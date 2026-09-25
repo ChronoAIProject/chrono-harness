@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "cost_models": {
+    "unmeasured": {
+      "cpu_ms": null,
+      "wall_ms": null,
+      "peak_rss_bytes": null,
+      "io_bytes": null,
+      "basis": "unknown; not measured"
+    }
+  },
+  "files": [
+    {
+      "path": ".gitignore",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "README.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "SPEC.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/config.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:workflow"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/judges.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:workflow"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/projects.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:projects"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:routes"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/FILEMAP.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/workflow.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:workflow"
+        }
+      ]
+    },
+    {
+      "path": "runner/Cargo.toml",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "runner/Cargo.lock",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "runner/src/lib.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "runner/src/main.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "runner-tests/Cargo.toml",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:runner-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "runner-tests/Cargo.lock",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:runner-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "runner-tests/tests/cli_contract.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    }
+  ],
+  "project_edges": [
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "test-execution",
+      "to": "test:runner-tests"
+    },
+    {
+      "from": "project:runner-tests",
+      "kind": "test-execution",
+      "to": "test:runner-tests"
+    }
+  ],
+  "test_costs": [
+    {
+      "test": "runner-tests",
+      "cost": "unmeasured"
+    }
+  ]
+}

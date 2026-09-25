@@ -1,0 +1,13 @@
+[package]
+name = "chrono-harness-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-harness = { path = "../runner" }
+
+[[test]]
+name = "cli_contract"
+path = "tests/cli_contract.rs"

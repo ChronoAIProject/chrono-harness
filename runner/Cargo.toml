@@ -1,0 +1,17 @@
+[package]
+name = "chrono-harness"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Spec-first foundation for an explicitly registered delta harness"
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-harness"
+path = "src/main.rs"
+test = false
+bench = false

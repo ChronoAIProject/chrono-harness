@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "enforcement": "not-implemented",
+  "runner": {
+    "path": ".chrono-harness/bin/chrono-harness",
+    "version": "0.1.0",
+    "sha256": null
+  },
+  "registries": {
+    "judges": ".chrono-harness/judges.json",
+    "projects": ".chrono-harness/projects.json",
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "workflow": ".chrono-harness/workflow.json"
+  },
+  "canonical_check": {
+    "operation": "validate.delta",
+    "argv": [
+      ".chrono-harness/bin/chrono-harness",
+      "check",
+      "--config",
+      ".chrono-harness/config.json",
+      "--base",
+      "{base}",
+      "--candidate",
+      "{candidate}",
+      "--context",
+      ".chrono-harness/state/context.json"
+    ]
+  },
+  "tools": [
+    {
+      "id": "cargo",
+      "program": "cargo",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
+    }
+  ],
+  "protocol": {
+    "id": "chrono-judge/v1",
+    "timeout_seconds": 120,
+    "stdout_limit_bytes": 1048576,
+    "encoding": "UTF-8"
+  },
+  "semantic_fields": [
+    {
+      "path": ".chrono-harness/projects.json",
+      "pointers": [
+        "/projects/*/actions",
+        "/scripts/*/actions"
+      ],
+      "on": "add-modify-delete"
+    },
+    {
+      "path": ".chrono-harness/FILEMAP.json",
+      "pointers": [
+        "/files/*/surface"
+      ],
+      "on": "modify-delete-existing"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".chrono-harness/bin/",
+      "owner": "repository",
+      "kind": "generated-executables",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/state/",
+      "owner": "repository",
+      "kind": "execution-evidence",
+      "tracked": false
+    },
+    {
+      "path": "runner/target/",
+      "owner": "runner",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "runner-tests/target/",
+      "owner": "runner-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    }
+  ],
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "TMPDIR",
+      "SDKROOT"
+    ],
+    "values": {
+      "CARGO_TERM_COLOR": "never"
+    },
+    "inputs": []
+  },
+  "input_closure": {
+    "status": "incomplete",
+    "unresolved": [
+      "Actual cargo/rustc, compiler backend, linker, target libraries and SDK identities are not registered.",
+      "Effective HOME/CARGO_HOME, rust-toolchain and other consumed configuration files are not enumerated.",
+      "Complete direct/indirect, fixture, environment and external inputs and their explicit dependency edges need evidence.",
+      "Verdict-relevant randomness, time, external responses, timeout/resource conditions and deterministic evaluation are not established."
+    ]
+  }
+}

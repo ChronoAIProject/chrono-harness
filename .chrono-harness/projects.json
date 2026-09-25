@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "owners": [
+    "repository",
+    "runner",
+    "runner-tests"
+  ],
+  "projects": [
+    {
+      "id": "runner",
+      "kind": "production",
+      "manifest": "runner/Cargo.toml",
+      "lockfile": "runner/Cargo.lock",
+      "root": "runner",
+      "test_project": "runner-tests",
+      "actions": {
+        "build": {
+          "operation": "build.runner",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "runner/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.runner",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "runner/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.runner",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "runner/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "runner-tests",
+      "kind": "test",
+      "manifest": "runner-tests/Cargo.toml",
+      "lockfile": "runner-tests/Cargo.lock",
+      "root": "runner-tests",
+      "tests_for": "runner",
+      "actions": {
+        "build": {
+          "operation": "build.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "runner-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "runner-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "runner-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "runner-tests/Cargo.toml"
+          ]
+        }
+      }
+    }
+  ],
+  "scripts": []
+}

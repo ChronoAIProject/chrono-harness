@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "target_branch": "dev",
+  "feature_prefix": "feature/",
+  "integration_prefix": "integration/",
+  "staleness": {
+    "max_behind_commits": 3,
+    "max_age_hours": 24,
+    "combine": "any-exceeded"
+  },
+  "stability": [
+    {
+      "id": "runner-engine",
+      "paths": [
+        "runner/src/lib.rs",
+        "runner/src/main.rs",
+        "runner/Cargo.toml",
+        "runner/Cargo.lock"
+      ],
+      "tests": [
+        "runner-tests"
+      ],
+      "reason": "CLI/protocol and future judge engine evolution"
+    }
+  ],
+  "semantic_changes_require_integration": true,
+  "mixed_change": {
+    "level": "warning",
+    "code": "W_MIXED_JUDGE_PRODUCT",
+    "requires_acknowledgement": false
+  },
+  "integration": {
+    "tests": [
+      "runner-tests"
+    ],
+    "bind": [
+      "base",
+      "candidate_tree",
+      "registry_digest",
+      "executables",
+      "tools",
+      "environment",
+      "effective_inputs",
+      "required_tests",
+      "results_digest"
+    ],
+    "evidence": ".chrono-harness/state/integration.json"
+  },
+  "retirements": [],
+  "migrations": []
+}
