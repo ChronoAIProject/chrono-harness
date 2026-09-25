@@ -4,7 +4,9 @@
   "owners": [
     "repository",
     "runner",
-    "runner-tests"
+    "runner-tests",
+    "instructions",
+    "instructions-tests"
   ],
   "projects": [
     {
@@ -95,6 +97,134 @@
             "--locked",
             "--manifest-path",
             "runner-tests/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "instructions",
+      "kind": "production",
+      "manifest": "instructions/Cargo.toml",
+      "lockfile": "instructions/Cargo.lock",
+      "root": "instructions",
+      "test_project": "instructions-tests",
+      "actions": {
+        "build": {
+          "operation": "build.instructions",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "instructions/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.instructions",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "instructions/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.instructions",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "instructions/Cargo.toml"
+          ]
+        },
+        "init": {
+          "operation": "instructions.init",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "instructions/Cargo.toml",
+            "--bin",
+            "chrono-instructions",
+            "--",
+            "init",
+            "--host-root",
+            ".",
+            "--methodology",
+            "assets/methodology.md",
+            "--host-context",
+            ".chrono-harness/instructions/host-context.md"
+          ]
+        },
+        "generate": {
+          "operation": "instructions.generate",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "instructions/Cargo.toml",
+            "--bin",
+            "chrono-instructions",
+            "--",
+            "generate",
+            "--host-root",
+            "."
+          ]
+        }
+      }
+    },
+    {
+      "id": "instructions-tests",
+      "kind": "test",
+      "manifest": "instructions-tests/Cargo.toml",
+      "lockfile": "instructions-tests/Cargo.lock",
+      "root": "instructions-tests",
+      "tests_for": "instructions",
+      "actions": {
+        "build": {
+          "operation": "build.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "instructions-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "instructions-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "instructions-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "instructions-tests/Cargo.toml"
           ]
         }
       }

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "producer": "chrono-instructions/0.1.0",
+  "render": "read-both/v1",
+  "sources": [
+    {
+      "role": "methodology",
+      "path": ".chrono-harness/instructions/methodology.md"
+    },
+    {
+      "role": "host-context",
+      "path": ".chrono-harness/instructions/host-context.md"
+    }
+  ],
+  "outputs": [
+    {
+      "role": "agents-entrypoint",
+      "path": "AGENTS.md"
+    },
+    {
+      "role": "claude-entrypoint",
+      "path": "CLAUDE.md"
+    }
+  ]
+}

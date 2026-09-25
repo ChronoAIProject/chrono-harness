@@ -22,6 +22,22 @@
         "runner-tests"
       ],
       "reason": "CLI/protocol and future judge engine evolution"
+    },
+    {
+      "id": "instructions-generator",
+      "paths": [
+        "instructions/src/lib.rs",
+        "instructions/src/main.rs",
+        "instructions/src/transaction.rs",
+        "instructions/Cargo.toml",
+        "instructions/Cargo.lock",
+        "assets/entrypoint.md",
+        "assets/methodology.md"
+      ],
+      "tests": [
+        "instructions-tests"
+      ],
+      "reason": "Host instruction ownership, preservation, registration and publication behavior; portable product methodology"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -32,7 +48,8 @@
   },
   "integration": {
     "tests": [
-      "runner-tests"
+      "runner-tests",
+      "instructions-tests"
     ],
     "bind": [
       "base",

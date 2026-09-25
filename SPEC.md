@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前实现仅含 Rust CLI 信息命令与配对测试；§14 给出实现边界。
+当前实现含 Rust CLI 信息命令，以及独立的宿主指令生成器与各自配对测试；§14、§16 给出实现边界。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 ## 1. 目标、权限与边界
@@ -28,10 +28,20 @@ Git 差异是输入事实；是否允许脏目录、怎样选测试、分支是�
 ```text
 SPEC.md                         产品合同，不承载生效宿主配置
 README.md                       使用和实现状态
-runner/Cargo.toml + Cargo.lock  唯一生产项目；无第三方依赖
+runner/Cargo.toml + Cargo.lock  runner 生产项目；无第三方依赖
 runner/src/{lib,main}.rs         产品实现，公开 CLI dispatch 边界
 runner-tests/Cargo.toml + Cargo.lock
-runner-tests/tests/cli_contract.rs  唯一配对测试项目
+runner-tests/tests/cli_contract.rs  runner 专属测试项目
+instructions/Cargo.toml + Cargo.lock  独立的指令生成生产项目
+instructions/src/{lib,main,transaction}.rs  生成、CLI 与文件发布
+instructions-tests/Cargo.toml + Cargo.lock  生成器专属测试项目
+instructions-tests/tests/generation.rs  临时宿主行为测试
+assets/methodology.md           产品方法资产，显式运行输入
+assets/entrypoint.md            产品固定路由文案，编译输入
+docs/instructions.md            已实现生成合同
+docs/methodology-extraction.md  来源与方法提取判断，不是运行依赖
+AGENTS.md / CLAUDE.md           生成的发现入口；仅指定块为产品投影
+.chrono-harness/instructions/  宿主方法、上下文与专用登记（见 §16）
 .chrono-harness/config.json     宿主入口、协议、显式字段分类
 .chrono-harness/judges.json     宿主判官白名单
 .chrono-harness/projects.json   项目、脚本和唯一操作登记
@@ -47,7 +57,8 @@ runner-tests/tests/cli_contract.rs  唯一配对测试项目
 产品 crate 不定义单元测试或 doctest；所有当前行为测试归唯一配对测试项目。
 以后新增独立生产项目必须同时登记一个专属测试项目；不能以共享巨型测试项目替代。
 
-宿主的所有生效 harness 约束、脚本配置、安装绑定都在宿主 `.chrono-harness/` 内。
+宿主的所有生效 harness 约束、脚本配置、安装绑定和指令 canonical 材料都在宿主 `.chrono-harness/` 内。
+根 AGENTS.md / CLAUDE.md 仅通过受管块提供发现路由；块外原有文字属于宿主，不宣称为生成投影。
 宿主可以使用其他仓库构建的二进制，但须在此显式绑定路径、版本与摘要。
 自举时 `runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。
 其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。
@@ -55,7 +66,7 @@ runner-tests/tests/cli_contract.rs  唯一配对测试项目
 
 ## 3. 登记格式与字段合同
 
-五个 JSON 文件均采用 `schema_version: 1` 和 `status: "proposed" | "active"`。
+本节的五个判官 JSON 文件均采用 `schema_version: 1` 和 `status: "proposed" | "active"`。
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前补齐实际输入闭包、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。
@@ -98,7 +109,7 @@ PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声�
 | owners | 唯一 owner ID 数组，包括无编译项目的 repository owner |
 | projects | `{id, kind, manifest, lockfile, root, actions, test_project? , tests_for?}[]` |
 | kind | `production` 或 `test`；production 必有 test_project，test 必有 tests_for |
-| actions | build/check/format_check/execute 对象；每项 `{operation, tool, argv}` |
+| actions | build/check/format_check/execute 以及生成器的 init/generate 对象；每项 `{operation, tool, argv}` |
 | scripts | `{id, path, test_script, actions}[]` 或 `{id, path, tests_for, actions}[]` |
 
 每个 production 与一个 test 双向一一对应，test 不再要求递归配一个 test。
@@ -106,12 +117,14 @@ PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声�
 operation 在全部 actions 与 canonical_check 中唯一；同名不同参数也属于重复方法。
 构建、测试依赖只由 FILEMAP 提供；manifest 可作为一致性检查输入，不能用来补登记。
 脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
+生成器自举 init/generate 通过已登记 cargo 工具的 `run --locked --manifest-path ... -- ...` 调用，
+argv 的宿主和材料均为本仓显式字面路径，不新增工具发现或路径模板。任意外部宿主直接用 §16 的 CLI。
 
 | FILEMAP 字段 | 类型与约束 |
 | --- | --- |
 | cost_models | 成本 ID → `{cpu_ms, wall_ms, peak_rss_bytes, io_bytes, basis}` |
 | files | `{path, owner, surface, cost, edges: Edge[]}[]`；每路径恰好一次 |
-| surface | `product / test / documentation / membership / judge-policy / judge-implementation` |
+| surface | `product / test / documentation / membership / instruction-policy / judge-policy / judge-implementation` |
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
@@ -134,7 +147,7 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 
 各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`，均为尚未实现的独立可执行文件。
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对项目分别编译测试，不由一个总判官二进制耦合；当前只存在 runner 与 runner-tests，不创建空项目。
+七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |
@@ -148,7 +161,8 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | retirements | `{kind, id, replacement: string|null, reason}[]`；显式退出/迁移事实 |
 | migrations | `{from_version, to_version, script, test, mappings, reason}[]`；mappings 为旧/新记录 ID 对 |
 
-每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。
+本节每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。
+指令生成专用 manifest 使用 §16 的独立合同，没有 active/proposed 状态，不参与判官启用。
 登记的语法/引用约束也由 registration 判官实施；runner 只负责 JSON 运输与协议解析。
 配置不可解析、进程无法启动等基础故障是运行时错误，不是一个未声明的业务判官。
 
@@ -225,10 +239,11 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 | --- | --- | --- |
 | compile | 输入文件→项目；依赖项目→消费者项目 | 不解析 Rust import 来补关系 |
 | build-input | manifest/lock/生成器/外部输入→项目 | 不把所有根目录文件当公共构建输入 |
+| runtime-input | 已明确选择的资产/宿主 canonical 材料及为保留原文、校验标记而读取的已有输出字节→消费项目 | 不将运行数据伪装成编译输入，也不由运行时扫描补登记 |
 | test-execution | 受影响项目/文件/脚本/输入→测试 ID | 不按文件名、测试名、Cargo 元数据猜测试 |
 | judge-trigger | 文件/项目→判官 ID | 不凭扩展名选判官 |
 
-compile/build-input 可沿显式项目 compile 边继续传播，但只有 test-execution 边能选测试。
+compile/build-input/runtime-input 可沿显式项目 compile 边继续传播，但只有 test-execution 边能选测试。
 配对关系表达所有权，不隐式产生测试边；缺配对执行边由 projects 判官报错。
 every-delta 判官始终被选择，judge-trigger 提供额外影响解释；二者取并集去重。
 依赖闭包需要读取未变文件和历史登记，这是读取上下文，不是重判历史文件。
@@ -496,13 +511,17 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 ## 14. 实现阶段与实际验证范围
 
-已实现：无外部依赖的 Rust library + binary；公开 `dispatch(&[&str]) -> CliOutput`；
+runner 已实现：无外部依赖的 Rust library + binary；公开 `dispatch(&[&str]) -> CliOutput`；
 帮助、版本、规格状态；check 恒非零；未知命令/多余参数非零；输出失败不报成功。
 配对 crate 验证公开边界的四类合同；binary 仅负责参数、stdout/stderr 和退出码运输。
-两个独立 Cargo.lock 必须提交；构建和测试使用各自 --manifest-path 与 --locked。
+每个项目的独立 Cargo.lock 必须提交；构建和测试使用各自 --manifest-path 与 --locked。
 测试 crate 只有显式 test target，build/check 需带 --tests，避免只检查空默认目标。
 
-尚未实现：登记解析与 schema 验证器、Git DELTA、图算法、判官二进制/脚本协议、
+instructions 已实现：显式 init/generate、严格专用 manifest、精确保留输入、双入口路由、
+受管块保留、单一相对别名、无写入重跑、预检与暂存/普通失败回滚；完整合同见 §16。
+serde/serde_json/tempfile 及其锁定依赖仅属于新生成器项目，不进入 runner 编译依赖。
+
+尚未实现：通用判官登记解析与 schema 验证器、Git DELTA、图算法、判官二进制/脚本协议、
 测试调度、成本报告、分支/integration 检查、自举安装、正式 check 与 CI gate。
 JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没有覆盖率或 CI 通过徽章。
 先实现 registration/filemap/protocol 并测试失败路径，再实现 projects/routes/cost，
@@ -520,3 +539,19 @@ JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没
 
 这些是经验来源而非兼容承诺，不复制已有复杂体系，不读取其运行时配置，不把它当依赖。
 本项目不会修改 trureturing，也没有宿主全局 hook、权限门禁或人工流程。
+
+## 16. 宿主指令生成（已实现）
+
+独立命令 `chrono-instructions init --host-root H --methodology M --host-context C` 将两个显式输入
+精确保留到 `.chrono-harness/instructions/`；`generate --host-root H` 只读取已登记保留源。
+根 AGENTS.md、CLAUDE.md 的受管块都要求依次完整阅读同一方法和上下文，块外内容保持原字节。
+宿主 AI 自主编辑源并重新生成；重复 init 不得覆盖不同的定制源。
+完整协议、v1 字段/路径、CLI 状态、所有权、别名和 IO 边界由 [docs/instructions.md](docs/instructions.md)
+单一维护，不在此复制第二份格式定义。该合同是本节的规范组成部分。
+
+产品资产与宿主材料不同：`assets/methodology.md` 维护发行方法，宿主保留源是明确选择后的自主快照；
+`assets/entrypoint.md` 是编译时读取的固定路由。提取的来源与取舍在
+[docs/methodology-extraction.md](docs/methodology-extraction.md)，不成为宿主运行依赖。
+五份通用登记仍 proposed、input_closure 仍 incomplete；生成器专用登记已被真实代码校验，
+不代表通用 registration 判官已经实现。新 instruction-policy 表面仅分类宿主指南，不伪称可执行规则。
+生成结果不证明阅读/服从、独立核验、语义正确或 Markdown 的强制力。

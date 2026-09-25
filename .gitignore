@@ -1,4 +1,6 @@
 /runner/target/
 /runner-tests/target/
+/instructions/target/
+/instructions-tests/target/
 /.chrono-harness/bin/
 /.chrono-harness/state/
