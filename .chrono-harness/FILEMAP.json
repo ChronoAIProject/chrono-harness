@@ -140,7 +140,7 @@
       ]
     },
     {
-      "path": "runner/Cargo.toml",
+      "path": "crates/runner/Cargo.toml",
       "owner": "runner",
       "surface": "product",
       "cost": "unmeasured",
@@ -156,7 +156,7 @@
       ]
     },
     {
-      "path": "runner/Cargo.lock",
+      "path": "crates/runner/Cargo.lock",
       "owner": "runner",
       "surface": "product",
       "cost": "unmeasured",
@@ -172,23 +172,7 @@
       ]
     },
     {
-      "path": "runner/src/lib.rs",
-      "owner": "runner",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "compile",
-          "to": "project:runner"
-        },
-        {
-          "kind": "judge-trigger",
-          "to": "judge:filemap"
-        }
-      ]
-    },
-    {
-      "path": "runner/src/main.rs",
+      "path": "crates/runner/src/lib.rs",
       "owner": "runner",
       "surface": "product",
       "cost": "unmeasured",
@@ -204,7 +188,23 @@
       ]
     },
     {
-      "path": "runner-tests/Cargo.toml",
+      "path": "crates/runner/src/main.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/Cargo.toml",
       "owner": "runner-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -220,7 +220,7 @@
       ]
     },
     {
-      "path": "runner-tests/Cargo.lock",
+      "path": "crates/runner-tests/Cargo.lock",
       "owner": "runner-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -236,7 +236,7 @@
       ]
     },
     {
-      "path": "runner-tests/tests/cli_contract.rs",
+      "path": "crates/runner-tests/tests/cli_contract.rs",
       "owner": "runner-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -317,7 +317,7 @@
       ]
     },
     {
-      "path": "instructions/Cargo.toml",
+      "path": "crates/instructions/Cargo.toml",
       "owner": "instructions",
       "surface": "product",
       "cost": "unmeasured",
@@ -333,7 +333,7 @@
       ]
     },
     {
-      "path": "instructions/Cargo.lock",
+      "path": "crates/instructions/Cargo.lock",
       "owner": "instructions",
       "surface": "product",
       "cost": "unmeasured",
@@ -349,7 +349,7 @@
       ]
     },
     {
-      "path": "instructions-tests/Cargo.toml",
+      "path": "crates/instructions-tests/Cargo.toml",
       "owner": "instructions-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -365,7 +365,7 @@
       ]
     },
     {
-      "path": "instructions-tests/Cargo.lock",
+      "path": "crates/instructions-tests/Cargo.lock",
       "owner": "instructions-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -381,7 +381,7 @@
       ]
     },
     {
-      "path": "instructions/src/lib.rs",
+      "path": "crates/instructions/src/lib.rs",
       "owner": "instructions",
       "surface": "product",
       "cost": "unmeasured",
@@ -397,7 +397,7 @@
       ]
     },
     {
-      "path": "instructions/src/main.rs",
+      "path": "crates/instructions/src/main.rs",
       "owner": "instructions",
       "surface": "product",
       "cost": "unmeasured",
@@ -413,7 +413,7 @@
       ]
     },
     {
-      "path": "instructions/src/transaction.rs",
+      "path": "crates/instructions/src/transaction.rs",
       "owner": "instructions",
       "surface": "product",
       "cost": "unmeasured",
@@ -429,7 +429,7 @@
       ]
     },
     {
-      "path": "instructions-tests/tests/generation.rs",
+      "path": "crates/instructions-tests/tests/generation.rs",
       "owner": "instructions-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -477,7 +477,7 @@
       ]
     },
     {
-      "path": "instructions/src/catalog.rs",
+      "path": "crates/instructions/src/catalog.rs",
       "owner": "instructions",
       "surface": "product",
       "cost": "unmeasured",
@@ -493,7 +493,7 @@
       ]
     },
     {
-      "path": "instructions-tests/tests/atomic.rs",
+      "path": "crates/instructions-tests/tests/atomic.rs",
       "owner": "instructions-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -649,7 +649,7 @@
       ]
     },
     {
-      "path": "judge-ci/Cargo.toml",
+      "path": "crates/judge-ci/Cargo.toml",
       "owner": "judge-ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -661,7 +661,7 @@
       ]
     },
     {
-      "path": "judge-ci/Cargo.lock",
+      "path": "crates/judge-ci/Cargo.lock",
       "owner": "judge-ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -673,7 +673,7 @@
       ]
     },
     {
-      "path": "judge-ci/src/lib.rs",
+      "path": "crates/judge-ci/src/lib.rs",
       "owner": "judge-ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -685,7 +685,7 @@
       ]
     },
     {
-      "path": "judge-ci/src/main.rs",
+      "path": "crates/judge-ci/src/main.rs",
       "owner": "judge-ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -697,7 +697,7 @@
       ]
     },
     {
-      "path": "judge-ci-tests/Cargo.toml",
+      "path": "crates/judge-ci-tests/Cargo.toml",
       "owner": "judge-ci-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -709,7 +709,7 @@
       ]
     },
     {
-      "path": "judge-ci-tests/Cargo.lock",
+      "path": "crates/judge-ci-tests/Cargo.lock",
       "owner": "judge-ci-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -721,7 +721,7 @@
       ]
     },
     {
-      "path": "judge-ci-tests/tests/behavior.rs",
+      "path": "crates/judge-ci-tests/tests/behavior.rs",
       "owner": "judge-ci-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -733,7 +733,7 @@
       ]
     },
     {
-      "path": "ci/Cargo.toml",
+      "path": "crates/ci/Cargo.toml",
       "owner": "ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -745,7 +745,7 @@
       ]
     },
     {
-      "path": "ci/Cargo.lock",
+      "path": "crates/ci/Cargo.lock",
       "owner": "ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -757,7 +757,7 @@
       ]
     },
     {
-      "path": "ci/src/lib.rs",
+      "path": "crates/ci/src/lib.rs",
       "owner": "ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -769,7 +769,7 @@
       ]
     },
     {
-      "path": "ci/src/main.rs",
+      "path": "crates/ci/src/main.rs",
       "owner": "ci",
       "surface": "product",
       "cost": "unmeasured",
@@ -781,7 +781,7 @@
       ]
     },
     {
-      "path": "ci-tests/Cargo.toml",
+      "path": "crates/ci-tests/Cargo.toml",
       "owner": "ci-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -793,7 +793,7 @@
       ]
     },
     {
-      "path": "ci-tests/Cargo.lock",
+      "path": "crates/ci-tests/Cargo.lock",
       "owner": "ci-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -805,7 +805,7 @@
       ]
     },
     {
-      "path": "ci-tests/tests/behavior.rs",
+      "path": "crates/ci-tests/tests/behavior.rs",
       "owner": "ci-tests",
       "surface": "test",
       "cost": "unmeasured",

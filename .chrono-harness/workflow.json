@@ -13,10 +13,10 @@
     {
       "id": "runner-engine",
       "paths": [
-        "runner/src/lib.rs",
-        "runner/src/main.rs",
-        "runner/Cargo.toml",
-        "runner/Cargo.lock"
+        "crates/runner/src/lib.rs",
+        "crates/runner/src/main.rs",
+        "crates/runner/Cargo.toml",
+        "crates/runner/Cargo.lock"
       ],
       "tests": [
         "runner-tests"
@@ -26,12 +26,12 @@
     {
       "id": "instructions-generator",
       "paths": [
-        "instructions/src/lib.rs",
-        "instructions/src/catalog.rs",
-        "instructions/src/main.rs",
-        "instructions/src/transaction.rs",
-        "instructions/Cargo.toml",
-        "instructions/Cargo.lock",
+        "crates/instructions/src/lib.rs",
+        "crates/instructions/src/catalog.rs",
+        "crates/instructions/src/main.rs",
+        "crates/instructions/src/transaction.rs",
+        "crates/instructions/Cargo.toml",
+        "crates/instructions/Cargo.lock",
         "assets/instructions/catalog.json",
         "assets/instructions/default-manifest.json"
       ],

@@ -5,7 +5,7 @@
 ## 调用与唯一编辑源
 
 ```sh
-cargo install --locked --path instructions
+cargo install --locked --path crates/instructions
 chrono-instructions init --host-root "/path/to/existing host"
 # 仅新宿主可显式绑定默认英文；不是运行时翻译
 chrono-instructions init --host-root "/path/to/another host" --locale en
@@ -108,13 +108,13 @@ init/generate 自动迁移为 current manifest + catalog，`legacy.method` 的 u
 只限定 Unix / 当前 macOS 普通 IO；不保证崩溃原子性、并发写者、跨平台、ACL、扩展属性、原 inode/时间戳/所有者恢复。无恶意 AI 门或全局安装/provider 假设。
 
 ```sh
-cargo fmt --check --manifest-path instructions/Cargo.toml
-cargo build --locked --manifest-path instructions/Cargo.toml
-cargo check --locked --manifest-path instructions/Cargo.toml
-cargo fmt --check --manifest-path instructions-tests/Cargo.toml
-cargo build --tests --locked --manifest-path instructions-tests/Cargo.toml
-cargo check --tests --locked --manifest-path instructions-tests/Cargo.toml
-cargo test --locked --manifest-path instructions-tests/Cargo.toml
+cargo fmt --check --manifest-path crates/instructions/Cargo.toml
+cargo build --locked --manifest-path crates/instructions/Cargo.toml
+cargo check --locked --manifest-path crates/instructions/Cargo.toml
+cargo fmt --check --manifest-path crates/instructions-tests/Cargo.toml
+cargo build --tests --locked --manifest-path crates/instructions-tests/Cargo.toml
+cargo check --tests --locked --manifest-path crates/instructions-tests/Cargo.toml
+cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
 ```
 
 产品默认内容同时按完整根字节数核消费边界，包括框架而非只数字符或 token；当前 [实测读数](methodology-extraction.md#实际消费者边界) 限空上下文新宿主。内容编辑需保持原义务并复核实际受影响消费者，不截尾、不借全局配置扩限。独立选择 `core.ownership` 或 `core.behavior` 的 Markdown 消费者分别包括投影与真实 CI 义务；此合同不新增文字匹配测试框架。

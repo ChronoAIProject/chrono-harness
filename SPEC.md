@@ -27,31 +27,34 @@ Git 差异是输入事实；是否允许脏目录、怎样选测试、分支是�
 ## 2. 仓库与自举边界
 
 ```text
-SPEC.md                         产品合同，不承载生效宿主配置
-README.md                       使用和实现状态
-runner/Cargo.toml + Cargo.lock  runner 生产项目；无第三方依赖
-runner/src/{lib,main}.rs         产品实现，公开 CLI dispatch 边界
-runner-tests/Cargo.toml + Cargo.lock
-runner-tests/tests/cli_contract.rs  runner 专属测试项目
-instructions/Cargo.toml + Cargo.lock  独立的指令生成生产项目
-instructions/src/{lib,catalog,main,transaction}.rs  组合解析、CLI 与文件发布
-instructions-tests/Cargo.toml + Cargo.lock  生成器专属测试项目
-instructions-tests/tests/{generation,atomic}.rs  临时宿主行为测试
-assets/instructions/catalog.json           双语原子规则/框架，编译输入
-assets/instructions/default-manifest.json  默认仅根输出计划，编译输入
-docs/instructions.md            已实现生成合同
-docs/methodology-extraction.md  来源与方法提取判断，不是运行依赖
-AGENTS.md / CLAUDE.md           CLAUDE 普通正文、AGENTS 相对链接；仅指定块为投影
-.chrono-harness/instructions/  宿主原子 catalog、上下文与输出计划（见 §16）
-.chrono-harness/config.json     宿主入口、协议、显式字段分类
-.chrono-harness/judges.json     宿主判官白名单
-.chrono-harness/projects.json   项目、脚本和唯一操作登记
-.chrono-harness/FILEMAP.json    逐文件归属、带类型的依赖及成本
-.chrono-harness/workflow.json   分支、稳定性、迁移与混合修改策略
-.chrono-harness/bin/            将来安装的指定二进制（不跟踪）
-.chrono-harness/state/          将来输入/报告/证据（不跟踪）
+SPEC.md                         产品合同
+README.md                       使用、目录导航和实现状态
+crates/                         独立 Cargo 项目的目录分组
+  runner/                       运输、协议与统一 check 入口
+  runner-tests/                 runner 专属测试
+  judge-ci/                     CI 登记、快照、DELTA 与操作执行
+  judge-ci-tests/                CI 判官专属测试
+  ci/                           工作流生成与事件输入准备
+  ci-tests/                     CI 生成器专属测试
+  instructions/                 原子指令组合、CLI 与文件发布
+  instructions-tests/           指令生成器专属测试
+assets/instructions/            产品双语 catalog 与默认输出计划，编译输入
+docs/                           合同说明、来源、许可与生成文档
+examples/ci-host/               可复制的宿主采用实例
+skills/                         本仓生成并采用的 skill
+AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
+.chrono-harness/                本仓采用的独立宿主数据
+  instructions/                 宿主 catalog、上下文与输出计划
+  projects.json / FILEMAP.json   项目、操作、文件、依赖与成本登记
+  config.json / judges.json     proposed 的完整治理配置与判官白名单
+  workflow.json                 proposed 的分支、迁移与混合修改策略
+  ci/                           现役 CI 配置及自举绑定
+  bin/                          已安装指定二进制（不跟踪）
+  state/                        输入、报告与证据（不跟踪）
+.github/workflows/              CI 配置的生成投影
 ```
 
+`crates/` 仅组织目录，不承担项目发现或选测。每个子项目有自己的 Cargo.toml、Cargo.lock 和 target。
 没有根 Cargo workspace；不需要一起编译的项目不放进同一个编译单元。
 生产 crate 同时导出库与极薄二进制，因为二者共享同一 CLI 行为；不另拆无价值项目。
 测试 crate 通过显式 path dev-dependency 引用生产库，有独立 lockfile 和 target 目录。
@@ -62,7 +65,7 @@ AGENTS.md / CLAUDE.md           CLAUDE 普通正文、AGENTS 相对链接；仅�
 根 CLAUDE.md 的受管块直接呈现完整方法，AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接；
 块外原有文字属于宿主；方法在 canonical 源编辑后生成，不独立维护副本。
 宿主可以使用其他仓库构建的二进制，但须在此显式绑定路径、版本与摘要。
-自举时 `runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。
+自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。
 其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。
 产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 
@@ -157,7 +160,7 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 
 各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`，均为尚未实现的独立可执行文件。
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、instructions 及各自测试，不创建空判官项目。
+七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |

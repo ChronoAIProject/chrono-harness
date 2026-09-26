@@ -12,15 +12,15 @@
   ],
   "install": [
     {
-      "source": "runner/target/debug/chrono-harness",
+      "source": "crates/runner/target/debug/chrono-harness",
       "destination": ".chrono-harness/bin/chrono-harness"
     },
     {
-      "source": "judge-ci/target/debug/chrono-judge-ci",
+      "source": "crates/judge-ci/target/debug/chrono-judge-ci",
       "destination": ".chrono-harness/bin/chrono-judge-ci"
     },
     {
-      "source": "ci/target/debug/chrono-ci",
+      "source": "crates/ci/target/debug/chrono-ci",
       "destination": ".chrono-harness/bin/chrono-ci"
     }
   ]

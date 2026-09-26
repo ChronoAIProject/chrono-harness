@@ -4,11 +4,32 @@
 
 **已实现指令生成，以及独立的 CI 生成器、DELTA 判官和本地/CI 共用 check 入口。五份完整治理登记仍 proposed；现役范围是明确版本化的 CI slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
-宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
+宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
+
+```text
+crates/                    独立 Rust 生产项目及各自测试项目
+  runner/                  判官运输与统一 check 入口
+  runner-tests/
+  judge-ci/                登记、快照、DELTA 与操作执行
+  judge-ci-tests/
+  ci/                      CI 初始化、生成和事件准备
+  ci-tests/
+  instructions/            原子指南与 skill 生成
+  instructions-tests/
+assets/instructions/       产品默认规则和输出计划
+docs/                      合同说明、来源和生成文档
+examples/                  可复制的宿主示例
+skills/                    本仓生成并采用的 skill
+.chrono-harness/           本仓采用的约束、登记和工具绑定
+.github/workflows/         从宿主配置生成的 CI
+```
+
+`crates/` 只组织目录；构建与选测由 `.chrono-harness/` 中的显式登记决定。
+`assets/` 提供可分发的产品默认值，宿主采用后的独立数据归 `.chrono-harness/`。
 
 ```sh
 # 在本项目 checkout 中安装；确保 Cargo 的 bin 目录在 PATH 中
-cargo install --locked --path instructions
+cargo install --locked --path crates/instructions
 # 安装后从任意工作目录初始化已有宿主，只需这一条命令
 chrono-instructions init --host-root "/path/to/existing-host"
 ```
@@ -29,10 +50,10 @@ chrono-instructions init --host-root "/path/to/existing-host"
 [来源说明](docs/methodology-extraction.md) 与 [逐条处置表](docs/methodology-clause-map.md) 记录固定 918 行来源的实际义务、泛化、重复与排除。[派生文本许可](docs/licenses/methodology-attribution.md) 仅适用于相应指令资产；规则经过修改、泛化及翻译，不改变整仓许可。本仓通过同一工具生成根中文、[英文方法](docs/generated/general-methods.en.md) 与[重复故障诊断 skill](skills/diagnose-recurring-failures/SKILL.md)；默认新宿主只生成根指南。生成不证明 AI 遵守、翻译语义等价或判官已执行。
 
 ```sh
-cargo build --locked --manifest-path runner/Cargo.toml
-cargo test --locked --manifest-path runner-tests/Cargo.toml
-./runner/target/debug/chrono-harness --help
-./runner/target/debug/chrono-harness spec status
+cargo build --locked --manifest-path crates/runner/Cargo.toml
+cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
+./crates/runner/target/debug/chrono-harness --help
+./crates/runner/target/debug/chrono-harness spec status
 ```
 
 现役 CI 使用独立的 `judge-ci` 执行显式登记的 DELTA 检查；runner 只承担外部判官运输与报告。独立 `chrono-ci` 从宿主配置生成 GitHub Actions，提供 init/generate/verify 和事件输入准备。

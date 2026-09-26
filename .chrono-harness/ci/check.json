@@ -46,14 +46,14 @@
     "artifacts": [
       ".chrono-harness/bin/",
       ".chrono-harness/state/",
-      "runner/target/",
-      "runner-tests/target/",
-      "instructions/target/",
-      "instructions-tests/target/",
-      "judge-ci/target/",
-      "judge-ci-tests/target/",
-      "ci/target/",
-      "ci-tests/target/"
+      "crates/runner/target/",
+      "crates/runner-tests/target/",
+      "crates/instructions/target/",
+      "crates/instructions-tests/target/",
+      "crates/judge-ci/target/",
+      "crates/judge-ci-tests/target/",
+      "crates/ci/target/",
+      "crates/ci-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
