@@ -27,17 +27,18 @@
       "id": "instructions-generator",
       "paths": [
         "instructions/src/lib.rs",
+        "instructions/src/catalog.rs",
         "instructions/src/main.rs",
         "instructions/src/transaction.rs",
         "instructions/Cargo.toml",
         "instructions/Cargo.lock",
-        "assets/entrypoint.md",
-        "assets/methodology.md"
+        "assets/instructions/catalog.json",
+        "assets/instructions/default-manifest.json"
       ],
       "tests": [
         "instructions-tests"
       ],
-      "reason": "Host instruction ownership, preservation, registration and publication behavior; portable product methodology"
+      "reason": "Explicit rule composition, translations, output ownership, preservation, migration and publication; embedded portable defaults"
     }
   ],
   "semantic_changes_require_integration": true,

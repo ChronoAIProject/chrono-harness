@@ -1,10 +1,11 @@
 <!-- chrono-instructions:begin -->
-本块直接呈现完整的宿主通用方法；AGENTS.md 是指向本文件 CLAUDE.md 的相对符号链接。
-方法的唯一编辑源为 `.chrono-harness/instructions/methodology.md`；修改源后运行
-`chrono-instructions generate --host-root <host-root>`，不要独立编辑本块。
-块外文字由宿主维护。工作前另读宿主根下 `.chrono-harness/instructions/host-context.md`
-中的明确上下文（可为空）；不必重复读取已经完整呈现在此的方法源。
-生成成功只表示生成完成，不证明 AI 已阅读、遵守或执行任何检查。
+本块直接呈现已登记的原子方法；AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接。
+修改下列登记的 catalog、file 源或 manifest 后运行 `chrono-instructions generate --host-root <host-root>`，不要独立编辑本块。块外文字由宿主维护。
+工作前另读登记的 host_context（可为空）；不必重复读取本块已经呈现的规则源。生成成功不证明 AI 已阅读、遵守或执行任何检查。
+
+manifest: `.chrono-harness/instructions/manifest.json`
+catalog: `.chrono-harness/instructions/catalog.json`
+host_context: `.chrono-harness/instructions/host-context.md`
 
 # 通用工作方法
 
@@ -41,5 +42,4 @@
 **独立核验保留其边界。** 关键结论用实际消费者、反例或可用的独立视角核对；单点自查如实说明，多次同源输出不冒充独立证据。分歧靠事实与可复现检验解决，票数和审美都不是证明，也不增加人类审批步骤。
 
 **只留下有用成果。** 代码、当前规范、必要数据、来源与许可证归对应位置，失败留下可复用判据或回归用例。交付说明写清改了什么、实际验证、结果与未解边界；不把思考转录、实施日记、评审对话、命令流水或重复快照存入仓库，也不搬到另一份强制阅读材料里。
-
 <!-- chrono-instructions:end -->

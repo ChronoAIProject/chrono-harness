@@ -1,0 +1,403 @@
+{
+  "schema_version": 1,
+  "locales": [
+    {
+      "id": "zh-CN",
+      "root_frame": "本块直接呈现已登记的原子方法；AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接。\n修改下列登记的 catalog、file 源或 manifest 后运行 `chrono-instructions generate --host-root <host-root>`，不要独立编辑本块。块外文字由宿主维护。\n工作前另读登记的 host_context（可为空）；不必重复读取本块已经呈现的规则源。生成成功不证明 AI 已阅读、遵守或执行任何检查。",
+      "projection_notice": "本文件是登记规则的生成投影。修改登记源并重新生成，不独立编辑；生成不证明规则已被遵守或检查已执行。"
+    },
+    {
+      "id": "en",
+      "root_frame": "This block contains the registered rule atoms. AGENTS.md is a literal relative symlink to CLAUDE.md.\nEdit the registered catalog, file sources or manifest listed below, then run `chrono-instructions generate --host-root <host-root>`; do not edit this block independently. The host owns exterior text.\nBefore work, read the registered host_context (which may be empty). Do not reread rule sources already presented here. Successful generation does not prove that AI read or followed the rules, or executed any checks.",
+      "projection_notice": "Generated from registered rule sources. Edit those sources and regenerate; do not edit this projection independently. Generation does not prove compliance or execution of checks."
+    },
+    {
+      "id": "und",
+      "root_frame": "The language of this retained opaque method is unspecified (und); no translation or language inference was performed. AGENTS.md is a literal relative symlink to CLAUDE.md.\nEdit the registered sources listed below and run `chrono-instructions generate --host-root <host-root>`. The host owns exterior text. Read the registered host_context before work; do not reread the method already presented here. Generation does not prove AI compliance or execution of checks.",
+      "projection_notice": "Projection of explicitly registered content in an unspecified language (und). Edit the registered sources and regenerate. No translation, compliance or check execution is implied."
+    }
+  ],
+  "atoms": [
+    {
+      "id": "core.goal",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**先明确要交付什么。** 行动前核对用户目标、范围、约束与可观察的验收条件，再选择最小充分方案。用户的新修正优先；据此更新假设，说明哪些先前结论仍成立、哪些失效，不把旧计划当成新目标的依据。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Clarify the deliverable first.** Before acting, check the user’s goal, scope, constraints and observable acceptance criteria, then choose the smallest sufficient approach. New corrections from the user take precedence. Update assumptions accordingly and state which earlier conclusions still hold and which no longer do; do not use an old plan as the basis for a new goal."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.autonomy",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**在授权内自主完成。** 信任用户、协作者与 AI 非恶意但可能犯错。实施、修复、迁移、验证和交付持续推进，不新增人工批准、签字或逐步确认门。遇阻先修可达的根因；确有能力、资源、范围或所有权缺口时，明确缺什么及恢复条件，继续不依赖它的工作，不以“已立案”冒充完成。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Complete authorized work autonomously.** Trust users, collaborators and AI to be nonmalicious but fallible. Continue implementation, repair, migration, validation and delivery without adding human approval, sign-off or stepwise confirmation gates. When blocked, first fix reachable root causes. If there is a real gap in capability, resources, scope or ownership, state what is missing and what would allow progress, and continue independent work; recording an issue does not complete it."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.evidence",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**结论对应实际证据。** 可测的先测，报告具体输入、结果和真实退出状态；失败、超时或无结果先读实际错误与日志再归因。未测、未实现、未解决分别说明对象和原因，不以信心、耗时、文档或包装器的成功代替真实检查。未执行的检查不提供保证；程序负责的状态由程序产生，不手填成功。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Match conclusions to actual evidence.** Measure what can be measured first, and report concrete inputs, results and actual exit status. After a failure, timeout or missing result, read the actual error and logs before attributing a cause. State separately what was not tested, not implemented or not resolved, and why. Confidence, elapsed time, documentation or wrapper success cannot replace a real check. An unexecuted check provides no assurance; state owned by a program must be produced by that program, never filled in as success by hand."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.reuse",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**先查已有实现，再补缺口。** 依次查本仓成果、固定版本的直接依赖和允许使用的外部来源，核对接口与适用条件。可满足目标的实现直接复用；可见性或位置阻碍真实调用时，调整原定义或提取共同依赖，避免复制、无用转发与依赖环。验证实际受影响消费者，引用或未使用的导入不算复用。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Check existing implementations before filling gaps.** Look first at this repository’s work, then at direct dependencies at pinned versions, then at permitted external sources; check interfaces and applicability. Reuse an implementation that meets the goal. When visibility or location prevents a real call, adjust the original definition or extract a shared dependency, avoiding copies, useless forwarding and dependency cycles. Validate the consumers actually affected; a reference or an unused import is not reuse."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.repair-producer",
+      "requires": [
+        "core.evidence",
+        "core.reuse"
+      ],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**重复症状修产生处。** 第二次出现“症状相同且处置动作相同”，先解释为什么会有第二次，修复生产者、工具或规则，再处理后续实例，不做第三次盲重试。暂时无法修复时说明次数、成本与边界，转向可推进的工作；不降低验收或检测来掩盖失败。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Repair the producer of recurring symptoms.** On the second occurrence of the same symptom requiring the same corrective action, first explain why it happened again and repair the producer, tool or rule before handling later instances. Do not make a third blind retry. If a repair is temporarily unavailable, state the occurrence count, cost and limits, then move to work that can progress; do not lower acceptance criteria or detection to hide the failure."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.ownership",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**每项内容只有一个自然所有者。** 程序承载类型、逻辑、读写与校验；声明性实例、配置和产品资产放在程序源码之外，合成夹具归测试。生成物由完整明确的源和生产者重建，不具有独立政策权威；改源再生成，不养第二份手工权威。迁移说明版本、所有权与升级方式，保留宿主原文和定制，冲突明确失败；完成后移除被替代的路径，历史交给版本库。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Give each item one natural owner.** Programs own types, logic, reading, writing and validation. Declarative instances, configuration and product assets belong outside program source; synthetic fixtures belong to tests. Generated artifacts must be reproducible from complete, explicit sources and a producer, and have no independent policy authority. Change the source and regenerate; do not maintain a second manual authority. Migrations must state versions, ownership and upgrade procedure, preserve host text and customization, and fail explicitly on conflicts. Remove superseded paths when migration is complete; leave history to version control."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.registration",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**用显式白名单连接工作。** 在宿主 `.chrono-harness/` 的 FILEMAP 或登记表中，明确文件所有者、输入、消费者、依赖、成本与操作。未知成本如实写未知，不能当零。AI 可自主维护登记；执行器只消费声明，不按目录、语言、项目名、工具扫描或调用分析推断测试图。漏登、歧义和缺失输入给出具体错误，修登记，不回退全套检查或伪报无工作。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Connect work through explicit allowlists.** In the host’s .chrono-harness/ FILEMAP or registry, declare file owners, inputs, consumers, dependencies, costs and operations. Record unknown cost as unknown, never as zero. AI may maintain the registry autonomously. Executors consume declarations only; they must not infer a test graph from directories, languages, project names, tool scans or call analysis. Report specific errors for missing registrations, ambiguity and missing inputs, and repair the registry; do not fall back to all checks or falsely report no work."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.single-method",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**一项活动使用一个登记方法。** 构建、生成、检查与交付走各自唯一入口，明确参数、前置、输出及退出码，层内委托已有实现，不复制配方。脚本、插件和判官及其配置由宿主 `.chrono-harness/` 显式登记，可替换、可演进，不把具体宿主实例写死进通用运行时。调用已提供的工具能力，不为当前任务重建同类平台或修改全局配置。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Use one registered method for each activity.** Build, generation, checking and delivery each use their own single entry point, with explicit parameters, preconditions, outputs and exit codes. Delegate to existing implementations within each layer instead of copying recipes. Scripts, plugins, judges and their configuration are explicitly registered under the host’s .chrono-harness/, replaceable and evolvable; do not hardcode a particular host instance in a general runtime. Use supplied tool capabilities instead of rebuilding a similar platform for the task or changing global configuration."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.registered-judges",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**可执行约束交给登记判官。** 默认约束与项目约束中适用且可机器检查的部分，均由显式登记、可配置的判官承载；受约束活动开始前登记处理方法、判定规则和所需输入。执行时调用指定判官二进制，偏离登记方法或规则须报错。不能机器检查的指导由 AI 明确自主核验，不声称机器强制；登记或指南生成不证明判官已实现、运行或通过。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Assign executable constraints to registered judges.** Applicable, machine-checkable parts of both default and project constraints belong to explicitly registered, configurable judges. Register the handling method, decision rules and required inputs before the constrained activity starts. Invoke the designated judge binary during execution; deviations from the registered method or rules must produce errors. AI must explicitly and autonomously check guidance that cannot be machine-checked, without claiming machine enforcement. Registration or guide generation does not prove that judges are implemented, have run or have passed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.small-projects",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**项目保持小而独立。** 不需要一起构建的生产项目独立构建，各配一个专属测试项目，通过明确依赖验证真实实现；测试项目不递归配测试项目。独立脚本及其测试可以单独登记，不强造空编译项目；不建总工程耦合无关编译，也不为拆分而造空壳。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Keep projects small and independent.** Production projects that do not need to build together must build independently, each with a dedicated test project that validates the real implementation through explicit dependencies. Test projects do not recursively get test projects. Independent scripts and their tests may be registered separately without manufacturing empty compilation projects. Do not couple unrelated builds in an umbrella project or create empty shells merely to split projects."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.delta",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**只裁决 DELTA 的影响。** 检查由本次变更及两端明确依赖的影响闭包选择，包含删除、改名和登记边变化；每个失败能追到具体变更与依赖。遗漏补登记，不能全仓重判兜底。完整输入和判定局部性是前提，图闭合不证明语义完整。基线只作固定数据，执行候选判官；本地与 CI 使用同一登记命令，还须有效输入、政策、执行物、工具链和环境一致且确定求值，才能主张裁决相同。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Judge only the impact of the DELTA.** Select checks from the impact closure of the change and explicit dependencies at both endpoints, including deletions, renames and changes to registration edges. Every failure must be traceable to a concrete change and dependency. Add missing registrations; do not use a full-repository reassessment as a fallback. Complete inputs and locality of judgment are prerequisites; graph closure does not prove semantic completeness. Treat the baseline as fixed data and execute candidate judges. Local and CI runs use the same registered command; equivalent judgments additionally require matching effective inputs, policy, executables, toolchain and environment, with deterministic evaluation."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.evolving-rules",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**规则也可以自主修正。** 先尝试现有规则，确需改变判官或政策就说明原因、影响和验证成本，完成适用验证与迁移。政策与产品代码同改时给出可见警告，列明两组改动及旧新影响；警告不是人工许可门，也不豁免真实失败。影响越广，验证范围越广；不以规则自检或评审意见声称绝对正确。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Rules may also be revised autonomously.** Try the existing rules first. If a judge or policy really needs to change, explain why, its impact and validation cost, and complete the applicable validation and migration. When policy and product code change together, give a visible warning that lists both groups of changes and their old and new effects. The warning is not a human permission gate and does not excuse real failures. Broader impact requires broader validation. Rule self-checks or review opinions cannot establish absolute correctness."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.behavior",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**用行为验证承诺。** 对解析、判断、状态维护等承重程序，先定义成功、失败和边界用例，尽可能观察修改前的预期失败，再实现并跑通；预期独立于实现，必要时用变异检验是否真的能发现缺陷。可逆文字修改和纯工具转发不造重复形状测试。工作流改变须验证实际 CI 事件与被执行版本，静态形状和本地通过不能替代。时间、随机性与环境作为明确输入；性能测量与功能判词分开，不靠等待时长或机器快慢判正确。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Validate promises through behavior.** For load-bearing parsing, judgment and state-management code, first define success, failure and boundary cases; wherever practical observe the expected failure before making the change, then implement and make the cases pass. Expectations must be independent of the implementation; use mutation checks when needed to determine whether defects are actually detected. Do not add tests that duplicate the shape of reversible text edits or pure tool forwarding. Workflow changes require checking actual CI events and the executed version; static shape and local success are not substitutes. Treat time, randomness and environment as explicit inputs. Keep performance measurement separate from functional verdicts; correctness must not depend on waiting time or machine speed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.candidate",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**验证实际交付的候选。** 保护已有工作，在授权隔离工作区实施。使用 dev 交付流程时，feature 与 integration 从最新 dev 创建；稳定性、规则或门控变更先在 fresh integration 验证。过期、冲突处理或基线前移使有效输入改变时，保留必要成果、重建候选并补验影响范围。交付包含合并或发布时核实际落地状态；若生命周期由调用方负责，明确交接边界，不把本阶段完成说成已交付。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Validate the candidate actually being delivered.** Protect existing work and implement in an authorized isolated workspace. When using the dev delivery flow, create feature and integration from the latest dev; validate stability, rule or gate changes in a fresh integration first. If staleness, conflict resolution or a moving baseline changes effective inputs, retain necessary work, rebuild the candidate and revalidate the affected scope. When delivery includes merging or publication, verify the actual landed state. If the caller owns the lifecycle, state the handoff boundary and do not call completion of this stage delivery."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.cost",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**成本判断先有读数。** 因“大、慢、贵”改变计划前，测实际输入规模、依赖范围和主要成本，附采集方法及比较口径。先消除不必要工作、错误表示或重复依赖，再量改进；不靠抬预算、反复重跑、删必要测试或削弱目标换成功。同一有效输入已有足够验证且无新疑点时不重复求放心，变更影响或新失败才触发补验。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Measure before making cost judgments.** Before changing a plan because it is large, slow or expensive, measure actual input size, dependency scope and major costs, and report the collection method and comparison basis. First eliminate unnecessary work, incorrect representations and repeated dependencies, then measure the improvement. Do not obtain success by raising budgets, rerunning repeatedly, deleting necessary tests or weakening the goal. When the same effective input already has sufficient validation and there is no new concern, do not repeat checks for reassurance; changed impact or a new failure triggers additional validation."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.independent-check",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**独立核验保留其边界。** 关键结论用实际消费者、反例或可用的独立视角核对；单点自查如实说明，多次同源输出不冒充独立证据。分歧靠事实与可复现检验解决，票数和审美都不是证明，也不增加人类审批步骤。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Respect the limits of independent checks.** Cross-check key conclusions with actual consumers, counterexamples or an available independent perspective. Identify a single-source self-check honestly; repeated output from the same source is not independent evidence. Resolve disagreement with facts and reproducible checks. Votes and taste are not proof, and do not add human approval steps."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.useful-artifacts",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "**只留下有用成果。** 代码、当前规范、必要数据、来源与许可证归对应位置，失败留下可复用判据或回归用例。交付说明写清改了什么、实际验证、结果与未解边界；不把思考转录、实施日记、评审对话、命令流水或重复快照存入仓库，也不搬到另一份强制阅读材料里。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "**Keep only useful artifacts.** Put code, current specifications, necessary data, provenance and licenses in their proper places; failures should leave reusable criteria or regression cases. Delivery notes must state changes, actual validation, results and unresolved limits. Do not store thought transcripts, implementation diaries, review conversations, command streams or duplicate snapshots in the repository, or move them into another mandatory reading document."
+          }
+        }
+      ]
+    },
+    {
+      "id": "core.general",
+      "requires": [
+        "core.goal",
+        "core.autonomy",
+        "core.evidence",
+        "core.reuse",
+        "core.repair-producer",
+        "core.ownership",
+        "core.registration",
+        "core.single-method",
+        "core.registered-judges",
+        "core.small-projects",
+        "core.delta",
+        "core.evolving-rules",
+        "core.behavior",
+        "core.candidate",
+        "core.cost",
+        "core.independent-check",
+        "core.useful-artifacts"
+      ],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": ""
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": ""
+          }
+        }
+      ]
+    }
+  ]
+}

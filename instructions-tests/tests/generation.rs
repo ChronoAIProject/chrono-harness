@@ -53,20 +53,52 @@ fn assert_alias(host: &Host) {
     assert_eq!(host.read("AGENTS.md"), host.read("CLAUDE.md"));
 }
 
+fn expected_root(body: &[u8], locale: &str, title: Option<&str>) -> Vec<u8> {
+    let asset: serde_json::Value = serde_json::from_slice(
+        &fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/instructions/catalog.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let frame = asset["locales"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["id"] == locale)
+        .unwrap()["root_frame"]
+        .as_str()
+        .unwrap();
+    let heading = title.map(|t| format!("# {t}\n\n")).unwrap_or_default();
+    [BEGIN.as_bytes(), format!("\n{frame}\n\nmanifest: `{MANIFEST}`\ncatalog: `.chrono-harness/instructions/catalog.json`\nhost_context: `{CONTEXT}`\n\n{heading}").as_bytes(), body, b"\n", END.as_bytes(), b"\n"].concat()
+}
 fn expected_guide(method: &[u8]) -> Vec<u8> {
-    let frame =
-        fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/entrypoint.md")).unwrap();
-    [
-        BEGIN.as_bytes(),
-        b"\n",
-        &frame,
-        b"\n",
-        method,
-        b"\n",
-        END.as_bytes(),
-        b"\n",
-    ]
-    .concat()
+    expected_root(method, "und", None)
+}
+fn default_body() -> Vec<u8> {
+    let cat: serde_json::Value = serde_json::from_slice(
+        &fs::read(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/instructions/catalog.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    cat["atoms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| {
+            a["variants"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| v["locale"] == "zh-CN")
+                .map(|v| v["source"]["text"].as_str().unwrap())
+        })
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+        .into_bytes()
 }
 
 fn cli_init(
@@ -151,25 +183,24 @@ impl Host {
 fn init_retains_exact_inputs_and_publishes_one_literal_guide() {
     let host = Host::new();
     let changed = host.init().unwrap();
-    assert_eq!(changed.len(), 5);
+    assert_eq!(changed.len(), 6);
     let method = fs::read(&host.method).unwrap();
     assert_eq!(host.read(METHOD), method);
     assert_eq!(host.read(CONTEXT), b"");
     assert_eq!(host.read("CLAUDE.md"), expected_guide(&method));
     assert_alias(&host);
     let manifest: serde_json::Value = serde_json::from_slice(&host.read(MANIFEST)).unwrap();
-    assert_eq!(manifest["schema_version"], 1);
-    assert_eq!(manifest["producer"], "chrono-instructions/0.1.0");
-    assert_eq!(manifest["render"], "literal-core/relative-alias/v2");
-    assert_eq!(manifest["sources"][0]["path"], METHOD);
-    assert_eq!(manifest["sources"][1]["path"], CONTEXT);
+    assert_eq!(manifest["schema_version"], 2);
+    assert_eq!(manifest["producer"], "chrono-instructions");
+    assert_eq!(manifest["render"], "atomic-rules/relative-alias/v3");
+    assert_eq!(
+        manifest["catalog"],
+        ".chrono-harness/instructions/catalog.json"
+    );
+    assert_eq!(manifest["host_context"], CONTEXT);
     assert_eq!(
         manifest["outputs"][0],
-        serde_json::json!({"role":"claude-guide", "path":"CLAUDE.md"})
-    );
-    assert_eq!(
-        manifest["outputs"][1],
-        serde_json::json!({"role":"agents-relative-alias", "path":"AGENTS.md"})
+        serde_json::json!({"id":"root", "path":"CLAUDE.md", "format":"root-guide", "locale":"und", "roots":["legacy.method"]})
     );
 }
 
@@ -307,49 +338,36 @@ fn invalid_registration_is_rejected_without_repairs_or_output_changes() {
     let cases = [
         "{".to_owned(),
         original.replacen(
-            "\"schema_version\": 1",
-            "\"schema_version\": 1, \"schema_version\": 1",
+            "\"schema_version\": 2",
+            "\"schema_version\": 2, \"schema_version\": 2",
             1,
         ),
-        original.replacen("\"schema_version\": 1", "\"schema_version\": 2", 1),
+        original.replacen("\"schema_version\": 2", "\"schema_version\": 99", 1),
         original.replacen(
-            "\"schema_version\": 1",
-            "\"extra\": true, \"schema_version\": 1",
+            "\"schema_version\": 2",
+            "\"extra\": true, \"schema_version\": 2",
             1,
         ),
-        original.replace(
-            "literal-core/relative-alias/v2",
-            "literal-core/relative-alias/v9",
-        ),
-        original.replace("chrono-instructions/0.1.0", "different-producer"),
-        original.replace(METHOD, "../outside.md"),
-        original.replace("host-context\"", "methodology\""),
+        original.replace("atomic-rules/relative-alias/v3", "atomic-rules/v9"),
+        original.replace("\"chrono-instructions\"", "\"different-producer\""),
         original.replace("CLAUDE.md", "AGENTS.md"),
-        original.replacen("\"role\":", "\"extra\": 1, \"role\":", 1),
-        original.replacen(
-            "\"role\": \"methodology\"",
-            "\"role\": \"methodology\", \"role\": \"methodology\"",
-            1,
-        ),
+        original.replacen("\"id\": \"root\"", "\"id\": \"root\", \"id\": \"root\"", 1),
         format!("{original} true"),
     ];
     for bytes in cases {
+        assert_ne!(bytes, original);
         host.write(MANIFEST, bytes);
         let before = host.snapshot();
-        let result = generate(&host.root);
-        assert!(result.unwrap_err().contains("registration"));
-        let result = cli_init(&host, None, None);
-        assert_eq!(result.exit_code, 1, "{result:?}");
-        assert!(result.stderr.contains("registration"));
+        assert!(generate(&host.root).is_err());
+        assert_eq!(cli_init(&host, None, None).exit_code, 1);
         assert_eq!(host.snapshot(), before);
     }
 }
 
 #[test]
-fn reordered_source_or_output_registration_is_invalid() {
+fn reordered_legacy_source_or_output_registration_is_invalid() {
     for field in ["sources", "outputs"] {
-        let host = Host::new();
-        host.init().unwrap();
+        let host = legacy_host();
         let mut value: serde_json::Value = serde_json::from_slice(&host.read(MANIFEST)).unwrap();
         value[field].as_array_mut().unwrap().reverse();
         host.write(MANIFEST, serde_json::to_vec(&value).unwrap());
@@ -362,7 +380,7 @@ fn reordered_source_or_output_registration_is_invalid() {
 
 #[test]
 fn init_never_overwrites_reserved_unregistered_material() {
-    for path in [METHOD, CONTEXT] {
+    for path in [METHOD, CONTEXT, ".chrono-harness/instructions/catalog.json"] {
         let host = Host::new();
         host.write(path, "customized existing source");
         let before = host.snapshot();
@@ -458,7 +476,7 @@ fn recognized_root_alias_is_preserved_and_explicit_input_alias_can_be_selected()
     symlink("CLAUDE.md", host.root.join("AGENTS.md")).unwrap();
     let selected = host.temp.path().join("selected alias.md");
     symlink(&host.method, &selected).unwrap();
-    assert_eq!(init(&host.root, &selected, &host.context).unwrap().len(), 4);
+    assert_eq!(init(&host.root, &selected, &host.context).unwrap().len(), 5);
     assert_eq!(
         fs::read_link(host.root.join("AGENTS.md"))
             .unwrap()
@@ -543,7 +561,7 @@ fn unrecognized_or_dangling_aliases_and_linked_storage_are_rejected() {
     host.write("CLAUDE.md", "shared inode");
     fs::hard_link(host.root.join("CLAUDE.md"), host.root.join("AGENTS.md")).unwrap();
     let before = host.snapshot();
-    assert!(host.init().unwrap_err().contains("hard-linked"));
+    assert!(host.init().unwrap_err().contains("alias"));
     assert_eq!(host.snapshot(), before);
 }
 
@@ -611,7 +629,7 @@ fn unreadable_inputs_outputs_and_storage_fail_without_publication() {
 
 #[test]
 fn late_publication_failure_rolls_back_new_material_and_existing_output_bytes() {
-    for after in 0..5 {
+    for after in 0..6 {
         let host = Host::new();
         host.write("AGENTS.md", b"original host\xff");
         host.write("CLAUDE.md", b"original host\xff");
@@ -631,7 +649,7 @@ fn incomplete_rollback_identifies_exact_unrestored_path_and_retains_original() {
     host.write("AGENTS.md", "original host");
     host.write("CLAUDE.md", "original host");
     let failure =
-        test_support::init_with_failure(&host.root, &host.method, &host.context, 4, Some(3))
+        test_support::init_with_failure(&host.root, &host.method, &host.context, 5, Some(4))
             .unwrap_err();
     let expected = format!(
         "unrestored=[{:?}]",
@@ -683,7 +701,7 @@ fn replacement_and_rollback_preserve_regular_file_permissions() {
         fs::Permissions::from_mode(0o640),
     )
     .unwrap();
-    test_support::init_with_failure(&host.root, &host.method, &host.context, 4, None).unwrap_err();
+    test_support::init_with_failure(&host.root, &host.method, &host.context, 5, None).unwrap_err();
     assert_eq!(
         fs::metadata(host.root.join("AGENTS.md"))
             .unwrap()
@@ -767,7 +785,7 @@ fn cli_usage_generation_errors_and_success_have_distinct_exit_contracts() {
         host.method.clone().into_os_string(),
     ]);
     assert_eq!(output.exit_code, 0, "{output:?}");
-    assert!(output.stdout.contains("5 file(s) changed"));
+    assert!(output.stdout.contains("6 file(s) changed"));
     let output = dispatch(&generate_args);
     assert_eq!(output.exit_code, 0);
     assert!(output.stdout.contains("0 file(s) changed"));
@@ -804,7 +822,7 @@ fn cli_accepts_os_path_arguments_without_lossy_conversion() {
 #[test]
 fn default_init_ships_exact_core_empty_context_and_sole_agents_donor() {
     let host = Host::new();
-    let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/methodology.md");
+    let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/instructions/catalog.json");
     host.write("AGENTS.md", b"existing agents\r\n");
     host.write(".chrono-harness/unrelated.json", b"keep this");
     fs::remove_file(&host.method).unwrap();
@@ -812,21 +830,26 @@ fn default_init_ships_exact_core_empty_context_and_sole_agents_donor() {
     let result = cli_init(&host, None, None);
     assert_eq!(result.exit_code, 0, "{result:?}");
     assert!(result.stdout.contains("5 file(s) changed"));
-    assert_eq!(host.read(METHOD), fs::read(&asset).unwrap());
+    assert_eq!(
+        host.read(".chrono-harness/instructions/catalog.json"),
+        fs::read(&asset).unwrap()
+    );
+    assert!(!host.root.join(METHOD).exists());
     assert_eq!(host.read(CONTEXT), b"");
-    let expected = [
-        b"existing agents\r\n".as_slice(),
-        &expected_guide(&host.read(METHOD)),
-    ]
-    .concat();
-    assert_eq!(host.read("CLAUDE.md"), expected);
+    assert_eq!(
+        host.read("CLAUDE.md"),
+        [
+            b"existing agents\r\n".as_slice(),
+            &expected_root(&default_body(), "zh-CN", Some("通用工作方法"))
+        ]
+        .concat()
+    );
     assert_alias(&host);
     assert_eq!(host.read(".chrono-harness/unrelated.json"), b"keep this");
 }
 
 #[test]
 fn init_overrides_are_independent_and_retain_exact_selected_bytes() {
-    let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/methodology.md");
     for (method, context) in [(true, false), (false, true), (true, true)] {
         let host = Host::new();
         fs::write(&host.context, "\u{feff}deliberate host facts\r\n").unwrap();
@@ -836,10 +859,15 @@ fn init_overrides_are_independent_and_retain_exact_selected_bytes() {
             context.then_some(&host.context),
         );
         assert_eq!(result.exit_code, 0, "{result:?}");
-        assert_eq!(
-            host.read(METHOD),
-            fs::read(if method { &host.method } else { &asset }).unwrap()
-        );
+        if method {
+            assert_eq!(host.read(METHOD), fs::read(&host.method).unwrap());
+        } else {
+            assert!(!host.root.join(METHOD).exists());
+            assert_eq!(
+                host.read("CLAUDE.md"),
+                expected_root(&default_body(), "zh-CN", Some("通用工作方法"))
+            );
+        }
         assert_eq!(
             host.read(CONTEXT),
             if context {
@@ -862,7 +890,16 @@ fn default_reinit_retains_custom_sources_without_writes() {
         }
         for customized in [false, true] {
             if customized {
-                host.write(METHOD, "customized method after installation\r\n");
+                if selected {
+                    host.write(METHOD, "customized method after installation\r\n");
+                } else {
+                    let path = ".chrono-harness/instructions/catalog.json";
+                    let mut cat: serde_json::Value =
+                        serde_json::from_slice(&host.read(path)).unwrap();
+                    cat["atoms"][0]["variants"][0]["source"]["text"] =
+                        serde_json::json!("customized goal atom\r\n");
+                    host.write(path, serde_json::to_vec(&cat).unwrap());
+                }
                 host.write(CONTEXT, "customized context after installation");
                 let manifest: serde_json::Value =
                     serde_json::from_slice(&host.read(MANIFEST)).unwrap();
@@ -1122,7 +1159,7 @@ fn exact_v1_upgrades_through_init_or_generate_without_updating_adopted_sources()
             host.root.clone().into_os_string(),
         ]);
         assert_eq!(result.exit_code, 0, "{result:?}");
-        assert!(result.stdout.contains("3 file(s) changed"));
+        assert!(result.stdout.contains("4 file(s) changed"));
         assert_eq!(host.read(METHOD), method);
         assert_eq!(host.read(CONTEXT), context);
         assert_alias(&host);
@@ -1132,7 +1169,7 @@ fn exact_v1_upgrades_through_init_or_generate_without_updating_adopted_sources()
         expected.extend_from_slice(b"\nhost tail");
         assert_eq!(host.read("CLAUDE.md"), expected);
         let manifest: serde_json::Value = serde_json::from_slice(&host.read(MANIFEST)).unwrap();
-        assert_eq!(manifest["render"], "literal-core/relative-alias/v2");
+        assert_eq!(manifest["render"], "atomic-rules/relative-alias/v3");
         host.write(MANIFEST, serde_json::to_vec(&manifest).unwrap());
         let before = host.snapshot();
         assert!(host.init().unwrap().is_empty());
@@ -1178,7 +1215,7 @@ fn existing_alias_inode_survives_edits_and_migration() {
         (m.dev(), m.ino(), m.modified().unwrap())
     };
     let before = identity();
-    assert_eq!(generate(&host.root).unwrap().len(), 2);
+    assert_eq!(generate(&host.root).unwrap().len(), 3);
     host.write(METHOD, "changed method");
     assert_eq!(generate(&host.root).unwrap().len(), 1);
     assert_eq!(cli_init(&host, None, None).exit_code, 0);
@@ -1189,7 +1226,7 @@ fn existing_alias_inode_survives_edits_and_migration() {
 #[test]
 fn failure_after_fresh_alias_publication_removes_all_new_material() {
     let host = Host::new();
-    let failure = test_support::init_with_failure(&host.root, &host.method, &host.context, 4, None)
+    let failure = test_support::init_with_failure(&host.root, &host.method, &host.context, 5, None)
         .unwrap_err();
     assert!(failure.contains("injected publication failure"));
     assert!(failure.contains("AGENTS.md") && failure.contains("unrestored=[]"));
@@ -1211,7 +1248,7 @@ fn upgrade_failure_after_alias_restores_old_registration_roots_and_modes() {
         fs::set_permissions(host.root.join(path), fs::Permissions::from_mode(mode)).unwrap();
     }
     let before = host.snapshot();
-    let failure = test_support::init_with_failure(&host.root, &host.method, &host.context, 2, None)
+    let failure = test_support::init_with_failure(&host.root, &host.method, &host.context, 3, None)
         .unwrap_err();
     assert!(failure.contains("unrestored=[]"));
     assert_eq!(host.snapshot(), before);
@@ -1224,7 +1261,7 @@ fn upgrade_failure_after_alias_restores_old_registration_roots_and_modes() {
         assert!(meta.file_type().is_file());
         assert_eq!(meta.permissions().mode() & 0o777, mode);
     }
-    assert_eq!(generate(&host.root).unwrap().len(), 3);
+    assert_eq!(generate(&host.root).unwrap().len(), 4);
     assert_alias(&host);
     assert_eq!(
         fs::metadata(host.root.join("CLAUDE.md"))
@@ -1240,7 +1277,7 @@ fn upgrade_failure_after_alias_restores_old_registration_roots_and_modes() {
 fn incomplete_fresh_alias_rollback_names_unrestored_link_and_allows_explicit_recovery() {
     let host = Host::new();
     let failure =
-        test_support::init_with_failure(&host.root, &host.method, &host.context, 4, Some(3))
+        test_support::init_with_failure(&host.root, &host.method, &host.context, 5, Some(4))
             .unwrap_err();
     let path = fs::canonicalize(&host.root).unwrap().join("AGENTS.md");
     assert!(
@@ -1261,3 +1298,6 @@ fn incomplete_fresh_alias_rollback_names_unrestored_link_and_allows_explicit_rec
     host.init().unwrap();
     assert_alias(&host);
 }
+
+#[path = "atomic.rs"]
+mod atomic;

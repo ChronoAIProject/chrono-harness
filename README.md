@@ -2,7 +2,7 @@
 
 用 Rust 构建的、以显式登记和 DELTA 判官为核心的 harness，附独立的宿主指令生成器。
 
-**已实现 AGENTS.md / CLAUDE.md 生成；通用 check 与判官尚未实现，五份判官登记表仍为 proposed。**
+**已实现原子规则与多语言组合，生成根指南、Markdown 和 skills；通用 check 与判官尚未实现，五份通用登记表仍为 proposed。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
 宿主约束草案仅放在 [.chrono-harness](.chrono-harness/config.json)；产品代码在 `runner/` 与
 `instructions/`，分别有专属的 `runner-tests/` 与 `instructions-tests/`。
@@ -15,23 +15,18 @@ cargo install --locked --path instructions
 chrono-instructions init --host-root "/path/to/existing-host"
 ```
 
-可执行文件编译时内嵌精选的[通用软件/AI 工作核心](assets/methodology.md)，运行时不需要 checkout。
-默认产生普通 `CLAUDE.md`，其受管块直接包含完整核心；`AGENTS.md -> CLAUDE.md` 是真实的字面相对符号链接。
-新宿主同时获得 `.chrono-harness/instructions/` 下的方法编辑源、空上下文和专用 manifest，无需手工注入。
-可独立选择 `--methodology M`、`--host-context C` 覆盖默认输入，精确保留选定 UTF-8 字节。
-根块外文字属于宿主。两个现有普通根文件仅在渲染后的完整字节相同时自动转换；不同原文报无写入冲突，
-授权 AI 保全并明确整合后重试。仅一个普通根文件时保留其文字，转成同一正文+链接布局。
+可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。17 条通用规则具有稳定 ID、中文/英文 variant 和显式依赖；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
 
-日常编辑宿主方法源，再运行 `chrono-instructions generate --host-root "/path/to/existing-host"`。
-init 和 generate 都支持从已知 `read-both/v1` 登记前向升级布局；保留已注册方法和上下文，不自动采用新默认。
-重复 init 省略选项保留定制，显式不同输入拒绝；采用新版核心须明确比较、编辑宿主源再生成。
-当前身份为 `literal-core/relative-alias/v2`，旧二进制不支持它。重复无变化时无写入，已有正确链接不重建。
+默认产生含完整中文核心的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
 
-支持 Unix；已验证当前 macOS，其他平台未验证，非 Unix 明确失败。退出码 0 完整、2 用法错误、1 生成/IO 失败。
-普通 IO 失败尝试恢复原文件/模式或移除新链接，恢复失败报告路径和可用备份；无崩溃原子性或并发写者保证。
-完整所有权、版本、冲突、字节和恢复边界见[生成合同](docs/instructions.md)。
-[可选来源说明](docs/methodology-extraction.md) 说明实际通用规则的选择与研究材料的排除，不宣称全条款迁移。
-本仓通过相同工具生成根正文和链接；自举不证明 AI 遵守，也不启用判官。
+日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。依赖先于使用者、共享原子每输出仅一次；缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
+
+当前身份为 schema 2 / `atomic-rules/relative-alias/v3`。已知 read-both/v1 与 literal-core/relative-alias/v2 自动前向迁移，保留旧方法/上下文精确字节、路径与权限，不拆 prose 或改为默认。重复 init 省略选项保留采用数据，显式不同输入或 locale 拒绝；原子组合不能被 raw method 覆盖。
+
+根块外原文属于宿主；两普通根只在渲染后整份字节相同才转换，有差异明确报错供授权 AI 保全并整合。额外输出为有身份标记的整文件投影，拒绝覆盖未声明所有权的现有文件。删除或改名输出条目保留旧文件；旧 skill 须明确退休，否则仍可能被发现。无变化时无写入，已有有效根链接不重建。
+
+支持 Unix，行为验证限定当前 macOS。普通 IO 失败尝试回滚并报告未恢复路径/备份；无崩溃原子性或并发写者保证。退出码 0 完整、2 用法错误、1 生成/IO 失败。
+[来源说明](docs/methodology-extraction.md) 定义通用规则与译文来源边界。本仓通过同一工具生成根中文、[英文方法](docs/generated/general-methods.en.md) 与[重复故障诊断 skill](skills/diagnose-recurring-failures/SKILL.md)；默认新宿主只生成根指南。生成不证明 AI 遵守、翻译语义等价或判官已执行。
 
 ```sh
 cargo build --locked --manifest-path runner/Cargo.toml

@@ -1,6 +1,10 @@
 //! Explicit host instruction generation. No judge execution or host discovery.
 
+mod catalog;
 mod transaction;
+
+use catalog::{Atom, Catalog, Content, Format, Manifest, Variant};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use std::ffi::{OsStr, OsString};
@@ -8,19 +12,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use transaction::{Change, Fault, Snapshot};
 
-const DIRECTORY: &str = ".chrono-harness/instructions";
 const MANIFEST: &str = ".chrono-harness/instructions/manifest.json";
 const METHOD: &str = ".chrono-harness/instructions/methodology.md";
 const CONTEXT: &str = ".chrono-harness/instructions/host-context.md";
 const BEGIN: &[u8] = b"<!-- chrono-instructions:begin -->";
 const END: &[u8] = b"<!-- chrono-instructions:end -->";
 const RESERVED: &[u8] = b"<!-- chrono-instructions";
-const FRAME: &str = include_str!("../../assets/entrypoint.md");
-const DEFAULT_METHOD: &str = include_str!("../../assets/methodology.md");
+const CATALOG: &str = ".chrono-harness/instructions/catalog.json";
 
 struct InitSources {
     methodology: Option<Vec<u8>>,
     context: Option<Vec<u8>>,
+    locale: Option<String>,
 }
 
 impl InitSources {
@@ -28,6 +31,7 @@ impl InitSources {
         Ok(Self {
             methodology: methodology.map(input).transpose()?,
             context: context.map(input).transpose()?,
+            locale: None,
         })
     }
 }
@@ -56,7 +60,7 @@ fn registration() -> Registration {
     };
     Registration {
         schema_version: 1,
-        producer: concat!("chrono-instructions/", env!("CARGO_PKG_VERSION")).into(),
+        producer: "chrono-instructions/0.1.0".into(),
         render: "literal-core/relative-alias/v2".into(),
         sources: vec![
             source("methodology", METHOD),
@@ -87,20 +91,17 @@ fn legacy_registration() -> Registration {
     old
 }
 
-fn manifest_bytes() -> Result<Vec<u8>, String> {
-    let mut bytes = serde_json::to_vec_pretty(&registration()).map_err(|e| e.to_string())?;
-    bytes.push(b'\n');
-    Ok(bytes)
-}
-
-fn managed_block(method: &[u8]) -> Vec<u8> {
+fn managed_block(manifest: &Manifest, frame: &str, body: &str) -> Vec<u8> {
     let mut block = BEGIN.to_vec();
-    block.push(b'\n');
-    block.extend_from_slice(FRAME.as_bytes());
-    block.push(b'\n');
-    block.extend_from_slice(method);
-    // Framing belongs to the projection; the method bytes are never trimmed.
-    block.push(b'\n');
+    block.extend_from_slice(
+        format!(
+            "\n{frame}\n\nmanifest: `{MANIFEST}`\ncatalog: `{}`\nhost_context: `{}`\n\n{}\n",
+            manifest.catalog,
+            manifest.host_context,
+            manifest.root().title_body(body)
+        )
+        .as_bytes(),
+    );
     block.extend_from_slice(END);
     block
 }
@@ -208,6 +209,153 @@ fn render(path: &Path, bytes: &[u8], block: &[u8]) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
+// Canonical lexical paths keep the registry unambiguous; existing ancestors are
+// checked separately before reading or writing any registered file.
+fn relative(path: &str, source: bool) -> Result<(), String> {
+    catalog::content_valid(path)?;
+    if path.is_empty()
+        || path.contains('\\')
+        || path.chars().any(char::is_control)
+        || path
+            .split('/')
+            .any(|p| p.is_empty() || p == "." || p == "..")
+        || Path::new(path).is_absolute()
+    {
+        return Err(format!("{path:?}: expected canonical relative path"));
+    }
+    if source && !path.starts_with(".chrono-harness/") {
+        return Err(format!(
+            "{path}: registered inputs must be under .chrono-harness/"
+        ));
+    }
+    Ok(())
+}
+
+// Use Unicode case folding, then the platform's filesystem representation for
+// prospective macOS paths. Lowercasing misses aliases such as straße / STRASSE.
+// This conservatively rejects ambiguous spellings even on case-sensitive volumes;
+// it does not change registered paths or probe the filesystem with writes.
+#[cfg(target_os = "macos")]
+fn mac_path_key(path: &str) -> Result<Vec<u8>, String> {
+    use std::ffi::{c_char, c_void};
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFStringCreateWithBytes(
+            allocator: *const c_void,
+            bytes: *const u8,
+            count: isize,
+            encoding: u32,
+            external: u8,
+        ) -> *const c_void;
+        fn CFStringCreateMutableCopy(
+            allocator: *const c_void,
+            capacity: isize,
+            string: *const c_void,
+        ) -> *mut c_void;
+        fn CFStringFold(string: *mut c_void, flags: usize, locale: *const c_void);
+        fn CFStringGetMaximumSizeOfFileSystemRepresentation(string: *const c_void) -> isize;
+        fn CFStringGetFileSystemRepresentation(
+            string: *const c_void,
+            buffer: *mut c_char,
+            size: isize,
+        ) -> u8;
+        fn CFRelease(value: *const c_void);
+    }
+    let count = isize::try_from(path.len()).map_err(|_| format!("{path}: path too long"))?;
+    // SAFETY: create from a live UTF-8 slice using the SDK's UTF-8 encoding
+    // constant. Fold only a mutable copy, using kCFCompareCaseInsensitive (1)
+    // and the canonical system locale (NULL), not the user's locale. Check the
+    // allocations and buffer bound; release both owned CF strings on every
+    // return path. CF never retains the supplied byte buffer.
+    unsafe {
+        let original =
+            CFStringCreateWithBytes(std::ptr::null(), path.as_ptr(), count, 0x08000100, 0);
+        if original.is_null() {
+            return Err(format!(
+                "{path}: cannot create macOS path comparison string"
+            ));
+        }
+        let string = CFStringCreateMutableCopy(std::ptr::null(), 0, original);
+        CFRelease(original);
+        if string.is_null() {
+            return Err(format!("{path}: cannot copy macOS path comparison string"));
+        }
+        CFStringFold(string, 1, std::ptr::null());
+        let size = CFStringGetMaximumSizeOfFileSystemRepresentation(string);
+        if size <= 0 {
+            CFRelease(string);
+            return Err(format!("{path}: cannot size macOS path comparison string"));
+        }
+        let mut bytes = vec![0u8; size as usize];
+        let converted =
+            CFStringGetFileSystemRepresentation(string, bytes.as_mut_ptr().cast(), size);
+        CFRelease(string);
+        if converted == 0 {
+            return Err(format!("{path}: cannot encode macOS filesystem path"));
+        }
+        let end = bytes
+            .iter()
+            .position(|b| *b == 0)
+            .ok_or_else(|| format!("{path}: missing filesystem string terminator"))?;
+        bytes.truncate(end);
+        Ok(bytes)
+    }
+}
+
+fn parents(root: &Path, relative: &str, directories: &mut BTreeSet<PathBuf>) -> Result<(), String> {
+    let mut path = root.to_path_buf();
+    let parts: Vec<_> = relative.split('/').collect();
+    for part in &parts[..parts.len() - 1] {
+        path.push(part);
+        match metadata(&path)? {
+            Some(meta) if !meta.file_type().is_dir() => {
+                return Err(error(
+                    &path,
+                    "expected a directory, not a symlink or other type",
+                ));
+            }
+            None => {
+                directories.insert(path.clone());
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn required(root: &Path, path: &str) -> Result<Vec<u8>, String> {
+    let full = root.join(path);
+    let snapshot = regular(&full)?.ok_or_else(|| error(&full, "registered source is missing"))?;
+    utf8(&full, &snapshot.bytes)?;
+    Ok(snapshot.bytes)
+}
+
+fn raw_catalog(locale: &str) -> Result<Catalog, String> {
+    let mut cat: Catalog = catalog::parse(catalog::DEFAULT_CATALOG.as_bytes())?;
+    if !cat.locales.iter().any(|l| l.id == locale) {
+        return Err(format!("unregistered locale {locale}"));
+    }
+    cat.atoms = vec![Atom {
+        id: "legacy.method".into(),
+        requires: vec![],
+        variants: vec![Variant {
+            locale: locale.into(),
+            source: Content::File {
+                path: METHOD.into(),
+            },
+        }],
+    }];
+    Ok(cat)
+}
+fn raw_manifest(locale: &str) -> Result<Manifest, String> {
+    let mut manifest: Manifest = catalog::parse(catalog::DEFAULT_MANIFEST.as_bytes())?;
+    let output = &mut manifest.outputs[0];
+    output.locale = locale.into();
+    output.roots = vec!["legacy.method".into()];
+    output.title = None;
+    Ok(manifest)
+}
+
 fn prepare(
     host: &Path,
     selected: Option<InitSources>,
@@ -221,98 +369,234 @@ fn prepare(
     if !root.is_dir() {
         return Err(error(&root, "host root must be an existing directory"));
     }
-    let mut directories = Vec::new();
-    for relative in [".chrono-harness", DIRECTORY] {
-        let path = root.join(relative);
-        match metadata(&path)? {
-            Some(meta) if !meta.file_type().is_dir() => {
-                return Err(error(
-                    &path,
-                    "expected a directory, not a symlink or other type",
-                ));
-            }
-            None => directories.push(path),
-            _ => {}
-        }
-    }
-    let mut changes = Vec::new();
+    let mut directories = BTreeSet::new();
+    parents(&root, MANIFEST, &mut directories)?;
     let manifest_path = root.join(MANIFEST);
-    let manifest = regular(&manifest_path)?;
-    let method_path = root.join(METHOD);
-    let context_path = root.join(CONTEXT);
-    let method = regular(&method_path)?;
-    let context = regular(&context_path)?;
-    let mut manifest_change = None;
-    let method_bytes;
-    if let Some(existing) = manifest {
-        let parsed: Registration = serde_json::from_slice(&existing.bytes)
-            .map_err(|e| error(&manifest_path, format!("invalid registration: {e}")))?;
-        if parsed == legacy_registration() {
-            manifest_change = Some(Change::new(
-                manifest_path.clone(),
-                Some(existing),
-                manifest_bytes()?,
-            ));
-        } else if parsed != registration() {
-            return Err(error(
-                &manifest_path,
-                "unsupported registration: expected exact literal-core/relative-alias/v2 or read-both/v1 migration identity",
-            ));
-        }
-        let method = method.ok_or_else(|| error(&method_path, "registered source is missing"))?;
-        let context =
-            context.ok_or_else(|| error(&context_path, "registered source is missing"))?;
-        utf8(&method_path, &method.bytes)?;
-        utf8(&context_path, &context.bytes)?;
-        if let Some(selected) = selected {
-            if selected
-                .methodology
-                .is_some_and(|bytes| bytes != method.bytes)
-                || selected.context.is_some_and(|bytes| bytes != context.bytes)
-            {
-                return Err(error(
-                    &manifest_path,
-                    "init inputs differ from retained canonical sources; edit retained sources deliberately and use generate",
-                ));
+    let manifest_before = regular(&manifest_path)?;
+    let mut changes = Vec::new();
+    let mut pending = BTreeMap::<String, Vec<u8>>::new();
+    let mut new_manifest = false;
+    let manifest: Manifest;
+    if let Some(existing) = &manifest_before {
+        match catalog::parse::<Manifest>(&existing.bytes) {
+            Ok(parsed) => {
+                parsed.validate().map_err(|e| error(&manifest_path, e))?;
+                manifest = parsed;
+            }
+            Err(current_error) => {
+                let parsed: Registration = catalog::parse(&existing.bytes).map_err(|e| {
+                    error(
+                        &manifest_path,
+                        format!("invalid registration: {current_error}; legacy: {e}"),
+                    )
+                })?;
+                if parsed != registration() && parsed != legacy_registration() {
+                    return Err(error(
+                        &manifest_path,
+                        "unsupported registration: expected exact known v1/v2 migration identity",
+                    ));
+                }
+                // Retain old method/context files; only register an opaque reference.
+                if regular(&root.join(CATALOG))?.is_some() {
+                    return Err(error(
+                        &root.join(CATALOG),
+                        "reserved source collision during migration",
+                    ));
+                }
+                manifest = raw_manifest("und")?;
+                pending.insert(CATALOG.into(), catalog::bytes(&raw_catalog("und")?)?);
+                new_manifest = true;
             }
         }
-        method_bytes = method.bytes;
     } else {
-        let selected = selected.ok_or_else(|| {
+        let sources = selected.as_ref().ok_or_else(|| {
             error(
                 &manifest_path,
                 "missing registration; run explicit init first",
             )
         })?;
-        for (path, exists) in [
-            (&method_path, method.is_some()),
-            (&context_path, context.is_some()),
-        ] {
-            if exists {
+        for path in [METHOD, CONTEXT, CATALOG] {
+            if regular(&root.join(path))?.is_some() {
                 return Err(error(
-                    path,
+                    &root.join(path),
                     "reserved source collision without registration",
                 ));
             }
         }
-        method_bytes = selected
-            .methodology
-            .unwrap_or_else(|| DEFAULT_METHOD.as_bytes().to_vec());
-        changes.push(Change::new(method_path.clone(), None, method_bytes.clone()));
-        changes.push(Change::new(
-            context_path,
-            None,
-            selected.context.unwrap_or_default(),
-        ));
-        manifest_change = Some(Change::new(manifest_path, None, manifest_bytes()?));
+        let (catalog_bytes, initial) = if let Some(method) = &sources.methodology {
+            let locale = sources.locale.as_deref().unwrap_or("und");
+            pending.insert(METHOD.into(), method.clone());
+            (
+                catalog::bytes(&raw_catalog(locale)?)?,
+                raw_manifest(locale)?,
+            )
+        } else {
+            let mut initial: Manifest = catalog::parse(catalog::DEFAULT_MANIFEST.as_bytes())?;
+            if let Some(locale) = &sources.locale {
+                if initial.outputs[0].locale != *locale {
+                    initial.outputs[0].title = None;
+                }
+                initial.outputs[0].locale = locale.clone();
+            }
+            (catalog::DEFAULT_CATALOG.as_bytes().to_vec(), initial)
+        };
+        manifest = initial;
+        pending.insert(CATALOG.into(), catalog_bytes);
+        pending.insert(CONTEXT.into(), sources.context.clone().unwrap_or_default());
+        new_manifest = true;
     }
-    if !positions(&method_bytes, RESERVED).is_empty() {
-        return Err(error(
-            &method_path,
-            "methodology contains reserved marker prefix <!-- chrono-instructions; edit the source before generation",
-        ));
+    manifest.validate().map_err(|e| error(&manifest_path, e))?;
+    for path in [&manifest.catalog, &manifest.host_context] {
+        relative(path, true)?;
+        parents(&root, path, &mut directories)?;
     }
-    let block = managed_block(&method_bytes);
+    if manifest.catalog == manifest.host_context
+        || manifest.catalog == MANIFEST
+        || manifest.host_context == MANIFEST
+    {
+        return Err("source/control overlap in registration".into());
+    }
+    let catalog_bytes = match pending.get(&manifest.catalog) {
+        Some(bytes) => bytes.clone(),
+        None => required(&root, &manifest.catalog)?,
+    };
+    let cat: Catalog = catalog::parse(&catalog_bytes).map_err(|e| {
+        error(
+            &root.join(&manifest.catalog),
+            format!("invalid catalog: {e}"),
+        )
+    })?;
+    cat.validate()
+        .map_err(|e| error(&root.join(&manifest.catalog), e))?;
+    // Distinct control files and every output own one path. File variants may
+    // explicitly share an input, but cannot alias a control file or output.
+    let mut roles = BTreeMap::new();
+    for (path, role) in [
+        (MANIFEST, "manifest"),
+        (&manifest.catalog, "catalog"),
+        (&manifest.host_context, "host context"),
+        ("AGENTS.md", "root alias"),
+    ] {
+        if roles.insert(path.to_owned(), role).is_some() {
+            return Err(format!("{path}: source/control/alias overlap"));
+        }
+    }
+    let file_inputs: BTreeSet<_> = cat.file_inputs().into_iter().collect();
+    for path in &file_inputs {
+        relative(path, true)?;
+        if roles.insert((*path).to_owned(), "file source").is_some() {
+            return Err(format!("{path}: source/control overlap"));
+        }
+    }
+    for output in &manifest.outputs {
+        relative(&output.path, false)?;
+        if roles.insert(output.path.clone(), "output").is_some() {
+            return Err(format!("{}: source/output/alias overlap", output.path));
+        }
+    }
+    // macOS commonly uses case-insensitive volumes. Refuse inconsistent case
+    // or normalization spellings, including prospective directories, even on a case-sensitive
+    // macOS volume rather than publishing two ordinary aliases as two owners.
+    #[cfg(target_os = "macos")]
+    {
+        let mut spellings = BTreeMap::new();
+        for path in roles.keys() {
+            let mut prefix = String::new();
+            for component in path.split('/') {
+                if !prefix.is_empty() {
+                    prefix.push('/');
+                }
+                prefix.push_str(component);
+                if let Some(previous) = spellings.insert(mac_path_key(&prefix)?, prefix.clone()) {
+                    if previous != prefix {
+                        return Err(format!(
+                            "case alias or normalization alias in registered paths: {previous} and {prefix}"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let mut identities = BTreeMap::new();
+        for path in roles.keys() {
+            if let Some(meta) = metadata(&root.join(path))? {
+                if meta.file_type().is_file() {
+                    if let Some(previous) = identities.insert((meta.dev(), meta.ino()), path) {
+                        return Err(format!("actual file alias: {previous} and {path}"));
+                    }
+                }
+            }
+        }
+    }
+    for path in roles.keys() {
+        for other in roles.keys() {
+            if other.starts_with(&format!("{path}/")) {
+                return Err(format!("file/ancestor conflict: {path} and {other}"));
+            }
+        }
+        parents(&root, path, &mut directories)?;
+    }
+    let mut files = BTreeMap::new();
+    for path in file_inputs
+        .into_iter()
+        .chain(std::iter::once(manifest.host_context.as_str()))
+    {
+        let bytes = match pending.get(path) {
+            Some(bytes) => bytes.clone(),
+            None => required(&root, path)?,
+        };
+        files.insert(path.to_owned(), bytes);
+    }
+    if let Some(sources) = selected {
+        let conflict = || {
+            error(
+                &manifest_path,
+                "init inputs differ from retained canonical sources or root binding; edit retained sources deliberately and use generate (edit the output plan for locale changes)",
+            )
+        };
+        if sources
+            .context
+            .is_some_and(|b| b != files[&manifest.host_context])
+            || sources.locale.is_some_and(|l| l != manifest.root().locale)
+        {
+            return Err(conflict());
+        }
+        if let Some(bytes) = sources.methodology {
+            let output = manifest.root();
+            let raw = (output.roots.len() == 1)
+                .then(|| cat.atoms.iter().find(|a| a.id == output.roots[0]))
+                .flatten()
+                .filter(|a| a.requires.is_empty())
+                .and_then(|a| a.variants.iter().find(|v| v.locale == output.locale))
+                .and_then(|v| match &v.source {
+                    Content::File { path } => files.get(path),
+                    _ => None,
+                });
+            if raw != Some(&bytes) {
+                return Err(conflict());
+            }
+        }
+    }
+    for (path, bytes) in pending {
+        changes.push(Change::new(root.join(path), None, bytes));
+    }
+    let mut rendered = Vec::new();
+    for output in &manifest.outputs {
+        let (body, locale) = cat.compose(output, &files)?;
+        if output.format == Format::RootGuide {
+            rendered.push((output, managed_block(&manifest, &locale.root_frame, &body)));
+        } else {
+            rendered.push((output, output.projection(&locale.projection_notice, &body)));
+        }
+    }
+    let block = &rendered
+        .iter()
+        .find(|(o, _)| o.format == Format::RootGuide)
+        .unwrap()
+        .1;
     let agents = root.join("AGENTS.md");
     let claude = root.join("CLAUDE.md");
     let alias = metadata(&agents)?.is_some_and(|m| m.file_type().is_symlink());
@@ -364,11 +648,27 @@ fn prepare(
     if !alias {
         changes.push(Change::alias(agents, agents_before));
     }
-    // The target precedes its alias; registration commits the new layout last.
-    if let Some(change) = manifest_change {
-        changes.push(change);
+    for (output, after) in rendered {
+        if output.format == Format::RootGuide {
+            continue;
+        }
+        let path = root.join(&output.path);
+        let before = regular(&path)?;
+        if let Some(existing) = &before {
+            output.check_owned(&existing.bytes)?;
+        }
+        changes.push(Change::new(path, before, after));
+    }
+    if new_manifest {
+        changes.push(Change::new(
+            manifest_path,
+            manifest_before,
+            catalog::bytes(&manifest)?,
+        ));
     }
     changes.retain(|c| !c.unchanged());
+    let mut directories: Vec<_> = directories.into_iter().collect();
+    directories.sort_by_key(|p| p.components().count());
     Ok((changes, directories))
 }
 
@@ -401,6 +701,22 @@ pub fn generate(host: &Path) -> Result<Vec<PathBuf>, String> {
 #[cfg(feature = "test-support")]
 pub mod test_support {
     use super::*;
+
+    pub fn generate_with_failure(
+        host: &Path,
+        after: usize,
+        rollback: Option<usize>,
+    ) -> Result<Vec<PathBuf>, String> {
+        let (changes, directories) = prepare(host, None)?;
+        transaction::publish(
+            changes,
+            directories,
+            Fault {
+                after: Some(after),
+                rollback,
+            },
+        )
+    }
 
     /// Fail before publication `after` (zero based); optionally fail one rollback.
     /// No production CLI or environment switch enables this hook.
@@ -442,7 +758,7 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
     if args.is_empty()
         || (args.len() == 1 && ["help", "--help", "-h"].iter().any(|a| args[0] == *a))
     {
-        return reply(0, "Usage:\n  chrono-instructions init --host-root H [--methodology M] [--host-context C]\n  chrono-instructions generate --host-root H\nH must be an existing directory. New init defaults to the bundled general core and empty context. Registered init retains existing canonical sources for omitted options; explicit differing inputs fail. Optional M/C must be readable UTF-8 regular files. Edit retained sources deliberately, then generate to update CLAUDE.md and AGENTS.md -> CLAUDE.md. Unix only. No host inference or runtime checkout required. Exit 0 complete, 2 usage, 1 generation/IO failure. No judges run.\n".into(), String::new());
+        return reply(0, "Usage:\n  chrono-instructions init --host-root H [--methodology M] [--host-context C] [--locale L]\n  chrono-instructions generate --host-root H\nH must be an existing directory. New init adopts embedded atomic rules (zh-CN default) and empty context. --locale binds the fresh root; --methodology retains one opaque file atom (und unless explicitly bound). Registered init retains existing canonical sources for omitted options; explicit differing inputs fail. Optional M/C must be readable UTF-8 regular files. Edit the registered catalog and output plan, then generate root guides, Markdown and skills. AGENTS.md -> CLAUDE.md remains a literal relative alias. Unix only. No host inference or runtime checkout required. Exit 0 complete, 2 usage, 1 generation/IO failure. No judges run.\n".into(), String::new());
     }
     if args.len() == 1 && args[0] == "--version" {
         return reply(
@@ -465,6 +781,7 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
     let mut host = None;
     let mut method = None;
     let mut context = None;
+    let mut locale = None;
     let mut parts = args[1..].chunks_exact(2);
     for pair in &mut parts {
         let slot = if pair[0] == "--host-root" {
@@ -473,6 +790,8 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
             &mut method
         } else if is_init && pair[0] == "--host-context" {
             &mut context
+        } else if is_init && pair[0] == "--locale" {
+            &mut locale
         } else {
             return usage();
         };
@@ -488,7 +807,18 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
         return usage();
     };
     let result = if is_init {
-        init_with_defaults(&host, method.as_deref(), context.as_deref())
+        (|| {
+            let mut sources = InitSources::read(method.as_deref(), context.as_deref())?;
+            sources.locale = locale
+                .map(|p| {
+                    p.into_os_string()
+                        .into_string()
+                        .map_err(|_| "locale must be UTF-8".to_string())
+                })
+                .transpose()?;
+            let (changes, directories) = prepare(&host, Some(sources))?;
+            transaction::publish(changes, directories, Fault::default())
+        })()
     } else {
         generate(&host)
     };

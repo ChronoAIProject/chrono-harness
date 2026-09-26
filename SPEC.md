@@ -34,15 +34,15 @@ runner/src/{lib,main}.rs         产品实现，公开 CLI dispatch 边界
 runner-tests/Cargo.toml + Cargo.lock
 runner-tests/tests/cli_contract.rs  runner 专属测试项目
 instructions/Cargo.toml + Cargo.lock  独立的指令生成生产项目
-instructions/src/{lib,main,transaction}.rs  生成、CLI 与文件发布
+instructions/src/{lib,catalog,main,transaction}.rs  组合解析、CLI 与文件发布
 instructions-tests/Cargo.toml + Cargo.lock  生成器专属测试项目
-instructions-tests/tests/generation.rs  临时宿主行为测试
-assets/methodology.md           精选通用核心资产，编译时嵌入的默认输入
-assets/entrypoint.md            根正文的固定框架，编译输入
+instructions-tests/tests/{generation,atomic}.rs  临时宿主行为测试
+assets/instructions/catalog.json           双语原子规则/框架，编译输入
+assets/instructions/default-manifest.json  默认仅根输出计划，编译输入
 docs/instructions.md            已实现生成合同
 docs/methodology-extraction.md  来源与方法提取判断，不是运行依赖
 AGENTS.md / CLAUDE.md           CLAUDE 普通正文、AGENTS 相对链接；仅指定块为投影
-.chrono-harness/instructions/  宿主方法、上下文与专用登记（见 §16）
+.chrono-harness/instructions/  宿主原子 catalog、上下文与输出计划（见 §16）
 .chrono-harness/config.json     宿主入口、协议、显式字段分类
 .chrono-harness/judges.json     宿主判官白名单
 .chrono-harness/projects.json   项目、脚本和唯一操作登记
@@ -128,14 +128,14 @@ argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定
 | cost_models | 成本 ID → `{cpu_ms, wall_ms, peak_rss_bytes, io_bytes, basis}` |
 | files | `{path, owner, surface, cost, edges: Edge[], symlink?, projection?}[]`；每路径恰好一次 |
 | symlink | 可选字面相对目标字符串；登记实际链接身份，不能按解析后相等放宽字面目标 |
-| projection | 可选 `{source, producer, scope}`；source 为已登记源路径，producer 为已登记 project 节点；当前 scope 为 `managed-block`，块外保持宿主所有权 |
+| projection | 可选 `{sources: string[], producer, scope}`；sources 为完整显式已登记源路径（manifest/catalog/file 源），producer 为已登记 project 节点；scope 为 `managed-block`（块外归宿主）或 `whole-file`。这是 proposed 形状扩展，不自动执行 |
 | surface | `product / test / documentation / membership / instruction-policy / judge-policy / judge-implementation` |
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
 
 symlink/projection 是明确的文件表示及所有权说明，不自动增加编译或测试执行边。
-本仓 AGENTS 的 symlink 恰为 CLAUDE.md，CLAUDE 的受管块由 instructions 从宿主 methodology 产生；
+本仓 AGENTS 的 symlink 恰为 CLAUDE.md，CLAUDE 的受管块与登记的英文 Markdown/skill 由 instructions 从宿主 manifest/catalog 产生；
 框架资产的编译边、资产运输测试边和源/目标读取的 runtime-input 边另行显式登记。
 这些 FILEMAP 扩展仍属 proposed；专用生成器 manifest 的实际链接/源校验不等于通用 FILEMAP 判官已实现。
 
@@ -527,12 +527,12 @@ runner 已实现：无外部依赖的 Rust library + binary；公开 `dispatch(&
 每个项目的独立 Cargo.lock 必须提交；构建和测试使用各自 --manifest-path 与 --locked。
 测试 crate 只有显式 test target，build/check 需带 --tests，避免只检查空默认目标。
 
-instructions 已实现：只需 host-root 的 init、独立可选输入覆盖、内嵌精选核心/空上下文默认、
-已登记宿主省略选项保留定制、显式 generate、严格专用 manifest、精确保留输入、根正文与相对链接、
-受管块保留、根文件冲突预检、已知 v1 前向迁移、无写入重跑、暂存/普通失败回滚；完整合同见 §16。
-serde/serde_json/tempfile 及其锁定依赖仅属于新生成器项目，不进入 runner 编译依赖。
+instructions 已实现：内嵌默认数据的一条 init，独立输入/初始 locale 绑定，显式原子/翻译/依赖与输出计划，
+确定性组合为根正文、登记 Markdown 与有效 skill，旧 v1/v2 opaque file atom 前向迁移、宿主字节保留、
+严格引用/翻译/所有权/路径预检、相对链接、无写入重跑和多输出普通失败回滚；完整合同见 §16。
+serde/serde_json/tempfile 锁定依赖仅属于生成器，不进入 runner 编译依赖。
 
-尚未实现：通用判官登记解析与 schema 验证器、Git DELTA、图算法、判官二进制/脚本协议、
+尚未实现：通用判官登记解析与 schema 验证器、Git DELTA、测试影响图算法、判官二进制/脚本协议、
 测试调度、成本报告、分支/integration 检查、自举安装、正式 check 与 CI gate。
 JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没有覆盖率或 CI 通过徽章。
 先实现 registration/filemap/protocol 并测试失败路径，再实现 projects/routes/cost，
@@ -553,22 +553,14 @@ JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没
 
 ## 16. 宿主指令生成（已实现）
 
-从 checkout 执行 `cargo install --locked --path instructions` 安装后，任意 cwd 只需
-`chrono-instructions init --host-root H`。默认保留精选通用核心和空上下文，普通 CLAUDE.md 的
-受管块直接包含完整方法，AGENTS.md 是字面 `CLAUDE.md` 相对符号链接。无需手工准备输入或重复读取方法源。
-可独立用 `--methodology M`、`--host-context C` 覆盖默认值；显式输入须可读、普通文件、UTF-8。
-选定方法按原字节呈现，保留前缀冲突在写入前拒绝，不以转义或删节改变源。
+`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。17 项通用规则有稳定 ID、中文/英文 variant 与显式稀疏内容依赖；普通空文本 aggregate 组合全套，聚焦 skill 可只选择修复产生处及其证据/复用前提。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
 
-宿主 AI 编辑 canonical 源后，init 或 generate 刷新根正文；省略 init 选项保留注册源，显式不同输入拒绝。
-产品默认和宿主采用的快照分开演进，升级二进制不自动替换定制。已知 read-both/v1 仅作前向布局迁移输入，
-当前 literal-core/relative-alias/v2 是唯一输出身份；旧二进制拒绝新登记。
-两普通根文件先分别渲染，预期完整字节相同才转换；真实冲突明确失败，由授权 AI 保全原文后整合重试。
-既有正确链接从不重建；发布顺序先目标再别名，manifest 最后。普通失败回滚恢复原字节/类型/模式，失败报告可用备份。
-仅支持 Unix、已验证当前 macOS；不声称其他平台、崩溃原子性或并发写者安全。
+当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。确定性 DFS 依赖先行、共享 atom 每输出仅一次；引用/循环/重复身份与选中闭包缺翻译报具体错误。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
 
-完整格式、迁移、CLI、字节、所有权及恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护，
-不在此复制第二份格式定义。产品资产在源码之外，是显式编译输入；运行时不依赖 checkout、不检测宿主事实。
-[可选来源说明](docs/methodology-extraction.md) 说明选择通用规则和排除研究体制，不声称全条款完整迁移。
-本仓明确采用新版核心后通过相同命令自举；FILEMAP 声明字面别名与源/投影所有权。
-五份通用登记仍 proposed、input_closure 仍 incomplete；专用 manifest 校验不代表通用判官已实现。
-生成不证明 AI 阅读/遵守、语义正确或 Markdown 的强制力；通用 check、DELTA 和 CI gate 仍未实现。
+根受管块保留宿主块外原文、sole donor 和预期整份比较语义。Markdown/skill 为带身份 envelope 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退休；不建立历史 ledger 或扫描删除器。
+
+已知完整旧 read-both/v1 和 literal-core/relative-alias/v2 自动迁为 und file atom，保留旧方法/上下文的精确字节、路径、普通权限与根块外原文，不自动拆分、猜语言或采用新默认。init --locale 只绑定新根；省略选项保留采用数据，显式冲突报错。全计划预检、路径/链接/实际别名检查、父先子后建目录及多输出回滚复用现有 publisher；manifest 最后发布。当前 macOS 普通 IO 为已测边界，无跨平台、崩溃/并发保证。
+
+完整 schema、组合配方、CLI、迁移、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
+[来源说明](docs/methodology-extraction.md) 定义实际通用核心与双语原子的保真边界。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
+五份通用登记仍 proposed、input_closure 仍 incomplete；专用 manifest 校验与内容图解析不代表通用判官、DELTA、CI gate 或 AI 遵守已经实现。

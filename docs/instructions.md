@@ -1,150 +1,103 @@
-# 宿主指令生成合同：literal-core/relative-alias/v2（已实现）
+# 宿主原子指令生成合同：atomic-rules/relative-alias/v3
 
-`chrono-instructions` 是独立 Rust 库与薄 CLI，不依赖 runner、不执行判官。
-生产/专属测试为 `instructions/` 与 `instructions-tests/`，各有 manifest、lockfile、target。
-serde/serde_json 解析严格 JSON，tempfile 暂存普通文件和链接；没有新增运行时框架。
+`chrono-instructions` 是独立 Rust 库与薄 CLI，生产/专属测试为 instructions ↔ instructions-tests；无根 workspace，不依赖 runner。它校验显式数据、解析内容依赖并使用同一个普通 IO publisher 发布投影，不执行判官，不推断语义依赖、项目、语言或政策，不翻译、不联网解析包。
 
-## 调用与内容边界
+## 调用与唯一编辑源
 
 ```sh
 cargo install --locked --path instructions
-# 安装后从任意 cwd 使用；H 必须是已有目录，可含空格，不要求 Git
-chrono-instructions init --host-root "/path/to/host"
-# 编辑宿主方法或上下文后刷新
-chrono-instructions generate --host-root "/path/to/host"
+chrono-instructions init --host-root "/path/to/existing host"
+# 仅新宿主可显式绑定默认英文；不是运行时翻译
+chrono-instructions init --host-root "/path/to/another host" --locale en
+# 修改该宿主的 catalog / manifest / 显式 file 源后
+chrono-instructions generate --host-root "/path/to/existing host"
 ```
 
-默认 init 只需 host-root：二进制内嵌 `assets/methodology.md` 的精选通用核心，默认上下文为空。
-运行时不读 checkout、资产目录或私人配置，不发现项目、语言、依赖，不推断政策。
-这份核心选择通用软件/AI 工作方法，并非原始指南的完整迁移；取舍见可选的
-[来源说明](methodology-extraction.md)。研究专属体制不作为默认核心或第二份必读附件。
-文字是工作纪律，生成器不判断内容质量、不认证 AI 阅读或遵守、不实现通用 check。
+默认 init 采用编译时内嵌的 `assets/instructions/catalog.json` 与 root-only `default-manifest.json`，创建独立宿主 `.chrono-harness/instructions/catalog.json`、`manifest.json`、空 `host-context.md`。复制后的二进制无需 checkout。产品资产与宿主采用数据不是同一所有者；升级二进制不会覆盖已采用数据。采用新默认须明确比较并编辑宿主数据，然后 generate。
 
-`init --host-root H [--methodology M] [--host-context C]` 可独立覆盖任一输入。
-显式输入必须可读、为 UTF-8 普通文件，可以由调用者明确选择外部文件链接。
-选项顺序可交换；host-root 必填且各项最多一次。generate 只接受 host-root。
-相对参数相对于调用 cwd，输出相对于解析后的 host-root。参数按 OS 路径运输，不经 shell 插值。
-保留源和嵌入方法均保留精确字节，包括 BOM、CRLF、空内容及无末尾换行；生成框架另加分隔换行。
-方法禁止包含保留前缀 `<!-- chrono-instructions`，无论是否独占行；在任何写入前报错。
-该限制也适用于旧登记中的方法；先有意识地修改方法中的冲突文本再重试。上下文不嵌入，故不受此限制。
+CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`generate --host-root H`。H 已存在，各选项仅一次，参数按 OS 路径运输。新宿主省略 locale 选择 zh-CN；显式 methodology 以一个 opaque file atom 保留，未指定 locale 则绑定 und（未指定语言），指定 locale 则明确绑定该语言而不翻译。初始 locale 必须已在嵌入 catalog 声明。默认 root title 仅属于默认 zh-CN 绑定；改用其他 locale 时省略此可选 title，作者可在 manifest 显式添加本地化 title。context 可独立选择。显式外部 M/C 必须可读 UTF-8 普通文件，可由调用者选择链接。
 
-| 退出码 | 含义 |
-| --- | --- |
-| 0 | 完整生成或完全无写入；帮助/版本也返回 0 |
-| 2 | CLI 用法错误，未开始生成 |
-| 1 | 输入、类型、登记、标记、平台、生成或 IO 失败，包括 stdout/stderr 写入失败 |
+已登记 init 的省略选项保留原数据；显式不同 context、raw method 或 root locale 拒绝，提示编辑源/输出计划再 generate。atomized root 不允许用 raw methodology 替换。源缺失、登记损坏不补默认。没有登记却已有保留源/控制文件时拒绝碰撞。public `init`、`init_with_defaults`、`generate`、`dispatch` 继续可用。
 
-成功输出改动路径数和 `no judges executed`。失败输出具体路径及错误，不能当部分成功。
-`chrono-harness check` 仍未实现、返回 3；两个命令的退出语义不互相替代。
+退出 0 完成/无写入/帮助/版本；2 CLI 用法错误；1 输入/生成/IO/平台错误。成功报告实际改动数和 `no judges executed`。`chrono-harness check` 仍返回 3、未实现；生成不证明 AI 已阅读、遵守、执行判官或通过检查。
 
-## 单一编辑源和根布局
+## Schema 与可复制组合配方
 
-```text
-.chrono-harness/instructions/methodology.md   宿主方法的唯一编辑源
-.chrono-harness/instructions/host-context.md  宿主明确上下文，可为空
-.chrono-harness/instructions/manifest.json   专用格式/源/输出登记
-CLAUDE.md                                   普通文件：完整方法受管块 + 宿主块外文字
-AGENTS.md -> CLAUDE.md                       实际符号链接，字面相对目标恰为 CLAUDE.md
-```
-
-CLAUDE.md 的受管块直接包含完整方法，无需再读 methodology.md。
-框架说明编辑源、生成命令和另读 host-context.md；只有这个块是生成投影，块外原文仍归宿主。
-AGENTS.md 与 CLAUDE.md 解析到同一字节，没有第二份独立编辑的政策。
-产品 `assets/methodology.md` 是发行默认，首次 init 后的宿主源是独立采用的快照。
-升级二进制不覆盖宿主定制：采用新版核心须先比较并明确编辑宿主源，再生成。
-`assets/entrypoint.md` 仅是固定框架文字，生产者在框架后原样附方法，无模板语言。
-两份资产都是编译输入，修改产品资产后须重建二进制。
-
-正常编辑 canonical 源后，init 或 generate 都刷新根方法；只改上下文通常无需改根字节。
-已登记 init 省略选项时保留对应源，显式输入不同则拒绝并提示 edit + generate；不与新默认比较。
-源缺失、不可读或登记损坏不补默认；无 manifest 却有保留源时拒绝 reserved collision。
-`.chrono-harness/` 其他文件不受生成器改写。
-全部预期状态相同时不创建临时文件、不改 inode/mtime；已有有效 AGENTS 链接即使更新方法也从不触碰。
-
-## 版本和前向迁移
-
-当前 manifest 严格接受下列值；格式空白任意，重复/未知字段、漏项、重排、路径或角色变化均拒绝：
+专用 manifest schema_version=2，producer 固定 `chrono-instructions`（独立于包版本），render 固定 `atomic-rules/relative-alias/v3`。以下是完整示例：默认宿主仅有第一项，增加后两项再 generate 即可得到英文文档与聚焦 skill。本仓以相同输入生成这些实例。
 
 ```json
 {
-  "schema_version": 1,
-  "producer": "chrono-instructions/0.1.0",
-  "render": "literal-core/relative-alias/v2",
-  "sources": [
-    {"role": "methodology", "path": ".chrono-harness/instructions/methodology.md"},
-    {"role": "host-context", "path": ".chrono-harness/instructions/host-context.md"}
-  ],
+  "schema_version": 2,
+  "producer": "chrono-instructions",
+  "render": "atomic-rules/relative-alias/v3",
+  "catalog": ".chrono-harness/instructions/catalog.json",
+  "host_context": ".chrono-harness/instructions/host-context.md",
   "outputs": [
-    {"role": "claude-guide", "path": "CLAUDE.md"},
-    {"role": "agents-relative-alias", "path": "AGENTS.md"}
+    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":["core.general"],"title":"通用工作方法"},
+    {"id":"general-en","path":"docs/generated/general-methods.en.md","format":"markdown","locale":"en","roots":["core.general"],"title":"General working methods"},
+    {"id":"repair-skill","path":"skills/diagnose-recurring-failures/SKILL.md","format":"skill","locale":"en","roots":["core.repair-producer"],"skill":{"name":"diagnose-recurring-failures","description":"Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."}}
   ]
 }
 ```
 
-schema 形状保持 1；新的 render 身份和输出角色明确规定完整布局，包括字面链接目标。
-唯一可升级输入是旧 `producer=chrono-instructions/0.1.0`、`render=read-both/v1`、同一 schema/sources，
-outputs 按顺序恰为 `agents-entrypoint:AGENTS.md`、`claude-entrypoint:CLAUDE.md` 的完整登记。
-init 和 generate 共用预检与发布路径：保留旧方法/上下文，转换根文件，最后写当前 manifest。
-这只升级布局，不把旧的自定义方法自动替换成精选核心；本仓另行明确采用新版资产后才运行迁移。
-输出只使用当前身份，没有旧渲染模式或降级开关。当前 manifest 的原排版在重复运行时保留；旧登记升级时重新序列化。
-旧二进制会拒绝新 render/角色；需继续使用新二进制，不手改 manifest 冒充降级。
-专用 manifest 已由代码执行校验，独立于仍 proposed 的五份通用 harness 登记。
+恰有一个 root-guide，path 必须为 `CLAUDE.md`；`AGENTS.md` 保留给字面相对链接 `CLAUDE.md`。发布时固定根 CLAUDE/alias 对先于所有额外输出，CLAUDE 在所需 alias 前；额外输出之间按 outputs 声明顺序发布，与 root-guide 条目在数组中的位置无关。ID/路径唯一。每项必填 id/path/format/locale/roots；title 可选，单行非空无控制字符；只有 skill 必须且允许 skill metadata。
 
-## 原文保留与转换合同
+Catalog schema_version=1，必填 locales 与 atoms 数组。结构例子（合成内容，替换宿主 catalog 时须相应修改 manifest roots 与 locale）：
 
-只替换从 `<!-- chrono-instructions:begin -->` 到 `<!-- chrono-instructions:end -->` 的一个块，
-含两标记但不含 end 后换行。标记须各一次、顺序正确、独占行；保留前缀的其他出现也拒绝。
-块外字节可非 UTF-8，原样保留。缺块时追加，必要时先补一条分隔换行。
+```json
+{
+  "schema_version": 1,
+  "locales": [{"id":"en","root_frame":"Edit the registered sources and regenerate; read the registered host context before work. Generation does not prove compliance.","projection_notice":"Generated from registered sources. Edit those sources and regenerate."}],
+  "atoms": [
+    {"id":"example.evidence","requires":[],"variants":[{"locale":"en","source":{"type":"inline","text":"Inspect the actual error before attributing a failure."}}]},
+    {"id":"example.repair","requires":["example.evidence"],"variants":[{"locale":"en","source":{"type":"file","path":".chrono-harness/instructions/repair.en.md"}}]},
+    {"id":"example.bundle","requires":["example.repair"],"variants":[{"locale":"en","source":{"type":"inline","text":""}}]}
+  ]
+}
+```
 
-| 预检发现的根文件 | 行为 |
-| --- | --- |
-| 两者都无 | 新建 CLAUDE.md 和相对链接 |
-| 仅一个普通文件 | 保留其原文并渲染为 CLAUDE.md；仅 AGENTS 时也继承其普通权限 |
-| 两个普通文件 | 分别渲染同一核心，只有预期完整字节相等才转换 AGENTS；CLAUDE 权限优先 |
-| AGENTS 为字面 `CLAUDE.md` 链接且目标是普通文件 | 保留链接本身，只刷新目标 |
-| 两普通文件的预期字节不同 | 无写入冲突；诊断同时指出两路径和明确整合方法 |
-| 反向、非字面、绝对、悬空链接、特殊类型或硬链接普通文件 | 无写入拒绝 |
+locale id 显式且唯一，允许追加本地语言；无语言标签猜测/自动 fallback。atom id 是稳定引用身份（ASCII 字母/数字及 `._-`，非空）；requires 有序，variants 以 locale 唯一；source 是严格 tagged inline{text} / file{path}。JSON 重复、未知字段拒绝。根引用和依赖引用必须存在，所有已登记依赖均检查 cycle，并报告链。所有 file variants 都是完整显式输入，即使未被当前输出选择，也校验存在、UTF-8、普通类型和路径。只有选中闭包需要对应 locale variant；未选中的 atom 可缺翻译。
 
-两个旧块不同不妨碍转换，相同核心渲染后块外差异仍冲突。
-处理冲突的授权 AI 应先保全有效原文、明确整合到 CLAUDE.md，再对齐 AGENTS 普通文件或移除冗余文件，重试。
-生成器不自动合并两份不同宿主政策、不静默丢字节，也不要求人类批准。
-保留源、manifest 及 `.chrono-harness/` 两级目录不允许链接；目录必须真实目录。
-Unix 普通文件的硬链接也拒绝，避免隐藏写入共享 inode 的所有权歧义。
+DFS 按 roots / requires 的声明顺序遍历，先依赖后使用者，共享 atom 每个输出只渲染一次；不按文字推断边。`core.general` 是具有空 zh-CN/en 文本的普通 aggregate，按声明顺序依赖 17 项。`core.repair-producer` 仅依赖 evidence/reuse；聚焦 skill 不引入无关规则。空 inline 可表达纯组合，非空段按顺序以两个 LF 分隔，段内字节不 trim、不正规化；file UTF-8 字节与 JSON 解码后的 inline UTF-8 精确保留。BOM、CRLF、空内容、无末尾换行均可运输。title、框架、输入引用、分隔 LF 与所有权标记是投影格式。选中内容及框架禁止保留前缀 `<!-- chrono-instructions`，context 不嵌入所以不受此限制。
 
-## IO、恢复与平台边界
+locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所选 locale 的登记数据。root 的 manifest/catalog/host_context 路径随实际绑定列出；正文直接在根受管块内，不要求重复读取源。翻译是作者提供的数据，不声称语义等价或完整性已由程序证明。
 
-预检完成才创建缺失目录。在目标同目录暂存新普通字节、原普通文件备份和新符号链接。
-普通文件暂存后 flush/sync；已有普通权限保留，新文件采用 tempfile 默认私有权限。
-不打开或 chmod 暂存链接。发布顺序为新源、CLAUDE、AGENTS、新建或升级 manifest。
-已有有效链接不加入事务；新别名和普通 AGENTS 的转换都由同一 publisher 负责。
+## 所有权、路径与退休
 
-普通发布失败时逆序恢复原字节/普通类型/权限，移除本次新文件或链接、空目录。
-错误给出 `published`（曾发布路径）、`unrestored`、`recovery`、`cleanup`；published 不等于仍被改变。
-回滚失败的原文件备份保留在诊断的临时路径，可据其恢复对应普通文件；没有原文件则直接报告未移除目标。
-检查实际状态，恢复已报告目标后再运行，不能让悬空链接或缺失源被当作正常重跑。
-清理失败也非零；目标全已完成但备份清理失败时明确报告 publication complete。
+根仅替换 `<!-- chrono-instructions:begin -->` 至 `<!-- chrono-instructions:end -->` 一个受管块；标记须唯一、有序、独占行，其他保留前缀拒绝。块外原字节（可非 UTF-8）保留；无块则追加，必要时补 LF。只有 AGENTS 普通文件时作为 donor，继承原文与普通权限；两普通根分别渲染后整份预期字节相同才转换 AGENTS。不同原文明确冲突，授权 AI 保全并整合后重试。已有有效 alias inode 不触碰。
 
-仅支持 Unix 链接发布；非 Unix 在写入前明确失败，不回退为两个普通副本。
-已验证当前 macOS 的文件系统、权限与链接行为；其他 Unix、Windows 和文件系统未验证。
-不提供多文件崩溃原子性、并发写者、竞态防护、重启恢复服务；进程被杀可能留下部分发布。
-恢复不保证原 inode、时间戳、ACL、扩展属性或所有者。使用单写者，保留源后有意识地恢复异常状态。
-文件系统可能拒绝非 UTF-8 路径；诊断路径是定位文字，不是任意 OS 路径字节的机器往返协议。
+额外 Markdown / skill 整文件归投影。文件不存在可创建；已有文件必须有恰当 producer、output ID、format 的完整 begin/end envelope。未标记、错误身份、畸形 envelope 一律预写入失败，不静默覆盖宿主文件。skill 的 `---` 必须是最初字节，name/description 用 JSON 字符串形式的合法 YAML 双引号标量，所有权标记在 frontmatter 关闭之后。name 1–63 位小写 ASCII 字母/数字/连字符，无首尾或连续连字符，且父目录同名、文件名恰为 SKILL.md；description 非空、单行无控制字符，最多 1024 个字符且无尖括号，供当前外部 validator 消费。title/metadata 不推断使用范围，作者负责聚焦且有用的语义。
 
-## 验证与自举
+仅当前 manifest 的输出受管理。删除条目或改名均保留旧文件原样；旧 marker 仅记录来源，不代表当前管理。旧 skill 可能继续被发现，授权 AI 须显式退休旧文件。没有 previous-manifest/history ledger、glob、扫描卸载或自动删除。
+
+所有登记路径必须为规范的相对 `/` 路径，无空段、`.`、`..`、反斜杠、控制字符或绝对路径；catalog/context/file 源在宿主 `.chrono-harness/` 下。控制/源/输出/alias 不得相互覆盖或构成文件祖先冲突。重复引用同一个 file variant 输入允许；多个输出路径不允许。所有已有祖先必须是真实目录，保留文件/控制文件/输出拒绝链接、硬链接、特殊类型（AGENTS 固定别名是唯一例外）。检查已存在普通文件的设备/inode 别名；当前 macOS 还保守拒绝各路径段经 Unicode case folding 和文件系统表示转换后相同的不同拼写（如 `straße` / `STRASSE`，即使所在卷区分大小写）。比较键先由现有 CoreFoundation 的 `CFStringFold` 以 `kCFCompareCaseInsensitive` 和规范系统 locale 生成，再经文件系统表示 API 转换；不改登记原字节、不增加 Cargo 依赖、不写入探测文件，避免预期新文件/目录别名。先验证完整计划并渲染所有输出，再写任何内容；目录按父先子后去重创建。
+
+## 严格前向迁移
+
+只接受完整已知 schema=1 / producer=`chrono-instructions/0.1.0` 身份：sources 按顺序为 methodology:`.chrono-harness/instructions/methodology.md`、host-context:`.chrono-harness/instructions/host-context.md`；旧 read-both/v1 outputs 按顺序为 agents-entrypoint:AGENTS.md、claude-entrypoint:CLAUDE.md；旧 literal-core/relative-alias/v2 outputs 为 claude-guide:CLAUDE.md、agents-relative-alias:AGENTS.md。混用角色/版本/路径或未知字段拒绝。
+
+init/generate 自动迁移为 current manifest + catalog，`legacy.method` 的 und file variant 显式引用旧方法。und 表示语言未指定，不冒称中文或英文；框架是显式未指定语言的数据。保留精确旧 method/context 字节、路径、普通权限及根块外原文，不拆旧 prose、不更新为默认、不删除旧文件；只刷新框架、组合绑定与根布局。迁移最后发布 manifest。新 raw-method init 使用同一模式；显式 --locale 则由作者声明语言。current manifest 的排版在未改绑定时保留。
+
+本仓有意识地采用与 001e501 中 assets/methodology.md 的 17 段逐字一致的中文原子及作者提供的英文译文，自举后退休本仓/product 被替代 monolith；这是明确采用，不是其他宿主自动迁移行为。
+
+## IO、边界与验证
+
+复用同一 publisher：同目录暂存普通新文件与原文件备份，flush/sync，新文件为 tempfile 默认私有权限，原普通权限保留；source 在 output 前，CLAUDE 在 alias 前，新建/迁移 manifest 最后。当前用户已编辑 manifest 不是程序保存的历史。全部相等时不创建临时文件，不改 inode/mtime。
+
+普通发布失败逆序恢复字节/普通类型/权限、删除本次新文件/链接、子先父后清理空目录。错误列 published、unrestored、recovery、cleanup；published 不等于仍改变。回滚失败保留原文件备份并报告路径；无原文件则报告未移除目标。恢复实际异常状态后重试。清理失败也非零，完成发布但清理失败明确说明。
+
+只限定 Unix / 当前 macOS 普通 IO；不保证崩溃原子性、并发写者、跨平台、ACL、扩展属性、原 inode/时间戳/所有者恢复。无恶意 AI 门或全局安装/provider 假设。
 
 ```sh
 cargo fmt --check --manifest-path instructions/Cargo.toml
-cargo fmt --check --manifest-path instructions-tests/Cargo.toml
 cargo build --locked --manifest-path instructions/Cargo.toml
 cargo check --locked --manifest-path instructions/Cargo.toml
+cargo fmt --check --manifest-path instructions-tests/Cargo.toml
 cargo build --tests --locked --manifest-path instructions-tests/Cargo.toml
 cargo check --tests --locked --manifest-path instructions-tests/Cargo.toml
 cargo test --locked --manifest-path instructions-tests/Cargo.toml
 ```
 
-测试验证字节运输、实际链接身份、重复无写入、源编辑、定制保留、根转换/冲突、严格前向迁移、
-输入/标记/类型错误、真实权限失败和注入的别名发布前后失败及恢复。test-support 仅配对测试启用，CLI 无注入开关。
-特权进程可绕过权限位时测试明确报告未验证该拒绝，不称通过了权限边界。
-资产字节测试是运输合同，不是散文关键词或语义完整性认证。
-本仓使用同一个工具升级为根正文和链接，FILEMAP 明确登记字面别名、源/投影所有权、编译/测试/运行输入。
-自举不启用通用判官、DELTA 或 CI gate。
+专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方，真实生成 skill 使用外部 validator 与 YAML 消费者验证格式/metadata；不引入生产依赖，不证明语义。
+
+FILEMAP 的 proposed projection 元数据从单一 `source` 扩展为显式 `sources` 数组（catalog、manifest 及被引用 file 输入），producer/scope 不变；生成 root-frame 的路径引用也由 manifest 决定。产品资产是 build-input/test-execution，宿主数据和既有投影是 runtime-input。五份通用登记仍 proposed、成本 unmeasured；专用 schema 校验不能冒称通用判官/DELTA/CI 已实现。

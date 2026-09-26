@@ -284,7 +284,10 @@
         }
       ],
       "projection": {
-        "source": ".chrono-harness/instructions/methodology.md",
+        "sources": [
+          ".chrono-harness/instructions/manifest.json",
+          ".chrono-harness/instructions/catalog.json"
+        ],
         "producer": "project:instructions",
         "scope": "managed-block"
       }
@@ -442,62 +445,6 @@
       ]
     },
     {
-      "path": "assets/entrypoint.md",
-      "owner": "instructions",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "build-input",
-          "to": "project:instructions"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:instructions-tests"
-        },
-        {
-          "kind": "judge-trigger",
-          "to": "judge:filemap"
-        }
-      ]
-    },
-    {
-      "path": "assets/methodology.md",
-      "owner": "instructions",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "build-input",
-          "to": "project:instructions"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:instructions-tests"
-        },
-        {
-          "kind": "judge-trigger",
-          "to": "judge:filemap"
-        }
-      ]
-    },
-    {
-      "path": ".chrono-harness/instructions/methodology.md",
-      "owner": "repository",
-      "surface": "instruction-policy",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "runtime-input",
-          "to": "project:instructions"
-        },
-        {
-          "kind": "judge-trigger",
-          "to": "judge:filemap"
-        }
-      ]
-    },
-    {
       "path": ".chrono-harness/instructions/host-context.md",
       "owner": "repository",
       "surface": "instruction-policy",
@@ -528,6 +475,142 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "instructions/src/catalog.rs",
+      "owner": "instructions",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:instructions"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "instructions-tests/tests/atomic.rs",
+      "owner": "instructions-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:instructions-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "assets/instructions/catalog.json",
+      "owner": "instructions",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:instructions"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:instructions-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "assets/instructions/default-manifest.json",
+      "owner": "instructions",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:instructions"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:instructions-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/instructions/catalog.json",
+      "owner": "repository",
+      "surface": "instruction-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:instructions"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "docs/generated/general-methods.en.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:instructions"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/instructions/manifest.json",
+          ".chrono-harness/instructions/catalog.json"
+        ],
+        "producer": "project:instructions",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": "skills/diagnose-recurring-failures/SKILL.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:instructions"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/instructions/manifest.json",
+          ".chrono-harness/instructions/catalog.json"
+        ],
+        "producer": "project:instructions",
+        "scope": "whole-file"
+      }
     }
   ],
   "project_edges": [

@@ -4,7 +4,7 @@
 来源为只读 trureturing [CLAUDE.md 固定快照](https://github.com/the-omega-institute/trureturing/blob/8c874f8a7b1fc2fbabb9b73fb4e4da6cf25d5ec0/CLAUDE.md)，
 Git blob `125a9cd0e1df678753420a4f2cd4dbd71d3f253f`。当前用户修正决定迁移范围，来源不覆盖当前目标。
 
-[产品核心](../assets/methodology.md) 选择可用于一般软件与 AI 工作的实际方法，压缩为短规则段，
+[产品原子 catalog](../assets/instructions/catalog.json) 选择可用于一般软件与 AI 工作的实际方法，压缩为短规则段，
 保留触发条件、动作和边界；不逐章迁移，不声称保留每条原句或原章节完整性。
 以下是选择依据，编号只定位来源，不成为宿主规则或实现依赖。
 
@@ -30,3 +30,11 @@ Git blob `125a9cd0e1df678753420a4f2cd4dbd71d3f253f`。当前用户修正决定�
 联合界与形式外推义务，固定提供方/模型/席位、会话恢复元数据、来源 CI 4/8 次配额、缓存/容量编排。
 不通过改名保留，也不搬到 host-context 或另一份强制阅读附件。历史正文和完整映射由版本库保留。
 内容适切性须由当前目标下的语义评审核对；字数、关键词和文件一致性不能认证内容保真或 AI 遵守。
+
+## 原子化与翻译来源
+
+本次原子化唯一中文输入是 chrono-harness 提交 `001e501fc837ccd3e01788ce17dd2d2992de0c8d` 的 `assets/methodology.md`（7009 字节，SHA-256 `dfa9558de09c5d74c2a3cd0d6206b25073a973b4cb9d3180a48b13fb3ced11e9`）。未重新读取或扩展上游研究指南。该核心的 17 个段落按原字节进入 zh-CN variants；标题与段落间空行属于投影框架。英文 variants 是针对这些段落新写的译文，逐项保留触发、动作及限制，未引入研究体制；程序只检查显式登记与运输，不证明语义等价。
+
+稳定 ID 按原顺序为 core.goal、autonomy、evidence、reuse、repair-producer、ownership、registration、single-method、registered-judges、small-projects、delta、evolving-rules、behavior、candidate、cost、independent-check、useful-artifacts（后续项均带 core. 前缀）。core.general 是空文本 aggregate；repair-producer 显式要求 evidence 与 reuse，其他内容前提不由文字推断。完整方法与聚焦 skill 复用这些原子，无复制政策段。
+
+本仓明确采用双语 catalog 后退休产品/宿主旧 monolith 与旧固定 frame 资产；历史在版本库。其他宿主自动迁移继续保留自己的 opaque method 文件。本说明可选，不承担当前政策权威或强制阅读义务。

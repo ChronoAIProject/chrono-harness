@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "producer": "chrono-instructions",
+  "render": "atomic-rules/relative-alias/v3",
+  "catalog": ".chrono-harness/instructions/catalog.json",
+  "host_context": ".chrono-harness/instructions/host-context.md",
+  "outputs": [
+    {
+      "id": "root",
+      "path": "CLAUDE.md",
+      "format": "root-guide",
+      "locale": "zh-CN",
+      "roots": [
+        "core.general"
+      ],
+      "title": "通用工作方法"
+    }
+  ]
+}
