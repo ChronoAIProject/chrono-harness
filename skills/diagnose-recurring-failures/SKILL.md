@@ -3,11 +3,21 @@ name: "diagnose-recurring-failures"
 description: "Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."
 ---
 <!-- chrono-instructions:output producer=chrono-instructions id=repair-skill format=skill begin -->
-Generated from registered rule sources. Edit those sources and regenerate; do not edit this projection independently. Generation does not prove compliance or execution of checks.
+Generated from registered rules. Edit sources and regenerate, not this file alone. Generation proves neither compliance nor executed checks.
 
-**Match conclusions to actual evidence.** Measure what can be measured first, and report concrete inputs, results and actual exit status. After a failure, timeout or missing result, read the actual error and logs before attributing a cause. State separately what was not tested, not implemented or not resolved, and why. Confidence, elapsed time, documentation or wrapper success cannot replace a real check. An unexecuted check provides no assurance; state owned by a program must be produced by that program, never filled in as success by hand.
+<!-- Instructions are modified, generalized and translated from Copyright 2026 The Omega Institute, Apache-2.0. Accompanying license/provenance are optional legal reading, not policy. -->
 
-**Check existing implementations before filling gaps.** Look first at this repository’s work, then at direct dependencies at pinned versions, then at permitted external sources; check interfaces and applicability. Reuse an implementation that meets the goal. When visibility or location prevents a real call, adjust the original definition or extract a shared dependency, avoiding copies, useless forwarding and dependency cycles. Validate the consumers actually affected; a reference or an unused import is not reuse.
+Measure first. Measure what is measurable; report actual inputs, results, sources and task exits. Specify what is untested, unimplemented or unresolved, and why. Confidence, guesses, time, docs or wrapper success replace no checks.
 
-**Repair the producer of recurring symptoms.** On the second occurrence of the same symptom requiring the same corrective action, first explain why it happened again and repair the producer, tool or rule before handling later instances. Do not make a third blind retry. If a repair is temporarily unavailable, state the occurrence count, cost and limits, then move to work that can progress; do not lower acceptance criteria or detection to hide the failure.
+Inspect failures first. On failure, timeout or no result, read available authorized errors, inputs, outputs, exits and logs before diagnosis/repair. Verify input matches dispatch intent. Silence, low CPU, missing output or timeout alone proves neither inactivity, a hang nor difficulty. Without evidence, leave causes unverified.
+
+Programs produce their state. Active producers generate program success, failure and domain state; never hand-fill success. Unrun checks give no assurance. Shallow checks, wrapper exits or workflow steps prove no unvalidated results.
+
+Search existing work first. Search repo, pinned direct dependencies, then allowed external sources, including private definitions and valid failure findings. Verify versions, interfaces, assumptions, scope and evidence status; reuse suitable work. Invisible does not mean absent.
+
+Reuse at the source. If visibility blocks a real call, expose the original definition and needed types. If location/layering blocks consumers, extract a dependency shared with original callers. Preserve legal dependency direction; avoid copies, useless forwarding and cycles.
+
+Verify real reuse. Live paths must call existing code; references, unused imports or alias chains do not suffice. Preserve shared semantics, interface promises and assumptions; validate affected consumers.
+
+Repair recurring causes. Recurrence means the same symptom AND remedy. Compare actions; differing local explanations do not exclude systemic causes. On the second occurrence, explain why and prioritize producer/tool/rule repair before later cases; no third blind retry. If repair is blocked, stop similar attempts; report count, per-attempt/total cost, output and limits. Continue independent work. Do not weaken goals, acceptance or detection. Check known issues and valid remedies before investing.
 <!-- chrono-instructions:output producer=chrono-instructions id=repair-skill format=skill end -->

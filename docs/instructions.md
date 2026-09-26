@@ -58,7 +58,7 @@ Catalog schema_version=1，必填 locales 与 atoms 数组。结构例子（合�
 
 locale id 显式且唯一，允许追加本地语言；无语言标签猜测/自动 fallback。atom id 是稳定引用身份（ASCII 字母/数字及 `._-`，非空）；requires 有序，variants 以 locale 唯一；source 是严格 tagged inline{text} / file{path}。JSON 重复、未知字段拒绝。根引用和依赖引用必须存在，所有已登记依赖均检查 cycle，并报告链。所有 file variants 都是完整显式输入，即使未被当前输出选择，也校验存在、UTF-8、普通类型和路径。只有选中闭包需要对应 locale variant；未选中的 atom 可缺翻译。
 
-DFS 按 roots / requires 的声明顺序遍历，先依赖后使用者，共享 atom 每个输出只渲染一次；不按文字推断边。`core.general` 是具有空 zh-CN/en 文本的普通 aggregate，按声明顺序依赖 17 项。`core.repair-producer` 仅依赖 evidence/reuse；聚焦 skill 不引入无关规则。空 inline 可表达纯组合，非空段按顺序以两个 LF 分隔，段内字节不 trim、不正规化；file UTF-8 字节与 JSON 解码后的 inline UTF-8 精确保留。BOM、CRLF、空内容、无末尾换行均可运输。title、框架、输入引用、分隔 LF 与所有权标记是投影格式。选中内容及框架禁止保留前缀 `<!-- chrono-instructions`，context 不嵌入所以不受此限制。
+DFS 按 roots / requires 的声明顺序遍历，先依赖后使用者，共享 atom 每个输出只渲染一次；不按文字推断边。`core.general` 是具有空 zh-CN/en 文本的普通 aggregate，显式选择原有 17 个稳定入口及新增便携义务。当前共有 98 个内容叶子、16 个普通聚合；原有主题 ID 只组合原职责，不扩成章节全集。`core.repair-producer` 是内容叶子，仅依赖 `core.evidence`（3 个叶子）和 `core.reuse`（3 个叶子），skill 共呈现 7 个叶子；不引入容量、缓存、CI 或研究路线。空 inline 可表达纯组合，非空段按顺序以两个 LF 分隔，段内字节不 trim、不正规化；file UTF-8 字节与 JSON 解码后的 inline UTF-8 精确保留。BOM、CRLF、空内容、无末尾换行均可运输。title、框架、输入引用、分隔 LF 与所有权标记是投影格式。选中内容及框架禁止保留前缀 `<!-- chrono-instructions`，context 不嵌入所以不受此限制。
 
 locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所选 locale 的登记数据。root 的 manifest/catalog/host_context 路径随实际绑定列出；正文直接在根受管块内，不要求重复读取源。翻译是作者提供的数据，不声称语义等价或完整性已由程序证明。
 
@@ -78,7 +78,7 @@ locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所�
 
 init/generate 自动迁移为 current manifest + catalog，`legacy.method` 的 und file variant 显式引用旧方法。und 表示语言未指定，不冒称中文或英文；框架是显式未指定语言的数据。保留精确旧 method/context 字节、路径、普通权限及根块外原文，不拆旧 prose、不更新为默认、不删除旧文件；只刷新框架、组合绑定与根布局。迁移最后发布 manifest。新 raw-method init 使用同一模式；显式 --locale 则由作者声明语言。current manifest 的排版在未改绑定时保留。
 
-本仓有意识地采用与 001e501 中 assets/methodology.md 的 17 段逐字一致的中文原子及作者提供的英文译文，自举后退休本仓/product 被替代 monolith；这是明确采用，不是其他宿主自动迁移行为。
+本仓明确采用本次逐条迁移的产品双语 catalog 到独立宿主 catalog，再使用实际重建二进制生成三个现有消费者。先前 001e501 的精选 17 段被细分与补充，稳定入口保留且没有第二份旧段落权威；旧 monolith 继续退休，历史由版本库保留。这不是其他宿主的自动更新：既有宿主继续保留自己采用的 catalog 或 opaque method，新默认采用须明确比较、保留定制并编辑宿主数据。可选 [逐条处置表](methodology-clause-map.md) 与 [许可说明](licenses/methodology-attribution.md) 不进入生成图。
 
 ## IO、边界与验证
 
@@ -97,6 +97,8 @@ cargo build --tests --locked --manifest-path instructions-tests/Cargo.toml
 cargo check --tests --locked --manifest-path instructions-tests/Cargo.toml
 cargo test --locked --manifest-path instructions-tests/Cargo.toml
 ```
+
+产品默认内容同时按完整根字节数核消费边界，包括框架而非只数字符或 token；当前 [实测读数](methodology-extraction.md#实际消费者边界) 限空上下文新宿主。内容编辑需保持原义务并复核实际受影响消费者，不截尾、不借全局配置扩限。独立选择 `core.ownership` 或 `core.behavior` 的 Markdown 消费者分别包括投影与真实 CI 义务；此合同不新增文字匹配测试框架。
 
 专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方，真实生成 skill 使用外部 validator 与 YAML 消费者验证格式/metadata；不引入生产依赖，不证明语义。
 

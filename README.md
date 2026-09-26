@@ -15,9 +15,11 @@ cargo install --locked --path instructions
 chrono-instructions init --host-root "/path/to/existing-host"
 ```
 
-可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。17 条通用规则具有稳定 ID、中文/英文 variant 和显式依赖；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
+可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。逐条迁移后的 98 个内容叶子具有中文/英文 variant；16 个普通聚合保留原有 17 个稳定入口及 core.general，依赖显式；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
 
 默认产生含完整中文核心的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
+
+默认两种语言的完整新根均已实测落在 Codex 默认 32 KiB 项目指令上限内；字节数、有限余量及宿主定制边界见[实际消费者读数](docs/methodology-extraction.md#实际消费者边界)。
 
 日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。依赖先于使用者、共享原子每输出仅一次；缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
 
@@ -26,7 +28,7 @@ chrono-instructions init --host-root "/path/to/existing-host"
 根块外原文属于宿主；两普通根只在渲染后整份字节相同才转换，有差异明确报错供授权 AI 保全并整合。额外输出为有身份标记的整文件投影，拒绝覆盖未声明所有权的现有文件。删除或改名输出条目保留旧文件；旧 skill 须明确退休，否则仍可能被发现。无变化时无写入，已有有效根链接不重建。
 
 支持 Unix，行为验证限定当前 macOS。普通 IO 失败尝试回滚并报告未恢复路径/备份；无崩溃原子性或并发写者保证。退出码 0 完整、2 用法错误、1 生成/IO 失败。
-[来源说明](docs/methodology-extraction.md) 定义通用规则与译文来源边界。本仓通过同一工具生成根中文、[英文方法](docs/generated/general-methods.en.md) 与[重复故障诊断 skill](skills/diagnose-recurring-failures/SKILL.md)；默认新宿主只生成根指南。生成不证明 AI 遵守、翻译语义等价或判官已执行。
+[来源说明](docs/methodology-extraction.md) 与 [逐条处置表](docs/methodology-clause-map.md) 记录固定 918 行来源的实际义务、泛化、重复与排除。[派生文本许可](docs/licenses/methodology-attribution.md) 仅适用于相应指令资产；规则经过修改、泛化及翻译，不改变整仓许可。本仓通过同一工具生成根中文、[英文方法](docs/generated/general-methods.en.md) 与[重复故障诊断 skill](skills/diagnose-recurring-failures/SKILL.md)；默认新宿主只生成根指南。生成不证明 AI 遵守、翻译语义等价或判官已执行。
 
 ```sh
 cargo build --locked --manifest-path runner/Cargo.toml

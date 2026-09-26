@@ -553,7 +553,9 @@ JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没
 
 ## 16. 宿主指令生成（已实现）
 
-`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。17 项通用规则有稳定 ID、中文/英文 variant 与显式稀疏内容依赖；普通空文本 aggregate 组合全套，聚焦 skill 可只选择修复产生处及其证据/复用前提。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
+`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由 98 个双语内容叶子和 16 个普通空文本 aggregate 组成，原有 17 个 core 稳定入口及 core.general 全部保留；旧主题入口只组合原职责，新增便携方法由 core.general 显式选择。聚焦 skill 只选择修复产生处及其证据/复用前提（7 个内容叶子）。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
+
+`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的完整双语根已按实际 Codex 默认字节上限验证，读数与有限适用条件见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
 
 当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。确定性 DFS 依赖先行、共享 atom 每输出仅一次；引用/循环/重复身份与选中闭包缺翻译报具体错误。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
 
@@ -562,5 +564,5 @@ JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没
 已知完整旧 read-both/v1 和 literal-core/relative-alias/v2 自动迁为 und file atom，保留旧方法/上下文的精确字节、路径、普通权限与根块外原文，不自动拆分、猜语言或采用新默认。init --locale 只绑定新根；省略选项保留采用数据，显式冲突报错。全计划预检、路径/链接/实际别名检查、父先子后建目录及多输出回滚复用现有 publisher；manifest 最后发布。当前 macOS 普通 IO 为已测边界，无跨平台、崩溃/并发保证。
 
 完整 schema、组合配方、CLI、迁移、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
-[来源说明](docs/methodology-extraction.md) 定义实际通用核心与双语原子的保真边界。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
+[来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
 五份通用登记仍 proposed、input_closure 仍 incomplete；专用 manifest 校验与内容图解析不代表通用判官、DELTA、CI gate 或 AI 遵守已经实现。

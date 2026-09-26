@@ -611,6 +611,42 @@
         "producer": "project:instructions",
         "scope": "whole-file"
       }
+    },
+    {
+      "path": "docs/methodology-clause-map.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "docs/licenses/methodology-attribution.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "docs/licenses/trureturing-Apache-2.0.txt",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [
