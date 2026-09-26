@@ -11,16 +11,37 @@ pub(super) struct Snapshot {
 pub(super) struct Change {
     pub path: PathBuf,
     pub before: Option<Snapshot>,
-    pub after: Vec<u8>,
+    pub after: After,
+    pub permissions: Option<Permissions>,
+}
+
+pub(super) enum After {
+    Regular(Vec<u8>),
+    RelativeAlias,
 }
 
 impl Change {
     pub fn new(path: PathBuf, before: Option<Snapshot>, after: Vec<u8>) -> Self {
+        let permissions = before.as_ref().map(|s| s.permissions.clone());
         Self {
             path,
             before,
-            after,
+            after: After::Regular(after),
+            permissions,
         }
+    }
+
+    pub fn alias(path: PathBuf, before: Option<Snapshot>) -> Self {
+        Self {
+            path,
+            before,
+            after: After::RelativeAlias,
+            permissions: None,
+        }
+    }
+
+    pub fn unchanged(&self) -> bool {
+        matches!((&self.before, &self.after), (Some(before), After::Regular(after)) if before.bytes == *after)
     }
 }
 
@@ -58,6 +79,27 @@ fn stage(path: &Path, bytes: &[u8], permissions: Option<&Permissions>) -> Result
             )
         })?;
     Ok(temp.into_temp_path())
+}
+
+fn stage_alias(path: &Path) -> Result<TempPath, String> {
+    #[cfg(unix)]
+    {
+        let temp = Builder::new()
+            .prefix(".chrono-instructions-")
+            .tempfile_in(path.parent().expect("destination has parent"))
+            .map_err(|e| format!("stage alias {}: {e}", path.display()))?
+            .into_temp_path();
+        fs::remove_file(&temp)
+            .and_then(|()| std::os::unix::fs::symlink("CLAUDE.md", &temp))
+            .map_err(|e| format!("stage alias {}: {e}", path.display()))?;
+        // Never chmod or open the symlink: its target may already exist.
+        Ok(temp)
+    }
+    #[cfg(not(unix))]
+    Err(format!(
+        "{}: relative alias publication requires Unix",
+        path.display()
+    ))
 }
 
 fn clean(staged: Vec<Staged>) -> Vec<String> {
@@ -100,15 +142,17 @@ pub(super) fn publish(
             made.push(path);
         }
         for change in &changes {
-            let permissions = change.before.as_ref().map(|s| &s.permissions);
-            let next = stage(&change.path, &change.after, permissions)?;
+            let next = match &change.after {
+                After::Regular(bytes) => stage(&change.path, bytes, change.permissions.as_ref())?,
+                After::RelativeAlias => stage_alias(&change.path)?,
+            };
             // Retain next in the cleanup set even if staging its backup fails.
             staged.push(Staged {
                 next,
                 original: None,
             });
             if let Some(snapshot) = &change.before {
-                let backup = stage(&change.path, &snapshot.bytes, permissions)?;
+                let backup = stage(&change.path, &snapshot.bytes, Some(&snapshot.permissions))?;
                 staged.last_mut().expect("just pushed").original = Some(backup);
             }
         }

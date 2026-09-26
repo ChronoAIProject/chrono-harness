@@ -265,7 +265,8 @@
           "kind": "judge-trigger",
           "to": "judge:filemap"
         }
-      ]
+      ],
+      "symlink": "CLAUDE.md"
     },
     {
       "path": "CLAUDE.md",
@@ -281,7 +282,12 @@
           "kind": "judge-trigger",
           "to": "judge:filemap"
         }
-      ]
+      ],
+      "projection": {
+        "source": ".chrono-harness/instructions/methodology.md",
+        "producer": "project:instructions",
+        "scope": "managed-block"
+      }
     },
     {
       "path": "docs/instructions.md",
@@ -444,6 +450,10 @@
         {
           "kind": "build-input",
           "to": "project:instructions"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:instructions-tests"
         },
         {
           "kind": "judge-trigger",

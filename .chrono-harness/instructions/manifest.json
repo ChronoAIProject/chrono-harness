@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "producer": "chrono-instructions/0.1.0",
-  "render": "read-both/v1",
+  "render": "literal-core/relative-alias/v2",
   "sources": [
     {
       "role": "methodology",
@@ -14,12 +14,12 @@
   ],
   "outputs": [
     {
-      "role": "agents-entrypoint",
-      "path": "AGENTS.md"
+      "role": "claude-guide",
+      "path": "CLAUDE.md"
     },
     {
-      "role": "claude-entrypoint",
-      "path": "CLAUDE.md"
+      "role": "agents-relative-alias",
+      "path": "AGENTS.md"
     }
   ]
 }

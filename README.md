@@ -15,20 +15,23 @@ cargo install --locked --path instructions
 chrono-instructions init --host-root "/path/to/existing-host"
 ```
 
-可执行文件在编译时内嵌完整 `assets/methodology.md`，运行时不需要源码 checkout。
-新宿主默认获得完整指南和空上下文，无需准备输入文件或手工注入 Markdown。
-可独立选择 `--methodology M`、`--host-context C` 覆盖任一默认输入；外部输入须是可读 UTF-8 普通文件。
-init 精确保留选定字节到宿主 `.chrono-harness/instructions/`，
-两个根入口都要求全文读取同一方法与宿主上下文；只替换自己拥有的块，保留块外内容。
-日常更新直接编辑保留源，再运行 `chrono-instructions generate --host-root "/path/to/existing-host"`。
-已登记宿主再次 init 时，省略的选项保留现有源，不与新二进制默认内容比较；显式不同的输入仍报错。
-升级二进制不自动更新宿主指南；采用新版须有意识地比较、编辑 canonical 方法，再 generate。
-成功重复调用无写入。退出码为 0 完整、2 用法错误、1 生成/IO 失败。
-普通 IO 失败尝试回滚；不提供多文件崩溃原子性，不支持并发写者。
-完整格式、所有权、别名、恢复边界与验证命令见 [生成合同](docs/instructions.md)。
-实际 CLAUDE.md 条款逐节迁移的完整中文正文见 [产品资产](assets/methodology.md)，
-102 个来源子节的保留、适配和排除决定见 [来源映射](docs/methodology-extraction.md)。
-本仓也由该工具生成根入口；这是能力示例，不证明 AI 实际阅读/遵守，也不启用判官。
+可执行文件编译时内嵌精选的[通用软件/AI 工作核心](assets/methodology.md)，运行时不需要 checkout。
+默认产生普通 `CLAUDE.md`，其受管块直接包含完整核心；`AGENTS.md -> CLAUDE.md` 是真实的字面相对符号链接。
+新宿主同时获得 `.chrono-harness/instructions/` 下的方法编辑源、空上下文和专用 manifest，无需手工注入。
+可独立选择 `--methodology M`、`--host-context C` 覆盖默认输入，精确保留选定 UTF-8 字节。
+根块外文字属于宿主。两个现有普通根文件仅在渲染后的完整字节相同时自动转换；不同原文报无写入冲突，
+授权 AI 保全并明确整合后重试。仅一个普通根文件时保留其文字，转成同一正文+链接布局。
+
+日常编辑宿主方法源，再运行 `chrono-instructions generate --host-root "/path/to/existing-host"`。
+init 和 generate 都支持从已知 `read-both/v1` 登记前向升级布局；保留已注册方法和上下文，不自动采用新默认。
+重复 init 省略选项保留定制，显式不同输入拒绝；采用新版核心须明确比较、编辑宿主源再生成。
+当前身份为 `literal-core/relative-alias/v2`，旧二进制不支持它。重复无变化时无写入，已有正确链接不重建。
+
+支持 Unix；已验证当前 macOS，其他平台未验证，非 Unix 明确失败。退出码 0 完整、2 用法错误、1 生成/IO 失败。
+普通 IO 失败尝试恢复原文件/模式或移除新链接，恢复失败报告路径和可用备份；无崩溃原子性或并发写者保证。
+完整所有权、版本、冲突、字节和恢复边界见[生成合同](docs/instructions.md)。
+[可选来源说明](docs/methodology-extraction.md) 说明实际通用规则的选择与研究材料的排除，不宣称全条款迁移。
+本仓通过相同工具生成根正文和链接；自举不证明 AI 遵守，也不启用判官。
 
 ```sh
 cargo build --locked --manifest-path runner/Cargo.toml

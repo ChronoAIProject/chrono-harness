@@ -11,6 +11,64 @@ const MANIFEST: &str = ".chrono-harness/instructions/manifest.json";
 const BEGIN: &str = "<!-- chrono-instructions:begin -->";
 const END: &str = "<!-- chrono-instructions:end -->";
 
+#[cfg(unix)]
+#[test]
+fn literal_core_and_relative_alias_are_the_default_layout() {
+    let host = Host::new();
+    let method = "\u{feff}方法\r\nwithout final newline".as_bytes();
+    fs::write(&host.method, method).unwrap();
+    host.init().unwrap();
+    assert!(
+        fs::symlink_metadata(host.root.join("AGENTS.md"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::read_link(host.root.join("AGENTS.md"))
+            .unwrap()
+            .as_os_str(),
+        "CLAUDE.md"
+    );
+    let guide = host.read("CLAUDE.md");
+    assert!(guide.windows(method.len()).any(|part| part == method));
+    assert_eq!(host.read("AGENTS.md"), guide);
+}
+
+fn assert_alias(host: &Host) {
+    let path = host.root.join("AGENTS.md");
+    assert!(
+        fs::symlink_metadata(&path)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(fs::read_link(path).unwrap().as_os_str(), "CLAUDE.md");
+    assert!(
+        fs::symlink_metadata(host.root.join("CLAUDE.md"))
+            .unwrap()
+            .file_type()
+            .is_file()
+    );
+    assert_eq!(host.read("AGENTS.md"), host.read("CLAUDE.md"));
+}
+
+fn expected_guide(method: &[u8]) -> Vec<u8> {
+    let frame =
+        fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/entrypoint.md")).unwrap();
+    [
+        BEGIN.as_bytes(),
+        b"\n",
+        &frame,
+        b"\n",
+        method,
+        b"\n",
+        END.as_bytes(),
+        b"\n",
+    ]
+    .concat()
+}
+
 fn cli_init(
     host: &Host,
     method: Option<&Path>,
@@ -90,39 +148,44 @@ impl Host {
 }
 
 #[test]
-fn init_retains_exact_inputs_and_both_entrypoints_route_to_readable_shared_sources() {
+fn init_retains_exact_inputs_and_publishes_one_literal_guide() {
     let host = Host::new();
     let changed = host.init().unwrap();
     assert_eq!(changed.len(), 5);
-    assert_eq!(host.read(METHOD), fs::read(&host.method).unwrap());
+    let method = fs::read(&host.method).unwrap();
+    assert_eq!(host.read(METHOD), method);
     assert_eq!(host.read(CONTEXT), b"");
-    for name in ["AGENTS.md", "CLAUDE.md"] {
-        let route = String::from_utf8(host.read(name)).unwrap();
-        assert!(route.contains("read BOTH canonical files in full, in this order"));
-        assert!(route.find(METHOD).unwrap() < route.find(CONTEXT).unwrap());
-        for relative in [METHOD, CONTEXT] {
-            assert!(host.root.join(relative).is_file());
-        }
-        assert!(route.contains("does not activate harness judges"));
-    }
+    assert_eq!(host.read("CLAUDE.md"), expected_guide(&method));
+    assert_alias(&host);
     let manifest: serde_json::Value = serde_json::from_slice(&host.read(MANIFEST)).unwrap();
     assert_eq!(manifest["schema_version"], 1);
     assert_eq!(manifest["producer"], "chrono-instructions/0.1.0");
-    assert_eq!(manifest["render"], "read-both/v1");
+    assert_eq!(manifest["render"], "literal-core/relative-alias/v2");
     assert_eq!(manifest["sources"][0]["path"], METHOD);
     assert_eq!(manifest["sources"][1]["path"], CONTEXT);
-    assert_eq!(manifest["outputs"][0]["path"], "AGENTS.md");
-    assert_eq!(manifest["outputs"][1]["path"], "CLAUDE.md");
+    assert_eq!(
+        manifest["outputs"][0],
+        serde_json::json!({"role":"claude-guide", "path":"CLAUDE.md"})
+    );
+    assert_eq!(
+        manifest["outputs"][1],
+        serde_json::json!({"role":"agents-relative-alias", "path":"AGENTS.md"})
+    );
 }
 
 #[test]
-fn repeated_init_and_generate_do_not_write_even_after_canonical_edits() {
+fn repeated_init_and_generate_do_not_write_and_edits_refresh_only_the_guide() {
     let host = Host::new();
     host.init().unwrap();
     let before = host.snapshot();
     let times: Vec<_> = [METHOD, CONTEXT, MANIFEST, "AGENTS.md", "CLAUDE.md"]
         .iter()
-        .map(|p| fs::metadata(host.root.join(p)).unwrap().modified().unwrap())
+        .map(|p| {
+            fs::symlink_metadata(host.root.join(p))
+                .unwrap()
+                .modified()
+                .unwrap()
+        })
         .collect();
     assert!(host.init().unwrap().is_empty());
     assert!(generate(&host.root).unwrap().is_empty());
@@ -132,7 +195,7 @@ fn repeated_init_and_generate_do_not_write_even_after_canonical_edits() {
         .zip(times)
     {
         assert_eq!(
-            fs::metadata(host.root.join(path))
+            fs::symlink_metadata(host.root.join(path))
                 .unwrap()
                 .modified()
                 .unwrap(),
@@ -141,12 +204,17 @@ fn repeated_init_and_generate_do_not_write_even_after_canonical_edits() {
     }
     host.write(METHOD, "自主修订的通用方法\n");
     host.write(CONTEXT, "项目事实：仅使用显式登记。\n");
+    let changed = generate(&host.root).unwrap();
+    assert_eq!(
+        changed,
+        vec![fs::canonicalize(&host.root).unwrap().join("CLAUDE.md")]
+    );
+    assert_eq!(host.read("CLAUDE.md"), expected_guide(&host.read(METHOD)));
+    assert_alias(&host);
     let edited = host.snapshot();
     assert!(generate(&host.root).unwrap().is_empty());
-    assert_eq!(host.snapshot(), edited);
     assert!(host.init().unwrap_err().contains("init inputs differ"));
     assert_eq!(host.snapshot(), edited);
-    // Explicit selection of the current canonical materials is also safe.
     assert!(
         init(
             &host.root,
@@ -156,6 +224,8 @@ fn repeated_init_and_generate_do_not_write_even_after_canonical_edits() {
         .unwrap()
         .is_empty()
     );
+    host.write(CONTEXT, "context changes do not rewrite the guide");
+    assert!(generate(&host.root).unwrap().is_empty());
 }
 
 #[test]
@@ -167,17 +237,17 @@ fn preserves_unrelated_bytes_and_only_replaces_owned_span() {
     original.extend_from_slice(format!("{BEGIN}\r\nstale route\r\n{END}").as_bytes());
     original.extend_from_slice(suffix);
     host.write("AGENTS.md", &original);
-    host.write("CLAUDE.md", b"unrelated without newline");
+    let mut other = prefix.to_vec();
+    other.extend_from_slice(format!("{BEGIN}\nother old block\n{END}").as_bytes());
+    other.extend_from_slice(suffix);
+    host.write("CLAUDE.md", other);
     host.write(".chrono-harness/keep.json", b"host configuration");
     host.init().unwrap();
     let agents = host.read("AGENTS.md");
     assert!(agents.starts_with(prefix));
     assert!(agents.ends_with(suffix));
     assert!(!String::from_utf8_lossy(&agents).contains("stale route"));
-    assert!(
-        host.read("CLAUDE.md")
-            .starts_with(b"unrelated without newline\n")
-    );
+    assert_alias(&host);
     assert_eq!(
         host.read(".chrono-harness/keep.json"),
         b"host configuration"
@@ -195,8 +265,9 @@ fn refreshes_changed_block_and_recreates_absent_entrypoint() {
         "AGENTS.md",
         format!("local\n{BEGIN}\nmanual change inside owned block\n{END}\ntail"),
     );
-    fs::remove_file(host.root.join("CLAUDE.md")).unwrap();
+    fs::remove_file(host.root.join("AGENTS.md")).unwrap();
     assert_eq!(generate(&host.root).unwrap().len(), 2);
+    assert_alias(&host);
     assert!(host.read("AGENTS.md").starts_with(b"local\n"));
     assert!(host.read("AGENTS.md").ends_with(b"\ntail"));
     assert!(host.root.join("CLAUDE.md").is_file());
@@ -246,7 +317,10 @@ fn invalid_registration_is_rejected_without_repairs_or_output_changes() {
             "\"extra\": true, \"schema_version\": 1",
             1,
         ),
-        original.replace("read-both/v1", "read-both/v9"),
+        original.replace(
+            "literal-core/relative-alias/v2",
+            "literal-core/relative-alias/v9",
+        ),
         original.replace("chrono-instructions/0.1.0", "different-producer"),
         original.replace(METHOD, "../outside.md"),
         original.replace("host-context\"", "methodology\""),
@@ -329,7 +403,7 @@ fn input_failures_and_absent_registration_are_errors() {
 }
 
 #[test]
-fn generate_reads_both_retained_sources_even_if_routes_are_current() {
+fn generate_reads_both_retained_sources_even_if_guide_is_current() {
     for path in [METHOD, CONTEXT] {
         let host = Host::new();
         host.init().unwrap();
@@ -539,8 +613,8 @@ fn unreadable_inputs_outputs_and_storage_fail_without_publication() {
 fn late_publication_failure_rolls_back_new_material_and_existing_output_bytes() {
     for after in 0..5 {
         let host = Host::new();
-        host.write("AGENTS.md", b"original agents\xff");
-        host.write("CLAUDE.md", "original claude");
+        host.write("AGENTS.md", b"original host\xff");
+        host.write("CLAUDE.md", b"original host\xff");
         let before = host.snapshot();
         let failure =
             test_support::init_with_failure(&host.root, &host.method, &host.context, after, None)
@@ -554,8 +628,8 @@ fn late_publication_failure_rolls_back_new_material_and_existing_output_bytes() 
 #[test]
 fn incomplete_rollback_identifies_exact_unrestored_path_and_retains_original() {
     let host = Host::new();
-    host.write("AGENTS.md", "original agents");
-    host.write("CLAUDE.md", "original claude");
+    host.write("AGENTS.md", "original host");
+    host.write("CLAUDE.md", "original host");
     let failure =
         test_support::init_with_failure(&host.root, &host.method, &host.context, 4, Some(3))
             .unwrap_err();
@@ -565,7 +639,7 @@ fn incomplete_rollback_identifies_exact_unrestored_path_and_retains_original() {
     );
     assert!(failure.contains(&expected), "{failure}");
     assert!(failure.contains("original retained at"));
-    assert_eq!(host.read("CLAUDE.md"), b"original claude");
+    assert_eq!(host.read("CLAUDE.md"), b"original host");
     assert!(!host.root.join(".chrono-harness").exists());
     let backups: Vec<_> = fs::read_dir(&host.root)
         .unwrap()
@@ -578,7 +652,24 @@ fn incomplete_rollback_identifies_exact_unrestored_path_and_retains_original() {
         })
         .collect();
     assert_eq!(backups.len(), 1);
-    assert_eq!(fs::read(&backups[0]).unwrap(), b"original agents");
+    assert_eq!(fs::read(&backups[0]).unwrap(), b"original host");
+    assert!(failure.contains(&backups[0].display().to_string()));
+    assert!(
+        fs::symlink_metadata(host.root.join("AGENTS.md"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    fs::rename(&backups[0], host.root.join("AGENTS.md")).unwrap();
+    assert!(
+        fs::symlink_metadata(host.root.join("AGENTS.md"))
+            .unwrap()
+            .file_type()
+            .is_file()
+    );
+    assert_eq!(host.read("AGENTS.md"), b"original host");
+    host.init().unwrap();
+    assert_alias(&host);
 }
 
 #[cfg(unix)]
@@ -711,13 +802,11 @@ fn cli_accepts_os_path_arguments_without_lossy_conversion() {
 }
 
 #[test]
-fn default_init_ships_exact_full_asset_empty_context_and_both_readable_routes() {
+fn default_init_ships_exact_core_empty_context_and_sole_agents_donor() {
     let host = Host::new();
     let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/methodology.md");
     host.write("AGENTS.md", b"existing agents\r\n");
-    host.write("CLAUDE.md", b"existing claude without newline");
     host.write(".chrono-harness/unrelated.json", b"keep this");
-    // Normal adoption needs no external input files at all.
     fs::remove_file(&host.method).unwrap();
     fs::remove_file(&host.context).unwrap();
     let result = cli_init(&host, None, None);
@@ -725,19 +814,13 @@ fn default_init_ships_exact_full_asset_empty_context_and_both_readable_routes() 
     assert!(result.stdout.contains("5 file(s) changed"));
     assert_eq!(host.read(METHOD), fs::read(&asset).unwrap());
     assert_eq!(host.read(CONTEXT), b"");
-    for name in ["AGENTS.md", "CLAUDE.md"] {
-        let route = String::from_utf8(host.read(name)).unwrap();
-        assert!(route.contains("read BOTH canonical files in full, in this order"));
-        assert!(route.find(METHOD).unwrap() < route.find(CONTEXT).unwrap());
-        for path in [METHOD, CONTEXT] {
-            fs::read_to_string(host.root.join(path)).unwrap();
-        }
-    }
-    assert!(host.read("AGENTS.md").starts_with(b"existing agents\r\n"));
-    assert!(
-        host.read("CLAUDE.md")
-            .starts_with(b"existing claude without newline\n")
-    );
+    let expected = [
+        b"existing agents\r\n".as_slice(),
+        &expected_guide(&host.read(METHOD)),
+    ]
+    .concat();
+    assert_eq!(host.read("CLAUDE.md"), expected);
+    assert_alias(&host);
     assert_eq!(host.read(".chrono-harness/unrelated.json"), b"keep this");
 }
 
@@ -784,6 +867,7 @@ fn default_reinit_retains_custom_sources_without_writes() {
                 let manifest: serde_json::Value =
                     serde_json::from_slice(&host.read(MANIFEST)).unwrap();
                 host.write(MANIFEST, serde_json::to_vec(&manifest).unwrap());
+                assert_eq!(generate(&host.root).unwrap().len(), 1);
             }
             let before = host.snapshot();
             let times: Vec<_> = before
@@ -818,6 +902,7 @@ fn registered_init_compares_only_explicit_overrides_and_never_overwrites_conflic
     host.init().unwrap();
     host.write(METHOD, "custom method\r\n");
     host.write(CONTEXT, "custom context\r\n");
+    assert_eq!(generate(&host.root).unwrap().len(), 1);
     let before = host.snapshot();
     for path in [METHOD, CONTEXT] {
         let retained = host.root.join(path);
@@ -871,4 +956,308 @@ fn each_optional_external_input_still_requires_readable_regular_utf8_bytes() {
             }
         }
     }
+}
+
+#[test]
+fn exact_method_bytes_survive_framing_edits_and_init_refresh() {
+    for method in [
+        b"".as_slice(),
+        b"plain",
+        b"lines\r\n\r\n",
+        "\u{feff}首行\r\n末行".as_bytes(),
+    ] {
+        let host = Host::new();
+        fs::write(&host.method, method).unwrap();
+        host.init().unwrap();
+        assert_eq!(host.read(METHOD), method);
+        assert_eq!(host.read("CLAUDE.md"), expected_guide(method));
+        assert_alias(&host);
+        let edited = [method, b"\nnext version without final newline"].concat();
+        host.write(METHOD, &edited);
+        let result = cli_init(&host, None, None);
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        assert!(result.stdout.contains("1 file(s) changed"));
+        assert_eq!(host.read("CLAUDE.md"), expected_guide(&edited));
+        assert!(generate(&host.root).unwrap().is_empty());
+    }
+}
+
+#[test]
+fn reserved_method_prefix_is_rejected_before_publication() {
+    for method in [
+        BEGIN.to_owned(),
+        END.to_owned(),
+        "inline <!-- chrono-instructions-invalid".into(),
+    ] {
+        for registered in [false, true] {
+            let host = Host::new();
+            if registered {
+                host.init().unwrap();
+                host.write(METHOD, &method);
+            }
+            fs::write(&host.method, &method).unwrap();
+            let before = host.snapshot();
+            assert!(host.init().unwrap_err().contains("reserved marker prefix"));
+            if registered {
+                assert!(
+                    generate(&host.root)
+                        .unwrap_err()
+                        .contains("reserved marker prefix")
+                );
+                assert_eq!(cli_init(&host, None, None).exit_code, 1);
+            }
+            assert_eq!(host.snapshot(), before);
+        }
+    }
+    // Context is not embedded, so the restriction does not apply there.
+    let host = Host::new();
+    fs::write(&host.context, BEGIN).unwrap();
+    host.init().unwrap();
+    assert_eq!(host.read(CONTEXT), BEGIN.as_bytes());
+    assert!(generate(&host.root).unwrap().is_empty());
+}
+
+#[test]
+fn roots_convert_only_when_prospective_whole_bytes_agree() {
+    for roots in [
+        vec![],
+        vec!["AGENTS.md"],
+        vec!["CLAUDE.md"],
+        vec!["AGENTS.md", "CLAUDE.md"],
+    ] {
+        let host = Host::new();
+        for name in &roots {
+            host.write(name, b"host text without newline\xff");
+        }
+        host.init().unwrap();
+        assert_alias(&host);
+        let expected = if roots.is_empty() {
+            expected_guide(&host.read(METHOD))
+        } else {
+            [
+                b"host text without newline\xff\n".as_slice(),
+                &expected_guide(&host.read(METHOD)),
+            ]
+            .concat()
+        };
+        assert_eq!(host.read("CLAUDE.md"), expected);
+        assert!(generate(&host.root).unwrap().is_empty());
+    }
+    for registered in [false, true] {
+        let host = Host::new();
+        if registered {
+            host.init().unwrap();
+            fs::remove_file(host.root.join("AGENTS.md")).unwrap();
+        }
+        host.write("AGENTS.md", b"agent-specific text");
+        host.write("CLAUDE.md", b"claude-specific text");
+        let before = host.snapshot();
+        let failure = if registered {
+            generate(&host.root)
+        } else {
+            host.init()
+        }
+        .unwrap_err();
+        assert!(failure.contains("AGENTS.md") && failure.contains("CLAUDE.md"));
+        assert!(failure.contains("consolidate"));
+        assert_eq!(host.snapshot(), before);
+        assert_eq!(cli_init(&host, None, None).exit_code, 1);
+        assert_eq!(host.snapshot(), before);
+        // Explicit consolidation preserves both original texts; retry can finish.
+        host.write("CLAUDE.md", b"agent-specific text\nclaude-specific text");
+        fs::remove_file(host.root.join("AGENTS.md")).unwrap();
+        assert_eq!(cli_init(&host, None, None).exit_code, 0);
+        assert_alias(&host);
+        assert!(
+            host.read("CLAUDE.md")
+                .starts_with(b"agent-specific text\nclaude-specific text\n")
+        );
+    }
+}
+
+fn legacy_manifest() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "producer": "chrono-instructions/0.1.0",
+        "render": "read-both/v1",
+        "sources": [
+            {"role": "methodology", "path": METHOD},
+            {"role": "host-context", "path": CONTEXT}
+        ],
+        "outputs": [
+            {"role": "agents-entrypoint", "path": "AGENTS.md"},
+            {"role": "claude-entrypoint", "path": "CLAUDE.md"}
+        ]
+    })
+}
+
+fn legacy_host() -> Host {
+    let host = Host::new();
+    host.write(METHOD, fs::read(&host.method).unwrap());
+    host.write(CONTEXT, b"deliberate nonempty context\r\n");
+    fs::write(&host.context, host.read(CONTEXT)).unwrap();
+    host.write(MANIFEST, serde_json::to_vec(&legacy_manifest()).unwrap());
+    for name in ["AGENTS.md", "CLAUDE.md"] {
+        host.write(
+            name,
+            format!("host preface\n{BEGIN}\nold reading route\n{END}\nhost tail"),
+        );
+    }
+    host
+}
+
+#[test]
+fn exact_v1_upgrades_through_init_or_generate_without_updating_adopted_sources() {
+    for init_command in [false, true] {
+        let host = legacy_host();
+        let method = host.read(METHOD);
+        let context = host.read(CONTEXT);
+        let result = dispatch(&[
+            if init_command {
+                "init".into()
+            } else {
+                "generate".into()
+            },
+            "--host-root".into(),
+            host.root.clone().into_os_string(),
+        ]);
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        assert!(result.stdout.contains("3 file(s) changed"));
+        assert_eq!(host.read(METHOD), method);
+        assert_eq!(host.read(CONTEXT), context);
+        assert_alias(&host);
+        let mut expected = b"host preface\n".to_vec();
+        let block = expected_guide(&method);
+        expected.extend_from_slice(&block[..block.len() - 1]);
+        expected.extend_from_slice(b"\nhost tail");
+        assert_eq!(host.read("CLAUDE.md"), expected);
+        let manifest: serde_json::Value = serde_json::from_slice(&host.read(MANIFEST)).unwrap();
+        assert_eq!(manifest["render"], "literal-core/relative-alias/v2");
+        host.write(MANIFEST, serde_json::to_vec(&manifest).unwrap());
+        let before = host.snapshot();
+        assert!(host.init().unwrap().is_empty());
+        assert!(generate(&host.root).unwrap().is_empty());
+        assert_eq!(host.snapshot(), before); // retain current manifest formatting
+    }
+}
+
+#[test]
+fn corrupt_or_mixed_v1_is_not_migration_authority() {
+    for pointer in [
+        "/producer",
+        "/render",
+        "/sources/0/role",
+        "/outputs/1/role",
+        "/outputs/0/path",
+    ] {
+        let host = legacy_host();
+        let mut value = legacy_manifest();
+        *value.pointer_mut(pointer).unwrap() = serde_json::json!("unknown");
+        host.write(MANIFEST, serde_json::to_vec(&value).unwrap());
+        let before = host.snapshot();
+        assert!(generate(&host.root).unwrap_err().contains("registration"));
+        assert!(host.init().unwrap_err().contains("registration"));
+        assert_eq!(host.snapshot(), before);
+    }
+    let host = legacy_host();
+    fs::write(&host.method, "different explicitly selected input").unwrap();
+    let before = host.snapshot();
+    assert!(host.init().unwrap_err().contains("init inputs differ"));
+    assert_eq!(host.snapshot(), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn existing_alias_inode_survives_edits_and_migration() {
+    use std::os::unix::fs::{MetadataExt, symlink};
+    let host = legacy_host();
+    fs::remove_file(host.root.join("AGENTS.md")).unwrap();
+    symlink("CLAUDE.md", host.root.join("AGENTS.md")).unwrap();
+    let identity = || {
+        let m = fs::symlink_metadata(host.root.join("AGENTS.md")).unwrap();
+        (m.dev(), m.ino(), m.modified().unwrap())
+    };
+    let before = identity();
+    assert_eq!(generate(&host.root).unwrap().len(), 2);
+    host.write(METHOD, "changed method");
+    assert_eq!(generate(&host.root).unwrap().len(), 1);
+    assert_eq!(cli_init(&host, None, None).exit_code, 0);
+    assert_eq!(identity(), before);
+    assert_alias(&host);
+}
+
+#[test]
+fn failure_after_fresh_alias_publication_removes_all_new_material() {
+    let host = Host::new();
+    let failure = test_support::init_with_failure(&host.root, &host.method, &host.context, 4, None)
+        .unwrap_err();
+    assert!(failure.contains("injected publication failure"));
+    assert!(failure.contains("AGENTS.md") && failure.contains("unrestored=[]"));
+    assert!(host.snapshot().is_empty(), "{failure}");
+    host.init().unwrap();
+    assert_alias(&host);
+}
+
+#[cfg(unix)]
+#[test]
+fn upgrade_failure_after_alias_restores_old_registration_roots_and_modes() {
+    use std::os::unix::fs::PermissionsExt;
+    let host = legacy_host();
+    for (path, mode) in [
+        ("AGENTS.md", 0o640),
+        ("CLAUDE.md", 0o600),
+        (MANIFEST, 0o644),
+    ] {
+        fs::set_permissions(host.root.join(path), fs::Permissions::from_mode(mode)).unwrap();
+    }
+    let before = host.snapshot();
+    let failure = test_support::init_with_failure(&host.root, &host.method, &host.context, 2, None)
+        .unwrap_err();
+    assert!(failure.contains("unrestored=[]"));
+    assert_eq!(host.snapshot(), before);
+    for (path, mode) in [
+        ("AGENTS.md", 0o640),
+        ("CLAUDE.md", 0o600),
+        (MANIFEST, 0o644),
+    ] {
+        let meta = fs::symlink_metadata(host.root.join(path)).unwrap();
+        assert!(meta.file_type().is_file());
+        assert_eq!(meta.permissions().mode() & 0o777, mode);
+    }
+    assert_eq!(generate(&host.root).unwrap().len(), 3);
+    assert_alias(&host);
+    assert_eq!(
+        fs::metadata(host.root.join("CLAUDE.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+}
+
+#[test]
+fn incomplete_fresh_alias_rollback_names_unrestored_link_and_allows_explicit_recovery() {
+    let host = Host::new();
+    let failure =
+        test_support::init_with_failure(&host.root, &host.method, &host.context, 4, Some(3))
+            .unwrap_err();
+    let path = fs::canonicalize(&host.root).unwrap().join("AGENTS.md");
+    assert!(
+        failure.contains(&format!("unrestored=[{path:?}]")),
+        "{failure}"
+    );
+    assert!(
+        fs::symlink_metadata(&path)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(!host.root.join("CLAUDE.md").exists());
+    let before = host.snapshot();
+    assert!(host.init().is_err());
+    assert_eq!(host.snapshot(), before);
+    fs::remove_file(path).unwrap();
+    host.init().unwrap();
+    assert_alias(&host);
 }
