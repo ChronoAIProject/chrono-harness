@@ -1,0 +1,40 @@
+{
+  "schema": "chrono-ci-check/v1",
+  "judge": {
+    "program": ".chrono-harness/bin/chrono-judge-ci",
+    "args": [],
+    "timeout_seconds": 2400,
+    "output_limit_bytes": 8388608
+  },
+  "report_path": ".chrono-harness/state/check.json",
+  "policy": {
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "projects": ".chrono-harness/projects.json",
+    "tools": {
+      "python3": "python3",
+      "chrono-ci": ".chrono-harness/bin/chrono-ci"
+    },
+    "bindings": {
+      "test:example": [
+        "example.check"
+      ],
+      "test:ci-verify": [
+        "ci.verify"
+      ]
+    },
+    "artifacts": [
+      ".chrono-harness/bin/",
+      ".chrono-harness/state/"
+    ],
+    "required_inputs": [
+      ".chrono-harness/ci/check.json",
+      ".chrono-harness/ci/github.json",
+      ".chrono-harness/ci/install.py",
+      ".github/workflows/chrono-ci.yml"
+    ],
+    "adoption_base": null,
+    "operation_timeout_seconds": 600,
+    "operation_output_limit_bytes": 1048576,
+    "environment": {}
+  }
+}

@@ -4,3 +4,7 @@
 /instructions-tests/target/
 /.chrono-harness/bin/
 /.chrono-harness/state/
+/judge-ci/target/
+/judge-ci-tests/target/
+/ci/target/
+/ci-tests/target/

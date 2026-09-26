@@ -1,0 +1,73 @@
+{
+  "schema": "chrono-ci-check/v1",
+  "judge": {
+    "program": ".chrono-harness/bin/chrono-judge-ci",
+    "args": [],
+    "timeout_seconds": 2400,
+    "output_limit_bytes": 8388608
+  },
+  "report_path": ".chrono-harness/state/check.json",
+  "policy": {
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "projects": ".chrono-harness/projects.json",
+    "tools": {
+      "cargo": "cargo",
+      "chrono-ci": ".chrono-harness/bin/chrono-ci"
+    },
+    "bindings": {
+      "test:runner-tests": [
+        "fmt.runner",
+        "fmt.runner-tests",
+        "build.runner",
+        "test.runner-tests"
+      ],
+      "test:instructions-tests": [
+        "fmt.instructions",
+        "fmt.instructions-tests",
+        "build.instructions",
+        "test.instructions-tests"
+      ],
+      "test:judge-ci-tests": [
+        "fmt.judge-ci",
+        "fmt.judge-ci-tests",
+        "build.judge-ci",
+        "test.judge-ci-tests"
+      ],
+      "test:ci-tests": [
+        "fmt.ci",
+        "fmt.ci-tests",
+        "build.ci",
+        "test.ci-tests"
+      ],
+      "test:ci-verify": [
+        "ci.verify"
+      ]
+    },
+    "artifacts": [
+      ".chrono-harness/bin/",
+      ".chrono-harness/state/",
+      "runner/target/",
+      "runner-tests/target/",
+      "instructions/target/",
+      "instructions-tests/target/",
+      "judge-ci/target/",
+      "judge-ci-tests/target/",
+      "ci/target/",
+      "ci-tests/target/"
+    ],
+    "required_inputs": [
+      ".chrono-harness/ci/check.json",
+      ".chrono-harness/ci/github.json",
+      ".chrono-harness/ci/bootstrap.py",
+      ".chrono-harness/ci/bootstrap.json",
+      ".github/workflows/chrono-ci.yml"
+    ],
+    "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
+    "operation_timeout_seconds": 600,
+    "operation_output_limit_bytes": 1048576,
+    "environment": {
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "CARGO_TERM_COLOR": "never"
+    }
+  }
+}

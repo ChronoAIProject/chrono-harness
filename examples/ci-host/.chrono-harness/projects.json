@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "owners": [
+    "host",
+    "example",
+    "ci-verify"
+  ],
+  "projects": [],
+  "scripts": [
+    {
+      "id": "example",
+      "actions": {
+        "execute": {
+          "operation": "example.check",
+          "tool": "python3",
+          "argv": [
+            "check.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ci-verify",
+      "actions": {
+        "execute": {
+          "operation": "ci.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/github.json"
+          ]
+        }
+      }
+    }
+  ]
+}

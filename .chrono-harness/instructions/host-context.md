@@ -1,10 +1,10 @@
 # chrono-harness 宿主上下文
 
-本仓维护显式登记的 Rust harness 与独立宿主指令生成器。产品合同在 SPEC.md，当前行为与调用在 README.md、docs/instructions.md。
+本仓维护显式登记的 Rust harness 与独立宿主指令生成器。产品合同在 SPEC.md，当前行为与调用在 README.md、docs/instructions.md、docs/ci.md。
 
-生产/专属测试配对：runner ↔ runner-tests，instructions ↔ instructions-tests。各自有 Cargo.toml、Cargo.lock、target，无根 workspace；instructions 不依赖 runner。构建/检查使用显式 manifest 与 --locked；仅测试项目的 build/check 带 --tests。操作、所有权、依赖和未知成本分别登记在 .chrono-harness/projects.json、FILEMAP.json；变更文件需同步精确登记。
+生产/专属测试配对：runner ↔ runner-tests，judge-ci ↔ judge-ci-tests，ci ↔ ci-tests，instructions ↔ instructions-tests。各自有 Cargo.toml、Cargo.lock、target，无根 workspace；instructions 不依赖 runner。构建/检查使用显式 manifest 与 --locked；仅测试项目的 build/check 带 --tests。操作、所有权、依赖和未知成本分别登记在 .chrono-harness/projects.json、FILEMAP.json；变更文件需同步精确登记。
 
-通用判官、DELTA、调度与 CI gate 尚未实现。五份通用登记仍 proposed；chrono-harness check 返回 3，不产生验证通过报告。chrono-instructions 的专用 manifest 校验和生成已实现，两者不可混报。
+五份完整治理登记仍 proposed；独立 chrono-ci-check/v1 已显式消费 FILEMAP/projects 的 scoped CI 子集。runner 只运输外部判官/协议/结果，judge-ci 拥有快照、DELTA、登记与操作执行，ci 拥有工作流生成和事件准备。先用 .chrono-harness/ci/bootstrap.py 构建登记工具，再对干净固定候选使用同一 chrono-harness check --config .chrono-harness/ci/check.json --base FULL_OID --candidate FULL_OID。完整配置及七判官尚未实现；不能与现役 slice 混报。成本未知、输入闭包不完整、同命令不自证同判。chrono-instructions 的专用 manifest 校验和生成独立保持。
 
 产品默认位于 assets/instructions/catalog.json 与 default-manifest.json；宿主独立采用 catalog.json、manifest.json 和本上下文。根 CLAUDE.md 受管块直接呈现中文核心，AGENTS.md 是字面相对链接 CLAUDE.md；编辑 catalog 或其显式 file 源/输出计划，再运行登记的 generate。不要独立编辑投影，也不必重复读取已呈现的规则源。
 

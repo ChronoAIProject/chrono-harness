@@ -19,7 +19,7 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
 
 已登记 init 的省略选项保留原数据；显式不同 context、raw method 或 root locale 拒绝，提示编辑源/输出计划再 generate。atomized root 不允许用 raw methodology 替换。源缺失、登记损坏不补默认。没有登记却已有保留源/控制文件时拒绝碰撞。public `init`、`init_with_defaults`、`generate`、`dispatch` 继续可用。
 
-退出 0 完成/无写入/帮助/版本；2 CLI 用法错误；1 输入/生成/IO/平台错误。成功报告实际改动数和 `no judges executed`。`chrono-harness check` 仍返回 3、未实现；生成不证明 AI 已阅读、遵守、执行判官或通过检查。
+退出 0 完成/无写入/帮助/版本；2 CLI 用法错误；1 输入/生成/IO/平台错误。成功报告实际改动数和 `no judges executed`。独立 `chrono-harness check` 已有 [CI slice](ci.md)，完整治理配置仍未实现；指令生成不证明 AI 已阅读、遵守、执行判官或通过检查。
 
 ## Schema 与可复制组合配方
 
@@ -121,4 +121,4 @@ cargo test --locked --manifest-path instructions-tests/Cargo.toml
 
 专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、布局重排/双语复用/深度/完整覆盖/预写入拒绝、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方；实际消费者读数及外部 skill 格式验证的适用边界见 [迁移说明](methodology-extraction.md#实际消费者边界)，不引入生产依赖，不证明语义。
 
-FILEMAP 的 proposed projection 元数据从单一 `source` 扩展为显式 `sources` 数组（catalog、manifest 及被引用 file 输入），producer/scope 不变；生成 root-frame 的路径引用也由 manifest 决定。产品资产是 build-input/test-execution，宿主数据和既有投影是 runtime-input。五份通用登记仍 proposed、成本 unmeasured；专用 schema 校验不能冒称通用判官/DELTA/CI 已实现。
+FILEMAP 的 proposed projection 元数据从单一 `source` 扩展为显式 `sources` 数组（catalog、manifest 及被引用 file 输入），producer/scope 不变；生成 root-frame 的路径引用也由 manifest 决定。产品资产是 build-input/test-execution，宿主数据和既有投影是 runtime-input。五份完整治理登记仍 proposed、成本 unmeasured；指令专用 schema 校验不冒称治理判官执行。独立 CI slice 的实际 DELTA、协议与生成范围见 [CI 合同](ci.md)。

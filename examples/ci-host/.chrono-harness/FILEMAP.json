@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "files": [
+    {
+      "path": ".gitignore",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "README.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "check.py",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:example"
+        }
+      ]
+    },
+    {
+      "path": "message.txt",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:example"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/projects.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/FILEMAP.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/ci/check.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:example"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/github.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/install.py",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/chrono-ci.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        }
+      ]
+    }
+  ],
+  "project_edges": []
+}
