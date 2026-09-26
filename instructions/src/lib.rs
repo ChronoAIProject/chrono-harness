@@ -345,6 +345,7 @@ fn raw_catalog(locale: &str) -> Result<Catalog, String> {
             },
         }],
     }];
+    cat.layouts.clear();
     Ok(cat)
 }
 fn raw_manifest(locale: &str) -> Result<Manifest, String> {
@@ -353,6 +354,7 @@ fn raw_manifest(locale: &str) -> Result<Manifest, String> {
     output.locale = locale.into();
     output.roots = vec!["legacy.method".into()];
     output.title = None;
+    output.layout = None;
     Ok(manifest)
 }
 

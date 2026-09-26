@@ -13,7 +13,8 @@
       "roots": [
         "core.general"
       ],
-      "title": "通用工作方法"
+      "title": "通用工作方法",
+      "layout": "general"
     }
   ]
 }

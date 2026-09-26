@@ -33,8 +33,8 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
   "catalog": ".chrono-harness/instructions/catalog.json",
   "host_context": ".chrono-harness/instructions/host-context.md",
   "outputs": [
-    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":["core.general"],"title":"通用工作方法"},
-    {"id":"general-en","path":"docs/generated/general-methods.en.md","format":"markdown","locale":"en","roots":["core.general"],"title":"General working methods"},
+    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":["core.general"],"title":"通用工作方法","layout":"general"},
+    {"id":"general-en","path":"docs/generated/general-methods.en.md","format":"markdown","locale":"en","roots":["core.general"],"title":"General working methods","layout":"general"},
     {"id":"repair-skill","path":"skills/diagnose-recurring-failures/SKILL.md","format":"skill","locale":"en","roots":["core.repair-producer"],"skill":{"name":"diagnose-recurring-failures","description":"Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."}}
   ]
 }
@@ -58,9 +58,28 @@ Catalog schema_version=1，必填 locales 与 atoms 数组。结构例子（合�
 
 locale id 显式且唯一，允许追加本地语言；无语言标签猜测/自动 fallback。atom id 是稳定引用身份（ASCII 字母/数字及 `._-`，非空）；requires 有序，variants 以 locale 唯一；source 是严格 tagged inline{text} / file{path}。JSON 重复、未知字段拒绝。根引用和依赖引用必须存在，所有已登记依赖均检查 cycle，并报告链。所有 file variants 都是完整显式输入，即使未被当前输出选择，也校验存在、UTF-8、普通类型和路径。只有选中闭包需要对应 locale variant；未选中的 atom 可缺翻译。
 
-DFS 按 roots / requires 的声明顺序遍历，先依赖后使用者，共享 atom 每个输出只渲染一次；不按文字推断边。`core.general` 是具有空 zh-CN/en 文本的普通 aggregate，显式选择原有 17 个稳定入口及新增便携义务。当前共有 98 个内容叶子、16 个普通聚合；原有主题 ID 只组合原职责，不扩成章节全集。`core.repair-producer` 是内容叶子，仅依赖 `core.evidence`（3 个叶子）和 `core.reuse`（3 个叶子），skill 共呈现 7 个叶子；不引入容量、缓存、CI 或研究路线。空 inline 可表达纯组合，非空段按顺序以两个 LF 分隔，段内字节不 trim、不正规化；file UTF-8 字节与 JSON 解码后的 inline UTF-8 精确保留。BOM、CRLF、空内容、无末尾换行均可运输。title、框架、输入引用、分隔 LF 与所有权标记是投影格式。选中内容及框架禁止保留前缀 `<!-- chrono-instructions`，context 不嵌入所以不受此限制。
+无 layout 的输出按 roots / requires 声明顺序 DFS，先依赖后使用者，共享 atom 每个输出只渲染一次；不按文字推断边。`core.general` 是具有空 zh-CN/en 文本的普通 aggregate，显式选择原有 17 个稳定入口及新增便携义务。当前共有 98 个内容叶子、16 个普通聚合；原有主题 ID 只组合原职责，不扩成章节全集。`core.repair-producer` 是内容叶子，仅依赖 `core.evidence`（3 个叶子）和 `core.reuse`（3 个叶子），skill 共呈现 7 个叶子；不引入容量、缓存、CI 或研究路线。空 inline 可表达纯组合，非空段按顺序以两个 LF 分隔，段内字节不 trim、不正规化；file UTF-8 字节与 JSON 解码后的 inline UTF-8 精确保留。BOM、CRLF、空内容、无末尾换行均可运输。title、框架、输入引用、分隔 LF 与所有权标记是投影格式。选中内容及框架禁止保留前缀 `<!-- chrono-instructions`，context 不嵌入所以不受此限制。
 
 locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所选 locale 的登记数据。root 的 manifest/catalog/host_context 路径随实际绑定列出；正文直接在根受管块内，不要求重复读取源。翻译是作者提供的数据，不声称语义等价或完整性已由程序证明。
+
+## 可选文档布局
+
+本扩展只新增 catalog 的可选 `layouts`（缺省空数组）和 output 的可选 `layout`（具名引用）；catalog schema 1、manifest schema 2 / render v3 的原有字段语义不变。未选择 layout 时保留原 DFS 与逐字节输出行为，注册但未选择的布局不自动生效。旧二进制会拒绝这些未知字段，不会静默忽略；升级生成器即可读取，已有宿主不自动采用产品新布局。raw-method init 和 v1/v2 迁移明确不带布局及选择器。
+
+布局由有序 `sections` 组成，每节必填相对 `depth`、`titles` 与显式内容 `atoms`。以下片段可加入上面的合成 catalog，并在输出选择 `"layout":"example"`：
+
+```json
+"layouts": [{"id":"example","sections":[
+  {"depth":1,"titles":[{"locale":"en","text":"Methods"}],"atoms":[]},
+  {"depth":2,"titles":[{"locale":"en","text":"Evidence and repair"}],"atoms":["example.evidence","example.repair"]}
+]}]
+```
+
+布局 ID 唯一；引用必须是已登记 atom，布局内不可重复放置。depth 是 1–6 整数，从 1 起，相邻只可增深一级，可任意回浅；有 output title 时渲染深度加 1，结果不得超过 Markdown 的 6 级。标题按显式 locale 唯一，文本非空单行、无控制字符或保留 marker；未知字段与重复 JSON 字段拒绝。所有布局检查结构与引用；选择布局的输出还必须有每节的所选语言标题，无 fallback。
+
+先按原 roots/requires 求完整闭包、读取所选 variant 并验证，再要求布局恰好覆盖其所有非空正文一次。空按 UTF-8 字节长度判定，不 trim；不放置空 aggregate。缺少依赖正文、重复、未知或闭包外放置均报错，不能借布局扩大选择。各节先输出标题再输出显式列出的正文，间隔仍是两个 LF，正文原字节不变。空 atoms 可用作上层标题。所有输出完成预检与渲染后才进入原 publisher，失败不写源、输出、alias 或目录。
+
+**布局只组织阅读，不产生权威优先级或执行顺序承诺；requires 仍仅拥有内容依赖。** 产品 `general` 是同一个双语布局，显式列出基本原则、工作方法、执行合同三部分及 12 个主题，覆盖 98 个内容叶子；产品默认与本仓中文根/英文指南选择它。主题成员不是扫描、ID 前缀或正文推断，也不是 header atom。宿主采用数据独立拥有；focused skill 不选择通用布局，仍按原 7 叶子闭包平铺。
 
 ## 所有权、路径与退休
 
@@ -100,6 +119,6 @@ cargo test --locked --manifest-path instructions-tests/Cargo.toml
 
 产品默认内容同时按完整根字节数核消费边界，包括框架而非只数字符或 token；当前 [实测读数](methodology-extraction.md#实际消费者边界) 限空上下文新宿主。内容编辑需保持原义务并复核实际受影响消费者，不截尾、不借全局配置扩限。独立选择 `core.ownership` 或 `core.behavior` 的 Markdown 消费者分别包括投影与真实 CI 义务；此合同不新增文字匹配测试框架。
 
-专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方，真实生成 skill 使用外部 validator 与 YAML 消费者验证格式/metadata；不引入生产依赖，不证明语义。
+专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、布局重排/双语复用/深度/完整覆盖/预写入拒绝、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方；实际消费者读数及外部 skill 格式验证的适用边界见 [迁移说明](methodology-extraction.md#实际消费者边界)，不引入生产依赖，不证明语义。
 
 FILEMAP 的 proposed projection 元数据从单一 `source` 扩展为显式 `sources` 数组（catalog、manifest 及被引用 file 输入），producer/scope 不变；生成 root-frame 的路径引用也由 manifest 决定。产品资产是 build-input/test-execution，宿主数据和既有投影是 runtime-input。五份通用登记仍 proposed、成本 unmeasured；专用 schema 校验不能冒称通用判官/DELTA/CI 已实现。

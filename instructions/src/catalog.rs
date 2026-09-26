@@ -27,6 +27,8 @@ pub(super) struct Output {
     pub locale: String,
     pub roots: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skill: Option<Skill>,
@@ -62,6 +64,27 @@ pub(super) struct Catalog {
     pub schema_version: u32,
     pub locales: Vec<Locale>,
     pub atoms: Vec<Atom>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layouts: Vec<Layout>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Layout {
+    pub id: String,
+    pub sections: Vec<Section>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Section {
+    pub depth: u8,
+    pub titles: Vec<Title>,
+    pub atoms: Vec<String>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Title {
+    pub locale: String,
+    pub text: String,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -284,6 +307,48 @@ impl Catalog {
                 &mut Vec::new(),
             )?;
         }
+        let mut layouts = BTreeSet::new();
+        for layout in &self.layouts {
+            identity(&layout.id)?;
+            if !layouts.insert(&layout.id) {
+                return Err(format!("duplicate layout {}", layout.id));
+            }
+            if layout.sections.is_empty() {
+                return Err(format!("layout {}: no sections", layout.id));
+            }
+            let mut previous_depth = 0;
+            let mut placed = BTreeSet::new();
+            for (index, section) in layout.sections.iter().enumerate() {
+                let at = format!("layout {} section {}", layout.id, index + 1);
+                if !(1..=6).contains(&section.depth) || section.depth > previous_depth + 1 {
+                    return Err(format!(
+                        "{at}: depth must be 1..6, start at 1 and increase by at most 1"
+                    ));
+                }
+                previous_depth = section.depth;
+                let mut titles = BTreeSet::new();
+                for title in &section.titles {
+                    if !locales.contains(&title.locale) {
+                        return Err(format!("{at}: unregistered title locale {}", title.locale));
+                    }
+                    if !titles.insert(&title.locale) {
+                        return Err(format!("{at}: duplicate title locale {}", title.locale));
+                    }
+                    if !single_line(&title.text) {
+                        return Err(format!("{at}: title must be nonempty single-line text"));
+                    }
+                    content_valid(&title.text).map_err(|e| format!("{at}: {e}"))?;
+                }
+                for id in &section.atoms {
+                    if !atoms.contains_key(id.as_str()) {
+                        return Err(format!("{at}: unknown atom {id}"));
+                    }
+                    if !placed.insert(id) {
+                        return Err(format!("{at}: duplicate placement {id}"));
+                    }
+                }
+            }
+        }
         Ok(())
     }
     pub fn file_inputs(&self) -> Vec<&str> {
@@ -319,6 +384,7 @@ impl Catalog {
                 .map_err(|e| format!("output {}: {e}", output.id))?;
         }
         let mut parts = Vec::new();
+        let mut bodies = BTreeMap::new();
         for atom in order {
             let variant = atom
                 .variants
@@ -347,7 +413,51 @@ impl Catalog {
             })?;
             if !text.is_empty() {
                 parts.push(text);
+                bodies.insert(atom.id.as_str(), text);
             }
+        }
+        if let Some(id) = &output.layout {
+            let at = format!("output {} layout {id}", output.id);
+            let layout = self
+                .layouts
+                .iter()
+                .find(|l| l.id == *id)
+                .ok_or_else(|| format!("output {}: unknown layout {id}", output.id))?;
+            let mut arranged = Vec::new();
+            for (index, section) in layout.sections.iter().enumerate() {
+                let depth = section.depth + u8::from(output.title.is_some());
+                if depth > 6 {
+                    return Err(format!(
+                        "{at} section {}: depth exceeds 6 with output title",
+                        index + 1
+                    ));
+                }
+                let title = section
+                    .titles
+                    .iter()
+                    .find(|t| t.locale == output.locale)
+                    .ok_or_else(|| {
+                        format!(
+                            "{at} section {}: missing selected locale {}",
+                            index + 1,
+                            output.locale
+                        )
+                    })?;
+                arranged.push(format!("{} {}", "#".repeat(depth.into()), title.text));
+                for atom in &section.atoms {
+                    let text = bodies.remove(atom.as_str()).ok_or_else(|| {
+                        format!("{at}: atom {atom} is outside the selected nonempty body closure")
+                    })?;
+                    arranged.push(text.to_owned());
+                }
+            }
+            if !bodies.is_empty() {
+                return Err(format!(
+                    "{at}: missing placement for {}",
+                    bodies.keys().copied().collect::<Vec<_>>().join(", ")
+                ));
+            }
+            return Ok((arranged.join("\n\n"), locale));
         }
         Ok((parts.join("\n\n"), locale))
     }

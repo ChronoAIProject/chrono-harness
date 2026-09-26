@@ -16,6 +16,7 @@ fn fixture() -> Host {
     let result = cli_init(&host, None, None);
     assert_eq!(result.exit_code, 0, "{result:?}");
     let mut cat = value(&host, CATALOG);
+    cat.as_object_mut().unwrap().remove("layouts");
     cat["atoms"] = json!([
         atom("base", &[], "base\r\n"),
         atom("left", &["base"], "left"),
@@ -65,6 +66,236 @@ fn fails_unchanged(host: &Host, expected: &str) {
     let err = generate(&host.root).unwrap_err();
     assert!(err.contains(expected), "expected {expected:?}: {err}");
     assert_eq!(host.snapshot(), before, "{err}");
+}
+
+fn layout_fixture() -> Host {
+    let host = fixture();
+    let mut cat = value(&host, CATALOG);
+    cat["layouts"] = json!([{"id":"guide","sections":[
+        {"depth":1,"titles":[{"locale":"en","text":"Methods"},{"locale":"zh-CN","text":"方法"}],"atoms":[]},
+        {"depth":2,"titles":[{"locale":"en","text":"Decide"},{"locale":"zh-CN","text":"决策"}],"atoms":["top","right"]},
+        {"depth":2,"titles":[{"locale":"en","text":"Inspect"},{"locale":"zh-CN","text":"核验"}],"atoms":["base","left"]}
+    ]}]);
+    put(&host, CATALOG, &cat);
+    let mut m = value(&host, MANIFEST);
+    // A late output must be fully validated before even the root can change.
+    m["outputs"][1]["layout"] = json!("guide");
+    put(&host, MANIFEST, &m);
+    host
+}
+
+#[test]
+fn layout_orders_bodies_separately_from_dependencies_and_reuses_translated_headings() {
+    let host = layout_fixture();
+    let mut cat = value(&host, CATALOG);
+    for a in cat["atoms"].as_array_mut().unwrap() {
+        let mut variant = a["variants"][0].clone();
+        variant["locale"] = json!("zh-CN");
+        a["variants"].as_array_mut().unwrap().push(variant);
+    }
+    put(&host, CATALOG, &cat);
+    generate(&host.root).unwrap();
+    let flat_root = host.read("CLAUDE.md");
+    let doc = String::from_utf8(host.read("docs/nested/guide.md")).unwrap();
+    assert!(
+        doc.contains("# Methods\n\n## Decide\n\ntop\n\nright\n\n## Inspect\n\nbase\r\n\n\nleft")
+    );
+    let mut m = value(&host, MANIFEST);
+    m["outputs"][1]["locale"] = json!("zh-CN");
+    m["outputs"][1]["title"] = json!("指南");
+    put(&host, MANIFEST, &m);
+    generate(&host.root).unwrap();
+    let doc = String::from_utf8(host.read("docs/nested/guide.md")).unwrap();
+    assert!(
+        doc.contains(
+            "# 指南\n\n## 方法\n\n### 决策\n\ntop\n\nright\n\n### 核验\n\nbase\r\n\n\nleft"
+        )
+    );
+    assert_eq!(host.read("CLAUDE.md"), flat_root);
+    assert_alias(&host);
+    assert!(generate(&host.root).unwrap().is_empty());
+    m["outputs"][1].as_object_mut().unwrap().remove("layout");
+    m["outputs"][1].as_object_mut().unwrap().remove("title");
+    m["outputs"][1]["locale"] = json!("en");
+    put(&host, MANIFEST, &m);
+    generate(&host.root).unwrap();
+    let plain = fixture();
+    generate(&plain.root).unwrap();
+    assert_eq!(
+        host.read("docs/nested/guide.md"),
+        plain.read("docs/nested/guide.md")
+    );
+}
+
+#[test]
+fn layout_rejects_invalid_placement_locale_and_depth_before_any_writes() {
+    for (kind, expected) in [
+        ("missing", "missing placement for base"),
+        ("dependency-omitted", "missing placement for base"),
+        ("repeated", "duplicate placement top"),
+        ("unknown", "unknown atom lost"),
+        ("outside", "outside the selected nonempty body closure"),
+        ("empty-body", "outside the selected nonempty body closure"),
+        ("unknown-layout", "unknown layout lost"),
+        ("duplicate-layout", "duplicate layout guide"),
+        ("missing-heading", "missing selected locale en"),
+        ("duplicate-heading", "duplicate title locale en"),
+        ("unknown-heading-locale", "unregistered title locale xx"),
+        ("blank-heading", "nonempty single-line"),
+        ("multiline-heading", "nonempty single-line"),
+        ("marker-heading", "reserved marker"),
+        ("zero-depth", "depth"),
+        ("deep", "depth"),
+        ("skipped-depth", "depth"),
+        ("initial-depth", "depth"),
+        ("title-overflow", "depth"),
+        ("empty-layout", "no sections"),
+    ] {
+        let host = layout_fixture();
+        let mut cat = value(&host, CATALOG);
+        let mut m = value(&host, MANIFEST);
+        match kind {
+            "missing" | "dependency-omitted" => {
+                cat["layouts"][0]["sections"][2]["atoms"] = json!(["left"]);
+                if kind == "dependency-omitted" {
+                    m["outputs"][1]["roots"] = json!(["top"]);
+                }
+            }
+            "repeated" => {
+                cat["layouts"][0]["sections"][2]["atoms"] = json!(["base", "left", "top"])
+            }
+            "unknown" => {
+                cat["layouts"][0]["sections"][2]["atoms"] = json!(["base", "left", "lost"])
+            }
+            "outside" | "empty-body" => {
+                cat["atoms"].as_array_mut().unwrap().push(atom(
+                    "other",
+                    &[],
+                    if kind == "outside" { "other" } else { "" },
+                ));
+                cat["layouts"][0]["sections"][2]["atoms"] = json!(["base", "left", "other"]);
+                if kind == "empty-body" {
+                    m["outputs"][1]["roots"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(json!("other"));
+                }
+            }
+            "unknown-layout" => m["outputs"][1]["layout"] = json!("lost"),
+            "duplicate-layout" => {
+                let layout = cat["layouts"][0].clone();
+                cat["layouts"].as_array_mut().unwrap().push(layout);
+            }
+            "missing-heading" => cat["layouts"][0]["sections"][2]["titles"] = json!([]),
+            "duplicate-heading" => {
+                cat["layouts"][0]["sections"][2]["titles"] =
+                    json!([{"locale":"en","text":"A"},{"locale":"en","text":"B"}])
+            }
+            "unknown-heading-locale" => {
+                cat["layouts"][0]["sections"][2]["titles"][0]["locale"] = json!("xx")
+            }
+            "blank-heading" => cat["layouts"][0]["sections"][2]["titles"][0]["text"] = json!(" "),
+            "multiline-heading" => {
+                cat["layouts"][0]["sections"][2]["titles"][0]["text"] = json!("A\nB")
+            }
+            "marker-heading" => {
+                cat["layouts"][0]["sections"][2]["titles"][0]["text"] =
+                    json!("<!-- chrono-instructions")
+            }
+            "zero-depth" => cat["layouts"][0]["sections"][0]["depth"] = json!(0),
+            "deep" => cat["layouts"][0]["sections"][1]["depth"] = json!(7),
+            "skipped-depth" => cat["layouts"][0]["sections"][1]["depth"] = json!(3),
+            "initial-depth" => cat["layouts"][0]["sections"][0]["depth"] = json!(2),
+            "title-overflow" => {
+                let section = cat["layouts"][0]["sections"][0].clone();
+                for depth in 3..=6 {
+                    let mut deeper = section.clone();
+                    deeper["depth"] = json!(depth);
+                    cat["layouts"][0]["sections"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(deeper);
+                }
+                m["outputs"][1]["title"] = json!("Guide");
+            }
+            "empty-layout" => cat["layouts"][0]["sections"] = json!([]),
+            _ => unreachable!(),
+        }
+        put(&host, CATALOG, &cat);
+        put(&host, MANIFEST, &m);
+        fails_unchanged(&host, expected);
+    }
+}
+
+#[test]
+fn layout_coverage_uses_actual_selected_file_bytes_and_allows_empty_aggregates() {
+    let host = layout_fixture();
+    let mut cat = value(&host, CATALOG);
+    cat["atoms"]
+        .as_array_mut()
+        .unwrap()
+        .push(atom("bundle", &["top"], ""));
+    cat["atoms"][0]["variants"][0]["source"] =
+        json!({"type":"file","path":".chrono-harness/body.txt"});
+    host.write(".chrono-harness/body.txt", "\u{feff}\r\n  ");
+    put(&host, CATALOG, &cat);
+    let mut m = value(&host, MANIFEST);
+    m["outputs"][1]["roots"] = json!(["bundle"]);
+    put(&host, MANIFEST, &m);
+    generate(&host.root).unwrap();
+    assert!(
+        String::from_utf8(host.read("docs/nested/guide.md"))
+            .unwrap()
+            .contains("\n\n\u{feff}\r\n  \n\nleft")
+    );
+    host.write(".chrono-harness/body.txt", "");
+    fails_unchanged(&host, "outside the selected nonempty body closure");
+    cat["layouts"][0]["sections"][2]["atoms"] = json!(["left"]);
+    put(&host, CATALOG, &cat);
+    generate(&host.root).unwrap();
+}
+
+#[test]
+fn layout_depth_six_is_valid_without_document_title() {
+    let host = layout_fixture();
+    let mut cat = value(&host, CATALOG);
+    let section = cat["layouts"][0]["sections"][0].clone();
+    for depth in 3..=6 {
+        let mut deeper = section.clone();
+        deeper["depth"] = json!(depth);
+        cat["layouts"][0]["sections"]
+            .as_array_mut()
+            .unwrap()
+            .push(deeper);
+    }
+    put(&host, CATALOG, &cat);
+    generate(&host.root).unwrap();
+    assert!(
+        String::from_utf8(host.read("docs/nested/guide.md"))
+            .unwrap()
+            .contains("\n\n###### Methods\n")
+    );
+}
+
+#[test]
+fn layout_json_remains_strict_at_every_new_level() {
+    for (needle, replacement) in [
+        ("\"sections\": [", "\"extra\":0,\"sections\": ["),
+        ("\"depth\": 1", "\"depth\": 1,\"depth\": 2"),
+        ("\"depth\": 1", "\"extra\":0,\"depth\": 1"),
+        (
+            "\"text\": \"Methods\"",
+            "\"text\": \"Methods\",\"text\":\"ignored\"",
+        ),
+        ("\"text\": \"Methods\"", "\"text\": \"Methods\",\"extra\":0"),
+    ] {
+        let host = layout_fixture();
+        let original = String::from_utf8(host.read(CATALOG)).unwrap();
+        let edited = original.replacen(needle, replacement, 1);
+        assert_ne!(original, edited);
+        host.write(CATALOG, edited);
+        fails_unchanged(&host, "invalid catalog");
+    }
 }
 
 #[test]

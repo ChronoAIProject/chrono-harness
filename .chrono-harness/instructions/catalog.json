@@ -8,7 +8,7 @@
     },
     {
       "id": "en",
-      "root_frame": "Registered atoms appear here; AGENTS.md is a literal relative symlink to CLAUDE.md.\nEdit the listed catalog, file sources or manifest, then run `chrono-instructions generate --host-root <host-root>`, never edit this block alone. The host owns exterior text.\nRead registered host_context (possibly empty) before work; do not reread rules shown here. Generation proves neither AI reading/compliance nor executed checks.\n\n<!-- Instructions are modified, generalized and translated from Copyright 2026 The Omega Institute, Apache-2.0. Accompanying license/provenance are optional legal reading, not policy. -->",
+      "root_frame": "Registered rules; AGENTS.md is a literal relative symlink to CLAUDE.md.\nEdit the listed catalog/file sources/manifest; run `chrono-instructions generate --host-root <host-root>`. Do not edit this block; the host owns exterior text.\nRead host_context (may be empty) before work; do not reread these rules. Generation proves no AI reading/compliance or check execution.\n\n<!-- Instructions modified, generalized and translated from Copyright 2026 The Omega Institute, Apache-2.0. License/provenance: optional legal reading, not policy. -->",
       "projection_notice": "Generated from registered rules. Edit sources and regenerate, not this file alone. Generation proves neither compliance nor executed checks.\n\n<!-- Instructions are modified, generalized and translated from Copyright 2026 The Omega Institute, Apache-2.0. Accompanying license/provenance are optional legal reading, not policy. -->"
     },
     {
@@ -2430,6 +2430,333 @@
             "type": "inline",
             "text": ""
           }
+        }
+      ]
+    }
+  ],
+  "layouts": [
+    {
+      "id": "general",
+      "sections": [
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "基本原则"
+            },
+            {
+              "locale": "en",
+              "text": "Principles"
+            }
+          ],
+          "atoms": []
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "目标与自主"
+            },
+            {
+              "locale": "en",
+              "text": "Goals and autonomy"
+            }
+          ],
+          "atoms": [
+            "goal.deliverable",
+            "goal.revision",
+            "action.autonomy",
+            "action.blocked"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "证据与判断"
+            },
+            {
+              "locale": "en",
+              "text": "Evidence and judgment"
+            }
+          ],
+          "atoms": [
+            "evidence.measure",
+            "evidence.program-state",
+            "evidence.predeclare",
+            "evidence.anomaly",
+            "evidence.prediction",
+            "evidence.source-quality",
+            "evidence.scope",
+            "review.independent",
+            "review.disclosure"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "所有权与保证"
+            },
+            {
+              "locale": "en",
+              "text": "Ownership and assurance"
+            }
+          ],
+          "atoms": [
+            "owner.canonical",
+            "owner.program-data",
+            "projection.criteria",
+            "projection.consumption",
+            "judge.strength",
+            "policy.proportional"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "工作方法"
+            },
+            {
+              "locale": "en",
+              "text": "Methods"
+            }
+          ],
+          "atoms": []
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "检索与复用"
+            },
+            {
+              "locale": "en",
+              "text": "Search and reuse"
+            }
+          ],
+          "atoms": [
+            "reuse.search",
+            "search.bounded",
+            "search.routes",
+            "reuse.shared-definition",
+            "reuse.actual-consumers"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "推理与表示"
+            },
+            {
+              "locale": "en",
+              "text": "Reasoning"
+            }
+          ],
+          "atoms": [
+            "reason.goal-relations",
+            "reason.representation",
+            "reason.insufficiency",
+            "reason.comparison",
+            "reason.transfer",
+            "reason.joint-evidence",
+            "reason.sufficient-condition"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "诊断与恢复"
+            },
+            {
+              "locale": "en",
+              "text": "Repair"
+            }
+          ],
+          "atoms": [
+            "evidence.failure",
+            "core.repair-producer",
+            "state.recovery-context",
+            "recovery.causal",
+            "recovery.validate"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "协作与成果"
+            },
+            {
+              "locale": "en",
+              "text": "Collaboration and results"
+            }
+          ],
+          "atoms": [
+            "collaboration.combine",
+            "collaboration.current-result",
+            "collaboration.handoff",
+            "artifact.results",
+            "artifact.substance",
+            "artifact.temporary",
+            "artifact.no-diary"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "执行合同"
+            },
+            {
+              "locale": "en",
+              "text": "Execution contracts"
+            }
+          ],
+          "atoms": []
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "登记与工具"
+            },
+            {
+              "locale": "en",
+              "text": "Tools and registry"
+            }
+          ],
+          "atoms": [
+            "registry.explicit",
+            "registry.consume",
+            "method.entry",
+            "method.host-tools",
+            "judge.register",
+            "core.small-projects",
+            "structure.pressure",
+            "tool.maintainable-owner",
+            "tool.portability",
+            "tool.portability-check",
+            "transport.literal",
+            "tool.glue",
+            "tool.semantic",
+            "reference.resolve"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "变更与交付"
+            },
+            {
+              "locale": "en",
+              "text": "Changes and delivery"
+            }
+          ],
+          "atoms": [
+            "owner.migration",
+            "policy.evolution",
+            "policy.mixed-warning",
+            "candidate.isolation",
+            "candidate.refresh",
+            "change.coherent",
+            "change.partition",
+            "change.negligible-conflict",
+            "change.debt",
+            "projection.partition",
+            "candidate.landing"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "验证与集成"
+            },
+            {
+              "locale": "en",
+              "text": "Checks and integration"
+            }
+          ],
+          "atoms": [
+            "test.behavior",
+            "test.determinism",
+            "test.mutation",
+            "test.first-useful-case",
+            "delta.selection",
+            "delta.candidate-judge",
+            "delta.range",
+            "delta.indexing",
+            "test.selection",
+            "judge.counterexamples",
+            "delta.local-ci",
+            "ci.actual-events",
+            "ci.evidence-scope"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "任务与状态"
+            },
+            {
+              "locale": "en",
+              "text": "Jobs and state"
+            }
+          ],
+          "atoms": [
+            "state.domain-workflow",
+            "evidence.mutable-snapshot",
+            "signal.meaning",
+            "job.lifecycle",
+            "job.wait",
+            "query.identity"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "成本与缓存"
+            },
+            {
+              "locale": "en",
+              "text": "Costs and cache"
+            }
+          ],
+          "atoms": [
+            "cost.measure",
+            "cost.valid-evidence",
+            "resource.contract",
+            "resource.static-dynamic",
+            "cache.diagnose",
+            "cost.profile",
+            "cache.memoization",
+            "cache.incremental-seed",
+            "cache.compatibility",
+            "cache.build-separate",
+            "cache.query"
+          ]
         }
       ]
     }

@@ -75,30 +75,12 @@ fn expected_root(body: &[u8], locale: &str, title: Option<&str>) -> Vec<u8> {
 fn expected_guide(method: &[u8]) -> Vec<u8> {
     expected_root(method, "und", None)
 }
-fn default_body() -> Vec<u8> {
-    let cat: serde_json::Value = serde_json::from_slice(
-        &fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/instructions/catalog.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    cat["atoms"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|a| {
-            a["variants"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|v| v["locale"] == "zh-CN")
-                .map(|v| v["source"]["text"].as_str().unwrap())
-        })
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
-        .into_bytes()
+fn fresh_default_guide() -> Vec<u8> {
+    // Donor/context tests compare with a pristine consumer, independently of
+    // presentation order. Layout behavior has its own synthetic contract tests.
+    let host = Host::new();
+    assert_eq!(cli_init(&host, None, None).exit_code, 0);
+    host.read("CLAUDE.md")
 }
 
 fn cli_init(
@@ -838,11 +820,7 @@ fn default_init_ships_exact_core_empty_context_and_sole_agents_donor() {
     assert_eq!(host.read(CONTEXT), b"");
     assert_eq!(
         host.read("CLAUDE.md"),
-        [
-            b"existing agents\r\n".as_slice(),
-            &expected_root(&default_body(), "zh-CN", Some("通用工作方法"))
-        ]
-        .concat()
+        [b"existing agents\r\n".as_slice(), &fresh_default_guide()].concat()
     );
     assert_alias(&host);
     assert_eq!(host.read(".chrono-harness/unrelated.json"), b"keep this");
@@ -863,10 +841,7 @@ fn init_overrides_are_independent_and_retain_exact_selected_bytes() {
             assert_eq!(host.read(METHOD), fs::read(&host.method).unwrap());
         } else {
             assert!(!host.root.join(METHOD).exists());
-            assert_eq!(
-                host.read("CLAUDE.md"),
-                expected_root(&default_body(), "zh-CN", Some("通用工作方法"))
-            );
+            assert_eq!(host.read("CLAUDE.md"), fresh_default_guide());
         }
         assert_eq!(
             host.read(CONTEXT),
