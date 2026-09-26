@@ -362,7 +362,45 @@ fn initial_requires_parentless_commit_and_runs_declared_inventory() {
     assert_eq!(r.evidence["mode"], "initial-inventory");
     assert_eq!(h.calls(), 1);
     let c = h.commit();
-    fail(&judge(&h.request(None, &c)), "parentless");
+    let r = judge(&h.request(None, &c));
+    fail(&r, "parentless");
+    assert_eq!(r.evidence["executed"], json!([]));
+    assert_eq!(h.calls(), 1);
+}
+#[test]
+fn initial_rejects_actual_parents_in_full_and_shallow_history_before_operations() {
+    for shallow in [false, true] {
+        let h = Host::new();
+        let b = h.head();
+        h.write("src.txt", "two\n");
+        let c = h.commit();
+        if shallow {
+            h.write(".git/shallow", &format!("{c}\n"));
+            assert_eq!(h.git(&["rev-list", "--parents", "-n", "1", &c]), c);
+        }
+        assert_eq!(
+            h.git(&["rev-parse", "--is-shallow-repository"]),
+            shallow.to_string()
+        );
+        assert!(
+            h.git(&["cat-file", "-p", &c])
+                .lines()
+                .take_while(|line| !line.is_empty())
+                .any(|line| line == format!("parent {b}"))
+        );
+        assert!(h.git(&["status", "--porcelain"]).is_empty());
+        let r = judge(&h.request(None, &c));
+        fail(&r, "initial requires parentless commit");
+        assert_eq!(r.results[0].id, "ci.inventory");
+        assert_eq!(r.evidence["executed"], json!([]));
+        assert_eq!(h.calls(), 0);
+
+        let r = h.check(&b, &c);
+        pass(&r);
+        assert_eq!(r.evidence["mode"], "delta");
+        assert_eq!(r.evidence["selected"], json!(["test:suite"]));
+        assert_eq!(h.calls(), 1);
+    }
 }
 #[test]
 fn output_mutating_inputs_fails_after_execution() {
