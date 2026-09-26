@@ -41,6 +41,13 @@
       ],
       "test:ci-verify": [
         "ci.verify"
+      ],
+      "test:judge-registration-tests": [
+        "fmt.judge-registration",
+        "fmt.judge-registration-tests",
+        "build.runner",
+        "build.judge-registration",
+        "test.judge-registration-tests"
       ]
     },
     "artifacts": [
@@ -53,7 +60,9 @@
       "crates/judge-ci/target/",
       "crates/judge-ci-tests/target/",
       "crates/ci/target/",
-      "crates/ci-tests/target/"
+      "crates/ci-tests/target/",
+      "crates/judge-registration/target/",
+      "crates/judge-registration-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",

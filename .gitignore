@@ -8,3 +8,5 @@
 /crates/judge-ci-tests/target/
 /crates/ci/target/
 /crates/ci-tests/target/
+/crates/judge-registration/target/
+/crates/judge-registration-tests/target/

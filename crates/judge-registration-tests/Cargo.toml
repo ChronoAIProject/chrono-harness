@@ -1,19 +1,16 @@
 [package]
-name = "chrono-harness-tests"
+name = "chrono-judge-registration-tests"
 version = "0.1.0"
 edition = "2024"
 publish = false
 autotests = false
 
 [dev-dependencies]
+chrono-judge-registration = { path = "../judge-registration" }
 chrono-harness = { path = "../runner" }
 serde_json = "1"
 tempfile = "3"
 
 [[test]]
-name = "cli_contract"
-path = "tests/cli_contract.rs"
-
-[[test]]
-name = "protocol_v1"
-path = "tests/protocol_v1.rs"
+name = "registration_contract"
+path = "tests/registration_contract.rs"

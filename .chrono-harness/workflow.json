@@ -16,7 +16,10 @@
         "crates/runner/src/lib.rs",
         "crates/runner/src/main.rs",
         "crates/runner/Cargo.toml",
-        "crates/runner/Cargo.lock"
+        "crates/runner/Cargo.lock",
+        "crates/runner/src/wire.rs",
+        "crates/runner/src/facts.rs",
+        "crates/runner/src/full.rs"
       ],
       "tests": [
         "runner-tests"
@@ -39,6 +42,20 @@
         "instructions-tests"
       ],
       "reason": "Explicit rule composition, translations, output ownership, preservation, migration and publication; embedded portable defaults"
+    },
+    {
+      "id": "registration-judge",
+      "paths": [
+        "crates/judge-registration/src/lib.rs",
+        "crates/judge-registration/src/schema.rs",
+        "crates/judge-registration/src/main.rs",
+        "crates/judge-registration/Cargo.toml",
+        "crates/judge-registration/Cargo.lock"
+      ],
+      "tests": [
+        "judge-registration-tests"
+      ],
+      "reason": "Registration schema, snapshot and reference policy"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -50,7 +67,8 @@
   "integration": {
     "tests": [
       "runner-tests",
-      "instructions-tests"
+      "instructions-tests",
+      "judge-registration-tests"
     ],
     "bind": [
       "base",

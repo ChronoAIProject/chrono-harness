@@ -11,7 +11,9 @@
     "judge-ci-tests",
     "ci",
     "ci-tests",
-    "ci-verify"
+    "ci-verify",
+    "judge-registration",
+    "judge-registration-tests"
   ],
   "projects": [
     {
@@ -410,6 +412,98 @@
             "--locked",
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-registration",
+      "kind": "production",
+      "manifest": "crates/judge-registration/Cargo.toml",
+      "lockfile": "crates/judge-registration/Cargo.lock",
+      "root": "crates/judge-registration",
+      "test_project": "judge-registration-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-registration-tests",
+      "kind": "test",
+      "manifest": "crates/judge-registration-tests/Cargo.toml",
+      "lockfile": "crates/judge-registration-tests/Cargo.lock",
+      "root": "crates/judge-registration-tests",
+      "tests_for": "judge-registration",
+      "actions": {
+        "build": {
+          "operation": "build.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
           ]
         }
       }

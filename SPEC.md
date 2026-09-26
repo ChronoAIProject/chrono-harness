@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前实现含 Rust CLI 信息命令，以及独立的宿主指令生成器与各自配对测试；§14、§16 给出实现边界。
+当前实现含 v1 外部判官运输、独立 registration 判官、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 ## 1. 目标、权限与边界
@@ -32,6 +32,8 @@ README.md                       使用、目录导航和实现状态
 crates/                         独立 Cargo 项目的目录分组
   runner/                       运输、协议与统一 check 入口
   runner-tests/                 runner 专属测试
+  judge-registration/           v1 登记结构、快照与受影响引用判官
+  judge-registration-tests/     registration 专属测试
   judge-ci/                     CI 登记、快照、DELTA 与操作执行
   judge-ci-tests/                CI 判官专属测试
   ci/                           工作流生成与事件输入准备
@@ -75,7 +77,7 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前补齐实际输入闭包、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。
-这里的类型表是 v1 规范 schema，仓库中的 JSON 是完整的当前实例；尚无 schema 验证器。
+这里的类型表是 v1 规范 schema；registration 已实现严格结构验证，当前宿主仍有不符合该合同的 scoped CI 遗留项（见 §14）。
 对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
 路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。
 所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
@@ -158,9 +160,9 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | after | 必须存在的判官 ID 数组；有向无环，稳定 ID 顺序打破并列 |
 | modes | v1 仅 `evaluate`；candidate 判官读取两端事实，见 §6 |
 
-各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`，均为尚未实现的独立可执行文件。
+各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`；registration 已实现，其余六个尚未实现。
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
+七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |
@@ -211,7 +213,7 @@ v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 di
 仓库路径边界、特殊文件类型不支持时必须返回 `E_INPUT_UNSUPPORTED`，不能漏判。
 
 `--config` 的磁盘内容必须等于 candidate 中同路径 blob；base 配置单独从 base tree 读取。
-判官接收两个只用于读取的快照路径；测试在 candidate 的独立构建目录运行。
+base.root 是从固定 base tree 导出的只读文件快照；不执行其中程序。candidate.root 是实际检出的候选工作树根，不是导出的干净副本。判官将其视为只读源，构建及证据仅使用登记生成目录。只读是输入消费合同，不声称 OS 沙箱隔离；registration 对比观察与固定对象。
 context 为 UTF-8 JSON：`schema_version, base, candidate, dev_tip, branch_ref, fork_point,`
 `branch_started_at, observed_at, operation, integration_evidence`，时间均为 UTC RFC3339。
 operation 固定为 validate.delta；integration_evidence 为证据摘要或 null。
@@ -312,7 +314,10 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
   "judge_id": "filemap",
   "mode": "evaluate",
   "base": {"commit": "<full oid>", "tree": "<tree oid>", "root": "<snapshot path>"},
-  "candidate": {"commit": "<full oid>", "tree": "<tree oid>", "root": "<snapshot path>"},
+  "candidate": {"commit": "<full oid>", "tree": "<tree oid>", "root": "<observed checkout root>"},
+  "config_path": ".chrono-harness/config.json",
+  "checkout": {"head": "<observed HEAD oid>", "tracked": [], "untracked": [], "index_flags": []},
+  "runner": {"path": "<actual runner executable>", "sha256": "<sha256>", "version": "<version>"},
   "delta": [{"kind": "D", "path": "old.rs", "old_blob": "<oid>", "new_blob": null,
              "old_mode": "100644", "new_mode": null}],
   "registries": {"base": "<snapshot .chrono-harness path>",
@@ -324,9 +329,13 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
 }
 ```
 
+上述新增事实字段不裁决 admissibility：config_path 是两端共同的显式根相对配置路径；checkout.tracked 是相对 candidate 的索引/工作树变更路径并集，untracked 包括 ignore 路径；index_flags 是 Git ls-files -v 的完整 {path, tag} 记录，registration 拒绝 assume-unchanged/skip-worktree 隐藏条件，runner 不改写索引。runner 绑定实际当前执行物。registration 从固定 tree 判断支持的 entry 类型，重读对象、磁盘配置、context 和 checkout，忽略两次观察之间新增的已声明 artifact；其它变化报错。request_id 覆盖这些字段；不把 exported clean copy 当实际 checkout。base 导出保留在 state，普通文件无写权限，不执行 base 工具。
+registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, "candidate": {"<path>": <parsed JSON>, ...}}` 的 SHA-256，每端包含 config_path 与该端 config 指定的四份 registry；context.sha256 为 context JCS 摘要，evidence.sha256 为原始文件字节摘要。所有 JSON 先拒绝重复成员。
+本增量的 full CLI 要求两个真实 commit，不提供伪造空 base 的成功模式。初始模式及 schema 迁移仍待后续判官实现；不支持时非零。
+
 impact.edges 为 `{from, kind, to, origin}`；origin 是 base/candidate/both。
 prior_results 仅含 after 列出的前置判官完整响应；不得从运行目录猜测旧输出复用。
-registration 先消费原始快照与 context；filemap 据登记生成 impact，其他判官显式消费结果。
+registration 先消费原始快照与 context；filemap 据登记生成 impact，其他判官显式消费结果。尚无前驱产物时 impact 为 null，不填造已算出的空闭包；runner 仅将直接前驱 outputs.impact 同名传入，冲突报错，其余具名产物保留在 prior_results.outputs。
 routes 先验证执行入口，projects 再执行测试；judges.after 中明确登记这个依赖顺序。
 共享上下文的推导属于登记判官逻辑；runner 只传递具名输出，不在内部另写项目政策。
 所有摘要使用 SHA-256；JSON 摘要使用 RFC 8785 JCS，文件 blob 按原始字节计算。
@@ -366,7 +375,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 ## 8. 默认判官、规则表面与警告
 
-当前 judges.json 登记以下计划判官；全部尚未实现，不存在默认隐形 gate。
+当前 judges.json 登记以下判官；registration 已实现但宿主绑定仍 proposed，其余六个待实现，不存在默认隐形 gate。
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
@@ -412,6 +421,19 @@ costs 报告每个变更文件、影响项目、选择测试及旧删除节点�
 可按显式串行计划估算总 CPU/IO，任何输入未知则总估计注明不完整，不填 0。
 实际测量放在 measured 下，附工具、样本与时间；不能把构建耗时冒充测试耗时。
 当前所有成本 unknown 是诚实的初始登记，未来 cost 判官应 warning，不能捏造基准数据。
+
+首增量的 `scope: "configured-judges"` 草稿也必须提供上述全部顶层字段。尚无生产者结果的
+tools/effective_inputs/impact/tests/costs 写 `null`，扩展字段 `unresolved` 按报告 JSON pointer
+给出原因；不能用空列表、零成本或配置声明冒充已观察结果。`sources` 按目标 JSON pointer
+列出原始响应在同一报告中的 JSON pointer。验证通过的响应若提供同名 outputs，原值转入对应字段；
+多份值相同可共用，冲突或生产者给 null 则保持 unresolved，原响应完整保留。这仅运输结果，
+不由 runner 判断专门政策、输入闭包或具名产物的语义完整性。
+findings 汇集所有验证通过的响应，逐条绑定来源；部分响应缺失时列明不完整原因，无有效响应时写 null。
+executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行物和编译版本，判官使用
+实际 process 观察的路径/摘要；未观察的判官版本为 null 并给原因。每个 judge 的 binding 仅是
+配置元数据，executable_index 才指向已有进程观察，不把 blocked 或未获进程观察的绑定填成执行事实。
+草稿 status/退出码只聚合配置判官与运输状态，parity 保持 unestablished；即使 scoped pass，
+这些未知项仍不是完整治理成功。完整报告、专门生产者及完整输入证据的义务不因此减免。
 
 ## 10. dev、integration 与过期分支
 
@@ -480,7 +502,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 ## 13. 可执行验收矩阵（目标行为）
 
-除最后四行外均为未来运行时验收，不能以当前 cargo test 通过来宣称完成。
+下表保持完整目标验收；逐行当前实现、直接测试与缺口在 docs/spec-coverage.md，不以一个增量的 cargo test 通过宣称整表完成。
 以下充分选测结论均以 §5 的实际输入完整性与局部性为前提；图闭合本身不提供这些保证。
 
 | 场景 | 预期裁决或可观察结果 |
@@ -517,14 +539,16 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 替换/退休判官，旧二进制缺失、崩溃或不支持新 schema | 当前 migration_validator 核对保留的旧事实与迁移证据；candidate evaluate + integration，无旧执行前提 |
 | 无 DELTA | 报告 delta=[]，不裁决历史；输入/分支条件仍检查 |
 | 首个根提交 | bootstrap/no prior base，无绿色 DELTA 报告 |
-| 当前 CLI：check | **已实现**独立 chrono-ci-check/v1；完整本节治理配置仍拒绝，具体协议/退出见 docs/ci.md |
+| 当前 CLI：check | **已实现**独立 chrono-ci-check/v1 与带 --context 的 chrono-judge/v1；完整宿主仍因 proposed/缺绑定/未实现义务非零，具体范围见 §14 |
 | 当前 CLI：未知命令/信息命令多余参数 | **已实现** E_USAGE，exit 2 |
 | 当前 CLI：spec status | **已实现** draft/not-implemented/proposed，exit 0 |
 | 当前 CLI：help/version | **已实现** 信息输出，exit 0；help 明示完整治理未实现 |
 
 ## 14. 实现阶段与实际验证范围
 
-runner 已实现通用外部进程、严格 `chrono-ci-judge/v1` 运输、请求身份、退出/状态一致性与结果发布；不拥有选测政策。独立 judge-ci 实现 `chrono-ci-check/v1` 的固定快照、真实双端 FILEMAP/projects、旧新图传播及串行登记操作。独立 ci 实现 GitHub Actions 的 init/generate/verify、事件输入准备与同一 check 入口生成。完整字段、边界与新仓实例见 [docs/ci.md](docs/ci.md)。这里的 scoped 协议不是前文未来完整 `chrono-judge/v1`。
+runner 已实现通用外部进程、严格 `chrono-ci-judge/v1` 运输、请求身份、退出/状态一致性与结果发布；不拥有选测政策。独立 judge-ci 实现 `chrono-ci-check/v1` 的固定快照、真实双端 FILEMAP/projects、旧新图传播及串行登记操作。独立 ci 实现 GitHub Actions 的 init/generate/verify、事件输入准备与同一 check 入口生成。完整字段、边界与新仓实例见 [docs/ci.md](docs/ci.md)。这里的 scoped 协议独立于 `chrono-judge/v1`。v1 已复用严格 JSON/hash/有界进程，新增固定 RFC 8785 JCS、预启动摘要、清空后白名单环境、四状态精确退出、证据字节校验与声明 DAG；candidate-only 进程运输不内置七判官政策。
+
+独立 registration 已实现五份严格结构、重复成员/ID、固定 OID/config/context/checkout 核对、ignore dirt、声明启用/闭包就绪及受影响引用检查。真实进程测试含有界合规宿主和本仓 registry 材料。当前 ci-verify 是缺 path/配对且引用未登记 chrono-ci 工具的 scoped 遗留项，full schema 明确报错；其真实归属/路由迁移留给 routes/projects，不创建假脚本。外部输入两端保留、schema 转换和其证据仍非零 unresolved。registration pass 只证明该判官范围，非全部治理完成。报告已提供 §9 全部顶层字段、执行物列表、实际 findings 和具名输出来源；缺失或冲突的生产者结果显式 null/unresolved。完整成本/工具/测试/有效输入生产者仍待实现；parity 始终 unestablished。
 
 各生产项目都有独立专属测试项目、Cargo.lock 与 target，无根 workspace。操作以登记 argv 为准；构建/测试带 --locked。bootstrap 重用注册 build 操作，固定 Rust 1.95.0；成本未测。FILEMAP/projects 的 schema=1 数据由显式 CI profile 消费其规定字段，不将五份完整治理登记的 proposed 改称全部 active。
 

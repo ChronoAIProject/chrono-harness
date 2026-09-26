@@ -8,7 +8,6 @@ use serde_json::{Value, json as object};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -40,25 +39,7 @@ struct Snapshot {
     tree: BTreeMap<String, (String, String)>,
     policy: Policy,
 }
-fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let o = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !o.status.success() {
-        return Err(format!(
-            "git {}: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&o.stderr).trim()
-        ));
-    }
-    Ok(o.stdout)
-}
-fn utf8(b: Vec<u8>) -> Result<String, String> {
-    String::from_utf8(b).map_err(|_| "non UTF-8 Git path/output".into())
-}
+use chrono_harness::facts::{git, utf8};
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str, String> {
     v.get(k)
         .and_then(Value::as_str)
@@ -360,17 +341,11 @@ fn clean(root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
     }
     // -v lowercases tags for assume-unchanged; S/s marks skip-worktree.
     // Paths follow the two-byte tag prefix and end at NUL, never whitespace.
-    for entry in git(root, &["ls-files", "-v", "-z"])?
-        .split(|b| *b == 0)
-        .filter(|s| !s.is_empty())
-    {
-        if entry.len() < 3 || entry[1] != b' ' {
-            return Err("invalid Git index flag record".into());
-        }
-        let assume_unchanged = entry[0].is_ascii_lowercase();
-        let skip_worktree = entry[0].eq_ignore_ascii_case(&b'S');
+    for entry in chrono_harness::facts::index_flags(root)? {
+        let assume_unchanged = entry.tag.as_bytes()[0].is_ascii_lowercase();
+        let skip_worktree = entry.tag.eq_ignore_ascii_case("S");
         if assume_unchanged || skip_worktree {
-            let path = std::str::from_utf8(&entry[2..]).map_err(|_| "non UTF-8 index path")?;
+            let path = entry.path;
             let flag = match (assume_unchanged, skip_worktree) {
                 (true, true) => "assume-unchanged and skip-worktree",
                 (true, false) => "assume-unchanged",

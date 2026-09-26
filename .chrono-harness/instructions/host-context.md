@@ -2,9 +2,9 @@
 
 本仓维护显式登记的 Rust harness 与独立宿主指令生成器。产品合同在 SPEC.md，当前行为与调用在 README.md、docs/instructions.md、docs/ci.md。
 
-生产/专属测试配对：runner ↔ runner-tests，judge-ci ↔ judge-ci-tests，ci ↔ ci-tests，instructions ↔ instructions-tests。八个项目分别位于 crates/<项目 ID>/，各自有 Cargo.toml、Cargo.lock、target，无根 workspace；instructions 不依赖 runner。crates/ 仅作目录分组，宿主约束仍在 .chrono-harness/。构建/检查使用显式 manifest 与 --locked；仅测试项目的 build/check 带 --tests。操作、所有权、依赖和未知成本分别登记在 .chrono-harness/projects.json、FILEMAP.json；变更文件需同步精确登记。
+生产/专属测试配对：runner ↔ runner-tests，judge-registration ↔ judge-registration-tests，judge-ci ↔ judge-ci-tests，ci ↔ ci-tests，instructions ↔ instructions-tests。十个项目分别位于 crates/<项目 ID>/，各自有 Cargo.toml、Cargo.lock、target，无根 workspace；instructions 不依赖 runner。crates/ 仅作目录分组，宿主约束仍在 .chrono-harness/。构建/检查使用显式 manifest 与 --locked；仅测试项目的 build/check 带 --tests。操作、所有权、依赖和未知成本分别登记在 .chrono-harness/projects.json、FILEMAP.json；变更文件需同步精确登记。
 
-五份完整治理登记仍 proposed；独立 chrono-ci-check/v1 已显式消费 FILEMAP/projects 的 scoped CI 子集。runner 只运输外部判官/协议/结果，judge-ci 拥有快照、DELTA、登记与操作执行，ci 拥有工作流生成和事件准备。先用 .chrono-harness/ci/bootstrap.py 构建登记工具，再对干净固定候选使用同一 chrono-harness check --config .chrono-harness/ci/check.json --base FULL_OID --candidate FULL_OID。完整配置及七判官尚未实现；不能与现役 slice 混报。成本未知、输入闭包不完整、同命令不自证同判。chrono-instructions 的专用 manifest 校验和生成独立保持。
+五份完整治理登记仍 proposed；独立 chrono-ci-check/v1 已显式消费 FILEMAP/projects 的 scoped CI 子集。runner 的 full v1 采集原始 Git 事实、运输外部判官/协议/结果；registration 拥有 full 登记结构、实际 checkout/config/context 核对、dirt 与受影响引用政策。judge-ci 拥有 scoped CI 快照、DELTA、登记与操作执行，ci 拥有工作流生成和事件准备。先用 .chrono-harness/ci/bootstrap.py 构建登记工具，再对干净固定候选使用同一 chrono-harness check --config .chrono-harness/ci/check.json --base FULL_OID --candidate FULL_OID。full --context 已执行 candidate-only 登记判官，清空白名单环境、预启动摘要、JCS ID、四状态与 DAG/evidence 校验已实现；其余六判官及完整交付未实现，不能与现役 slice 混报。ci-verify 缺 full script path/配对与 chrono-ci 工具声明；full registration 会明确报错，routes/projects 迁移仍待完成。逐节及验收行边界在 docs/spec-coverage.md。成本未知、输入闭包不完整、同命令不自证同判。chrono-instructions 的专用 manifest 校验和生成独立保持。
 
 产品默认位于 assets/instructions/catalog.json 与 default-manifest.json；宿主独立采用 catalog.json、manifest.json 和本上下文。根 CLAUDE.md 受管块直接呈现中文核心，AGENTS.md 是字面相对链接 CLAUDE.md；编辑 catalog 或其显式 file 源/输出计划，再运行登记的 generate。不要独立编辑投影，也不必重复读取已呈现的规则源。
 
