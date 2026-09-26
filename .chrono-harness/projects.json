@@ -6,7 +6,12 @@
     "runner",
     "runner-tests",
     "instructions",
-    "instructions-tests"
+    "instructions-tests",
+    "judge-ci",
+    "judge-ci-tests",
+    "ci",
+    "ci-tests",
+    "ci-verify"
   ],
   "projects": [
     {
@@ -224,7 +229,209 @@
           ]
         }
       }
+    },
+    {
+      "id": "judge-ci",
+      "kind": "production",
+      "manifest": "judge-ci/Cargo.toml",
+      "lockfile": "judge-ci/Cargo.lock",
+      "root": "judge-ci",
+      "test_project": "judge-ci-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "judge-ci/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "judge-ci/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "judge-ci/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-ci-tests",
+      "kind": "test",
+      "manifest": "judge-ci-tests/Cargo.toml",
+      "lockfile": "judge-ci-tests/Cargo.lock",
+      "root": "judge-ci-tests",
+      "tests_for": "judge-ci",
+      "actions": {
+        "build": {
+          "operation": "build.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "judge-ci-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "judge-ci-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "judge-ci-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "judge-ci-tests/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ci",
+      "kind": "production",
+      "manifest": "ci/Cargo.toml",
+      "lockfile": "ci/Cargo.lock",
+      "root": "ci",
+      "test_project": "ci-tests",
+      "actions": {
+        "build": {
+          "operation": "build.ci",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "ci/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.ci",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "ci/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.ci",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "ci/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ci-tests",
+      "kind": "test",
+      "manifest": "ci-tests/Cargo.toml",
+      "lockfile": "ci-tests/Cargo.lock",
+      "root": "ci-tests",
+      "tests_for": "ci",
+      "actions": {
+        "build": {
+          "operation": "build.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "ci-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "ci-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "ci-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "ci-tests/Cargo.toml"
+          ]
+        }
+      }
     }
   ],
-  "scripts": []
+  "scripts": [
+    {
+      "id": "ci-verify",
+      "kind": "test",
+      "actions": {
+        "execute": {
+          "operation": "ci.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/github.json"
+          ]
+        }
+      }
+    }
+  ]
 }

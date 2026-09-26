@@ -1,23 +1,20 @@
 [package]
-name = "chrono-harness"
+name = "chrono-ci"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "External judge transport and canonical harness check entry"
 
 [lib]
-path = "src/lib.rs"
 test = false
 doctest = false
 
 [[bin]]
-name = "chrono-harness"
+name = "chrono-ci"
 path = "src/main.rs"
 test = false
 bench = false
 
 [dependencies]
+chrono-harness = { path = "../runner" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
-libc = "0.2"

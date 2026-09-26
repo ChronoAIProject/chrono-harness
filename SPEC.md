@@ -219,7 +219,7 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 
 计划中的报告写入 `.chrono-harness/state/report.json`，stdout 输出同一 JSON 对象。
 CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。
-不得另写 CI 专属判官、skip 参数或本地宽松模式；当前仓库不设置虚假的绿色 workflow。
+不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
 
 ## 5. DELTA 与依赖图算法
 
@@ -352,7 +352,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 | 0 | pass 或仅 warn；报告区分它们，warn 不要求确认 |
 | 1 | 至少一个 fail：已完成判定，存在约束错误 |
 | 2 | error：输入/协议/基础设施失败或必要证据不足 |
-| 3 | 仅当前 CLI 使用：功能尚未实现，不是 pass/warn |
+| 3 | 早期 spec-only CLI 的未实现退出码；现役 CI slice 不使用，完整配置拒绝返回 2 |
 
 子进程输出 fail 却 exit 0、空 stdout、额外日志、截断 JSON、未知状态都属于协议错误。
 本轮选中的当前进程崩溃、超时、不可执行、摘要不匹配、必需测试未执行都不能降级为通过。
@@ -514,30 +514,20 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 替换/退休判官，旧二进制缺失、崩溃或不支持新 schema | 当前 migration_validator 核对保留的旧事实与迁移证据；candidate evaluate + integration，无旧执行前提 |
 | 无 DELTA | 报告 delta=[]，不裁决历史；输入/分支条件仍检查 |
 | 首个根提交 | bootstrap/no prior base，无绿色 DELTA 报告 |
-| 当前 CLI：check，含貌似正确参数 | **已实现** E_NOT_IMPLEMENTED，exit 3，stdout 空 |
+| 当前 CLI：check | **已实现**独立 chrono-ci-check/v1；完整本节治理配置仍拒绝，具体协议/退出见 docs/ci.md |
 | 当前 CLI：未知命令/信息命令多余参数 | **已实现** E_USAGE，exit 2 |
 | 当前 CLI：spec status | **已实现** draft/not-implemented/proposed，exit 0 |
-| 当前 CLI：help/version | **已实现** 信息输出，exit 0；help 提示 check 未实现 |
+| 当前 CLI：help/version | **已实现** 信息输出，exit 0；help 明示完整治理未实现 |
 
 ## 14. 实现阶段与实际验证范围
 
-runner 已实现：无外部依赖的 Rust library + binary；公开 `dispatch(&[&str]) -> CliOutput`；
-帮助、版本、规格状态；check 恒非零；未知命令/多余参数非零；输出失败不报成功。
-配对 crate 验证公开边界的四类合同；binary 仅负责参数、stdout/stderr 和退出码运输。
-每个项目的独立 Cargo.lock 必须提交；构建和测试使用各自 --manifest-path 与 --locked。
-测试 crate 只有显式 test target，build/check 需带 --tests，避免只检查空默认目标。
+runner 已实现通用外部进程、严格 `chrono-ci-judge/v1` 运输、请求身份、退出/状态一致性与结果发布；不拥有选测政策。独立 judge-ci 实现 `chrono-ci-check/v1` 的固定快照、真实双端 FILEMAP/projects、旧新图传播及串行登记操作。独立 ci 实现 GitHub Actions 的 init/generate/verify、事件输入准备与同一 check 入口生成。完整字段、边界与新仓实例见 [docs/ci.md](docs/ci.md)。这里的 scoped 协议不是前文未来完整 `chrono-judge/v1`。
 
-instructions 已实现：内嵌默认数据的一条 init，独立输入/初始 locale 绑定，显式原子/翻译/依赖与输出计划，
-确定性组合为根正文、登记 Markdown 与有效 skill，旧 v1/v2 opaque file atom 前向迁移、宿主字节保留、
-严格引用/翻译/所有权/路径预检、相对链接、无写入重跑和多输出普通失败回滚；完整合同见 §16。
-serde/serde_json/tempfile 锁定依赖仅属于生成器，不进入 runner 编译依赖。
+各生产项目都有独立专属测试项目、Cargo.lock 与 target，无根 workspace。操作以登记 argv 为准；构建/测试带 --locked。bootstrap 重用注册 build 操作，固定 Rust 1.95.0；成本未测。FILEMAP/projects 的 schema=1 数据由显式 CI profile 消费其规定字段，不将五份完整治理登记的 proposed 改称全部 active。
 
-尚未实现：通用判官登记解析与 schema 验证器、Git DELTA、测试影响图算法、判官二进制/脚本协议、
-测试调度、成本报告、分支/integration 检查、自举安装、正式 check 与 CI gate。
-JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没有覆盖率或 CI 通过徽章。
-先实现 registration/filemap/protocol 并测试失败路径，再实现 projects/routes/cost，
-最后实现 workflow/mixed、自举与同一指令的 CI 集成；每一步仍须明确未实现能力。
-不在这个 spec-first 版本启动 daemon、远端服务、插件市场或全量约束运行时。
+instructions 已实现独立的内嵌双语原子组合、init/generate、v1/v2 迁移、宿主定制保留、严格引用/所有权/路径校验、相对别名、布局与 no-op；详见 §16。本次 CI 实现不改变其正文、框架、布局和 alias 合同。
+
+尚未实现完整七判官治理、完整输入闭包、确定性与同判认证、freshness/integration provenance、通用迁移/退休框架、缓存、成本推断、保护规则或其它 provider。原生 CI 行为必须由实际事件运行验证；本地检查和模板生成不能代替。没有 daemon、插件市场或全量约束运行时。前文未由 CI slice 明确采用的设计义务继续作为 proposed 合同。
 
 ## 15. 实际参考经验
 
@@ -565,4 +555,4 @@ JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没
 
 完整 schema、组合配方、CLI、迁移、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
 [来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
-五份通用登记仍 proposed、input_closure 仍 incomplete；专用 manifest 校验与内容图解析不代表通用判官、DELTA、CI gate 或 AI 遵守已经实现。
+五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。

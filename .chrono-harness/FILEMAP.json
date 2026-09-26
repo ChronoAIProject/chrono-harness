@@ -647,6 +647,384 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "judge-ci/Cargo.toml",
+      "owner": "judge-ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "judge-ci/Cargo.lock",
+      "owner": "judge-ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "judge-ci/src/lib.rs",
+      "owner": "judge-ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "judge-ci/src/main.rs",
+      "owner": "judge-ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "judge-ci-tests/Cargo.toml",
+      "owner": "judge-ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "judge-ci-tests/Cargo.lock",
+      "owner": "judge-ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "judge-ci-tests/tests/behavior.rs",
+      "owner": "judge-ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "ci/Cargo.toml",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "ci/Cargo.lock",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "ci/src/lib.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "ci/src/main.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "ci-tests/Cargo.toml",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "ci-tests/Cargo.lock",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "ci-tests/tests/behavior.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/check.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:runner-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/github.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/chrono-ci.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-verify"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/github.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": "docs/ci.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "examples/ci-host/check.py",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/README.md",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/.gitignore",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/message.txt",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/.chrono-harness/FILEMAP.json",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/.chrono-harness/projects.json",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/.chrono-harness/ci/check.json",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/.chrono-harness/ci/install.py",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host/.chrono-harness/ci/github.json",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -679,6 +1057,56 @@
       "from": "project:instructions-tests",
       "kind": "test-execution",
       "to": "test:instructions-tests"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "compile",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "test-execution",
+      "to": "test:judge-ci-tests"
+    },
+    {
+      "from": "project:judge-ci-tests",
+      "kind": "test-execution",
+      "to": "test:judge-ci-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "project:ci",
+      "kind": "compile",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "project:ci",
+      "kind": "test-execution",
+      "to": "test:ci-tests"
+    },
+    {
+      "from": "project:ci-tests",
+      "kind": "test-execution",
+      "to": "test:ci-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:ci"
+    },
+    {
+      "from": "project:ci",
+      "kind": "test-execution",
+      "to": "test:ci-verify"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "test-execution",
+      "to": "test:ci-tests"
     }
   ],
   "test_costs": [
@@ -688,6 +1116,18 @@
     },
     {
       "test": "instructions-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-ci-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "ci-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "ci-verify",
       "cost": "unmeasured"
     }
   ]

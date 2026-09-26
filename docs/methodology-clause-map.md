@@ -741,7 +741,7 @@
 | §9.5 L760:a | 最终候选语义检查与基线规划角色分工 | 现行 | duplicate | `delta.candidate-judge`、`delta.range` | push不能用HEAD^1替完整范围 |
 | §9.5 L761:a | before/after固定核HEAD、覆盖多提交删改名两端 | 现行 | duplicate | `delta.range` | 不依服务路径截断或祖先关系 |
 | §9.5 L761:b | 缺对象可按固定身份取得；失败不可无工或全套 | 现行 | duplicate | `delta.range`、`query.identity` | 获取身份不授权任意latest输入 |
-| §9.5 L762:a | 新树用显式初始输入，不猜base；删除无候选不报current通过 | 现行 | duplicate | `delta.range` | 目标未实现初始DELTA不冒支持 |
+| §9.5 L762:a | 新树用显式初始输入，不猜base；删除无候选不报current通过 | 现行 | duplicate | `delta.range` | 现役 CI slice 显式 initial inventory，非历史 DELTA；完整范围见 docs/ci.md |
 | §9.5 L763:a | 登记决定资源缓存，命中仅种子；完整no-resource才省资源 | 现行 | duplicate | `registry.consume`、`cache.incremental-seed` | 源dirty/preflight格式非目标现有支持 |
 | §9.5 L763:b | 本地增量完整显式范围，不猜push事件 | 现行 | duplicate | `delta.range` | 当前runner边界仍干净快照 |
 | §9.5 L764:a | 只执行候选，其它修订按角色读固定数据，不读latest | 现行 | duplicate | `delta.candidate-judge` | OID固定也不自动有输入资格 |

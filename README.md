@@ -2,11 +2,9 @@
 
 用 Rust 构建的、以显式登记和 DELTA 判官为核心的 harness，附独立的宿主指令生成器。
 
-**已实现原子规则与多语言组合，生成根指南、Markdown 和 skills；通用 check 与判官尚未实现，五份通用登记表仍为 proposed。**
+**已实现指令生成，以及独立的 CI 生成器、DELTA 判官和本地/CI 共用 check 入口。五份完整治理登记仍 proposed；现役范围是明确版本化的 CI slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
-宿主约束草案仅放在 [.chrono-harness](.chrono-harness/config.json)；产品代码在 `runner/` 与
-`instructions/`，分别有专属的 `runner-tests/` 与 `instructions-tests/`。
-每个项目都有独立 manifest、lockfile、target，没有根 workspace，也没有 generator → runner 依赖。
+宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
 
 ```sh
 # 在本项目 checkout 中安装；确保 Cargo 的 bin 目录在 PATH 中
@@ -37,21 +35,15 @@ cargo test --locked --manifest-path runner-tests/Cargo.toml
 ./runner/target/debug/chrono-harness spec status
 ```
 
-runner 目前只实现帮助、版本和规格状态，以及公开的 `chrono_harness::dispatch` 调用边界。
-`check` 返回退出码 **3**，不执行判官、不输出通过报告；未知命令或多余参数返回 **2**。
-Cargo 测试通过只证明这个 CLI 基础的行为，不能表示宿主约束已经通过。
+现役 CI 使用独立的 `judge-ci` 执行显式登记的 DELTA 检查；runner 只承担外部判官运输与报告。独立 `chrono-ci` 从宿主配置生成 GitHub Actions，提供 init/generate/verify 和事件输入准备。
 
 ```sh
-cargo fmt --check --manifest-path runner/Cargo.toml
-cargo fmt --check --manifest-path runner-tests/Cargo.toml
-cargo check --locked --manifest-path runner/Cargo.toml
-cargo build --tests --locked --manifest-path runner-tests/Cargo.toml
-cargo check --tests --locked --manifest-path runner-tests/Cargo.toml
+python3 .chrono-harness/ci/bootstrap.py .
+.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/github.json
+# 候选须已提交且检出干净；本地和 CI 使用完全相同的入口
+.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID
 ```
 
-计划中的本地/CI 唯一检查指令与启用条件见 SPEC §4、§12；当前没有声称生效的 CI gate。
-DELTA 充分选测依赖实际输入完整登记和判定局部性；本地/CI 裁决相同还需完整有效输入相同及确定性求值。
-当前工具链与环境输入闭包未填齐，登记表保持 proposed；七个默认判官计划各自拥有独立生产/测试项目。
-v1 仅接受干净的不可变提交快照；暂存、未暂存或未跟踪非生成物变化将返回 E_SNAPSHOT_DIRTY。
-无前序提交的根提交是显式 bootstrap，不能伪造 DELTA 成功。
-远端仓库、提交、独立评审和 `dev` 默认分支由仓库创建流程完成。
+复制二进制初始化新仓、操作扩展、schema、首次采用和事件合同见 [docs/ci.md](docs/ci.md)；可复制完整实例见 [examples/ci-host](examples/ci-host/README.md)。`verify` 检测工作流漂移，不先修复输出。未知路径、缺对象、脏输入、无效登记或失败命令均非零；文档等闭包外变更明确报告未选项目检查。
+
+`.chrono-harness/config.json` 的完整七判官治理配置仍未实现，不能冒充现役 `.chrono-harness/ci/check.json`。工具链/环境完整输入闭包、裁决确定性、本地/CI 同判、分支 freshness/integration provenance 与保护规则均未获本实现认证。原生 GitHub 事件的验证须以实际 run 的固定身份和执行结果为准；本地测试不能替代。
