@@ -56,7 +56,7 @@ fn assert_alias(host: &Host) {
 fn expected_root(body: &[u8], locale: &str, title: Option<&str>) -> Vec<u8> {
     let asset: serde_json::Value = serde_json::from_slice(
         &fs::read(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/instructions/catalog.json"),
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/instructions/catalog.json"),
         )
         .unwrap(),
     )
@@ -804,7 +804,8 @@ fn cli_accepts_os_path_arguments_without_lossy_conversion() {
 #[test]
 fn default_init_ships_exact_core_empty_context_and_sole_agents_donor() {
     let host = Host::new();
-    let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/instructions/catalog.json");
+    let asset =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/instructions/catalog.json");
     host.write("AGENTS.md", b"existing agents\r\n");
     host.write(".chrono-harness/unrelated.json", b"keep this");
     fs::remove_file(&host.method).unwrap();

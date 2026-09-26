@@ -310,7 +310,7 @@ fn cli_preserves_context_and_outputs_full_identity() {
     assert!(d.path().join(".chrono-harness/state/context.json").exists());
 }
 fn copied_example() -> tempfile::TempDir {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/ci-host");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-host");
     let root = tempfile::Builder::new()
         .prefix("copied example host ")
         .tempdir()
@@ -344,7 +344,7 @@ fn example_bundle_adopts_without_source_checkout_dependency() {
 
 fn committed_example(message: &str) -> (tempfile::TempDir, tempfile::TempDir, String) {
     let root = copied_example();
-    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.chrono-harness/bin");
+    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/bin");
     let bin = root.path().join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
     for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
@@ -475,7 +475,8 @@ fn creation_requires_valid_event_branch_and_available_baseline() {
 }
 #[test]
 fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.chrono-harness/ci/bootstrap.py");
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/ci/bootstrap.py");
     let root = tempfile::Builder::new()
         .prefix("bootstrap host ")
         .tempdir()

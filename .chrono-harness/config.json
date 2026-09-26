@@ -76,25 +76,25 @@
       "tracked": false
     },
     {
-      "path": "runner/target/",
+      "path": "crates/runner/target/",
       "owner": "runner",
       "kind": "cargo-output",
       "tracked": false
     },
     {
-      "path": "runner-tests/target/",
+      "path": "crates/runner-tests/target/",
       "owner": "runner-tests",
       "kind": "cargo-output",
       "tracked": false
     },
     {
-      "path": "instructions/target/",
+      "path": "crates/instructions/target/",
       "owner": "instructions",
       "kind": "cargo-output",
       "tracked": false
     },
     {
-      "path": "instructions-tests/target/",
+      "path": "crates/instructions-tests/target/",
       "owner": "instructions-tests",
       "kind": "cargo-output",
       "tracked": false

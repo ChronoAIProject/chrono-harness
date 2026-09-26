@@ -17,9 +17,9 @@
     {
       "id": "runner",
       "kind": "production",
-      "manifest": "runner/Cargo.toml",
-      "lockfile": "runner/Cargo.lock",
-      "root": "runner",
+      "manifest": "crates/runner/Cargo.toml",
+      "lockfile": "crates/runner/Cargo.lock",
+      "root": "crates/runner",
       "test_project": "runner-tests",
       "actions": {
         "build": {
@@ -29,7 +29,7 @@
             "build",
             "--locked",
             "--manifest-path",
-            "runner/Cargo.toml"
+            "crates/runner/Cargo.toml"
           ]
         },
         "check": {
@@ -39,7 +39,7 @@
             "check",
             "--locked",
             "--manifest-path",
-            "runner/Cargo.toml"
+            "crates/runner/Cargo.toml"
           ]
         },
         "format_check": {
@@ -49,7 +49,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "runner/Cargo.toml"
+            "crates/runner/Cargo.toml"
           ]
         }
       }
@@ -57,9 +57,9 @@
     {
       "id": "runner-tests",
       "kind": "test",
-      "manifest": "runner-tests/Cargo.toml",
-      "lockfile": "runner-tests/Cargo.lock",
-      "root": "runner-tests",
+      "manifest": "crates/runner-tests/Cargo.toml",
+      "lockfile": "crates/runner-tests/Cargo.lock",
+      "root": "crates/runner-tests",
       "tests_for": "runner",
       "actions": {
         "build": {
@@ -70,7 +70,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "runner-tests/Cargo.toml"
+            "crates/runner-tests/Cargo.toml"
           ]
         },
         "check": {
@@ -81,7 +81,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "runner-tests/Cargo.toml"
+            "crates/runner-tests/Cargo.toml"
           ]
         },
         "format_check": {
@@ -91,7 +91,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "runner-tests/Cargo.toml"
+            "crates/runner-tests/Cargo.toml"
           ]
         },
         "execute": {
@@ -101,7 +101,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            "runner-tests/Cargo.toml"
+            "crates/runner-tests/Cargo.toml"
           ]
         }
       }
@@ -109,9 +109,9 @@
     {
       "id": "instructions",
       "kind": "production",
-      "manifest": "instructions/Cargo.toml",
-      "lockfile": "instructions/Cargo.lock",
-      "root": "instructions",
+      "manifest": "crates/instructions/Cargo.toml",
+      "lockfile": "crates/instructions/Cargo.lock",
+      "root": "crates/instructions",
       "test_project": "instructions-tests",
       "actions": {
         "build": {
@@ -121,7 +121,7 @@
             "build",
             "--locked",
             "--manifest-path",
-            "instructions/Cargo.toml"
+            "crates/instructions/Cargo.toml"
           ]
         },
         "check": {
@@ -131,7 +131,7 @@
             "check",
             "--locked",
             "--manifest-path",
-            "instructions/Cargo.toml"
+            "crates/instructions/Cargo.toml"
           ]
         },
         "format_check": {
@@ -141,7 +141,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "instructions/Cargo.toml"
+            "crates/instructions/Cargo.toml"
           ]
         },
         "init": {
@@ -151,7 +151,7 @@
             "run",
             "--locked",
             "--manifest-path",
-            "instructions/Cargo.toml",
+            "crates/instructions/Cargo.toml",
             "--bin",
             "chrono-instructions",
             "--",
@@ -167,7 +167,7 @@
             "run",
             "--locked",
             "--manifest-path",
-            "instructions/Cargo.toml",
+            "crates/instructions/Cargo.toml",
             "--bin",
             "chrono-instructions",
             "--",
@@ -181,9 +181,9 @@
     {
       "id": "instructions-tests",
       "kind": "test",
-      "manifest": "instructions-tests/Cargo.toml",
-      "lockfile": "instructions-tests/Cargo.lock",
-      "root": "instructions-tests",
+      "manifest": "crates/instructions-tests/Cargo.toml",
+      "lockfile": "crates/instructions-tests/Cargo.lock",
+      "root": "crates/instructions-tests",
       "tests_for": "instructions",
       "actions": {
         "build": {
@@ -194,7 +194,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "instructions-tests/Cargo.toml"
+            "crates/instructions-tests/Cargo.toml"
           ]
         },
         "check": {
@@ -205,7 +205,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "instructions-tests/Cargo.toml"
+            "crates/instructions-tests/Cargo.toml"
           ]
         },
         "format_check": {
@@ -215,7 +215,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "instructions-tests/Cargo.toml"
+            "crates/instructions-tests/Cargo.toml"
           ]
         },
         "execute": {
@@ -225,7 +225,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            "instructions-tests/Cargo.toml"
+            "crates/instructions-tests/Cargo.toml"
           ]
         }
       }
@@ -233,9 +233,9 @@
     {
       "id": "judge-ci",
       "kind": "production",
-      "manifest": "judge-ci/Cargo.toml",
-      "lockfile": "judge-ci/Cargo.lock",
-      "root": "judge-ci",
+      "manifest": "crates/judge-ci/Cargo.toml",
+      "lockfile": "crates/judge-ci/Cargo.lock",
+      "root": "crates/judge-ci",
       "test_project": "judge-ci-tests",
       "actions": {
         "build": {
@@ -245,7 +245,7 @@
             "build",
             "--locked",
             "--manifest-path",
-            "judge-ci/Cargo.toml"
+            "crates/judge-ci/Cargo.toml"
           ]
         },
         "check": {
@@ -255,7 +255,7 @@
             "check",
             "--locked",
             "--manifest-path",
-            "judge-ci/Cargo.toml"
+            "crates/judge-ci/Cargo.toml"
           ]
         },
         "format_check": {
@@ -265,7 +265,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "judge-ci/Cargo.toml"
+            "crates/judge-ci/Cargo.toml"
           ]
         }
       }
@@ -273,9 +273,9 @@
     {
       "id": "judge-ci-tests",
       "kind": "test",
-      "manifest": "judge-ci-tests/Cargo.toml",
-      "lockfile": "judge-ci-tests/Cargo.lock",
-      "root": "judge-ci-tests",
+      "manifest": "crates/judge-ci-tests/Cargo.toml",
+      "lockfile": "crates/judge-ci-tests/Cargo.lock",
+      "root": "crates/judge-ci-tests",
       "tests_for": "judge-ci",
       "actions": {
         "build": {
@@ -286,7 +286,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "judge-ci-tests/Cargo.toml"
+            "crates/judge-ci-tests/Cargo.toml"
           ]
         },
         "check": {
@@ -297,7 +297,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "judge-ci-tests/Cargo.toml"
+            "crates/judge-ci-tests/Cargo.toml"
           ]
         },
         "format_check": {
@@ -307,7 +307,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "judge-ci-tests/Cargo.toml"
+            "crates/judge-ci-tests/Cargo.toml"
           ]
         },
         "execute": {
@@ -317,7 +317,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            "judge-ci-tests/Cargo.toml"
+            "crates/judge-ci-tests/Cargo.toml"
           ]
         }
       }
@@ -325,9 +325,9 @@
     {
       "id": "ci",
       "kind": "production",
-      "manifest": "ci/Cargo.toml",
-      "lockfile": "ci/Cargo.lock",
-      "root": "ci",
+      "manifest": "crates/ci/Cargo.toml",
+      "lockfile": "crates/ci/Cargo.lock",
+      "root": "crates/ci",
       "test_project": "ci-tests",
       "actions": {
         "build": {
@@ -337,7 +337,7 @@
             "build",
             "--locked",
             "--manifest-path",
-            "ci/Cargo.toml"
+            "crates/ci/Cargo.toml"
           ]
         },
         "check": {
@@ -347,7 +347,7 @@
             "check",
             "--locked",
             "--manifest-path",
-            "ci/Cargo.toml"
+            "crates/ci/Cargo.toml"
           ]
         },
         "format_check": {
@@ -357,7 +357,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "ci/Cargo.toml"
+            "crates/ci/Cargo.toml"
           ]
         }
       }
@@ -365,9 +365,9 @@
     {
       "id": "ci-tests",
       "kind": "test",
-      "manifest": "ci-tests/Cargo.toml",
-      "lockfile": "ci-tests/Cargo.lock",
-      "root": "ci-tests",
+      "manifest": "crates/ci-tests/Cargo.toml",
+      "lockfile": "crates/ci-tests/Cargo.lock",
+      "root": "crates/ci-tests",
       "tests_for": "ci",
       "actions": {
         "build": {
@@ -378,7 +378,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "ci-tests/Cargo.toml"
+            "crates/ci-tests/Cargo.toml"
           ]
         },
         "check": {
@@ -389,7 +389,7 @@
             "--tests",
             "--locked",
             "--manifest-path",
-            "ci-tests/Cargo.toml"
+            "crates/ci-tests/Cargo.toml"
           ]
         },
         "format_check": {
@@ -399,7 +399,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            "ci-tests/Cargo.toml"
+            "crates/ci-tests/Cargo.toml"
           ]
         },
         "execute": {
@@ -409,7 +409,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            "ci-tests/Cargo.toml"
+            "crates/ci-tests/Cargo.toml"
           ]
         }
       }

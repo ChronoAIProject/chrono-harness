@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-pub(super) const DEFAULT_CATALOG: &str = include_str!("../../assets/instructions/catalog.json");
+pub(super) const DEFAULT_CATALOG: &str = include_str!("../../../assets/instructions/catalog.json");
 pub(super) const DEFAULT_MANIFEST: &str =
-    include_str!("../../assets/instructions/default-manifest.json");
+    include_str!("../../../assets/instructions/default-manifest.json");
 pub(super) const RENDER: &str = "atomic-rules/relative-alias/v3";
 
 #[derive(Deserialize, Serialize)]

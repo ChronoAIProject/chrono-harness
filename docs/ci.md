@@ -1,7 +1,10 @@
 # Generated CI and the active CI slice
 
-`runner`, `judge-ci`, and `ci` are separate Rust production projects, each with a
-separate test project, Cargo.lock and target directory. There is no root workspace.
+`runner`, `judge-ci`, and `ci` are separate Rust production projects under
+`crates/`, each beside its dedicated `-tests` project with separate Cargo.lock
+and target directories. `instructions` and `instructions-tests` follow the same
+layout. The container directory is not a Cargo workspace or a test-discovery rule;
+each manifest, operation and dependency remains explicitly registered.
 `runner` owns external process transport, request identity, strict protocol checks
 and result publication. `judge-ci` owns the active registration, snapshot, DELTA
 and operation policy. `ci` owns the GitHub workflow projection and event input
