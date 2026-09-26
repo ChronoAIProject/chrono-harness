@@ -358,6 +358,27 @@ fn clean(root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
     if utf8(git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate {
         return Err("checkout HEAD does not equal candidate".into());
     }
+    // -v lowercases tags for assume-unchanged; S/s marks skip-worktree.
+    // Paths follow the two-byte tag prefix and end at NUL, never whitespace.
+    for entry in git(root, &["ls-files", "-v", "-z"])?
+        .split(|b| *b == 0)
+        .filter(|s| !s.is_empty())
+    {
+        if entry.len() < 3 || entry[1] != b' ' {
+            return Err("invalid Git index flag record".into());
+        }
+        let assume_unchanged = entry[0].is_ascii_lowercase();
+        let skip_worktree = entry[0].eq_ignore_ascii_case(&b'S');
+        if assume_unchanged || skip_worktree {
+            let path = std::str::from_utf8(&entry[2..]).map_err(|_| "non UTF-8 index path")?;
+            let flag = match (assume_unchanged, skip_worktree) {
+                (true, true) => "assume-unchanged and skip-worktree",
+                (true, false) => "assume-unchanged",
+                _ => "skip-worktree",
+            };
+            return Err(format!("unsupported index flags ({flag}): {path}"));
+        }
+    }
     if !git(root, &["diff", "--cached", "--raw", "-z", candidate, "--"])?.is_empty()
         || !git(root, &["diff", "--raw", "-z", "--"])?.is_empty()
     {

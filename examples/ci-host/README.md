@@ -23,7 +23,17 @@ Commit the complete initialized inventory. For a parentless first commit:
 
 For later commits use the same command with `--base FULL_BASE_OID --candidate
 FULL_CANDIDATE_OID`, omitting `--initial`. The initial commit's default branch is
-`dev`; the normal push/PR routes are configured explicitly. An existing host's
+`dev`; the normal push/PR routes are configured explicitly. When first pushing
+this parentless commit to `dev`, the ordinary branch-creation event automatically
+runs that same `check --candidate FULL_INITIAL_OID --initial` command. It executes
+`example.check` and workflow verification; setting `message.txt` to anything other
+than `hello` plus a newline fails locally and in that first-push check.
+
+Creating an integration branch at the existing `dev` tip uses a real empty DELTA
+and reports no selected operations. Creating `dev` from a commit with parents
+has no prior baseline and fails preparation: supply an explicit full base/candidate
+range through `workflow_dispatch` or the canonical local command. Do not use
+`--initial` for parented history. An existing host's
 first adoption must set `policy.adoption_base` to its exact previous full OID and
 retain real base FILEMAP/projects registries. It cannot adopt unregistered history
 by pretending it was an empty tree.

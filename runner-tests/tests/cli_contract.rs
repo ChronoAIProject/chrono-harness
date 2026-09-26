@@ -182,6 +182,108 @@ fn not_required_is_a_typed_status() {
     );
 }
 #[test]
+fn external_judge_result_exit_invariants() {
+    for (status, child_exit, reported_exit, judge_exit, expected) in [
+        ("not-required", None, "None", 0, 0),
+        ("passed", None, "None", 0, 0),
+        ("failed", None, "None", 1, 1),
+        ("passed", Some(0), "code", 0, 0),
+        ("failed", Some(7), "code", 7, 1),
+        ("not-required", Some(7), "code", 0, 2),
+        ("not-required", Some(0), "code", 0, 2),
+        ("passed", Some(7), "code", 0, 2),
+        ("failed", Some(0), "code", 1, 2),
+    ] {
+        let execution = child_exit.map_or(String::new(), |code| {
+            format!("code=subprocess.run(['/bin/sh','-c','exit {code}']).returncode;")
+        });
+        let script = format!(
+            "import json,sys,subprocess; r=json.load(sys.stdin); {execution} print(json.dumps({{'protocol':r['protocol'],'request_id':r['request_id'],'status':'{status}','results':[{{'id':'external','status':'{status}','cause':'fixture result','exit_code':{reported_exit}}}],'evidence':{{'fixture':True}}}}));sys.exit({judge_exit})"
+        );
+        let (_dir, path) = fixture(&script);
+        let result = run(&path);
+        assert_eq!(
+            result.exit_code, expected,
+            "{status}/{reported_exit}: {result:?}"
+        );
+        let report: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
+        assert_eq!(report["judge"]["exit_code"], judge_exit);
+        assert_eq!(report.get("transport_failure").is_some(), expected == 2);
+        if status == "not-required" && child_exit.is_some() {
+            assert!(
+                report["transport_failure"]
+                    .as_str()
+                    .unwrap()
+                    .contains("not-required")
+            );
+        }
+    }
+}
+
+#[test]
+fn aggregate_not_required_exactly_matches_unused_results() {
+    for script in [
+        RESPONSE.replacen("'status':'passed'", "'status':'not-required'", 1),
+        RESPONSE
+            .replace(
+                "'id':'external','status':'passed'",
+                "'id':'external','status':'not-required'",
+            )
+            .replace("'exit_code':0", "'exit_code':None"),
+    ] {
+        let (_dir, path) = fixture(&script);
+        let result = run(&path);
+        assert_eq!(result.exit_code, 2);
+        let report: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
+        assert_eq!(
+            report["transport_failure"],
+            "judge exit/status/results disagreement"
+        );
+    }
+}
+
+#[test]
+fn command_path_override_selects_and_hashes_the_invoked_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::Builder::new()
+        .prefix("command cwd ")
+        .tempdir()
+        .unwrap();
+    let tools = dir.path().join("tools");
+    fs::create_dir(&tools).unwrap();
+    let executable = tools.join("sh");
+    let bytes = b"#!/bin/sh\nexit 9\n";
+    fs::write(&executable, bytes).unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    let mut spec = CommandSpec {
+        program: "sh".into(),
+        args: vec!["-c".into(), "exit 0".into()],
+        env: Default::default(),
+        timeout_seconds: 15,
+        output_limit_bytes: 4096,
+    };
+    let inherited = run_process(dir.path(), &spec, &[]).unwrap();
+    assert_eq!(inherited.exit_code, 0);
+    assert_ne!(inherited.executable, executable);
+    assert_eq!(
+        inherited.sha256,
+        chrono_harness::sha256(&fs::read(&inherited.executable).unwrap())
+    );
+    for path in [tools.to_str().unwrap(), "tools", "missing:tools"] {
+        spec.env.insert("PATH".into(), path.into());
+        let result = run_process(dir.path(), &spec, &[]).unwrap();
+        assert_eq!(result.exit_code, 9, "PATH={path}");
+        assert_eq!(result.executable, executable);
+        assert_eq!(result.sha256, chrono_harness::sha256(bytes));
+    }
+    spec.env.insert("PATH".into(), "missing".into());
+    assert!(
+        run_process(dir.path(), &spec, &[])
+            .unwrap_err()
+            .contains("executable not found")
+    );
+}
+#[test]
 fn symlinked_tool_preserves_invocation_identity() {
     let dir = tempfile::tempdir().unwrap();
     let alias = dir.path().join("registered-shell");

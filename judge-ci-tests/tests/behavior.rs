@@ -456,3 +456,68 @@ fn index_changes_cannot_cancel_against_worktree_changes() {
     h.write("src.txt", "one\n");
     fail(&h.check(&base, &base), "dirty tracked");
 }
+
+#[test]
+fn hidden_worktree_bytes_fail_before_execution_without_changing_index() {
+    for (flag, reason) in [
+        ("--assume-unchanged", "assume-unchanged"),
+        ("--skip-worktree", "skip-worktree"),
+    ] {
+        let h = Host::new();
+        let base = h.head();
+        // Tabs/spaces in a real tracked name must survive index fact parsing.
+        let path = "source with\ttab.txt";
+        h.git(&["mv", "src.txt", path]);
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            for row in v["files"].as_array_mut().unwrap() {
+                if row["path"] == "src.txt" {
+                    row["path"] = path.into();
+                }
+            }
+        });
+        h.write(path, "bad\n");
+        h.write(
+            "check.sh",
+            "test \"$(cat 'source with\ttab.txt')\" = good || exit 7\n",
+        );
+        let candidate = h.commit();
+        let control = h.check(&base, &candidate);
+        fail(&control, "exit 7");
+        h.git(&["update-index", flag, "--", path]);
+        h.write(path, "good\n");
+        assert!(h.git(&["diff", "--raw", "-z"]).is_empty());
+        let index = fs::read(h.root().join(".git/index")).unwrap();
+        let result = h.check(&base, &candidate);
+        fail(&result, reason);
+        assert_eq!(result.results[0].id, "ci.inventory");
+        assert!(result.results[0].cause.contains(path));
+        assert_eq!(result.evidence["executed"], json!([]));
+        assert_eq!(fs::read(h.root().join(".git/index")).unwrap(), index);
+    }
+}
+
+#[test]
+fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
+    for (flag, reason) in [
+        ("--assume-unchanged", "assume-unchanged"),
+        ("--skip-worktree", "skip-worktree"),
+    ] {
+        let h = Host::new();
+        let base = h.head();
+        h.write(
+            "check.sh",
+            &format!("git update-index {flag} src.txt\nprintf hidden > src.txt\n"),
+        );
+        let candidate = h.commit();
+        let result = h.check(&base, &candidate);
+        fail(&result, reason);
+        assert_eq!(result.evidence["executed"][0]["process"]["exit_code"], 0);
+        let guard = result
+            .results
+            .iter()
+            .find(|r| r.id == "ci.post-snapshot")
+            .unwrap();
+        assert_eq!(guard.status, Status::Failed);
+        assert!(guard.cause.contains(reason));
+    }
+}

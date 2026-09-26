@@ -337,14 +337,23 @@ pub fn prepare(
                 if payload["created"].as_bool() != Some(true) {
                     return Err("zero before without branch-creation event".into());
                 }
-                git(
-                    root,
-                    &["fetch", "--no-tags", "origin", &c.branch_creation_base_ref],
-                )?;
-                let base = git(root, &["rev-parse", "FETCH_HEAD^{commit}"])?
-                    .trim()
-                    .to_owned();
-                (false, Some(base), candidate, "branch-creation-baseline-ref")
+                let event_ref = payload["ref"]
+                    .as_str()
+                    .filter(|r| r.starts_with("refs/heads/"))
+                    .ok_or("branch-creation event requires refs/heads/... ref")?;
+                git(root, &["check-ref-format", event_ref])?;
+                if event_ref == c.branch_creation_base_ref {
+                    (true, None, candidate, "baseline-creation-initial-inventory")
+                } else {
+                    git(
+                        root,
+                        &["fetch", "--no-tags", "origin", &c.branch_creation_base_ref],
+                    )?;
+                    let base = git(root, &["rev-parse", "FETCH_HEAD^{commit}"])?
+                        .trim()
+                        .to_owned();
+                    (false, Some(base), candidate, "branch-creation-baseline-ref")
+                }
             } else {
                 (false, Some(before), candidate, "push-before-after")
             }
@@ -390,15 +399,19 @@ pub fn prepare(
         return Err("checkout is not exact event candidate".into());
     }
     if initial
-        && git(root, &["rev-list", "--parents", "-n", "1", &candidate])?
-            .split_whitespace()
-            .count()
-            != 1
+        && git(root, &["cat-file", "-p", &candidate])?
+            .lines()
+            .take_while(|line| !line.is_empty())
+            .any(|line| line.starts_with("parent "))
     {
-        return Err("initial candidate has parents".into());
+        return Err(if source == "baseline-creation-initial-inventory" {
+            "baseline-creation candidate has parents and no prior baseline; supply an explicit range via workflow_dispatch or check --base/--candidate"
+        } else {
+            "initial candidate has parents"
+        }.into());
     }
     Ok(
-        json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,&c.check_config,base.as_deref(),&candidate,initial)}),
+        json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,&c.check_config,base.as_deref(),&candidate,initial)}),
     )
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {

@@ -18,9 +18,13 @@ by `check` and returns a nonzero error.
 ## This repository
 
 Run from the repository root. Bootstrap requires Python 3, Git, and rustup; it
-installs Rust 1.95.0 if unavailable and builds the explicitly listed bootstrap
+installs Rust 1.95.0 if unavailable, independently ensures its rustfmt component
+(including on a preinstalled minimal toolchain), and builds the explicitly listed bootstrap
 operations using `.chrono-harness/projects.json`, then copies declared binaries.
 It does not duplicate Cargo build recipes or discover projects.
+Toolchain operations name the configured version explicitly and do not change
+the global default toolchain. Bootstrap these tools before the dedicated CI tests;
+their copied-host regressions consume the installed candidate binaries.
 
 ```sh
 python3 .chrono-harness/ci/bootstrap.py .
@@ -73,7 +77,7 @@ validate every proposed field's semantics.
 | judge | `{program, args, env?, timeout_seconds, output_limit_bytes}`; explicit executable/interpreter plus argv; positive bounds, at most 64 MiB per captured stream |
 | report_path | Safe relative file beneath `.chrono-harness/state/`, also covered by a declared artifact directory |
 | policy.filemap / projects | Explicit relative paths; schema_version 1; registry path migration across an enforced range is unsupported |
-| policy.tools | Tool ID → executable path or PATH command; resolved once for each execution and hashed |
+| policy.tools | Tool ID → executable path or PATH command; resolved once for each execution and hashed using the command's PATH override, otherwise inherited PATH; relative PATH entries use the child cwd |
 | policy.bindings | `test:ID` → ordered, nonempty registered operation IDs; no test discovery |
 | policy.environment | Explicit environment overrides passed to operations; this host sets `RUSTUP_TOOLCHAIN=1.95.0` |
 | policy.artifacts | Relative directory prefixes ending `/`; ignored execution products may exist there; tracked files may not overlap them |
@@ -90,7 +94,12 @@ symlinks, submodules, unsupported modes and non-UTF-8 paths are rejected.
 
 The candidate must be HEAD at a complete 40- or 64-character lowercase commit
 OID. Both objects must exist. Staged/unstaged changes and all untracked nonartifact
-files, including otherwise ignored files, fail. The profile bytes must match
+files, including otherwise ignored files, fail. Index entries marked
+`assume-unchanged` or `skip-worktree` are unsupported and fail explicitly, even if
+Git's diff hides changed bytes. The judge reads NUL-delimited index facts before
+and after execution and never clears these flags or repairs the index. Use a
+complete checkout without these flags for the supported clean-snapshot boundary.
+The profile bytes must match
 both request digest and candidate tree. The snapshot is checked again after
 operations; a check that mutates tracked input fails. Arbitrary commit pairs are
 explicit comparisons; freshness, ancestry and integration provenance are not
@@ -130,7 +139,10 @@ initial}`. The response is one JSON object:
 `{protocol, request_id, status, results, evidence}`. `status` is `passed`, `failed`,
 `blocked` or `not-required`. `results` is nonempty, with unique nonempty IDs and
 `{id, status, cause, exit_code}`; cause is nonempty and exit_code can be null for
-nonprocess checks. Evidence must be a nonempty object. IDs/protocol, aggregate and
+nonprocess checks. A `not-required` result always has null `exit_code`; an executed
+exit (including zero) cannot be labeled unexecuted. Passed process results require
+zero and failed process results require nonzero. The aggregate is `not-required`
+exactly when all results are `not-required`. Evidence must be a nonempty object. IDs/protocol, aggregate and
 individual statuses and actual child exit must agree. Empty/extra/malformed output,
 missing results, timeout, output overflow or crashes fail. Processes use bounded
 capture and Unix process groups; the implementation is validated on macOS. Reports
@@ -163,7 +175,8 @@ Event mapping is preparation, not policy:
 | Event | Fixed input behavior |
 | --- | --- |
 | Existing branch push | Payload `before` / `after` |
-| First branch push (`created`, zero before) | Fetch configured `refs/heads/dev` once, record resolved full base OID; use payload after |
+| Creation of the configured baseline branch (`created`, zero before, matching payload `ref`) | Parentless payload `after` uses the same check with `--initial`, no base, and `initial-inventory` mode; a parented candidate requires an explicit range |
+| Creation of another branch (`created`, zero before, different payload `ref`) | Fetch configured baseline ref once, record its full base OID, use payload `after`; candidate equal to that existing baseline is an honest no-op |
 | PR to dev | Event `pull_request.base.sha` / `head.sha`; check out head, never the default merge ref |
 | workflow_dispatch | Explicit full base/candidate, or explicit initial plus parentless candidate |
 | Branch deletion | Job has no candidate check and cannot produce a passing candidate report |
@@ -176,6 +189,13 @@ available for fetching required objects; post-job checkout cleanup removes it.
 Missing objects are fetched explicitly or fail. Manual dispatch availability can
 depend on workflow registration on the default branch. Workflow source revision
 is recorded independently with `github.workflow_sha`.
+Creation events require a valid `refs/heads/...` payload ref. Creating the baseline
+itself never treats the newly pushed candidate as its own prior baseline. The
+context records source `baseline-creation-initial-inventory`, null base, and mode
+`initial-inventory` for a parentless first push; other branch creations record
+`branch-creation-baseline-ref` and `delta`. For a parented first baseline push,
+supply real full base/candidate OIDs via manual dispatch or the canonical local
+command; the ordinary creation route fails rather than fabricating a range.
 
 The `ci.verify` registered operation checks drift, with explicit FILEMAP dependencies
 on generator/config/workflow/bootstrap sources. Regeneration does not happen in CI

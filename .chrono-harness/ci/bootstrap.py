@@ -28,6 +28,9 @@ def main():
     probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], capture_output=True)
     if probe.returncode:
         subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], check=True)
+    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], capture_output=True)
+    if fmt_probe.returncode:
+        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], check=True)
     env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
     versions = {}
     for tool in ["cargo", "rustc"]:

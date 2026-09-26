@@ -210,14 +210,29 @@ pub fn validate_command(s: &CommandSpec) -> Result<(), String> {
     }
     Ok(())
 }
-pub fn resolve_program(root: &Path, program: &str) -> Result<PathBuf, String> {
+pub fn resolve_program(
+    root: &Path,
+    program: &str,
+    path_override: Option<&str>,
+) -> Result<PathBuf, String> {
+    let root = if root.is_absolute() {
+        root.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|e| e.to_string())?
+            .join(root)
+    };
     let raw = Path::new(program);
     let paths = if raw.is_absolute() {
         vec![raw.to_path_buf()]
     } else if program.contains('/') {
         vec![root.join(raw)]
     } else {
-        std::env::split_paths(&std::env::var_os("PATH").ok_or("PATH is missing")?)
+        let path = path_override
+            .map(std::ffi::OsString::from)
+            .or_else(|| std::env::var_os("PATH"))
+            .ok_or("PATH is missing")?;
+        std::env::split_paths(&path)
             .map(|p| {
                 if p.is_absolute() {
                     p.join(raw)
@@ -238,7 +253,7 @@ pub fn resolve_program(root: &Path, program: &str) -> Result<PathBuf, String> {
 }
 pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<ProcessResult, String> {
     validate_command(s)?;
-    let executable = resolve_program(root, &s.program)?;
+    let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
     let hash = sha256(&fs::read(&executable).map_err(|e| e.to_string())?);
     let mut command = Command::new(&executable);
     command
@@ -367,6 +382,9 @@ pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String
         if result.status == Status::Failed && result.exit_code == Some(0) {
             return Err("failed result has successful exit".into());
         }
+        if result.status == Status::NotRequired && result.exit_code.is_some() {
+            return Err("not-required result must have null exit_code".into());
+        }
     }
     let failed = r
         .results
@@ -375,7 +393,7 @@ pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String
     let all_unused = r.results.iter().all(|v| v.status == Status::NotRequired);
     if (failed && !matches!(r.status, Status::Failed | Status::Blocked))
         || (!failed && matches!(r.status, Status::Failed | Status::Blocked))
-        || (r.status == Status::NotRequired && !all_unused)
+        || (r.status == Status::NotRequired) != all_unused
         || (exit == 0) != (!failed)
     {
         return Err("judge exit/status/results disagreement".into());

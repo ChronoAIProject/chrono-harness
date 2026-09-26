@@ -234,7 +234,7 @@ fn branch_creation_resolves_configured_baseline_once() {
         d.path(),
         &config(),
         "push",
-        &json!({"before":"0".repeat(40),"after":c,"created":true}),
+        &json!({"ref":"refs/heads/integration/new","before":"0".repeat(40),"after":c,"created":true}),
         &c,
     )
     .unwrap();
@@ -309,8 +309,7 @@ fn cli_preserves_context_and_outputs_full_identity() {
     );
     assert!(d.path().join(".chrono-harness/state/context.json").exists());
 }
-#[test]
-fn example_bundle_adopts_without_source_checkout_dependency() {
+fn copied_example() -> tempfile::TempDir {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/ci-host");
     let root = tempfile::Builder::new()
         .prefix("copied example host ")
@@ -333,9 +332,146 @@ fn example_bundle_adopts_without_source_checkout_dependency() {
         &root.path().join(".chrono-harness/ci/github.json"),
     )
     .unwrap();
+    root
+}
+#[test]
+fn example_bundle_adopts_without_source_checkout_dependency() {
+    let root = copied_example();
     assert!(!generate(root.path(), ".chrono-harness/ci/github.json", true).unwrap());
     let config = chrono_ci::load(&root.path().join(".chrono-harness/ci/github.json")).unwrap();
     assert_eq!(config.runs_on, "self-hosted");
+}
+
+fn committed_example(message: &str) -> (tempfile::TempDir, tempfile::TempDir, String) {
+    let root = copied_example();
+    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.chrono-harness/bin");
+    let bin = root.path().join(".chrono-harness/bin");
+    fs::create_dir_all(&bin).unwrap();
+    for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
+        fs::copy(installed.join(name), bin.join(name)).expect(
+            "bootstrap the registered candidate tools before running the copied-host tests",
+        );
+    }
+    git(root.path(), &["init", "-q", "-b", "dev"]);
+    git(
+        root.path(),
+        &["config", "user.email", "fixture@example.invalid"],
+    );
+    git(root.path(), &["config", "user.name", "Fixture"]);
+    fs::write(root.path().join("message.txt"), message).unwrap();
+    git(root.path(), &["add", "."]);
+    git(root.path(), &["commit", "-qm", "initial host"]);
+    let candidate = git(root.path(), &["rev-parse", "HEAD"]);
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "--bare", "-q"]);
+    git(
+        root.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    git(root.path(), &["push", "-q", "origin", "dev"]);
+    (root, remote, candidate)
+}
+fn example_push(root: &Path, candidate: &str, branch: &str) -> Result<Value, String> {
+    let c = chrono_ci::load(&root.join(".chrono-harness/ci/github.json")).unwrap();
+    prepare(
+        root,
+        &c,
+        "push",
+        &json!({"ref":branch,"before":"0".repeat(40),"after":candidate,"created":true,"deleted":false}),
+        candidate,
+    )
+}
+fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
+    let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
+    assert_eq!(argv[1], "check");
+    let output = Command::new(root.join(&argv[0]))
+        .args(&argv[1..])
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(expected_exit),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(report.get("transport_failure").is_none(), "{report}");
+    report
+}
+#[test]
+fn first_baseline_push_runs_copied_example_inventory_with_failure_and_passing_control() {
+    for (message, exit) in [("wrong\n", 1), ("hello\n", 0)] {
+        let (root, _remote, candidate) = committed_example(message);
+        let context = example_push(root.path(), &candidate, "refs/heads/dev").unwrap();
+        let report = execute_context(root.path(), &context, exit);
+        assert_eq!(context["source"], "baseline-creation-initial-inventory");
+        assert_eq!(context["mode"], "initial-inventory");
+        assert_eq!(context["initial"], true);
+        assert!(context["base"].is_null());
+        assert_eq!(report["response"]["evidence"]["mode"], "initial-inventory");
+        let result = report["response"]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == "example.check")
+            .unwrap();
+        assert_eq!(result["exit_code"], exit);
+        assert_eq!(
+            result["status"],
+            if exit == 0 { "passed" } else { "failed" }
+        );
+        assert_eq!(
+            report["response"]["evidence"]["executed"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+}
+#[test]
+fn integration_creation_at_existing_baseline_is_an_honest_noop() {
+    let (root, _remote, candidate) = committed_example("hello\n");
+    let context = example_push(root.path(), &candidate, "refs/heads/integration/new").unwrap();
+    assert_eq!(context["base"], candidate);
+    assert_eq!(context["initial"], false);
+    assert_eq!(context["mode"], "delta");
+    assert_eq!(context["source"], "branch-creation-baseline-ref");
+    let report = execute_context(root.path(), &context, 0);
+    assert_eq!(report["response"]["evidence"]["selected"], json!([]));
+    assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+}
+#[test]
+fn baseline_creation_with_parents_requires_explicit_range() {
+    let (d, _b, c) = repo();
+    let payload = json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":c,"created":true});
+    let error = prepare(d.path(), &config(), "push", &payload, &c).unwrap_err();
+    assert!(error.contains("explicit range"), "{error}");
+    // Git traversal hides parents at a shallow boundary; the object still has them.
+    fs::write(d.path().join(".git/shallow"), format!("{c}\n")).unwrap();
+    assert_eq!(git(d.path(), &["rev-list", "--parents", "-n", "1", &c]), c);
+    let error = prepare(d.path(), &config(), "push", &payload, &c).unwrap_err();
+    assert!(error.contains("explicit range"), "{error}");
+}
+#[test]
+fn creation_requires_valid_event_branch_and_available_baseline() {
+    let (d, _b, c) = repo();
+    for branch in [
+        Value::Null,
+        json!("refs/tags/dev"),
+        json!("refs/heads/bad..name"),
+    ] {
+        let payload = json!({"ref":branch,"before":"0".repeat(40),"after":c,"created":true});
+        let error = prepare(d.path(), &config(), "push", &payload, &c).unwrap_err();
+        assert!(
+            error.contains("branch-creation event requires") || error.contains("check-ref-format"),
+            "{error}"
+        );
+    }
+    let payload = json!({"ref":"refs/heads/integration/new","before":"0".repeat(40),"after":c,"created":true});
+    let error = prepare(d.path(), &config(), "push", &payload, &c).unwrap_err();
+    assert!(error.contains("fetch"), "{error}");
 }
 #[test]
 fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {
@@ -360,11 +496,64 @@ fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {
         serde_json::to_vec(&registry("printf binary > built-tool")).unwrap(),
     )
     .unwrap();
+    // Model an already installed minimal toolchain without touching real rustup state.
+    let tools = root.path().join("mock-tools");
+    fs::create_dir(&tools).unwrap();
+    let python = Command::new("python3")
+        .args(["-c", "import sys; print(sys.executable)"])
+        .output()
+        .unwrap();
+    assert!(python.status.success());
+    let interpreter = String::from_utf8(python.stdout).unwrap();
+    let mock = format!(
+        "#!{}\n{}",
+        interpreter.trim(),
+        r#"
+import json, os, pathlib, sys
+root = pathlib.Path(__file__).parent
+name, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
+record = root / 'calls.json'
+calls = json.loads(record.read_text()) if record.exists() else []
+calls.append([name, *args])
+record.write_text(json.dumps(calls))
+if name == 'rustup':
+    if args == ['run', '1.95.0', 'cargo', '--version']:
+        sys.exit(0 if (root / 'cargo-ready').exists() else 1)
+    if args == ['run', '1.95.0', 'rustfmt', '--version']:
+        sys.exit(0 if (root / 'fmt-ready').exists() else 1)
+    if args == ['toolchain', 'install', '1.95.0', '--profile', 'minimal', '--component', 'rustfmt']:
+        (root / 'cargo-ready').touch()
+        (root / 'fmt-ready').touch()
+    elif args == ['component', 'add', '--toolchain', '1.95.0', 'rustfmt']:
+        if (root / 'fail-component').exists():
+            sys.exit(8)
+        (root / 'fmt-ready').touch()
+    else:
+        sys.exit(99)
+else:
+    assert name in ['cargo', 'rustc'] and args == ['--version']
+    assert os.environ['RUSTUP_TOOLCHAIN'] == '1.95.0'
+    print(name + ' 1.95.0 (fixture)')
+"#
+    );
+    use std::os::unix::fs::PermissionsExt;
+    for name in ["rustup", "cargo", "rustc"] {
+        let p = tools.join(name);
+        fs::write(&p, &mock).unwrap();
+        fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(tools.join("cargo-ready"), "").unwrap();
+    let path = std::env::join_paths(
+        std::iter::once(tools.clone())
+            .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+    )
+    .unwrap();
     let invoke = || {
         Command::new("python3")
             .arg(dir.join("bootstrap.py"))
             .arg(root.path())
             .current_dir(std::env::temp_dir())
+            .env("PATH", &path)
             .output()
             .unwrap()
     };
@@ -374,6 +563,21 @@ fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {
         "{}",
         String::from_utf8_lossy(&success.stderr)
     );
+    assert!(
+        tools.join("fmt-ready").exists(),
+        "minimal installed toolchain still lacks rustfmt"
+    );
+    let calls = || -> Value {
+        serde_json::from_slice(&fs::read(tools.join("calls.json")).unwrap()).unwrap()
+    };
+    assert!(calls().as_array().unwrap().contains(&json!([
+        "rustup",
+        "component",
+        "add",
+        "--toolchain",
+        "1.95.0",
+        "rustfmt"
+    ])));
     assert_eq!(
         fs::read(root.path().join(".chrono-harness/bin/tool")).unwrap(),
         b"binary"
@@ -388,4 +592,30 @@ fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {
     );
     fs::write(&pr, serde_json::to_vec(&registry("exit 9")).unwrap()).unwrap();
     assert!(!invoke().status.success());
+    fs::write(
+        &pr,
+        serde_json::to_vec(&registry("printf binary > built-tool")).unwrap(),
+    )
+    .unwrap();
+    fs::remove_file(tools.join("cargo-ready")).unwrap();
+    fs::remove_file(tools.join("fmt-ready")).unwrap();
+    assert!(invoke().status.success());
+    assert!(calls().as_array().unwrap().contains(&json!([
+        "rustup",
+        "toolchain",
+        "install",
+        "1.95.0",
+        "--profile",
+        "minimal",
+        "--component",
+        "rustfmt"
+    ])));
+    fs::remove_file(tools.join("fmt-ready")).unwrap();
+    fs::write(tools.join("fail-component"), "").unwrap();
+    fs::remove_file(root.path().join("built-tool")).unwrap();
+    assert!(!invoke().status.success());
+    assert!(
+        !root.path().join("built-tool").exists(),
+        "operations ran despite component failure"
+    );
 }

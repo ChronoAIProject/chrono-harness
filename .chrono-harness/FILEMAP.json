@@ -1102,6 +1102,11 @@
       "from": "project:ci",
       "kind": "test-execution",
       "to": "test:ci-verify"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "test-execution",
+      "to": "test:ci-tests"
     }
   ],
   "test_costs": [
