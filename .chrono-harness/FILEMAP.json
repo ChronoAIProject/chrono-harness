@@ -64,6 +64,10 @@
         {
           "kind": "judge-trigger",
           "to": "judge:workflow"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -84,6 +88,10 @@
         {
           "kind": "judge-trigger",
           "to": "judge:workflow"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -104,6 +112,10 @@
         {
           "kind": "judge-trigger",
           "to": "judge:routes"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -116,6 +128,10 @@
         {
           "kind": "judge-trigger",
           "to": "judge:filemap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -136,6 +152,10 @@
         {
           "kind": "judge-trigger",
           "to": "judge:workflow"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -837,6 +857,10 @@
         {
           "kind": "test-execution",
           "to": "test:ci-verify"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -869,6 +893,10 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     },
@@ -1025,6 +1053,162 @@
           "to": "test:ci-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/wire.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/facts.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/full.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/protocol_v1.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/Cargo.toml",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/Cargo.lock",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/lib.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/schema.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/main.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/Cargo.toml",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/Cargo.lock",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/registration_contract.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/spec-coverage.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -1107,6 +1291,31 @@
       "from": "project:judge-ci",
       "kind": "test-execution",
       "to": "test:ci-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "test-execution",
+      "to": "test:judge-registration-tests"
+    },
+    {
+      "from": "project:judge-registration-tests",
+      "kind": "test-execution",
+      "to": "test:judge-registration-tests"
     }
   ],
   "test_costs": [
@@ -1128,6 +1337,10 @@
     },
     {
       "test": "ci-verify",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-registration-tests",
       "cost": "unmeasured"
     }
   ]

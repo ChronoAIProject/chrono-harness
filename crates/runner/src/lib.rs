@@ -1,4 +1,7 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
+pub mod facts;
+pub mod full;
+pub mod wire;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -252,10 +255,33 @@ pub fn resolve_program(
     Err(format!("executable not found: {program}"))
 }
 pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<ProcessResult, String> {
+    run_process_inner(root, s, input, None)
+}
+/// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
+pub fn run_process_bound(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+) -> Result<ProcessResult, String> {
+    run_process_inner(root, s, input, Some(digest))
+}
+fn run_process_inner(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    expected: Option<&str>,
+) -> Result<ProcessResult, String> {
     validate_command(s)?;
     let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
     let hash = sha256(&fs::read(&executable).map_err(|e| e.to_string())?);
+    if expected.is_some_and(|v| v != hash) {
+        return Err("prelaunch executable digest mismatch".into());
+    }
     let mut command = Command::new(&executable);
+    if expected.is_some() {
+        command.env_clear();
+    }
     command
         .args(&s.args)
         .envs(&s.env)
@@ -447,9 +473,9 @@ fn root_for_config(path: &Path) -> Result<(PathBuf, String), String> {
 }
 pub fn dispatch(args: &[&str]) -> CliOutput {
     match args{
-    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nUse --initial without --base for a parentless candidate. CI slice only; full governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
+    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
-    ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
+    ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
@@ -459,6 +485,7 @@ fn check(args: &[&str]) -> Result<(u8, String), String> {
     let mut base = None;
     let mut candidate = None;
     let mut initial = false;
+    let mut context = None;
     let mut i = 0;
     let mut seen = BTreeSet::new();
     while i < args.len() {
@@ -476,6 +503,7 @@ fn check(args: &[&str]) -> Result<(u8, String), String> {
             "--config" => config = Some(value),
             "--base" => base = Some(value.to_owned()),
             "--candidate" => candidate = Some(value.to_owned()),
+            "--context" => context = Some(value),
             _ => return Err(format!("unknown argument {k}")),
         }
         i += 2;
@@ -485,6 +513,20 @@ fn check(args: &[&str]) -> Result<(u8, String), String> {
     }
     let candidate = candidate.ok_or("missing --candidate")?;
     let (root, config_path) = root_for_config(Path::new(config.ok_or("missing --config")?))?;
+    let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
+    if profile.get("schema").and_then(Value::as_str) != Some("chrono-ci-check/v1") {
+        return full::check(
+            &root,
+            &config_path,
+            base.as_deref()
+                .ok_or("full check requires --base; initial mode has no governance success")?,
+            &candidate,
+            Path::new(context.ok_or("full check requires --context")?),
+        );
+    }
+    if context.is_some() {
+        return Err("CI profile does not accept --context".into());
+    }
     let c = load_config(&root.join(&config_path))?;
     let bytes = fs::read(root.join(&config_path)).map_err(|e| e.to_string())?;
     let request_id = sha256(

@@ -8,7 +8,8 @@
   "operations": [
     "build.runner",
     "build.judge-ci",
-    "build.ci"
+    "build.ci",
+    "build.judge-registration"
   ],
   "install": [
     {
@@ -22,6 +23,10 @@
     {
       "source": "crates/ci/target/debug/chrono-ci",
       "destination": ".chrono-harness/bin/chrono-ci"
+    },
+    {
+      "source": "crates/judge-registration/target/debug/chrono-judge-registration",
+      "destination": ".chrono-harness/bin/chrono-judge-registration"
     }
   ]
 }

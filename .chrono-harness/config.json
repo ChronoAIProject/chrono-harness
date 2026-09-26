@@ -98,6 +98,42 @@
       "owner": "instructions-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/judge-ci/target/",
+      "owner": "judge-ci",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-ci-tests/target/",
+      "owner": "judge-ci-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/ci/target/",
+      "owner": "ci",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/ci-tests/target/",
+      "owner": "ci-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-registration/target/",
+      "owner": "judge-registration",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-registration-tests/target/",
+      "owner": "judge-registration-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

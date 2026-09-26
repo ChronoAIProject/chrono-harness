@@ -1,22 +1,24 @@
 # Generated CI and the active CI slice
 
-`runner`, `judge-ci`, and `ci` are separate Rust production projects under
+`runner`, `judge-registration`, `judge-ci`, and `ci` are separate Rust production projects under
 `crates/`, each beside its dedicated `-tests` project with separate Cargo.lock
 and target directories. `instructions` and `instructions-tests` follow the same
 layout. The container directory is not a Cargo workspace or a test-discovery rule;
 each manifest, operation and dependency remains explicitly registered.
 `runner` owns external process transport, request identity, strict protocol checks
-and result publication. `judge-ci` owns the active registration, snapshot, DELTA
-and operation policy. `ci` owns the GitHub workflow projection and event input
+and result publication. `judge-registration` owns full-format registration checks.
+`judge-ci` owns the scoped CI registration, snapshot, DELTA and operation policy.
+`ci` owns the GitHub workflow projection and event input
 preparation. It does not select tests or judge outcomes. `instructions` remains
 independent and its catalogs, layouts and relative root alias are unchanged.
 
 The five full-governance registries remain **proposed**. The bounded
 `chrono-ci-check/v1` profile explicitly consumes the FILEMAP and projects data
-below. It does not activate SPEC's seven future judges or future
-`chrono-judge/v1` protocol. The active transport protocol is
-`chrono-ci-judge/v1`. The full `.chrono-harness/config.json` remains unsupported
-by `check` and returns a nonzero error.
+below using `chrono-ci-judge/v1`. Separately, `check` supports configured
+`chrono-judge/v1` transport and the registration judge through
+`.chrono-harness/config.json` with `--context`. This proposed host remains
+incomplete and returns nonzero; the other six judges and automated lifecycle
+are not implemented.
 
 ## This repository
 
@@ -123,7 +125,7 @@ binds each affected production/test pair to formatting, the production binary
 build and the dedicated test execution. The production build covers executable
 entry points that dependency-only library compilation in a separate test project
 does not cover; no redundant Cargo check or test-project build is scheduled.
-Bootstrap builds the three execution tools before they exist; canonical build
+Bootstrap builds the four execution tools before they exist; canonical build
 results remain explicit checks of selected candidate executable sources.
 
 For first adoption, the exact `adoption_base` permits only the absence of the base
