@@ -16,6 +16,21 @@ const BEGIN: &[u8] = b"<!-- chrono-instructions:begin -->";
 const END: &[u8] = b"<!-- chrono-instructions:end -->";
 const RESERVED: &[u8] = b"<!-- chrono-instructions";
 const ROUTE: &str = include_str!("../../assets/entrypoint.md");
+const DEFAULT_METHOD: &str = include_str!("../../assets/methodology.md");
+
+struct InitSources {
+    methodology: Option<Vec<u8>>,
+    context: Option<Vec<u8>>,
+}
+
+impl InitSources {
+    fn read(methodology: Option<&Path>, context: Option<&Path>) -> Result<Self, String> {
+        Ok(Self {
+            methodology: methodology.map(input).transpose()?,
+            context: context.map(input).transpose()?,
+        })
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -160,7 +175,7 @@ fn render(path: &Path, bytes: &[u8]) -> Result<Vec<u8>, String> {
 
 fn prepare(
     host: &Path,
-    selected: Option<(Vec<u8>, Vec<u8>)>,
+    selected: Option<InitSources>,
 ) -> Result<(Vec<Change>, Vec<PathBuf>), String> {
     let root = fs::canonicalize(host).map_err(|e| error(host, e))?;
     if !root.is_dir() {
@@ -201,8 +216,12 @@ fn prepare(
             context.ok_or_else(|| error(&context_path, "registered source is missing"))?;
         utf8(&method_path, &method.bytes)?;
         utf8(&context_path, &context.bytes)?;
-        if let Some((new_method, new_context)) = selected {
-            if method.bytes != new_method || context.bytes != new_context {
+        if let Some(selected) = selected {
+            if selected
+                .methodology
+                .is_some_and(|bytes| bytes != method.bytes)
+                || selected.context.is_some_and(|bytes| bytes != context.bytes)
+            {
                 return Err(error(
                     &manifest_path,
                     "init inputs differ from retained canonical sources; edit retained sources deliberately and use generate",
@@ -210,7 +229,7 @@ fn prepare(
             }
         }
     } else {
-        let (new_method, new_context) = selected.ok_or_else(|| {
+        let selected = selected.ok_or_else(|| {
             error(
                 &manifest_path,
                 "missing registration; run explicit init first",
@@ -227,8 +246,18 @@ fn prepare(
                 ));
             }
         }
-        changes.push(Change::new(method_path, None, new_method));
-        changes.push(Change::new(context_path, None, new_context));
+        changes.push(Change::new(
+            method_path,
+            None,
+            selected
+                .methodology
+                .unwrap_or_else(|| DEFAULT_METHOD.as_bytes().to_vec()),
+        ));
+        changes.push(Change::new(
+            context_path,
+            None,
+            selected.context.unwrap_or_default(),
+        ));
         let mut bytes = serde_json::to_vec_pretty(&registration()).map_err(|e| e.to_string())?;
         bytes.push(b'\n');
         changes.push(Change::new(manifest_path, None, bytes));
@@ -266,7 +295,18 @@ fn prepare(
 /// Retain exact selected UTF-8 bytes and generate both discovery routes.
 /// Repeated init refuses differing retained sources. The host must already exist.
 pub fn init(host: &Path, methodology: &Path, context: &Path) -> Result<Vec<PathBuf>, String> {
-    let selected = (input(methodology)?, input(context)?);
+    init_with_defaults(host, Some(methodology), Some(context))
+}
+
+/// Initialize with independently optional source files. For a new host, omissions
+/// select the embedded full guide and empty context. For a registered host,
+/// omissions retain validated canonical bytes; explicit conflicts still fail.
+pub fn init_with_defaults(
+    host: &Path,
+    methodology: Option<&Path>,
+    context: Option<&Path>,
+) -> Result<Vec<PathBuf>, String> {
+    let selected = InitSources::read(methodology, context)?;
     let (changes, directories) = prepare(host, Some(selected))?;
     transaction::publish(changes, directories, Fault::default())
 }
@@ -291,7 +331,8 @@ pub mod test_support {
         after: usize,
         rollback: Option<usize>,
     ) -> Result<Vec<PathBuf>, String> {
-        let (changes, directories) = prepare(host, Some((input(method)?, input(context)?)))?;
+        let selected = InitSources::read(Some(method), Some(context))?;
+        let (changes, directories) = prepare(host, Some(selected))?;
         transaction::publish(
             changes,
             directories,
@@ -321,7 +362,7 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
     if args.is_empty()
         || (args.len() == 1 && ["help", "--help", "-h"].iter().any(|a| args[0] == *a))
     {
-        return reply(0, "Usage:\n  chrono-instructions init --host-root H --methodology M --host-context C\n  chrono-instructions generate --host-root H\nExplicit paths; H must exist. C may be empty. Exit 0 complete, 2 usage, 1 generation/IO failure. No judges run.\n".into(), String::new());
+        return reply(0, "Usage:\n  chrono-instructions init --host-root H [--methodology M] [--host-context C]\n  chrono-instructions generate --host-root H\nH must be an existing directory. New init defaults to the bundled full guide and empty context. Registered init retains existing canonical sources for omitted options; explicit differing inputs fail. Optional M/C must be readable UTF-8 regular files. Edit retained sources deliberately, then generate to update routes. No host inference or runtime checkout required. Exit 0 complete, 2 usage, 1 generation/IO failure. No judges run.\n".into(), String::new());
     }
     if args.len() == 1 && args[0] == "--version" {
         return reply(
@@ -334,7 +375,7 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
         reply(
             2,
             String::new(),
-            "E_USAGE: use --help; required options must occur exactly once.\n".into(),
+            "E_USAGE: use --help; --host-root is required, each option may occur only once and needs a value.\n".into(),
         )
     };
     let is_init = args[0] == "init";
@@ -367,10 +408,7 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
         return usage();
     };
     let result = if is_init {
-        let (Some(method), Some(context)) = (method, context) else {
-            return usage();
-        };
-        init(&host, &method, &context)
+        init_with_defaults(&host, method.as_deref(), context.as_deref())
     } else {
         generate(&host)
     };

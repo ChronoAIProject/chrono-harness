@@ -36,7 +36,7 @@ instructions/Cargo.toml + Cargo.lock  独立的指令生成生产项目
 instructions/src/{lib,main,transaction}.rs  生成、CLI 与文件发布
 instructions-tests/Cargo.toml + Cargo.lock  生成器专属测试项目
 instructions-tests/tests/generation.rs  临时宿主行为测试
-assets/methodology.md           产品方法资产，显式运行输入
+assets/methodology.md           完整产品方法资产，编译时嵌入的默认输入
 assets/entrypoint.md            产品固定路由文案，编译输入
 docs/instructions.md            已实现生成合同
 docs/methodology-extraction.md  来源与方法提取判断，不是运行依赖
@@ -118,7 +118,8 @@ operation 在全部 actions 与 canonical_check 中唯一；同名不同参数�
 构建、测试依赖只由 FILEMAP 提供；manifest 可作为一致性检查输入，不能用来补登记。
 脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
 生成器自举 init/generate 通过已登记 cargo 工具的 `run --locked --manifest-path ... -- ...` 调用，
-argv 的宿主和材料均为本仓显式字面路径，不新增工具发现或路径模板。任意外部宿主直接用 §16 的 CLI。
+argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定制；首次采用内嵌完整方法与空上下文。
+不新增工具发现或路径模板。任意外部宿主直接用 §16 的 CLI。
 
 | FILEMAP 字段 | 类型与约束 |
 | --- | --- |
@@ -517,7 +518,8 @@ runner 已实现：无外部依赖的 Rust library + binary；公开 `dispatch(&
 每个项目的独立 Cargo.lock 必须提交；构建和测试使用各自 --manifest-path 与 --locked。
 测试 crate 只有显式 test target，build/check 需带 --tests，避免只检查空默认目标。
 
-instructions 已实现：显式 init/generate、严格专用 manifest、精确保留输入、双入口路由、
+instructions 已实现：只需 host-root 的 init、独立可选输入覆盖、内嵌完整指南/空上下文默认、
+已登记宿主省略选项保留定制、显式 generate、严格专用 manifest、精确保留输入、双入口路由、
 受管块保留、单一相对别名、无写入重跑、预检与暂存/普通失败回滚；完整合同见 §16。
 serde/serde_json/tempfile 及其锁定依赖仅属于新生成器项目，不进入 runner 编译依赖。
 
@@ -542,15 +544,22 @@ JSON 草案和验收矩阵是这些实现的输入，不是假执行报告；没
 
 ## 16. 宿主指令生成（已实现）
 
-独立命令 `chrono-instructions init --host-root H --methodology M --host-context C` 将两个显式输入
-精确保留到 `.chrono-harness/instructions/`；`generate --host-root H` 只读取已登记保留源。
+从 checkout 执行 `cargo install --locked --path instructions` 安装后，任意 cwd 只需执行
+`chrono-instructions init --host-root H`，无需准备 Markdown 或上下文文件。
+新宿主将内嵌完整方法和空上下文精确保留到 `.chrono-harness/instructions/`。
+`--methodology M` 与 `--host-context C` 是相互独立的可选覆盖，显式输入仍须可读、普通文件、UTF-8；
+已登记宿主省略任一选项则保留对应 canonical 字节，不与二进制默认值比较。
+重复 init 必须先验证登记和保留源；显式不同输入拒绝并指向 deliberate edit + generate。
+`generate --host-root H` 只读取已登记保留源，行为不变。
 根 AGENTS.md、CLAUDE.md 的受管块都要求依次完整阅读同一方法和上下文，块外内容保持原字节。
 宿主 AI 自主编辑源并重新生成；重复 init 不得覆盖不同的定制源。
 完整协议、v1 字段/路径、CLI 状态、所有权、别名和 IO 边界由 [docs/instructions.md](docs/instructions.md)
 单一维护，不在此复制第二份格式定义。该合同是本节的规范组成部分。
 
 产品资产与宿主材料不同：`assets/methodology.md` 维护发行方法，宿主保留源是明确选择后的自主快照；
-`assets/entrypoint.md` 是编译时读取的固定路由。提取的来源与取舍在
+`assets/methodology.md` 和固定路由 `assets/entrypoint.md` 都在 Rust 源码之外，并显式登记为编译输入。
+可执行文件不依赖运行时 checkout 或 cwd 中的资产；默认上下文确定为空，不检测项目事实。
+升级二进制不自动更新宿主材料，采用新版须先有意识地比较/编辑源，再 generate。提取的来源与取舍在
 [docs/methodology-extraction.md](docs/methodology-extraction.md)，不成为宿主运行依赖。
 五份通用登记仍 proposed、input_closure 仍 incomplete；生成器专用登记已被真实代码校验，
 不代表通用 registration 判官已经实现。新 instruction-policy 表面仅分类宿主指南，不伪称可执行规则。

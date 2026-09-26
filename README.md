@@ -9,22 +9,25 @@
 每个项目都有独立 manifest、lockfile、target，没有根 workspace，也没有 generator → runner 依赖。
 
 ```sh
-cargo build --locked --manifest-path instructions/Cargo.toml
-./instructions/target/debug/chrono-instructions init \
-  --host-root "/path/to/existing-host" \
-  --methodology "/path/to/chrono-harness/assets/methodology.md" \
-  --host-context "/path/to/explicit-context.md"
-./instructions/target/debug/chrono-instructions generate --host-root "/path/to/existing-host"
-cargo test --locked --manifest-path instructions-tests/Cargo.toml
+# 在本项目 checkout 中安装；确保 Cargo 的 bin 目录在 PATH 中
+cargo install --locked --path instructions
+# 安装后从任意工作目录初始化已有宿主，只需这一条命令
+chrono-instructions init --host-root "/path/to/existing-host"
 ```
 
-上下文可用显式空文件。init 精确保留选定字节到宿主 `.chrono-harness/instructions/`，
+可执行文件在编译时内嵌完整 `assets/methodology.md`，运行时不需要源码 checkout。
+新宿主默认获得完整指南和空上下文，无需准备输入文件或手工注入 Markdown。
+可独立选择 `--methodology M`、`--host-context C` 覆盖任一默认输入；外部输入须是可读 UTF-8 普通文件。
+init 精确保留选定字节到宿主 `.chrono-harness/instructions/`，
 两个根入口都要求全文读取同一方法与宿主上下文；只替换自己拥有的块，保留块外内容。
-日常更新直接编辑保留源，再 generate；不同的 init 输入会报错，不能悄悄覆盖定制。
+日常更新直接编辑保留源，再运行 `chrono-instructions generate --host-root "/path/to/existing-host"`。
+已登记宿主再次 init 时，省略的选项保留现有源，不与新二进制默认内容比较；显式不同的输入仍报错。
+升级二进制不自动更新宿主指南；采用新版须有意识地比较、编辑 canonical 方法，再 generate。
 成功重复调用无写入。退出码为 0 完整、2 用法错误、1 生成/IO 失败。
 普通 IO 失败尝试回滚；不提供多文件崩溃原子性，不支持并发写者。
 完整格式、所有权、别名、恢复边界与验证命令见 [生成合同](docs/instructions.md)。
-可迁移中文方法见 [产品资产](assets/methodology.md)，出处与提取取舍见 [来源映射](docs/methodology-extraction.md)。
+实际 CLAUDE.md 条款逐节迁移的完整中文正文见 [产品资产](assets/methodology.md)，
+102 个来源子节的保留、适配和排除决定见 [来源映射](docs/methodology-extraction.md)。
 本仓也由该工具生成根入口；这是能力示例，不证明 AI 实际阅读/遵守，也不启用判官。
 
 ```sh

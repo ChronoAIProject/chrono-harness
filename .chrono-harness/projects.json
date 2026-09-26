@@ -152,11 +152,7 @@
             "--",
             "init",
             "--host-root",
-            ".",
-            "--methodology",
-            "assets/methodology.md",
-            "--host-context",
-            ".chrono-harness/instructions/host-context.md"
+            "."
           ]
         },
         "generate": {

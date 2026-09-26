@@ -11,6 +11,24 @@ const MANIFEST: &str = ".chrono-harness/instructions/manifest.json";
 const BEGIN: &str = "<!-- chrono-instructions:begin -->";
 const END: &str = "<!-- chrono-instructions:end -->";
 
+fn cli_init(
+    host: &Host,
+    method: Option<&Path>,
+    context: Option<&Path>,
+) -> chrono_instructions::CliOutput {
+    let mut args = vec![
+        "init".into(),
+        "--host-root".into(),
+        host.root.clone().into_os_string(),
+    ];
+    for (flag, path) in [("--methodology", method), ("--host-context", context)] {
+        if let Some(path) = path {
+            args.extend([flag.into(), path.as_os_str().to_owned()]);
+        }
+    }
+    dispatch(&args)
+}
+
 struct Host {
     temp: TempDir,
     root: PathBuf,
@@ -203,6 +221,9 @@ fn malformed_markers_fail_before_any_write() {
         host.write("CLAUDE.md", bytes);
         let before = host.snapshot();
         assert!(host.init().unwrap_err().contains("managed delimiters"));
+        let result = cli_init(&host, None, None);
+        assert_eq!(result.exit_code, 1, "{result:?}");
+        assert!(result.stderr.contains("managed delimiters"));
         assert_eq!(host.snapshot(), before);
     }
 }
@@ -243,6 +264,9 @@ fn invalid_registration_is_rejected_without_repairs_or_output_changes() {
         let before = host.snapshot();
         let result = generate(&host.root);
         assert!(result.unwrap_err().contains("registration"));
+        let result = cli_init(&host, None, None);
+        assert_eq!(result.exit_code, 1, "{result:?}");
+        assert!(result.stderr.contains("registration"));
         assert_eq!(host.snapshot(), before);
     }
 }
@@ -257,6 +281,7 @@ fn reordered_source_or_output_registration_is_invalid() {
         host.write(MANIFEST, serde_json::to_vec(&value).unwrap());
         let before = host.snapshot();
         assert!(generate(&host.root).is_err());
+        assert_eq!(cli_init(&host, None, None).exit_code, 1);
         assert_eq!(host.snapshot(), before);
     }
 }
@@ -268,6 +293,9 @@ fn init_never_overwrites_reserved_unregistered_material() {
         host.write(path, "customized existing source");
         let before = host.snapshot();
         assert!(host.init().unwrap_err().contains("collision"));
+        let result = cli_init(&host, None, None);
+        assert_eq!(result.exit_code, 1, "{result:?}");
+        assert!(result.stderr.contains("collision"));
         assert_eq!(host.snapshot(), before);
     }
 }
@@ -308,6 +336,9 @@ fn generate_reads_both_retained_sources_even_if_routes_are_current() {
         host.write(path, [0xff]);
         let before = host.snapshot();
         assert!(generate(&host.root).unwrap_err().contains("UTF-8"));
+        let result = cli_init(&host, None, None);
+        assert_eq!(result.exit_code, 1, "{result:?}");
+        assert!(result.stderr.contains("UTF-8"));
         assert_eq!(host.snapshot(), before);
         fs::remove_file(host.root.join(path)).unwrap();
         let before = host.snapshot();
@@ -316,6 +347,9 @@ fn generate_reads_both_retained_sources_even_if_routes_are_current() {
                 .unwrap_err()
                 .contains("registered source is missing")
         );
+        let result = cli_init(&host, None, None);
+        assert_eq!(result.exit_code, 1, "{result:?}");
+        assert!(result.stderr.contains("registered source is missing"));
         assert_eq!(host.snapshot(), before);
     }
 }
@@ -327,6 +361,7 @@ fn conflicting_file_types_fail_before_changes() {
         fs::create_dir_all(host.root.join(path)).unwrap();
         let before = host.snapshot();
         assert!(host.init().unwrap_err().contains("regular file"));
+        assert_eq!(cli_init(&host, None, None).exit_code, 1);
         assert_eq!(host.snapshot(), before);
     }
     for path in [".chrono-harness", ".chrono-harness/instructions"] {
@@ -334,6 +369,7 @@ fn conflicting_file_types_fail_before_changes() {
         host.write(path, "file, not directory");
         let before = host.snapshot();
         assert!(host.init().unwrap_err().contains("expected a directory"));
+        assert_eq!(cli_init(&host, None, None).exit_code, 1);
         assert_eq!(host.snapshot(), before);
     }
 }
@@ -359,6 +395,11 @@ fn recognized_root_alias_is_preserved_and_explicit_input_alias_can_be_selected()
     assert!(host.read("CLAUDE.md").starts_with(b"host preface\n"));
     assert!(generate(&host.root).unwrap().is_empty());
     assert!(host.init().unwrap().is_empty());
+    assert!(
+        cli_init(&host, None, None)
+            .stdout
+            .contains("0 file(s) changed")
+    );
 }
 
 #[cfg(unix)]
@@ -457,6 +498,7 @@ fn unreadable_inputs_outputs_and_storage_fail_without_publication() {
         assert!(host.init().is_err());
         if path.starts_with(&host.root) {
             assert!(generate(&host.root).is_err());
+            assert_eq!(cli_init(&host, None, None).exit_code, 1);
         }
         fs::set_permissions(path, permissions).unwrap();
     }
@@ -581,7 +623,29 @@ fn cli_usage_generation_errors_and_success_have_distinct_exit_contracts() {
     for words in [
         vec!["unknown"],
         vec!["generate"],
-        vec!["init", "--host-root", "."],
+        vec!["init"],
+        vec!["init", "--methodology", "method.md"],
+        vec!["init", "--host-root", ".", "--methodology"],
+        vec!["init", "--host-root", ".", "--host-context", ""],
+        vec!["init", "--host-root", ".", "--unknown", "value"],
+        vec![
+            "init",
+            "--host-root",
+            ".",
+            "--methodology",
+            "a",
+            "--methodology",
+            "b",
+        ],
+        vec![
+            "init",
+            "--host-root",
+            ".",
+            "--host-context",
+            "a",
+            "--host-context",
+            "b",
+        ],
         vec!["generate", "--host-root"],
         vec!["generate", "--host-root", ""],
         vec!["generate", "--host-root", ".", "--host-root", "."],
@@ -647,14 +711,164 @@ fn cli_accepts_os_path_arguments_without_lossy_conversion() {
 }
 
 #[test]
-fn shipped_methodology_is_a_real_external_runtime_input() {
+fn default_init_ships_exact_full_asset_empty_context_and_both_readable_routes() {
     let host = Host::new();
     let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/methodology.md");
-    init(&host.root, &asset, &host.context).unwrap();
+    host.write("AGENTS.md", b"existing agents\r\n");
+    host.write("CLAUDE.md", b"existing claude without newline");
+    host.write(".chrono-harness/unrelated.json", b"keep this");
+    // Normal adoption needs no external input files at all.
+    fs::remove_file(&host.method).unwrap();
+    fs::remove_file(&host.context).unwrap();
+    let result = cli_init(&host, None, None);
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(result.stdout.contains("5 file(s) changed"));
     assert_eq!(host.read(METHOD), fs::read(&asset).unwrap());
+    assert_eq!(host.read(CONTEXT), b"");
+    for name in ["AGENTS.md", "CLAUDE.md"] {
+        let route = String::from_utf8(host.read(name)).unwrap();
+        assert!(route.contains("read BOTH canonical files in full, in this order"));
+        assert!(route.find(METHOD).unwrap() < route.find(CONTEXT).unwrap());
+        for path in [METHOD, CONTEXT] {
+            fs::read_to_string(host.root.join(path)).unwrap();
+        }
+    }
+    assert!(host.read("AGENTS.md").starts_with(b"existing agents\r\n"));
     assert!(
-        std::str::from_utf8(&host.read(METHOD))
-            .unwrap()
-            .contains("证据与陈述")
+        host.read("CLAUDE.md")
+            .starts_with(b"existing claude without newline\n")
     );
+    assert_eq!(host.read(".chrono-harness/unrelated.json"), b"keep this");
+}
+
+#[test]
+fn init_overrides_are_independent_and_retain_exact_selected_bytes() {
+    let asset = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/methodology.md");
+    for (method, context) in [(true, false), (false, true), (true, true)] {
+        let host = Host::new();
+        fs::write(&host.context, "\u{feff}deliberate host facts\r\n").unwrap();
+        let result = cli_init(
+            &host,
+            method.then_some(&host.method),
+            context.then_some(&host.context),
+        );
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        assert_eq!(
+            host.read(METHOD),
+            fs::read(if method { &host.method } else { &asset }).unwrap()
+        );
+        assert_eq!(
+            host.read(CONTEXT),
+            if context {
+                fs::read(&host.context).unwrap()
+            } else {
+                vec![]
+            }
+        );
+    }
+}
+
+#[test]
+fn default_reinit_retains_custom_sources_without_writes() {
+    for selected in [false, true] {
+        let host = Host::new();
+        if selected {
+            host.init().unwrap();
+        } else {
+            assert_eq!(cli_init(&host, None, None).exit_code, 0);
+        }
+        for customized in [false, true] {
+            if customized {
+                host.write(METHOD, "customized method after installation\r\n");
+                host.write(CONTEXT, "customized context after installation");
+                let manifest: serde_json::Value =
+                    serde_json::from_slice(&host.read(MANIFEST)).unwrap();
+                host.write(MANIFEST, serde_json::to_vec(&manifest).unwrap());
+            }
+            let before = host.snapshot();
+            let times: Vec<_> = before
+                .keys()
+                .map(|p| {
+                    fs::symlink_metadata(host.root.join(p))
+                        .unwrap()
+                        .modified()
+                        .unwrap()
+                })
+                .collect();
+            let result = cli_init(&host, None, None);
+            assert_eq!(result.exit_code, 0, "{result:?}");
+            assert!(result.stdout.contains("0 file(s) changed"));
+            assert_eq!(host.snapshot(), before);
+            for (path, time) in before.keys().zip(times) {
+                assert_eq!(
+                    fs::symlink_metadata(host.root.join(path))
+                        .unwrap()
+                        .modified()
+                        .unwrap(),
+                    time
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn registered_init_compares_only_explicit_overrides_and_never_overwrites_conflicts() {
+    let host = Host::new();
+    host.init().unwrap();
+    host.write(METHOD, "custom method\r\n");
+    host.write(CONTEXT, "custom context\r\n");
+    let before = host.snapshot();
+    for path in [METHOD, CONTEXT] {
+        let retained = host.root.join(path);
+        let method = (path == METHOD).then_some(retained.as_path());
+        let context = (path == CONTEXT).then_some(retained.as_path());
+        let result = cli_init(&host, method, context);
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        assert!(result.stdout.contains("0 file(s) changed"));
+    }
+    for (method, context) in [
+        (Some(host.method.as_path()), None),
+        (None, Some(host.context.as_path())),
+        (Some(host.method.as_path()), Some(host.context.as_path())),
+    ] {
+        let result = cli_init(&host, method, context);
+        assert_eq!(result.exit_code, 1, "{result:?}");
+        assert!(result.stderr.contains("init inputs differ"));
+        assert!(
+            result
+                .stderr
+                .contains("edit retained sources deliberately and use generate")
+        );
+        assert_eq!(host.snapshot(), before);
+    }
+}
+
+#[test]
+fn each_optional_external_input_still_requires_readable_regular_utf8_bytes() {
+    for registered in [false, true] {
+        for method in [false, true] {
+            let host = Host::new();
+            if registered {
+                host.init().unwrap();
+            }
+            let before = host.snapshot();
+            let path = if method { &host.method } else { &host.context };
+            fs::remove_file(path).unwrap();
+            for kind in ["missing", "directory", "invalid-utf8"] {
+                match kind {
+                    "directory" => fs::create_dir(path).unwrap(),
+                    "invalid-utf8" => {
+                        fs::remove_dir(path).unwrap();
+                        fs::write(path, [0xff]).unwrap();
+                    }
+                    _ => {}
+                }
+                let result = cli_init(&host, method.then_some(path), (!method).then_some(path));
+                assert_eq!(result.exit_code, 1, "{kind}: {result:?}");
+                assert!(result.stdout.is_empty());
+                assert_eq!(host.snapshot(), before);
+            }
+        }
+    }
 }

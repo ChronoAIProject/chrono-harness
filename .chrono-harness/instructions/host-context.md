@@ -8,4 +8,6 @@
 
 产品资产位于 assets/，宿主 canonical 方法与上下文位于本目录。根 AGENTS.md、CLAUDE.md 仅有生成路由；编辑本目录源后运行 chrono-instructions generate --host-root <本仓根>。采用新版产品方法须先明确比较并更新本目录方法，不能用 init 覆盖定制。
 
+从 checkout 用 cargo install --locked --path instructions 安装生成器。新宿主只需 chrono-instructions init --host-root <已有宿主根>，默认写入编译时内嵌的完整 assets/methodology.md 和空上下文，运行时不读源码资产或推断项目事实。--methodology 与 --host-context 可独立显式覆盖；已登记宿主省略选项保留 canonical 字节，显式不同输入拒绝。本仓登记的 init 只传 --host-root .，在定制后仍可使用。方法与路由资产的生产编译边以及方法的测试输入边在 FILEMAP 登记。
+
 按任务目标自主实施、验证与修复，保持独立项目/专属测试和真实退出状态。分支约定与计划中的 integration 策略见 SPEC.md；Git 生命周期遵循当前任务授权，不从本文推断已启用机器门。不要改全局配置或参考仓库，不将过程转录写入本仓。

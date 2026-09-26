@@ -458,7 +458,7 @@
       "cost": "unmeasured",
       "edges": [
         {
-          "kind": "runtime-input",
+          "kind": "build-input",
           "to": "project:instructions"
         },
         {
