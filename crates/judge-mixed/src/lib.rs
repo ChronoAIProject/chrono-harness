@@ -2,9 +2,8 @@
 mod semantic;
 use chrono_harness::{
     facts,
-    wire::{Finding, Request, Response, Status},
+    wire::{Delta, Finding, Request, Response, Status},
 };
-use chrono_judge_filemap::{IMPACT_SCHEMA, Impact};
 use chrono_judge_registration::Registrations;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,29 +32,19 @@ fn surface(r: &Registrations, path: &str) -> Option<String> {
         .find(|f| f["path"] == path)
         .map(|f| f["surface"].as_str().unwrap().to_string())
 }
-/// Consume existing impact, costs and explicitly named endpoint documents.
-/// Registry documents must be the registration judge's interpreted views.
-pub fn produce(
+/// Classify only explicit endpoint surfaces and named semantic fields.
+/// No impact computation, costs, test selection or process execution.
+pub fn classify(
     a: &Registrations,
     b: &Registrations,
-    impact: &Impact,
+    delta: &[Delta],
     before: &Documents,
     after: &Documents,
-    costs: &Value,
 ) -> Result<Value, String> {
-    if impact.schema != IMPACT_SCHEMA {
-        return Err("E_IMPACT: unsupported schema".into());
-    }
-    if costs["schema"] != chrono_judge_cost::COST_SCHEMA
-        || !costs["declared_before"].is_object()
-        || !costs["declared_after"].is_object()
-    {
-        return Err("E_COST_INPUT: missing or unsupported cost report".into());
-    }
     let patterns = patterns(a, b);
     let mut changes = BTreeMap::new();
     let mut products = BTreeMap::new();
-    for d in &impact.delta {
+    for d in delta {
         let old = surface(a, &d.path);
         let new = surface(b, &d.path);
         let surfaces: BTreeSet<_> = old.iter().chain(new.iter()).map(String::as_str).collect();
@@ -96,6 +85,29 @@ pub fn produce(
             rule["semantic"] = fields.into();
             changes.insert(d.path.clone(), rule);
         }
+    }
+    Ok(json!({"mixed":!changes.is_empty()&&!products.is_empty(),
+        "rule_paths":changes.keys().collect::<Vec<_>>(),"product_paths":products.keys().collect::<Vec<_>>(),
+        "changes":changes.values().collect::<Vec<_>>(),"product_changes":products.values().collect::<Vec<_>>(),
+        "requires_acknowledgement":false}))
+}
+/// Package the shared classification with the already-produced cost wire value.
+pub fn produce(
+    a: &Registrations,
+    b: &Registrations,
+    delta: &[Delta],
+    before: &Documents,
+    after: &Documents,
+    costs: &Value,
+) -> Result<Value, String> {
+    if costs["schema"] != "chrono-costs/v1"
+        || !costs["declared_before"].is_object()
+        || !costs["declared_after"].is_object()
+    {
+        return Err("E_COST_INPUT: missing or unsupported cost report".into());
+    }
+    let mut output = classify(a, b, delta, before, after)?;
+    for d in delta {
         let node = format!("file:{}", d.path);
         for key in ["declared_before", "declared_after"] {
             if costs[key].get(&node).is_none() {
@@ -103,13 +115,40 @@ pub fn produce(
             }
         }
     }
-    Ok(
-        json!({"schema":MIXED_SCHEMA,"mixed":!changes.is_empty()&&!products.is_empty(),
-        "rule_paths":changes.keys().collect::<Vec<_>>(),"product_paths":products.keys().collect::<Vec<_>>(),
-        "changes":changes.values().collect::<Vec<_>>(),"product_changes":products.values().collect::<Vec<_>>(),
-        "costs":costs,"requires_acknowledgement":false}),
-    )
+    output["schema"] = MIXED_SCHEMA.into();
+    output["costs"] = costs.clone();
+    Ok(output)
 }
+/// Known interpreted registries for declaration-only consumers. Other named JSON
+/// must be supplied explicitly; absence is an error when a pattern consumes it.
+pub fn registry_documents(r: &Registrations, config_path: &str) -> Documents {
+    let mut out = BTreeMap::from([(config_path.into(), r.config().clone())]);
+    for (key, value) in [
+        ("judges", r.judges()),
+        ("projects", r.projects()),
+        ("filemap", r.filemap()),
+        ("workflow", r.workflow()),
+    ] {
+        out.insert(
+            r.config()["registries"][key].as_str().unwrap().into(),
+            value.clone(),
+        );
+    }
+    out
+}
+/// Fixed-object reader shared by the mixed and FILEMAP process boundaries.
+pub fn load_documents(
+    req: &Request,
+    a: &Registrations,
+    b: &Registrations,
+) -> Result<[Documents; 2], String> {
+    let paths = patterns(a, b).into_iter().map(|(p, _, _)| p).collect();
+    Ok([
+        documents(req, a, true, &paths)?,
+        documents(req, b, false, &paths)?,
+    ])
+}
+
 fn documents(
     req: &Request,
     r: &Registrations,
@@ -159,15 +198,17 @@ fn documents(
 fn evaluate(req: &Request) -> Result<(Value, String), String> {
     req.validate()?;
     let (base, candidate, _) = chrono_judge_registration::views(req)?;
-    let impact: Impact =
-        serde_json::from_value(req.impact.clone()).map_err(|e| format!("E_IMPACT: {e}"))?;
+    if req.impact["schema"] != "chrono-filemap-impact/v2" {
+        return Err("E_IMPACT: unsupported schema".into());
+    }
+    let delta: Vec<Delta> = serde_json::from_value(req.impact["delta"].clone())
+        .map_err(|e| format!("E_IMPACT: {e}"))?;
     let sources: Vec<_> = req
         .prior_results
         .iter()
         .filter_map(|r| r.outputs.get("impact"))
         .collect();
-    if sources.is_empty() || sources.iter().any(|v| **v != req.impact) || impact.delta != req.delta
-    {
+    if sources.is_empty() || sources.iter().any(|v| **v != req.impact) || delta != req.delta {
         return Err("E_IMPACT: missing or conflicting bound FILEMAP output".into());
     }
     let binding = json!({"base":req.base.commit,"candidate":req.candidate.commit,
@@ -185,13 +226,8 @@ fn evaluate(req: &Request) -> Result<(Value, String), String> {
             "E_COST_INPUT: conflicting costs or mismatched endpoint/context binding".into(),
         );
     }
-    let paths = patterns(&base, &candidate)
-        .into_iter()
-        .map(|(p, _, _)| p)
-        .collect();
-    let before = documents(req, &base, true, &paths)?;
-    let after = documents(req, &candidate, false, &paths)?;
-    let mut output = produce(&base, &candidate, &impact, &before, &after, costs)?;
+    let [before, after] = load_documents(req, &base, &candidate)?;
+    let mut output = produce(&base, &candidate, &req.delta, &before, &after, costs)?;
     output["binding"] = binding;
     Ok((
         output,

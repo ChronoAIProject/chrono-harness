@@ -1,6 +1,7 @@
 //! Candidate FILEMAP impact policy. No operation execution, retirement or cost verdicts.
 pub mod graph;
 mod records;
+mod workflow;
 use chrono_harness::{
     facts,
     wire::{Delta, Finding, Request, Response, Status},
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v1";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v2";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
     /// Only uniquely resolved values. Absent and ambiguous endpoints are distinguished by definitions.
@@ -56,6 +57,7 @@ pub struct EdgeProblem {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Impact {
     pub schema: String,
+    pub workflow: Value,
     pub delta: Vec<Delta>,
     pub records: BTreeMap<String, RecordPair>,
     pub changes: Vec<Change>,
@@ -118,7 +120,26 @@ pub fn produce(
     config_path: &str,
     delta: &[Delta],
 ) -> (Impact, Vec<Finding>) {
-    produce_environment(base, candidate, config_path, delta, None)
+    produce_with_documents(
+        base,
+        candidate,
+        config_path,
+        delta,
+        &[
+            chrono_judge_mixed::registry_documents(base, config_path),
+            chrono_judge_mixed::registry_documents(candidate, config_path),
+        ],
+    )
+}
+/// Named semantic inputs are explicit; no file discovery or missing-input fallback.
+pub fn produce_with_documents(
+    base: &Registrations,
+    candidate: &Registrations,
+    config_path: &str,
+    delta: &[Delta],
+    documents: &[chrono_judge_mixed::Documents; 2],
+) -> (Impact, Vec<Finding>) {
+    produce_environment(base, candidate, config_path, delta, None, documents)
 }
 /// Effective-input impact for validated retained endpoint facts. Declarations and
 /// effective values use the same explicit environment nodes; no edges are inferred.
@@ -128,6 +149,26 @@ pub fn produce_with_inputs(
     config_path: &str,
     delta: &[Delta],
     effective_inputs: &Value,
+) -> Result<(Impact, Vec<Finding>), String> {
+    produce_with_inputs_and_documents(
+        base,
+        candidate,
+        config_path,
+        delta,
+        effective_inputs,
+        &[
+            chrono_judge_mixed::registry_documents(base, config_path),
+            chrono_judge_mixed::registry_documents(candidate, config_path),
+        ],
+    )
+}
+pub fn produce_with_inputs_and_documents(
+    base: &Registrations,
+    candidate: &Registrations,
+    config_path: &str,
+    delta: &[Delta],
+    effective_inputs: &Value,
+    documents: &[chrono_judge_mixed::Documents; 2],
 ) -> Result<(Impact, Vec<Finding>), String> {
     let environments = chrono_judge_registration::inputs::effective_environments(
         effective_inputs,
@@ -140,6 +181,7 @@ pub fn produce_with_inputs(
         config_path,
         delta,
         environments.as_ref(),
+        documents,
     ))
 }
 fn produce_environment(
@@ -148,11 +190,31 @@ fn produce_environment(
     config_path: &str,
     delta: &[Delta],
     environments: Option<&[BTreeMap<String, String>; 2]>,
+    documents: &[chrono_judge_mixed::Documents; 2],
 ) -> (Impact, Vec<Finding>) {
     let an = base.node_data();
     let bn = candidate.node_data();
     let a = records::inventory(base, config_path, &an, environments.map(|p| &p[0]));
     let b = records::inventory(candidate, config_path, &bn, environments.map(|p| &p[1]));
+    let mut findings = vec![];
+    let workflow = match workflow::select(base, candidate, delta, [&a, &b], documents) {
+        Ok(selection) => selection,
+        Err(message) => {
+            findings.push(Finding {
+                code: message
+                    .split(':')
+                    .next()
+                    .filter(|s| s.starts_with("E_"))
+                    .unwrap_or("E_WORKFLOW_INPUT")
+                    .into(),
+                level: "error".into(),
+                message,
+                delta_refs: vec!["/request".into()],
+                causes: vec![],
+            });
+            Value::Null
+        }
+    };
     let mut records = BTreeMap::new();
     let mut changes = vec![];
     let mut seeds = BTreeSet::new();
@@ -197,8 +259,12 @@ fn produce_environment(
             },
         );
     }
-    let ae = edges(base);
-    let be = edges(candidate);
+    let declared_ae = edges(base);
+    let declared_be = edges(candidate);
+    let mut ae = declared_ae.clone();
+    let mut be = declared_be.clone();
+    ae.extend(workflow::edges(&workflow, "base"));
+    be.extend(workflow::edges(&workflow, "candidate"));
     let edges = graph::union(&ae, &be);
     for e in ae.symmetric_difference(&be) {
         let file_record = e
@@ -213,12 +279,17 @@ fn produce_environment(
                     })
             })
         });
-        let reference = file_record.filter(|_| declared_on_file).unwrap_or_else(|| {
-            format!(
-                "/records/filemap/project_edges/{}",
-                records::escape(&serde_json::to_string(&json!([e.from, e.kind, e.to])).unwrap())
-            )
-        });
+        let reference = file_record
+            .filter(|_| declared_on_file)
+            .or_else(|| workflow::reference(&workflow, e))
+            .unwrap_or_else(|| {
+                format!(
+                    "/records/filemap/project_edges/{}",
+                    records::escape(
+                        &serde_json::to_string(&json!([e.from, e.kind, e.to])).unwrap()
+                    )
+                )
+            });
         for node in [&e.from, &e.to] {
             seeds.insert(seed(node.clone(), reference.clone(), "edge-change"));
         }
@@ -251,7 +322,6 @@ fn produce_environment(
             )
         })
         .collect();
-    let mut findings = vec![];
     let mut historical_context = vec![];
     let mut historical_ambiguities = vec![];
     for (endpoint, inventory) in [("base", &an), ("candidate", &bn)] {
@@ -313,7 +383,22 @@ fn produce_environment(
                 continue;
             }
             let edge = &e.edge;
-            let message = match (inventory.get(&edge.from), inventory.get(&edge.to)) {
+            // Workflow conditions refer to this DELTA's union of paths. A new or
+            // deleted trigger can require tests declared at the other endpoint.
+            // Ordinary FILEMAP edges retain their endpoint-local validation.
+            let declared = if endpoint == "base" {
+                &declared_ae
+            } else {
+                &declared_be
+            };
+            let from = inventory.get(&edge.from).or_else(|| {
+                if !declared.contains(edge) && workflow::reference(&workflow, edge).is_some() {
+                    an.get(&edge.from).or_else(|| bn.get(&edge.from))
+                } else {
+                    None
+                }
+            });
+            let message = match (from, inventory.get(&edge.to)) {
                 (Some(from), Some(to)) if !valid_types(edge.kind, from.kind, to.kind) => {
                     Some("invalid typed edge endpoints".to_string())
                 }
@@ -398,6 +483,7 @@ fn produce_environment(
     (
         Impact {
             schema: IMPACT_SCHEMA.into(),
+            workflow,
             delta: delta.to_vec(),
             records,
             changes,
@@ -458,7 +544,12 @@ pub fn judge(req: &Request) -> Response {
         Err(message) => {
             response.status = Status::Error;
             response.findings.push(Finding {
-                code: "E_INPUT".into(),
+                code: message
+                    .split(':')
+                    .next()
+                    .filter(|s| s.starts_with("E_"))
+                    .unwrap_or("E_INPUT")
+                    .into(),
                 level: "error".into(),
                 message,
                 delta_refs: vec!["/request".into()],
@@ -485,6 +576,14 @@ fn evaluate(req: &Request) -> Result<(Impact, Vec<Finding>, Value), String> {
     }
     let (a, b, view) = chrono_judge_registration::views(req)?;
     let inputs = chrono_judge_registration::inputs::validate(req, &a, &b)?;
-    let (impact, findings) = produce_with_inputs(&a, &b, &req.config_path, &req.delta, &inputs)?;
+    let documents = chrono_judge_mixed::load_documents(req, &a, &b)?;
+    let (impact, findings) = produce_with_inputs_and_documents(
+        &a,
+        &b,
+        &req.config_path,
+        &req.delta,
+        &inputs,
+        &documents,
+    )?;
     Ok((impact, findings, view))
 }

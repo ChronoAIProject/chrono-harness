@@ -1,7 +1,7 @@
 # Explicit mixed-change warnings
 
 `chrono-judge-mixed` consumes registration's single interpreted endpoint views,
-FILEMAP's bound DELTA/impact and the cost judge's bound `chrono-costs/v1` output.
+FILEMAP's bound v2 DELTA/impact and the cost judge's bound `chrono-costs/v1` output.
 Declare all three as direct predecessors. Missing/conflicting impact, costs or
 endpoint/tree/registry/context bindings are errors; this judge does not rebuild
 the graph, discover dependencies, run tests or recompute costs.
@@ -50,3 +50,9 @@ references. A rule-only DELTA still publishes its changes, with status `pass`.
 The warning adds no approval or acknowledgement step and does not override other
 failures. Workflow stability, migration, retirement and integration certification
 remain separate unfinished obligations. Full host activation is not claimed.
+
+The explicit classifier and fixed-object reader are shared with FILEMAP v2 so
+workflow test requirements enter the existing plan before execution. Mixed has no
+compile dependency on the FILEMAP or cost producer; its process consumes their
+versioned wire outputs and bindings. Invalid named semantic inputs can therefore
+fail in FILEMAP before mixed runs. Classification remains one implementation.

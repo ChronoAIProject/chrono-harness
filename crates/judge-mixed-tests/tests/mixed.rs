@@ -25,10 +25,18 @@ fn report(a: &Values, b: &Values, paths: &[&str]) -> Result<Value, String> {
     let old = load(a);
     let new = load(b);
     let delta = paths.iter().map(|p| delta(p)).collect::<Vec<_>>();
-    let (impact, errors) = chrono_judge_filemap::produce(&old, &new, CONFIG, &delta);
-    assert!(errors.is_empty(), "{errors:?}");
+    let (impact, errors) = chrono_judge_filemap::produce_with_documents(
+        &old,
+        &new,
+        CONFIG,
+        &delta,
+        &[a.clone(), b.clone()],
+    );
+    if let Some(error) = errors.first() {
+        return Err(error.message.clone());
+    }
     let costs = chrono_judge_cost::produce(&old, &new, &impact).unwrap();
-    produce(&old, &new, &impact, a, b, &costs)
+    produce(&old, &new, &impact.delta, a, b, &costs)
 }
 
 #[test]
@@ -271,7 +279,7 @@ fn missing_named_documents_and_incomplete_costs_are_errors_without_fallback() {
     let mut missing = a.clone();
     missing.remove(PROJECTS);
     assert!(
-        produce(&old, &old, &impact, &a, &missing, &costs)
+        produce(&old, &old, &impact.delta, &a, &missing, &costs)
             .unwrap_err()
             .contains("E_SEMANTIC_INPUT")
     );
@@ -280,7 +288,7 @@ fn missing_named_documents_and_incomplete_costs_are_errors_without_fallback() {
         .unwrap()
         .remove(&format!("file:{PROJECTS}"));
     assert!(
-        produce(&old, &old, &impact, &a, &a, &costs)
+        produce(&old, &old, &impact.delta, &a, &a, &costs)
             .unwrap_err()
             .contains("E_COST_INPUT")
     );

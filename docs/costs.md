@@ -1,7 +1,7 @@
 # Declared impact costs
 
 The independent `chrono-judge-cost` executable consumes registration's interpreted
-endpoint views and FILEMAP's existing `chrono-filemap-impact/v1` output. It does
+endpoint views and FILEMAP's existing `chrono-filemap-impact/v2` output. It does
 not discover dependencies, select tests, execute operations or measure resources.
 Its dedicated test project is `judge-cost-tests`.
 

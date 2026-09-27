@@ -70,7 +70,8 @@
         "crates/judge-filemap/src/lib.rs",
         "crates/judge-filemap/src/main.rs",
         "crates/judge-filemap/src/graph.rs",
-        "crates/judge-filemap/src/records.rs"
+        "crates/judge-filemap/src/records.rs",
+        "crates/judge-filemap/src/workflow.rs"
       ],
       "tests": [
         "judge-filemap-tests",

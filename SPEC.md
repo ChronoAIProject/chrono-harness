@@ -271,6 +271,7 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 | judge-trigger | 文件/项目→判官 ID | 不凭扩展名选判官 |
 
 compile/build-input/runtime-input 可沿显式项目 compile 边继续传播，但只有 test-execution 边能选测试。
+workflow 的显式 stability 路径/测试及条件 integration.tests 同样是白名单关系；现役 FILEMAP impact v2 将适用要求降为有来源的 test-execution 边，再交同一闭包与执行链，见 [选择合同](docs/workflow-selection.md)。此步骤不认证分支、迁移或 integration 证据。
 配对关系表达所有权，不隐式产生测试边；缺配对执行边由 projects 判官报错。
 every-delta 判官始终被选择，judge-trigger 提供额外影响解释；二者取并集去重。
 依赖闭包需要读取未变文件和历史登记，这是读取上下文，不是重判历史文件。
