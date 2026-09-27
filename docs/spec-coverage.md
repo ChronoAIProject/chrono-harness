@@ -36,7 +36,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 7 legal retirement | implemented bounded: W joint producer/test removal, explicit alias repair | full native activation |
 | 8 required test removed | implemented bounded: W explicit successful replacement or validated joint retirement | full native activation |
 | 9 nonunique/missing test pair | implemented bounded: projects and real consumer negatives | full native activation |
-| 10 manifest undeclared dependency | implemented bounded: optional Cargo adapter: explicit policy, TOML path dependencies and missing-edge rejection | compiler/backend/linker/SDK closure; guarded registry/Git resolution implemented |
+| 10 manifest undeclared dependency | implemented bounded: optional Cargo adapter: explicit policy, TOML path dependencies and missing-edge rejection; optional v4 binds Cargo/compiler file inputs and selection with actual direct/full/scoped consumers | compiler-library/backend/linker/SDK closure; guarded registry/Git resolution implemented |
 | 11 unknown input closure | partial: G `proposed_and_incomplete_never_receive_governance_success` | complete Cargo/SDK closure; retained bounded external/tool inputs implemented, no discovery guarantee |
 | 12 README no all-tests | implemented bounded: F selection, C and projects consumer real nonexecution with unrelated historical defects | full native activation |
 | 13 independent script tests | implemented bounded: real full-chain script pair | full native activation |
@@ -94,3 +94,10 @@ snapshots, reject historical config rewrites, ambiguous/incomplete selectors and
 missing or failed compatibility evidence, and retain documentation-only locality
 after adoption. This is a decoder contract, not an automatic host config writer.
 Complete input closure and full host activation remain outstanding.
+
+Optional Cargo input policy v4 binds the delegated Cargo and compiler executable
+to explicitly connected input IDs, paths, hashes and observed versions. Tests
+exercise real compiler selection, rejection before metadata, configuration/include
+and wrapper conflicts, persistent post-consumer mutation and full/scoped docs
+locality. V2/v3 meanings remain supported. This does not certify compiler libraries,
+delegated processes, backend/linker/SDK, build scripts or complete native parity.

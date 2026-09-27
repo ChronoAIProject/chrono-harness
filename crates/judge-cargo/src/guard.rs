@@ -16,6 +16,7 @@ pub struct Report {
     error: Option<String>,
     operation_id: String,
     tool: Option<observation::Tool>,
+    compiler: Option<observation::Tool>,
     metadata: Option<ProcessResult>,
     operation: Option<ProcessResult>,
     configuration: Option<crate::configuration::Evidence>,
@@ -36,6 +37,7 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         error: None,
         operation_id: operation.into(),
         tool: None,
+        compiler: None,
         metadata: None,
         operation: None,
         configuration: None,
@@ -94,39 +96,74 @@ fn evaluate(
     )?;
     report.configuration = Some(check.configuration.evidence.clone());
     let contract = &check.contract;
-    let declarations: Vec<_> = registrations.config()["tools"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|t| t["id"] == contract.metadata.tool)
-        .collect();
-    if declarations.len() != 1 {
-        return Err("E_CARGO_INPUT: Cargo tool is not uniquely registered".into());
+    let mut tools = BTreeMap::new();
+    let ids = std::iter::once(contract.metadata.tool.as_str())
+        .chain(contract.compiler.iter().map(|c| c.tool.as_str()));
+    for id in ids {
+        let declarations: Vec<_> = registrations.config()["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|t| t["id"] == id)
+            .collect();
+        if declarations.len() != 1 {
+            return Err(format!(
+                "E_CARGO_INPUT: tool {id} is not uniquely registered"
+            ));
+        }
+        let declaration = declarations[0];
+        let program = declaration["program"]
+            .as_str()
+            .ok_or("E_CARGO_INPUT: tool program missing")?;
+        let version_argv: Vec<String> = serde_json::from_value(declaration["version_argv"].clone())
+            .map_err(|e| e.to_string())?;
+        if let Some(input) = check.tool_inputs.get(id) {
+            let path = chrono_harness::resolve_program(
+                &root,
+                program,
+                Some(environment.get("PATH").map(String::as_str).unwrap_or("")),
+            )?;
+            if path != input.path
+                || chrono_harness::file_identity(&path)?.0 != input.sha256
+                || declaration["expected_version"].as_str().is_none()
+            {
+                return Err(format!(
+                    "E_CARGO_INPUT: tool {id} path/digest/version is not bound to its declared input"
+                ));
+            }
+        }
+        let tool = observation::tool(
+            &root,
+            program,
+            &version_argv,
+            &environment,
+            contract.timeout_seconds,
+            contract.output_limit_bytes,
+        )?;
+        if id == contract.metadata.tool {
+            report.tool = Some(tool.clone());
+        } else {
+            report.compiler = Some(tool.clone());
+        }
+        chrono_judge_routes::validate_tool(
+            &tool,
+            program,
+            &version_argv,
+            &environment,
+            &root,
+            declaration["expected_version"].as_str(),
+        )?;
+        check.unchanged()?;
+        if let Some(input) = check.tool_inputs.get(id) {
+            if tool.path != input.path || tool.sha256 != input.sha256 {
+                return Err(format!(
+                    "E_CARGO_INPUT: tool {id} changed during observation"
+                ));
+            }
+        }
+        tools.insert(id, tool);
     }
-    let declaration = declarations[0];
-    let program = declaration["program"]
-        .as_str()
-        .ok_or("E_CARGO_INPUT: tool program missing")?;
-    let version_argv: Vec<String> =
-        serde_json::from_value(declaration["version_argv"].clone()).map_err(|e| e.to_string())?;
-    let tool = observation::tool(
-        &root,
-        program,
-        &version_argv,
-        &environment,
-        contract.timeout_seconds,
-        contract.output_limit_bytes,
-    )?;
-    report.tool = Some(tool.clone());
-    chrono_judge_routes::validate_tool(
-        &tool,
-        program,
-        &version_argv,
-        &environment,
-        &root,
-        declaration["expected_version"].as_str(),
-    )?;
-    check.unchanged()?;
+    let tool = &tools[contract.metadata.tool.as_str()];
     let invoke = |argv: Vec<String>| {
         run_process_observed(
             &root,
