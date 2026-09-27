@@ -18,6 +18,7 @@ pub struct Report {
     tool: Option<observation::Tool>,
     metadata: Option<ProcessResult>,
     operation: Option<ProcessResult>,
+    configuration: Option<crate::configuration::Evidence>,
     input_closure_complete: bool,
 }
 impl Report {
@@ -29,7 +30,7 @@ impl Report {
 }
 pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
     let mut report = Report {
-        schema: "chrono-cargo-run/v1",
+        schema: "chrono-cargo-run/v2",
         exit_code: 0,
         status: "passed",
         error: None,
@@ -37,6 +38,7 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         tool: None,
         metadata: None,
         operation: None,
+        configuration: None,
         input_closure_complete: false,
     };
     if let Err(error) = evaluate(root, config, policy, operation, &mut report) {
@@ -90,6 +92,7 @@ fn evaluate(
         operation,
         &environment,
     )?;
+    report.configuration = Some(check.configuration.evidence.clone());
     let contract = &check.contract;
     let declarations: Vec<_> = registrations.config()["tools"]
         .as_array()

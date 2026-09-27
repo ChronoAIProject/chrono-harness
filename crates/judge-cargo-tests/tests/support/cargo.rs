@@ -31,10 +31,16 @@ fn rust_tool(name: &str) -> PathBuf {
 }
 impl Fixture {
     pub fn new() -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("cargo declared host ")
-            .tempdir()
-            .unwrap();
+        Self::new_in(None)
+    }
+    pub fn new_in(parent: Option<&Path>) -> Self {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix("cargo declared host ");
+        let dir = match parent {
+            Some(path) => builder.tempdir_in(path),
+            None => builder.tempdir(),
+        }
+        .unwrap();
         let root = fs::canonicalize(dir.path()).unwrap();
         let cargo = rust_tool("cargo");
         let rustc = rust_tool("rustc");
@@ -188,7 +194,7 @@ impl Fixture {
         ];
         packages.extend(external);
         let projects: Vec<_> = ["p","t"].iter().map(|id| json!({"project":id,"manifest":format!("{id}/Cargo.toml"),"lockfile":format!("{id}/Cargo.lock"),"output":format!("{id}/target/"),"ancestor_manifests":[]})).collect();
-        let contract = json!({"schema":"chrono-cargo-inputs/v1","root":"t","projects":projects,"metadata":metadata,"operations":{"test.t":operation},"target":target,"configuration_inputs":["cargo.config"],"packages":packages,"timeout_seconds":120,"output_limit_bytes":1048576});
+        let contract = json!({"schema":"chrono-cargo-inputs/v2","root":"t","projects":projects,"metadata":metadata,"operations":{"test.t":operation},"target":target,"configuration_files":[{"path":cp,"input":"cargo.config"}],"packages":packages,"timeout_seconds":120,"output_limit_bytes":1048576});
         for path in [cp, POLICY] {
             let mut row = file(path, json!([{"kind":"build-input","to":"project:t"}]));
             row["owner"] = "t".into();
@@ -198,13 +204,46 @@ impl Fixture {
                 .unwrap()
                 .push(row);
         }
-        let f = Self {
+        let mut f = Self {
             dir,
             values: v,
             contract,
         };
+        for directory in root
+            .ancestors()
+            .map(|p| p.join(".cargo"))
+            .chain([root.join(".chrono-harness/state/cargo-home")])
+        {
+            for name in ["config", "config.toml"] {
+                f.configuration_absent(&directory.join(name));
+            }
+        }
         f.save();
         f
+    }
+    pub fn configuration_absent(&mut self, path: &Path) {
+        let root = self.root();
+        let rows = self.contract["configuration_files"].as_array_mut().unwrap();
+        rows.retain(|v| root.join(v["path"].as_str().unwrap()) != path);
+        rows.push(json!({"path":path,"input":null}));
+    }
+    pub fn configuration(&mut self, id: &str, path: &Path, contents: &str) {
+        write(&self.root(), path.to_str().unwrap(), contents);
+        let root = self.root();
+        let rows = self.contract["configuration_files"].as_array_mut().unwrap();
+        rows.retain(|v| root.join(v["path"].as_str().unwrap()) != path);
+        rows.push(json!({"path":path,"input":id}));
+        let inputs = self.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap();
+        inputs.retain(|v| v["id"] != id);
+        inputs.push(json!({"id":id,"location":path,"sha256":sha256(contents.as_bytes())}));
+        let edges = self.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap();
+        let from = format!("input:{id}");
+        edges.retain(|v| v["from"] != from);
+        edges.push(edge(&from, "runtime-input", "project:t"));
     }
     pub fn root(&self) -> PathBuf {
         fs::canonicalize(self.dir.path()).unwrap()

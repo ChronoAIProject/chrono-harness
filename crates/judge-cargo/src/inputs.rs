@@ -30,7 +30,7 @@ pub(crate) struct Contract {
     pub metadata: Command,
     pub operations: BTreeMap<String, Command>,
     target: String,
-    configuration_inputs: Vec<String>,
+    configuration_files: Vec<crate::configuration::Declaration>,
     packages: Vec<Package>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
@@ -64,6 +64,7 @@ struct Kind {
 }
 pub(crate) struct Check {
     pub contract: Contract,
+    pub configuration: crate::configuration::Checked,
     manifests: BTreeMap<String, PathBuf>,
     sources: BTreeMap<String, BTreeSet<PathBuf>>,
     target_directory: PathBuf,
@@ -78,9 +79,6 @@ fn strings(values: &[String]) -> Result<BTreeSet<String>> {
         return Err(error("empty/duplicate identity"));
     }
     Ok(set)
-}
-fn actual_path(root: &Path, path: &str) -> Result<PathBuf> {
-    fs::canonicalize(root.join(path)).map_err(error)
 }
 fn table(path: &Path) -> Result<toml::Value> {
     fs::read_to_string(path)
@@ -228,13 +226,15 @@ pub(crate) fn prepare(
     let policy_path = no_symlink_parents(root, policy)?;
     let contract: Contract =
         serde_json::from_value(json(&fs::read(&policy_path).map_err(error)?)?).map_err(error)?;
-    if contract.schema != "chrono-cargo-inputs/v1"
+    if contract.schema != "chrono-cargo-inputs/v2"
         || contract.target.is_empty()
         || contract.timeout_seconds == 0
         || contract.output_limit_bytes == 0
         || contract.output_limit_bytes > 64 * 1024 * 1024
     {
-        return Err(error("invalid contract schema/target/process limits"));
+        return Err(error(
+            "invalid chrono-cargo-inputs/v2 contract schema/target/process limits",
+        ));
     }
     let root_package = contract
         .packages
@@ -394,17 +394,13 @@ pub(crate) fn prepare(
     {
         input(row["id"].as_str().unwrap())?;
     }
-    strings(&contract.configuration_inputs)?;
-    let configuration_paths: BTreeSet<_> = contract
-        .configuration_inputs
-        .iter()
-        .map(|id| input(id))
-        .collect::<Result<_>>()?;
-    for path in &observing.configurations {
-        if !configuration_paths.contains(&actual_path(root, path)?) {
-            return Err(error("unregistered Cargo configuration argument"));
-        }
-    }
+    let configuration = crate::configuration::check(
+        root,
+        environment,
+        &contract.configuration_files,
+        &observing.configurations,
+        input,
+    )?;
     let selected: BTreeSet<_> = contract
         .packages
         .iter()
@@ -540,6 +536,7 @@ pub(crate) fn prepare(
     let target_directory = root.join(&root_project.output);
     Ok(Check {
         contract,
+        configuration,
         manifests,
         sources,
         target_directory,
@@ -548,6 +545,7 @@ pub(crate) fn prepare(
 }
 impl Check {
     pub(crate) fn unchanged(&self) -> Result {
+        self.configuration.unchanged()?;
         for (path, (canonical, digest)) in &self.inputs {
             if fs::canonicalize(path).map_err(error)? != *canonical
                 || file_identity(path).map_err(error)?.0 != *digest

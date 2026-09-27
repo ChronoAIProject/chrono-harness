@@ -1,4 +1,5 @@
 //! Optional Cargo-specific consistency checks. FILEMAP alone declares selection.
+mod configuration;
 pub mod guard;
 mod inputs;
 use chrono_harness::{
