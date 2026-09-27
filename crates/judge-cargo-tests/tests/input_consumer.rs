@@ -35,7 +35,7 @@ fn full_and_scoped_runners_execute_the_same_registered_cargo_guard() {
         let (code, report) = f.committed_check("source", consumer);
         assert_eq!(code, 0, "{report}");
         let actual = nested(&report, consumer);
-        assert_eq!(actual["schema"], "chrono-cargo-run/v1");
+        assert_eq!(actual["schema"], "chrono-cargo-run/v2");
         assert_eq!(actual["metadata"]["exit_code"], 0);
         assert_eq!(actual["operation"]["exit_code"], 0);
         assert_eq!(
@@ -65,6 +65,46 @@ fn documentation_delta_does_not_run_an_unrelated_historical_cargo_defect() {
         let mut f = Fixture::new();
         f.contract["packages"][2]["features"] = json!([]);
         f.save();
+        let (code, report) = f.committed_check("docs", consumer);
+        assert_eq!(code, 0, "{report}");
+        assert!(executions(&report, consumer).is_empty());
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[test]
+fn unregistered_ambient_configuration_fails_through_both_runner_profiles() {
+    for consumer in [Consumer::Full, Consumer::Scoped] {
+        let mut f = Fixture::new();
+        write(
+            &f.root(),
+            ".chrono-harness/state/cargo-home/config.toml",
+            "[env]\nCHRONO_AMBIENT='undeclared'\n",
+        );
+        let (code, report) = f.committed_check("source", consumer);
+        assert_ne!(code, 0, "{report}");
+        let actual = nested(&report, consumer);
+        assert!(
+            actual["error"]
+                .as_str()
+                .unwrap()
+                .contains("configuration presence differs"),
+            "{actual}"
+        );
+        assert!(actual["metadata"].is_null() && actual["operation"].is_null());
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[test]
+fn documentation_delta_leaves_unrelated_ambient_configuration_unexecuted() {
+    for consumer in [Consumer::Full, Consumer::Scoped] {
+        let mut f = Fixture::new();
+        write(
+            &f.root(),
+            ".chrono-harness/state/cargo-home/config.toml",
+            "[env]\nCHRONO_AMBIENT='undeclared'\n",
+        );
         let (code, report) = f.committed_check("docs", consumer);
         assert_eq!(code, 0, "{report}");
         assert!(executions(&report, consumer).is_empty());

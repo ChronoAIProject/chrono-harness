@@ -189,10 +189,10 @@ fn ordered_configuration_arguments_are_not_collapsed_into_a_set() {
             .as_array_mut()
             .unwrap()
             .push(edge(&format!("input:{id}"), "runtime-input", "project:t"));
-        f.contract["configuration_inputs"]
+        f.contract["configuration_files"]
             .as_array_mut()
             .unwrap()
-            .push(id.into());
+            .push(json!({"path":path,"input":id}));
         f.contract["metadata"]["argv"]
             .as_array_mut()
             .unwrap()

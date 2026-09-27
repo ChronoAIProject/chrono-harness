@@ -2580,6 +2580,30 @@
           "to": "project:judge-cargo-tests"
         }
       ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/tests/configuration.rs",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo/src/configuration.rs",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo"
+        }
+      ]
     }
   ],
   "project_edges": [

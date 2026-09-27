@@ -85,7 +85,7 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
-The policy has schema `chrono-cargo-inputs/v1` and these required fields:
+The policy has schema `chrono-cargo-inputs/v2` and these required fields:
 
 | Field | Contract |
 | --- | --- |
@@ -94,9 +94,38 @@ The policy has schema `chrono-cargo-inputs/v1` and these required fields:
 | `metadata` | `{tool, argv}` for the registered Cargo tool and metadata invocation |
 | `operations` | Map from registered operation ID to its actual Cargo `{tool, argv}` |
 | `target` | Explicit target triple shared by metadata and the consumer |
-| `configuration_inputs` | Explicit registered file-input IDs for Cargo configuration files |
+| `configuration_files` | Explicit `{path, input}` rows for every lookup, argument and recursive include path; `input` is a registered file-input ID, or explicit `null` for absence |
 | `packages` | Complete declared package resolution for this root and configuration |
 | `timeout_seconds`, `output_limit_bytes` | Per-child limits; positive, output at most 64 MiB |
+
+The guard invokes Cargo from the explicit host root. Declare both `.cargo/config`
+and `.cargo/config.toml` at that root and every ancestor, plus `config` and
+`config.toml` inside the explicitly configured absolute `CARGO_HOME`. Also declare
+each ordered `--config` argument and each recursive `include` target. Paths may be
+host-root-relative or absolute; their resolved locations must match the registered
+inputs. An absent path still needs a row with `input: null`; omitting the field is
+an error. Optional absent includes follow the same rule. These are host-owned
+configuration declarations, never inferred FILEMAP edges or test selection.
+
+A present file requires a registered input with an expected SHA-256 and an
+explicit dependency path to the consumer. The guard rejects missing, extra or
+duplicate inventory rows, wrong presence or identity, undeclared includes and
+include cycles. Symlink files or parent components (including a link before `..`)
+are outside this adapter's supported path contract. Cargo's legacy `config`
+takes precedence over `config.toml`; both presence/identities remain bound, but
+the shadowed modern file is not parsed. The adapter validates include membership;
+Cargo itself merges values and applies precedence. Present inputs and all declared
+absences are rechecked after tool observation, metadata and consumer execution.
+This detects persistent mutations across those boundaries, not writes restored
+between observations.
+
+For example, one inventory row is `{"path":".cargo/config.toml","input":null}`.
+It does not stand for the other required paths. Migration from the earlier v1
+contract replaces `configuration_inputs` with this complete explicit inventory,
+retains existing input IDs/hashes/edges and updates the schema. The v2 guard
+rejects v1 policies; it cannot silently assign absence or discover authoritative
+registration. Current adoption fixtures have migrated; the product host has not
+yet activated the guarded operation.
 
 Each package row contains `id`, `name`, `version`, `source`, `project`,
 `manifest_input`, `inputs`, `checksum`, `features` and `dependencies`. Local
@@ -157,9 +186,10 @@ them requires an explicit adapter extension. Cargo still determines whether a
 particular accepted combination is legal and retains its real failure.
 
 The registered outer action must invoke this guard with the exact root, config,
-policy and operation arguments above. `chrono-cargo-run/v1` reports the observed
+policy and operation arguments above. `chrono-cargo-run/v2` reports the observed
 tool and actual metadata/consumer processes, including original stdout/stderr
-bytes, hashes and exit status. A rejected resolution retains successful metadata
+bytes, hashes and exit status, plus the checked configuration inventory, input
+IDs, digests, absent paths and parsed files. A rejected resolution retains successful metadata
 and has no consumer receipt. A failing test retains its actual exit (including
 101). Input changes after an otherwise successful test still fail the guard.
 Process timeout/output failures are errors. Ordinary preflight/validation failure
@@ -170,11 +200,16 @@ Real fixtures cover renamed and transitive registry dependencies, feature and
 dependency-kind mismatches, vendored fixed-revision Git dependencies, configuration
 order, failed tests and post-execution mutation. Full and scoped runner fixtures
 use the same registered action; documentation DELTAs leave unrelated historical
-Cargo defects unexecuted. See the dedicated `inputs` and `input_consumer` tests.
+Cargo defects unexecuted. The dedicated `configuration`, `inputs` and
+`input_consumer` tests cover Cargo-home/ancestor configuration, recursive includes,
+legacy precedence, explicit absence, path aliases, mutation and full/scoped
+rejection/nonexecution.
 
 The product builds and distributes this optional binary. Its full host
 registration remains proposed. Every guard report states
 `input_closure_complete: false`: package metadata and retained declared files do
-not close compiler/backend/linker/SDK, build-script reads or ambient Cargo
-configuration. Those declarations, adoption and full native parity remain
+not close compiler/backend/linker/SDK, build-script reads or Cargo credential and
+other service inputs. The configuration inventory covers Cargo 1.95 lookup and
+include rules, not every input a Cargo child might consume. The remaining input
+declarations, adoption and full native parity remain
 required work. Existing core checks do not certify that missing scope.
