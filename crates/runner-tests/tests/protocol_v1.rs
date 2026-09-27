@@ -138,6 +138,56 @@ fn initial_transport_rejects_wrong_mode_digest_and_base_placeholder_before_launc
         assert!(!dir.path().join("ran").exists(), "{case}");
     }
 }
+fn bounded_script(timeout: bool) -> String {
+    format!(
+        "{RESPONSE}print(json.dumps(s), flush=True)\nprint('diagnostic-before-bound', file=sys.stderr, flush=True)\n{}",
+        if timeout {
+            "import time\ntime.sleep(30)"
+        } else {
+            "sys.stderr.write('x' * 4096)\nsys.stderr.flush()"
+        }
+    )
+}
+fn assert_bound_evidence(failure: wire::TransportFailure, timeout: bool) {
+    let expected = if timeout {
+        "process timed out"
+    } else {
+        "process output limit exceeded"
+    };
+    assert!(failure.message.contains(expected), "{failure:?}");
+    let process = failure.process.expect("a launched bounded judge must retain its process evidence");
+    assert_eq!(process.failure.as_deref(), Some(expected));
+    assert_eq!(process.stdout_sha256, sha256(&process.stdout_bytes));
+    assert_eq!(process.stderr_sha256, sha256(&process.stderr_bytes));
+    assert!(process.stderr_bytes.starts_with(b"diagnostic-before-bound\n"));
+    assert_eq!(json(&process.stdout_bytes).unwrap()["status"], "pass",
+        "a valid-looking response cannot hide a process bound");
+    assert!(process.stdout_bytes.len() <= 1024 && process.stderr_bytes.len() <= 1024);
+    if timeout {
+        assert_eq!(process.exit_code, -1);
+    } else {
+        assert_eq!(process.stderr_bytes.len(), 1024);
+    }
+}
+#[test]
+fn bounded_delta_transport_retains_process_evidence() {
+    for timeout in [true, false] {
+        let (_dir, request, binding) = fixture(&bounded_script(timeout));
+        let failure = wire::invoke_detailed(&request, &binding, &Default::default(), 2, 1024)
+            .expect_err("a process bound is an error despite a valid response");
+        assert_bound_evidence(failure, timeout);
+    }
+}
+#[test]
+fn bounded_initial_transport_retains_process_evidence() {
+    for timeout in [true, false] {
+        let (_dir, request, binding) = initial_fixture(&bounded_script(timeout));
+        let failure = chrono_harness::initial::invoke(
+            &request, &binding, &Default::default(), 2, 1024,
+        ).expect_err("an initial process bound cannot complete inventory");
+        assert_bound_evidence(failure, timeout);
+    }
+}
 fn invoke(script: &str) -> Result<wire::Response, String> {
     let (_dir, r, b) = fixture(script);
     wire::invoke(&r, &b, &Default::default(), 5, 8192).map(|v| v.0)
