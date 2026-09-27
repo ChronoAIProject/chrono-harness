@@ -547,7 +547,9 @@ pub fn judge(req: &Request) -> Response {
                 code: message
                     .split(':')
                     .next()
-                    .filter(|s| s.starts_with("E_"))
+                    // Existing request/snapshot errors retain the public E_INPUT
+                    // contract; named semantic input errors are new in impact v2.
+                    .filter(|s| s.starts_with("E_SEMANTIC_"))
                     .unwrap_or("E_INPUT")
                     .into(),
                 level: "error".into(),
