@@ -217,6 +217,18 @@
       "owner": "judge-cost-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/judge-mixed/target/",
+      "owner": "judge-mixed",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-mixed-tests/target/",
+      "owner": "judge-mixed-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

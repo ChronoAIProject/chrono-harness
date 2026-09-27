@@ -2,9 +2,9 @@
 
 用 Rust 构建的、以显式登记和 DELTA 判官为核心的 harness，附独立的宿主指令生成器。
 
-**已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
+**已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
-宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cost` / `judge-cost-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
+宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
 
 ```text
 crates/                    独立 Rust 生产项目及各自测试项目
@@ -20,6 +20,8 @@ crates/                    独立 Rust 生产项目及各自测试项目
   judge-projects-tests/
   judge-cost/              显式四维成本、旧新来源和未知值告警
   judge-cost-tests/
+  judge-mixed/             显式规则变化分类、混合修改与旧新成本警告
+  judge-mixed-tests/
   judge-ci/                scoped CI 登记、快照、DELTA 与操作执行
   judge-ci-tests/
   ci/                      CI 初始化、生成和事件准备
@@ -77,8 +79,8 @@ python3 .chrono-harness/ci/bootstrap.py .
 
 复制二进制初始化新仓、操作扩展、schema、首次采用和事件合同见 [docs/ci.md](docs/ci.md)；可复制完整实例见 [examples/ci-host](examples/ci-host/README.md)。`verify` 检测工作流漂移，不先修复输出。未知路径、缺对象、脏输入、无效登记或失败命令均非零；文档等闭包外变更明确报告未选项目检查。
 
-带 `--context .chrono-harness/state/context.json` 的 full check 调用登记的 v1 外部判官，绑定请求身份、候选二进制摘要、白名单环境与直接前驱 DAG。registration 验证五份结构、固定身份、工作树 dirt、保留输入及受影响引用，并提供唯一历史解释视图。FILEMAP 生成两端 impact；routes 合并显式执行计划并绑定实际工具；projects 核配对并执行、核对真实回执。现役 scoped CI 复用该规划和执行路径，保留其已注明的选择及输入边界。版本化输出见 [FILEMAP impact 合同](docs/filemap-impact.md) 和 [执行合同](docs/execution.md)。`.chrono-harness/config.json` 仍 proposed、缺完整绑定和 mixed/workflow 判官，完整宿主检查必须非零。完整 SPEC 的生产者、直接测试与缺口见 [覆盖矩阵](docs/spec-coverage.md)。完整 Cargo/SDK 输入闭包、裁决确定性、本地/CI 同判、分支 freshness/integration provenance 与保护规则仍未认证。原生 GitHub 事件须以实际 run 的固定身份和结果验证；本地测试不能替代。
+带 `--context .chrono-harness/state/context.json` 的 full check 调用登记的 v1 外部判官，绑定请求身份、候选二进制摘要、白名单环境与直接前驱 DAG。registration 验证五份结构、固定身份、工作树 dirt、保留输入及受影响引用，并提供唯一历史解释视图。FILEMAP 生成两端 impact；routes 合并显式执行计划并绑定实际工具；projects 核配对并执行、核对真实回执。现役 scoped CI 复用该规划和执行路径，保留其已注明的选择及输入边界。版本化输出见 [FILEMAP impact 合同](docs/filemap-impact.md) 和 [执行合同](docs/execution.md)。`.chrono-harness/config.json` 仍 proposed、缺完整绑定和 workflow 判官，完整宿主检查必须非零。完整 SPEC 的生产者、直接测试与缺口见 [覆盖矩阵](docs/spec-coverage.md)。完整 Cargo/SDK 输入闭包、裁决确定性、本地/CI 同判、分支 freshness/integration provenance 与保护规则仍未认证。原生 GitHub 事件须以实际 run 的固定身份和结果验证；本地测试不能替代。
 
 full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 为 unestablished，有界 registration/filemap pass 不表示完整治理成功。
 
-Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; mixed/workflow and autonomous delivery remain future work. Declared costs and unknown warnings have their own [cost contract](docs/costs.md).
+Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; workflow and autonomous delivery remain future work. Mixed classification and warnings use the [explicit surface contract](docs/mixed.md). Declared costs and unknown warnings have their own [cost contract](docs/costs.md).

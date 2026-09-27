@@ -1379,6 +1379,10 @@
         {
           "kind": "compile",
           "to": "project:judge-cost-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed-tests"
         }
       ]
     },
@@ -1779,6 +1783,137 @@
     },
     {
       "path": "docs/costs.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "crates/judge-mixed/Cargo.toml",
+      "owner": "judge-mixed",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-mixed"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed/Cargo.lock",
+      "owner": "judge-mixed",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-mixed"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed/src/lib.rs",
+      "owner": "judge-mixed",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed/src/main.rs",
+      "owner": "judge-mixed",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed-tests/Cargo.toml",
+      "owner": "judge-mixed-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-mixed-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed-tests/Cargo.lock",
+      "owner": "judge-mixed-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-mixed-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed-tests/tests/mixed.rs",
+      "owner": "judge-mixed-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed-tests/tests/consumer.rs",
+      "owner": "judge-mixed-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-mixed/src/semantic.rs",
+      "owner": "judge-mixed",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost-tests/tests/support/host.rs",
+      "owner": "judge-cost-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cost-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/mixed.md",
       "owner": "repository",
       "surface": "documentation",
       "cost": "unmeasured",
@@ -2945,6 +3080,166 @@
       "from": "project:judge-cost",
       "kind": "runtime-input",
       "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "project:judge-mixed",
+      "kind": "test-execution",
+      "to": "test:judge-mixed-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-mixed",
+      "kind": "compile",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-mixed-tests",
+      "kind": "test-execution",
+      "to": "test:judge-mixed-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-mixed",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "compile",
+      "to": "project:judge-mixed"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "compile",
+      "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "runtime-input",
+      "to": "project:judge-mixed-tests"
     }
   ],
   "test_costs": [
@@ -2986,6 +3281,10 @@
     },
     {
       "test": "judge-cost-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-mixed-tests",
       "cost": "unmeasured"
     }
   ],
@@ -3099,6 +3398,20 @@
         "build.judge-filemap",
         "build.judge-cost",
         "test.judge-cost-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-mixed-tests": {
+      "operations": [
+        "fmt.judge-mixed",
+        "fmt.judge-mixed-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-cost",
+        "build.judge-mixed",
+        "test.judge-mixed-tests"
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576

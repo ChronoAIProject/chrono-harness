@@ -22,7 +22,9 @@
     "scoped-v1",
     "scoped-v1-tests",
     "judge-cost",
-    "judge-cost-tests"
+    "judge-cost-tests",
+    "judge-mixed",
+    "judge-mixed-tests"
   ],
   "projects": [
     {
@@ -895,6 +897,98 @@
         }
       },
       "tests_for": "judge-cost"
+    },
+    {
+      "id": "judge-mixed",
+      "kind": "production",
+      "manifest": "crates/judge-mixed/Cargo.toml",
+      "lockfile": "crates/judge-mixed/Cargo.lock",
+      "root": "crates/judge-mixed",
+      "actions": {
+        "build": {
+          "operation": "build.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-mixed-tests"
+    },
+    {
+      "id": "judge-mixed-tests",
+      "kind": "test",
+      "manifest": "crates/judge-mixed-tests/Cargo.toml",
+      "lockfile": "crates/judge-mixed-tests/Cargo.lock",
+      "root": "crates/judge-mixed-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "judge-mixed"
     }
   ],
   "scripts": [

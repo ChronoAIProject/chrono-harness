@@ -35,7 +35,9 @@
       "crates/judge-projects/target/",
       "crates/judge-projects-tests/target/",
       "crates/judge-cost/target/",
-      "crates/judge-cost-tests/target/"
+      "crates/judge-cost-tests/target/",
+      "crates/judge-mixed/target/",
+      "crates/judge-mixed-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",

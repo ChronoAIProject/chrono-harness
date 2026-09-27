@@ -42,6 +42,8 @@ crates/                         独立 Cargo 项目的目录分组
   judge-projects-tests/         projects 专属测试
   judge-cost/                   显式四维成本与未知值告警
   judge-cost-tests/             cost 专属测试
+  judge-mixed/                  显式规则分类与混合修改警告
+  judge-mixed-tests/            mixed 专属测试
   judge-ci/                     CI 登记、快照、DELTA 与操作执行
   judge-ci-tests/                CI 判官专属测试
   ci/                           工作流生成与事件输入准备
@@ -169,7 +171,7 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | after | 必须存在的判官 ID 数组；有向无环，稳定 ID 顺序打破并列 |
 | modes | v1 仅 `evaluate`；candidate 判官读取两端事实，见 §6 |
 
-Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. Registration/filemap/routes/projects/cost have bounded implementations; mixed/workflow remain unimplemented.
+Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. Registration/filemap/routes/projects/cost/mixed have bounded implementations; workflow remains unimplemented.
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
 七对判官项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-routes、judge-projects、judge-cost、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
@@ -385,7 +387,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 ## 8. 默认判官、规则表面与警告
 
-当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost 已实现有界合同，宿主绑定仍 proposed；mixed、workflow 待实现，不存在默认隐形 gate。
+当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed 已实现有界合同，宿主绑定仍 proposed；workflow 待实现，不存在默认隐形 gate。
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
@@ -412,6 +414,7 @@ warning 不升级成 blanket block、不索要批准、不要求人为确认或�
 integration 是这类规则变更本身的稳定性要求，并非混合提交惩罚。
 AI 先尝试在现有规则下解决任务；确需改判官时自主变更并验证，报告为什么和影响多大。
 源码自举的 engine 修改只按显式 stability 登记要求 integration，本身不被当作宿主 policy。
+现役 mixed 输出和语义选择合同见 [docs/mixed.md](docs/mixed.md)；integration 认证仍由待实现的 workflow 承担。
 
 ## 9. 成本与执行报告
 
@@ -564,7 +567,7 @@ Scoped judge-ci reuses routes planning and projects execution/receipt logic thro
 
 Context may name retained_inputs containing original external-file bytes and environment snapshots at both fixed endpoints. Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods with standalone Cargo manifests and TOML path dependencies; it does not certify Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
 
-Mixed/workflow judges, complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Workflow alone will certify migration, retirement and integration; retained facts and successful replacements are not that certification. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
+Workflow judge, complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Workflow alone will certify migration, retirement and integration; retained facts and successful replacements are not that certification. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
 
 ## 15. 实际参考经验
 
