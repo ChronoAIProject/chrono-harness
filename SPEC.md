@@ -126,7 +126,7 @@ tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次
 只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。
 inputs 为逐文件登记的有效输入，ID 唯一。v1 及 v2 present 的摘要 null 仍仅表示未绑定草稿；不得解释为缺失。v2 absent 禁止携带摘要；缺失不同于空文件。v2 快照保留实际 `{absent:true}` 或文件内容身份，判官核对登记与两端快照，并在操作前后核候选路径。目录、符号链接、权限及 IO 错误不作缺失；路径祖先也不得是符号链接。历史缺失只从保留快照读取，不重读今天的路径。报告绑定实际值，不自动读取 dotenv。
 
-Config v2 可用于两端均采用该合同的宿主。v1→v2 仍须 §6 的显式迁移与兼容测试；当前有限迁移器尚不提供这项转换，不得把支持读取 v2 冒充已有宿主升级成功。文件状态变化通过 input 节点的显式边传播；没有边不推断消费者。捕获成功不是治理成功，缺失检查不是完整输入闭包或并发隔离证明。
+Config v2 可用于两端均采用该合同的宿主，也可经 workflow v3 显式版本选择的宿主 decoder 从 v1 迁移。v1→v2 仍须 §6 的实际转换及兼容测试；支持读取 v2 本身不证明已有宿主升级成功。文件状态变化通过 input 节点的显式边传播；没有边不推断消费者。捕获成功不是治理成功，缺失检查不是完整输入闭包或并发隔离证明。
 外部输入须保留两端快照，变化通过登记的存在状态或摘要进入提交 DELTA；磁盘值不符或快照缺失报输入不足，不隐式扩展 DELTA。
 PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声明的工具链运行；
 完整闭包包括实际 cargo/rustc、编译器后端、链接器、SDK、目标库和所读配置文件，
@@ -204,10 +204,15 @@ Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. All seven judges h
 | mixed_change | `{level: "warning", code, requires_acknowledgement: false}` |
 | integration | `{tests, bind, evidence}`；精确绑定字段与状态目录路径 |
 | retirements | `{kind, id, replacement: string|null, reason}[]`；显式退出/迁移事实 |
-| historical_profiles | workflow v2: `{id,filemap_version,profile_path,script,test,mappings,legacy_records,ambiguities}[]`; finite named candidate decoder, exact original bytes/definitions and replacement obligations retained |
+| historical_profiles | workflow v2 retains the named FILEMAP v1 profile `{id,filemap_version,profile_path,script,test,mappings,legacy_records,ambiguities}`. Workflow v3 also accepts `{id,from_versions,to_versions,script,test,mappings,legacy_records,ambiguities}`; both version maps explicitly name all five registries (`config,filemap,projects,judges,workflow`). Selection requires exact before/after version agreement and one matching profile. |
 | migrations | `{from_version, to_version, script, test, mappings, reason}[]`；mappings 为旧/新记录 ID 对 |
 
 本节每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。
+版本选择合同只登记需要执行哪个 candidate decoder，不推断宿主结构、语言或迁移算法。
+v3 的版本选择会给 decoder 传原始登记及字节、candidate 登记和所选 profile；原始 config
+不得被历史视图改写，旧输入快照仍按旧版本及其原始摘要核验。配置 v1→v2 可用此合同
+验证宿主登记的转换及兼容测试，v1 的 `sha256:null` 仍是未绑定而非缺失。
+实际转换收据与同一专属测试的执行结果均须通过 workflow 验证，版本声明本身不认证兼容。
 指令生成专用 manifest 使用 §16 的独立合同，没有 active/proposed 状态，不参与判官启用。
 登记的语法/引用约束也由 registration 判官实施；runner 只负责 JSON 运输与协议解析。
 配置不可解析、进程无法启动等基础故障是运行时错误，不是一个未声明的业务判官。
@@ -611,7 +616,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency and guarded retained-package/metadata validation; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
 
-The current FILEMAP v2 execution and workflow v2 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2; projects/judges remain v1. Config v1→v2 conversion is not supplied by this finite decoder. Strict old v1 readers reject the new fields. The supported historical decoder is only chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
+The current FILEMAP v2 execution and workflow v2/v3 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2; projects/judges remain v1. Workflow v3 selects an explicitly registered host decoder by exact endpoint schema versions, including config v1→v2 compatibility with unchanged historical input semantics. It does not supply an automatic host config writer. Strict old v1 readers reject the new fields. The shipped host historical decoder remains chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
 
 Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
 

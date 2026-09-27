@@ -97,12 +97,31 @@ undisclosed inputs exist. This host remains proposed and explicitly incomplete.
 ## Historical transition and the scoped CI consumer
 
 Strict v1 readers reject v2. Candidate readers retain v1 structure as historical
-data, without inventing plans. The sole implemented decoder profile is
+data, without inventing plans. The built-in host decoder profile is
 `chrono-ci-check/v1` with FILEMAP v1, declared in workflow v2
 `historical_profiles`. Each entry names the original profile path, candidate script
 and dedicated script test, exact malformed legacy records, identity mappings and
 finite ambiguity repairs. Existing workflow `migrations` and `retirements` retain
-the transition and replacement facts. Config additionally supports explicit v2 presence declarations on both endpoints (see [input snapshots](inputs.md)); projects and judges remain v1. The finite migration contract here does not convert config v1 to v2.
+the transition and replacement facts. Config additionally supports explicit v2 presence declarations on both endpoints (see [input snapshots](inputs.md)); projects and judges remain v1.
+
+Workflow v3 adds an explicit version selector: `from_versions` and `to_versions`
+each contain the five positive integer versions `config`, `filemap`, `projects`,
+`judges`, and `workflow`. The maps must differ and exactly match the fixed endpoints.
+The remaining profile fields are `id`, `script`, `test`, `mappings`, `legacy_records`,
+and `ambiguities`. Legacy marker profiles remain supported without reinterpretation.
+More than one matching profile fails. No matching version profile runs no decoder;
+any changed schema still requires actual conversion and compatibility evidence.
+
+The selected candidate script receives `chrono-historical-decode/v2` with
+`config_path`, `original`, `original_bytes`, `candidate`, and `profile`.
+It returns `values` (the historical interpretation), `historical` (retained old
+definitions), and the declared `mappings`. Historical `config` must remain equal
+to the original, so old input snapshots keep their original schema and digest.
+This supports a host-registered v1→v2 config conversion/compatibility check without
+relabeling old snapshots or treating an unbound v1 digest as absence. The runtime
+does not generate a host's conversion algorithm. Its dedicated registered test
+must actually execute and pass; an unrelated passing pair cannot certify it.
+Unchanged v3 hosts do not repeat a version transition on documentation-only DELTAs.
 
 The registered `.chrono-harness/migrations/scoped-v1.py` receives original JSON and
 exact bytes, the fixed historical profile bytes and candidate mapping declaration.

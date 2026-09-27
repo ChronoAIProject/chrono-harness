@@ -22,6 +22,13 @@ fn load_view(view: &Value, config: &str) -> Result<(Registrations, Registrations
     if let Some(raw) = view["conversion"]["input"].get("original") {
         let raw: Values = serde_json::from_value(raw.clone()).map_err(|e| e.to_string())?;
         old.original_schemas = Registrations::schemas(&raw, config)?;
+        // Supported config versions already have readers. Historical snapshots
+        // bind their original config, never a decoder's replacement semantics.
+        if a.get(config) != raw.get(config) {
+            return Err(
+                "E_MIGRATION_INPUT_SEMANTICS: historical config must remain original".into(),
+            );
+        }
     }
     Ok((old, Registrations::load(&b, config)?))
 }
@@ -85,26 +92,42 @@ fn interpret_mode(
     let filemap = raw[config]["registries"]["filemap"]
         .as_str()
         .ok_or("historical filemap path")?;
-    let profiles: Vec<_> = new.workflow()["historical_profiles"]
+    let mut view = value!({"base":raw,"candidate":candidate,"historical":{},"conversion":null});
+    let versions = |values: &Values| -> Result<Value, String> {
+        Ok(value!(
+            Registrations::schemas(values, config)?
+                .into_iter()
+                .map(|(key, (_, version))| (key, version))
+                .collect::<BTreeMap<_, _>>()
+        ))
+    };
+    let from = versions(&raw)?;
+    let to = versions(&candidate)?;
+    let mut matching = vec![];
+    let mut legacy_required = false;
+    for profile in new.workflow()["historical_profiles"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|p| p["filemap_version"] == raw[filemap]["schema_version"])
-        .collect();
-    let mut view = value!({"base":raw,"candidate":candidate,"historical":{},"conversion":null});
-    if raw[filemap]["schema_version"] == 2 || profiles.is_empty() {
-        let old = Registrations::load(&raw, config).map_err(|e| format!("base: {e}"))?;
-        return Ok((old, new, view));
-    }
-    let mut matching = vec![];
-    for profile in profiles {
-        let path = profile["profile_path"].as_str().unwrap();
-        if let Ok(bytes) = facts::blob(root, base, path) {
-            let value = json(&bytes)?;
-            if value["schema"] == profile["id"] {
-                matching.push((profile, path, bytes, value));
+    {
+        if profile.get("from_versions").is_some() {
+            if profile["from_versions"] == from && profile["to_versions"] == to {
+                matching.push((profile, Value::Null, Value::Null, Value::Null));
+            }
+        } else if profile["filemap_version"] == raw[filemap]["schema_version"] {
+            legacy_required = true;
+            let path = profile["profile_path"].as_str().unwrap();
+            if let Ok(bytes) = facts::blob(root, base, path) {
+                let value = json(&bytes)?;
+                if value["schema"] == profile["id"] {
+                    matching.push((profile, value!(path), value!(bytes), value));
+                }
             }
         }
+    }
+    if matching.is_empty() && !legacy_required {
+        let old = Registrations::load(&raw, config).map_err(|e| format!("base: {e}"))?;
+        return Ok((old, new, view));
     }
     if matching.len() != 1 {
         return Err("E_MIGRATION_PROFILE: missing/ambiguous historical profile".into());
@@ -161,7 +184,11 @@ fn interpret_mode(
         .keys()
         .map(|p| Ok((p.clone(), facts::blob(root, base, p)?)))
         .collect::<Result<_, String>>()?;
-    let input = value!({"schema":"chrono-historical-decode/v1","config_path":config,"original":raw,"original_bytes":raw_bytes,"profile":profile,"profile_bytes":profile_bytes,"profile_value":profile_value});
+    let input = if profile.get("from_versions").is_some() {
+        value!({"schema":"chrono-historical-decode/v2","config_path":config,"original":raw,"original_bytes":raw_bytes,"candidate":candidate,"profile":profile})
+    } else {
+        value!({"schema":"chrono-historical-decode/v1","config_path":config,"original":raw,"original_bytes":raw_bytes,"profile":profile,"profile_bytes":profile_bytes,"profile_value":profile_value})
+    };
     let script_path = script["path"].as_str().unwrap();
     let script_bytes = fs::read(root.join(script_path)).map_err(|e| e.to_string())?;
     if script_bytes != facts::blob(root, candidate_oid, script_path)? {
