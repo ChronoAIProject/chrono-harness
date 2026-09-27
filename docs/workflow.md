@@ -69,9 +69,15 @@ scoped consumers keep their stricter preservation contract.
 Schema changes are compared using original versions before decoding. FILEMAP
 selects explicit compatibility tests and integration requirements. Workflow checks
 retained candidate conversion and actual compatibility-test success against the
-declared version transition and mappings. The supported conversion remains the
-finite `chrono-ci-check/v1` plus FILEMAP v1 decoder; this is not arbitrary schema
-migration discovery.
+declared version transition and mappings. The shipped host conversion remains the
+finite `chrono-ci-check/v1` plus FILEMAP v1 decoder. Workflow v3 additionally allows
+explicit `from_versions`/`to_versions` profile selection across all five registries,
+including config v1→v2; it runs the registered candidate script and requires its
+dedicated compatibility test. Ambiguous matches fail, unmatched profiles never
+certify a transition, and each changed version pair still requires a migration
+declaration. Historical config must retain its original interpretation and snapshot
+binding. See [execution](execution.md) for the v2 decoder input; no migration or
+dependency is discovered automatically.
 
 Bounded fixtures exercise the complete seven-judge chain. This host remains
 proposed with incomplete Cargo/SDK input closure and bindings; native CI still

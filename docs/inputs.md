@@ -95,8 +95,10 @@ actual operation. An absent ID cannot supply a package manifest, configuration
 file, package bytes or a tool. Configuration lookup inventories and their
 relationships are still explicit declarations; this does not infer them.
 
-Both endpoints may already use v2. Upgrading an existing v1 host still needs the
-workflow migration contract and an executed compatibility test; the current finite
-migration decoder does not implement that conversion. This implementation does
+Both endpoints may already use v2. Workflow v3 can select a host-registered v1→v2
+decoder by the exact declared endpoint schema versions; see [the decoder contract](execution.md).
+Its dedicated compatibility test must execute and pass. Historical config and v1
+snapshots remain original; unbound digests cannot acquire absence semantics.
+The runtime does not generate a host's config conversion algorithm. This implementation does
 not activate the repository's proposed full configuration or establish complete
 compiler/backend/linker/SDK/build-script inputs.

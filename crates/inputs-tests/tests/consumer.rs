@@ -481,3 +481,300 @@ fn config_presence_upgrade_requires_registered_migration_evidence() {
             .exists()
     );
 }
+
+// A host-owned decoder checks an exact v1 -> v2 config migration. The historical
+// view stays v1: converting its inputs would invalidate the retained snapshot.
+fn migration_fixture() -> (Host, Value) {
+    let mut h = fixture();
+    v2(&mut h);
+    h.values.get_mut(CONFIG).unwrap()["schema_version"] = json!(1);
+    for input in h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        input.as_object_mut().unwrap().remove("presence");
+    }
+    let decoder = r#"import copy,json,sys
+def upgrade(config):
+    if config['schema_version'] != 1:
+        raise ValueError('source config must be v1')
+    out = copy.deepcopy(config)
+    out['schema_version'] = 2
+    for item in out['environment']['inputs']:
+        if item['sha256'] is None:
+            raise ValueError('unbound digest is not absence')
+        item['presence'] = 'present'
+    return out
+def convert(req):
+    assert req['schema'] == 'chrono-historical-decode/v2'
+    for path, value in req['original'].items():
+        assert json.loads(bytes(req['original_bytes'][path])) == value
+    assert upgrade(req['original'][req['config_path']]) == req['candidate'][req['config_path']]
+    return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])
+if __name__ == '__main__':
+    print(json.dumps(convert(json.load(sys.stdin))))
+"#;
+    let tests = r#"import runpy
+upgrade = runpy.run_path('.chrono-harness/decoder.py')['upgrade']
+source = dict(schema_version=1,environment=dict(inputs=[dict(id='empty',location='x',sha256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')]))
+expected = dict(schema_version=2,environment=dict(inputs=[dict(id='empty',location='x',sha256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',presence='present')]))
+assert upgrade(source) == expected
+assert source['schema_version'] == 1 and 'presence' not in source['environment']['inputs'][0]
+source['environment']['inputs'][0]['sha256'] = None
+try:
+    upgrade(source)
+except ValueError:
+    pass
+else:
+    raise AssertionError('unbound digest became absence')
+print('config migration compatibility checked')
+"#;
+    for (id, path, code, pair) in [
+        (
+            "decoder",
+            ".chrono-harness/decoder.py",
+            decoder,
+            json!({"test_script":"decoder-tests"}),
+        ),
+        (
+            "decoder-tests",
+            ".chrono-harness/decoder-tests.py",
+            tests,
+            json!({"tests_for":"decoder"}),
+        ),
+    ] {
+        fs::write(h.root().join(path), code).unwrap();
+        let mut f = file(
+            path,
+            json!([{"kind":"runtime-input","to":format!("script:{id}")}]),
+        );
+        f["owner"] = json!(id);
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(f);
+        let p = h.values.get_mut(PROJECTS).unwrap();
+        p["owners"].as_array_mut().unwrap().push(json!(id));
+        let mut script = json!({"id":id,"path":path,"actions":{"execute":{"operation":id,"tool":"python","argv":["-B",path]}}});
+        script
+            .as_object_mut()
+            .unwrap()
+            .extend(pair.as_object().unwrap().clone());
+        p["scripts"].as_array_mut().unwrap().push(script);
+    }
+    let f = h.values.get_mut(FM).unwrap();
+    f["project_edges"].as_array_mut().unwrap().push(edge(
+        "script:decoder",
+        "test-execution",
+        "test:decoder-tests",
+    ));
+    f["execution_plans"]["test:decoder-tests"] =
+        json!({"operations":["decoder-tests"],"timeout_seconds":15,"output_limit_bytes":4096});
+    f["test_costs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"test":"decoder-tests","cost":"unknown"}));
+    fs::write(
+        h.root().join(".chrono-harness/decoder.py"),
+        "raise RuntimeError('historical decoder must never execute')\n",
+    )
+    .unwrap();
+    h.save();
+    h.base = h.candidate.clone();
+    let before = capture(&h, "before");
+    fs::write(h.root().join(".chrono-harness/decoder.py"), decoder).unwrap();
+    v2(&mut h);
+    let w = h.values.get_mut(WORKFLOW).unwrap();
+    w["schema_version"] = json!(3);
+    w["historical_profiles"] = json!([{
+        "id":"config-presence/v1-to-v2",
+        "from_versions":{"config":1,"filemap":2,"projects":1,"judges":1,"workflow":1},
+        "to_versions":{"config":2,"filemap":2,"projects":1,"judges":1,"workflow":3},
+        "script":"decoder","test":"decoder-tests","mappings":[],"legacy_records":[],"ambiguities":[]
+    }]);
+    w["integration"]["tests"] = json!(["t", "decoder-tests"]);
+    w["migrations"] = json!([
+        {"from_version":1,"to_version":2,"script":"decoder","test":"decoder-tests","mappings":[],"reason":"explicit input presence"},
+        {"from_version":1,"to_version":3,"script":"decoder","test":"decoder-tests","mappings":[],"reason":"explicit version selector"}
+    ]);
+    h.save();
+    (h, before)
+}
+fn migration_check(h: &Host, before: &Value) -> (i32, Value) {
+    check(
+        h,
+        &json!({"base":before,"candidate":capture(h, &format!("after-{}", h.candidate))}),
+    )
+}
+fn conversion(report: &Value) -> &Value {
+    &report["judges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|j| j["id"] == "registration")
+        .unwrap()["response"]["outputs"]["registration_view"]["conversion"]
+}
+
+#[test]
+fn explicit_version_migration_executes_candidate_decoder_and_preserves_v1_snapshot() {
+    let (h, before) = migration_fixture();
+    let (exit, r) = migration_check(&h, &before);
+    assert_eq!(exit, 0, "{}", r["findings"]);
+    assert_eq!(r["tests"]["tests"]["test:decoder-tests"], "passed");
+    let c = conversion(&r);
+    assert_eq!(c["input"]["schema"], "chrono-historical-decode/v2");
+    assert_eq!(c["output"]["values"][CONFIG]["schema_version"], 1);
+    assert_eq!(c["input"]["candidate"][CONFIG]["schema_version"], 2);
+    assert_eq!(c["process"]["exit_code"], 0);
+    assert_eq!(c["input_digest"], c["process"]["stdin_sha256"]);
+    assert_eq!(c["output_digest"], c["process"]["stdout_sha256"]);
+    assert_eq!(before["schema"], "chrono-input-snapshot/v1");
+    assert!(
+        r["effective_inputs"]["endpoints"]["base"]["files"]["data"]
+            .get("presence")
+            .is_none()
+    );
+    assert_eq!(
+        r["effective_inputs"]["endpoints"]["candidate"]["files"]["data"]["presence"],
+        "present"
+    );
+    // An unchanged v3 host must not run an old migration on a documentation DELTA.
+    let mut h = h;
+    h.base = h.candidate.clone();
+    let before = capture(&h, "steady-before");
+    fs::write(h.root().join("doc.txt"), "documentation only\n").unwrap();
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_eq!(exit, 0, "{}", r["findings"]);
+    assert!(conversion(&r).is_null());
+    assert!(r["tests"]["executed"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn version_migration_rejects_ambiguous_incomplete_and_unmatched_selectors() {
+    let (mut h, before) = migration_fixture();
+    let profile = h.values[WORKFLOW]["historical_profiles"][0].clone();
+    let mut duplicate = profile.clone();
+    duplicate["id"] = json!("ambiguous");
+    h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([profile, duplicate]);
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_ne!(exit, 0);
+    assert!(
+        r["findings"].to_string().contains("E_MIGRATION_PROFILE"),
+        "{r}"
+    );
+    assert!(r["tests"].is_null());
+    h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([profile]);
+    h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["from_versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("config");
+    let error = chrono_judge_registration::Registrations::load(&h.values, CONFIG)
+        .err()
+        .unwrap();
+    assert!(error.contains("missing field config"), "{error}");
+    for (key, value, expected) in [
+        (
+            "to_versions",
+            profile["from_versions"].clone(),
+            "must describe a transition",
+        ),
+        (
+            "from_versions",
+            json!({"config":0,"filemap":2,"projects":1,"judges":1,"workflow":1}),
+            "positive integers",
+        ),
+        (
+            "from_versions",
+            json!({"config":1,"filemap":2,"projects":1,"judges":1,"workflow":1,"guessed":1}),
+            "unknown field guessed",
+        ),
+    ] {
+        h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([profile]);
+        h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"][0][key] = value;
+        let error = chrono_judge_registration::Registrations::load(&h.values, CONFIG)
+            .err()
+            .unwrap();
+        assert!(error.contains(expected), "{error}");
+    }
+    h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([profile]);
+    h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["to_versions"]["config"] =
+        json!(1);
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_ne!(exit, 0);
+    assert!(
+        r["findings"].to_string().contains("E_MIGRATION_EVIDENCE"),
+        "{r}"
+    );
+    assert!(conversion(&r).is_null());
+}
+
+#[test]
+fn version_migration_cannot_rewrite_historical_input_semantics() {
+    let (mut h, before) = migration_fixture();
+    let path = h.root().join(".chrono-harness/decoder.py");
+    let source = fs::read_to_string(&path).unwrap();
+    fs::write(path, source.replace(
+        "return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])",
+        "req['original'][req['config_path']] = req['candidate'][req['config_path']]\n    return dict(values=req['original'],historical={},mappings=req['profile']['mappings'])",
+    )).unwrap();
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_ne!(exit, 0);
+    assert!(
+        r["findings"]
+            .to_string()
+            .contains("E_MIGRATION_INPUT_SEMANTICS"),
+        "{r}"
+    );
+    assert!(r["tests"].is_null());
+}
+
+#[test]
+fn version_migration_requires_its_actual_compatibility_test_and_each_changed_version() {
+    let (mut h, before) = migration_fixture();
+    let migrations = h.values[WORKFLOW]["migrations"].clone();
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"][0]["script"] = json!("p");
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"][0]["test"] = json!("t");
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_ne!(exit, 0);
+    assert_eq!(r["tests"]["tests"]["test:t"], "passed");
+    assert!(
+        r["findings"]
+            .to_string()
+            .contains("declared script/test differs"),
+        "{r}"
+    );
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"] = migrations.clone();
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_ne!(exit, 0);
+    assert!(
+        r["findings"]
+            .to_string()
+            .contains("missing/ambiguous schema migration"),
+        "{r}"
+    );
+    h.values.get_mut(WORKFLOW).unwrap()["migrations"] = migrations;
+    fs::write(
+        h.root().join(".chrono-harness/decoder-tests.py"),
+        "raise AssertionError('incompatible migration')\n",
+    )
+    .unwrap();
+    h.save();
+    let (exit, r) = migration_check(&h, &before);
+    assert_ne!(exit, 0);
+    assert_eq!(r["tests"]["tests"]["test:decoder-tests"], "failed");
+    assert!(
+        !h.root()
+            .join(".chrono-harness/state/integration.json")
+            .exists()
+    );
+}

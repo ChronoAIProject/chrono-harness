@@ -440,35 +440,53 @@ pub fn workflow(v: &Value) -> Result {
         "retirements",
         "migrations",
     ];
-    if v["schema_version"] == 2 {
+    if v["schema_version"] == 2 || v["schema_version"] == 3 {
         let mut required = vec!["schema_version", "status", "historical_profiles"];
         required.extend(fields);
         object(v, &required, &[])?;
         choice(&v["status"], &["active", "proposed"])?;
         unique(&v["historical_profiles"], Some("id"))?;
         for profile in array(&v["historical_profiles"])? {
-            object(
-                profile,
-                &[
-                    "id",
-                    "filemap_version",
-                    "profile_path",
-                    "script",
-                    "test",
-                    "mappings",
-                    "legacy_records",
-                    "ambiguities",
-                ],
-                &[],
-            )?;
-            path(&profile["profile_path"])?;
+            let mut fields = vec![
+                "id",
+                "script",
+                "test",
+                "mappings",
+                "legacy_records",
+                "ambiguities",
+            ];
+            if v["schema_version"] == 3 && profile.get("from_versions").is_some() {
+                fields.extend(["from_versions", "to_versions"]);
+                object(profile, &fields, &[])?;
+                for side in ["from_versions", "to_versions"] {
+                    let versions = object(
+                        &profile[side],
+                        &["config", "filemap", "projects", "judges", "workflow"],
+                        &[],
+                    )?;
+                    if versions
+                        .values()
+                        .any(|v| !v.as_u64().is_some_and(|n| n > 0))
+                    {
+                        return Err("historical schema versions must be positive integers".into());
+                    }
+                }
+                if profile["from_versions"] == profile["to_versions"] {
+                    return Err("historical version selector must describe a transition".into());
+                }
+            } else {
+                fields.extend(["filemap_version", "profile_path"]);
+                object(profile, &fields, &[])?;
+                path(&profile["profile_path"])?;
+                if profile["filemap_version"] != 1 {
+                    return Err(
+                        "only explicitly declared historical FILEMAP v1 profiles are supported"
+                            .into(),
+                    );
+                }
+            }
             for k in ["script", "test"] {
                 string(&profile[k])?;
-            }
-            if profile["filemap_version"] != 1 {
-                return Err(
-                    "only explicitly declared historical FILEMAP v1 profiles are supported".into(),
-                );
             }
             for mapping in array(&profile["mappings"])? {
                 object(mapping, &["from", "to"], &[])?;
