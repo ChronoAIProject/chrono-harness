@@ -13,7 +13,9 @@
     "ci-tests",
     "ci-verify",
     "judge-registration",
-    "judge-registration-tests"
+    "judge-registration-tests",
+    "judge-filemap",
+    "judge-filemap-tests"
   ],
   "projects": [
     {
@@ -504,6 +506,98 @@
             "--locked",
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-filemap",
+      "kind": "production",
+      "manifest": "crates/judge-filemap/Cargo.toml",
+      "lockfile": "crates/judge-filemap/Cargo.lock",
+      "root": "crates/judge-filemap",
+      "test_project": "judge-filemap-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-filemap-tests",
+      "kind": "test",
+      "manifest": "crates/judge-filemap-tests/Cargo.toml",
+      "lockfile": "crates/judge-filemap-tests/Cargo.lock",
+      "root": "crates/judge-filemap-tests",
+      "tests_for": "judge-filemap",
+      "actions": {
+        "build": {
+          "operation": "build.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
           ]
         }
       }

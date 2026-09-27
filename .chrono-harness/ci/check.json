@@ -48,6 +48,14 @@
         "build.runner",
         "build.judge-registration",
         "test.judge-registration-tests"
+      ],
+      "test:judge-filemap-tests": [
+        "fmt.judge-filemap",
+        "fmt.judge-filemap-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "test.judge-filemap-tests"
       ]
     },
     "artifacts": [
@@ -62,7 +70,9 @@
       "crates/ci/target/",
       "crates/ci-tests/target/",
       "crates/judge-registration/target/",
-      "crates/judge-registration-tests/target/"
+      "crates/judge-registration-tests/target/",
+      "crates/judge-filemap/target/",
+      "crates/judge-filemap-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",

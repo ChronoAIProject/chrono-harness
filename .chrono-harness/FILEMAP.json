@@ -1209,6 +1209,162 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "crates/judge-registration/src/registrations.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/Cargo.toml",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/Cargo.lock",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/src/lib.rs",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/src/main.rs",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/src/graph.rs",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/src/records.rs",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap-tests/Cargo.toml",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap-tests/Cargo.lock",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap-tests/tests/impact.rs",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap-tests/tests/consumer.rs",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap-tests/tests/support/mod.rs",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/filemap-impact.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -1316,6 +1472,61 @@
       "from": "project:judge-registration-tests",
       "kind": "test-execution",
       "to": "test:judge-registration-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "test-execution",
+      "to": "test:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-filemap-tests",
+      "kind": "test-execution",
+      "to": "test:judge-filemap-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
     }
   ],
   "test_costs": [
@@ -1341,6 +1552,10 @@
     },
     {
       "test": "judge-registration-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-filemap-tests",
       "cost": "unmeasured"
     }
   ]

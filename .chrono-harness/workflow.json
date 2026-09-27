@@ -50,12 +50,29 @@
         "crates/judge-registration/src/schema.rs",
         "crates/judge-registration/src/main.rs",
         "crates/judge-registration/Cargo.toml",
-        "crates/judge-registration/Cargo.lock"
+        "crates/judge-registration/Cargo.lock",
+        "crates/judge-registration/src/registrations.rs"
       ],
       "tests": [
         "judge-registration-tests"
       ],
       "reason": "Registration schema, snapshot and reference policy"
+    },
+    {
+      "id": "filemap-impact",
+      "paths": [
+        "crates/judge-filemap/Cargo.toml",
+        "crates/judge-filemap/Cargo.lock",
+        "crates/judge-filemap/src/lib.rs",
+        "crates/judge-filemap/src/main.rs",
+        "crates/judge-filemap/src/graph.rs",
+        "crates/judge-filemap/src/records.rs"
+      ],
+      "tests": [
+        "judge-filemap-tests",
+        "judge-ci-tests"
+      ],
+      "reason": "Full declaration impact and shared operational CI closure selection"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -68,7 +85,8 @@
     "tests": [
       "runner-tests",
       "instructions-tests",
-      "judge-registration-tests"
+      "judge-registration-tests",
+      "judge-filemap-tests"
     ],
     "bind": [
       "base",

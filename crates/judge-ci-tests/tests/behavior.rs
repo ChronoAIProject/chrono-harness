@@ -559,3 +559,54 @@ fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
         assert!(guard.cause.contains(reason));
     }
 }
+
+#[test]
+fn adapter_explains_legacy_only_selection_without_graph_edges() {
+    let h = Host::new();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["project_edges"] = json!([]);
+        for f in v["files"].as_array_mut().unwrap() {
+            f["edges"] = json!([]);
+        }
+    });
+    let b = h.commit();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["projects"][1]["actions"]["execute"]["argv"] = json!(["check.sh", "changed"]);
+    });
+    let c = h.commit();
+    let r = h.check(&b, &c);
+    pass(&r);
+    assert_eq!(h.calls(), 1);
+    let e = &r.evidence["selection_explanation"];
+    assert_eq!(e["edges"], json!([]));
+    assert_eq!(e["legacy_only_selections"], json!(["test:suite"]));
+    assert_eq!(
+        e["extra_selections"]["test:suite"],
+        json!(["changed operation: test.suite"])
+    );
+}
+#[test]
+fn operation_bounds_changes_execute_registered_command() {
+    for (key, value, reason) in [
+        ("operation_timeout_seconds", 4, "changed operation timeout"),
+        (
+            "operation_output_limit_bytes",
+            8192,
+            "changed operation output limit",
+        ),
+    ] {
+        let h = Host::new();
+        let b = h.head();
+        h.change_registry(CONFIG, |v| v["policy"][key] = json!(value));
+        let c = h.commit();
+        let r = h.check(&b, &c);
+        pass(&r);
+        assert_eq!(h.calls(), 1);
+        assert!(
+            r.evidence["selection_explanation"]["extra_selections"]["test:suite"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(reason))
+        );
+    }
+}

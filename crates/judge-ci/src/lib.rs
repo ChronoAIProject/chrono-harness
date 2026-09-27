@@ -3,9 +3,10 @@ use chrono_harness::{
     CheckConfig, CheckResult, CommandSpec, PROTOCOL, Request, Response, Status, decode, json,
     relative_path, run_process, sha256,
 };
+use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as object};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
@@ -23,12 +24,6 @@ pub struct Policy {
     pub adoption_base: Option<String>,
     pub operation_timeout_seconds: u64,
     pub operation_output_limit_bytes: usize,
-}
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Edge {
-    from: String,
-    kind: String,
-    to: String,
 }
 #[derive(Clone, Debug)]
 struct Snapshot {
@@ -311,7 +306,7 @@ fn snapshot(root: &Path, oid: &str, p: Policy) -> Result<Snapshot, String> {
         }
         if !edges.insert(Edge {
             from: from.into(),
-            kind: kind.into(),
+            kind: serde_json::from_value(Value::String(kind.into())).map_err(|e| e.to_string())?,
             to: to.into(),
         }) {
             return Err(format!("duplicate edge {from} -> {to}"));
@@ -377,17 +372,19 @@ fn changed<T: PartialEq>(a: &BTreeMap<String, T>, b: &BTreeMap<String, T>) -> BT
         .cloned()
         .collect()
 }
-fn affected(old: Option<&Snapshot>, new: &Snapshot) -> (BTreeSet<String>, BTreeSet<String>) {
+// Scoped CI owns legacy seeds and selections; it consumes only shared union/closure mechanics.
+fn ci_impact(
+    old: Option<&Snapshot>,
+    new: &Snapshot,
+) -> (BTreeSet<String>, BTreeSet<String>, Value) {
     let paths = if let Some(old) = old {
         changed(&old.tree, &new.tree)
     } else {
         new.tree.keys().cloned().collect()
     };
     let mut seeds: BTreeSet<_> = paths.iter().map(|p| format!("file:{p}")).collect();
-    let mut edges = new.edges.clone();
-    let mut selected = BTreeSet::new();
+    let mut extras: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     if let Some(old) = old {
-        edges.extend(old.edges.clone());
         for path in changed(&old.files, &new.files) {
             seeds.insert(format!("file:{path}"));
         }
@@ -401,21 +398,25 @@ fn affected(old: Option<&Snapshot>, new: &Snapshot) -> (BTreeSet<String>, BTreeS
                 }
                 for (test, ops) in &s.policy.bindings {
                     if ops.contains(&op) {
-                        selected.insert(test.clone());
+                        extras
+                            .entry(test.clone())
+                            .or_default()
+                            .insert(format!("changed operation: {op}"));
                     }
                 }
             }
         }
         for e in old.edges.symmetric_difference(&new.edges) {
             seeds.insert(e.from.clone());
-            if e.kind == "test-execution" {
-                selected.insert(e.to.clone());
-            } else {
+            if e.kind != EdgeKind::TestExecution {
                 seeds.insert(e.to.clone());
             }
         }
         for t in changed(&old.policy.bindings, &new.policy.bindings) {
-            selected.insert(t);
+            extras
+                .entry(t)
+                .or_default()
+                .insert("changed binding".into());
         }
         let changed_tools = changed(&old.policy.tools, &new.policy.tools);
         if !changed_tools.is_empty()
@@ -436,25 +437,56 @@ fn affected(old: Option<&Snapshot>, new: &Snapshot) -> (BTreeSet<String>, BTreeS
                                 .is_some_and(|(_, tool, _)| changed_tools.contains(tool))
                         })
                     {
-                        selected.insert(test.clone());
+                        let reasons = extras.entry(test.clone()).or_default();
+                        if old.policy.environment != new.policy.environment {
+                            reasons.insert("changed environment".into());
+                        }
+                        if old.policy.operation_timeout_seconds
+                            != new.policy.operation_timeout_seconds
+                        {
+                            reasons.insert("changed operation timeout".into());
+                        }
+                        if old.policy.operation_output_limit_bytes
+                            != new.policy.operation_output_limit_bytes
+                        {
+                            reasons.insert("changed operation output limit".into());
+                        }
+                        for tool in &changed_tools {
+                            if ops
+                                .iter()
+                                .any(|op| s.operations.get(op).is_some_and(|(_, t, _)| t == tool))
+                            {
+                                reasons.insert(format!("changed bound tool: {tool}"));
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    let mut q: VecDeque<_> = seeds.iter().cloned().collect();
-    while let Some(node) = q.pop_front() {
-        for e in edges.iter().filter(|e| e.from == node) {
-            if e.kind == "test-execution" {
-                selected.insert(e.to.clone());
-            }
-            if seeds.insert(e.to.clone()) {
-                q.push_back(e.to.clone());
-            }
-        }
-    }
-    (paths, selected)
+    let empty = BTreeSet::new();
+    let edges = graph::union(old.map(|s| &s.edges).unwrap_or(&empty), &new.edges);
+    let seeds: Vec<_> = seeds
+        .into_iter()
+        .map(|node| Seed {
+            id: node.clone(),
+            reference: node.clone(),
+            node,
+            reason: "scoped CI path, registration or operation seed".into(),
+        })
+        .collect();
+    let closure = graph::closure(&edges, &seeds);
+    let mut selected = closure.selected_tests();
+    let legacy_only: BTreeSet<_> = extras
+        .keys()
+        .filter(|t| !selected.contains(*t))
+        .cloned()
+        .collect();
+    selected.extend(extras.keys().cloned());
+    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    (paths, selected, explanation)
 }
+
 pub fn judge(req: &Request) -> Response {
     match evaluate(req) {
         Ok(r) => r,
@@ -547,7 +579,7 @@ fn evaluate(req: &Request) -> Result<Response, String> {
         Some(snapshot(root, base, op)?)
     };
     let new = snapshot(root, &req.candidate, p.clone())?;
-    let (paths, selected) = affected(old.as_ref(), &new);
+    let (paths, selected, selection_explanation) = ci_impact(old.as_ref(), &new);
     let mut operations = Vec::new();
     let mut blocked = vec![];
     for test in &selected {
@@ -664,6 +696,6 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             Status::Passed
         },
         results,
-        evidence: object!({"scope":"chrono-ci-check/v1","mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selected":selected,"operations":operations,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":"chrono-ci-check/v1","mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     })
 }

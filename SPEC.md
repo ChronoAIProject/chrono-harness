@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前实现含 v1 外部判官运输、独立 registration 判官、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
+当前实现含 v1 外部判官运输、独立 registration/filemap 判官、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 ## 1. 目标、权限与边界
@@ -34,6 +34,8 @@ crates/                         独立 Cargo 项目的目录分组
   runner-tests/                 runner 专属测试
   judge-registration/           v1 登记结构、快照与受影响引用判官
   judge-registration-tests/     registration 专属测试
+  judge-filemap/                v1 完整声明图与 impact，复用注册数据
+  judge-filemap-tests/          FILEMAP 专属测试
   judge-ci/                     CI 登记、快照、DELTA 与操作执行
   judge-ci-tests/                CI 判官专属测试
   ci/                           工作流生成与事件输入准备
@@ -160,9 +162,9 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | after | 必须存在的判官 ID 数组；有向无环，稳定 ID 顺序打破并列 |
 | modes | v1 仅 `evaluate`；candidate 判官读取两端事实，见 §6 |
 
-各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`；registration 已实现，其余六个尚未实现。
+各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`；registration 与 filemap 已实现，其余五个尚未实现。
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
+七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |
@@ -375,7 +377,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 ## 8. 默认判官、规则表面与警告
 
-当前 judges.json 登记以下判官；registration 已实现但宿主绑定仍 proposed，其余六个待实现，不存在默认隐形 gate。
+当前 judges.json 登记以下判官；registration 与 filemap 已实现但宿主绑定仍 proposed，其余五个待实现，不存在默认隐形 gate。
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
@@ -549,6 +551,8 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 runner 已实现通用外部进程、严格 `chrono-ci-judge/v1` 运输、请求身份、退出/状态一致性与结果发布；不拥有选测政策。独立 judge-ci 实现 `chrono-ci-check/v1` 的固定快照、真实双端 FILEMAP/projects、旧新图传播及串行登记操作。独立 ci 实现 GitHub Actions 的 init/generate/verify、事件输入准备与同一 check 入口生成。完整字段、边界与新仓实例见 [docs/ci.md](docs/ci.md)。这里的 scoped 协议独立于 `chrono-judge/v1`。v1 已复用严格 JSON/hash/有界进程，新增固定 RFC 8785 JCS、预启动摘要、清空后白名单环境、四状态精确退出、证据字节校验与声明 DAG；candidate-only 进程运输不内置七判官政策。
 
 独立 registration 已实现五份严格结构、重复成员/ID、固定 OID/config/context/checkout 核对、ignore dirt、声明启用/闭包就绪及受影响引用检查。真实进程测试含有界合规宿主和本仓 registry 材料。当前 ci-verify 是缺 path/配对且引用未登记 chrono-ci 工具的 scoped 遗留项，full schema 明确报错；其真实归属/路由迁移留给 routes/projects，不创建假脚本。外部输入两端保留、schema 转换和其证据仍非零 unresolved。registration pass 只证明该判官范围，非全部治理完成。报告已提供 §9 全部顶层字段、执行物列表、实际 findings 和具名输出来源；缺失或冲突的生产者结果显式 null/unresolved。完整成本/工具/测试/有效输入生产者仍待实现；parity 始终 unestablished。
+
+独立 filemap 已实现两端完整声明图、稳定记录/字段变化、union 边来源、全种子有限因果闭包和 outputs.impact；现役 judge-ci 通过显式 scoped adapter 消费共享 union/closure，继续真实执行登记 argv。只有 test-execution 选择完整治理测试，旧测试/owner/cost 保留为事实；执行、退休和成本裁决仍待实现。直接 input 声明测试不构成外部输入保留证据。版本化消费合同及证据边界见 [docs/filemap-impact.md](docs/filemap-impact.md)。
 
 各生产项目都有独立专属测试项目、Cargo.lock 与 target，无根 workspace。操作以登记 argv 为准；构建/测试带 --locked。bootstrap 重用注册 build 操作，固定 Rust 1.95.0；成本未测。FILEMAP/projects 的 schema=1 数据由显式 CI profile 消费其规定字段，不将五份完整治理登记的 proposed 改称全部 active。
 

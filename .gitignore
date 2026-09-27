@@ -10,3 +10,5 @@
 /crates/ci-tests/target/
 /crates/judge-registration/target/
 /crates/judge-registration-tests/target/
+/crates/judge-filemap/target/
+/crates/judge-filemap-tests/target/
