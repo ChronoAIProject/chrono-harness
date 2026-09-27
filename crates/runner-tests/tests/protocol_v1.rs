@@ -246,3 +246,31 @@ fn invalid_response_retains_actual_process_exit_in_report() {
     assert_eq!(records[0]["exit_code"], 9);
     assert_eq!(records[0]["process"]["stdout"], "invalid JSON\n");
 }
+
+#[test]
+fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
+    for (bytes, accepted) in [("bytes([239,191,189])", true), ("bytes([255])", false)] {
+        let script = format!(
+            "{RESPONSE}s['outputs']['note']='MARKER'\nsys.stdout.buffer.write(json.dumps(s).encode().replace(b'MARKER',{bytes}))"
+        );
+        let (_dir, r, b) = fixture(&script);
+        let (status, records) =
+            chrono_harness::full::execute(&r, &[b], &Default::default(), 5, 8192).unwrap();
+        assert_eq!(
+            status,
+            if accepted {
+                wire::Status::Pass
+            } else {
+                wire::Status::Error
+            },
+            "original protocol bytes must determine UTF-8 validity"
+        );
+        let raw: Vec<u8> =
+            serde_json::from_value(records[0]["process"]["stdout_bytes"].clone()).unwrap();
+        assert_eq!(std::str::from_utf8(&raw).is_ok(), accepted);
+        assert_eq!(records[0]["process"]["exit_code"], 0);
+        if accepted {
+            assert_eq!(records[0]["response"]["outputs"]["note"], "�");
+        }
+    }
+}

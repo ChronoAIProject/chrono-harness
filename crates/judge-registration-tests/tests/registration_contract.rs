@@ -79,7 +79,12 @@ impl Host {
         let mut values = std::collections::BTreeMap::new();
         for name in ["config", "judges", "projects", "FILEMAP", "workflow"] {
             let mut v: Value = serde_json::from_slice(
-                &fs::read(source().join(format!(".chrono-harness/{name}.json"))).unwrap(),
+                &facts::blob(
+                    &source(),
+                    "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98",
+                    &format!(".chrono-harness/{name}.json"),
+                )
+                .unwrap(),
             )
             .unwrap();
             v["status"] = "active".into();
@@ -746,9 +751,15 @@ fn proposed_and_incomplete_never_receive_governance_success() {
 #[test]
 fn real_host_pseudo_script_and_tool_defects_are_concrete() {
     let mut h = Host::new();
-    let host: Value =
-        serde_json::from_slice(&fs::read(source().join(".chrono-harness/projects.json")).unwrap())
-            .unwrap();
+    let host: Value = serde_json::from_slice(
+        &chrono_harness::facts::blob(
+            &source(),
+            "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98",
+            ".chrono-harness/projects.json",
+        )
+        .unwrap(),
+    )
+    .unwrap();
     h.edit(".chrono-harness/projects.json", |v| {
         v["scripts"] = host["scripts"].clone()
     });
@@ -774,10 +785,17 @@ fn real_host_pseudo_script_and_tool_defects_are_concrete() {
 #[test]
 fn actual_host_registries_cannot_pass_full_governance() {
     let mut h = Host::new();
-    for name in ["projects", "FILEMAP", "workflow"] {
+    for name in ["config", "projects", "FILEMAP", "workflow"] {
         let bytes = fs::read(source().join(format!(".chrono-harness/{name}.json"))).unwrap();
         fs::write(h.root().join(format!(".chrono-harness/{name}.json")), bytes).unwrap();
     }
+    h.candidate = commit(h.root());
+    h.base = h.candidate.clone();
+    fs::write(
+        h.root().join("document.txt"),
+        "current host negative closure",
+    )
+    .unwrap();
     h.candidate = commit(h.root());
     let (exit, r) = h.run();
     assert_eq!(exit, 2);
@@ -786,7 +804,7 @@ fn actual_host_registries_cannot_pass_full_governance() {
         assert_unresolved(&r, field);
     }
     assert_eq!(r["findings"], r["judges"][0]["response"]["findings"]);
-    assert!(finding(&r, "E_SCHEMA"), "{r:#}");
+    assert!(finding(&r, "E_ACTIVATION"), "{r:#}");
 }
 #[test]
 fn rename_is_delete_add_and_no_delta_still_checks_inputs() {

@@ -316,7 +316,25 @@ pub fn projects(v: &Value) -> Result {
     Ok(())
 }
 pub fn filemap(v: &Value) -> Result {
-    common(v, &["cost_models", "files", "project_edges", "test_costs"])?;
+    if v["schema_version"] == 2 {
+        object(
+            v,
+            &[
+                "schema_version",
+                "status",
+                "cost_models",
+                "files",
+                "project_edges",
+                "test_costs",
+                "execution_plans",
+            ],
+            &[],
+        )?;
+        choice(&v["status"], &["active", "proposed"])?;
+        crate::execution::plans(v)?;
+    } else {
+        common(v, &["cost_models", "files", "project_edges", "test_costs"])?;
+    }
     for c in v["cost_models"]
         .as_object()
         .ok_or("cost_models object")?
@@ -399,21 +417,69 @@ pub fn judges(v: &Value) -> Result {
     Ok(())
 }
 pub fn workflow(v: &Value) -> Result {
-    common(
-        v,
-        &[
-            "target_branch",
-            "feature_prefix",
-            "integration_prefix",
-            "staleness",
-            "stability",
-            "semantic_changes_require_integration",
-            "mixed_change",
-            "integration",
-            "retirements",
-            "migrations",
-        ],
-    )?;
+    let fields = [
+        "target_branch",
+        "feature_prefix",
+        "integration_prefix",
+        "staleness",
+        "stability",
+        "semantic_changes_require_integration",
+        "mixed_change",
+        "integration",
+        "retirements",
+        "migrations",
+    ];
+    if v["schema_version"] == 2 {
+        let mut required = vec!["schema_version", "status", "historical_profiles"];
+        required.extend(fields);
+        object(v, &required, &[])?;
+        choice(&v["status"], &["active", "proposed"])?;
+        unique(&v["historical_profiles"], Some("id"))?;
+        for profile in array(&v["historical_profiles"])? {
+            object(
+                profile,
+                &[
+                    "id",
+                    "filemap_version",
+                    "profile_path",
+                    "script",
+                    "test",
+                    "mappings",
+                    "legacy_records",
+                    "ambiguities",
+                ],
+                &[],
+            )?;
+            path(&profile["profile_path"])?;
+            for k in ["script", "test"] {
+                string(&profile[k])?;
+            }
+            if profile["filemap_version"] != 1 {
+                return Err(
+                    "only explicitly declared historical FILEMAP v1 profiles are supported".into(),
+                );
+            }
+            for mapping in array(&profile["mappings"])? {
+                object(mapping, &["from", "to"], &[])?;
+                string(&mapping["from"])?;
+                string(&mapping["to"])?;
+            }
+            for record in array(&profile["legacy_records"])? {
+                object(record, &["collection", "id", "definition", "nodes"], &[])?;
+                choice(&record["collection"], &["scripts"])?;
+                string(&record["id"])?;
+                strings(&record["nodes"])?;
+            }
+            for repair in array(&profile["ambiguities"])? {
+                object(repair, &["node", "definitions", "replacement"], &[])?;
+                string(&repair["node"])?;
+                strings(&repair["definitions"])?;
+                string(&repair["replacement"])?;
+            }
+        }
+    } else {
+        common(v, &fields)?;
+    }
     for k in ["target_branch", "feature_prefix", "integration_prefix"] {
         string(&v[k])?;
     }

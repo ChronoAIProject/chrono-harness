@@ -415,6 +415,9 @@ pub fn prepare(
     )
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args == ["--version"] {
+        return Ok(format!("chrono-ci {}\n", env!("CARGO_PKG_VERSION")));
+    }
     let command = args
         .first()
         .ok_or("use init/generate/verify/prepare --host-root H --config P")?;

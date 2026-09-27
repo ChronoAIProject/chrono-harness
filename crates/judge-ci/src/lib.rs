@@ -1,7 +1,7 @@
 //! Explicit CI policy: fixed Git snapshots, registered old/new impact graph, candidate operations.
 use chrono_harness::{
-    CheckConfig, CheckResult, CommandSpec, PROTOCOL, Request, Response, Status, decode, json,
-    relative_path, run_process, sha256,
+    CheckConfig, CheckResult, PROTOCOL, Request, Response, Status, decode, json, relative_path,
+    sha256,
 };
 use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
 use serde::{Deserialize, Serialize};
@@ -13,9 +13,12 @@ use std::path::Path;
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default)]
+    pub registration_config: Option<String>,
     pub filemap: String,
     pub projects: String,
     pub tools: BTreeMap<String, String>,
+    #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub environment: BTreeMap<String, String>,
@@ -33,6 +36,8 @@ struct Snapshot {
     edges: BTreeSet<Edge>,
     tree: BTreeMap<String, (String, String)>,
     policy: Policy,
+    plans: BTreeMap<String, chrono_judge_registration::execution::Plan>,
+    execute: BTreeMap<String, String>,
 }
 use chrono_harness::facts::{git, utf8};
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str, String> {
@@ -150,12 +155,38 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
     }
     Ok(p)
 }
-fn snapshot(root: &Path, oid: &str, p: Policy) -> Result<Snapshot, String> {
+fn snapshot(root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
     let fm = json(&at(root, oid, &p.filemap)?)?;
     let pr = json(&at(root, oid, &p.projects)?)?;
-    if fm["schema_version"] != 1 || pr["schema_version"] != 1 {
+    if ![object!(1), object!(2)].contains(&fm["schema_version"]) || pr["schema_version"] != 1 {
         return Err("unsupported registry version".into());
     }
+    let plans = if fm["schema_version"] == 2 {
+        if !p.bindings.is_empty() {
+            return Err("current FILEMAP v2 cannot duplicate plans in scoped bindings".into());
+        }
+        let plans = chrono_judge_registration::execution::plans(&fm)?;
+        p.bindings = plans
+            .iter()
+            .map(|(id, p)| (id.clone(), p.operations.clone()))
+            .collect();
+        plans
+    } else {
+        p.bindings
+            .iter()
+            .map(|(id, ops)| {
+                (
+                    id.clone(),
+                    chrono_judge_registration::execution::Plan {
+                        operations: ops.clone(),
+                        timeout_seconds: p.operation_timeout_seconds,
+                        output_limit_bytes: p.operation_output_limit_bytes,
+                    },
+                )
+            })
+            .collect()
+    };
+    let mut execute = BTreeMap::new();
     let owners: BTreeSet<_> = strings(&pr["owners"])?.into_iter().collect();
     if owners.is_empty() {
         return Err("empty owner registry".into());
@@ -163,6 +194,34 @@ fn snapshot(root: &Path, oid: &str, p: Policy) -> Result<Snapshot, String> {
     let mut projects = BTreeMap::new();
     let mut ops = BTreeMap::new();
     let mut nodes = BTreeSet::new();
+    if let Some(config) = &p.registration_config {
+        let config = json(&at(root, oid, config)?)?;
+        for tool in config["tools"].as_array().ok_or("tools missing")? {
+            nodes.insert(format!("tool:{}", text(tool, "id")?));
+        }
+        for input in config["environment"]["inputs"]
+            .as_array()
+            .ok_or("inputs missing")?
+        {
+            nodes.insert(format!("input:{}", text(input, "id")?));
+        }
+        for key in config["environment"]["inherit"]
+            .as_array()
+            .ok_or("inherit missing")?
+            .iter()
+            .filter_map(Value::as_str)
+            .chain(
+                config["environment"]["values"]
+                    .as_object()
+                    .ok_or("values missing")?
+                    .keys()
+                    .map(String::as_str),
+            )
+        {
+            nodes.insert(format!("environment:{key}"));
+        }
+    }
+
     for collection in ["projects", "scripts"] {
         for entry in array(&pr, collection)? {
             let name = text(entry, "id")?;
@@ -173,6 +232,10 @@ fn snapshot(root: &Path, oid: &str, p: Policy) -> Result<Snapshot, String> {
             if projects.insert(name.to_owned(), entry.clone()).is_some() {
                 return Err(format!("duplicate project/script {name}"));
             }
+            if let Some(op) = entry["actions"]["execute"]["operation"].as_str() {
+                execute.insert(format!("test:{name}"), op.into());
+            }
+            nodes.insert(format!("script:{name}"));
             nodes.insert(format!("project:{name}"));
             nodes.insert(format!("test:{name}"));
             for a in entry
@@ -328,6 +391,8 @@ fn snapshot(root: &Path, oid: &str, p: Policy) -> Result<Snapshot, String> {
         edges,
         tree,
         policy: p,
+        plans,
+        execute,
     })
 }
 fn clean(root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
@@ -580,19 +645,72 @@ fn evaluate(req: &Request) -> Result<Response, String> {
         Some(snapshot(root, base, op)?)
     };
     let new = snapshot(root, &req.candidate, p.clone())?;
-    let (paths, selected, selection_explanation) = ci_impact(old.as_ref(), &new);
-    let mut operations = Vec::new();
+    let (paths, mut selected, selection_explanation) = ci_impact(old.as_ref(), &new);
     let mut blocked = vec![];
-    for test in &selected {
-        match p.bindings.get(test) {
-            Some(ops) => {
-                for op in ops {
-                    if !operations.contains(op) {
-                        operations.push(op.clone())
-                    }
+    let mut removed = BTreeMap::new();
+    let mut conversion = Value::Null;
+    let mut reused = BTreeMap::new();
+    let mut environment: BTreeMap<String, String> = std::env::vars().collect();
+    environment.extend(p.environment.clone());
+    let mut declarations=object!(p.tools.iter().map(|(id,program)|object!({"id":id,"program":program,"version_argv":["--version"],"expected_version":null})).collect::<Vec<_>>());
+    if let (Some(config_path), Some(base)) = (&p.registration_config, &req.base) {
+        let a = chrono_harness::facts::registry_values(root, base, config_path)?;
+        let b = chrono_harness::facts::registry_values(root, &req.candidate, config_path)?;
+        let template: Vec<String> =
+            serde_json::from_value(b[config_path]["canonical_check"]["argv"].clone())
+                .map_err(|e| e.to_string())?;
+        chrono_judge_routes::validate_invocation(
+            root,
+            &req.observations["entry"],
+            &template,
+            &object!({"base":req.base,"candidate":req.candidate}),
+        )?;
+        environment.clear();
+        for key in b[config_path]["environment"]["inherit"]
+            .as_array()
+            .ok_or("environment inherit missing")?
+        {
+            let key = key.as_str().ok_or("environment key")?;
+            if let Ok(value) = std::env::var(key) {
+                environment.insert(key.into(), value);
+            }
+        }
+        for (key, value) in b[config_path]["environment"]["values"]
+            .as_object()
+            .ok_or("environment values missing")?
+        {
+            environment.insert(
+                key.clone(),
+                value.as_str().ok_or("environment value")?.into(),
+            );
+        }
+        environment.extend(p.environment.clone());
+        let (_, r, view) = chrono_judge_registration::interpret(
+            root,
+            base,
+            &req.candidate,
+            config_path,
+            a,
+            b,
+            &environment,
+        )?;
+        declarations = r.config()["tools"].clone();
+        reused = chrono_judge_registration::reused_tools(&view)?;
+        conversion = view["conversion"].clone();
+        let replacements = chrono_judge_registration::replacements(&r)?;
+        for test in selected.clone() {
+            if !new.plans.contains_key(&test) {
+                if let Some(replacement) = replacements.get(&test) {
+                    removed.insert(test.clone(), replacement.clone());
+                    selected.remove(&test);
+                    selected.insert(replacement.clone());
                 }
             }
-            None => blocked.push(format!("affected binding removed: {test}")),
+        }
+    }
+    for test in &selected {
+        if !new.plans.contains_key(test) {
+            blocked.push(format!("affected binding removed: {test}"));
         }
         if let Some(old) = &old {
             if let Some(ops) = old.policy.bindings.get(test) {
@@ -604,6 +722,57 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             }
         }
     }
+    // Replaced obligations must preserve every formerly bound method in the replacement plan.
+    for (test, replacement) in &removed {
+        for op in old
+            .as_ref()
+            .and_then(|s| s.policy.bindings.get(test))
+            .ok_or("historical obligation missing")?
+        {
+            if !new
+                .plans
+                .get(replacement)
+                .is_some_and(|p| p.operations.contains(op))
+            {
+                blocked.push(format!("replacement omits old obligation {op}"));
+            }
+        }
+    }
+    let methods: BTreeMap<_, _> = new
+        .operations
+        .iter()
+        .map(|(id, (owner, tool, argv))| {
+            (
+                id.clone(),
+                vec![chrono_judge_registration::execution::Method {
+                    owner: format!("project:{owner}"),
+                    operation: id.clone(),
+                    tool: tool.clone(),
+                    argv: argv.clone(),
+                }],
+            )
+        })
+        .collect();
+    let plan = if blocked.is_empty() {
+        Some(chrono_judge_routes::prepare_scoped(
+            root,
+            object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"]}),
+            &selected,
+            &new.plans,
+            &methods,
+            &new.execute,
+            &declarations,
+            environment,
+            &reused,
+        )?)
+    } else {
+        None
+    };
+    let operations: Vec<_> = plan
+        .as_ref()
+        .into_iter()
+        .flat_map(|p| p.operations.iter().map(|o| o.method.operation.clone()))
+        .collect();
     let mut results = vec![CheckResult {
         id: "ci.inventory".into(),
         status: Status::Passed,
@@ -619,51 +788,39 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             exit_code: None,
         })
     }
-    if blocked.is_empty() {
-        for op in &operations {
-            let (_, tool, args) = new
-                .operations
-                .get(op)
-                .ok_or_else(|| format!("operation absent: {op}"))?;
-            let spec = CommandSpec {
-                program: p.tools.get(tool).ok_or("tool absent")?.clone(),
-                args: args.clone(),
-                env: p.environment.clone(),
-                timeout_seconds: p.operation_timeout_seconds,
-                output_limit_bytes: p.operation_output_limit_bytes,
-            };
-            match run_process(root, &spec, &[]) {
-                Ok(proc) => {
-                    let passed = proc.exit_code == 0;
-                    results.push(CheckResult {
-                        id: op.clone(),
-                        status: if passed {
-                            Status::Passed
-                        } else {
-                            Status::Failed
-                        },
-                        cause: if passed {
-                            "registered command completed".into()
-                        } else {
-                            format!("registered command exit {}", proc.exit_code)
-                        },
-                        exit_code: Some(proc.exit_code),
-                    });
-                    executed.push(object!({"operation":op,"tool":tool,"argv":spec,"process":proc}));
-                }
-                Err(e) => {
-                    results.push(CheckResult {
-                        id: op.clone(),
-                        status: Status::Failed,
-                        cause: e.clone(),
-                        exit_code: None,
-                    });
-                    executed.push(object!({"operation":op,"tool":tool,"argv":spec,"error":e}));
-                }
+    if let Some(plan) = &plan {
+        let outcome = chrono_judge_projects::execute(plan)?;
+        for result in outcome.executed.iter().chain(&outcome.blocked) {
+            results.push(CheckResult {
+                id: result.operation.clone(),
+                status: match result.status.as_str() {
+                    "passed" => Status::Passed,
+                    "blocked" => Status::Blocked,
+                    _ => Status::Failed,
+                },
+                cause: result
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "registered command completed with matching receipt".into()),
+                exit_code: result.receipt.as_ref().map(|r| r.process.exit_code),
+            });
+            if let Some(receipt) = &result.receipt {
+                executed.push(object!({"operation":result.operation,"process":receipt.process,"receipt":receipt}));
+            }
+        }
+        for (old, replacement) in &removed {
+            if outcome.tests.get(replacement).map(String::as_str) != Some("passed") {
+                results.push(CheckResult {
+                    id: format!("replacement:{old}"),
+                    status: Status::Failed,
+                    cause: "required replacement did not execute successfully".into(),
+                    exit_code: None,
+                });
             }
         }
     }
-    let not_required: Vec<_> = p
+    let not_required: Vec<_> = new
+        .policy
         .bindings
         .keys()
         .filter(|t| !selected.contains(*t))
@@ -697,6 +854,6 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             Status::Passed
         },
         results,
-        evidence: object!({"scope":"chrono-ci-check/v1","mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":"chrono-ci-check/v1","mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     })
 }

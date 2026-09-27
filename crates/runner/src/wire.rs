@@ -113,6 +113,8 @@ pub struct Executable {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
+    #[serde(default)]
+    pub observations: Value,
     pub protocol: String,
     pub request_id: String,
     pub judge_id: String,
@@ -279,7 +281,7 @@ pub fn invoke_detailed(
         output_limit_bytes: limit,
     };
     let p = run_process_bound(&req.candidate.root, &spec, &canonical(req)?, hash)?;
-    let result = decode::<Response>(p.stdout.as_bytes()).and_then(|response| {
+    let result = decode::<Response>(&p.stdout_bytes).and_then(|response| {
         validate_response(req, &response, p.exit_code)?;
         Ok(response)
     });

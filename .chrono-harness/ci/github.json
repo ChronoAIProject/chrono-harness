@@ -15,7 +15,7 @@
   "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
   "timeout_minutes": 45,
   "bootstrap": [
-    "python3",
+    "/usr/bin/python3",
     ".chrono-harness/ci/bootstrap.py",
     "."
   ],

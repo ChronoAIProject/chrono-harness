@@ -8,6 +8,7 @@ pub struct Registrations {
     pub(crate) projects: Value,
     pub(crate) filemap: Value,
     pub(crate) workflow: Value,
+    pub(crate) historical: BTreeMap<String, Vec<(String, Value)>>,
 }
 impl Registrations {
     pub fn load(v: &BTreeMap<String, Value>, config_path: &str) -> Result<Self> {
@@ -28,6 +29,7 @@ impl Registrations {
             filemap: get("filemap")?,
             workflow: get("workflow")?,
             config,
+            historical: BTreeMap::new(),
         };
         for (name, v, check) in [
             (
@@ -84,6 +86,7 @@ impl Registrations {
                 "id",
             ),
             ("judge", NodeKind::Judge, &self.judges, "judges", "id"),
+            ("tool", NodeKind::Tool, &self.config, "tools", "id"),
         ] {
             for row in value[key].as_array().unwrap() {
                 let identity = format!("{prefix}:{}", row[id].as_str().unwrap());
@@ -113,6 +116,45 @@ impl Registrations {
                 }
             }
         }
+        for key in self.config["environment"]["inherit"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .chain(
+                self.config["environment"]["values"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .map(String::as_str),
+            )
+        {
+            let identity = format!("environment:{key}");
+            nodes.entry(identity.clone()).or_insert_with(|| NodeView {
+                kind: NodeKind::Environment,
+                definitions: vec![NodeDefinition {
+                    identity,
+                    value: &self.config["environment"],
+                }],
+            });
+        }
+        for (identity, definitions) in &self.historical {
+            let kind = if identity.starts_with("test:") {
+                NodeKind::Test
+            } else {
+                NodeKind::Script
+            };
+            let view = nodes.entry(identity.clone()).or_insert_with(|| NodeView {
+                kind,
+                definitions: vec![],
+            });
+            for (source, value) in definitions {
+                view.definitions.push(NodeDefinition {
+                    identity: source.clone(),
+                    value,
+                });
+            }
+        }
         nodes
     }
 }
@@ -124,6 +166,8 @@ pub enum NodeKind {
     Input,
     Test,
     Judge,
+    Tool,
+    Environment,
 }
 #[derive(Clone, Debug)]
 pub struct NodeDefinition<'a> {

@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前实现含 v1 外部判官运输、独立 registration/filemap 判官、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
+当前实现含 v1 外部判官运输、独立 registration/filemap/routes/projects 的有界合同、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 ## 1. 目标、权限与边界
@@ -75,11 +75,11 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 
 ## 3. 登记格式与字段合同
 
-本节的五个判官 JSON 文件均采用 `schema_version: 1` 和 `status: "proposed" | "active"`。
+Config/projects/judges use `schema_version: 1`; current FILEMAP and workflow use `schema_version: 2`. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前补齐实际输入闭包、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。
-这里的类型表是 v1 规范 schema；registration 已实现严格结构验证，当前宿主仍有不符合该合同的 scoped CI 遗留项（见 §14）。
+类型表按各登记的现役 schema 描述；registration 严格验证结构。明确支持的历史 scoped 遗留项先由候选解释器转换并保留原始事实（见 §14），不作为第二套当前登记。
 对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
 路径是仓库根相对 UTF-8 POSIX 路径，不含 `..` 或隐式 glob；environment.inputs.location 可显式指定外部绝对路径。
 所有文件逐个登记；目录条目只用于明确生成物，不允许替代源文件登记。
@@ -99,7 +99,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 
 tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、
 文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。
-当前仅草拟 cargo，expected_version 为 null，未声明已测得工具链；换工具链由 AI 显式更新登记。
+当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备完整 Cargo/SDK 输入闭包。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。
 `argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
 没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。
 只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。
@@ -139,6 +139,7 @@ argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定
 | surface | `product / test / documentation / membership / instruction-policy / judge-policy / judge-implementation` |
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
+| execution_plans | FILEMAP v2: `test:ID` -> `{operations: string[], timeout_seconds, output_limit_bytes}`; ordered nonempty unique IDs, test execute required; shared precedence and bounds must agree before any launch |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
 
 symlink/projection 是明确的文件表示及所有权说明，不自动增加编译或测试执行边。
@@ -146,7 +147,7 @@ symlink/projection 是明确的文件表示及所有权说明，不自动增加�
 框架资产的编译边、资产运输测试边和源/目标读取的 runtime-input 边另行显式登记。
 这些 FILEMAP 扩展仍属 proposed；专用生成器 manifest 的实际链接/源校验不等于通用 FILEMAP 判官已实现。
 
-图节点 ID 使用 `file:<path>`、`input:<id>`、`project:<id>`、`script:<id>`、`test:<id>`、`judge:<id>`。
+图节点 ID 使用 `file:<path>`、`input:<id>`、`tool:<id>`、`environment:<name>`、`project:<id>`、`script:<id>`、`test:<id>`、`judge:<id>`。工具和环境记录必须显式连接消费者；不推断执行依赖。
 input 节点引用对应状态的 environment.inputs；其边在 project_edges 显式列出，变化也成为种子。
 环境变量及其他非文件输入以显式快照文件登记；两端值无法保留/比较时属于输入不足。
 test 节点指向登记项目的 execute 操作或脚本的测试操作，不是猜出的测试函数。
@@ -162,9 +163,9 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | after | 必须存在的判官 ID 数组；有向无环，稳定 ID 顺序打破并列 |
 | modes | v1 仅 `evaluate`；candidate 判官读取两端事实，见 §6 |
 
-各默认判官分别指定 `.chrono-harness/bin/chrono-judge-<id>`；registration 与 filemap 已实现，其余五个尚未实现。
+Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. Registration/filemap/routes/projects have bounded implementations; cost/mixed/workflow remain unimplemented.
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
+七对判官项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-routes、judge-projects、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |
@@ -176,6 +177,7 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | mixed_change | `{level: "warning", code, requires_acknowledgement: false}` |
 | integration | `{tests, bind, evidence}`；精确绑定字段与状态目录路径 |
 | retirements | `{kind, id, replacement: string|null, reason}[]`；显式退出/迁移事实 |
+| historical_profiles | workflow v2: `{id,filemap_version,profile_path,script,test,mappings,legacy_records,ambiguities}[]`; finite named candidate decoder, exact original bytes/definitions and replacement obligations retained |
 | migrations | `{from_version, to_version, script, test, mappings, reason}[]`；mappings 为旧/新记录 ID 对 |
 
 本节每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。
@@ -377,7 +379,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 ## 8. 默认判官、规则表面与警告
 
-当前 judges.json 登记以下判官；registration 与 filemap 已实现但宿主绑定仍 proposed，其余五个待实现，不存在默认隐形 gate。
+当前 judges.json 登记以下判官；registration、filemap、routes、projects 已实现有界合同，宿主绑定仍 proposed；cost、mixed、workflow 待实现，不存在默认隐形 gate。
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
@@ -546,19 +548,17 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 当前 CLI：spec status | **已实现** draft/not-implemented/proposed，exit 0 |
 | 当前 CLI：help/version | **已实现** 信息输出，exit 0；help 明示完整治理未实现 |
 
-## 14. 实现阶段与实际验证范围
+## 14. Implementation boundaries
 
-runner 已实现通用外部进程、严格 `chrono-ci-judge/v1` 运输、请求身份、退出/状态一致性与结果发布；不拥有选测政策。独立 judge-ci 实现 `chrono-ci-check/v1` 的固定快照、真实双端 FILEMAP/projects、旧新图传播及串行登记操作。独立 ci 实现 GitHub Actions 的 init/generate/verify、事件输入准备与同一 check 入口生成。完整字段、边界与新仓实例见 [docs/ci.md](docs/ci.md)。这里的 scoped 协议独立于 `chrono-judge/v1`。v1 已复用严格 JSON/hash/有界进程，新增固定 RFC 8785 JCS、预启动摘要、清空后白名单环境、四状态精确退出、证据字节校验与声明 DAG；candidate-only 进程运输不内置七判官政策。
+Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, TOML path-dependency consistency, actual execution, blocked dependents and required replacement execution. These are separate production/test projects with independent manifests, lockfiles and targets.
 
-独立 registration 已实现五份严格结构、重复成员/ID、固定 OID/config/context/checkout 核对、ignore dirt、声明启用/闭包就绪及受影响引用检查。真实进程测试含有界合规宿主和本仓 registry 材料。当前 ci-verify 是缺 path/配对且引用未登记 chrono-ci 工具的 scoped 遗留项，full schema 明确报错；其真实归属/路由迁移留给 routes/projects，不创建假脚本。外部输入两端保留、schema 转换和其证据仍非零 unresolved。registration pass 只证明该判官范围，非全部治理完成。报告已提供 §9 全部顶层字段、执行物列表、实际 findings 和具名输出来源；缺失或冲突的生产者结果显式 null/unresolved。完整成本/工具/测试/有效输入生产者仍待实现；parity 始终 unestablished。
+The current FILEMAP v2 execution and workflow v2 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config/projects/judges remain v1. Strict old v1 readers reject the new fields. The supported historical decoder is only chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
 
-独立 filemap 已实现两端完整声明图、稳定记录/字段变化、union 边来源、全种子有限因果闭包和 outputs.impact；现役 judge-ci 通过显式 scoped adapter 消费共享 union/closure，继续真实执行登记 argv。只有 test-execution 选择完整治理测试，旧测试/owner/cost 保留为事实；执行、退休和成本裁决仍待实现。直接 input 声明测试不构成外部输入保留证据。版本化消费合同及证据边界见 [docs/filemap-impact.md](docs/filemap-impact.md)。
+Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
 
-各生产项目都有独立专属测试项目、Cargo.lock 与 target，无根 workspace。操作以登记 argv 为准；构建/测试带 --locked。bootstrap 重用注册 build 操作，固定 Rust 1.95.0；成本未测。FILEMAP/projects 的 schema=1 数据由显式 CI profile 消费其规定字段，不将五份完整治理登记的 proposed 改称全部 active。
+Context may name retained_inputs containing original external-file bytes and environment snapshots at both fixed endpoints. Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods with standalone Cargo manifests and TOML path dependencies; it does not certify Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
 
-instructions 已实现独立的内嵌双语原子组合、init/generate、v1/v2 迁移、宿主定制保留、严格引用/所有权/路径校验、相对别名、布局与 no-op；详见 §16。本次 CI 实现不改变其正文、框架、布局和 alias 合同。
-
-尚未实现完整七判官治理、完整输入闭包、确定性与同判认证、freshness/integration provenance、通用迁移/退休框架、缓存、成本推断、保护规则或其它 provider。原生 CI 行为必须由实际事件运行验证；本地检查和模板生成不能代替。没有 daemon、插件市场或全量约束运行时。前文未由 CI slice 明确采用的设计义务继续作为 proposed 合同。
+Cost/mixed/workflow judges, complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Workflow alone will certify migration, retirement and integration; retained facts and successful replacements are not that certification. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
 
 ## 15. 实际参考经验
 

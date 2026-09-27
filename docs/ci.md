@@ -1,6 +1,6 @@
 # Generated CI and the active CI slice
 
-`runner`, `judge-registration`, `judge-filemap`, `judge-ci`, and `ci` are separate Rust production projects under
+`runner`, `judge-registration`, `judge-filemap`, `judge-routes`, `judge-projects`, `judge-ci`, and `ci` are separate Rust production projects under
 `crates/`, each beside its dedicated `-tests` project with separate Cargo.lock
 and target directories. `instructions` and `instructions-tests` follow the same
 layout. The container directory is not a Cargo workspace or a test-discovery rule;
@@ -8,6 +8,8 @@ each manifest, operation and dependency remains explicitly registered.
 `runner` owns external process transport, request identity, strict protocol checks
 and result publication. `judge-registration` owns full-format registration checks.
 `judge-filemap` owns full typed declaration impact and shared union/closure mechanics.
+`judge-routes` owns operation planning, tool binding and receipt comparison;
+`judge-projects` owns affected pairs and actual execution results.
 `judge-ci` owns the scoped CI registration, snapshot, seed and operation policy,
 and consumes those shared mechanics through an explicit adapter. Its
 `selection_explanation.extra_selections` explains legacy rules, with
@@ -20,14 +22,13 @@ independent and its catalogs, layouts and relative root alias are unchanged.
 The five full-governance registries remain **proposed**. The bounded
 `chrono-ci-check/v1` profile explicitly consumes the FILEMAP and projects data
 below using `chrono-ci-judge/v1`. Separately, `check` supports configured
-`chrono-judge/v1` transport and the registration/filemap judges through
+`chrono-judge/v1` transport and the registration/filemap/routes/projects judges through
 `.chrono-harness/config.json` with `--context`. This proposed host remains
-incomplete and returns nonzero; the other five judges and automated lifecycle
-are not implemented.
+incomplete and returns nonzero; cost/mixed/workflow judges and automated lifecycle remain unimplemented. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
 
 ## This repository
 
-Run from the repository root. Bootstrap requires Python 3, Git, and rustup; it
+Run from the repository root. This macOS host explicitly binds `/usr/bin/python3` with the exact `Python 3.9.6` contract for bootstrap and migration (also in the scoped tool map). Bootstrap requires that interpreter, Git, and rustup; it
 installs Rust 1.95.0 if unavailable, independently ensures its rustfmt component
 (including on a preinstalled minimal toolchain), and builds the explicitly listed bootstrap
 operations using `.chrono-harness/projects.json`, then copies declared binaries.
@@ -37,7 +38,7 @@ the global default toolchain. Bootstrap these tools before the dedicated CI test
 their copied-host regressions consume the installed candidate binaries.
 
 ```sh
-python3 .chrono-harness/ci/bootstrap.py .
+/usr/bin/python3 .chrono-harness/ci/bootstrap.py .
 .chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/github.json
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/github.json
 ```
@@ -86,9 +87,10 @@ validate every proposed field's semantics.
 | schema | Exactly `chrono-ci-check/v1` |
 | judge | `{program, args, env?, timeout_seconds, output_limit_bytes}`; explicit executable/interpreter plus argv; positive bounds, at most 64 MiB per captured stream |
 | report_path | Safe relative file beneath `.chrono-harness/state/`, also covered by a declared artifact directory |
-| policy.filemap / projects | Explicit relative paths; schema_version 1; registry path migration across an enforced range is unsupported |
-| policy.tools | Tool ID → executable path or PATH command; resolved once for each execution and hashed using the command's PATH override, otherwise inherited PATH; relative PATH entries use the child cwd |
-| policy.bindings | `test:ID` → ordered, nonempty registered operation IDs; no test discovery |
+| policy.filemap / projects | Explicit relative paths; FILEMAP v1 historical/v2 current, projects v1; registry path migration across an enforced range is unsupported |
+| policy.tools | Tool ID → executable path or PATH command; legacy scoped resolution; current registration_config supplies actual version declarations; selected tools bind once per plan |
+| policy.bindings | Historical FILEMAP v1 only; current v2 rejects duplicate bindings and consumes FILEMAP.execution_plans |
+| policy.registration_config | Optional full config path; current host uses its candidate historical decoder and tool declarations |
 | policy.environment | Explicit environment overrides passed to operations; this host sets `RUSTUP_TOOLCHAIN=1.95.0` |
 | policy.artifacts | Relative directory prefixes ending `/`; ignored execution products may exist there; tracked files may not overlap them |
 | policy.required_inputs | Explicit regular tracked inputs required by this profile |
@@ -236,3 +238,15 @@ extension and event mapping. Existing instruction behavior remains covered by it
 61 tests. Local tests do not certify native GitHub event routing; delivery must
 verify actual candidate runs, selections, failure/success and PR head behavior
 before claiming those external results.
+
+The initial registered-execution native run [36292159644](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36292159644)
+failed on macos-14-arm64 at the canonical harness step after successful bootstrap.
+Base was `4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`; candidate and workflow source
+were `556fdb73b6f93275d18bd210b9b01be1173daec9`. The failure was
+`E_TOOL_BINDING: migration version mismatch`; no governed operations executed.
+That report did not retain the interpreter's actual version output. The repaired
+host uses the explicit system-interpreter path instead of PATH precedence, keeping
+the exact version contract. `/usr/bin/python3 --version` returned `Python 3.9.6`
+on the local Darwin arm64 verification host. This is not a measurement of the
+native runner's interpreter; a future fixed-candidate native run must validate it.
+Failed migration binding now preserves expected and observed version diagnostics.

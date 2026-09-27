@@ -10,7 +10,9 @@
     "build.judge-ci",
     "build.ci",
     "build.judge-registration",
-    "build.judge-filemap"
+    "build.judge-filemap",
+    "build.judge-routes",
+    "build.judge-projects"
   ],
   "install": [
     {
@@ -32,6 +34,14 @@
     {
       "source": "crates/judge-filemap/target/debug/chrono-judge-filemap",
       "destination": ".chrono-harness/bin/chrono-judge-filemap"
+    },
+    {
+      "source": "crates/judge-routes/target/debug/chrono-judge-routes",
+      "destination": ".chrono-harness/bin/chrono-judge-routes"
+    },
+    {
+      "source": "crates/judge-projects/target/debug/chrono-judge-projects",
+      "destination": ".chrono-harness/bin/chrono-judge-projects"
     }
   ]
 }
