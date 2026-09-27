@@ -161,6 +161,24 @@
         "inputs-tests"
       ],
       "reason": "Explicit input snapshots and retained content transport"
+    },
+    {
+      "id": "distribution",
+      "paths": [
+        "crates/distribution/Cargo.toml",
+        "crates/distribution/Cargo.lock",
+        "crates/distribution/src/lib.rs",
+        "crates/distribution/src/main.rs",
+        "assets/distribution/bootstrap.py",
+        ".chrono-harness/release/plan.json",
+        ".chrono-harness/release/build.json",
+        ".chrono-harness/release/build.py",
+        ".github/workflows/chrono-release.yml"
+      ],
+      "tests": [
+        "distribution-tests"
+      ],
+      "reason": "Release identity, pinned installation, bootstrap and update rollback"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -180,7 +198,8 @@
       "judge-cost-tests",
       "judge-mixed-tests",
       "judge-workflow-tests",
-      "inputs-tests"
+      "inputs-tests",
+      "distribution-tests"
     ],
     "bind": [
       "base",

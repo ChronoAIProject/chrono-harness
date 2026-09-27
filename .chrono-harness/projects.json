@@ -28,7 +28,9 @@
     "judge-workflow",
     "judge-workflow-tests",
     "inputs",
-    "inputs-tests"
+    "inputs-tests",
+    "distribution",
+    "distribution-tests"
   ],
   "projects": [
     {
@@ -1177,6 +1179,98 @@
         }
       },
       "tests_for": "inputs"
+    },
+    {
+      "id": "distribution",
+      "kind": "production",
+      "manifest": "crates/distribution/Cargo.toml",
+      "lockfile": "crates/distribution/Cargo.lock",
+      "root": "crates/distribution",
+      "actions": {
+        "build": {
+          "operation": "build.distribution",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.distribution",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.distribution",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "distribution-tests"
+    },
+    {
+      "id": "distribution-tests",
+      "kind": "test",
+      "manifest": "crates/distribution-tests/Cargo.toml",
+      "lockfile": "crates/distribution-tests/Cargo.lock",
+      "root": "crates/distribution-tests",
+      "actions": {
+        "build": {
+          "operation": "build.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "distribution"
     }
   ],
   "scripts": [

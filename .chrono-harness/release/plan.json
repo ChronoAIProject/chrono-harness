@@ -1,0 +1,19 @@
+{
+  "schema": "chrono-release-plan/v1",
+  "version": "v0.1.0-beta.1",
+  "assets": {
+    "chrono-harness": "crates/runner/target/release/chrono-harness",
+    "chrono-instructions": "crates/instructions/target/release/chrono-instructions",
+    "chrono-judge-ci": "crates/judge-ci/target/release/chrono-judge-ci",
+    "chrono-ci": "crates/ci/target/release/chrono-ci",
+    "chrono-judge-registration": "crates/judge-registration/target/release/chrono-judge-registration",
+    "chrono-judge-filemap": "crates/judge-filemap/target/release/chrono-judge-filemap",
+    "chrono-judge-routes": "crates/judge-routes/target/release/chrono-judge-routes",
+    "chrono-judge-projects": "crates/judge-projects/target/release/chrono-judge-projects",
+    "chrono-judge-cost": "crates/judge-cost/target/release/chrono-judge-cost",
+    "chrono-judge-mixed": "crates/judge-mixed/target/release/chrono-judge-mixed",
+    "chrono-judge-workflow": "crates/judge-workflow/target/release/chrono-judge-workflow",
+    "chrono-inputs": "crates/inputs/target/release/chrono-inputs",
+    "chrono-distribution": "crates/distribution/target/release/chrono-distribution"
+  }
+}

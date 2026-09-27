@@ -2251,6 +2251,164 @@
       "surface": "documentation",
       "cost": "unmeasured",
       "edges": []
+    },
+    {
+      "path": "crates/distribution/Cargo.toml",
+      "owner": "distribution",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:distribution"
+        }
+      ]
+    },
+    {
+      "path": "crates/distribution/Cargo.lock",
+      "owner": "distribution",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:distribution"
+        }
+      ]
+    },
+    {
+      "path": "crates/distribution/src/lib.rs",
+      "owner": "distribution",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:distribution"
+        }
+      ]
+    },
+    {
+      "path": "crates/distribution/src/main.rs",
+      "owner": "distribution",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:distribution"
+        }
+      ]
+    },
+    {
+      "path": "crates/distribution-tests/Cargo.toml",
+      "owner": "distribution-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/distribution-tests/Cargo.lock",
+      "owner": "distribution-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/distribution-tests/tests/installation.rs",
+      "owner": "distribution-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": "assets/distribution/bootstrap.py",
+      "owner": "distribution",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:distribution"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/plan.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/build.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/build.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/chrono-release.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/distribution.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "docs/examples.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -3908,6 +4066,116 @@
       "from": "environment:CARGO_TERM_COLOR",
       "kind": "runtime-input",
       "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:distribution"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "project:distribution",
+      "kind": "compile",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "project:distribution",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "project:distribution",
+      "kind": "test-execution",
+      "to": "test:distribution-tests"
+    },
+    {
+      "from": "project:distribution-tests",
+      "kind": "test-execution",
+      "to": "test:distribution-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:distribution"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:distribution-tests"
     }
   ],
   "test_costs": [
@@ -3961,6 +4229,10 @@
     },
     {
       "test": "inputs-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "distribution-tests",
       "cost": "unmeasured"
     }
   ],
@@ -4125,6 +4397,16 @@
         "build.judge-workflow",
         "build.inputs",
         "test.inputs-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:distribution-tests": {
+      "operations": [
+        "fmt.distribution",
+        "fmt.distribution-tests",
+        "build.distribution",
+        "test.distribution-tests"
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576

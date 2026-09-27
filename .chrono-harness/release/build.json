@@ -1,0 +1,19 @@
+{
+  "schema": "chrono-release-build/v1",
+  "rust_toolchain": "1.95.0",
+  "manifests": [
+    "crates/runner/Cargo.toml",
+    "crates/instructions/Cargo.toml",
+    "crates/judge-ci/Cargo.toml",
+    "crates/ci/Cargo.toml",
+    "crates/judge-registration/Cargo.toml",
+    "crates/judge-filemap/Cargo.toml",
+    "crates/judge-routes/Cargo.toml",
+    "crates/judge-projects/Cargo.toml",
+    "crates/judge-cost/Cargo.toml",
+    "crates/judge-mixed/Cargo.toml",
+    "crates/judge-workflow/Cargo.toml",
+    "crates/inputs/Cargo.toml",
+    "crates/distribution/Cargo.toml"
+  ]
+}
