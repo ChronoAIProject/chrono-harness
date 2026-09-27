@@ -85,7 +85,9 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
-The policy has schema `chrono-cargo-inputs/v2` and these required fields:
+The current policy has schema `chrono-cargo-inputs/v3` and these required fields.
+The fixed v2 inventory contract remains supported with its original absolute
+`CARGO_HOME` requirement and no ancestor-policy choice.
 
 | Field | Contract |
 | --- | --- |
@@ -94,18 +96,35 @@ The policy has schema `chrono-cargo-inputs/v2` and these required fields:
 | `metadata` | `{tool, argv}` for the registered Cargo tool and metadata invocation |
 | `operations` | Map from registered operation ID to its actual Cargo `{tool, argv}` |
 | `target` | Explicit target triple shared by metadata and the consumer |
-| `configuration_files` | Explicit `{path, input}` rows for every lookup, argument and recursive include path; `input` is a registered file-input ID, or explicit `null` for absence |
+| `configuration_files` | Explicit `{path, input}` rows for root/Cargo-home lookup, argument and recursive include paths, plus ancestors when using `inventory`; `input` is a registered file-input ID, or explicit `null` for absence |
+| `configuration_ancestors` | v3 requires `inventory` or `absent`; v2 uses only its original literal inventory |
 | `packages` | Complete declared package resolution for this root and configuration |
 | `timeout_seconds`, `output_limit_bytes` | Per-child limits; positive, output at most 64 MiB |
 
 The guard invokes Cargo from the explicit host root. Declare both `.cargo/config`
-and `.cargo/config.toml` at that root and every ancestor, plus `config` and
-`config.toml` inside the explicitly configured absolute `CARGO_HOME`. Also declare
+and `.cargo/config.toml` at that root, plus `config` and `config.toml` inside the
+explicitly configured `CARGO_HOME`. v3 accepts an absolute home or one resolved
+relative to that same host root; it does not use the guard caller's cwd or infer
+HOME. With `configuration_ancestors: "inventory"`, also declare both lookup
+files at every strict ancestor of the root. Also declare
 each ordered `--config` argument and each recursive `include` target. Paths may be
 host-root-relative or absolute; their resolved locations must match the registered
 inputs. An absent path still needs a row with `input: null`; omitting the field is
 an error. Optional absent includes follow the same rule. These are host-owned
 configuration declarations, never inferred FILEMAP edges or test selection.
+
+With `configuration_ancestors: "absent"`, the host instead asserts that both
+lookup files are absent at **every strict ancestor**. The guard checks that
+explicit universal assertion and rejects any present file, symlink or overlapping
+inventory row. There are no implicit exceptions for registered files; hosts that
+need ancestor configuration select `inventory`. This choice avoids embedding the
+checkout depth and ancestor names in an otherwise relative policy. It never
+discovers or registers a present input. Root lookup, Cargo-home files, arguments
+and includes still require their own explicit rows. The report's additive
+`configuration.ancestor_absences` lists the locations actually checked, and those
+absences are checked again after tool observation, metadata and execution. These
+observations do not supply retained before/after endpoint snapshots, discover
+unregistered semantic reads, or certify complete-input parity.
 
 A present file requires a registered input with an expected SHA-256 and an
 explicit dependency path to the consumer. The guard rejects missing, extra or
@@ -122,10 +141,12 @@ between observations.
 For example, one inventory row is `{"path":".cargo/config.toml","input":null}`.
 It does not stand for the other required paths. Migration from the earlier v1
 contract replaces `configuration_inputs` with this complete explicit inventory,
-retains existing input IDs/hashes/edges and updates the schema. The v2 guard
-rejects v1 policies; it cannot silently assign absence or discover authoritative
-registration. Current adoption fixtures have migrated; the product host has not
-yet activated the guarded operation.
+retains existing input IDs/hashes/edges and updates the schema. v1 remains
+rejected. To migrate v2 to v3, explicitly select the ancestor policy. `inventory`
+preserves its rows; `absent` requires removing strict-ancestor rows and ensuring
+the asserted files are absent. Relative home and input locations are explicit
+host choices, not automatic rewrites. Existing v2 policies keep their meaning.
+The product host has not yet activated the guarded operation.
 
 Each package row contains `id`, `name`, `version`, `source`, `project`,
 `manifest_input`, `inputs`, `checksum`, `features` and `dependencies`. Local

@@ -11,6 +11,12 @@ type Result<T = ()> = std::result::Result<T, String>;
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_CARGO_CONFIGURATION: {message}")
 }
+#[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Ancestors {
+    Inventory,
+    Absent,
+}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Declaration {
@@ -28,6 +34,8 @@ fn required_input<'de, D: serde::Deserializer<'de>>(
 pub(crate) struct Evidence {
     files: Vec<File>,
     parsed: BTreeSet<PathBuf>,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    ancestor_absences: BTreeSet<PathBuf>,
 }
 #[derive(Clone, Serialize)]
 struct File {
@@ -115,6 +123,14 @@ impl Checked {
                 )));
             }
         }
+        for path in &self.evidence.ancestor_absences {
+            if present(path)? {
+                return Err(error(format!(
+                    "ancestor configuration presence changed during guarded operation: {}",
+                    path.display()
+                )));
+            }
+        }
         Ok(())
     }
 }
@@ -165,6 +181,7 @@ pub(crate) fn check(
     root: &Path,
     environment: &BTreeMap<String, String>,
     declarations: &[Declaration],
+    ancestors: Option<Ancestors>,
     arguments: &[String],
     input: impl Fn(&str) -> Result<PathBuf>,
 ) -> Result<Checked> {
@@ -174,12 +191,14 @@ pub(crate) fn check(
         .ok_or_else(|| {
             error("CARGO_HOME must be explicitly set; implicit HOME lookup is unsupported")
         })?;
-    if !Path::new(home).is_absolute() {
+    if ancestors.is_none() && !Path::new(home).is_absolute() {
         return Err(error("CARGO_HOME must be an explicit absolute directory"));
     }
+    let home = root.join(home);
+    let home_directory = normalized(&home)?;
     let mut files = BTreeMap::new();
     let mut evidence = Vec::new();
-    let mut spellings = BTreeSet::from([PathBuf::from(home)]);
+    let mut spellings = BTreeSet::from([home]);
     for row in declarations {
         if row.path.is_empty() || row.path.contains('\0') {
             return Err(error("empty/invalid configuration path"));
@@ -219,10 +238,33 @@ pub(crate) fn check(
     }
     let mut used = BTreeSet::new();
     let mut roots = Vec::new();
+    let mut ancestor_absences = BTreeSet::new();
+    if ancestors == Some(Ancestors::Absent) {
+        for directory in root.ancestors().skip(1) {
+            for name in ["config", "config.toml"] {
+                let path = directory.join(".cargo").join(name);
+                if present(&path)? {
+                    return Err(error(format!(
+                        "ancestor configuration must be absent: {}",
+                        path.display()
+                    )));
+                }
+                if files.contains_key(&path) {
+                    return Err(error("ancestor absence policy overlaps an inventory row"));
+                }
+                ancestor_absences.insert(path);
+            }
+        }
+    }
     for directory in root
         .ancestors()
+        .take(if ancestors == Some(Ancestors::Absent) {
+            1
+        } else {
+            usize::MAX
+        })
         .map(|p| p.join(".cargo"))
-        .chain([normalized(Path::new(home))?])
+        .chain([home_directory])
     {
         let old = directory.join("config");
         let new = directory.join("config.toml");
@@ -305,6 +347,7 @@ pub(crate) fn check(
         evidence: Evidence {
             files: evidence,
             parsed,
+            ancestor_absences,
         },
         spellings,
     })

@@ -31,6 +31,7 @@ pub(crate) struct Contract {
     pub operations: BTreeMap<String, Command>,
     target: String,
     configuration_files: Vec<crate::configuration::Declaration>,
+    configuration_ancestors: Option<crate::configuration::Ancestors>,
     packages: Vec<Package>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
@@ -226,14 +227,19 @@ pub(crate) fn prepare(
     let policy_path = no_symlink_parents(root, policy)?;
     let contract: Contract =
         serde_json::from_value(json(&fs::read(&policy_path).map_err(error)?)?).map_err(error)?;
-    if contract.schema != "chrono-cargo-inputs/v2"
+    let version_valid = match contract.schema.as_str() {
+        "chrono-cargo-inputs/v2" => contract.configuration_ancestors.is_none(),
+        "chrono-cargo-inputs/v3" => contract.configuration_ancestors.is_some(),
+        _ => false,
+    };
+    if !version_valid
         || contract.target.is_empty()
         || contract.timeout_seconds == 0
         || contract.output_limit_bytes == 0
         || contract.output_limit_bytes > 64 * 1024 * 1024
     {
         return Err(error(
-            "invalid chrono-cargo-inputs/v2 contract schema/target/process limits",
+            "invalid chrono-cargo-inputs/v2 or v3 contract schema/ancestor policy/target/process limits",
         ));
     }
     let root_package = contract
@@ -398,6 +404,7 @@ pub(crate) fn prepare(
         root,
         environment,
         &contract.configuration_files,
+        contract.configuration_ancestors,
         &observing.configurations,
         input,
     )?;
