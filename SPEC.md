@@ -85,6 +85,15 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。
 产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 
+### 2.1 形式化真源与实现对应
+
+chrono-harness 所需的通用形式化定义与证明统一归入 trureturing，按数学主题组织并优先复用已有结果；不建立独立 chrono-harness-trureturing 库，不为本产品复制证明或新增仅包装已有定理的数学声明。
+chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归用例，以及 SPEC 子句到形式模型的对应说明。两库独立构建；宿主使用 harness 二进制不因此需要 Lean、trureturing checkout 或特定宿主语言／目录结构。
+
+形式化 lane 使用 trureturing 的独立 worktree 与 PR 交付，其数学准入、编译及验证遵循该库现役规范。对应说明须固定所引用修订和声明，列明对象、参数、假设、结论与实际消费者；已找到、已编译、已证明模型命题、已检验实现对应是不同状态。未完成部分如实保留，不以引用或 CI 绿色冒领全部形式化。
+
+形式模型与反例可以推动 SPEC 演进：发现缺失前提、错误推论或实现不符时，分别修订适用的模型、产品合同或实现，并验证受影响义务。不得为匹配当前实现而静默缩小用户目标或改写旧结论的适用范围。Lean 核验只证明其形式陈述；Rust 实现符合模型仍需单独的对应证据，完整依赖登记、局部性与确定性等现实前提也不能由图闭包或一次通过自动取得。
+
 ## 3. 登记格式与字段合同
 
 Config/projects/judges use `schema_version: 1`; current FILEMAP and workflow use `schema_version: 2`. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
@@ -264,12 +273,14 @@ DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID �
 
 第 1 步：读取 B/C 两份登记，解析变更文件及变更的记录 ID、字段和边。
 第 2 步：建立 `G = G_base ∪ G_candidate`，保留每条边来源 base/candidate/both。
-第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子。
+第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子；有类型边的增加、删除或改接必须把两端节点加入种子。
 例如只删除 `runner → runner-tests` 测试边，也把 runner 与旧测试作为影响种子。
 第 4 步：沿已登记的有类型正向边计算影响闭包，去重但保留来源和因果路径。
 第 5 步：选出候选测试、判官、成本项；验证删除/迁移事实后执行候选中仍存在的测试。
 第 6 步：每个 finding 必须关联一个 DELTA 路径或登记变更，以及明确的依赖因果链。
 没有因果链的旧缺陷不应成为本次错误；可作为未裁决 context 列出。
+
+可达节点集合不能代替有类型边、逐种子来源或执行要求。即使端点图与并集图的可达节点集合相同，也不能据此改用 candidate-only 图选测。例如 base 仅有 `project:p → test:t` 的 test-execution 边、candidate 删除该边、两端节点都已成为种子时，两图都到达这两个节点；只有保留旧边的并集仍选择旧测试。测试删除、替换或退休仍按第 6 节结算，不因节点已到达而省略。
 
 | 边 kind | 方向与含义 | 不允许的推断 |
 | --- | --- | --- |
@@ -292,6 +303,20 @@ every-delta 判官始终被选择，judge-trigger 提供额外影响解释；二
 完整登记表可读作上下文；初始完整性检查只要求本轮新增、变更、受影响引用闭合。
 未改动、无影响的历史缺登记留给后续明确 migration DELTA；不假造全库已经合规。
 schema 不可解析影响本轮输入时是错误；不能以“历史问题”忽略无法构图。
+
+### 5.1 形式对应与保留义务
+
+以下对应固定引用 trureturing 修订 `5cd5558013f6e02612a617b2ba5b03db7a6de0f6` 的 [TwoStateLocalityIncrementalPreservation.lean](https://github.com/the-omega-institute/trureturing/blob/5cd5558013f6e02612a617b2ba5b03db7a6de0f6/D5/S3/ConceptDynamics/Governance/TwoStateLocalityIncrementalPreservation.lean)。模型只承载下述条件结论，不提升 Rust 实现、宿主登记或实际执行的验证状态。
+
+| SPEC 对象／义务 | 形式对象与结论 | 仍须履行的实现义务 |
+| --- | --- | --- |
+| 未受影响对象的旧结论可保留 | `TwoStateLocalityIncrementalPreservation.two_state_locality_yields_incremental_preservation`：若属性具两状态局部性，声明依赖包含两端实际读取，对象自身及这些依赖值均未变化，则两端属性等价 | 状态须包括政策、执行物、工具链、配置、环境及实际外部输入；缺失值须与空值区分。真实读取的包含关系和局部性仍是前提，FILEMAP 格式正确、哈希存在或图闭合均不证明它们 |
+
+`State` 对应固定端点，`Artifact` 对应受检查对象及其输入，`bytes` 对应包含缺失态的输入值；`reads` 是两端实际读取，`dep` 是宿主声明的依赖上界，`property` 是要保留的判定属性。使用 `Option String` 的精确应用已编译，可区分不存在与空字节。实际读取集合、局部性和依赖包含关系仍由宿主履行，不能把 `Local` 假设当作自动取得的结论。不另造仅包装既有结论的定理。
+
+第 5 节的删边例子也给出实现对应的边界：把有类型边投影为“存在某个 kind 的边”，或只保留可达节点，会丢掉测试选择需要的信息。`project:p` 和 `test:t` 同为种子、唯一测试执行边被删除时，两图的可达节点均为这两个节点；candidate 图没有执行边，并集图保留旧执行边。因此任何只证明节点集合相等的结果都不足以替代旧边、逐种子解释、路径、测试选择、成本或退休义务。
+
+当前对应限于上述参数映射、编译过的既有定理应用与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
 
 ## 6. 登记变化、移除与演进
 
