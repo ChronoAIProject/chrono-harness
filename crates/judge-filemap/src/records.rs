@@ -109,6 +109,18 @@ pub fn inventory(
                         format!("file:{path}")
                     };
                     let mut targets = BTreeSet::from([target]);
+                    // Artifact ownership is an explicit declaration. Changing/removing
+                    // it affects that owner at each endpoint, without deriving any
+                    // source directory, language or dependency from the output path.
+                    if scope == "config" && key == "artifacts" {
+                        let owner = row["owner"].as_str().unwrap();
+                        for prefix in ["project", "script"] {
+                            let node = format!("{prefix}:{owner}");
+                            if nodes.contains_key(&node) {
+                                targets.insert(node);
+                            }
+                        }
+                    }
                     // Registration owns aliases such as project/script records' executable test nodes.
                     let test = format!("test:{id}");
                     if nodes.get(&test).is_some_and(|view| {

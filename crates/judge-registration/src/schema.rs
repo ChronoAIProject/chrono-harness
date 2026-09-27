@@ -105,22 +105,14 @@ fn action(v: &Value) -> Result {
     strings(&v["argv"])
 }
 fn actions(v: &Value) -> Result {
-    let o = object(
-        v,
-        &[],
-        &[
-            "build",
-            "check",
-            "format_check",
-            "execute",
-            "init",
-            "generate",
-        ],
-    )?;
+    let o = v.as_object().ok_or("actions must be an object")?;
     if o.is_empty() {
         return Err("empty actions".into());
     }
-    for a in o.values() {
+    for (name, a) in o {
+        if name.is_empty() {
+            return Err("empty action name".into());
+        }
         action(a)?;
     }
     Ok(())
@@ -279,15 +271,17 @@ pub fn projects(v: &Value) -> Result {
     for p in array(&v["projects"])? {
         object(
             p,
-            &["id", "kind", "manifest", "lockfile", "root", "actions"],
-            &["test_project", "tests_for"],
+            &["id", "kind", "actions"],
+            &["test_project", "tests_for", "manifest", "lockfile", "root"],
         )?;
         choice(&p["kind"], &["production", "test"])?;
         if p.get("test_project").is_some() == p.get("tests_for").is_some() {
             return Err("project requires exactly test_project or tests_for".into());
         }
         for k in ["manifest", "lockfile", "root"] {
-            path(&p[k])?;
+            if let Some(value) = p.get(k) {
+                path(value)?;
+            }
         }
         actions(&p["actions"])?;
         string(

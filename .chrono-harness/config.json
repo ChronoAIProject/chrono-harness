@@ -271,6 +271,18 @@
       "owner": "repository",
       "kind": "build-cache",
       "tracked": false
+    },
+    {
+      "path": "crates/judge-cargo/target/",
+      "owner": "judge-cargo",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-cargo-tests/target/",
+      "owner": "judge-cargo-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

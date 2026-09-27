@@ -179,6 +179,19 @@
         "distribution-tests"
       ],
       "reason": "Release identity, pinned installation, bootstrap and update rollback"
+    },
+    {
+      "id": "cargo-projects",
+      "paths": [
+        "crates/judge-cargo/Cargo.toml",
+        "crates/judge-cargo/Cargo.lock",
+        "crates/judge-cargo/src/lib.rs",
+        "crates/judge-cargo/src/main.rs"
+      ],
+      "tests": [
+        "judge-cargo-tests"
+      ],
+      "reason": "Optional Cargo consistency; generic core has no language or directory semantics"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -199,7 +212,8 @@
       "judge-mixed-tests",
       "judge-workflow-tests",
       "inputs-tests",
-      "distribution-tests"
+      "distribution-tests",
+      "judge-cargo-tests"
     ],
     "bind": [
       "base",

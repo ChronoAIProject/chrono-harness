@@ -56,20 +56,29 @@ removed and replacement obligations remain separate. Candidate dirt is checked
 before and after operations.
 
 Projects validates affected reciprocal exclusive project/test and script/test
-pairs, file ownership, distinct manifest/lock/root/target ownership, registered
-pair execution edges and absence of Cargo workspace aggregation. Affected Rust
-manifests and their registered ancestor Cargo manifests (including intermediate
-ancestors) must have no workspace association; this bounded check rejects ancestor
-workspace declarations without trying to interpret membership globs/exclusions.
-Script-only and docs-only changes do not adjudicate unrelated Cargo manifests.
-Its TOML consumer
-checks path dependencies against explicit compile edges without selecting work.
-The bounded full consumer currently rejects registry dependencies without retained
-closure support. This is a full Cargo/SDK closure limitation, not Cargo discovery.
-The positive project fixture exercises registered Python methods associated with
-standalone Cargo manifests; it validates method execution and TOML pairing, not
-Cargo compilation or SDK completeness. The migration consumer additionally runs
-this repository's actual registered ci-tests Cargo plan through the scoped adapter.
+pairs, explicit pair execution edges, registered file ownership and isolation of
+declared generated-output directories. A production project has registered files
+and one dedicated test; scripts keep their explicit path and test pair. Projects
+need no manifest, lockfile, source root or generated output. Optional legacy
+manifest/lockfile fields are opaque owned references; root carries no language
+or output inference. Shared/nested outputs belonging to different owners fail;
+registered input files cannot live inside a generated-output exclusion. Artifact
+record changes also target their explicitly declared project/script owners at
+both endpoints; changing an output alone therefore cannot silently become no work.
+
+Actions may have any nonempty explicit name. Each binds one globally unique
+operation; test `execute` remains its execution contract. FILEMAP execution plans
+continue to provide ordered prerequisites. No manifest, extension, import or
+directory discovery changes ownership, dependencies or test selection.
+
+Language checks live in separately selected adapters. [chrono-judge-cargo](cargo-projects.md)
+retains the former workspace and TOML path-dependency consistency checks using
+an explicit policy under the host `.chrono-harness/`. Full protocol fixtures
+verify that its failure blocks operations and docs-only changes do not rejudge
+unaffected Cargo history. Generic fixtures include manifest-free projects,
+opaque legacy files, custom actions and arbitrary locations. Actual Go/TS/mix
+project/FILEMAP declarations are accepted by the generic schema and pair consumer;
+this is not complete SDK input closure or full governance activation.
 
 The context may name a root-relative `retained_inputs` JSON file. Its `base` and
 `candidate` objects each contain `commit`, `environment` and `files`. Environment

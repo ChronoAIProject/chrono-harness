@@ -128,15 +128,16 @@ PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声�
 | projects 字段 | 类型与约束 |
 | --- | --- |
 | owners | 唯一 owner ID 数组，包括无编译项目的 repository owner |
-| projects | `{id, kind, manifest, lockfile, root, actions, test_project? , tests_for?}[]` |
+| projects | `{id, kind, actions, test_project?, tests_for?, manifest?, lockfile?, root?}[]`；三个 legacy 路径均可省略 |
 | kind | `production` 或 `test`；production 必有 test_project，test 必有 tests_for |
-| actions | build/check/format_check/execute 以及生成器的 init/generate 对象；每项 `{operation, tool, argv}` |
+| actions | 非空的显式具名方法对象；方法名不限定语言或活动；每项 `{operation, tool, argv}`。测试的 `execute` 是其执行入口合同 |
 | scripts | `{id, path, test_script, actions}[]` 或 `{id, path, tests_for, actions}[]` |
 
 每个 production 与一个 test 双向一一对应，test 不再要求递归配一个 test。
 脚本以同样的一对一关系单独登记，不为它创建虚假的编译项目。
 operation 在全部 actions 与 canonical_check 中唯一；同名不同参数也属于重复方法。
-构建、测试依赖只由 FILEMAP 提供；manifest 可作为一致性检查输入，不能用来补登记。
+宿主可以没有 manifest、lockfile、统一 source root 或编译输出目录。可选 legacy manifest/lockfile 只是显式归属的 opaque 文件引用；root 不授予内容或输出推断权。通用 projects 判官检查一对一配对、显式测试边、实际文件归属与声明产物目录的隔离，不解析语言文件，也不根据路径猜 `target/`。产物登记变更与删除按两端显式 owner 唤醒对应 project/script，再沿 FILEMAP 边选择测试。
+构建、测试依赖只由 FILEMAP 提供。语言工具可作为可选一致性判官，例如 [chrono-judge-cargo](docs/cargo-projects.md)；适配器消费显式语言政策与既有边，不能补登记或选测试。
 脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。
 生成器自举 init/generate 通过已登记 cargo 工具的 `run --locked --manifest-path ... -- ...` 调用，
 argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定制；首次采用内嵌精选核心与空上下文。
@@ -572,13 +573,13 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 ## 14. Implementation boundaries
 
-Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, TOML path-dependency consistency, actual execution, blocked dependents and required replacement execution. These are separate production/test projects with independent manifests, lockfiles and targets.
+Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
 
 The current FILEMAP v2 execution and workflow v2 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config/projects/judges remain v1. Strict old v1 readers reject the new fields. The supported historical decoder is only chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
 
 Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
 
-Context may name retained_inputs containing original external-file bytes or content-addressed blob references and environment snapshots at both fixed endpoints. The independent chrono-inputs capture/pair producer and streaming validation are specified in [docs/inputs.md](docs/inputs.md). Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods with standalone Cargo manifests and TOML path dependencies; it does not certify Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
+Context may name retained_inputs containing original external-file bytes or content-addressed blob references and environment snapshots at both fixed endpoints. The independent chrono-inputs capture/pair producer and streaming validation are specified in [docs/inputs.md](docs/inputs.md). Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods without manifest/lock/root, custom action names and arbitrary file locations; optional Cargo consumers preserve workspace/path-dependency checks. Neither certifies Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
 
 Workflow now certifies bounded branch, integration, retirement and finite migration contracts using actual observations and completed reports; see [docs/workflow.md](docs/workflow.md). Complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
 

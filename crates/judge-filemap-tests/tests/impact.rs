@@ -654,3 +654,35 @@ fn retained_effective_environment_api_preserves_old_edges_and_rejects_unknown_fa
             .is_err()
     );
 }
+
+#[test]
+fn artifact_owner_changes_and_removal_preserve_explicit_endpoint_consumers() {
+    let mut a = values();
+    script_pair(&mut a, "st");
+    a.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"path":"declared outputs/","owner":"p","kind":"output","tracked":false}));
+    let mut b = a.clone();
+    b.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .last_mut()
+        .unwrap()["owner"] = json!("s");
+    let (impact, findings) = run(&a, &b, &[delta(CONFIG)]);
+    assert!(findings.is_empty());
+    assert_eq!(tests(&impact), ["test:st", "test:t"]);
+    assert!(impact.seeds.contains(&"project:p".into()));
+    assert!(impact.seeds.contains(&"script:s".into()));
+    let mut removed = a.clone();
+    removed.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    let (impact, findings) = run(&a, &removed, &[delta(CONFIG)]);
+    assert!(findings.is_empty());
+    assert_eq!(tests(&impact), ["test:t"]);
+    let (impact, findings) = run(&a, &a, &[delta("doc.txt")]);
+    assert!(findings.is_empty());
+    assert!(tests(&impact).is_empty());
+}

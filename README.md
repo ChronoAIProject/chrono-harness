@@ -17,7 +17,7 @@
 
 这三个仓库是测试版安装与本地/原生 CI 的实际验收宿主；覆盖范围和当前限制见 [示例索引](docs/examples.md)。
 
-宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`judge-workflow` / `judge-workflow-tests`、`inputs` / `inputs-tests`、`distribution` / `distribution-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
+宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cargo` / `judge-cargo-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`judge-workflow` / `judge-workflow-tests`、`inputs` / `inputs-tests`、`distribution` / `distribution-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
 
 ```text
 crates/                    独立 Rust 生产项目及各自测试项目
@@ -35,6 +35,8 @@ crates/                    独立 Rust 生产项目及各自测试项目
   judge-routes-tests/
   judge-projects/          受影响配对与真实操作执行
   judge-projects-tests/
+  judge-cargo/             显式采用的 Cargo 一致性判官
+  judge-cargo-tests/
   judge-cost/              显式四维成本、旧新来源和未知值告警
   judge-cost-tests/
   judge-mixed/             显式规则变化分类、混合修改与旧新成本警告
@@ -109,3 +111,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 显式外部输入可由独立 `chrono-inputs capture/pair` 生成两端快照和保留内容，判官流式核对，无需把大文件字节塞进 JSON。调用及格式见 [输入快照合同](docs/inputs.md)。这不自动发现或补齐 Cargo/SDK 依赖，也不自动启用完整宿主。
 
 测试版统一从本库 [GitHub Releases](https://github.com/ChronoAIProject/chrono-harness/releases) 分发。独立 `chrono-distribution` 按显式清单打包、合并原生平台产物、生成宿主安装登记与入口，验证清单和二进制摘要后安装；宿主无需保留产品源码包或编译 Rust。合同与命令见 [发布与安装](docs/distribution.md)。
+
+通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
