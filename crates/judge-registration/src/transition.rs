@@ -19,6 +19,10 @@ fn load_view(view: &Value, config: &str) -> Result<(Registrations, Registrations
     let mut old = Registrations::load(&a, config)?;
     old.historical =
         serde_json::from_value(view["historical"].clone()).map_err(|e| e.to_string())?;
+    if let Some(raw) = view["conversion"]["input"].get("original") {
+        let raw: Values = serde_json::from_value(raw.clone()).map_err(|e| e.to_string())?;
+        old.original_schemas = Registrations::schemas(&raw, config)?;
+    }
     Ok((old, Registrations::load(&b, config)?))
 }
 pub fn views(req: &Request) -> Result<(Registrations, Registrations, Value), String> {
@@ -42,7 +46,7 @@ pub fn views(req: &Request) -> Result<(Registrations, Registrations, Value), Str
     }
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .unwrap_or_default();
-    let (a, b, mut view) = interpret(
+    let (a, b, mut view) = interpret_mode(
         &req.candidate.root,
         &req.base.commit,
         &req.candidate.commit,
@@ -50,6 +54,7 @@ pub fn views(req: &Request) -> Result<(Registrations, Registrations, Value), Str
         a,
         b,
         &env,
+        Some(&req.judge_id),
     )?;
     view["binding"] = binding;
     Ok((a, b, view))
@@ -63,7 +68,20 @@ pub fn interpret(
     candidate: Values,
     env: &BTreeMap<String, String>,
 ) -> Result<(Registrations, Registrations, Value), String> {
+    interpret_mode(root, base, candidate_oid, config, raw, candidate, env, None)
+}
+fn interpret_mode(
+    root: &Path,
+    base: &str,
+    candidate_oid: &str,
+    config: &str,
+    raw: Values,
+    candidate: Values,
+    env: &BTreeMap<String, String>,
+    consumer: Option<&str>,
+) -> Result<(Registrations, Registrations, Value), String> {
     let new = Registrations::load(&candidate, config).map_err(|e| format!("candidate: {e}"))?;
+    let deferred = consumer.is_some_and(|id| downstream_validator(&new, id));
     let filemap = raw[config]["registries"]["filemap"]
         .as_str()
         .ok_or("historical filemap path")?;
@@ -237,6 +255,9 @@ pub fn interpret(
             .unwrap()
             .values()
         {
+            if deferred {
+                continue;
+            }
             let current = all
                 .get(action["operation"].as_str().unwrap())
                 .ok_or("E_MIGRATION: historical method lost")?;
@@ -311,4 +332,55 @@ pub fn ambiguity_repaired(r: &Registrations, node: &str, definitions: &[String])
             || replacements(r)
                 .ok()
                 .is_some_and(|m| m.get(node).is_some_and(|v| v == to)))
+}
+
+/// Explicit requests only: null is a requested retirement, never its approval.
+pub fn retirement_requests(r: &Registrations) -> Result<BTreeMap<String, Option<String>>, String> {
+    let mut out = BTreeMap::new();
+    for row in r.workflow()["retirements"].as_array().unwrap() {
+        if row["kind"] != "test" {
+            continue;
+        }
+        let from = format!("test:{}", row["id"].as_str().unwrap());
+        let to = row["replacement"].as_str().map(|s| {
+            if s.starts_with("test:") {
+                s.into()
+            } else {
+                format!("test:{s}")
+            }
+        });
+        if out.insert(from, to).is_some() {
+            return Err("E_REQUIRED_TEST_REMOVED: ambiguous retirement request".into());
+        }
+    }
+    Ok(out)
+}
+/// A declared later validator must consume this judge before a pending obligation
+/// can leave planning/execution. The validator, not this graph query, approves it.
+pub fn downstream_validator(r: &Registrations, id: &str) -> bool {
+    let judges = r.judges()["judges"].as_array().unwrap();
+    let Some(validator) = r.judges()["migration_validator"].as_str() else {
+        return false;
+    };
+    if validator == id {
+        return false;
+    }
+    let mut pending = vec![validator];
+    let mut seen = BTreeSet::new();
+    while let Some(n) = pending.pop() {
+        if !seen.insert(n) {
+            continue;
+        }
+        let Some(j) = judges.iter().find(|j| j["id"] == n) else {
+            return false;
+        };
+        for p in j["after"].as_array().unwrap() {
+            let Some(p) = p.as_str() else { return false };
+            if p == id {
+                return true;
+            }
+            pending.push(p)
+        }
+    }
+    false
 }

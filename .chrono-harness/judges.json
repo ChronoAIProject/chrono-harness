@@ -120,6 +120,7 @@
       "after": [
         "registration",
         "filemap",
+        "routes",
         "projects",
         "mixed",
         "cost"

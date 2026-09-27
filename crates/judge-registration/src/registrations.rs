@@ -9,6 +9,7 @@ pub struct Registrations {
     pub(crate) filemap: Value,
     pub(crate) workflow: Value,
     pub(crate) historical: BTreeMap<String, Vec<(String, Value)>>,
+    pub(crate) original_schemas: BTreeMap<String, (String, u64)>,
 }
 impl Registrations {
     pub fn load(v: &BTreeMap<String, Value>, config_path: &str) -> Result<Self> {
@@ -30,6 +31,7 @@ impl Registrations {
             workflow: get("workflow")?,
             config,
             historical: BTreeMap::new(),
+            original_schemas: Self::schemas(v, config_path)?,
         };
         for (name, v, check) in [
             (
@@ -48,6 +50,31 @@ impl Registrations {
     /// Structurally validated values; semantic admissibility is still registration policy.
     pub fn config(&self) -> &Value {
         &self.config
+    }
+    pub(crate) fn schemas(
+        v: &BTreeMap<String, Value>,
+        config_path: &str,
+    ) -> Result<BTreeMap<String, (String, u64)>> {
+        let mut out = BTreeMap::new();
+        for key in ["config", "projects", "filemap", "judges", "workflow"] {
+            let path = if key == "config" {
+                config_path
+            } else {
+                v[config_path]["registries"][key]
+                    .as_str()
+                    .ok_or("original registry path")?
+            };
+            let version = v
+                .get(path)
+                .and_then(|v| v["schema_version"].as_u64())
+                .ok_or("original schema version")?;
+            out.insert(key.into(), (path.into(), version));
+        }
+        Ok(out)
+    }
+    /// Fixed original schema identities, before an explicit historical decoder.
+    pub fn original_schemas(&self) -> &BTreeMap<String, (String, u64)> {
+        &self.original_schemas
     }
     pub fn judges(&self) -> &Value {
         &self.judges

@@ -24,7 +24,9 @@
     "judge-cost",
     "judge-cost-tests",
     "judge-mixed",
-    "judge-mixed-tests"
+    "judge-mixed-tests",
+    "judge-workflow",
+    "judge-workflow-tests"
   ],
   "projects": [
     {
@@ -989,6 +991,98 @@
         }
       },
       "tests_for": "judge-mixed"
+    },
+    {
+      "id": "judge-workflow",
+      "kind": "production",
+      "manifest": "crates/judge-workflow/Cargo.toml",
+      "lockfile": "crates/judge-workflow/Cargo.lock",
+      "root": "crates/judge-workflow",
+      "actions": {
+        "build": {
+          "operation": "build.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-workflow-tests"
+    },
+    {
+      "id": "judge-workflow-tests",
+      "kind": "test",
+      "manifest": "crates/judge-workflow-tests/Cargo.toml",
+      "lockfile": "crates/judge-workflow-tests/Cargo.lock",
+      "root": "crates/judge-workflow-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "judge-workflow"
     }
   ],
   "scripts": [

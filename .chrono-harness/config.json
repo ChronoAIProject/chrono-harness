@@ -229,6 +229,18 @@
       "owner": "judge-mixed-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/judge-workflow/target/",
+      "owner": "judge-workflow",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-workflow-tests/target/",
+      "owner": "judge-workflow-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

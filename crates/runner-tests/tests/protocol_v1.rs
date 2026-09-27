@@ -274,3 +274,20 @@ fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
         }
     }
 }
+
+#[test]
+fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() {
+    let script = format!(
+        "{RESPONSE}import hashlib\nif r['judge_id']=='consumer':\n o=r['observations']['judges']\n assert len(o)==1 and o[0]['id']=='producer'\n p=o[0]['process']\n assert o[0]['request_digest']==p['stdin_sha256']\n assert hashlib.sha256(bytes(p['stdout_bytes'])).hexdigest()==p['stdout_sha256']\n assert json.loads(bytes(p['stdout_bytes']))==r['prior_results'][0]\n assert o[0]['request_id']==r['prior_results'][0]['request_id']\n assert p['exit_code']==0 and p['failure'] is None\nprint(json.dumps(s))"
+    );
+    let (_dir, req, mut producer) = fixture(&script);
+    producer.id = "producer".into();
+    let mut consumer = producer.clone();
+    consumer.id = "consumer".into();
+    consumer.after = vec!["producer".into()];
+    let (status, rows) =
+        chrono_harness::full::execute(&req, &[consumer, producer], &Default::default(), 5, 16384)
+            .unwrap();
+    assert_eq!(status, wire::Status::Pass, "{rows:#?}");
+    assert_eq!(rows.len(), 2);
+}

@@ -3,7 +3,10 @@ pub mod execution;
 pub mod inputs;
 mod registrations;
 mod transition;
-pub use transition::{ambiguity_repaired, interpret, replacements, reused_tools, views};
+pub use transition::{
+    ambiguity_repaired, downstream_validator, interpret, replacements, retirement_requests,
+    reused_tools, views,
+};
 mod schema;
 use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
@@ -156,6 +159,7 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
         );
         return Ok(());
     }
+    let context_v2 = context["schema_version"] == 2;
     schema::object(
         &context,
         &[
@@ -170,9 +174,13 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
             "operation",
             "integration_evidence",
         ],
-        &["retained_inputs"],
+        if context_v2 {
+            &["retained_inputs", "run_kind"]
+        } else {
+            &["retained_inputs"]
+        },
     )?;
-    if context["schema_version"] != 1
+    if (context["schema_version"] != 1 && !context_v2)
         || context["base"] != req.base.commit
         || context["candidate"] != req.candidate.commit
         || context["dev_tip"] != req.base.commit
@@ -186,6 +194,14 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
             true,
         );
         return Ok(());
+    }
+    if context_v2
+        && !matches!(
+            context["run_kind"].as_str(),
+            Some("integration" | "delivery")
+        )
+    {
+        return Err("context v2 requires integration/delivery run_kind".into());
     }
     schema::string(&context["branch_ref"])?;
     facts::verify_oid(root, schema::string(&context["fork_point"])?)?;

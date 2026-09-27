@@ -171,9 +171,9 @@ test 节点指向登记项目的 execute 操作或脚本的测试操作，不是
 | after | 必须存在的判官 ID 数组；有向无环，稳定 ID 顺序打破并列 |
 | modes | v1 仅 `evaluate`；candidate 判官读取两端事实，见 §6 |
 
-Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. Registration/filemap/routes/projects/cost/mixed have bounded implementations; workflow remains unimplemented.
+Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. All seven judges have bounded implementations; full host activation remains incomplete. See [workflow evidence](docs/workflow.md).
 每个 ID 实现时才创建并登记 `judge-<id>` 与专属 `judge-<id>-tests`，独立 manifest/lockfile/target。
-七对判官项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-routes、judge-projects、judge-cost、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
+七对判官项目分别编译测试，不由一个总判官二进制耦合；当前存在 runner、judge-registration、judge-filemap、judge-routes、judge-projects、judge-cost、judge-mixed、judge-workflow、judge-ci、ci、instructions 及各自测试，不创建空判官项目。
 第三方程序可改成自己的 executable/argv，但宿主调用声明仍位于 `.chrono-harness/`。
 
 | workflow 字段 | 类型与约束 |
@@ -228,13 +228,14 @@ v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 di
 base.root 是从固定 base tree 导出的只读文件快照；不执行其中程序。candidate.root 是实际检出的候选工作树根，不是导出的干净副本。判官将其视为只读源，构建及证据仅使用登记生成目录。只读是输入消费合同，不声称 OS 沙箱隔离；registration 对比观察与固定对象。
 context 为 UTF-8 JSON：`schema_version, base, candidate, dev_tip, branch_ref, fork_point,`
 `branch_started_at, observed_at, operation, integration_evidence`，时间均为 UTC RFC3339。
+workflow 使用 context schema 2，另须显式 `run_kind: integration | delivery`；integration 前缀的交付也必须使用 delivery。registration 保留 v1 供现有有界消费者读取。
 operation 固定为 validate.delta；integration_evidence 为证据摘要或 null。
 context 的 base/candidate 必须与 CLI 相同，dev_tip 必须等于 base；CI 不接受悄悄漂移。
 Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING`，AI 补取后重跑。
 工作开始记录 branch_started_at，observed_at 是本轮获取 dev 的时间，不用提交时间猜分支年龄。
 同一轮本地/CI 使用相同 context；dev 再推进就建立新一轮输入，不能冒用旧报告。
 
-计划中的报告写入 `.chrono-harness/state/report.json`，stdout 输出同一 JSON 对象。
+完整报告写入 `.chrono-harness/state/report.json` 与本轮唯一的 `run-<identity>.json`，stdout 输出同一 JSON 对象。报告的 report_path 指向后者；runner 将实际前序判官进程及 request_digest 传入 observations，供 workflow 核对执行身份与完成证据。
 CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。
 不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
 
@@ -388,7 +389,7 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 ## 8. 默认判官、规则表面与警告
 
-当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed 已实现有界合同，宿主绑定仍 proposed；workflow 待实现，不存在默认隐形 gate。
+当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed、workflow 已实现有界合同，宿主绑定仍 proposed，不存在默认隐形 gate。
 
 | ID | 本轮职责与典型错误 |
 | --- | --- |
@@ -415,7 +416,7 @@ warning 不升级成 blanket block、不索要批准、不要求人为确认或�
 integration 是这类规则变更本身的稳定性要求，并非混合提交惩罚。
 AI 先尝试在现有规则下解决任务；确需改判官时自主变更并验证，报告为什么和影响多大。
 源码自举的 engine 修改只按显式 stability 登记要求 integration，本身不被当作宿主 policy。
-现役 mixed 输出和语义选择合同见 [docs/mixed.md](docs/mixed.md)；integration 认证仍由待实现的 workflow 承担。
+现役 mixed 输出和语义选择合同见 [docs/mixed.md](docs/mixed.md)；integration 认证由独立 workflow 消费实际结果与完成报告，合同见 [docs/workflow.md](docs/workflow.md)。
 
 ## 9. 成本与执行报告
 
@@ -466,7 +467,7 @@ fork_point 必须是 branch/candidate 与 dev 的共同祖先；负年龄或不�
 
 判官语义/绑定改动或 stability 路径变动：先创建 fresh integration，组合拟交付完整变化。
 integration 上执行同一 check 指令与注册稳定性测试；成功报告作为 integration 证据。
-workflow 判官在 integration 上标记 `integration_run`，执行所需测试后生成证据，
+workflow 判官在显式 integration run_kind 上标记 `integration_run`，执行所需测试后生成证据，
 不会递归要求本轮先提供自身成功证据；feature/dev 交付才消费已完成的 integration 证据。
 纯普通变化在 feature 验证后可进入 dev；AI 可显式新增 stability 登记扩大测试需求。
 
@@ -478,6 +479,7 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 允许 commit OID 因合并元数据不同而变，只要 tree/base/其他绑定字段相同；报告写明映射。
 若合并冲突处理改变 tree 或 dev 推进，重新建立 integration 候选并测试，不能复用旧绿灯。
 缺失、失败、过期或绑定不匹配证据分别为 E_INTEGRATION_REQUIRED / E_INTEGRATION_MISMATCH。
+证据额外保留 producer 身份和 proof 中的实际 context、plan、results、inputs 与判官进程。交付必须同时取得发布该证据摘要的成功完成 runner 报告；未完成进程留下的证据不能使用。输入比较只规范化宿主路径与允许变化的候选 commit 身份，保留原始证据；交付仍执行选中测试。
 报告来自可信但可能出错的 AI/runner；摘要用于识别误用，不设计对抗 AI 的授权系统。
 
 ## 11. 独立脚本和插件扩展示例
@@ -568,7 +570,7 @@ Scoped judge-ci reuses routes planning and projects execution/receipt logic thro
 
 Context may name retained_inputs containing original external-file bytes and environment snapshots at both fixed endpoints. Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods with standalone Cargo manifests and TOML path dependencies; it does not certify Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
 
-Workflow judge, complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Workflow alone will certify migration, retirement and integration; retained facts and successful replacements are not that certification. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
+Workflow now certifies bounded branch, integration, retirement and finite migration contracts using actual observations and completed reports; see [docs/workflow.md](docs/workflow.md). Complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
 
 ## 15. 实际参考经验
 

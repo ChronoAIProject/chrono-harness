@@ -440,16 +440,39 @@ fn evaluate(req: &Request) -> Result<BTreeMap<String, Value>, String> {
     }
     let mut selected: BTreeSet<_> = impact.tests.iter().cloned().collect();
     let replacements = chrono_judge_registration::replacements(&r)?;
+    let requests = chrono_judge_registration::retirement_requests(&r)?;
+    let deferred = chrono_judge_registration::downstream_validator(&r, &req.judge_id);
     for test in &impact.retired_tests {
-        selected.insert(
-            replacements
-                .get(test)
-                .ok_or_else(|| format!("E_REQUIRED_TEST_REMOVED: {test}"))?
-                .clone(),
-        );
+        match requests.get(test) {
+            Some(Some(replacement)) => {
+                selected.insert(replacement.clone());
+            }
+            Some(None) if deferred => {}
+            _ => return Err(format!("E_REQUIRED_TEST_REMOVED: {test}")),
+        }
     }
     let candidate_plans = chrono_judge_registration::execution::plans(r.filemap())?;
     for required in &impact.required_tests {
+        // Explicit method replacement or joint retirement is adjudicated by the
+        // registered downstream validator; historical methods are retained data.
+        if deferred && requests.contains_key(&required.node) && !required.candidate_present {
+            continue;
+        }
+        let definitions = &impact.nodes[&required.node].base_definitions;
+        if deferred
+            && definitions.len() > 1
+            && chrono_judge_registration::ambiguity_repaired(
+                &r,
+                &required.node,
+                &definitions
+                    .iter()
+                    .map(|d| d.identity.clone())
+                    .collect::<Vec<_>>(),
+            )
+        {
+            continue;
+        }
+
         let target = replacements.get(&required.node).unwrap_or(&required.node);
         if required.candidate_present
             && !impact.nodes[&required.node]

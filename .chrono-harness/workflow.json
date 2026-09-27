@@ -131,6 +131,23 @@
         "judge-mixed-tests"
       ],
       "reason": "Explicit surface and semantic-field changes, mixed warnings and bound cost provenance"
+    },
+    {
+      "id": "workflow-certification",
+      "paths": [
+        "crates/judge-workflow/Cargo.toml",
+        "crates/judge-workflow/Cargo.lock",
+        "crates/judge-workflow/src/lib.rs",
+        "crates/judge-workflow/src/main.rs",
+        "crates/judge-workflow/src/branch.rs",
+        "crates/judge-workflow/src/evidence.rs",
+        "crates/judge-workflow/src/transition.rs",
+        "crates/judge-workflow/src/certificate.rs"
+      ],
+      "tests": [
+        "judge-workflow-tests"
+      ],
+      "reason": "Branch freshness, declared evolution and actual integration evidence"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -147,7 +164,9 @@
       "judge-filemap-tests",
       "judge-routes-tests",
       "judge-projects-tests",
-      "judge-cost-tests"
+      "judge-cost-tests",
+      "judge-mixed-tests",
+      "judge-workflow-tests"
     ],
     "bind": [
       "base",
