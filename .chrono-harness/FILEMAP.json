@@ -180,6 +180,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
         }
       ]
     },
@@ -4582,6 +4586,11 @@
       "from": "project:judge-workflow",
       "kind": "runtime-input",
       "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
     }
   ],
   "test_costs": [
@@ -4681,6 +4690,8 @@
       "operations": [
         "fmt.ci",
         "fmt.ci-tests",
+        "build.runner",
+        "build.judge-registration",
         "build.ci",
         "test.ci-tests",
         "ci.verify"

@@ -172,6 +172,9 @@ fn invalid_initial_sources_do_not_publish_partial_configuration() {
         "delta-collision",
         "host-config-collision",
         "state-output",
+        "source-parent",
+        "host-parent",
+        "judge-collision",
     ] {
         let host = tempfile::tempdir().unwrap();
         let inputs = tempfile::tempdir().unwrap();
@@ -202,6 +205,18 @@ fn invalid_initial_sources_do_not_publish_partial_configuration() {
             }
             "state-output" => {
                 c["initial_inventory"]["path"] = ".chrono-harness/state/initial.json".into()
+            }
+            "source-parent" => {
+                c["initial_inventory"]["path"] =
+                    ".chrono-harness/ci/github.json/initial.json".into()
+            }
+            "host-parent" => {
+                c["initial_inventory"]["profile"]["host_config"] =
+                    ".chrono-harness/ci/root inventory.json/config.json".into()
+            }
+            "judge-collision" => {
+                c["initial_inventory"]["profile"]["judges"][0]["executable"] =
+                    c["initial_inventory"]["path"].clone()
             }
             _ => unreachable!(),
         }
@@ -239,5 +254,149 @@ fn initial_projection_symlink_is_rejected_without_touching_the_target() {
     for verify in [true, false] {
         assert!(generate(host.path(), ".chrono-harness/ci/github.json", verify).is_err());
         assert_eq!(fs::read_to_string(&target).unwrap(), "preserved");
+    }
+}
+
+#[test]
+fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory() {
+    let product = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for unregistered in [false, true] {
+        let host = tempfile::Builder::new()
+            .prefix("generated root host ")
+            .tempdir()
+            .unwrap();
+        let inputs = tempfile::tempdir().unwrap();
+        let root = host.path();
+        let bin = root.join(".chrono-harness/bin");
+        fs::create_dir_all(&bin).unwrap();
+        for (project, name) in [
+            ("runner", "chrono-harness"),
+            ("judge-registration", "chrono-judge-registration"),
+        ] {
+            fs::copy(
+                product.join(format!("crates/{project}/target/debug/{name}")),
+                bin.join(name),
+            )
+            .expect("build the explicitly registered production prerequisites");
+        }
+        let mut c = source();
+        let binding = &mut c["initial_inventory"]["profile"]["judges"][0];
+        binding["executable"] = ".chrono-harness/bin/chrono-judge-registration".into();
+        binding["sha256"] =
+            chrono_harness::sha256(&fs::read(bin.join("chrono-judge-registration")).unwrap())
+                .into();
+        let input = inputs.path().join("source.json");
+        write(&input, &c);
+        init(root, &input).unwrap();
+
+        let read_host = |name: &str| -> Value {
+            serde_json::from_slice(
+                &fs::read(product.join(format!(".chrono-harness/{name}.json"))).unwrap(),
+            )
+            .unwrap()
+        };
+        let mut config = read_host("config");
+        config["tools"] = json!([]);
+        config["semantic_fields"] = json!([]);
+        config["environment"] = json!({"inherit":["PATH"], "values":{}, "inputs":[]});
+        config["artifacts"] = json!([
+            {"path":".chrono-harness/bin/","owner":"repository","kind":"executable","tracked":false},
+            {"path":".chrono-harness/state/","owner":"repository","kind":"evidence","tracked":false}
+        ]);
+        config["canonical_check"]["argv"] = json!([
+            ".chrono-harness/bin/chrono-harness",
+            "check",
+            "--config",
+            ".chrono-harness/registry.json",
+            "--base",
+            "{base}",
+            "--candidate",
+            "{candidate}"
+        ]);
+        write(&root.join(".chrono-harness/registry.json"), &config);
+        let mut workflow = read_host("workflow");
+        workflow["stability"] = json!([]);
+        workflow["integration"]["tests"] = json!([]);
+        workflow["migrations"] = json!([]);
+        workflow["retirements"] = json!([]);
+        workflow["historical_profiles"] = json!([]);
+        write(&root.join(".chrono-harness/workflow.json"), &workflow);
+        write(
+            &root.join(".chrono-harness/projects.json"),
+            &json!({"schema_version":1,"status":"proposed","owners":["repository"],"projects":[],"scripts":[]}),
+        );
+        let mut normal_binding = c["initial_inventory"]["profile"]["judges"][0].clone();
+        normal_binding["selector"] = "every-delta".into();
+        normal_binding["modes"] = json!(["evaluate"]);
+        normal_binding["argv"] = json!(["--protocol", "chrono-judge/v1"]);
+        write(
+            &root.join(".chrono-harness/judges.json"),
+            &json!({"schema_version":1,"status":"proposed","judges":[normal_binding],"migration_validator":"inventory"}),
+        );
+        let files: Vec<_> = [".gitignore", ".chrono-harness/registry.json", ".chrono-harness/projects.json", ".chrono-harness/judges.json", ".chrono-harness/workflow.json", ".chrono-harness/FILEMAP.json", ".chrono-harness/ci/github.json", ".chrono-harness/ci/root inventory.json", ".github/workflows/chrono-ci.yml"]
+            .into_iter().map(|path| json!({"path":path,"owner":"repository","surface":"documentation","cost":"unknown","edges":[]})).collect();
+        write(
+            &root.join(".chrono-harness/FILEMAP.json"),
+            &json!({"schema_version":2,"status":"proposed","files":files,"project_edges":[],"test_costs":[],"execution_plans":{},"cost_models":{"unknown":{"cpu_ms":null,"wall_ms":null,"peak_rss_bytes":null,"io_bytes":null,"basis":"fixture unknown"}}}),
+        );
+        fs::write(
+            root.join(".gitignore"),
+            ".chrono-harness/bin/\n.chrono-harness/state/\n",
+        )
+        .unwrap();
+        if unregistered {
+            fs::write(root.join("unregistered.txt"), "must be reported").unwrap();
+        }
+        git(root, &["init", "-q", "-b", "dev"]);
+        git(root, &["add", "."]);
+        git(
+            root,
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "--no-gpg-sign",
+                "-qm",
+                "generated root",
+            ],
+        );
+        let candidate = git(root, &["rev-parse", "HEAD"]);
+        let adopted = load(&root.join(".chrono-harness/ci/github.json")).unwrap();
+        let context = prepare(root, &adopted, "push", &json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":candidate,"created":true}), &candidate).unwrap();
+        let mut argv: Vec<String> =
+            serde_json::from_value(context["canonical_argv"].clone()).unwrap();
+        assert_eq!(argv[3], c["initial_inventory"]["path"]);
+        argv[3] = root.join(&argv[3]).to_str().unwrap().into();
+        let output = Command::new(root.join(&argv[0]))
+            .args(&argv[1..])
+            .current_dir(inputs.path())
+            .env_remove("HOME")
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(if unregistered { 1 } else { 0 }),
+            "{} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            report["status"],
+            if unregistered { "failed" } else { "complete" }
+        );
+        assert_eq!(report["governance"], "not-evaluated");
+        assert!(report["base"].is_null() && report["delta"].is_null());
+        assert_eq!(report["judges"][0]["state"], "executed");
+        assert_eq!(
+            report["judges"][0]["binding"]["sha256"],
+            c["initial_inventory"]["profile"]["judges"][0]["sha256"]
+        );
+        assert_eq!(
+            fs::read(root.join(".chrono-harness/state/initial-report.json")).unwrap(),
+            output.stdout
+        );
     }
 }

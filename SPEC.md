@@ -564,7 +564,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 初始化绑定采用 `every-initial` / `inventory`，通过 `chrono-initial-judge/v1` 只传候选端点、配置与登记摘要、实际 checkout／runner／环境观察和显式前驱结果。没有 base、DELTA 或猜测的判官，复用已有进程调用、摘要、严格 JSON 与退出码校验。默认 registration 初始化判官要求草案状态，复用登记引用检查并检查整个初始文件清单；它不执行项目测试、不证明输入闭包，也不启用治理。扩展判官和脚本通过该配置的显式 DAG 登记。
 
-`chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。完整自举来源、工具链闭包和自动初始化配置生成仍是独立义务。
+`chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。`chrono-github-ci/v2` 可在宿主 CI 源中显式声明 `initial_inventory: {path, profile}`，由同一 init/generate 生成初始配置与 workflow，verify 核对二者；初始事件与本地使用所声明的同一 check 配置，普通 DELTA 仍使用 check_config。v1 保持原义且不接受该扩展；v2 必须具备完整初始声明，不推断判官、语言、路径或摘要。来源与输出均由宿主显式登记，采用保留原有定制；生成不认证登记语义，不启用治理。具体所有权与失败边界见 [CI 合同](docs/ci.md#owned-github-projection)。完整自举来源、工具链闭包、原生 v2 初始事件采用与启用仍是独立义务。
 
 产品自举按登记方式从指定产品提交构建，将结果放宿主 `.chrono-harness/bin/`，
 写入具体版本、产品源提交、二进制摘要和工具链证据后，再调用唯一 check 指令。
