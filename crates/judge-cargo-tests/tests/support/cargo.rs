@@ -298,6 +298,16 @@ impl Fixture {
                 .unwrap()
                 .push(edge(&format!("input:{id}"), "runtime-input", "project:t"));
         }
+        if self.values[CONFIG]["schema_version"] == 2 {
+            for row in self.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+                .as_array_mut()
+                .unwrap()
+            {
+                if row.get("presence").is_none() {
+                    row["presence"] = json!("present");
+                }
+            }
+        }
         git(&root, &["init", "-q"]);
         git(&root, &["checkout", "-b", "integration/cargo"]);
         write(
@@ -423,6 +433,12 @@ impl Fixture {
             .unwrap()
             .iter()
             .map(|v| {
+                if v["presence"] == "absent" {
+                    return (
+                        v["id"].as_str().unwrap().to_string(),
+                        json!({"absent":true}),
+                    );
+                }
                 let original = root.join(v["location"].as_str().unwrap());
                 let (digest, length) = chrono_harness::file_identity(&original).unwrap();
                 let blob = format!(".chrono-harness/state/inputs/blobs/{digest}");
@@ -448,7 +464,15 @@ impl Fixture {
         }
         let candidate = commit(&root);
         let environment = json!({"PATH":std::env::var("PATH").unwrap()});
-        let retained = json!({"base":{"commit":base,"environment":environment,"files":files},"candidate":{"commit":candidate,"environment":environment,"files":files}});
+        let mut retained = json!({"base":{"commit":base,"environment":environment,"files":files},"candidate":{"commit":candidate,"environment":environment,"files":files}});
+        if self.values[CONFIG]["schema_version"] == 2 {
+            for name in ["base", "candidate"] {
+                retained[name]["schema"] = json!("chrono-input-snapshot/v2");
+                retained[name]["config_path"] = json!(CONFIG);
+                retained[name]["config_digest"] =
+                    json!(chrono_harness::wire::digest(&self.values[CONFIG]).unwrap());
+            }
+        }
         write(
             &root,
             ".chrono-harness/state/inputs.json",
@@ -497,4 +521,30 @@ pub const POLICY: &str = ".chrono-harness/cargo/inputs.json";
 pub enum Consumer {
     Full,
     Scoped,
+}
+
+pub fn absent_input(f: &mut Fixture) -> PathBuf {
+    for tool in f.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+    {
+        tool["program"] = json!(fs::canonicalize(tool["program"].as_str().unwrap()).unwrap());
+    }
+    f.values.get_mut(CONFIG).unwrap()["schema_version"] = json!(2);
+    for row in f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        row["presence"] = json!("present");
+    }
+    let path = f.root().join(".chrono-harness/state/optional-input");
+    f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"optional","location":path,"presence":"absent"}));
+    f.values.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(edge("input:optional", "runtime-input", "project:p"));
+    path
 }

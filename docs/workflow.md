@@ -33,7 +33,7 @@ state certificate. Its nine mandatory bindings are:
 | `executables` | Actual runner and all configured judge paths/digests |
 | `tools` | Resolved paths, bytes and observed version results |
 | `environment` | Effective values, including empty values |
-| `effective_inputs` | Validated endpoint input identities |
+| `effective_inputs` | Validated endpoint input identities, including explicit v2 file presence/absence |
 | `required_tests` | Old/new obligations, selected plans, methods and bounds |
 | `results_digest` | Original successful execution results |
 

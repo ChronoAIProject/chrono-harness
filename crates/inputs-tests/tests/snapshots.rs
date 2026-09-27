@@ -411,3 +411,201 @@ fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields
         );
     }
 }
+
+#[test]
+fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
+    let (d, f, mut v, _) = fixture();
+    v.get_mut(CONFIG).unwrap()["schema_version"] = value!(2);
+    for row in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        row["location"] = value!(fs::canonicalize(f.path()).unwrap());
+        row["presence"] = value!("absent");
+        row.as_object_mut().unwrap().remove("sha256");
+    }
+    write_values(d.path(), &v);
+    let oid = commit(d.path());
+    fs::remove_file(f.path()).unwrap();
+    let capture = |out| {
+        invoke(
+            d.path(),
+            &[
+                "capture", "--config", CONFIG, "--commit", &oid, "--output", out,
+            ],
+        )
+    };
+    let (code, absent, err) = capture(".chrono-harness/state/absent.json");
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(absent["schema"], "chrono-input-snapshot/v2");
+    assert_eq!(absent["files"]["data"], value!({"absent":true}));
+    fs::write(f.path(), []).unwrap();
+    let (code, empty, err) = capture(".chrono-harness/state/empty.json");
+    assert_eq!(
+        code, 0,
+        "capture observes even a declaration mismatch: {err}"
+    );
+    assert_eq!(empty["files"]["data"]["length"], 0);
+    assert_eq!(empty["files"]["data"]["sha256"], sha256(b""));
+    let target = tempfile::tempdir().unwrap();
+    let (code, pair, err) = invoke(
+        target.path(),
+        &[
+            "pair",
+            "--base-root",
+            d.path().to_str().unwrap(),
+            "--candidate-root",
+            d.path().to_str().unwrap(),
+            "--base-snapshot",
+            ".chrono-harness/state/absent.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/empty.json",
+            "--output",
+            ".chrono-harness/state/pair.json",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(pair["base"], absent);
+    assert_eq!(pair["candidate"], empty);
+    assert_eq!(
+        fs::read_dir(target.path().join(".chrono-harness/state/inputs/blobs"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
+    let (d, f, mut v, _) = fixture();
+    let external = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(external.path()).unwrap();
+    let bad = root.join("bad");
+    v.get_mut(CONFIG).unwrap()["schema_version"] = value!(2);
+    v.get_mut(CONFIG).unwrap()["environment"]["inputs"] =
+        value!([{"id":"data","location":bad,"presence":"absent"}]);
+    write_values(d.path(), &v);
+    let oid = commit(d.path());
+    let capture = || {
+        invoke(
+            d.path(),
+            &[
+                "capture",
+                "--config",
+                CONFIG,
+                "--commit",
+                &oid,
+                "--output",
+                ".chrono-harness/state/bad.json",
+            ],
+        )
+    };
+    fs::create_dir(&bad).unwrap();
+    assert_ne!(capture().0, 0, "directory is not absent");
+    fs::remove_dir(&bad).unwrap();
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(root.join("missing"), &bad).unwrap();
+        assert_ne!(capture().0, 0, "dangling link is not absent");
+        fs::remove_file(&bad).unwrap();
+        std::os::unix::fs::symlink(f.path(), &bad).unwrap();
+        assert_ne!(capture().0, 0, "live link is not a v2 input");
+        fs::remove_file(&bad).unwrap();
+    }
+    fs::write(&bad, []).unwrap();
+    v.get_mut(CONFIG).unwrap()["environment"]["inputs"][0]["location"] = value!(bad.join("child"));
+    write_values(d.path(), &v);
+    let oid = commit(d.path());
+    assert_ne!(
+        invoke(
+            d.path(),
+            &[
+                "capture",
+                "--config",
+                CONFIG,
+                "--commit",
+                &oid,
+                "--output",
+                ".chrono-harness/state/non-directory.json"
+            ]
+        )
+        .0,
+        0
+    );
+    fs::remove_file(&bad).unwrap();
+    let (code, observed, err) = invoke(
+        d.path(),
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/missing-parent.json",
+        ],
+    );
+    assert_eq!(code, 0, "missing directory gives explicit absence: {err}");
+    assert_eq!(observed["files"]["data"], value!({"absent":true}));
+}
+
+#[test]
+fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
+    use chrono_judge_registration::{Registrations, inputs::snapshot_shape};
+    let (d, f, mut v, _) = fixture();
+    for row in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        row["sha256"] = Value::Null;
+    }
+    assert!(
+        Registrations::load(&v, CONFIG).is_ok(),
+        "v1 null remains an unbound draft"
+    );
+    write_values(d.path(), &v);
+    let oid = commit(d.path());
+    fs::remove_file(f.path()).unwrap();
+    assert_ne!(
+        invoke(
+            d.path(),
+            &[
+                "capture",
+                "--config",
+                CONFIG,
+                "--commit",
+                &oid,
+                "--output",
+                ".chrono-harness/state/legacy.json"
+            ]
+        )
+        .0,
+        0
+    );
+    for row in [
+        value!({"id":"data","location":"external","presence":"absent","sha256":null}),
+        value!({"id":"data","location":"external","presence":"present"}),
+        value!({"id":"data","location":"external","sha256":null}),
+        value!({"id":"data","location":"external","presence":"unknown"}),
+    ] {
+        v.get_mut(CONFIG).unwrap()["schema_version"] = value!(2);
+        v.get_mut(CONFIG).unwrap()["environment"]["inputs"] = value!([row]);
+        assert!(Registrations::load(&v, CONFIG).is_err());
+    }
+    v.get_mut(CONFIG).unwrap()["schema_version"] = value!(1);
+    v.get_mut(CONFIG).unwrap()["environment"]["inputs"] =
+        value!([{"id":"data","location":"external","presence":"absent"}]);
+    assert!(Registrations::load(&v, CONFIG).is_err());
+    let mut empty = values();
+    empty.get_mut(CONFIG).unwrap()["schema_version"] = value!(2);
+    let r = Registrations::load(&empty, CONFIG).unwrap();
+    assert!(
+        chrono_judge_registration::inputs::effective_environments(&Value::Null, &r, &r).is_err()
+    );
+    let mut s = value!({"schema":"chrono-input-snapshot/v1","commit":oid,"config_path":CONFIG,"config_digest":"a".repeat(64),"environment":{},"files":{"data":{"absent":true}}});
+    assert!(snapshot_shape(&s).is_err());
+    s["schema"] = value!("chrono-input-snapshot/v2");
+    assert!(snapshot_shape(&s).is_ok());
+    s["files"]["data"]["absent"] = value!(false);
+    assert!(snapshot_shape(&s).is_err());
+}

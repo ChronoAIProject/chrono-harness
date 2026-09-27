@@ -70,6 +70,8 @@ pub(crate) struct Check {
     sources: BTreeMap<String, BTreeSet<PathBuf>>,
     target_directory: PathBuf,
     inputs: BTreeMap<PathBuf, (PathBuf, String)>,
+    absent_inputs: Vec<PathBuf>,
+    strict_inputs: Vec<PathBuf>,
 }
 fn error(s: impl std::fmt::Display) -> String {
     format!("E_CARGO_INPUT: {s}")
@@ -381,6 +383,7 @@ pub(crate) fn prepare(
         retain(no_symlink_parents(root, f["path"].as_str().unwrap())?, None)?;
     }
     let declarations = r.config()["environment"]["inputs"].as_array().unwrap();
+    let strict_inputs = RefCell::new(Vec::new());
     let input = |id: &str| -> Result<PathBuf> {
         let matches: Vec<_> = declarations.iter().filter(|d| d["id"] == id).collect();
         if matches.len() != 1 || !connected(&format!("input:{id}")) {
@@ -389,16 +392,39 @@ pub(crate) fn prepare(
             )));
         }
         let row = matches[0];
-        retain(
-            root.join(row["location"].as_str().unwrap()),
-            Some(row["sha256"].as_str().unwrap()),
-        )
+        let digest = row["sha256"]
+            .as_str()
+            .filter(|_| row["presence"] != "absent")
+            .ok_or_else(|| error(format!("input {id} requires bound present bytes")))?;
+        let path = root.join(row["location"].as_str().unwrap());
+        if r.config()["schema_version"] == 2 {
+            if chrono_judge_registration::inputs::observe_file(&path)
+                .map_err(error)?
+                .is_none()
+            {
+                return Err(error(format!("input {id} requires bound present bytes")));
+            }
+            strict_inputs.borrow_mut().push(path.clone());
+        }
+        retain(path, Some(digest))
     };
+    let mut absent_inputs = Vec::new();
     for row in declarations
         .iter()
         .filter(|d| connected(&format!("input:{}", d["id"].as_str().unwrap())))
     {
-        input(row["id"].as_str().unwrap())?;
+        if row["presence"] == "absent" {
+            let path = root.join(row["location"].as_str().unwrap());
+            if chrono_judge_registration::inputs::observe_file(&path)
+                .map_err(error)?
+                .is_some()
+            {
+                return Err(error(format!("input {} must be absent", row["id"])));
+            }
+            absent_inputs.push(path);
+        } else {
+            input(row["id"].as_str().unwrap())?;
+        }
     }
     let configuration = crate::configuration::check(
         root,
@@ -548,11 +574,27 @@ pub(crate) fn prepare(
         sources,
         target_directory,
         inputs: retained.into_inner(),
+        absent_inputs,
+        strict_inputs: strict_inputs.into_inner(),
     })
 }
 impl Check {
     pub(crate) fn unchanged(&self) -> Result {
         self.configuration.unchanged()?;
+        for path in &self.absent_inputs {
+            if chrono_judge_registration::inputs::observe_file(path)
+                .map_err(error)?
+                .is_some()
+            {
+                return Err(error(format!(
+                    "absent input changed during guarded operation: {}",
+                    path.display()
+                )));
+            }
+        }
+        for path in &self.strict_inputs {
+            chrono_judge_registration::inputs::observe_file(path).map_err(error)?;
+        }
         for (path, (canonical, digest)) in &self.inputs {
             if fs::canonicalize(path).map_err(error)? != *canonical
                 || file_identity(path).map_err(error)?.0 != *digest

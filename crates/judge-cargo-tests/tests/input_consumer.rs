@@ -111,3 +111,44 @@ fn documentation_delta_leaves_unrelated_ambient_configuration_unexecuted() {
         assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
     }
 }
+
+#[test]
+fn full_and_scoped_consumers_keep_absence_checks_and_documentation_locality() {
+    for consumer in [Consumer::Full, Consumer::Scoped] {
+        for case in ["stable", "mutation", "docs"] {
+            let mut f = Fixture::new();
+            let path = absent_input(&mut f);
+            if case == "mutation" {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(path);
+                write(
+                    &f.root(),
+                    "t/src/lib.rs",
+                    "#[test] fn create_absent_input() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"created\").unwrap(); }\n",
+                );
+            }
+            let (exit, r) =
+                f.committed_check(if case == "docs" { "docs" } else { "source" }, consumer);
+            if case == "mutation" {
+                assert_ne!(exit, 0, "{r}");
+                assert!(
+                    r.to_string()
+                        .contains("absent input changed during guarded operation"),
+                    "{r}"
+                );
+                assert_eq!(fs::read(path).unwrap(), b"created");
+            } else {
+                assert_eq!(exit, 0, "{r}");
+                if case == "docs" {
+                    assert!(executions(&r, consumer).is_empty());
+                    assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+                } else {
+                    assert_eq!(
+                        fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+                        b"ran"
+                    );
+                }
+            }
+        }
+    }
+}

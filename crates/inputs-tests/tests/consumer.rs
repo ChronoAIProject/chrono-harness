@@ -227,3 +227,257 @@ fn input_larger_than_judge_json_bound_remains_a_small_request_and_is_actually_va
     );
     assert_eq!(r["tests"]["tests"]["test:t"], "passed");
 }
+
+fn v2(h: &mut Host) {
+    h.tool = fs::canonicalize(&h.tool).unwrap();
+    for tool in h.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+    {
+        tool["program"] = json!(fs::canonicalize(tool["program"].as_str().unwrap()).unwrap());
+    }
+    h.values.get_mut(CONFIG).unwrap()["schema_version"] = json!(2);
+    for row in h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        row["presence"] = json!("present");
+        row["location"] = json!(fs::canonicalize(row["location"].as_str().unwrap()).unwrap());
+    }
+}
+fn data_state(h: &mut Host, absent: bool) {
+    let row = h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|i| i["id"] == "data")
+        .unwrap();
+    row["presence"] = json!(if absent { "absent" } else { "present" });
+    if absent {
+        row.as_object_mut().unwrap().remove("sha256");
+        if h.external.path().exists() {
+            fs::remove_file(h.external.path()).unwrap();
+        }
+    } else {
+        row["sha256"] = json!(sha256(b""));
+        fs::write(h.external.path(), b"").unwrap();
+    }
+}
+fn capture(h: &Host, name: &str) -> Value {
+    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .args([
+            "capture",
+            "--host-root",
+            h.root().to_str().unwrap(),
+            "--config",
+            CONFIG,
+            "--commit",
+            &h.candidate,
+            "--output",
+            &format!(".chrono-harness/state/{name}.json"),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout).unwrap()
+}
+#[test]
+fn absence_to_empty_and_back_selects_only_explicit_input_consumers_including_old_edges() {
+    for absent in [true, false] {
+        let mut h = fixture();
+        v2(&mut h);
+        data_state(&mut h, absent);
+        h.save();
+        h.base = h.candidate.clone();
+        let a = capture(&h, "before");
+        data_state(&mut h, !absent);
+        if !absent {
+            // Removal keeps the old-only input dependency alive for this DELTA.
+            h.values.get_mut(FM).unwrap()["project_edges"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|e| e["from"] != "input:data");
+        }
+        h.save();
+        let b = capture(&h, "after");
+        let (exit, r) = check(&h, &json!({"base":a,"candidate":b}));
+        assert_eq!(exit, 0, "{}", r["findings"]);
+        assert_eq!(r["tests"]["tests"]["test:t"], "passed");
+        assert!(r["impact"].to_string().contains("input:data"));
+        let files = &r["effective_inputs"]["endpoints"];
+        assert_ne!(
+            files["base"]["files"]["data"],
+            files["candidate"]["files"]["data"]
+        );
+        assert_eq!(r["effective_inputs"]["completeness_proven"], false);
+    }
+}
+#[test]
+fn unchanged_absence_and_disconnected_changes_do_not_select_tests() {
+    for disconnected in [false, true] {
+        let mut h = fixture();
+        v2(&mut h);
+        data_state(&mut h, true);
+        if disconnected {
+            h.values.get_mut(FM).unwrap()["project_edges"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|e| e["from"] != "input:data");
+        }
+        h.save();
+        h.base = h.candidate.clone();
+        let a = capture(&h, "before");
+        if disconnected {
+            data_state(&mut h, false);
+        } else {
+            fs::write(h.root().join("doc.txt"), "documentation only\n").unwrap();
+        }
+        h.save();
+        let b = capture(&h, "after");
+        let (exit, r) = check(&h, &json!({"base":a,"candidate":b}));
+        assert_eq!(exit, 0, "{}", r["findings"]);
+        assert_eq!(r["tests"]["tests"], json!({}));
+        assert!(!h.root().join(".chrono-harness/state/order").exists());
+    }
+}
+#[test]
+fn retained_absence_mismatch_missing_snapshot_and_v1_downgrade_fail_before_operations() {
+    let mut h = fixture();
+    v2(&mut h);
+    data_state(&mut h, true);
+    h.save();
+    h.base = h.candidate.clone();
+    let a = capture(&h, "before");
+    fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    h.save();
+    let b = capture(&h, "after");
+    let pair = json!({"base":a,"candidate":b});
+    for case in [
+        "retained-empty",
+        "retained-malformed",
+        "missing-schema",
+        "v1-schema",
+        "actual-present",
+        "actual-directory",
+        "actual-symlink",
+    ] {
+        let mut bad = pair.clone();
+        match case {
+            "retained-empty" => bad["base"]["files"]["data"] = json!({"bytes":[]}),
+            "retained-malformed" => {
+                bad["candidate"]["files"]["data"] = json!({"absent":true,"bytes":[]})
+            }
+            "missing-schema" => {
+                bad["candidate"].as_object_mut().unwrap().remove("schema");
+            }
+            "v1-schema" => bad["candidate"]["schema"] = json!("chrono-input-snapshot/v1"),
+            "actual-present" => fs::write(h.external.path(), []).unwrap(),
+            "actual-directory" => fs::create_dir(h.external.path()).unwrap(),
+            "actual-symlink" => {
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(
+                    h.external.path().with_extension("missing"),
+                    h.external.path(),
+                )
+                .unwrap();
+                #[cfg(not(unix))]
+                continue;
+            }
+            _ => unreachable!(),
+        }
+        let (exit, r) = check(&h, &bad);
+        assert_ne!(exit, 0, "{case}: {r}");
+        assert!(r["tests"].is_null(), "{case}: {r}");
+        assert!(!h.root().join(".chrono-harness/state/order").exists());
+        if case == "actual-directory" {
+            fs::remove_dir(h.external.path()).unwrap();
+        } else if case.starts_with("actual-") {
+            fs::remove_file(h.external.path()).unwrap();
+        }
+    }
+    let (exit, r) = check(&h, &pair);
+    assert_eq!(exit, 0, "{}", r["findings"]);
+}
+#[test]
+fn operation_creating_an_absent_input_fails_post_execution_validation() {
+    let mut h = fixture();
+    v2(&mut h);
+    data_state(&mut h, true);
+    h.values.get_mut(PROJECTS).unwrap()["scripts"][1]["actions"]["execute"]["argv"] = json!([
+        "-c",
+        format!(
+            "open({:?},'w').write('created')",
+            h.external.path().to_str().unwrap()
+        )
+    ]);
+    h.save();
+    h.base = h.candidate.clone();
+    let a = capture(&h, "before");
+    fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    h.save();
+    let b = capture(&h, "after");
+    let (exit, r) = check(&h, &json!({"base":a,"candidate":b}));
+    assert_ne!(exit, 0, "{r}");
+    assert!(
+        r["findings"]
+            .to_string()
+            .contains("candidate input changed: data"),
+        "{r}"
+    );
+    assert_eq!(fs::read(h.external.path()).unwrap(), b"created");
+}
+
+#[test]
+fn legacy_null_and_unversioned_retained_absence_never_authorize_missing_input() {
+    let mut h = fixture();
+    h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|i| i["id"] == "data")
+        .unwrap()["sha256"] = Value::Null;
+    h.save();
+    h.base = h.candidate.clone();
+    fs::remove_file(h.external.path()).unwrap();
+    let (exit, r) = h.run(|pair| {
+        for endpoint in ["base", "candidate"] {
+            pair[endpoint]["files"]["data"] = json!({"absent":true});
+        }
+    });
+    assert_ne!(exit, 0, "{r}");
+    assert!(
+        r["findings"]
+            .to_string()
+            .contains("retained input digest/presence mismatch: data"),
+        "{r}"
+    );
+    assert!(r["tests"].is_null());
+}
+
+#[test]
+fn config_presence_upgrade_requires_registered_migration_evidence() {
+    let mut h = fixture();
+    h.base = h.candidate.clone();
+    let a = capture(&h, "before");
+    v2(&mut h);
+    h.save();
+    let b = capture(&h, "after");
+    let (exit, r) = check(&h, &json!({"base":a,"candidate":b}));
+    assert_ne!(exit, 0, "{r}");
+    assert!(
+        r["findings"].to_string().contains("E_MIGRATION_EVIDENCE"),
+        "{}",
+        r["findings"]
+    );
+    assert!(
+        !h.root()
+            .join(".chrono-harness/state/integration.json")
+            .exists()
+    );
+}

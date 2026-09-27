@@ -102,7 +102,7 @@ data, without inventing plans. The sole implemented decoder profile is
 `historical_profiles`. Each entry names the original profile path, candidate script
 and dedicated script test, exact malformed legacy records, identity mappings and
 finite ambiguity repairs. Existing workflow `migrations` and `retirements` retain
-the transition and replacement facts. Other registry schema versions remain 1.
+the transition and replacement facts. Config additionally supports explicit v2 presence declarations on both endpoints (see [input snapshots](inputs.md)); projects and judges remain v1. The finite migration contract here does not convert config v1 to v2.
 
 The registered `.chrono-harness/migrations/scoped-v1.py` receives original JSON and
 exact bytes, the fixed historical profile bytes and candidate mapping declaration.
