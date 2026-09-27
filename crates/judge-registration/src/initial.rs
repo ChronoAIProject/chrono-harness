@@ -59,14 +59,13 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<()> {
     {
         return Err("initial binding differs from actual registration executable".into());
     }
-    let values = facts::registry_values(root, &req.candidate.commit, &req.config_path)?;
+    let snapshot = facts::registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
+    let values = snapshot.values;
     if wire::digest(&values)? != req.registry_digest {
         return Err("initial registry digest mismatch".into());
     }
-    for path in values.keys() {
-        if fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?
-            != facts::blob(root, &req.candidate.commit, path)?
-        {
+    for (path, original) in &snapshot.bytes {
+        if &fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())? != original {
             return Err(format!("checkout registry differs from candidate: {path}"));
         }
     }

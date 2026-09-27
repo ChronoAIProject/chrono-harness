@@ -249,11 +249,30 @@ pub fn registry_values(
     oid: &str,
     path: &str,
 ) -> Result<BTreeMap<String, Value>, String> {
-    let config = json(&blob(root, oid, path)?)?;
-    registry_paths(&config, path)?
-        .into_iter()
-        .map(|p| Ok((p.clone(), json(&blob(root, oid, &p)?)?)))
-        .collect()
+    Ok(registry_snapshot(root, oid, path)?.values)
+}
+/// Original bytes and parsed values from one registry read, without a global cache.
+pub struct RegistrySnapshot {
+    pub bytes: BTreeMap<String, Vec<u8>>,
+    pub values: BTreeMap<String, Value>,
+}
+pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
+    let original = blob(root, oid, path)?;
+    let config = json(&original)?;
+    let paths = registry_paths(&config, path)?;
+    let mut snapshot = RegistrySnapshot {
+        bytes: BTreeMap::from([(path.into(), original)]),
+        values: BTreeMap::from([(path.into(), config)]),
+    };
+    for path in paths {
+        if !snapshot.bytes.contains_key(&path) {
+            let original = blob(root, oid, &path)?;
+            let value = json(&original)?;
+            snapshot.bytes.insert(path.clone(), original);
+            snapshot.values.insert(path, value);
+        }
+    }
+    Ok(snapshot)
 }
 pub fn registry_digest(
     base: &BTreeMap<String, Value>,

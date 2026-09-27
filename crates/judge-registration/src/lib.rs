@@ -109,7 +109,9 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
     let observed = facts::checkout(root, &req.candidate.commit)?;
     // Newly written state artifacts may differ since acquisition; compare all governed dirt below.
     let bv = facts::registry_values(root, &req.base.commit, &req.config_path)?;
-    let cv = facts::registry_values(root, &req.candidate.commit, &req.config_path)?;
+    let candidate_snapshot =
+        facts::registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
+    let cv = candidate_snapshot.values;
     if facts::registry_digest(&bv, &cv)? != req.registries.digest
         || req.registries.base != req.base.root.join(".chrono-harness")
         || req.registries.candidate != root.join(".chrono-harness")
@@ -136,9 +138,9 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
             return Ok(());
         }
     }
-    for p in cv.keys() {
+    for (p, original) in &candidate_snapshot.bytes {
         let disk = fs::read(no_symlink_parents(root, p)?).map_err(|e| e.to_string())?;
-        if disk != facts::blob(root, &req.candidate.commit, p)? {
+        if &disk != original {
             issue(
                 r,
                 "E_CONFIG_MISMATCH",

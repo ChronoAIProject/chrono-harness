@@ -17,3 +17,7 @@ path = "tests/cli_contract.rs"
 [[test]]
 name = "protocol_v1"
 path = "tests/protocol_v1.rs"
+
+[[test]]
+name = "registry_snapshot"
+path = "tests/registry_snapshot.rs"
