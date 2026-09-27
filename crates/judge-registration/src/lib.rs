@@ -5,7 +5,7 @@ use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
     wire::{self, Finding, Request, Response, Status},
 };
-pub use registrations::{NodeKind, NodeView, Registrations};
+pub use registrations::{NodeDefinition, NodeKind, NodeView, Registrations};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},

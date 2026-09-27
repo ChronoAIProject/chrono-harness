@@ -325,7 +325,7 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
   "registries": {"base": "<snapshot .chrono-harness path>",
                  "candidate": "<snapshot .chrono-harness path>", "digest": "<sha256>"},
   "context": {"path": "<context path>", "sha256": "<sha256>"},
-  "impact": {"seeds": ["file:old.rs"], "edges": [], "tests": [], "retired_tests": []},
+  "impact": {"schema": "chrono-filemap-impact/v1", "seeds": ["file:old.rs"], "edges": [], "tests": [], "retired_tests": []},
   "prior_results": [{"protocol": "chrono-judge/v1", "request_id": "<registration request_id>",
     "judge_id": "registration", "status": "pass", "findings": [], "evidence": [], "outputs": {}}]
 }
@@ -335,7 +335,7 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
 registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, "candidate": {"<path>": <parsed JSON>, ...}}` 的 SHA-256，每端包含 config_path 与该端 config 指定的四份 registry；context.sha256 为 context JCS 摘要，evidence.sha256 为原始文件字节摘要。所有 JSON 先拒绝重复成员。
 本增量的 full CLI 要求两个真实 commit，不提供伪造空 base 的成功模式。初始模式及 schema 迁移仍待后续判官实现；不支持时非零。
 
-impact.edges 为 `{from, kind, to, origin}`；origin 是 base/candidate/both。
+impact 的版本为 `schema: "chrono-filemap-impact/v1"`，以下示例列核心字段；完整附加事实见 [FILEMAP impact 合同](docs/filemap-impact.md)。impact.edges 为平铺的 `{from, kind, to, origin}`；origin 是 base/candidate/both。seeds 是确定性去重的节点 ID 列表，附加 seed_causes 保留每个原因的 ID、节点、实际路径／记录引用和原因。tests 是候选仍存在的选中测试节点 ID 列表，retired_tests 是候选已不存在的选中必需测试节点 ID 列表，两者确定性去重，只表达选择／删除事实，不代表执行或退休批准。required_tests 和完整两端记录、节点定义及因果来源作为附加字段保留。retired_tests 成员资格不得豁免 `E_REQUIRED_TEST_REMOVED` 或第 6 节的迁移／退休证据义务。
 prior_results 仅含 after 列出的前置判官完整响应；不得从运行目录猜测旧输出复用。
 registration 先消费原始快照与 context；filemap 据登记生成 impact，其他判官显式消费结果。尚无前驱产物时 impact 为 null，不填造已算出的空闭包；runner 仅将直接前驱 outputs.impact 同名传入，冲突报错，其余具名产物保留在 prior_results.outputs。
 routes 先验证执行入口，projects 再执行测试；judges.after 中明确登记这个依赖顺序。
@@ -351,7 +351,7 @@ registries.digest 覆盖两端五份 JSON 的路径与内容；不存在的初�
   "status": "pass",
   "findings": [],
   "evidence": [],
-  "outputs": {"impact": {"seeds": ["file:old.rs"], "edges": [], "tests": [], "retired_tests": []}}
+  "outputs": {"impact": {"schema": "chrono-filemap-impact/v1", "seeds": ["file:old.rs"], "edges": [], "tests": [], "retired_tests": []}}
 }
 ```
 

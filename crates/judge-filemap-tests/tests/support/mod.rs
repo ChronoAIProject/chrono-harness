@@ -74,6 +74,42 @@ pub fn values() -> Values {
 pub fn load(v: &Values) -> Registrations {
     Registrations::load(v, CONFIG).unwrap()
 }
+pub fn script_pair(v: &mut Values, test_id: &str) {
+    v.get_mut(PROJECTS).unwrap()["scripts"] = json!([
+        {"id":"s","path":"s.sh","test_script":test_id,"actions":{"execute":{"operation":"script.s","tool":"sh","argv":["s.sh"]}}},
+        {"id":test_id,"path":"st.sh","tests_for":"s","actions":{"execute":{"operation":"script.st","tool":"sh","argv":["st.sh"]}}}
+    ]);
+    let owners = v.get_mut(PROJECTS).unwrap()["owners"]
+        .as_array_mut()
+        .unwrap();
+    owners.retain(|o| o != "st" && o != "st2");
+    for id in ["s", test_id] {
+        if !owners.contains(&json!(id)) {
+            owners.push(json!(id));
+        }
+    }
+    let fm = v.get_mut(FM).unwrap();
+    let files = fm["files"].as_array_mut().unwrap();
+    for path in ["s.sh", "st.sh"] {
+        if !files.iter().any(|f| f["path"] == path) {
+            files.push(file(path, json!([])));
+        }
+    }
+    let edges = fm["project_edges"].as_array_mut().unwrap();
+    edges.retain(|e| e["from"] != "script:s");
+    edges.push(edge(
+        "script:s",
+        "test-execution",
+        &format!("test:{test_id}"),
+    ));
+    fm["test_costs"] = json!([{"test":"t","cost":"unknown"}]);
+    if test_id != "t" {
+        fm["test_costs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"test":test_id,"cost":"unknown"}));
+    }
+}
 pub fn delta(path: &str) -> Delta {
     Delta {
         kind: "M".into(),

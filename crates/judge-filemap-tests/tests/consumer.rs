@@ -155,6 +155,220 @@ impl Host {
 fn codes(v: &Value) -> String {
     serde_json::to_string(v).unwrap()
 }
+fn script_host() -> Host {
+    let mut h = Host::new();
+    script_pair(&mut h.values, "st");
+    for path in ["s.sh", "st.sh"] {
+        fs::write(h.root().join(path), "exit 0\n").unwrap();
+    }
+    h.save();
+    h.base = h.candidate.clone();
+    h
+}
+#[test]
+fn full_changed_alias_collision_is_not_a_unique_executable() {
+    let mut h = script_host();
+    script_pair(&mut h.values, "t");
+    fs::write(h.root().join("src.bin"), "changed").unwrap();
+    h.save();
+    let (exit, r) = h.run();
+    assert_ne!(
+        exit, 0,
+        "same-ID executable aliases must fail; status={}",
+        r["status"]
+    );
+    assert_collision(&r, &["candidate"]);
+}
+fn assert_collision(r: &Value, endpoints: &[&str]) {
+    assert_eq!(r["judges"][0]["response"]["status"], "pass", "{r:#}");
+    assert_eq!(r["judges"][1]["response"]["status"], "fail", "{r:#}");
+    let findings = r["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), endpoints.len(), "{r:#}");
+    for (f, endpoint) in findings.iter().zip(endpoints) {
+        assert_eq!(f["code"], "E_NODE_AMBIGUOUS");
+        assert!(
+            f["message"]
+                .as_str()
+                .unwrap()
+                .starts_with(&format!("{endpoint}:"))
+        );
+        let reference = f["delta_refs"][0].as_str().unwrap();
+        assert!(
+            reference == "src.bin"
+                || r["impact"]["changes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|c| c["record"] == reference)
+        );
+        let causes = f["causes"].as_array().unwrap();
+        assert_eq!(causes.last().unwrap(), "test:t");
+        assert!(
+            r["impact"]["seed_causes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| s["reference"] == reference && s["node"] == causes[0])
+        );
+        // Independently specified fixture edges; a direct alias record seed has a zero-edge witness.
+        for pair in causes.windows(2) {
+            assert!(
+                (pair[0] == "file:src.bin" && pair[1] == "project:p")
+                    || (pair[0] == "project:p" && pair[1] == "test:t")
+                    || (pair[0] == "script:s" && pair[1] == "test:t"),
+                "{f:#}"
+            );
+        }
+        let node = &r["impact"]["nodes"]["test:t"];
+        assert!(
+            node[endpoint].is_null(),
+            "ambiguous value must never resolve to a winner"
+        );
+        let defs = &node[format!("{endpoint}_definitions")];
+        assert_eq!(defs.as_array().unwrap().len(), 2);
+        assert_eq!(defs[0]["identity"], "project:t");
+        assert_eq!(
+            defs[0]["value"]["actions"]["execute"]["operation"],
+            "execute.t"
+        );
+        assert_eq!(defs[1]["identity"], "script:t");
+        assert_eq!(
+            defs[1]["value"]["actions"]["execute"]["operation"],
+            "script.st"
+        );
+        for (record, targets) in [
+            ("projects", json!(["project:t", "test:t"])),
+            ("scripts", json!(["script:t", "test:t"])),
+        ] {
+            assert_eq!(
+                r["impact"]["records"][format!("/records/projects/{record}/t")][endpoint]["targets"],
+                targets
+            );
+        }
+    }
+    assert_eq!(
+        r["sources"]["/impact"],
+        json!(["/judges/1/response/outputs/impact"])
+    );
+}
+#[test]
+fn full_distinct_aliases_preserve_both_executables() {
+    let mut h = script_host();
+    script_pair(&mut h.values, "st2");
+    fs::write(h.root().join("src.bin"), "changed").unwrap();
+    h.save();
+    let (exit, r) = h.run();
+    assert_eq!(exit, 0, "{r:#}");
+    assert_eq!(
+        r["impact"]["nodes"]["test:t"]["candidate"]["actions"]["execute"]["operation"],
+        "execute.t"
+    );
+    assert_eq!(
+        r["impact"]["nodes"]["test:st2"]["candidate"]["actions"]["execute"]["operation"],
+        "script.st"
+    );
+    assert_eq!(
+        r["impact"]["records"]["/records/projects/projects/t"]["candidate"]["targets"],
+        json!(["project:t", "test:t"])
+    );
+    assert_eq!(
+        r["impact"]["records"]["/records/projects/scripts/st2"]["candidate"]["targets"],
+        json!(["script:st2", "test:st2"])
+    );
+    assert_eq!(r["impact"]["tests"], json!(["test:st2", "test:t"]));
+    assert_eq!(r["impact"]["retired_tests"], json!(["test:st"]));
+}
+#[test]
+fn full_alias_change_without_source_change_is_causal() {
+    let mut h = script_host();
+    script_pair(&mut h.values, "t");
+    h.save();
+    let (exit, r) = h.run();
+    assert_eq!(exit, 1, "{r:#}");
+    assert_collision(&r, &["candidate"]);
+    assert!(
+        r["delta"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["path"] == FM || d["path"] == PROJECTS)
+    );
+}
+#[test]
+fn full_historical_collision_is_only_judged_when_reached() {
+    let mut h = script_host();
+    script_pair(&mut h.values, "t");
+    h.save();
+    h.base = h.candidate.clone();
+    for changed in [false, true] {
+        if changed {
+            fs::write(h.root().join("doc.txt"), "unrelated").unwrap();
+            h.candidate = commit(h.root());
+        }
+        let (exit, r) = h.run();
+        assert_eq!(exit, 0, "{r:#}");
+        assert_eq!(r["findings"], json!([]));
+        assert_eq!(r["impact"]["tests"], json!([]));
+        assert_eq!(
+            r["impact"]["historical_ambiguities"],
+            json!([
+                {"node":"test:t","endpoint":"base","definitions":["project:t","script:t"]},
+                {"node":"test:t","endpoint":"candidate","definitions":["project:t","script:t"]}
+            ])
+        );
+        for endpoint in ["base_definitions", "candidate_definitions"] {
+            assert_eq!(
+                r["impact"]["nodes"]["test:t"][endpoint]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                2
+            );
+        }
+    }
+    h.base = h.candidate.clone();
+    fs::write(h.root().join("src.bin"), "reaches collision").unwrap();
+    h.candidate = commit(h.root());
+    let (exit, r) = h.run();
+    assert_eq!(exit, 1, "{r:#}");
+    assert_collision(&r, &["base", "candidate"]);
+    for f in r["findings"].as_array().unwrap() {
+        assert_eq!(f["delta_refs"], json!(["src.bin"]));
+        assert_eq!(f["causes"], json!(["file:src.bin", "project:p", "test:t"]));
+    }
+}
+#[test]
+fn full_colliding_project_record_change_preserves_its_alias_cause() {
+    let mut h = script_host();
+    script_pair(&mut h.values, "t");
+    h.save();
+    h.base = h.candidate.clone();
+    h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"] =
+        json!(["-c", "exit 1"]);
+    h.save();
+    let (exit, r) = h.run();
+    assert_eq!(exit, 1, "{r:#}");
+    assert_collision(&r, &["base", "candidate"]);
+    assert_eq!(r["delta"].as_array().unwrap().len(), 1);
+    assert_eq!(r["delta"][0]["path"], PROJECTS);
+    for f in r["findings"].as_array().unwrap() {
+        assert_eq!(f["delta_refs"], json!(["/records/projects/projects/t"]));
+        assert_eq!(f["causes"], json!(["test:t"]));
+    }
+    // Resolving only the candidate leaves the affected base ambiguity as a fact and finding.
+    script_pair(&mut h.values, "st2");
+    h.save();
+    let (exit, r) = h.run();
+    assert_eq!(exit, 1, "{r:#}");
+    assert_collision(&r, &["base"]);
+    assert_eq!(
+        r["impact"]["nodes"]["test:t"]["candidate_definitions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+}
 #[test]
 fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impact() {
     let h = Host::new();
@@ -195,12 +409,39 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
         ["test:t"]
     );
     assert!(impact.required_tests[0].candidate_present);
+    assert_eq!(r["impact"]["tests"], json!(["test:t"]));
+    assert_eq!(r["impact"]["retired_tests"], json!([]));
+    assert_eq!(
+        r["impact"]["edges"],
+        json!([
+            {"from":"file:src.bin","kind":"compile","to":"project:p","origin":"both"},
+            {"from":"project:p","kind":"test-execution","to":"test:t","origin":"both"}
+        ])
+    );
+    assert_eq!(
+        r["impact"]["seeds"],
+        json!([
+            "file:.chrono-harness/judges.json",
+            "file:src.bin",
+            "judge:filemap",
+            "judge:registration"
+        ])
+    );
+    assert!(
+        r["impact"]["seed_causes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["node"] == "file:src.bin"
+                && s["reference"] == "src.bin"
+                && s["reason"] == "delta-path")
+    );
     assert_eq!(
         impact
             .closure
             .witness(
                 &impact
-                    .seeds
+                    .seed_causes
                     .iter()
                     .find(|s| s.reference == "src.bin")
                     .unwrap()
@@ -220,7 +461,7 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
     );
 }
 #[test]
-fn full_report_removed_test_is_visible_not_executed_or_retired() {
+fn full_report_removed_test_is_selected_without_execution_or_retirement_approval() {
     let mut h = Host::new();
     h.values.get_mut(PROJECTS).unwrap()["projects"] = json!([]);
     h.values.get_mut(FM).unwrap()["project_edges"] = json!([]);
@@ -232,7 +473,21 @@ fn full_report_removed_test_is_visible_not_executed_or_retired() {
     assert_eq!(r["impact"]["required_tests"][0]["node"], "test:t");
     assert_eq!(r["impact"]["required_tests"][0]["candidate_present"], false);
     assert!(r["tests"].is_null());
-    assert!(r["impact"].get("retired_tests").is_none());
+    assert_eq!(r["impact"]["tests"], json!([]));
+    assert_eq!(r["impact"]["retired_tests"], json!(["test:t"]));
+    assert!(
+        r["impact"]["nodes"]["test:t"]["candidate_definitions"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        r["impact"]["nodes"]["test:t"]["base_definitions"][0]["identity"],
+        "project:t"
+    );
+    assert!(r["impact"]["required_tests"][0].get("approved").is_none());
+    assert!(r["impact"]["required_tests"][0].get("executed").is_none());
+    assert_eq!(h.values[WORKFLOW]["retirements"], json!([]));
 }
 #[test]
 fn full_check_missing_or_malformed_required_input_is_nonzero() {

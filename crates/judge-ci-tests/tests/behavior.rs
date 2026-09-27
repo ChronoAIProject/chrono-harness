@@ -189,6 +189,23 @@ fn rename_is_delete_plus_add() {
             .unwrap()
             .contains(&json!("src.txt"))
     );
+    let explanation = &r.evidence["selection_explanation"];
+    assert!(explanation["edges"].as_array().unwrap().contains(
+        &json!({"from":"file:src.txt", "kind":"compile", "to":"project:lib", "origin":"base"})
+    ));
+    assert!(
+        explanation["seeds"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("file:src.txt"))
+    );
+    assert!(
+        explanation["seed_causes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["node"] == "file:src.txt")
+    );
 }
 #[test]
 fn removed_project_edge_still_selects_surviving_consumer() {

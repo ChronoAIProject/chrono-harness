@@ -27,7 +27,7 @@ fn oracle_edges(rows: &[(&str, EdgeKind, &str)]) -> BTreeSet<Edge> {
 fn witnesses(i: &Impact, allowed: &BTreeSet<Edge>) {
     for (node, seeds) in &i.closure.reached {
         for id in seeds {
-            let s = i.seeds.iter().find(|s| &s.id == id).unwrap();
+            let s = i.seed_causes.iter().find(|s| &s.id == id).unwrap();
             let mut at = s.node.clone();
             for e in i.closure.witness(id, node).unwrap() {
                 assert!(allowed.contains(&e), "fabricated edge {e:?}");
@@ -168,7 +168,7 @@ fn file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends() {
     ));
     for node in ["project:p", "project:t", "test:t"] {
         assert!(
-            i.seeds
+            i.seed_causes
                 .iter()
                 .any(|s| s.node == node && s.reason == "edge-change")
         );
@@ -188,7 +188,7 @@ fn file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends() {
         i.edges.iter().filter(|e| e.origin == Origin::Both).count(),
         1
     );
-    for s in &i.seeds {
+    for s in &i.seed_causes {
         if s.reason != "delta-path" {
             assert!(i.records.contains_key(&s.reference));
         }
@@ -244,7 +244,7 @@ fn input_declaration_boundary_propagates_build_and_runtime_without_claiming_rete
         let (i, f) = run(&a, &b, &[delta(CONFIG)]);
         assert!(f.is_empty());
         assert_eq!(tests(&i), ["test:t"]);
-        assert!(i.seeds.iter().any(|s| s.node == "input:data"));
+        assert!(i.seed_causes.iter().any(|s| s.node == "input:data"));
         assert!(i.limits.iter().any(|s| s.contains("not retained")));
     }
 }
@@ -299,7 +299,7 @@ fn reached_dangling_and_changed_invalid_types_fail_but_disconnected_history_is_c
         let reference = &f.delta_refs[0];
         assert!(i.records.contains_key(reference) || reference == FM);
         let seed = i
-            .seeds
+            .seed_causes
             .iter()
             .find(|s| &s.reference == reference && s.node == f.causes[0]);
         assert!(seed.is_some());
@@ -383,6 +383,39 @@ fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
 use chrono_judge_registration::Registrations;
 
 #[test]
+fn shared_inventory_retains_definitions_and_only_resolves_unique_aliases() {
+    let mut v = values();
+    script_pair(&mut v, "t");
+    let r = load(&v);
+    let nodes = r.node_data();
+    assert!(nodes["test:t"].unique().is_none());
+    assert_eq!(
+        nodes["test:t"]
+            .definitions
+            .iter()
+            .map(|d| (
+                d.identity.as_str(),
+                d.value["actions"]["execute"]["operation"].as_str().unwrap()
+            ))
+            .collect::<Vec<_>>(),
+        [("project:t", "execute.t"), ("script:t", "script.st")]
+    );
+    assert_eq!(nodes["project:t"].unique().unwrap().identity, "project:t");
+    assert_eq!(nodes["script:t"].unique().unwrap().identity, "script:t");
+    script_pair(&mut v, "st2");
+    let r = load(&v);
+    let nodes = r.node_data();
+    assert_eq!(
+        nodes["test:t"].unique().unwrap().value["actions"]["execute"]["operation"],
+        "execute.t"
+    );
+    assert_eq!(
+        nodes["test:st2"].unique().unwrap().value["actions"]["execute"]["operation"],
+        "script.st"
+    );
+}
+
+#[test]
 fn file_origin_project_edge_change_points_to_its_actual_record() {
     let a = values();
     let mut b = a.clone();
@@ -404,7 +437,7 @@ fn file_edge_only_removal_and_addition_preserve_targets() {
     assert!(f.is_empty());
     assert_eq!(tests(&i), ["test:t"]);
     assert!(
-        i.seeds
+        i.seed_causes
             .iter()
             .any(|s| s.node == "project:p" && s.reason == "edge-change")
     );
@@ -480,7 +513,7 @@ fn removed_test_record_seeds_alias_and_exposes_retained_dangling_edge() {
         .retain(|p| p["id"] != "t");
     let (i, f) = run(&a, &b, &[delta(PROJECTS)]);
     assert!(
-        i.seeds
+        i.seed_causes
             .iter()
             .any(|s| s.node == "test:t" && s.reference == "/records/projects/projects/t")
     );

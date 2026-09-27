@@ -62,9 +62,10 @@ impl Registrations {
     pub fn nodes(&self) -> BTreeSet<String> {
         self.node_data().into_keys().collect()
     }
-    /// The authoritative node inventory. Values borrow immutable validated registration data.
+    /// The authoritative node inventory. Every definition is retained, including alias collisions.
+    /// Values borrow immutable validated data; only `NodeView::unique` resolves a single definition.
     pub fn node_data(&self) -> BTreeMap<String, NodeView<'_>> {
-        let mut nodes = BTreeMap::new();
+        let mut nodes: BTreeMap<String, NodeView<'_>> = BTreeMap::new();
         for (prefix, kind, value, key, id) in [
             ("file", NodeKind::File, &self.filemap, "files", "path"),
             (
@@ -85,21 +86,30 @@ impl Registrations {
             ("judge", NodeKind::Judge, &self.judges, "judges", "id"),
         ] {
             for row in value[key].as_array().unwrap() {
+                let identity = format!("{prefix}:{}", row[id].as_str().unwrap());
+                let definition = NodeDefinition {
+                    identity: identity.clone(),
+                    value: row,
+                };
                 nodes.insert(
-                    format!("{prefix}:{}", row[id].as_str().unwrap()),
-                    NodeView { kind, value: row },
+                    identity,
+                    NodeView {
+                        kind,
+                        definitions: vec![definition.clone()],
+                    },
                 );
                 if (kind == NodeKind::Project && row["kind"] == "test"
                     || kind == NodeKind::Script && row.get("tests_for").is_some())
                     && row["actions"].get("execute").is_some()
                 {
-                    nodes.insert(
-                        format!("test:{}", row[id].as_str().unwrap()),
-                        NodeView {
+                    nodes
+                        .entry(format!("test:{}", row[id].as_str().unwrap()))
+                        .or_insert_with(|| NodeView {
                             kind: NodeKind::Test,
-                            value: row,
-                        },
-                    );
+                            definitions: vec![],
+                        })
+                        .definitions
+                        .push(definition);
                 }
             }
         }
@@ -115,8 +125,22 @@ pub enum NodeKind {
     Test,
     Judge,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
+pub struct NodeDefinition<'a> {
+    /// Identity of the defining record, e.g. project:t or script:t for the alias test:t.
+    pub identity: String,
+    pub value: &'a Value,
+}
+#[derive(Clone, Debug)]
 pub struct NodeView<'a> {
     pub kind: NodeKind,
-    pub value: &'a Value,
+    pub definitions: Vec<NodeDefinition<'a>>,
+}
+impl<'a> NodeView<'a> {
+    pub fn unique(&self) -> Option<&NodeDefinition<'a>> {
+        match self.definitions.as_slice() {
+            [definition] => Some(definition),
+            _ => None,
+        }
+    }
 }

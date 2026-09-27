@@ -15,13 +15,28 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v1";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
+    /// Only uniquely resolved values. Absent and ambiguous endpoints are distinguished by definitions.
     pub base: Option<Value>,
     pub candidate: Option<Value>,
+    pub base_definitions: Vec<NodeDefinition>,
+    pub candidate_definitions: Vec<NodeDefinition>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NodeDefinition {
+    pub identity: String,
+    pub value: Value,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NodeAmbiguity {
+    pub node: String,
+    pub endpoint: String,
+    pub definitions: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequiredTest {
     pub node: String,
     pub candidate_present: bool,
+    pub candidate_ambiguous: bool,
     pub execution_edges: Vec<Edge>,
     pub base_cost: Option<Value>,
     pub candidate_cost: Option<Value>,
@@ -46,11 +61,15 @@ pub struct Impact {
     pub changes: Vec<Change>,
     pub nodes: BTreeMap<String, NodePair>,
     pub edges: Vec<UnionEdge>,
-    pub seeds: Vec<Seed>,
+    pub seeds: Vec<String>,
+    pub seed_causes: Vec<Seed>,
     pub closure: Closure,
+    pub tests: Vec<String>,
+    pub retired_tests: Vec<String>,
     pub required_tests: Vec<RequiredTest>,
     pub judges: Vec<JudgeSelection>,
     pub historical_context: Vec<EdgeProblem>,
+    pub historical_ambiguities: Vec<NodeAmbiguity>,
     pub limits: Vec<String>,
 }
 fn edges(r: &Registrations) -> BTreeSet<Edge> {
@@ -96,8 +115,10 @@ pub fn produce(
     config_path: &str,
     delta: &[Delta],
 ) -> (Impact, Vec<Finding>) {
-    let a = records::inventory(base, config_path);
-    let b = records::inventory(candidate, config_path);
+    let an = base.node_data();
+    let bn = candidate.node_data();
+    let a = records::inventory(base, config_path, &an);
+    let b = records::inventory(candidate, config_path, &bn);
     let mut records = BTreeMap::new();
     let mut changes = vec![];
     let mut seeds = BTreeSet::new();
@@ -170,8 +191,15 @@ pub fn produce(
     }
     let seeds: Vec<_> = seeds.into_iter().collect();
     let closure = graph::closure(&edges, &seeds);
-    let an = base.node_data();
-    let bn = candidate.node_data();
+    let definitions = |view: Option<&chrono_judge_registration::NodeView<'_>>| {
+        view.into_iter()
+            .flat_map(|v| &v.definitions)
+            .map(|d| NodeDefinition {
+                identity: d.identity.clone(),
+                value: d.value.clone(),
+            })
+            .collect()
+    };
     let nodes = an
         .keys()
         .chain(bn.keys())
@@ -181,14 +209,57 @@ pub fn produce(
             (
                 id.clone(),
                 NodePair {
-                    base: an.get(id).map(|n| n.value.clone()),
-                    candidate: bn.get(id).map(|n| n.value.clone()),
+                    base: an.get(id).and_then(|n| n.unique()).map(|d| d.value.clone()),
+                    candidate: bn.get(id).and_then(|n| n.unique()).map(|d| d.value.clone()),
+                    base_definitions: definitions(an.get(id)),
+                    candidate_definitions: definitions(bn.get(id)),
                 },
             )
         })
         .collect();
     let mut findings = vec![];
     let mut historical_context = vec![];
+    let mut historical_ambiguities = vec![];
+    for (endpoint, inventory) in [("base", &an), ("candidate", &bn)] {
+        for (node, view) in inventory {
+            if view.definitions.len() <= 1 {
+                continue;
+            }
+            let ambiguity = NodeAmbiguity {
+                node: node.clone(),
+                endpoint: endpoint.into(),
+                definitions: view
+                    .definitions
+                    .iter()
+                    .map(|d| d.identity.clone())
+                    .collect(),
+            };
+            if let Some(causes) = closure.reached.get(node) {
+                let cause = causes.first().unwrap();
+                let seed = seeds.iter().find(|s| &s.id == cause).unwrap();
+                let mut witness = vec![seed.node.clone()];
+                witness.extend(
+                    closure
+                        .witness(cause, node)
+                        .unwrap()
+                        .iter()
+                        .map(|e| e.to.clone()),
+                );
+                findings.push(Finding {
+                    code: "E_NODE_AMBIGUOUS".into(),
+                    level: "error".into(),
+                    message: format!(
+                        "{endpoint}: ambiguous node {node}: {:?}",
+                        ambiguity.definitions
+                    ),
+                    delta_refs: vec![seed.reference.clone()],
+                    causes: witness,
+                });
+            } else {
+                historical_ambiguities.push(ambiguity);
+            }
+        }
+    }
     for e in &edges {
         for (endpoint, inventory) in [("base", &an), ("candidate", &bn)] {
             if matches!(
@@ -244,11 +315,12 @@ pub fn produce(
             }
         }
     }
-    let required_tests = closure
+    let required_tests: Vec<_> = closure
         .selected_tests()
         .into_iter()
         .map(|node| RequiredTest {
             candidate_present: bn.get(&node).is_some_and(|n| n.kind == NodeKind::Test),
+            candidate_ambiguous: bn.get(&node).is_some_and(|n| n.definitions.len() > 1),
             execution_edges: closure
                 .traversed
                 .iter()
@@ -287,11 +359,28 @@ pub fn produce(
             changes,
             nodes,
             edges,
-            seeds,
+            seeds: seeds
+                .iter()
+                .map(|s| s.node.clone())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+            seed_causes: seeds,
             closure,
+            tests: required_tests
+                .iter()
+                .filter(|t| t.candidate_present)
+                .map(|t| t.node.clone())
+                .collect(),
+            retired_tests: required_tests
+                .iter()
+                .filter(|t| !t.candidate_present)
+                .map(|t| t.node.clone())
+                .collect(),
             required_tests,
             judges,
             historical_context,
+            historical_ambiguities,
             limits: vec![
                 "Declaration impact only; no test execution, retirement approval or cost verdict"
                     .into(),

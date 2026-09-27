@@ -26,6 +26,7 @@ pub enum Origin {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UnionEdge {
+    #[serde(flatten)]
     pub edge: Edge,
     pub origin: Origin,
 }

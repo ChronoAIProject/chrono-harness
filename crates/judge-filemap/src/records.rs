@@ -1,5 +1,5 @@
 //! Stable registration record identities and set normalization, owned by FILEMAP impact.
-use chrono_judge_registration::Registrations;
+use chrono_judge_registration::{NodeView, Registrations};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,9 +41,12 @@ fn normalize(v: &Value, key: &str) -> Value {
         _ => v.clone(),
     }
 }
-pub fn inventory(r: &Registrations, config_path: &str) -> BTreeMap<String, Record> {
+pub fn inventory(
+    r: &Registrations,
+    config_path: &str,
+    nodes: &BTreeMap<String, NodeView<'_>>,
+) -> BTreeMap<String, Record> {
     let mut out = BTreeMap::new();
-    let nodes = r.node_data();
     let mut add = |scope: &str,
                    collection: &str,
                    key: &str,
@@ -106,10 +109,9 @@ pub fn inventory(r: &Registrations, config_path: &str) -> BTreeMap<String, Recor
                     let mut targets = BTreeSet::from([target]);
                     // Registration owns aliases such as project/script records' executable test nodes.
                     let test = format!("test:{id}");
-                    if nodes
-                        .get(&test)
-                        .is_some_and(|view| std::ptr::eq(view.value, row))
-                    {
+                    if nodes.get(&test).is_some_and(|view| {
+                        view.definitions.iter().any(|d| std::ptr::eq(d.value, row))
+                    }) {
                         targets.insert(test);
                     }
                     add(scope, key, id, path, row, targets);

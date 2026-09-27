@@ -483,7 +483,8 @@ fn ci_impact(
         .cloned()
         .collect();
     selected.extend(extras.keys().cloned());
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
+    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
     (paths, selected, explanation)
 }
 
