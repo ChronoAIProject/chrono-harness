@@ -12,3 +12,6 @@ chrono-judge-filemap = { path = "../judge-filemap" }
 serde_json = "1"
 tempfile = "3"
 chrono-judge-routes = { path = "../judge-routes" }
+
+[profile.dev.package.sha2]
+opt-level = 3

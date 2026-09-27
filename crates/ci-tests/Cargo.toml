@@ -14,3 +14,6 @@ tempfile = "3"
 [[test]]
 name = "behavior"
 path = "tests/behavior.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

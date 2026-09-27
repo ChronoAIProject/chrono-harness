@@ -20,3 +20,6 @@ chrono-harness = { path = "../runner" }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 time = { version = "=0.3.47", features = ["parsing"] }
+
+[profile.dev.package.sha2]
+opt-level = 3

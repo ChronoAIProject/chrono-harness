@@ -89,6 +89,8 @@ cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
 ./crates/runner/target/debug/chrono-harness spec status
 ```
 
+使用 `sha2` 的独立 Cargo 构建根在 dev 及其继承的 test profile 中，将该上游依赖设为 `opt-level = 3`，降低输入摘要核验的计算成本，同时保留 debug assertions。依赖库的 profile 不向调用方传递，因此这项配置由每个生产、测试项目的 manifest 显式拥有。
+
 现役 CI 使用独立的 `judge-ci` 执行显式登记的 DELTA 检查；runner 只承担外部判官运输与报告。独立 `chrono-ci` 从宿主配置生成 GitHub Actions，提供 init/generate/verify 和事件输入准备。宿主可通过 `push_baselines` 显式登记分支前缀及远端基线；本仓的 integration 连续 push 均对照所观察的 dev 提交，使用相同的 check 指令。
 
 ```sh

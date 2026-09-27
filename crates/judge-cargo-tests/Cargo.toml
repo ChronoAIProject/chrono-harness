@@ -31,3 +31,6 @@ path = "tests/input_consumer.rs"
 [[test]]
 name = "configuration"
 path = "tests/configuration.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

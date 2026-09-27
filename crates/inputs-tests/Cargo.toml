@@ -19,3 +19,6 @@ path = "tests/snapshots.rs"
 [[test]]
 name = "consumer"
 path = "tests/consumer.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

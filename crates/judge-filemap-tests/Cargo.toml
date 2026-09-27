@@ -27,3 +27,6 @@ path = "tests/workflow_selection.rs"
 [[test]]
 name = "workflow_consumer"
 path = "tests/workflow_consumer.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3
