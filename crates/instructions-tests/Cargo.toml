@@ -13,3 +13,6 @@ serde_json = "1"
 [[test]]
 name = "generation"
 path = "tests/generation.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

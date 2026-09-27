@@ -22,3 +22,6 @@ chrono-judge-routes = { path = "../judge-routes" }
 chrono-judge-projects = { path = "../judge-projects" }
 serde_json = "1"
 time = { version = "0.3", features = ["parsing"] }
+
+[profile.dev.package.sha2]
+opt-level = 3
