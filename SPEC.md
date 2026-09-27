@@ -314,9 +314,15 @@ schema 不可解析影响本轮输入时是错误；不能以“历史问题”�
 
 `State` 对应固定端点，`Artifact` 对应受检查对象及其输入，`bytes` 对应包含缺失态的输入值；`reads` 是两端实际读取，`dep` 是宿主声明的依赖上界，`property` 是要保留的判定属性。使用 `Option String` 的精确应用已编译，可区分不存在与空字节。实际读取集合、局部性和依赖包含关系仍由宿主履行，不能把 `Local` 假设当作自动取得的结论。不另造仅包装既有结论的定理。
 
+另一个已编译模型位于 trureturing 修订 `7b527cae31e23efde893f06987d5328eab10f4cf` 的 [SeededEdgeUpdateReachability.lean](https://github.com/the-omega-institute/trureturing/blob/7b527cae31e23efde893f06987d5328eab10f4cf/D5/S3/ConceptDynamics/DependencyTopology/SeededEdgeUpdateReachability.lean)。其独立交付为 [PR #10868](https://github.com/the-omega-institute/trureturing/pull/10868)，当前是尚未独立评审、冻结或合并的草稿；成功编译与入库冻结分别记账。
+
+`seeded_edge_update_closure` 证明：给定任意顶点类型、两端有向关系及同一个种子集合，若每条新增或删除的关系边的终点都在种子中，则并集图、base 图、candidate 图从这些种子可达的节点集合相等。它允许环和无限顶点类型，路径仍是有限路径且允许零长度。证明遇到某端缺失的边时，从其已登记为种子的终点重新出发，因此不保留原来的起始种子。
+
+与 FILEMAP 的对应是：顶点取显式节点 ID，关系取“存在某种 kind 的登记边”，种子取本轮变更种子的节点集合。第 5 节要求变更边两端进入种子，强于该定理仅要求变更关系边终点的前提；从 Rust 的有类型登记变化到该前提的实现对应仍须核验。此结果不授权删除旧边，也不授权把逐种子解释、路径、边类型、测试选择或成本替换为节点集合。模型的精确有类型边投影应用及下述删边反例已编译；没有以此声称 Rust 算法已获形式验证。
+
 第 5 节的删边例子也给出实现对应的边界：把有类型边投影为“存在某个 kind 的边”，或只保留可达节点，会丢掉测试选择需要的信息。`project:p` 和 `test:t` 同为种子、唯一测试执行边被删除时，两图的可达节点均为这两个节点；candidate 图没有执行边，并集图保留旧执行边。因此任何只证明节点集合相等的结果都不足以替代旧边、逐种子解释、路径、测试选择、成本或退休义务。
 
-当前对应限于上述参数映射、编译过的既有定理应用与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
+当前对应限于上述参数映射、编译过的定理及精确应用、反例与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
 
 ## 6. 登记变化、移除与演进
 
@@ -621,7 +627,7 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 - [judge-content-address.sh](https://github.com/the-omega-institute/trureturing/blob/fbac8071cc862c8a43a247db2d8101dc61f655ea/tools/scripts/workflow/judge-content-address.sh)：判官地址包含 source/runtime/architecture/sdk；本设计同样绑定执行物与工具证据，避免复用错报告。
 
 这些是经验来源而非兼容承诺，不复制已有复杂体系，不读取其运行时配置，不把它当依赖。
-本项目不会修改 trureturing，也没有宿主全局 hook、权限门禁或人工流程。
+上述参考材料不因引用而被本产品修改；第 2.1 节的通用数学成果通过 trureturing 独立 lane 与 PR 交付。本产品没有宿主全局 hook、权限门禁或人工流程。
 
 ## 16. 宿主指令生成（已实现）
 
