@@ -74,8 +74,10 @@ this repository's actual registered ci-tests Cargo plan through the scoped adapt
 The context may name a root-relative `retained_inputs` JSON file. Its `base` and
 `candidate` objects each contain `commit`, `environment` and `files`. Environment
 snapshots map each inherited variable to a string (including empty) or null
-(absent). Each `files[ID]` contains `bytes`, an array of bytes. Runner transports
-these supplied snapshots. Registration checks every declared external file's
+(absent). Each `files[ID]` contains either `bytes`, an array of bytes, or exactly
+`{blob, sha256, length}` referencing retained state content. The [input snapshot
+producer](inputs.md) can capture and transport these without inline large bytes.
+Runner transports the supplied snapshot metadata. Registration checks every declared external file's
 retained digest at both endpoints and current candidate disk bytes, and compares
 the candidate environment with the runner observation. It never reconstructs old
 bytes from current disk. Reports publish input identities and lengths; supplied

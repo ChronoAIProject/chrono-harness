@@ -104,6 +104,39 @@ pub struct ProcessResult {
 pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+/// Transport bytes with bounded memory, returning their observed identity.
+pub fn copy_hashed(mut input: impl Read, mut output: impl Write) -> Result<(String, u64), String> {
+    let mut hash = Sha256::new();
+    let mut length = 0_u64;
+    let mut buffer = [0_u8; 65536];
+    loop {
+        let count = input.read(&mut buffer).map_err(|e| e.to_string())?;
+        if count == 0 {
+            break;
+        }
+        output
+            .write_all(&buffer[..count])
+            .map_err(|e| e.to_string())?;
+        hash.update(&buffer[..count]);
+        length = length
+            .checked_add(count as u64)
+            .ok_or("input length overflow")?;
+    }
+    Ok((format!("{:x}", hash.finalize()), length))
+}
+pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
+    if !fs::metadata(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .is_file()
+    {
+        return Err(format!("not a regular input file: {}", path.display()));
+    }
+    let file = fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if !file.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err(format!("not a regular input file: {}", path.display()));
+    }
+    copy_hashed(file, std::io::sink())
+}
 pub fn relative_path(value: &str) -> Result<(), String> {
     if value.is_empty()
         || value.contains(['\0', '\n', '\r', '\\'])

@@ -241,6 +241,18 @@
       "owner": "judge-workflow-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/inputs/target/",
+      "owner": "inputs",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/inputs-tests/target/",
+      "owner": "inputs-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

@@ -1387,6 +1387,10 @@
         {
           "kind": "compile",
           "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
         }
       ]
     },
@@ -1968,6 +1972,10 @@
         {
           "kind": "compile",
           "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
         }
       ]
     },
@@ -2136,6 +2144,109 @@
     },
     {
       "path": "docs/workflow.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "crates/inputs/Cargo.toml",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs/Cargo.lock",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs/src/lib.rs",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs/src/main.rs",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/Cargo.toml",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/Cargo.lock",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/snapshots.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/consumer.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/inputs.md",
       "owner": "repository",
       "surface": "documentation",
       "cost": "unmeasured",
@@ -3637,6 +3748,166 @@
       "from": "environment:CARGO_TERM_COLOR",
       "kind": "runtime-input",
       "to": "project:judge-workflow-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:inputs"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:inputs"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "compile",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "test-execution",
+      "to": "test:inputs-tests"
+    },
+    {
+      "from": "project:inputs-tests",
+      "kind": "test-execution",
+      "to": "test:inputs-tests"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-mixed",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:judge-workflow",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:inputs"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
     }
   ],
   "test_costs": [
@@ -3686,6 +3957,10 @@
     },
     {
       "test": "judge-workflow-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "inputs-tests",
       "cost": "unmeasured"
     }
   ],
@@ -3832,6 +4107,24 @@
         "build.judge-projects",
         "build.judge-workflow",
         "test.judge-workflow-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:inputs-tests": {
+      "operations": [
+        "fmt.inputs",
+        "fmt.inputs-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-cost",
+        "build.judge-mixed",
+        "build.judge-routes",
+        "build.judge-projects",
+        "build.judge-workflow",
+        "build.inputs",
+        "test.inputs-tests"
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576

@@ -1,7 +1,7 @@
 # chrono-harness 规格 v0.1
 
 状态：**DRAFT / SPEC-FIRST**。本文是待实现合同，不是已运行的验收报告。
-当前实现含 v1 外部判官运输、独立 registration/filemap/routes/projects/cost 的有界合同、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
+当前实现含 v1 外部判官运输、独立 registration/filemap/routes/projects/cost/mixed/workflow 的有界合同、scoped CI 与宿主指令生成器；§14、§16 及 docs/spec-coverage.md 给出实际边界。
 本文中的“必须”“错误”“判官”描述目标行为，除明确标注已实现者外均未执行。
 
 ## 1. 目标、权限与边界
@@ -32,6 +32,8 @@ README.md                       使用、目录导航和实现状态
 crates/                         独立 Cargo 项目的目录分组
   runner/                       运输、协议与统一 check 入口
   runner-tests/                 runner 专属测试
+  inputs/                       显式输入快照与保留内容运输
+  inputs-tests/                 输入生产者专属测试
   judge-registration/           v1 登记结构、快照与受影响引用判官
   judge-registration-tests/     registration 专属测试
   judge-filemap/                v1 完整声明图与 impact，复用注册数据
@@ -44,6 +46,8 @@ crates/                         独立 Cargo 项目的目录分组
   judge-cost-tests/             cost 专属测试
   judge-mixed/                  显式规则分类与混合修改警告
   judge-mixed-tests/            mixed 专属测试
+  judge-workflow/               新鲜度、演进与 integration 证据
+  judge-workflow-tests/          workflow 专属测试
   judge-ci/                     CI 登记、快照、DELTA 与操作执行
   judge-ci-tests/                CI 判官专属测试
   ci/                           工作流生成与事件输入准备
@@ -568,7 +572,7 @@ The current FILEMAP v2 execution and workflow v2 historical-profile contracts ar
 
 Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
 
-Context may name retained_inputs containing original external-file bytes and environment snapshots at both fixed endpoints. Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods with standalone Cargo manifests and TOML path dependencies; it does not certify Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
+Context may name retained_inputs containing original external-file bytes or content-addressed blob references and environment snapshots at both fixed endpoints. The independent chrono-inputs capture/pair producer and streaming validation are specified in [docs/inputs.md](docs/inputs.md). Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods with standalone Cargo manifests and TOML path dependencies; it does not certify Cargo/SDK closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
 
 Workflow now certifies bounded branch, integration, retirement and finite migration contracts using actual observations and completed reports; see [docs/workflow.md](docs/workflow.md). Complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
 

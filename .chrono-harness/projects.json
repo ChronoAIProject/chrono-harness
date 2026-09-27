@@ -26,7 +26,9 @@
     "judge-mixed",
     "judge-mixed-tests",
     "judge-workflow",
-    "judge-workflow-tests"
+    "judge-workflow-tests",
+    "inputs",
+    "inputs-tests"
   ],
   "projects": [
     {
@@ -1083,6 +1085,98 @@
         }
       },
       "tests_for": "judge-workflow"
+    },
+    {
+      "id": "inputs",
+      "kind": "production",
+      "manifest": "crates/inputs/Cargo.toml",
+      "lockfile": "crates/inputs/Cargo.lock",
+      "root": "crates/inputs",
+      "actions": {
+        "build": {
+          "operation": "build.inputs",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.inputs",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.inputs",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "inputs-tests"
+    },
+    {
+      "id": "inputs-tests",
+      "kind": "test",
+      "manifest": "crates/inputs-tests/Cargo.toml",
+      "lockfile": "crates/inputs-tests/Cargo.lock",
+      "root": "crates/inputs-tests",
+      "actions": {
+        "build": {
+          "operation": "build.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "inputs"
     }
   ],
   "scripts": [

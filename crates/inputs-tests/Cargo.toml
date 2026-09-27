@@ -1,0 +1,21 @@
+[package]
+name = "chrono-inputs-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-inputs = { path = "../inputs" }
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+serde_json = "1"
+tempfile = "3"
+
+[[test]]
+name = "snapshots"
+path = "tests/snapshots.rs"
+
+[[test]]
+name = "consumer"
+path = "tests/consumer.rs"
