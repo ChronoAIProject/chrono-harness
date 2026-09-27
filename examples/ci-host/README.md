@@ -29,8 +29,12 @@ runs that same `check --candidate FULL_INITIAL_OID --initial` command. It execut
 `example.check` and workflow verification; setting `message.txt` to anything other
 than `hello` plus a newline fails locally and in that first-push check.
 
+The example explicitly registers `refs/heads/integration/` in `push_baselines`
+with `refs/heads/dev` as its baseline on `origin`. Every matching push compares
+the whole candidate with that observed dev tip, including later repair pushes.
 Creating an integration branch at the existing `dev` tip uses a real empty DELTA
-and reports no selected operations. Creating `dev` from a commit with parents
+and reports no selected operations. Other existing branches retain payload
+before/after behavior. Creating `dev` from a commit with parents
 has no prior baseline and fails preparation: supply an explicit full base/candidate
 range through `workflow_dispatch` or the canonical local command. Do not use
 `--initial` for parented history. An existing host's

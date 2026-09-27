@@ -173,6 +173,30 @@ runner label, event branches and job timeout are data; selected test commands
 never appear in YAML. Runner command rendering uses the same canonical argv
 constructor as event evidence.
 
+Optional `push_baselines` rows explicitly bind a literal branch-ref prefix to a
+baseline branch on `origin`. This host and the copyable example adopt:
+
+```json
+"push_baselines": [
+  {"ref_prefix": "refs/heads/integration/", "base_ref": "refs/heads/dev"}
+]
+```
+
+A matching creation or subsequent push checks the complete candidate against the
+observed baseline tip, including earlier commits on the same integration branch.
+The prefix is a literal string ending in `/`, not a glob. Overlapping/duplicate
+prefixes and a baseline inside its own matching prefix are errors. With configured
+rows, push payloads must include a valid full branch ref. An absent/empty list
+preserves existing push behavior; unmatched branches still use the ordinary event
+mapping. No branch role is inferred from its name, host layout or language.
+
+The preparer reads the exact named remote ref once and binds its full commit OID.
+If needed it fetches that OID; it does not subsequently take identity from shared
+`FETCH_HEAD`. Missing refs/objects or malformed events fail without falling back
+to the payload's previous commit. Context source `push-configured-baseline-ref`
+identifies this choice. Preparation binds inputs; freshness, stability and
+integration certification remain the workflow judge's separate contract.
+
 `chrono-ci init --host-root H --config INPUT` accepts explicit source JSON from
 any directory, adopts it into `H/.chrono-harness/ci/github.json`, and produces the
 workflow. Existing adopted configuration is preserved. Init preflights output
@@ -186,9 +210,10 @@ Event mapping is preparation, not policy:
 
 | Event | Fixed input behavior |
 | --- | --- |
-| Existing branch push | Payload `before` / `after` |
+| Push matching a `push_baselines` prefix | Observed configured baseline ref / payload `after`, on creation and every subsequent push |
+| Unmatched existing branch push | Payload `before` / `after` |
 | Creation of the configured baseline branch (`created`, zero before, matching payload `ref`) | Parentless payload `after` uses the same check with `--initial`, no base, and `initial-inventory` mode; a parented candidate requires an explicit range |
-| Creation of another branch (`created`, zero before, different payload `ref`) | Fetch configured baseline ref once, record its full base OID, use payload `after`; candidate equal to that existing baseline is an honest no-op |
+| Unmatched creation of another branch (`created`, zero before, different payload `ref`) | Observe configured creation baseline ref once, obtain its fixed commit, use payload `after`; candidate equal to that existing baseline is an honest no-op |
 | PR to dev | Event `pull_request.base.sha` / `head.sha`; check out head, never the default merge ref |
 | workflow_dispatch | Explicit full base/candidate, or explicit initial plus parentless candidate |
 | Branch deletion | Job has no candidate check and cannot produce a passing candidate report |
@@ -204,7 +229,7 @@ is recorded independently with `github.workflow_sha`.
 Creation events require a valid `refs/heads/...` payload ref. Creating the baseline
 itself never treats the newly pushed candidate as its own prior baseline. The
 context records source `baseline-creation-initial-inventory`, null base, and mode
-`initial-inventory` for a parentless first push; other branch creations record
+`initial-inventory` for a parentless first push; other unmatched branch creations record
 `branch-creation-baseline-ref` and `delta`. For a parented first baseline push,
 supply real full base/candidate OIDs via manual dispatch or the canonical local
 command; the ordinary creation route fails rather than fabricating a range.
