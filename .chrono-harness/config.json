@@ -205,6 +205,18 @@
       "owner": "judge-projects-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/judge-cost/target/",
+      "owner": "judge-cost",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-cost-tests/target/",
+      "owner": "judge-cost-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

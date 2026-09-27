@@ -20,7 +20,9 @@
     "judge-projects",
     "judge-projects-tests",
     "scoped-v1",
-    "scoped-v1-tests"
+    "scoped-v1-tests",
+    "judge-cost",
+    "judge-cost-tests"
   ],
   "projects": [
     {
@@ -801,6 +803,98 @@
           ]
         }
       }
+    },
+    {
+      "id": "judge-cost",
+      "kind": "production",
+      "manifest": "crates/judge-cost/Cargo.toml",
+      "lockfile": "crates/judge-cost/Cargo.lock",
+      "root": "crates/judge-cost",
+      "actions": {
+        "build": {
+          "operation": "build.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-cost-tests"
+    },
+    {
+      "id": "judge-cost-tests",
+      "kind": "test",
+      "manifest": "crates/judge-cost-tests/Cargo.toml",
+      "lockfile": "crates/judge-cost-tests/Cargo.lock",
+      "root": "crates/judge-cost-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "judge-cost"
     }
   ],
   "scripts": [

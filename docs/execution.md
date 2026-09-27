@@ -121,10 +121,12 @@ are a named decoder input and remain supported for existing v1 example profiles.
 The legacy adapter's additional selection and ambient-environment behavior remain
 explicitly scoped; missing legacy version contracts remain unverified. Current host
 tools use full declarations. This adapter retires when full native CI consumes the
-full contracts. Full host activation, Cargo/SDK closure, cost/mixed/workflow judges,
+full contracts. Full host activation, Cargo/SDK closure, mixed/workflow judges,
 initial adoption, native CI/parity and delivery lifecycle are subsequent work.
 
 The dedicated routes/projects tests include actual processes, retained inputs,
 spaced host paths, another caller cwd, literal metacharacters/empty/newline argv,
 ordering/deduplication, rejection controls and real exit/output/effect observations.
 Single-worker checks are not independent review, native CI or landing evidence.
+
+Declared costs from the same impact now have a dedicated [cost judge](costs.md).

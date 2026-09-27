@@ -12,7 +12,8 @@
     "build.judge-registration",
     "build.judge-filemap",
     "build.judge-routes",
-    "build.judge-projects"
+    "build.judge-projects",
+    "build.judge-cost"
   ],
   "install": [
     {
@@ -42,6 +43,10 @@
     {
       "source": "crates/judge-projects/target/debug/chrono-judge-projects",
       "destination": ".chrono-harness/bin/chrono-judge-projects"
+    },
+    {
+      "source": "crates/judge-cost/target/debug/chrono-judge-cost",
+      "destination": ".chrono-harness/bin/chrono-judge-cost"
     }
   ]
 }
