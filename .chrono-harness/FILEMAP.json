@@ -1375,6 +1375,10 @@
         {
           "kind": "compile",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-cost-tests"
         }
       ]
     },
@@ -1672,6 +1676,109 @@
     },
     {
       "path": "docs/execution.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "crates/judge-cost/Cargo.toml",
+      "owner": "judge-cost",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cost"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost/Cargo.lock",
+      "owner": "judge-cost",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cost"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost/src/lib.rs",
+      "owner": "judge-cost",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cost"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost/src/main.rs",
+      "owner": "judge-cost",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cost"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost-tests/Cargo.toml",
+      "owner": "judge-cost-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cost-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost-tests/Cargo.lock",
+      "owner": "judge-cost-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cost-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost-tests/tests/costs.rs",
+      "owner": "judge-cost-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cost-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cost-tests/tests/consumer.rs",
+      "owner": "judge-cost-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cost-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/costs.md",
       "owner": "repository",
       "surface": "documentation",
       "cost": "unmeasured",
@@ -2693,6 +2800,151 @@
       "from": "project:judge-ci",
       "kind": "runtime-input",
       "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "test-execution",
+      "to": "test:judge-cost-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-cost"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "compile",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-cost-tests",
+      "kind": "test-execution",
+      "to": "test:judge-cost-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "runtime-input",
+      "to": "project:judge-cost-tests"
     }
   ],
   "test_costs": [
@@ -2730,6 +2982,10 @@
     },
     {
       "test": "scoped-v1-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-cost-tests",
       "cost": "unmeasured"
     }
   ],
@@ -2832,6 +3088,19 @@
         "migration.scoped-v1-tests"
       ],
       "timeout_seconds": 30,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-cost-tests": {
+      "operations": [
+        "fmt.judge-cost",
+        "fmt.judge-cost-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-cost",
+        "test.judge-cost-tests"
+      ],
+      "timeout_seconds": 600,
       "output_limit_bytes": 1048576
     }
   }

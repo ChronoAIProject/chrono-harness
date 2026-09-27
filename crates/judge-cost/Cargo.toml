@@ -1,0 +1,21 @@
+[package]
+name = "chrono-judge-cost"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-judge-cost"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+chrono-judge-filemap = { path = "../judge-filemap" }
+serde_json = "1"

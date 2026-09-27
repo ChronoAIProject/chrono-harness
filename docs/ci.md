@@ -24,7 +24,7 @@ The five full-governance registries remain **proposed**. The bounded
 below using `chrono-ci-judge/v1`. Separately, `check` supports configured
 `chrono-judge/v1` transport and the registration/filemap/routes/projects judges through
 `.chrono-harness/config.json` with `--context`. This proposed host remains
-incomplete and returns nonzero; cost/mixed/workflow judges and automated lifecycle remain unimplemented. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
+incomplete and returns nonzero; mixed/workflow judges and automated lifecycle remain unimplemented. Cost reports have a dedicated judge and registered consumer tests. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
 
 ## This repository
 
@@ -247,6 +247,10 @@ were `556fdb73b6f93275d18bd210b9b01be1173daec9`. The failure was
 That report did not retain the interpreter's actual version output. The repaired
 host uses the explicit system-interpreter path instead of PATH precedence, keeping
 the exact version contract. `/usr/bin/python3 --version` returned `Python 3.9.6`
-on the local Darwin arm64 verification host. This is not a measurement of the
-native runner's interpreter; a future fixed-candidate native run must validate it.
+on the local Darwin arm64 verification host. The repaired integration, PR and dev
+runs also observed that exact path and version. The verified [dev run 36295299904](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36295299904)
+checked base `4f08aef7ab40d7b0a3fb6ba42af2620600f18d98` to landed candidate
+`f8338fd9496878914216e2c070d8320ea50fbb6e`: 34 operations and 227 Rust tests
+passed. Its tree equals the independently reviewed candidate tree; full parity
+remains unestablished.
 Failed migration binding now preserves expected and observed version diagnostics.

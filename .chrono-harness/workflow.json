@@ -103,6 +103,19 @@
         "judge-projects-tests"
       ],
       "reason": "Registered method/receipt and paired operation execution policy"
+    },
+    {
+      "id": "declared-costs",
+      "paths": [
+        "crates/judge-cost/Cargo.toml",
+        "crates/judge-cost/Cargo.lock",
+        "crates/judge-cost/src/lib.rs",
+        "crates/judge-cost/src/main.rs"
+      ],
+      "tests": [
+        "judge-cost-tests"
+      ],
+      "reason": "Four-coordinate cost reporting, endpoint provenance and warning/error semantics"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -118,7 +131,8 @@
       "judge-registration-tests",
       "judge-filemap-tests",
       "judge-routes-tests",
-      "judge-projects-tests"
+      "judge-projects-tests",
+      "judge-cost-tests"
     ],
     "bind": [
       "base",
