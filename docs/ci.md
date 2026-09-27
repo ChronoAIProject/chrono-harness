@@ -1,13 +1,18 @@
 # Generated CI and the active CI slice
 
-`runner`, `judge-registration`, `judge-ci`, and `ci` are separate Rust production projects under
+`runner`, `judge-registration`, `judge-filemap`, `judge-ci`, and `ci` are separate Rust production projects under
 `crates/`, each beside its dedicated `-tests` project with separate Cargo.lock
 and target directories. `instructions` and `instructions-tests` follow the same
 layout. The container directory is not a Cargo workspace or a test-discovery rule;
 each manifest, operation and dependency remains explicitly registered.
 `runner` owns external process transport, request identity, strict protocol checks
 and result publication. `judge-registration` owns full-format registration checks.
-`judge-ci` owns the scoped CI registration, snapshot, DELTA and operation policy.
+`judge-filemap` owns full typed declaration impact and shared union/closure mechanics.
+`judge-ci` owns the scoped CI registration, snapshot, seed and operation policy,
+and consumes those shared mechanics through an explicit adapter. Its
+`selection_explanation.extra_selections` explains legacy rules, with
+`legacy_only_selections` identifying selections outside test-execution edges;
+these do not become full-policy edges. See [the impact contract](filemap-impact.md).
 `ci` owns the GitHub workflow projection and event input
 preparation. It does not select tests or judge outcomes. `instructions` remains
 independent and its catalogs, layouts and relative root alias are unchanged.
@@ -15,9 +20,9 @@ independent and its catalogs, layouts and relative root alias are unchanged.
 The five full-governance registries remain **proposed**. The bounded
 `chrono-ci-check/v1` profile explicitly consumes the FILEMAP and projects data
 below using `chrono-ci-judge/v1`. Separately, `check` supports configured
-`chrono-judge/v1` transport and the registration judge through
+`chrono-judge/v1` transport and the registration/filemap judges through
 `.chrono-harness/config.json` with `--context`. This proposed host remains
-incomplete and returns nonzero; the other six judges and automated lifecycle
+incomplete and returns nonzero; the other five judges and automated lifecycle
 are not implemented.
 
 ## This repository

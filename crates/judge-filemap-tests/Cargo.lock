@@ -36,16 +36,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chrono-judge-ci"
-version = "0.1.0"
-dependencies = [
- "chrono-harness",
- "chrono-judge-filemap",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "chrono-judge-filemap"
 version = "0.1.0"
 dependencies = [
@@ -53,6 +43,17 @@ dependencies = [
  "chrono-judge-registration",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-filemap-tests"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

@@ -134,6 +134,18 @@
       "owner": "judge-registration-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/judge-filemap/target/",
+      "owner": "judge-filemap",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-filemap-tests/target/",
+      "owner": "judge-filemap-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

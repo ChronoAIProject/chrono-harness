@@ -1,9 +1,11 @@
 //! Registration owns full-format schema, snapshot and affected-reference admissibility.
+mod registrations;
 mod schema;
 use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
     wire::{self, Finding, Request, Response, Status},
 };
+pub use registrations::{NodeDefinition, NodeKind, NodeView, Registrations};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -48,73 +50,6 @@ fn strings(v: &Value) -> BTreeSet<String> {
         .filter_map(Value::as_str)
         .map(str::to_owned)
         .collect()
-}
-struct Registrations {
-    config: Value,
-    judges: Value,
-    projects: Value,
-    filemap: Value,
-    workflow: Value,
-}
-impl Registrations {
-    fn load(v: &BTreeMap<String, Value>, config_path: &str) -> Result<Self> {
-        let config = v.get(config_path).ok_or("missing config")?.clone();
-        schema::config(&config).map_err(|e| format!("config: {e}"))?;
-        let get = |k: &str| -> Result<Value> {
-            Ok(v.get(
-                config["registries"][k]
-                    .as_str()
-                    .ok_or("missing registry path")?,
-            )
-            .ok_or("missing registry bytes")?
-            .clone())
-        };
-        let s = Self {
-            judges: get("judges")?,
-            projects: get("projects")?,
-            filemap: get("filemap")?,
-            workflow: get("workflow")?,
-            config,
-        };
-        for (name, v, check) in [
-            (
-                "judges",
-                &s.judges,
-                schema::judges as fn(&Value) -> Result<()>,
-            ),
-            ("projects", &s.projects, schema::projects),
-            ("filemap", &s.filemap, schema::filemap),
-            ("workflow", &s.workflow, schema::workflow),
-        ] {
-            check(v).map_err(|e| format!("{name}: {e}"))?;
-        }
-        Ok(s)
-    }
-    fn nodes(&self) -> BTreeSet<String> {
-        let mut n = BTreeSet::new();
-        for (prefix, v, key, id) in [
-            ("file", &self.filemap, "files", "path"),
-            ("project", &self.projects, "projects", "id"),
-            ("script", &self.projects, "scripts", "id"),
-            ("input", &self.config["environment"], "inputs", "id"),
-            ("judge", &self.judges, "judges", "id"),
-        ] {
-            for k in rows(v, key, id).keys() {
-                n.insert(format!("{prefix}:{k}"));
-            }
-        }
-        for p in self.projects["projects"].as_array().into_iter().flatten() {
-            if p["kind"] == "test" && p["actions"].get("execute").is_some() {
-                n.insert(format!("test:{}", p["id"].as_str().unwrap()));
-            }
-        }
-        for s in self.projects["scripts"].as_array().into_iter().flatten() {
-            if s.get("tests_for").is_some() && s["actions"].get("execute").is_some() {
-                n.insert(format!("test:{}", s["id"].as_str().unwrap()));
-            }
-        }
-        n
-    }
 }
 pub fn judge(req: &Request) -> Response {
     let mut r = req.response(Status::Pass);
