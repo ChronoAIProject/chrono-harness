@@ -72,6 +72,10 @@ pub fn execute(
         let mut req = template.clone();
         req.judge_id = b.id.clone();
         req.prior_results = b.after.iter().map(|id| responses[id].clone()).collect();
+        if !req.observations.is_object() {
+            req.observations = value!({});
+        }
+        req.observations["judges"] = value!(records);
         let impacts: Vec<_> = req
             .prior_results
             .iter()
@@ -89,7 +93,7 @@ pub fn execute(
         match wire::invoke_detailed(&req, &b, env, timeout, limit) {
             Ok((r, p)) => {
                 status = status.max(r.status.clone());
-                records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request_id,"exit_code":p.exit_code,"response":r,"process":p}));
+                records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request_id,"request_digest":sha256(&wire::canonical(&req)?),"exit_code":p.exit_code,"response":r,"process":p}));
                 responses.insert(b.id, r);
             }
             Err(e) => {
@@ -183,8 +187,16 @@ pub fn check_observed(
         sha256: sha256(&fs::read(&runner).map_err(|e| e.to_string())?),
         version: env!("CARGO_PKG_VERSION").into(),
     };
+    let run = format!("{}:{:?}", std::process::id(), std::time::SystemTime::now());
+    let report_path = format!(".chrono-harness/state/run-{}.json", wire::digest(&run)?);
+    let retained_report = no_symlink_parents(root, &report_path)?;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&retained_report)
+        .map_err(|e| e.to_string())?;
     let req = Request {
-        observations: value!({"entry":entry,"run":format!("{}:{:?}",std::process::id(),std::time::SystemTime::now()),"environment":{"inherited":observed,"effective":env},"retained":retained}),
+        observations: value!({"entry":entry,"run":run,"report_path":report_path,"environment":{"inherited":observed,"effective":env},"retained":retained}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
         judge_id: String::new(),
@@ -268,6 +280,7 @@ pub fn check_observed(
         value!(findings)
     };
     let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"executables":executables,"environment":{"inherited":observed,"effective":env},"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
+    report["report_path"] = value!(report_path);
     // Only validated named outputs supply these fields. Configuration and absent
     // producers cannot stand in for observations; conflicting results remain visible.
     for field in ["tools", "effective_inputs", "impact", "tests", "costs"] {
@@ -313,6 +326,7 @@ pub fn check_observed(
     report["sources"] = value!(sources);
     let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
     let path = no_symlink_parents(root, ".chrono-harness/state/report.json")?;
+    fs::write(retained_report, &text).map_err(|e| e.to_string())?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
     Ok((status.exit_code() as u8, text))
 }

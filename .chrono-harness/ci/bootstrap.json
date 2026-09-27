@@ -14,7 +14,8 @@
     "build.judge-routes",
     "build.judge-projects",
     "build.judge-cost",
-    "build.judge-mixed"
+    "build.judge-mixed",
+    "build.judge-workflow"
   ],
   "install": [
     {
@@ -52,6 +53,10 @@
     {
       "source": "crates/judge-mixed/target/debug/chrono-judge-mixed",
       "destination": ".chrono-harness/bin/chrono-judge-mixed"
+    },
+    {
+      "source": "crates/judge-workflow/target/debug/chrono-judge-workflow",
+      "destination": ".chrono-harness/bin/chrono-judge-workflow"
     }
   ]
 }

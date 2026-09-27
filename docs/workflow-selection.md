@@ -30,6 +30,7 @@ suite. The suite contains only declared test IDs, never discovered tests.
 | `rule_changes` | Shared mixed classification before cost packaging |
 | `trigger_paths` | Paths that activated stability or semantic requirements |
 | `requirements` | Endpoint, registry, physical pointer, reason, trigger paths, declared test IDs and lowered edges |
+| `schema_transitions` | Original registry versions/paths before and after decoding |
 | `certification` | Explicit selection-only boundary |
 
 Every lowered edge goes from a trigger file to a declared test. Its origin remains
@@ -60,8 +61,9 @@ verify additional suite execution, shared prerequisites running once and failure
 before operations. The existing mixed consumers verify the shared named-JSON
 decoder, which now rejects invalid semantic input before downstream judges run.
 
-This is test selection and execution evidence. Branch freshness, integration
-evidence production/consumption, retirement and migration certification remain
-workflow judge obligations. The scoped CI adapter still has its labelled legacy
-selection boundary; full native activation, complete inputs and parity remain
-unfinished. No successful integration certificate is produced by this increment.
+Original schema changes also activate integration and lower explicitly matching
+`migrations[].test` registrations to compatibility-test edges. Decoding cannot hide
+the original version change. These remain selection facts; the [workflow judge](workflow.md)
+certifies freshness, completed integration, retirement and finite migrations.
+The scoped CI adapter retains its labelled legacy selection boundary; full native
+activation, complete inputs and parity remain unfinished.

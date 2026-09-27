@@ -26,7 +26,7 @@ pub struct Results {
     pub executed: Vec<OperationResult>,
     pub blocked: Vec<OperationResult>,
     pub tests: BTreeMap<String, String>,
-    pub removed: BTreeMap<String, String>,
+    pub removed: BTreeMap<String, Option<String>>,
 }
 impl Results {
     pub fn has_errors(&self) -> bool {
@@ -413,19 +413,27 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<(), String> {
     if results.has_errors() {
         response.status = Status::Error;
     }
+    let requests = chrono_judge_registration::retirement_requests(&r)?;
+    let deferred = chrono_judge_registration::downstream_validator(&r, &req.judge_id);
     for removed in &impact.retired_tests {
-        let replacements = chrono_judge_registration::replacements(&r)?;
-        let replacement = replacements
-            .get(removed)
-            .ok_or_else(|| format!("E_REQUIRED_TEST_REMOVED: {removed}"))?;
-        results.removed.insert(removed.clone(), replacement.clone());
-        if results.tests.get(replacement).map(String::as_str) != Some("passed") {
-            response
-                .outputs
-                .insert("tests".into(), serde_json::to_value(&results).unwrap());
-            return Err(format!(
-                "E_REQUIRED_TEST_REMOVED: replacement did not succeed: {removed}"
-            ));
+        match requests.get(removed) {
+            Some(Some(replacement)) => {
+                results
+                    .removed
+                    .insert(removed.clone(), Some(replacement.clone()));
+                if results.tests.get(replacement).map(String::as_str) != Some("passed") {
+                    response
+                        .outputs
+                        .insert("tests".into(), serde_json::to_value(&results).unwrap());
+                    return Err(format!(
+                        "E_REQUIRED_TEST_REMOVED: replacement did not succeed: {removed}"
+                    ));
+                }
+            }
+            Some(None) if deferred => {
+                results.removed.insert(removed.clone(), None);
+            }
+            _ => return Err(format!("E_REQUIRED_TEST_REMOVED: {removed}")),
         }
     }
     response

@@ -24,7 +24,7 @@ The five full-governance registries remain **proposed**. The bounded
 below using `chrono-ci-judge/v1`. Separately, `check` supports configured
 `chrono-judge/v1` transport and the registration/filemap/routes/projects judges through
 `.chrono-harness/config.json` with `--context`. This proposed host remains
-incomplete and returns nonzero; workflow judge and automated lifecycle remain unimplemented. Mixed classification and warning behavior have a dedicated judge and real-chain tests; see [mixed](mixed.md). Cost reports have a dedicated judge and registered consumer tests. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
+incomplete and returns nonzero; workflow has [bounded certification](workflow.md); automated lifecycle remains unimplemented. Mixed classification and warning behavior have a dedicated judge and real-chain tests; see [mixed](mixed.md). Cost reports have a dedicated judge and registered consumer tests. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
 
 ## This repository
 

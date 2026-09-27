@@ -20,6 +20,35 @@ pub fn select(
     let changed_paths: BTreeSet<_> = delta.iter().map(|d| d.path.as_str()).collect();
     let mut requirements = vec![];
     let mut triggers = BTreeSet::<String>::new();
+    let mut schema_transitions = vec![];
+    for (role, (old_path, old_version)) in a.original_schemas() {
+        let (new_path, new_version) = &b.original_schemas()[role];
+        if old_version == new_version {
+            continue;
+        }
+        let paths = BTreeSet::from([old_path.clone(), new_path.clone()]);
+        triggers.extend(paths.clone());
+        schema_transitions.push(json!({"registry":role,"before":{"path":old_path,"version":old_version},"after":{"path":new_path,"version":new_version}}));
+        for (endpoint, r) in [("base", a), ("candidate", b)] {
+            for (i, m) in r.workflow()["migrations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .enumerate()
+            {
+                if m["from_version"] == *old_version && m["to_version"] == *new_version {
+                    requirements.push(requirement(
+                        endpoint,
+                        r.config()["registries"]["workflow"].as_str().unwrap(),
+                        &format!("/migrations/{i}/test"),
+                        "schema-migration",
+                        &paths,
+                        &json!([m["test"]]),
+                    ));
+                }
+            }
+        }
+    }
     for (endpoint, r) in [("base", a), ("candidate", b)] {
         let path = r.config()["registries"]["workflow"].as_str().unwrap();
         for (i, row) in r.workflow()["stability"]
@@ -86,7 +115,7 @@ pub fn select(
     }
     Ok(
         json!({"schema":"chrono-workflow-selection/v1","integration_required":required,
-        "rule_changes":changes,"trigger_paths":triggers,"requirements":requirements,
+        "rule_changes":changes,"trigger_paths":triggers,"requirements":requirements,"schema_transitions":schema_transitions,
         "certification":"not performed; this output selects declared tests only"}),
     )
 }

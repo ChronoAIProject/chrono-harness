@@ -103,9 +103,12 @@ bindings retain the expected version and actual tool path/digest/version-process
 observation (raw stdout/stderr and exit) in their error diagnostic. Candidate ambiguity or missing,
 ambiguous or incomplete mappings fail. A finite historical ambiguity repair must
 name every old defining identity and one unique current replacement; old definitions
-remain in impact. Required removed or ambiguous execute obligations must appear in
-the replacement plan and actually succeed. Workflow-owned migration, retirement and
-integration certification remains unresolved; these facts are not certification.
+remain in impact. Without a downstream migration validator, required removed or ambiguous execute
+obligations must remain in the replacement plan. With the declared workflow validator,
+explicit replacement or alias repair may change methods; the replacement must actually
+pass. Joint producer/test removal can explicitly retire a test without executing it.
+Original schema identities and historical costs remain available after decoding.
+The [workflow contract](workflow.md) defines actual migration/retirement certification.
 
 `ci.verify` has moved unchanged into `ci.actions.execute`; `ci` ↔ `ci-tests` remains
 the real dedicated pair. `chrono-ci --version` observes that producer's version.
@@ -121,7 +124,7 @@ are a named decoder input and remain supported for existing v1 example profiles.
 The legacy adapter's additional selection and ambient-environment behavior remain
 explicitly scoped; missing legacy version contracts remain unverified. Current host
 tools use full declarations. This adapter retires when full native CI consumes the
-full contracts. Full host activation, Cargo/SDK closure, workflow judge,
+full contracts. Full host activation, Cargo/SDK closure,
 initial adoption, native CI/parity and delivery lifecycle are subsequent work.
 
 The dedicated routes/projects tests include actual processes, retained inputs,

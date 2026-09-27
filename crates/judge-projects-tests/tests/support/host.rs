@@ -164,6 +164,13 @@ impl Host {
         self.candidate = commit(&self.root());
     }
     pub fn run(&self, edit: impl FnOnce(&mut Value)) -> (i32, Value) {
+        self.run_with_context(edit, |_| {})
+    }
+    pub fn run_with_context(
+        &self,
+        edit: impl FnOnce(&mut Value),
+        context_edit: impl FnOnce(&mut Value),
+    ) -> (i32, Value) {
         let root = self.root();
         fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
         let files = json!({"interpreter":{"bytes":fs::read(&self.tool).unwrap()},"data":{"bytes":b"bounded input\n".to_vec()}});
@@ -174,7 +181,8 @@ impl Host {
             serde_json::to_vec(&inputs).unwrap(),
         )
         .unwrap();
-        let ctx = json!({"schema_version":1,"base":self.base,"candidate":self.candidate,"dev_tip":self.base,"branch_ref":"integration/fixture","fork_point":self.base,"branch_started_at":"2026-01-01T00:00:00Z","observed_at":"2026-01-01T01:00:00Z","operation":"validate.delta","integration_evidence":null,"retained_inputs":".chrono-harness/state/inputs.json"});
+        let mut ctx = json!({"schema_version":1,"base":self.base,"candidate":self.candidate,"dev_tip":self.base,"branch_ref":"integration/fixture","fork_point":self.base,"branch_started_at":"2026-01-01T00:00:00Z","observed_at":"2026-01-01T01:00:00Z","operation":"validate.delta","integration_evidence":null,"retained_inputs":".chrono-harness/state/inputs.json"});
+        context_edit(&mut ctx);
         fs::write(
             root.join(".chrono-harness/state/context.json"),
             serde_json::to_vec(&ctx).unwrap(),

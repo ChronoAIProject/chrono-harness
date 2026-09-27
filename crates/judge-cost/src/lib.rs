@@ -51,19 +51,16 @@ fn entry(r: &Registrations, node: &str) -> Result<Value, String> {
             format!("/test_costs/{i}/cost"))?]}),
         );
     }
-    let (kind, id, collection) = if let Some(id) = node.strip_prefix("project:") {
-        ("project", id, "projects")
+    let (kind, id) = if let Some(id) = node.strip_prefix("project:") {
+        ("project", id)
     } else if let Some(id) = node.strip_prefix("script:") {
-        ("script", id, "scripts")
+        ("script", id)
     } else {
         return Err(format!("E_COST_REFERENCE: unsupported cost subject {node}"));
     };
-    if !r.projects()[collection]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|p| p["id"] == id)
-    {
+    // The candidate decoder retains obsolete definitions in the historical view.
+    // Their declared member costs remain meaningful without executing old code.
+    if !r.node_data().contains_key(node) {
         return Ok(Value::Null);
     }
     // Ownership is declared data. Keep each member and its source; costs are not additive by default.
