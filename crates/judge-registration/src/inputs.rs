@@ -5,12 +5,57 @@ use chrono_harness::{
     wire::{self, Request},
 };
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Component, Path, PathBuf},
+};
 
 pub const SNAPSHOT_SCHEMA: &str = "chrono-input-snapshot/v1";
+pub const SNAPSHOT_SCHEMA_V2: &str = "chrono-input-snapshot/v2";
+
+pub fn snapshot_schema(config: &Value) -> &'static str {
+    if config["schema_version"] == 2 {
+        SNAPSHOT_SCHEMA_V2
+    } else {
+        SNAPSHOT_SCHEMA
+    }
+}
+
+/// V2 observes a regular file or explicit absence. Other errors and links are not absence.
+/// This is a point-in-time observation, not protection against transient concurrent writes.
+pub fn observe_file(path: &Path) -> Result<Option<(String, u64)>, String> {
+    let mut prefix = PathBuf::new();
+    for component in path.components() {
+        if !matches!(
+            component,
+            Component::RootDir | Component::Prefix(_) | Component::Normal(_)
+        ) {
+            return Err(format!(
+                "E_INPUT_PATH: non-normal input path: {}",
+                path.display()
+            ));
+        }
+        prefix.push(component);
+        match fs::symlink_metadata(&prefix) {
+            Ok(m) if m.file_type().is_symlink() => {
+                return Err(format!("E_INPUT_PATH: symlink input: {}", prefix.display()));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("E_INPUT_PATH: {}: {e}", prefix.display())),
+        }
+    }
+    match fs::symlink_metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("E_INPUT_PATH: {}: {e}", path.display())),
+        Ok(_) => file_identity(path).map(Some),
+    }
+}
 
 /// Parse the retained representation without reading or repairing its contents.
 pub enum Retained<'a> {
+    Absent,
     Bytes(Vec<u8>),
     Blob {
         path: &'a str,
@@ -19,6 +64,14 @@ pub enum Retained<'a> {
     },
 }
 pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
+    if value.get("absent").is_some() {
+        crate::schema::object(value, &["absent"], &[]).map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
+        return if value["absent"] == true {
+            Ok(Retained::Absent)
+        } else {
+            Err("E_INPUT_BLOB: absent must be true".into())
+        };
+    }
     let parse = || match (value.get("bytes"), value.get("blob")) {
         (Some(bytes), None) => {
             crate::schema::object(value, &["bytes"], &[])?;
@@ -64,7 +117,7 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         &[],
     )
     .map_err(|e| format!("E_INPUT_SNAPSHOT: {e}"))?;
-    if value["schema"] != SNAPSHOT_SCHEMA {
+    if value["schema"] != SNAPSHOT_SCHEMA && value["schema"] != SNAPSHOT_SCHEMA_V2 {
         return Err("E_INPUT_SNAPSHOT: unsupported snapshot schema".into());
     }
     facts::full_oid(
@@ -96,14 +149,19 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         if id.is_empty() {
             return Err("E_INPUT_SNAPSHOT: empty file ID".into());
         }
-        retained_shape(file)?;
+        if matches!(retained_shape(file)?, Retained::Absent)
+            && value["schema"] != SNAPSHOT_SCHEMA_V2
+        {
+            return Err("E_INPUT_SNAPSHOT: absence requires snapshot v2".into());
+        }
     }
     Ok(())
 }
 
-fn retained_identity(root: &Path, value: &Value) -> Result<(String, u64), String> {
+fn retained_identity(root: &Path, value: &Value) -> Result<Option<(String, u64)>, String> {
     match retained_shape(value)? {
-        Retained::Bytes(bytes) => Ok((sha256(&bytes), bytes.len() as u64)),
+        Retained::Absent => Ok(None),
+        Retained::Bytes(bytes) => Ok(Some((sha256(&bytes), bytes.len() as u64))),
         Retained::Blob {
             path,
             digest,
@@ -114,7 +172,7 @@ fn retained_identity(root: &Path, value: &Value) -> Result<(String, u64), String
             if observed != (digest.into(), length) {
                 return Err("E_INPUT_BLOB: retained content identity mismatch".into());
             }
-            Ok(observed)
+            Ok(Some(observed))
         }
     }
 }
@@ -165,6 +223,8 @@ pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, 
 }
 pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Result<Value, String> {
     if new.filemap()["schema_version"] == 1
+        && old.config()["schema_version"] == 1
+        && new.config()["schema_version"] == 1
         && old.config()["environment"]["inputs"]
             .as_array()
             .unwrap()
@@ -182,9 +242,13 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
     for (name, endpoint, r) in [("base", &req.base, old), ("candidate", &req.candidate, new)] {
         let cfg = r.config();
         let retained = &req.observations["retained"][name];
+        if cfg["schema_version"] == 2 && retained["schema"] != SNAPSHOT_SCHEMA_V2 {
+            return Err(format!("{name}: config v2 requires snapshot v2"));
+        }
         if retained.get("schema").is_some() {
             snapshot_shape(retained)?;
-            if retained["config_path"] != req.config_path
+            if retained["schema"] != snapshot_schema(cfg)
+                || retained["config_path"] != req.config_path
                 || retained["config_digest"] != wire::digest(cfg)?
             {
                 return Err(format!("{name}: snapshot configuration binding mismatch"));
@@ -234,10 +298,18 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
             let value = retained["files"]
                 .get(id)
                 .ok_or_else(|| format!("{name}: missing retained input {id}"))?;
-            let (digest, length) = retained_identity(&req.candidate.root, value)
+            let identity = retained_identity(&req.candidate.root, value)
                 .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
-            if input["sha256"].as_str() != Some(&digest) {
-                return Err(format!("{name}: retained input digest mismatch: {id}"));
+            match &identity {
+                None if cfg["schema_version"] == 2 && input["presence"] == "absent" => {}
+                Some((digest, _))
+                    if input["presence"] != "absent"
+                        && input["sha256"].as_str() == Some(digest) => {}
+                _ => {
+                    return Err(format!(
+                        "{name}: retained input digest/presence mismatch: {id}"
+                    ));
+                }
             }
             if name == "candidate" {
                 let path = Path::new(input["location"].as_str().unwrap());
@@ -246,23 +318,40 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                 } else {
                     req.candidate.root.join(path)
                 };
-                if file_identity(&path).map_err(|e| format!("candidate input {id}: {e}"))?
-                    != (digest.clone(), length)
-                {
+                let actual = if cfg["schema_version"] == 2 {
+                    observe_file(&path)
+                } else {
+                    file_identity(&path).map(Some)
+                };
+                if actual.map_err(|e| format!("candidate input {id}: {e}"))? != identity {
                     return Err(format!("candidate input changed: {id}"));
                 }
             }
-            evidence.insert(
-                id.to_string(),
-                json!({"sha256":digest,"length":length,"location":input["location"]}),
-            );
+            let mut fact = match identity {
+                None => json!({"presence":"absent","location":input["location"]}),
+                Some((digest, length)) => {
+                    json!({"sha256":digest,"length":length,"location":input["location"]})
+                }
+            };
+            if cfg["schema_version"] == 2 && fact.get("presence").is_none() {
+                fact["presence"] = json!("present");
+            }
+            evidence.insert(id.to_string(), fact);
         }
         endpoints.insert(name.into(),json!({"commit":endpoint.commit,"environment":effective.ok(),"inherited":inherited,"files":evidence}));
     }
     let endpoints = Value::Object(endpoints);
     Ok(
-        json!({"schema":"chrono-effective-inputs/v1","identity":wire::digest(&endpoints)?,"endpoints":endpoints,"completeness_proven":false}),
+        json!({"schema":effective_schema(old,new),"identity":wire::digest(&endpoints)?,"endpoints":endpoints,"completeness_proven":false}),
     )
+}
+
+fn effective_schema(old: &Registrations, new: &Registrations) -> &'static str {
+    if old.config()["schema_version"] == 2 || new.config()["schema_version"] == 2 {
+        "chrono-effective-inputs/v2"
+    } else {
+        "chrono-effective-inputs/v1"
+    }
 }
 
 /// Consume retained facts through the same environment semantics as validation.
@@ -272,10 +361,14 @@ pub fn effective_environments(
     old: &Registrations,
     new: &Registrations,
 ) -> Result<Option<[BTreeMap<String, String>; 2]>, String> {
-    if evidence.is_null() && new.filemap()["schema_version"] == 1 {
+    if evidence.is_null()
+        && new.filemap()["schema_version"] == 1
+        && old.config()["schema_version"] == 1
+        && new.config()["schema_version"] == 1
+    {
         return Ok(None);
     }
-    if evidence["schema"] != "chrono-effective-inputs/v1"
+    if evidence["schema"] != effective_schema(old, new)
         || evidence["identity"] != wire::digest(&evidence["endpoints"])?
     {
         return Err("effective input identity missing/mismatched".into());

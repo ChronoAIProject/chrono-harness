@@ -96,7 +96,7 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 ## 3. 登记格式与字段合同
 
-Config/projects/judges use `schema_version: 1`; current FILEMAP and workflow use `schema_version: 2`. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
+Config accepts explicit `schema_version: 1 | 2`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2 requires a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前补齐实际输入闭包、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。
@@ -111,7 +111,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | registries | judges/projects/filemap/workflow 四个唯一 JSON 路径 |
 | canonical_check | `{operation, argv: string[]}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
-| environment | `{inherit: string[], values: object, inputs: {id, location, sha256}[]}`；变量及输入文件白名单 |
+| environment | `{inherit: string[], values: object, inputs: object[]}`；v1 输入 `{id, location, sha256}`，v2 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
 | input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[]}`；工程声明，不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
 | semantic_fields | `{path, pointers: string[], on}[]`；语义字段分类，见 §8 |
@@ -124,8 +124,10 @@ tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次
 `argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
 没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。
 只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。
-inputs 为逐文件登记的有效输入，ID 唯一，摘要遵循 draft null 规则；报告绑定实际值，不自动读取 dotenv。
-外部输入须保留两端快照，变化通过登记摘要进入提交 DELTA；磁盘值不符或快照缺失报输入不足，不隐式扩展 DELTA。
+inputs 为逐文件登记的有效输入，ID 唯一。v1 及 v2 present 的摘要 null 仍仅表示未绑定草稿；不得解释为缺失。v2 absent 禁止携带摘要；缺失不同于空文件。v2 快照保留实际 `{absent:true}` 或文件内容身份，判官核对登记与两端快照，并在操作前后核候选路径。目录、符号链接、权限及 IO 错误不作缺失；路径祖先也不得是符号链接。历史缺失只从保留快照读取，不重读今天的路径。报告绑定实际值，不自动读取 dotenv。
+
+Config v2 可用于两端均采用该合同的宿主。v1→v2 仍须 §6 的显式迁移与兼容测试；当前有限迁移器尚不提供这项转换，不得把支持读取 v2 冒充已有宿主升级成功。文件状态变化通过 input 节点的显式边传播；没有边不推断消费者。捕获成功不是治理成功，缺失检查不是完整输入闭包或并发隔离证明。
+外部输入须保留两端快照，变化通过登记的存在状态或摘要进入提交 DELTA；磁盘值不符或快照缺失报输入不足，不隐式扩展 DELTA。
 PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声明的工具链运行；
 完整闭包包括实际 cargo/rustc、编译器后端、链接器、SDK、目标库和所读配置文件，
 包括 HOME/CARGO_HOME 下配置、rust-toolchain、间接依赖、fixture、外部数据及环境变量。
@@ -609,7 +611,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency and guarded retained-package/metadata validation; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
 
-The current FILEMAP v2 execution and workflow v2 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config/projects/judges remain v1. Strict old v1 readers reject the new fields. The supported historical decoder is only chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
+The current FILEMAP v2 execution and workflow v2 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2; projects/judges remain v1. Config v1→v2 conversion is not supplied by this finite decoder. Strict old v1 readers reject the new fields. The supported historical decoder is only chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
 
 Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
 

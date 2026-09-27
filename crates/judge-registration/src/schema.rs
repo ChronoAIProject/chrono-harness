@@ -90,10 +90,16 @@ fn boolean(v: &Value) -> Result {
     }
 }
 fn common(v: &Value, fields: &[&str]) -> Result {
+    common_versions(v, fields, &[1])
+}
+fn common_versions(v: &Value, fields: &[&str], versions: &[u64]) -> Result {
     let mut required = vec!["schema_version", "status"];
     required.extend(fields);
     object(v, &required, &[])?;
-    if v["schema_version"] != 1 {
+    if !v["schema_version"]
+        .as_u64()
+        .is_some_and(|n| versions.contains(&n))
+    {
         return Err("unsupported schema_version; migration evidence required".into());
     }
     choice(&v["status"], &["active", "proposed"])
@@ -144,7 +150,7 @@ fn edge(v: &Value, from: bool) -> Result {
     Ok(())
 }
 pub fn config(v: &Value) -> Result {
-    common(
+    common_versions(
         v,
         &[
             "enforcement",
@@ -158,6 +164,7 @@ pub fn config(v: &Value) -> Result {
             "environment",
             "input_closure",
         ],
+        &[1, 2],
     )?;
     choice(&v["enforcement"], &["enabled", "not-implemented"])?;
     object(&v["runner"], &["path", "version", "sha256"], &[])?;
@@ -248,12 +255,22 @@ pub fn config(v: &Value) -> Result {
     }
     unique(&v["environment"]["inputs"], Some("id"))?;
     for i in array(&v["environment"]["inputs"])? {
-        object(i, &["id", "location", "sha256"], &[])?;
+        if v["schema_version"] == 2 {
+            choice(&i["presence"], &["present", "absent"])?;
+            if i["presence"] == "absent" {
+                object(i, &["id", "location", "presence"], &[])?;
+            } else {
+                object(i, &["id", "location", "presence", "sha256"], &[])?;
+                hash(&i["sha256"])?;
+            }
+        } else {
+            object(i, &["id", "location", "sha256"], &[])?;
+            hash(&i["sha256"])?;
+        }
         let s = string(&i["location"])?;
         if !std::path::Path::new(s).is_absolute() {
             path(&i["location"])?;
         }
-        hash(&i["sha256"])?;
     }
     object(&v["input_closure"], &["status", "unresolved"], &[])?;
     choice(

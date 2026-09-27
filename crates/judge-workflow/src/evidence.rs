@@ -114,8 +114,10 @@ pub fn inputs(
     tree: &str,
     root: &Path,
 ) -> Result<Value, String> {
-    if v["schema"] != "chrono-effective-inputs/v1"
-        || v["identity"] != wire::digest(&v["endpoints"])?
+    if !matches!(
+        v["schema"].as_str(),
+        Some("chrono-effective-inputs/v1" | "chrono-effective-inputs/v2")
+    ) || v["identity"] != wire::digest(&v["endpoints"])?
         || v["endpoints"]["base"]["commit"] != base
         || v["endpoints"]["candidate"]["commit"] != candidate
     {

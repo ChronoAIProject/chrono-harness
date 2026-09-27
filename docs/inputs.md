@@ -20,13 +20,13 @@ chrono-inputs pair --host-root /path/to/host \
 
 Capture requires that exact commit to be checked out and the config's disk bytes
 to match its fixed blob. It reads the original registry values at that commit;
-it is not a dirty-check or a passed governance report. Every declared file is
+it is not a dirty-check or a passed governance report. Every observed regular file is
 copied with a bounded buffer into `.chrono-harness/state/inputs/blobs/<sha256>`.
 Equal contents share one retained blob. Existing content addresses are verified
-before reuse. Missing/nonregular inputs or invalid paths fail without publishing
-a snapshot. Source bytes are never reconstructed from today's files during pair.
+before reuse. V1 missing/nonregular inputs and invalid paths fail without publishing
+a snapshot. V2 can retain an explicitly observed absence; nonregular files still fail. Source bytes are never reconstructed from today's files during pair.
 
-The snapshot has schema `chrono-input-snapshot/v1`, `commit`, `config_path`, the
+A config v1 snapshot has schema `chrono-input-snapshot/v1`, `commit`, `config_path`, the
 canonical config-value `config_digest`, `environment` and `files`. Environment
 values preserve strings, empty strings and absent/null; configured overrides remain
 in the config, and undeclared ambient variables are not captured. Each file ID maps
@@ -64,3 +64,39 @@ Dedicated tests cover exact binary/environment preservation, immutable outputs,
 deduplication, transport after the original input disappears, corrupt addresses,
 invalid paths and a real seven-judge consumer. Large-file and rejection cases
 exercise the actual check entry rather than constructing success reports.
+
+Config **v2** requires each input to declare either
+`{id, location, presence: "present", sha256}` or
+`{id, location, presence: "absent"}`. Absence has no hash field. A null hash still
+means unbound, never absent. Capturing v2 produces `chrono-input-snapshot/v2`:
+regular files keep the blob format; a missing input becomes `{absent: true}`.
+An empty file has its own blob and length zero. Capture observes actual state even
+when it contradicts the declaration; registration rejects that contradiction.
+V2 requires the versioned snapshot, exact config binding and explicit state for
+every ID. V1 snapshots and unversioned legacy observations cannot carry absence.
+
+Pair transports absence unchanged without opening its historical location.
+Registration, routes and projects consume the same validation, including a final
+candidate check after operations. Effective reports use `chrono-effective-inputs/v2`
+when either endpoint uses config v2; v2 file facts carry `presence`. Present facts
+also carry digest/length, absent facts carry neither. State changes require matching
+registration changes and follow only explicit `input:ID` edges, including old edges.
+Stable absences and disconnected changes do not select unrelated tests.
+
+V2 locations reject symlink components, including dangling links, and `..`.
+Use canonical absolute locations when a platform exposes temporary directories
+through a symlink. A missing parent directory is a valid absence; a directory at
+the file location, a non-directory ancestor, permissions and other IO errors are
+not. Observations before/after execution detect persistent changes, not transient
+concurrent changes restored between observations.
+
+The Cargo guard retains connected declared absences and rechecks them after the
+actual operation. An absent ID cannot supply a package manifest, configuration
+file, package bytes or a tool. Configuration lookup inventories and their
+relationships are still explicit declarations; this does not infer them.
+
+Both endpoints may already use v2. Upgrading an existing v1 host still needs the
+workflow migration contract and an executed compatibility test; the current finite
+migration decoder does not implement that conversion. This implementation does
+not activate the repository's proposed full configuration or establish complete
+compiler/backend/linker/SDK/build-script inputs.

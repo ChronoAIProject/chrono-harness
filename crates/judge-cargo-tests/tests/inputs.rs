@@ -445,3 +445,59 @@ fn failing_tests_and_post_execution_input_changes_retain_real_receipts() {
         }
     }
 }
+
+#[test]
+fn connected_absence_is_checked_before_and_after_cargo_and_cannot_supply_package_bytes() {
+    for case in ["stable", "present", "package", "mutation", "symlink"] {
+        let mut f = Fixture::new();
+        let path = absent_input(&mut f);
+        match case {
+            "stable" => {}
+            "present" => fs::write(&path, []).unwrap(),
+            "package" => {
+                f.contract["packages"][2]["manifest_input"] = json!("optional");
+                f.contract["packages"][2]["inputs"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!("optional"));
+            }
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(path);
+                write(
+                    &f.root(),
+                    "t/src/lib.rs",
+                    "#[test] fn create_absent_input() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"created\").unwrap(); }\n",
+                );
+            }
+            "symlink" => {
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(path.with_extension("missing"), &path).unwrap();
+                #[cfg(not(unix))]
+                continue;
+            }
+            _ => unreachable!(),
+        }
+        f.save();
+        let (exit, r, err) = f.call();
+        if case == "stable" {
+            assert_eq!(exit, 0, "{r} {err}");
+            assert_eq!(r["operation"]["exit_code"], 0);
+        } else {
+            assert_ne!(exit, 0, "{case}: {r} {err}");
+            let expected = match case {
+                "present" => "must be absent",
+                "package" => "requires bound present bytes",
+                "mutation" => "absent input changed during guarded operation",
+                _ => "symlink input",
+            };
+            assert!(format!("{r} {err}").contains(expected), "{case}: {r} {err}");
+            if case == "mutation" {
+                assert_eq!(r["operation"]["exit_code"], 0);
+                assert_eq!(fs::read(path).unwrap(), b"created");
+            } else {
+                assert!(r["metadata"].is_null());
+            }
+        }
+    }
+}

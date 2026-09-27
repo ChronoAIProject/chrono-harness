@@ -3,7 +3,7 @@ use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents
 pub use chrono_judge_registration::inputs::SNAPSHOT_SCHEMA;
 use chrono_judge_registration::{
     Registrations,
-    inputs::{Retained, retained_shape, snapshot_shape},
+    inputs::{Retained, observe_file, retained_shape, snapshot_schema, snapshot_shape},
 };
 use serde_json::{Value, json as value};
 use std::{
@@ -90,9 +90,23 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
     let mut files = serde_json::Map::new();
     for input in r.config()["environment"]["inputs"].as_array().unwrap() {
         let path = root.join(input["location"].as_str().unwrap());
-        files.insert(input["id"].as_str().unwrap().into(), store(root, &path)?);
+        let retained = if r.config()["schema_version"] == 2 {
+            match observe_file(&path)? {
+                None => value!({"absent":true}),
+                Some(identity) => {
+                    let observed = store(root, &path)?;
+                    if observed["sha256"] != identity.0 || observed["length"] != identity.1 {
+                        return Err("E_INPUT_READ: input changed during capture".into());
+                    }
+                    observed
+                }
+            }
+        } else {
+            store(root, &path)?
+        };
+        files.insert(input["id"].as_str().unwrap().into(), retained);
     }
-    let snapshot = value!({"schema":SNAPSHOT_SCHEMA,"commit":commit,"config_path":config,"config_digest":wire::digest(r.config())?,"environment":environment,"files":files});
+    let snapshot = value!({"schema":snapshot_schema(r.config()),"commit":commit,"config_path":config,"config_digest":wire::digest(r.config())?,"environment":environment,"files":files});
     publish(root, output, &snapshot)?;
     Ok(snapshot)
 }
@@ -104,8 +118,12 @@ fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
         .as_object_mut()
         .ok_or("E_INPUT_SNAPSHOT: missing files")?;
     for f in files.values_mut() {
-        let Retained::Blob { path: blob, .. } = retained_shape(f)? else {
-            return Err("E_INPUT_BLOB: pair requires captured blob references".into());
+        let blob = match retained_shape(f)? {
+            Retained::Absent => continue,
+            Retained::Blob { path, .. } => path,
+            Retained::Bytes(_) => {
+                return Err("E_INPUT_BLOB: pair requires captured blob references".into());
+            }
         };
         let path = state(from, blob)?;
         let observed = store(to, &path)?;
