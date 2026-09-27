@@ -14,3 +14,7 @@ tempfile = "3"
 [[test]]
 name = "behavior"
 path = "tests/behavior.rs"
+
+[[test]]
+name = "initial_projection"
+path = "tests/initial_projection.rs"
