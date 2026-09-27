@@ -152,3 +152,37 @@ fn full_and_scoped_consumers_keep_absence_checks_and_documentation_locality() {
         }
     }
 }
+#[test]
+fn compiler_binding_full_and_scoped_consumers_preserve_execution_rejection_and_locality() {
+    for consumer in [Consumer::Full, Consumer::Scoped] {
+        for case in ["source", "rejected", "docs"] {
+            let mut f = Fixture::new();
+            compiler_binding(&mut f);
+            if case != "source" {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTC_WRAPPER"] =
+                    json!("/bin/false");
+                f.save();
+            }
+            let (exit, report) =
+                f.committed_check(if case == "docs" { "docs" } else { "source" }, consumer);
+            if case == "docs" {
+                assert_eq!(exit, 0, "{report}");
+                assert!(executions(&report, consumer).is_empty());
+            } else {
+                let actual = nested(&report, consumer);
+                if case == "source" {
+                    assert_eq!(exit, 0, "{report}");
+                    assert_eq!(actual["compiler"]["version"]["exit_code"], 0);
+                    assert_eq!(actual["operation"]["exit_code"], 0);
+                } else {
+                    assert_ne!(exit, 0, "{report}");
+                    assert!(
+                        actual["error"].as_str().unwrap().contains("wrapper"),
+                        "{actual}"
+                    );
+                    assert!(actual["metadata"].is_null() && actual["operation"].is_null());
+                }
+            }
+        }
+    }
+}

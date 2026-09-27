@@ -289,14 +289,19 @@ impl Fixture {
                     .unwrap(),
             );
             let (digest, _) = chrono_harness::file_identity(&path).unwrap();
-            self.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            let inputs = self.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
                 .as_array_mut()
-                .unwrap()
-                .push(json!({"id":id,"location":path,"sha256":digest}));
-            self.values.get_mut(FM).unwrap()["project_edges"]
+                .unwrap();
+            if !inputs.iter().any(|i| i["id"] == id) {
+                inputs.push(json!({"id":id,"location":path,"sha256":digest}));
+            }
+            let declared = edge(&format!("input:{id}"), "runtime-input", "project:t");
+            let edges = self.values.get_mut(FM).unwrap()["project_edges"]
                 .as_array_mut()
-                .unwrap()
-                .push(edge(&format!("input:{id}"), "runtime-input", "project:t"));
+                .unwrap();
+            if !edges.contains(&declared) {
+                edges.push(declared);
+            }
         }
         if self.values[CONFIG]["schema_version"] == 2 {
             for row in self.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
@@ -516,6 +521,47 @@ impl Fixture {
     }
 }
 pub const POLICY: &str = ".chrono-harness/cargo/inputs.json";
+
+pub fn compiler_binding(f: &mut Fixture) {
+    f.contract["schema"] = json!("chrono-cargo-inputs/v4");
+    f.contract["configuration_ancestors"] = json!("inventory");
+    f.contract["cargo_input"] = json!("tool.cargo");
+    f.contract["compiler"] = json!({"tool":"rustc","input":"tool.rustc"});
+    let compiler = f.values[CONFIG]["environment"]["values"]["RUSTC"].clone();
+    let version = Command::new(compiler.as_str().unwrap())
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(version.status.success());
+    f.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id":"rustc","program":compiler,"resolution":"PATH-once","version_argv":["--version"],
+            "expected_version":String::from_utf8(version.stdout).unwrap().trim()
+        }));
+    for key in ["RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"] {
+        f.values.get_mut(CONFIG).unwrap()["environment"]["values"][key] = json!("");
+    }
+    for (id, path) in [
+        (
+            "tool.cargo",
+            f.values[CONFIG]["tools"][0]["program"].clone(),
+        ),
+        ("tool.rustc", compiler),
+    ] {
+        let bytes = fs::read(path.as_str().unwrap()).unwrap();
+        f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id":id,"location":path,"sha256":sha256(&bytes)}));
+        f.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(&format!("input:{id}"), "runtime-input", "project:t"));
+    }
+    f.save();
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Consumer {

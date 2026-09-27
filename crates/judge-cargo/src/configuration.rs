@@ -141,11 +141,39 @@ struct Include {
     #[serde(default)]
     optional: bool,
 }
-fn includes(path: &Path) -> Result<Vec<Include>> {
+fn includes(path: &Path, compiler_binding: bool) -> Result<Vec<Include>> {
     let config: toml::Value = fs::read_to_string(path)
         .map_err(error)?
         .parse()
         .map_err(error)?;
+    if compiler_binding {
+        for (table, keys) in [
+            (
+                "build",
+                &["rustc", "rustc-wrapper", "rustc-workspace-wrapper"][..],
+            ),
+            (
+                "env",
+                &[
+                    "RUSTC",
+                    "RUSTC_WRAPPER",
+                    "RUSTC_WORKSPACE_WRAPPER",
+                    "CARGO_BUILD_RUSTC",
+                    "CARGO_BUILD_RUSTC_WRAPPER",
+                    "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
+                ][..],
+            ),
+        ] {
+            for key in keys {
+                if config.get(table).and_then(|v| v.get(*key)).is_some() {
+                    return Err(error(format!(
+                        "compiler selection must use the bound host environment, not {table}.{key} in {}",
+                        path.display()
+                    )));
+                }
+            }
+        }
+    }
     config
         .get("include")
         .map(|value| {
@@ -183,6 +211,7 @@ pub(crate) fn check(
     declarations: &[Declaration],
     ancestors: Option<Ancestors>,
     arguments: &[String],
+    compiler_binding: bool,
     input: impl Fn(&str) -> Result<PathBuf>,
 ) -> Result<Checked> {
     let home = environment
@@ -315,7 +344,7 @@ pub(crate) fn check(
             )));
         }
         pending.push((path.clone(), true));
-        for include in includes(&path)?.into_iter().rev() {
+        for include in includes(&path, compiler_binding)?.into_iter().rev() {
             let spelling = path.parent().unwrap().join(include.path);
             let target = normalized(&spelling)?;
             spellings.insert(spelling);

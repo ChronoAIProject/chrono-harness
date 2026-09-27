@@ -501,3 +501,289 @@ fn connected_absence_is_checked_before_and_after_cargo_and_cannot_supply_package
         }
     }
 }
+#[test]
+fn compiler_binding_runs_real_cargo_with_declared_executable_inputs() {
+    let mut f = Fixture::new();
+    compiler_binding(&mut f);
+    let (exit, report, stderr) = f.call();
+    assert_eq!(exit, 0, "{report} {stderr}");
+    assert_eq!(report["metadata"]["exit_code"], 0);
+    assert_eq!(report["operation"]["exit_code"], 0);
+    assert_eq!(
+        report["compiler"]["path"],
+        f.values[CONFIG]["environment"]["values"]["RUSTC"]
+    );
+    let input = f.values[CONFIG]["environment"]["inputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["id"] == "tool.rustc")
+        .unwrap();
+    assert_eq!(report["compiler"]["sha256"], input["sha256"]);
+    assert_eq!(report["input_closure_complete"], false);
+    assert_eq!(
+        fs::read(f.root().join(".chrono-harness/state/test-ran")).unwrap(),
+        b"ran"
+    );
+}
+
+#[test]
+fn compiler_binding_rejects_unbound_tools_and_selection_overrides_before_metadata() {
+    let mut f = Fixture::new();
+    compiler_binding(&mut f);
+    let values = f.values.clone();
+    let contract = f.contract.clone();
+    for case in [
+        "missing-input",
+        "disconnected",
+        "digest",
+        "tool",
+        "version",
+        "selection",
+        "wrapper",
+        "workspace-wrapper",
+        "missing-wrapper",
+        "clippy",
+    ] {
+        f.values = values.clone();
+        f.contract = contract.clone();
+        match case {
+            "missing-input" => f.contract["cargo_input"] = json!("missing"),
+            "disconnected" => f.values.get_mut(FM).unwrap()["project_edges"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|e| e["from"] != "input:tool.rustc"),
+            "digest" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|i| i["id"] == "tool.rustc")
+                    .unwrap()["sha256"] = json!("0".repeat(64))
+            }
+            "tool" => {
+                f.values.get_mut(CONFIG).unwrap()["tools"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|t| t["id"] == "rustc")
+                    .unwrap()["program"] = json!("/bin/sh")
+            }
+            "version" => {
+                f.values.get_mut(CONFIG).unwrap()["tools"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|t| t["id"] == "rustc")
+                    .unwrap()["expected_version"] = json!("wrong compiler version")
+            }
+            "selection" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTC"] =
+                    json!("/bin/false")
+            }
+            "wrapper" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTC_WRAPPER"] =
+                    json!("/bin/false")
+            }
+            "workspace-wrapper" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTC_WORKSPACE_WRAPPER"] =
+                    json!("/bin/false")
+            }
+            "missing-wrapper" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("RUSTC_WRAPPER");
+            }
+            "clippy" => f.contract["operations"]["test.t"]["argv"][0] = json!("clippy"),
+            _ => unreachable!(),
+        }
+        f.save();
+        let (exit, report, stderr) = f.call();
+        assert_ne!(exit, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"].as_str().is_some_and(|e| e.contains("input")
+                || e.contains("compiler")
+                || e.contains("tool")
+                || e.contains("version")
+                || e.contains("wrapper")),
+            "{case}: {report}"
+        );
+        assert!(
+            report["metadata"].is_null() && report["operation"].is_null(),
+            "{case}: {report}"
+        );
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+#[test]
+fn compiler_binding_rejects_cargo_configuration_selection_overrides() {
+    for case in ["build", "env", "include", "alias"] {
+        let mut f = Fixture::new();
+        compiler_binding(&mut f);
+        let path = f.root().join(".chrono-harness/cargo/config.toml");
+        let original = fs::read_to_string(&path).unwrap();
+        match case {
+            "build" => f.configuration(
+                "cargo.config",
+                &path,
+                &(original + "\n[build]\nrustc='/bin/sh'\n"),
+            ),
+            "env" => f.configuration(
+                "cargo.config",
+                &path,
+                &(original + "\n[env]\nRUSTC={value='/bin/sh',force=true}\n"),
+            ),
+            "include" => {
+                let included = f.root().join(".chrono-harness/cargo/selection.toml");
+                f.configuration(
+                    "selection",
+                    &included,
+                    "[env]\nRUSTC_WRAPPER={value='/bin/sh',force=true}\n",
+                );
+                f.configuration(
+                    "cargo.config",
+                    &path,
+                    &format!("include=['selection.toml']\n{original}"),
+                );
+            }
+            "alias" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_BUILD_RUSTC"] =
+                    json!("/bin/sh")
+            }
+            _ => unreachable!(),
+        }
+        f.save();
+        let (exit, report, stderr) = f.call();
+        assert_ne!(exit, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"]
+                .as_str()
+                .unwrap()
+                .contains("compiler selection"),
+            "{case}: {report}"
+        );
+        assert!(report["metadata"].is_null() && report["operation"].is_null());
+    }
+}
+#[test]
+fn compiler_binding_tracks_real_invocation_and_rejects_post_execution_mutation() {
+    use std::os::unix::fs::PermissionsExt;
+    let mut f = Fixture::new();
+    compiler_binding(&mut f);
+    let actual = f.values[CONFIG]["environment"]["values"]["RUSTC"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let wrapper = f.root().join(".chrono-harness/state/bound-compiler");
+    let trace = f.root().join(".chrono-harness/state/compiler-arguments");
+    let quote = |s: &str| format!("'{}'", s.replace('\'', "'\"'\"'"));
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\nexec {} \"$@\"\n",
+        quote(trace.to_str().unwrap()),
+        quote(&actual)
+    );
+    fs::write(&wrapper, &script).unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    f.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|t| t["id"] == "rustc")
+        .unwrap()["program"] = json!(wrapper);
+    let input = f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|i| i["id"] == "tool.rustc")
+        .unwrap();
+    input["location"] = json!(wrapper);
+    input["sha256"] = json!(sha256(script.as_bytes()));
+    f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTC"] = json!(wrapper);
+    f.contract["operations"]["test.t"]["argv"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("--lib"));
+    f.save();
+    let (exit, r, stderr) = f.call();
+    assert_eq!(exit, 0, "{r} {stderr}");
+    assert!(
+        fs::read_to_string(&trace)
+            .unwrap()
+            .contains("--crate-name\nt\n")
+    );
+    f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] = json!(wrapper);
+    write(
+        &f.root(),
+        "t/src/lib.rs",
+        "#[test] fn mutate_selected_compiler() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(), b\"changed\").unwrap(); }\n",
+    );
+    f.save();
+    let (exit, r, stderr) = f.call();
+    assert_ne!(exit, 0, "{r} {stderr}");
+    assert_eq!(r["operation"]["exit_code"], 0);
+    assert!(
+        r["error"].as_str().unwrap().contains("input changed"),
+        "{r}"
+    );
+    assert_eq!(fs::read(wrapper).unwrap(), b"changed");
+}
+
+#[test]
+fn compiler_binding_requires_versioned_present_bindings_without_legacy_reinterpretation() {
+    let mut f = Fixture::new();
+    compiler_binding(&mut f);
+    let contract = f.contract.clone();
+    for version in [2, 3, 4] {
+        for field in ["cargo_input", "compiler"] {
+            for null in [false, true] {
+                f.contract = contract.clone();
+                f.contract["schema"] = json!(format!("chrono-cargo-inputs/v{version}"));
+                if version == 2 {
+                    f.contract
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("configuration_ancestors");
+                }
+                if version < 4 {
+                    f.contract
+                        .as_object_mut()
+                        .unwrap()
+                        .remove(if field == "compiler" {
+                            "cargo_input"
+                        } else {
+                            "compiler"
+                        });
+                }
+                if null {
+                    f.contract[field] = json!(null);
+                } else if version == 4 {
+                    f.contract.as_object_mut().unwrap().remove(field);
+                }
+                f.save();
+                let (exit, r, stderr) = f.call();
+                assert_ne!(exit, 0, "v{version} {field} null={null}: {r} {stderr}");
+                assert!(
+                    r["error"].as_str().unwrap().contains("contract schema"),
+                    "{r}"
+                );
+                assert!(r["metadata"].is_null() && r["operation"].is_null());
+            }
+        }
+    }
+    f.contract = contract;
+    absent_input(&mut f);
+    f.contract["compiler"]["input"] = json!("optional");
+    f.save();
+    let (exit, r, stderr) = f.call();
+    assert_ne!(exit, 0, "{r} {stderr}");
+    assert!(
+        r["error"]
+            .as_str()
+            .unwrap()
+            .contains("requires bound present bytes"),
+        "{r}"
+    );
+    assert!(r["metadata"].is_null() && r["operation"].is_null());
+    assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+}

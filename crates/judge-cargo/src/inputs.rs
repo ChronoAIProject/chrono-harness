@@ -23,6 +23,16 @@ pub(crate) struct Command {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct Compiler {
+    pub tool: String,
+    input: String,
+}
+pub(crate) struct ToolInput {
+    pub path: PathBuf,
+    pub sha256: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Contract {
     schema: String,
     root: String,
@@ -32,6 +42,8 @@ pub(crate) struct Contract {
     target: String,
     configuration_files: Vec<crate::configuration::Declaration>,
     configuration_ancestors: Option<crate::configuration::Ancestors>,
+    cargo_input: Option<String>,
+    pub compiler: Option<Compiler>,
     packages: Vec<Package>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
@@ -66,6 +78,7 @@ struct Kind {
 pub(crate) struct Check {
     pub contract: Contract,
     pub configuration: crate::configuration::Checked,
+    pub tool_inputs: BTreeMap<String, ToolInput>,
     manifests: BTreeMap<String, PathBuf>,
     sources: BTreeMap<String, BTreeSet<PathBuf>>,
     target_directory: PathBuf,
@@ -227,11 +240,24 @@ pub(crate) fn prepare(
         return Err(error("policy must be under .chrono-harness/"));
     }
     let policy_path = no_symlink_parents(root, policy)?;
-    let contract: Contract =
-        serde_json::from_value(json(&fs::read(&policy_path).map_err(error)?)?).map_err(error)?;
+    let value = json(&fs::read(&policy_path).map_err(error)?)?;
+    let contract = Contract::deserialize(&value).map_err(error)?;
     let version_valid = match contract.schema.as_str() {
-        "chrono-cargo-inputs/v2" => contract.configuration_ancestors.is_none(),
-        "chrono-cargo-inputs/v3" => contract.configuration_ancestors.is_some(),
+        "chrono-cargo-inputs/v2" => {
+            contract.configuration_ancestors.is_none()
+                && value.get("cargo_input").is_none()
+                && value.get("compiler").is_none()
+        }
+        "chrono-cargo-inputs/v3" => {
+            contract.configuration_ancestors.is_some()
+                && value.get("cargo_input").is_none()
+                && value.get("compiler").is_none()
+        }
+        "chrono-cargo-inputs/v4" => {
+            contract.configuration_ancestors.is_some()
+                && contract.cargo_input.is_some()
+                && contract.compiler.is_some()
+        }
         _ => false,
     };
     if !version_valid
@@ -241,7 +267,7 @@ pub(crate) fn prepare(
         || contract.output_limit_bytes > 64 * 1024 * 1024
     {
         return Err(error(
-            "invalid chrono-cargo-inputs/v2 or v3 contract schema/ancestor policy/target/process limits",
+            "invalid chrono-cargo-inputs/v2, v3 or v4 contract schema/ancestor policy/tool bindings/target/process limits",
         ));
     }
     let root_package = contract
@@ -262,6 +288,16 @@ pub(crate) fn prepare(
         .operations
         .get(operation)
         .ok_or_else(|| error("unregistered Cargo operation"))?;
+    if contract.compiler.is_some()
+        && !backing
+            .argv
+            .first()
+            .is_some_and(|s| matches!(s.as_str(), "build" | "check" | "test" | "run" | "bench"))
+    {
+        return Err(error(
+            "compiler binding does not cover additional doc/clippy tools",
+        ));
+    }
     if contract.metadata.tool.is_empty() || backing.tool != contract.metadata.tool {
         return Err(error(
             "metadata and operation must use the same registered tool",
@@ -409,6 +445,53 @@ pub(crate) fn prepare(
         retain(path, Some(digest))
     };
     let mut absent_inputs = Vec::new();
+    let mut tool_inputs = BTreeMap::new();
+    if let Some(compiler) = &contract.compiler {
+        for key in [
+            "CARGO_BUILD_RUSTC",
+            "CARGO_BUILD_RUSTC_WRAPPER",
+            "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
+        ] {
+            if environment.contains_key(key) {
+                return Err(error(format!("compiler selection cannot also use {key}")));
+            }
+        }
+        for (tool, id) in [
+            (
+                &contract.metadata.tool,
+                contract.cargo_input.as_ref().unwrap(),
+            ),
+            (&compiler.tool, &compiler.input),
+        ] {
+            input(id)?;
+            let row = declarations.iter().find(|d| d["id"] == *id).unwrap();
+            let expected = ToolInput {
+                path: root.join(row["location"].as_str().unwrap()),
+                sha256: row["sha256"].as_str().unwrap().into(),
+            };
+            if tool.is_empty() || tool_inputs.insert(tool.clone(), expected).is_some() {
+                return Err(error(
+                    "compiler and Cargo need distinct registered tool IDs",
+                ));
+            }
+        }
+        let compiler_path = tool_inputs[&compiler.tool]
+            .path
+            .to_str()
+            .ok_or_else(|| error("compiler path UTF-8"))?;
+        if environment.get("RUSTC").map(String::as_str) != Some(compiler_path) {
+            return Err(error(
+                "RUSTC must select the explicitly bound compiler path",
+            ));
+        }
+        for key in ["RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"] {
+            if environment.get(key).map(String::as_str) != Some("") {
+                return Err(error(format!(
+                    "compiler binding requires explicit empty {key} to disable Cargo wrappers"
+                )));
+            }
+        }
+    }
     for row in declarations
         .iter()
         .filter(|d| connected(&format!("input:{}", d["id"].as_str().unwrap())))
@@ -432,6 +515,7 @@ pub(crate) fn prepare(
         &contract.configuration_files,
         contract.configuration_ancestors,
         &observing.configurations,
+        contract.compiler.is_some(),
         input,
     )?;
     let selected: BTreeSet<_> = contract
@@ -570,6 +654,7 @@ pub(crate) fn prepare(
     Ok(Check {
         contract,
         configuration,
+        tool_inputs,
         manifests,
         sources,
         target_directory,

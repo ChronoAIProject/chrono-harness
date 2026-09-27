@@ -85,7 +85,7 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
-The current policy has schema `chrono-cargo-inputs/v3` and these required fields.
+The configuration policy has schema `chrono-cargo-inputs/v3` and these required fields.
 The fixed v2 inventory contract remains supported with its original absolute
 `CARGO_HOME` requirement and no ancestor-policy choice.
 
@@ -234,3 +234,39 @@ other service inputs. The configuration inventory covers Cargo 1.95 lookup and
 include rules, not every input a Cargo child might consume. The remaining input
 declarations, adoption and full native parity remain
 required work. Existing core checks do not certify that missing scope.
+
+## Explicit compiler binding
+
+Hosts can opt into `chrono-cargo-inputs/v4` by retaining all v3 declarations and
+adding `cargo_input` (an external input ID) plus `compiler: {tool, input}`.
+`tool` names a distinct registered compiler tool; both input IDs must be present,
+have expected SHA-256 values, and have explicit FILEMAP paths to the consumer.
+The guard checks each resolved invocation path and its bytes against that input
+before probing the version. Each tool requires its declared expected version.
+The report retains the Cargo `tool` observation and the additional `compiler`
+observation; v2/v3 retain their old contract and have no compiler-binding claim.
+Those older policy schemas reject the v4 fields, including explicit nulls.
+
+The effective host environment must explicitly set `RUSTC` to the compiler's
+absolute input path and set both `RUSTC_WRAPPER` and `RUSTC_WORKSPACE_WRAPPER` to
+empty strings. The guard passes that same environment to metadata and execution.
+V4 rejects the three corresponding `CARGO_BUILD_*` aliases, and any parsed Cargo
+configuration (including recursive includes) that declares those six environment
+names or `build.rustc`, `build.rustc-wrapper`, or `build.rustc-workspace-wrapper`.
+This contract gives compiler selection one declared source; it does not infer
+which of several conflicting declarations a host intended. Configuration files
+shadowed by Cargo's legacy-file rule remain unparsed, with their bytes retained.
+
+V4 supports `build`, `check`, `test`, `run`, and `bench`; `doc` and `clippy` require
+additional tool contracts and remain available through the original v2/v3 scope.
+All retained inputs are checked after tool observation, metadata and the consumer.
+An otherwise successful consumer that persistently changes a bound tool fails,
+with the actual consumer receipt retained. Transient concurrent replacement is
+outside the existing before/after observation guarantee.
+
+This binds the executable supplied to Cargo. It does not close that executable's
+own delegated processes, compiler libraries/sysroot/backend, linker, SDK,
+build-script reads or other external inputs. `input_closure_complete` remains
+false. The product host has not adopted v4. Dedicated direct and full/scoped tests
+exercise actual Cargo compilation, selected-tool traces, before/after mismatch,
+configuration rejection and documentation-only nonexecution.
