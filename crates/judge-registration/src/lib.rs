@@ -631,7 +631,9 @@ fn references(
             } else {
                 vec!["path"]
             } {
-                let path = p[field].as_str().unwrap();
+                let Some(path) = p[field].as_str() else {
+                    continue;
+                };
                 if !ct.contains_key(path) || !b.contains_key(path) {
                     issue(
                         r,

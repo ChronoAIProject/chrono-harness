@@ -1,0 +1,21 @@
+[package]
+name = "chrono-judge-cargo-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+chrono-judge-cargo = { path = "../judge-cargo" }
+serde_json = "1"
+tempfile = "3"
+
+[[test]]
+name = "contracts"
+path = "tests/contracts.rs"
+
+[[test]]
+name = "consumer"
+path = "tests/consumer.rs"

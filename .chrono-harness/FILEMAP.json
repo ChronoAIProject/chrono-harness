@@ -1391,6 +1391,10 @@
         {
           "kind": "compile",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -1976,6 +1980,10 @@
         {
           "kind": "compile",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -2405,6 +2413,109 @@
     },
     {
       "path": "docs/examples.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "crates/judge-cargo/Cargo.toml",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo/Cargo.lock",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo/src/lib.rs",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo/src/main.rs",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/Cargo.toml",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/Cargo.lock",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/tests/contracts.rs",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/tests/consumer.rs",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/cargo-projects.md",
       "owner": "repository",
       "surface": "documentation",
       "cost": "unmeasured",
@@ -4176,6 +4287,156 @@
       "from": "environment:CARGO_TERM_COLOR",
       "kind": "runtime-input",
       "to": "project:distribution-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "project:judge-cargo",
+      "kind": "test-execution",
+      "to": "test:judge-cargo-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-cargo",
+      "kind": "compile",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-cargo-tests",
+      "kind": "test-execution",
+      "to": "test:judge-cargo-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
     }
   ],
   "test_costs": [
@@ -4233,6 +4494,10 @@
     },
     {
       "test": "distribution-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-cargo-tests",
       "cost": "unmeasured"
     }
   ],
@@ -4407,6 +4672,21 @@
         "fmt.distribution-tests",
         "build.distribution",
         "test.distribution-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-cargo-tests": {
+      "operations": [
+        "fmt.judge-cargo",
+        "fmt.judge-cargo-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-routes",
+        "build.judge-projects",
+        "build.judge-cargo",
+        "test.judge-cargo-tests"
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576

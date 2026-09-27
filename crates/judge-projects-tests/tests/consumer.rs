@@ -64,7 +64,7 @@ fn docs_and_unrelated_historical_pair_defect_launch_zero_operations() {
     assert!(!h.root().join(".chrono-harness/state/order").exists());
 }
 #[test]
-fn pair_edge_manifest_and_route_counterexamples_launch_nothing() {
+fn pair_edge_ownership_and_route_counterexamples_launch_nothing() {
     for mode in 0..5 {
         let mut h = Host::new(false);
         match mode {
@@ -73,10 +73,16 @@ fn pair_edge_manifest_and_route_counterexamples_launch_nothing() {
                 .as_array_mut()
                 .unwrap()
                 .retain(|e| e["from"] != "project:p" || e["kind"] != "test-execution"),
-            2 => h.values.get_mut(FM).unwrap()["project_edges"]
-                .as_array_mut()
-                .unwrap()
-                .retain(|e| e["kind"] != "compile"),
+            2 => {
+                h.values.get_mut(FM).unwrap()["files"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|f| f["path"] == "p/product.py")
+                    .unwrap()["owner"] = json!("t");
+                h.values.get_mut(PROJECTS).unwrap()["projects"][0]["manifest"] =
+                    json!("p/product.py");
+            }
             3 => {
                 h.values.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["execute"] =
                     h.values[PROJECTS]["projects"][1]["actions"]["execute"].clone()
@@ -92,7 +98,7 @@ fn pair_edge_manifest_and_route_counterexamples_launch_nothing() {
         assert!(
             v.to_string().contains(match mode {
                 0 | 1 => "E_TEST_PAIR",
-                2 => "E_DANGLING_EDGE",
+                2 => "E_TEST_PAIR",
                 3 => "E_ROUTE_AMBIGUOUS",
                 _ => "E_TOOL_BINDING",
             }),
@@ -523,93 +529,6 @@ fn unrepresented_retained_environment_is_not_no_work_success() {
 }
 
 #[test]
-fn registered_intermediate_workspace_rejected_before_operations_and_standalone_passes() {
-    for workspace in [false, true] {
-        let mut h = Host::new(false);
-        let root = h.root();
-        fs::create_dir(root.join("group")).unwrap();
-        for id in ["p", "t"] {
-            fs::rename(root.join(id), root.join(format!("group/{id}"))).unwrap();
-        }
-        for p in h.values.get_mut(PROJECTS).unwrap()["projects"]
-            .as_array_mut()
-            .unwrap()
-        {
-            for field in ["root", "manifest", "lockfile"] {
-                p[field] = json!(format!("group/{}", p[field].as_str().unwrap()));
-            }
-        }
-        h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"][1] =
-            json!("group/t/check.py");
-        for f in h.values.get_mut(FM).unwrap()["files"]
-            .as_array_mut()
-            .unwrap()
-        {
-            let path = f["path"].as_str().unwrap();
-            if path.starts_with("p/") || path.starts_with("t/") {
-                f["path"] = json!(format!("group/{path}"));
-            }
-        }
-        for a in h.values.get_mut(CONFIG).unwrap()["artifacts"]
-            .as_array_mut()
-            .unwrap()
-        {
-            if a["kind"] == "cargo-output" {
-                a["path"] = json!(format!("group/{}", a["path"].as_str().unwrap()));
-            }
-        }
-        let check = fs::read_to_string(root.join("group/t/check.py"))
-            .unwrap()
-            .replace("p/product.py", "group/p/product.py");
-        fs::write(root.join("group/t/check.py"), check).unwrap();
-        if workspace {
-            fs::write(
-                root.join("group/Cargo.toml"),
-                "[workspace]\nmembers=['p','t']\n",
-            )
-            .unwrap();
-            h.values.get_mut(FM).unwrap()["files"]
-                .as_array_mut()
-                .unwrap()
-                .push(file("group/Cargo.toml", json!([])));
-        }
-        h.save();
-        h.base = h.candidate.clone();
-        fs::write(root.join("doc.txt"), "docs only\n").unwrap();
-        h.candidate = commit(&root);
-        let (code, v) = h.run(|_| {});
-        assert_eq!(
-            code, 0,
-            "docs do not adjudicate historical Cargo data: {}",
-            v["findings"]
-        );
-        assert_eq!(v["tests"]["executed"], json!([]));
-        fs::write(
-            root.join("group/p/product.py"),
-            "def double(n): return 2*n\n",
-        )
-        .unwrap();
-        h.candidate = commit(&root);
-        let (code, v) = h.run(|_| {});
-        if workspace {
-            assert_ne!(
-                code, 0,
-                "registered intermediate workspace must be rejected"
-            );
-            assert!(v.to_string().contains("E_TEST_PAIR"), "{}", v["findings"]);
-            assert!(v.to_string().contains("group/Cargo.toml"));
-            assert!(!root.join(".chrono-harness/state/order").exists());
-        } else {
-            check_pass(code, &v);
-            assert_eq!(
-                fs::read_to_string(root.join(".chrono-harness/state/order")).unwrap(),
-                "pt"
-            );
-        }
-    }
-}
-
-#[test]
 fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
     for (bytes, expected_exit) in [("bytes([239,191,189])", 0), ("bytes([255])", 2)] {
         let mut h = Host::new(true);
@@ -637,4 +556,186 @@ fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes
             assert_eq!(record["response"]["outputs"]["note"], "�");
         }
     }
+}
+
+#[test]
+fn manifest_free_projects_custom_operations_and_arbitrary_paths_execute_full_chain() {
+    let mut h = Host::new(false);
+    let root = h.root();
+    for row in h.values.get_mut(PROJECTS).unwrap()["projects"]
+        .as_array_mut()
+        .unwrap()
+    {
+        for field in ["manifest", "lockfile", "root"] {
+            row.as_object_mut().unwrap().remove(field);
+        }
+    }
+    let actions = h.values.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]
+        .as_object_mut()
+        .unwrap();
+    let method = actions.remove("build").unwrap();
+    actions.insert("hydrate-fixture".into(), method);
+    h.values.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|a| a["owner"] != "p" && a["owner"] != "t");
+    for (old, new) in [
+        ("p/product.py", "different shelf/value.data"),
+        ("t/check.py", "assays/contract.verify"),
+    ] {
+        fs::create_dir_all(root.join(new).parent().unwrap()).unwrap();
+        fs::rename(root.join(old), root.join(new)).unwrap();
+        for f in h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+        {
+            if f["path"] == old {
+                f["path"] = json!(new);
+            }
+        }
+    }
+    let test = fs::read_to_string(root.join("assays/contract.verify"))
+        .unwrap()
+        .replace("p/product.py", "different shelf/value.data");
+    fs::write(root.join("assays/contract.verify"), test).unwrap();
+    h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"][1] =
+        json!("assays/contract.verify");
+    fs::write(root.join("p/Cargo.toml"), "opaque host bytes, not TOML").unwrap();
+    h.save();
+    let (code, report) = h.run(|_| {});
+    check_pass(code, &report);
+    assert_eq!(
+        fs::read_to_string(root.join(".chrono-harness/state/order")).unwrap(),
+        "pt"
+    );
+    assert_eq!(report["tests"]["selected"], json!(["test:t"]));
+}
+
+#[test]
+fn opaque_legacy_paths_do_not_enable_language_or_directory_inference() {
+    let mut h = Host::new(false);
+    // A manifest-looking name does not opt the host into Cargo semantics.
+    fs::write(h.root().join("p/Cargo.toml"), "host-owned opaque input\n").unwrap();
+    fs::write(
+        h.root().join("t/Cargo.toml"),
+        "[workspace]\nmembers=['p']\n",
+    )
+    .unwrap();
+    h.values.get_mut(PROJECTS).unwrap()["projects"][1]["root"] = json!("p");
+    h.values.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|a| a["owner"] != "p" && a["owner"] != "t");
+    h.save();
+    let (code, v) = h.run(|_| {});
+    check_pass(code, &v);
+}
+
+#[test]
+fn overlapping_declared_outputs_fail_and_isolated_arbitrary_paths_pass() {
+    for overlap in [false, true] {
+        let mut h = Host::new(false);
+        for row in h.values.get_mut(PROJECTS).unwrap()["projects"]
+            .as_array_mut()
+            .unwrap()
+        {
+            for key in ["manifest", "lockfile", "root"] {
+                row.as_object_mut().unwrap().remove(key);
+            }
+        }
+        for a in h.values.get_mut(CONFIG).unwrap()["artifacts"]
+            .as_array_mut()
+            .unwrap()
+        {
+            if a["owner"] == "p" {
+                a["path"] = json!("output shelf/product/");
+            }
+            if a["owner"] == "t" {
+                a["path"] = json!(if overlap {
+                    "output shelf/product/test/"
+                } else {
+                    "assay output/"
+                });
+            }
+        }
+        h.save();
+        let (code, v) = h.run(|_| {});
+        if overlap {
+            assert_ne!(code, 0);
+            assert!(
+                v.to_string().contains("overlapping registered outputs"),
+                "{}",
+                v["findings"]
+            );
+            assert!(!h.root().join(".chrono-harness/state/order").exists());
+        } else {
+            check_pass(code, &v);
+        }
+    }
+}
+
+#[test]
+fn empty_action_name_and_duplicate_custom_operation_are_rejected() {
+    for duplicate in [false, true] {
+        let mut h = Host::new(false);
+        let value = h.values[PROJECTS]["projects"][0]["actions"]["build"].clone();
+        h.values.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]
+            .as_object_mut()
+            .unwrap()
+            .insert(
+                if duplicate {
+                    "explicit-custom-operation"
+                } else {
+                    ""
+                }
+                .into(),
+                value,
+            );
+        h.save();
+        let (code, v) = h.run(|_| {});
+        assert_ne!(code, 0);
+        assert!(
+            v.to_string().contains(if duplicate {
+                "E_ROUTE_AMBIGUOUS"
+            } else {
+                "empty action name"
+            }),
+            "{}",
+            v["findings"]
+        );
+        assert!(!h.root().join(".chrono-harness/state/order").exists());
+    }
+}
+
+#[test]
+fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
+    let mut h = Host::new(false);
+    h.base = h.candidate.clone();
+    h.values.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|a| a["owner"] == "t")
+        .unwrap()["path"] = json!("p/target/test/");
+    h.save();
+    let (code, v) = h.run(|_| {});
+    assert_ne!(
+        code, 0,
+        "an output-only overlap must not be classified as no work"
+    );
+    assert!(
+        v.to_string().contains("overlapping registered outputs"),
+        "{}",
+        v["findings"]
+    );
+    assert!(!h.root().join(".chrono-harness/state/order").exists());
+    h.values.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|a| a["owner"] == "t")
+        .unwrap()["path"] = json!("arbitrary assay outputs/");
+    h.save();
+    let (code, v) = h.run(|_| {});
+    check_pass(code, &v);
 }

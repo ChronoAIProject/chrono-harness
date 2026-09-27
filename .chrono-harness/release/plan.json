@@ -1,6 +1,6 @@
 {
   "schema": "chrono-release-plan/v1",
-  "version": "v0.1.0-beta.1",
+  "version": "v0.1.0-beta.2",
   "assets": {
     "chrono-harness": "crates/runner/target/release/chrono-harness",
     "chrono-instructions": "crates/instructions/target/release/chrono-instructions",
@@ -14,6 +14,7 @@
     "chrono-judge-mixed": "crates/judge-mixed/target/release/chrono-judge-mixed",
     "chrono-judge-workflow": "crates/judge-workflow/target/release/chrono-judge-workflow",
     "chrono-inputs": "crates/inputs/target/release/chrono-inputs",
-    "chrono-distribution": "crates/distribution/target/release/chrono-distribution"
+    "chrono-distribution": "crates/distribution/target/release/chrono-distribution",
+    "chrono-judge-cargo": "crates/judge-cargo/target/release/chrono-judge-cargo"
   }
 }

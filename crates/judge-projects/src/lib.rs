@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
-    path::{Component, Path},
+    path::Path,
 };
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OperationResult {
@@ -122,21 +121,6 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
     }
     Ok(results)
 }
-fn normalized(path: &Path) -> Result<std::path::PathBuf, String> {
-    let mut out = std::path::PathBuf::new();
-    for c in path.components() {
-        match c {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !out.pop() {
-                    return Err("dependency path escapes host".into());
-                }
-            }
-            _ => out.push(c),
-        }
-    }
-    Ok(out)
-}
 pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Result<(), String> {
     let projects = r.projects()["projects"].as_array().unwrap();
     let scripts = r.projects()["scripts"].as_array().unwrap();
@@ -232,109 +216,40 @@ pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Res
                     if collection.iter().filter(|p| p["path"] == path).count() != 1 {
                         return Err("E_TEST_PAIR: shared script path".into());
                     }
-                    continue;
                 }
-                for field in ["manifest", "lockfile", "root"] {
-                    if collection
-                        .iter()
-                        .filter(|p| p[field] == member[field])
-                        .count()
-                        != 1
-                    {
-                        return Err(format!("E_TEST_PAIR: shared {field}"));
-                    }
-                }
+                // Legacy paths remain optional opaque owned inputs. No language parsing,
+                // ancestor discovery or inferred output directory belongs to this judge.
                 for field in ["manifest", "lockfile"] {
-                    registered(member[field].as_str().unwrap(), owner)?;
-                }
-                let target = format!("{}/target/", member["root"].as_str().unwrap());
-                if r.config()["artifacts"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .filter(|a| a["path"] == target && a["owner"] == owner)
-                    .count()
-                    != 1
-                {
-                    return Err("E_TEST_PAIR: distinct registered target required".into());
-                }
-                let path = member["manifest"].as_str().unwrap();
-                let manifest: toml::Value = fs::read_to_string(root.join(path))
-                    .map_err(|e| e.to_string())?
-                    .parse()
-                    .map_err(|e| format!("E_MANIFEST: {e}"))?;
-                if manifest.get("workspace").is_some()
-                    || manifest
-                        .get("package")
-                        .and_then(|p| p.get("workspace"))
-                        .is_some()
-                {
-                    return Err("E_TEST_PAIR: Cargo workspace aggregation".into());
-                }
-                // Cargo searches parent manifests for workspace membership. Only registered
-                // ancestors of this affected Rust manifest participate in this consistency check.
-                for ancestor in Path::new(path).parent().unwrap().ancestors().skip(1) {
-                    let ancestor_manifest = ancestor.join("Cargo.toml");
-                    if !files
-                        .iter()
-                        .any(|f| f["path"].as_str() == ancestor_manifest.to_str())
-                    {
-                        continue;
+                    if let Some(path) = member[field].as_str() {
+                        registered(path, owner)?;
                     }
-                    let value: toml::Value = fs::read_to_string(root.join(&ancestor_manifest))
-                        .map_err(|e| format!("E_MANIFEST: {}: {e}", ancestor_manifest.display()))?
-                        .parse()
-                        .map_err(|e| format!("E_MANIFEST: {}: {e}", ancestor_manifest.display()))?;
-                    if value.get("workspace").is_some() {
+                }
+                let owned: Vec<_> = files.iter().filter(|f| f["owner"] == owner).collect();
+                if owned.is_empty() {
+                    return Err(format!(
+                        "E_TEST_PAIR: project {owner} has no registered files"
+                    ));
+                }
+                for file in owned {
+                    registered(file["path"].as_str().unwrap(), owner)?;
+                }
+                let artifacts = r.config()["artifacts"].as_array().unwrap();
+                for artifact in artifacts.iter().filter(|a| a["owner"] == owner) {
+                    let path = artifact["path"].as_str().unwrap();
+                    if files
+                        .iter()
+                        .any(|f| f["path"].as_str().unwrap().starts_with(path))
+                    {
                         return Err(format!(
-                            "E_TEST_PAIR: registered ancestor workspace {} for {path}",
-                            ancestor_manifest.display()
+                            "E_TEST_PAIR: generated output contains registered input: {path}"
                         ));
                     }
-                }
-                // TOML is a consistency consumer. These references never add graph edges or select tests.
-                let mut tables = vec![&manifest];
-                if let Some(targets) = manifest.get("target").and_then(toml::Value::as_table) {
-                    tables.extend(targets.values());
-                }
-                for table in tables {
-                    for key in ["dependencies", "dev-dependencies", "build-dependencies"] {
-                        if let Some(deps) = table.get(key).and_then(toml::Value::as_table) {
-                            for (name, dep) in deps {
-                                if dep.get("workspace").is_some() {
-                                    return Err("E_TEST_PAIR: workspace dependency".into());
-                                }
-                                if let Some(relative) =
-                                    dep.get("path").and_then(toml::Value::as_str)
-                                {
-                                    let manifest_path = normalized(
-                                        &Path::new(path)
-                                            .parent()
-                                            .unwrap()
-                                            .join(relative)
-                                            .join("Cargo.toml"),
-                                    )?;
-                                    let target = projects
-                                        .iter()
-                                        .find(|p| p["manifest"].as_str() == manifest_path.to_str())
-                                        .ok_or_else(|| {
-                                            format!("E_INPUT_UNDECLARED: dependency {name}")
-                                        })?;
-                                    if !edge(
-                                        &format!("project:{}", target["id"].as_str().unwrap()),
-                                        "compile",
-                                        &format!("project:{owner}"),
-                                    ) {
-                                        return Err(format!(
-                                            "E_DANGLING_EDGE: undeclared manifest dependency {name}"
-                                        ));
-                                    }
-                                } else {
-                                    return Err(format!(
-                                        "E_INPUT_UNDECLARED: bounded project consumer requires explicit retained dependency closure for {name}; registry dependency support unresolved"
-                                    ));
-                                }
-                            }
+                    for other in artifacts.iter().filter(|a| a["owner"] != owner) {
+                        let other_path = other["path"].as_str().unwrap();
+                        if path.starts_with(other_path) || other_path.starts_with(path) {
+                            return Err(format!(
+                                "E_TEST_PAIR: overlapping registered outputs: {path}, {other_path}"
+                            ));
                         }
                     }
                 }
