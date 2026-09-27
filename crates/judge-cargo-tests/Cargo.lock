@@ -42,6 +42,7 @@ dependencies = [
  "chrono-harness",
  "chrono-judge-filemap",
  "chrono-judge-registration",
+ "chrono-judge-routes",
  "serde",
  "serde_json",
  "toml",
@@ -86,6 +87,17 @@ dependencies = [
  "serde",
  "serde_json",
  "time",
+]
+
+[[package]]
+name = "chrono-judge-routes"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

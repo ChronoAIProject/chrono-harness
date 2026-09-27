@@ -9,6 +9,25 @@ fn main() -> std::process::ExitCode {
         println!("chrono-judge-cargo {}", env!("CARGO_PKG_VERSION"));
         return std::process::ExitCode::SUCCESS;
     }
+    if args.len() == 9
+        && args[0] == "run"
+        && args[1] == "--host-root"
+        && args[3] == "--config"
+        && args[5] == "--policy"
+        && args[7] == "--operation"
+    {
+        let report =
+            chrono_judge_cargo::guard::run(Path::new(&args[2]), &args[4], &args[6], &args[8]);
+        match serde_json::to_vec(&report) {
+            Ok(bytes) => {
+                if std::io::stdout().write_all(&bytes).is_err() {
+                    return fail("E_PROTOCOL: output");
+                }
+            }
+            Err(e) => return fail(&e.to_string()),
+        }
+        return std::process::ExitCode::from(report.exit_code);
+    }
     if args.len() == 4 && args[..3] == ["--protocol", "chrono-judge/v1", "--policy"] {
         let mut bytes = vec![];
         if std::io::stdin()
@@ -63,7 +82,7 @@ fn main() -> std::process::ExitCode {
         };
     }
     fail(
-        "E_USAGE: --protocol chrono-judge/v1 --policy PATH | check --host-root ROOT --config PATH --policy PATH --project ID ...",
+        "E_USAGE: --protocol chrono-judge/v1 --policy PATH | check --host-root ROOT --config PATH --policy PATH --project ID ... | run --host-root ROOT --config PATH --policy PATH --operation ID",
     )
 }
 fn fail(message: &str) -> std::process::ExitCode {

@@ -112,4 +112,4 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 
 测试版统一从本库 [GitHub Releases](https://github.com/ChronoAIProject/chrono-harness/releases) 分发。独立 `chrono-distribution` 按显式清单打包、合并原生平台产物、生成宿主安装登记与入口，验证清单和二进制摘要后安装；宿主无需保留产品源码包或编译 Rust。合同与命令见 [发布与安装](docs/distribution.md)。
 
-通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
+通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查及已登记 registry/Git 输入、metadata 与真实操作的联合校验属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
