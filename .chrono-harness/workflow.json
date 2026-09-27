@@ -148,6 +148,19 @@
         "judge-workflow-tests"
       ],
       "reason": "Branch freshness, declared evolution and actual integration evidence"
+    },
+    {
+      "id": "retained-inputs",
+      "paths": [
+        "crates/inputs/Cargo.toml",
+        "crates/inputs/Cargo.lock",
+        "crates/inputs/src/lib.rs",
+        "crates/inputs/src/main.rs"
+      ],
+      "tests": [
+        "inputs-tests"
+      ],
+      "reason": "Explicit input snapshots and retained content transport"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -166,7 +179,8 @@
       "judge-projects-tests",
       "judge-cost-tests",
       "judge-mixed-tests",
-      "judge-workflow-tests"
+      "judge-workflow-tests",
+      "inputs-tests"
     ],
     "bind": [
       "base",

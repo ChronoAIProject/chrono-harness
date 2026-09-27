@@ -15,7 +15,8 @@
     "build.judge-projects",
     "build.judge-cost",
     "build.judge-mixed",
-    "build.judge-workflow"
+    "build.judge-workflow",
+    "build.inputs"
   ],
   "install": [
     {
@@ -57,6 +58,10 @@
     {
       "source": "crates/judge-workflow/target/debug/chrono-judge-workflow",
       "destination": ".chrono-harness/bin/chrono-judge-workflow"
+    },
+    {
+      "source": "crates/inputs/target/debug/chrono-inputs",
+      "destination": ".chrono-harness/bin/chrono-inputs"
     }
   ]
 }

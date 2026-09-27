@@ -1,11 +1,123 @@
 //! Completeness declarations and retained endpoint bytes; a digest is not a closure proof.
 use crate::Registrations;
 use chrono_harness::{
-    sha256,
+    facts, file_identity, no_symlink_parents, relative_path, sha256,
     wire::{self, Request},
 };
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{collections::BTreeMap, path::Path};
+
+pub const SNAPSHOT_SCHEMA: &str = "chrono-input-snapshot/v1";
+
+/// Parse the retained representation without reading or repairing its contents.
+pub enum Retained<'a> {
+    Bytes(Vec<u8>),
+    Blob {
+        path: &'a str,
+        digest: &'a str,
+        length: u64,
+    },
+}
+pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
+    let parse = || match (value.get("bytes"), value.get("blob")) {
+        (Some(bytes), None) => {
+            crate::schema::object(value, &["bytes"], &[])?;
+            let bytes =
+                serde_json::from_value(bytes.clone()).map_err(|_| "invalid retained byte array")?;
+            Ok(Retained::Bytes(bytes))
+        }
+        (None, Some(blob)) => {
+            crate::schema::object(value, &["blob", "sha256", "length"], &[])?;
+            let path = blob
+                .as_str()
+                .filter(|p| p.starts_with(".chrono-harness/state/"))
+                .ok_or("reference must be within host state")?;
+            relative_path(path)?;
+            let digest = value["sha256"]
+                .as_str()
+                .filter(|s| wire::is_digest(s))
+                .ok_or("invalid digest")?;
+            let length = value["length"].as_u64().ok_or("invalid length")?;
+            Ok(Retained::Blob {
+                path,
+                digest,
+                length,
+            })
+        }
+        _ => Err("expected exactly one bytes or blob representation".to_string()),
+    };
+    parse().map_err(|e| format!("E_INPUT_BLOB: {e}"))
+}
+
+/// Snapshot format shared by the producer and consumer; endpoint policy is separate.
+pub fn snapshot_shape(value: &Value) -> Result<(), String> {
+    crate::schema::object(
+        value,
+        &[
+            "schema",
+            "commit",
+            "config_path",
+            "config_digest",
+            "environment",
+            "files",
+        ],
+        &[],
+    )
+    .map_err(|e| format!("E_INPUT_SNAPSHOT: {e}"))?;
+    if value["schema"] != SNAPSHOT_SCHEMA {
+        return Err("E_INPUT_SNAPSHOT: unsupported snapshot schema".into());
+    }
+    facts::full_oid(
+        value["commit"]
+            .as_str()
+            .ok_or("E_INPUT_SNAPSHOT: invalid commit")?,
+    )?;
+    relative_path(
+        value["config_path"]
+            .as_str()
+            .ok_or("E_INPUT_SNAPSHOT: invalid config path")?,
+    )?;
+    if !value["config_digest"].as_str().is_some_and(wire::is_digest) {
+        return Err("E_INPUT_SNAPSHOT: invalid config digest".into());
+    }
+    let environment = value["environment"]
+        .as_object()
+        .ok_or("E_INPUT_SNAPSHOT: invalid environment")?;
+    if environment
+        .iter()
+        .any(|(name, v)| name.is_empty() || !(v.is_null() || v.is_string()))
+    {
+        return Err("E_INPUT_SNAPSHOT: environment values must be strings or null".into());
+    }
+    for (id, file) in value["files"]
+        .as_object()
+        .ok_or("E_INPUT_SNAPSHOT: invalid files")?
+    {
+        if id.is_empty() {
+            return Err("E_INPUT_SNAPSHOT: empty file ID".into());
+        }
+        retained_shape(file)?;
+    }
+    Ok(())
+}
+
+fn retained_identity(root: &Path, value: &Value) -> Result<(String, u64), String> {
+    match retained_shape(value)? {
+        Retained::Bytes(bytes) => Ok((sha256(&bytes), bytes.len() as u64)),
+        Retained::Blob {
+            path,
+            digest,
+            length,
+        } => {
+            let path = no_symlink_parents(root, path).map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
+            let observed = file_identity(&path).map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
+            if observed != (digest.into(), length) {
+                return Err("E_INPUT_BLOB: retained content identity mismatch".into());
+            }
+            Ok(observed)
+        }
+    }
+}
 pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, String>, String> {
     let mut out = BTreeMap::new();
     if let Some(values) = snapshot.as_object() {
@@ -70,11 +182,20 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
     for (name, endpoint, r) in [("base", &req.base, old), ("candidate", &req.candidate, new)] {
         let cfg = r.config();
         let retained = &req.observations["retained"][name];
+        if retained.get("schema").is_some() {
+            snapshot_shape(retained)?;
+            if retained["config_path"] != req.config_path
+                || retained["config_digest"] != wire::digest(cfg)?
+            {
+                return Err(format!("{name}: snapshot configuration binding mismatch"));
+            }
+        }
         let files = cfg["environment"]["inputs"]
             .as_array()
             .ok_or("inputs missing")?;
         let strict_environment = new.filemap()["schema_version"] == 2;
-        if (!files.is_empty()
+        if (retained.get("schema").is_some()
+            || !files.is_empty()
             || strict_environment && !cfg["environment"]["inherit"].as_array().unwrap().is_empty())
             && retained["commit"] != endpoint.commit
         {
@@ -101,11 +222,20 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
             return Err("candidate environment differs from entry observation".into());
         }
         let mut evidence = BTreeMap::new();
+        if let Some(retained_files) = retained["files"].as_object() {
+            for id in retained_files.keys() {
+                if !files.iter().any(|i| i["id"] == *id) {
+                    return Err(format!("{name}: unregistered retained input {id}"));
+                }
+            }
+        }
         for input in files {
             let id = input["id"].as_str().unwrap();
-            let bytes: Vec<u8> = serde_json::from_value(retained["files"][id]["bytes"].clone())
-                .map_err(|_| format!("{name}: missing retained input {id}"))?;
-            let digest = sha256(&bytes);
+            let value = retained["files"]
+                .get(id)
+                .ok_or_else(|| format!("{name}: missing retained input {id}"))?;
+            let (digest, length) = retained_identity(&req.candidate.root, value)
+                .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
             if input["sha256"].as_str() != Some(&digest) {
                 return Err(format!("{name}: retained input digest mismatch: {id}"));
             }
@@ -116,13 +246,15 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                 } else {
                     req.candidate.root.join(path)
                 };
-                if fs::read(&path).map_err(|e| format!("candidate input {id}: {e}"))? != bytes {
+                if file_identity(&path).map_err(|e| format!("candidate input {id}: {e}"))?
+                    != (digest.clone(), length)
+                {
                     return Err(format!("candidate input changed: {id}"));
                 }
             }
             evidence.insert(
                 id.to_string(),
-                json!({"sha256":digest,"length":bytes.len(),"location":input["location"]}),
+                json!({"sha256":digest,"length":length,"location":input["location"]}),
             );
         }
         endpoints.insert(name.into(),json!({"commit":endpoint.commit,"environment":effective.ok(),"inherited":inherited,"files":evidence}));

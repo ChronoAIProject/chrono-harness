@@ -1,0 +1,66 @@
+# Explicit retained input snapshots
+
+`chrono-inputs` captures only the file IDs in a fixed config's
+`environment.inputs` and the variable names in `environment.inherit`. It does not
+discover dependencies, rewrite expected hashes, add tests or declare input closure
+complete. It is an independent Rust production/test pair. Git must be available
+to read the explicit fixed commit. This host still has incomplete Cargo/SDK input
+registration; installing this transport does not activate full governance.
+
+```sh
+chrono-inputs capture --host-root /path/to/host \
+  --config .chrono-harness/config.json --commit FULL_COMMIT_OID \
+  --output .chrono-harness/state/input-candidate.json
+
+chrono-inputs pair --host-root /path/to/host \
+  --base-snapshot .chrono-harness/state/input-base.json \
+  --candidate-snapshot .chrono-harness/state/input-candidate.json \
+  --output .chrono-harness/state/inputs.json
+```
+
+Capture requires that exact commit to be checked out and the config's disk bytes
+to match its fixed blob. It reads the original registry values at that commit;
+it is not a dirty-check or a passed governance report. Every declared file is
+copied with a bounded buffer into `.chrono-harness/state/inputs/blobs/<sha256>`.
+Equal contents share one retained blob. Existing content addresses are verified
+before reuse. Missing/nonregular inputs or invalid paths fail without publishing
+a snapshot. Source bytes are never reconstructed from today's files during pair.
+
+The snapshot has schema `chrono-input-snapshot/v1`, `commit`, `config_path`, the
+canonical config-value `config_digest`, `environment` and `files`. Environment
+values preserve strings, empty strings and absent/null; configured overrides remain
+in the config, and undeclared ambient variables are not captured. Each file ID maps
+to `{blob, sha256, length}`. These are observed values: a changed file can be
+captured while its expected registry hash stays unchanged, and the judge then
+rejects that mismatch. Snapshot success only means capture completed.
+
+Pair preserves both explicitly supplied snapshots. Optional `--base-root` and
+`--candidate-root` select their source hosts; both default to `--host-root`. It
+copies the referenced retained blobs into the destination's state and verifies
+their identities. It never reads historical external input locations or infers
+their new locations. The snapshots and blobs can also be transported together as
+CI artifacts. Original base bytes must remain available; a missing base blob is an
+error even when current candidate bytes exist.
+
+Snapshot and pair output paths must lie under `.chrono-harness/state/`. Repeating
+identical output is a no-op; different output at an existing path fails with
+`E_SNAPSHOT_EXISTS`, preserving the old evidence. Choose a new explicit path for
+new observations. Blob and output references reject symlink components and path
+traversal. Ordinary IO uses temporary files and publication without clobbering;
+power-loss recovery and concurrent mutation of source files remain outside this
+contract.
+
+Set context `retained_inputs` to the produced pair path. Registration accepts
+either the existing inline `{bytes: [...]}` representation or exactly one
+`{blob, sha256, length}` reference. It checks the snapshot's endpoint/config binding,
+declared file IDs, original blob digest/length and current candidate disk identity.
+Unknown file IDs, conflicting representations, missing/corrupt blobs and changed
+candidate inputs fail. Blob bytes are streamed and stay outside judge JSON; the
+effective-input result is the same for matching inline and blob representations.
+Reports still state `completeness_proven: false`: hashes bind the declared inputs,
+and do not prove no actual input was omitted.
+
+Dedicated tests cover exact binary/environment preservation, immutable outputs,
+deduplication, transport after the original input disappears, corrupt addresses,
+invalid paths and a real seven-judge consumer. Large-file and rejection cases
+exercise the actual check entry rather than constructing success reports.
