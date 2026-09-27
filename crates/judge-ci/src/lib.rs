@@ -589,13 +589,7 @@ fn evaluate(req: &Request) -> Result<Response, String> {
         if req.base.is_some() {
             return Err("initial cannot have base".into());
         }
-        // History traversal hides parents at shallow boundaries; commit headers do not.
-        let commit = git(root, &["cat-file", "-p", &req.candidate])?;
-        if commit
-            .split(|byte| *byte == b'\n')
-            .take_while(|line| !line.is_empty())
-            .any(|line| line.starts_with(b"parent "))
-        {
+        if !chrono_harness::facts::parents(root, &req.candidate)?.is_empty() {
             return Err("initial requires parentless commit".into());
         }
         previous = "none";

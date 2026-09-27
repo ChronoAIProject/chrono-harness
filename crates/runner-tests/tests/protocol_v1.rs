@@ -57,6 +57,87 @@ fn fixture(script: &str) -> (tempfile::TempDir, wire::Request, wire::Binding) {
     (dir, r, binding)
 }
 const RESPONSE: &str = "import json,sys\nr=json.load(sys.stdin)\ns={'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],'status':'pass','findings':[],'evidence':[],'outputs':{}}\n";
+
+fn initial_fixture(
+    script: &str,
+) -> (
+    tempfile::TempDir,
+    chrono_harness::initial::Request,
+    wire::Binding,
+) {
+    let (dir, old, mut binding) = fixture(script);
+    binding.selector = "every-initial".into();
+    binding.modes = vec!["inventory".into()];
+    let mut request = chrono_harness::initial::Request {
+        protocol: chrono_harness::initial::PROTOCOL.into(),
+        request_id: String::new(),
+        judge_id: old.judge_id,
+        mode: "inventory".into(),
+        candidate: old.candidate,
+        profile_path: ".chrono-harness/initial.json".into(),
+        profile_sha256: "a".repeat(64),
+        config_path: old.config_path,
+        registry_digest: old.registries.digest,
+        checkout: old.checkout,
+        runner: old.runner,
+        observations: value!({}),
+        prior_results: vec![],
+    };
+    request.seal().unwrap();
+    (dir, request, binding)
+}
+
+#[test]
+fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
+    for tail in [
+        "print(json.dumps(s))",
+        "print('invalid json')",
+        "s['protocol']='chrono-judge/v1'; print(json.dumps(s))",
+        "print(json.dumps(s)); sys.exit(3)",
+    ] {
+        let (dir, request, binding) = initial_fixture(&format!(
+            "{RESPONSE}assert 'base' not in r and 'delta' not in r\n{tail}"
+        ));
+        let result =
+            chrono_harness::initial::invoke(&request, &binding, &Default::default(), 5, 8192);
+        if tail == "print(json.dumps(s))" {
+            let (response, process) = result.unwrap();
+            assert_eq!(response.status, wire::Status::Pass);
+            assert_eq!(process.exit_code, 0);
+            assert_eq!(response.protocol, "chrono-initial-judge/v1");
+        } else {
+            let failure = result.unwrap_err();
+            assert!(failure.process.is_some(), "{failure:?}");
+        }
+        let mut value = serde_json::to_value(&request).unwrap();
+        value["base"] = value!({"commit":"f".repeat(40),"root":dir.path(),"tree":"e".repeat(40)});
+        assert!(serde_json::from_value::<chrono_harness::initial::Request>(value).is_err());
+    }
+}
+
+#[test]
+fn initial_transport_rejects_wrong_mode_digest_and_base_placeholder_before_launch() {
+    let (dir, request, original) = initial_fixture(&format!(
+        "{RESPONSE}open('ran','w').write('yes')\nprint(json.dumps(s))"
+    ));
+    for case in ["mode", "digest", "base", "request"] {
+        let mut binding = original.clone();
+        let mut request = request.clone();
+        match case {
+            "mode" => binding.modes = vec!["evaluate".into()],
+            "digest" => binding.sha256 = Some("0".repeat(64)),
+            "base" => binding.argv.push("{base}".into()),
+            "request" => request.candidate.commit = "f".repeat(40),
+            _ => unreachable!(),
+        }
+        assert!(
+            chrono_harness::initial::invoke(&request, &binding, &Default::default(), 5, 8192)
+                .is_err(),
+            "{case}"
+        );
+        assert!(!dir.path().join("ran").exists(), "{case}");
+    }
+}
 fn invoke(script: &str) -> Result<wire::Response, String> {
     let (_dir, r, b) = fixture(script);
     wire::invoke(&r, &b, &Default::default(), 5, 8192).map(|v| v.0)

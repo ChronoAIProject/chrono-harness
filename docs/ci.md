@@ -57,6 +57,11 @@ constitute reproducible-build or complete binary-provenance certification.
 A parentless commit can instead use `--candidate FULL_OID --initial` without
 `--base`. The report explicitly says `initial-inventory`; it does not fabricate
 a historical DELTA.
+Event preparation and initial judges read original commit headers with Git replacement
+overlays disabled. A same-tree child cannot become an initial root through a
+`git replace` view or a shallow-history boundary. The explicit full-registry
+initial profile is documented in [execution.md](execution.md#initial-inventory);
+its inventory completion does not activate full governance.
 
 The check exits 0 only after a valid passing response; judge failure exits 1;
 usage, unsupported configuration, transport, malformed protocol or report I/O

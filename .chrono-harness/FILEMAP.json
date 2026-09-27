@@ -2604,6 +2604,30 @@
           "to": "project:judge-cargo"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/initial.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/initial.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
     }
   ],
   "project_edges": [

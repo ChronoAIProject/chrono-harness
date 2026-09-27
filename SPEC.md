@@ -395,7 +395,7 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
 
 上述新增事实字段不裁决 admissibility：config_path 是两端共同的显式根相对配置路径；checkout.tracked 是相对 candidate 的索引/工作树变更路径并集，untracked 包括 ignore 路径；index_flags 是 Git ls-files -v 的完整 {path, tag} 记录，registration 拒绝 assume-unchanged/skip-worktree 隐藏条件，runner 不改写索引。runner 绑定实际当前执行物。registration 从固定 tree 判断支持的 entry 类型，重读对象、磁盘配置、context 和 checkout，忽略两次观察之间新增的已声明 artifact；其它变化报错。request_id 覆盖这些字段；不把 exported clean copy 当实际 checkout。base 导出保留在 state，普通文件无写权限，不执行 base 工具。
 registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, "candidate": {"<path>": <parsed JSON>, ...}}` 的 SHA-256，每端包含 config_path 与该端 config 指定的四份 registry；context.sha256 为 context JCS 摘要，evidence.sha256 为原始文件字节摘要。所有 JSON 先拒绝重复成员。
-本增量的 full CLI 要求两个真实 commit，不提供伪造空 base 的成功模式。初始模式及 schema 迁移仍待后续判官实现；不支持时非零。
+普通 full DELTA CLI 要求两个真实 commit。根提交只通过第 12 节的显式初始化配置进入单候选清单协议；不构造伪造空 base，不产生 DELTA 治理成功。登记版本迁移按第 6 节的候选转换与实际兼容测试合同执行。
 
 impact 的版本为 `schema: "chrono-filemap-impact/v1"`，以下示例列核心字段；完整附加事实见 [FILEMAP impact 合同](docs/filemap-impact.md)。impact.edges 为平铺的 `{from, kind, to, origin}`；origin 是 base/candidate/both。seeds 是确定性去重的节点 ID 列表，附加 seed_causes 保留每个原因的 ID、节点、实际路径／记录引用和原因。tests 是候选仍存在的选中测试节点 ID 列表，retired_tests 是候选已不存在的选中必需测试节点 ID 列表，两者确定性去重，只表达选择／删除事实，不代表执行或退休批准。required_tests 和完整两端记录、节点定义及因果来源作为附加字段保留。retired_tests 成员资格不得豁免 `E_REQUIRED_TEST_REMOVED` 或第 6 节的迁移／退休证据义务。
 prior_results 仅含 after 列出的前置判官完整响应；不得从运行目录猜测旧输出复用。
@@ -403,7 +403,7 @@ registration 先消费原始快照与 context；filemap 据登记生成 impact�
 routes 先验证执行入口，projects 再执行测试；judges.after 中明确登记这个依赖顺序。
 共享上下文的推导属于登记判官逻辑；runner 只传递具名输出，不在内部另写项目政策。
 所有摘要使用 SHA-256；JSON 摘要使用 RFC 8785 JCS，文件 blob 按原始字节计算。
-registries.digest 覆盖两端五份 JSON 的路径与内容；不存在的初始端须显式写 null。
+普通请求的 registries.digest 覆盖两端五份 JSON 的路径与内容，两个端点都必须存在。初始化请求没有 base 或 delta 字段，使用单份候选登记映射的独立摘要。
 
 ```json
 {
@@ -555,10 +555,16 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 ## 12. 初始根提交与自取自举
 
 空仓库没有 base，允许一次明确标记的根提交存储 spec/scaffold/草案登记。
-初始根提交不是一次通过的 DELTA，也不生成“所有历史已合规”的报告；当前正处此阶段。
+初始根提交不是一次通过的 DELTA，也不生成“所有历史已合规”的报告。
 随后修改都有真实 base；初次启用仍按 §6 由候选判官检查 activation DELTA 和迁移证据，并通过 integration。
 base.status 为 proposed 时记录 previous_enforcement:none，不能回填之前的成功；根提交之外不得伪造空 base。
 草案与 active 的迁移都不执行旧判官；启用必须填完 input_closure，声明完整仍不等于数学证明。
+
+宿主可显式登记 `chrono-initial-check/v1` 初始化配置，包含完整登记的 `host_config`、具名 `judges` 及进程上限，使用同一 `chrono-harness check --config P --candidate OID --initial` 入口。本地和 CI 在初始化时仍须使用相同配置和指令。普通完整配置不自动降级到该模式；初始化配置拒绝 `--base` 与 `--context`，读取真实 commit header 排除非根提交，包括浅历史及 Git replace 覆盖造成的伪根。
+
+初始化绑定采用 `every-initial` / `inventory`，通过 `chrono-initial-judge/v1` 只传候选端点、配置与登记摘要、实际 checkout／runner／环境观察和显式前驱结果。没有 base、DELTA 或猜测的判官，复用已有进程调用、摘要、严格 JSON 与退出码校验。默认 registration 初始化判官要求草案状态，复用登记引用检查并检查整个初始文件清单；它不执行项目测试、不证明输入闭包，也不启用治理。扩展判官和脚本通过该配置的显式 DAG 登记。
+
+`chrono-initial-report/v1` 的 scope 为 `initial-inventory`，成功状态为 `complete`，base 和 delta 为 null，governance 恒为 `not-evaluated`；实际判官响应和进程回执另行保留。初始化检查成功不会修改草案登记或补写历史合规。配置、请求、报告及已验边界见 [执行合同](docs/execution.md#initial-inventory)。完整自举来源、工具链闭包和自动初始化配置生成仍是独立义务。
 
 产品自举按登记方式从指定产品提交构建，将结果放宿主 `.chrono-harness/bin/`，
 写入具体版本、产品源提交、二进制摘要和工具链证据后，再调用唯一 check 指令。
@@ -626,7 +632,7 @@ Scoped judge-ci reuses routes planning and projects execution/receipt logic thro
 
 Context may name retained_inputs containing original external-file bytes or content-addressed blob references and environment snapshots at both fixed endpoints. The independent chrono-inputs capture/pair producer and streaming validation are specified in [docs/inputs.md](docs/inputs.md). Registration checks digests, current candidate bytes, absent/empty variables and candidate observations. Hashes and declarations do not prove undisclosed input completeness. The positive project fixture exercises declared methods without manifest/lock/root, custom action names and arbitrary file locations; optional Cargo consumers preserve workspace/path-dependency checks and run locked/offline metadata before explicitly registered Cargo operations. The adapter validates retained registry/Git inputs, exact resolution and ordered configuration arguments through the same full/scoped action path; see docs/cargo-projects.md. Neither certifies compiler/SDK or undisclosed input closure. Actual repository ci-tests Cargo execution is covered through the scoped migration consumer. This host remains proposed/incomplete and full governance is nonzero.
 
-CI event preparation supports explicit push_baselines prefixes and named baseline refs on origin: matching integration creation and repair pushes compare the complete candidate with the fixed observed dev tip, while unconfigured pushes retain before/after semantics (docs/ci.md). This preparation does not certify workflow obligations. Workflow now certifies bounded branch, integration, retirement and finite migration contracts using actual observations and completed reports; see [docs/workflow.md](docs/workflow.md). Complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
+CI event preparation supports explicit push_baselines prefixes and named baseline refs on origin: matching integration creation and repair pushes compare the complete candidate with the fixed observed dev tip, while unconfigured pushes retain before/after semantics (docs/ci.md). This preparation does not certify workflow obligations. Workflow now certifies bounded branch, integration, retirement and finite migration contracts using actual observations and completed reports; see [docs/workflow.md](docs/workflow.md). Complete effective Cargo/SDK and external-input closure, initial adoption/bootstrap provenance beyond the explicit root inventory profile, full native CI/parity, autonomous fresh worktrees, stale reconstruction, PR/merge/landing and the final full-SPEC audit remain unfinished. Single-worker local behavior checks do not establish independent review, native CI or landing. Existing instruction generation and its documented platform/crash/concurrency boundaries remain in force. Every original numbered requirement and acceptance row remains the goal.
 
 ## 15. 实际参考经验
 

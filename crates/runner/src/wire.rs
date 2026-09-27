@@ -178,9 +178,29 @@ pub struct Binding {
 }
 
 pub fn validate_response(req: &Request, r: &Response, exit: i32) -> Result<(), String> {
-    if r.protocol != PROTOCOL
-        || r.request_id != req.request_id
-        || r.judge_id != req.judge_id
+    validate_response_at(
+        &req.candidate.root,
+        PROTOCOL,
+        &req.request_id,
+        &req.judge_id,
+        r,
+        exit,
+        |p| p.starts_with('/') || req.delta.iter().any(|d| d.path == p),
+    )
+}
+/// Shared response contract; the request protocol owns admissible finding references.
+pub(crate) fn validate_response_at(
+    root: &std::path::Path,
+    protocol: &str,
+    request_id: &str,
+    judge_id: &str,
+    r: &Response,
+    exit: i32,
+    reference: impl Fn(&str) -> bool,
+) -> Result<(), String> {
+    if r.protocol != protocol
+        || r.request_id != request_id
+        || r.judge_id != judge_id
         || exit != r.status.exit_code()
     {
         return Err("E_PROTOCOL: response identity/status/exit mismatch".into());
@@ -190,9 +210,7 @@ pub fn validate_response(req: &Request, r: &Response, exit: i32) -> Result<(), S
             || f.message.is_empty()
             || !matches!(f.level.as_str(), "info" | "warning" | "error")
             || f.delta_refs.is_empty()
-            || f.delta_refs
-                .iter()
-                .any(|p| !p.starts_with('/') && !req.delta.iter().any(|d| d.path == *p))
+            || f.delta_refs.iter().any(|p| !reference(p))
         {
             return Err("E_PROTOCOL: invalid finding".into());
         }
@@ -212,7 +230,7 @@ pub fn validate_response(req: &Request, r: &Response, exit: i32) -> Result<(), S
         {
             return Err("E_PROTOCOL: invalid evidence identity".into());
         }
-        let p = no_symlink_parents(&req.candidate.root, &e.path)?;
+        let p = no_symlink_parents(root, &e.path)?;
         if !p.is_file()
             || sha256(&fs::read(&p).map_err(|e| format!("E_PROTOCOL: evidence: {e}"))?) != e.sha256
         {

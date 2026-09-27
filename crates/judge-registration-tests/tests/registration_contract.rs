@@ -198,6 +198,368 @@ fn finding(v: &Value, code: &str) -> bool {
         .flat_map(|j| j["response"]["findings"].as_array().into_iter().flatten())
         .any(|f| f["code"] == code)
 }
+
+fn initial_host() -> Host {
+    let mut h = Host::new();
+    git(h.root(), &["checkout", "--orphan", "initial-fixture"]);
+    for name in ["config", "judges", "projects", "FILEMAP", "workflow"] {
+        let path = format!(".chrono-harness/{name}.json");
+        let mut v: Value =
+            serde_json::from_slice(&fs::read(h.root().join(&path)).unwrap()).unwrap();
+        v["status"] = json!("proposed");
+        if name == "config" {
+            v["enforcement"] = json!("not-implemented");
+            v["input_closure"] = json!({"status":"incomplete","unresolved":["toolchain"]});
+        }
+        if name == "FILEMAP" {
+            v["files"].as_array_mut().unwrap().extend([
+                file("historical-unregistered.txt"),
+                file(".chrono-harness/initial.json"),
+            ]);
+        }
+        write(h.root(), &path, &v);
+    }
+    let binary = h
+        .root()
+        .join(".chrono-harness/bin/chrono-judge-registration");
+    write(
+        h.root(),
+        ".chrono-harness/initial.json",
+        &json!({
+            "schema":"chrono-initial-check/v1", "host_config":".chrono-harness/config.json",
+            "timeout_seconds":30, "stdout_limit_bytes":1048576,
+            "judges":[{"id":"initial-registration","executable":".chrono-harness/bin/chrono-judge-registration",
+                "sha256":sha256(&fs::read(binary).unwrap()),"version":"0.1.0",
+                "argv":["--protocol","chrono-initial-judge/v1"],"selector":"every-initial","after":[],"modes":["inventory"]}]
+        }),
+    );
+    h.candidate = commit(h.root());
+    h
+}
+
+fn initial_run(h: &Host) -> (i32, Value) {
+    let o = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+        .current_dir("/")
+        .env_remove("HOME")
+        .args([
+            "check",
+            "--config",
+            h.root()
+                .join(".chrono-harness/initial.json")
+                .to_str()
+                .unwrap(),
+            "--candidate",
+            &h.candidate,
+            "--initial",
+        ])
+        .output()
+        .unwrap();
+    let report = serde_json::from_slice(&o.stdout)
+        .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&o.stderr)}));
+    (o.status.code().unwrap(), report)
+}
+
+fn amend_initial(h: &mut Host) {
+    git(h.root(), &["add", "."]);
+    git(
+        h.root(),
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--amend",
+            "--no-gpg-sign",
+            "-qm",
+            "fixed initial fixture",
+        ],
+    );
+    h.candidate = git(h.root(), &["rev-parse", "HEAD"]);
+}
+
+#[test]
+fn initial_inventory_checks_semantic_field_references_without_old_history() {
+    let mut h = initial_host();
+    let path = ".chrono-harness/config.json";
+    let mut cfg: Value = serde_json::from_slice(&fs::read(h.root().join(path)).unwrap()).unwrap();
+    cfg["semantic_fields"] =
+        json!([{"path":"missing.json","pointers":["/policy"],"on":"add-modify-delete"}]);
+    write(h.root(), path, &cfg);
+    amend_initial(&mut h);
+    let (exit, r) = initial_run(&h);
+    assert_ne!(exit, 0, "{r}");
+    assert!(finding(&r, "E_REFERENCE"), "{r}");
+}
+
+#[test]
+fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
+    let mut h = initial_host();
+    let root = h.candidate.clone();
+    git(
+        h.root(),
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--allow-empty",
+            "--no-gpg-sign",
+            "-qm",
+            "same tree child",
+        ],
+    );
+    h.candidate = git(h.root(), &["rev-parse", "HEAD"]);
+    git(h.root(), &["replace", &h.candidate, &root]);
+    assert!(
+        !git(h.root(), &["cat-file", "-p", &h.candidate])
+            .lines()
+            .take_while(|l| !l.is_empty())
+            .any(|l| l.starts_with("parent "))
+    );
+    let (exit, r) = initial_run(&h);
+    assert_ne!(exit, 0, "{r}");
+    assert!(r["stderr"].as_str().unwrap().contains("parentless"), "{r}");
+    assert!(
+        !h.root()
+            .join(".chrono-harness/state/initial-report.json")
+            .exists()
+    );
+}
+
+#[test]
+fn initial_inventory_uses_only_declared_dag_and_blocks_failed_dependents() {
+    use std::os::unix::fs::PermissionsExt;
+    let mut h = initial_host();
+    let script = ".chrono-harness/inventory-plugin.py";
+    let text = r#"#!/usr/bin/python3
+import json, pathlib, sys
+r = json.load(sys.stdin)
+assert 'base' not in r and 'delta' not in r
+if r['judge_id'] == 'dependent':
+    assert len(r['prior_results']) == 1
+    assert r['prior_results'][0]['outputs']['inventory']['scope'] == 'schema-references-checkout'
+else:
+    assert r['prior_results'] == []
+p = pathlib.Path('.chrono-harness/state')
+p.mkdir(parents=True, exist_ok=True)
+(p / (r['judge_id'] + '-ran')).write_text('ran')
+print(json.dumps({'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],
+ 'status':'pass','findings':[],'evidence':[],'outputs':{'plugin':True}}))
+"#;
+    fs::write(h.root().join(script), text).unwrap();
+    fs::set_permissions(h.root().join(script), fs::Permissions::from_mode(0o755)).unwrap();
+    let fm = ".chrono-harness/FILEMAP.json";
+    let mut map: Value = serde_json::from_slice(&fs::read(h.root().join(fm)).unwrap()).unwrap();
+    map["files"].as_array_mut().unwrap().push(file(script));
+    write(h.root(), fm, &map);
+    let path = ".chrono-harness/initial.json";
+    let mut profile: Value =
+        serde_json::from_slice(&fs::read(h.root().join(path)).unwrap()).unwrap();
+    for (id, after) in [
+        ("dependent", vec!["initial-registration"]),
+        ("independent", vec![]),
+    ] {
+        profile["judges"].as_array_mut().unwrap().push(json!({"id":id,"executable":script,"version":"fixture",
+            "sha256":sha256(text.as_bytes()),"argv":[],"selector":"every-initial","after":after,"modes":["inventory"]}));
+    }
+    write(h.root(), path, &profile);
+    amend_initial(&mut h);
+    let (exit, r) = initial_run(&h);
+    assert_eq!(exit, 0, "{r}");
+    let records = r["judges"].as_array().unwrap();
+    assert_eq!(records.len(), 3);
+    assert!(
+        records
+            .iter()
+            .all(|r| r["state"] == "executed" && r["process"]["exit_code"] == 0)
+    );
+    for id in ["dependent", "independent"] {
+        let path = h.root().join(format!(".chrono-harness/state/{id}-ran"));
+        assert_eq!(fs::read(&path).unwrap(), b"ran");
+        fs::remove_file(path).unwrap();
+    }
+    fs::write(h.root().join("unregistered.txt"), "break first judge").unwrap();
+    amend_initial(&mut h);
+    let (exit, r) = initial_run(&h);
+    assert_ne!(exit, 0, "{r}");
+    assert!(finding(&r, "E_UNREGISTERED"), "{r}");
+    let records = r["judges"].as_array().unwrap();
+    let dependent = records.iter().find(|r| r["id"] == "dependent").unwrap();
+    assert_eq!(dependent["state"], "blocked");
+    assert_eq!(dependent["blocked_by"], json!(["initial-registration"]));
+    assert!(dependent["process"].is_null());
+    assert!(
+        !h.root()
+            .join(".chrono-harness/state/dependent-ran")
+            .exists()
+    );
+    assert_eq!(
+        fs::read(h.root().join(".chrono-harness/state/independent-ran")).unwrap(),
+        b"ran"
+    );
+}
+
+#[test]
+fn initial_inventory_rejects_unregistered_dangling_and_malformed_declarations() {
+    for case in [
+        "unregistered",
+        "dangling",
+        "missing-file",
+        "schema",
+        "activation",
+    ] {
+        let mut h = initial_host();
+        let mut path = ".chrono-harness/FILEMAP.json";
+        let mut value: Value =
+            serde_json::from_slice(&fs::read(h.root().join(path)).unwrap()).unwrap();
+        let expected = match case {
+            "unregistered" => {
+                fs::write(h.root().join("extra.txt"), "not registered").unwrap();
+                "E_UNREGISTERED"
+            }
+            "dangling" => {
+                value["project_edges"] =
+                    json!([{"from":"file:document.txt","kind":"compile","to":"project:missing"}]);
+                "E_DANGLING_EDGE"
+            }
+            "missing-file" => {
+                value["files"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(file("missing.txt"));
+                "E_REFERENCE"
+            }
+            "schema" => {
+                value["unknown"] = json!(true);
+                "E_INITIAL_INPUT"
+            }
+            "activation" => {
+                path = ".chrono-harness/config.json";
+                value = serde_json::from_slice(&fs::read(h.root().join(path)).unwrap()).unwrap();
+                value["status"] = json!("active");
+                value["enforcement"] = json!("enabled");
+                "E_INITIAL_INPUT"
+            }
+            _ => unreachable!(),
+        };
+        write(h.root(), path, &value);
+        amend_initial(&mut h);
+        let (exit, r) = initial_run(&h);
+        assert_ne!(exit, 0, "{case}: {r}");
+        assert!(finding(&r, expected), "{case}: {r}");
+        assert_ne!(r["status"], "complete");
+    }
+}
+
+#[test]
+fn initial_inventory_rejects_dirty_hidden_and_wrong_checkouts() {
+    for case in ["tracked", "ignored", "assume-unchanged", "head"] {
+        let h = initial_host();
+        match case {
+            "tracked" => fs::write(h.root().join("document.txt"), "dirty").unwrap(),
+            "ignored" => fs::write(h.root().join("ignored.txt"), "dirty").unwrap(),
+            "assume-unchanged" => {
+                git(
+                    h.root(),
+                    &["update-index", "--assume-unchanged", "document.txt"],
+                );
+            }
+            "head" => {
+                git(h.root(), &["update-ref", "HEAD", &h.base]);
+            }
+            _ => unreachable!(),
+        }
+        let (exit, r) = initial_run(&h);
+        assert_ne!(exit, 0, "{case}: {r}");
+        assert!(finding(&r, "E_INITIAL_INPUT"), "{case}: {r}");
+        assert_ne!(r["status"], "complete");
+    }
+}
+
+#[test]
+fn initial_inventory_rejects_real_parents_even_in_shallow_history_and_cannot_activate_delta() {
+    let mut h = initial_host();
+    h.base = h.candidate.clone();
+    fs::write(h.root().join("document.txt"), "later change").unwrap();
+    h.candidate = commit(h.root());
+    let (exit, r) = initial_run(&h);
+    assert_ne!(exit, 0, "{r}");
+    assert!(r["stderr"].as_str().unwrap().contains("parentless"), "{r}");
+    let (exit, r) = h.run();
+    assert_ne!(exit, 0, "{r}");
+    assert!(finding(&r, "E_ACTIVATION"), "{r}");
+    let dir = tempfile::tempdir().unwrap();
+    let clone = dir.path().join("shallow host");
+    git(
+        dir.path(),
+        &[
+            "clone",
+            "--quiet",
+            "--depth",
+            "1",
+            &format!("file://{}", h.root().display()),
+            clone.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(git(&clone, &["rev-list", "--count", "HEAD"]), "1");
+    fs::create_dir_all(clone.join(".chrono-harness/bin")).unwrap();
+    for binary in ["chrono-harness", "chrono-judge-registration"] {
+        fs::copy(
+            h.root().join(format!(".chrono-harness/bin/{binary}")),
+            clone.join(format!(".chrono-harness/bin/{binary}")),
+        )
+        .unwrap();
+    }
+    let o = Command::new(clone.join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(&clone)
+        .args([
+            "check",
+            "--config",
+            ".chrono-harness/initial.json",
+            "--candidate",
+            &h.candidate,
+            "--initial",
+        ])
+        .output()
+        .unwrap();
+    assert!(!o.status.success());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("parentless"));
+    assert!(
+        !clone
+            .join(".chrono-harness/state/initial-report.json")
+            .exists()
+    );
+}
+
+#[test]
+fn explicit_initial_inventory_runs_candidate_judge_without_a_delta_or_activation_claim() {
+    let h = initial_host();
+    let (exit, r) = initial_run(&h);
+    assert_eq!(exit, 0, "{r}");
+    assert_eq!(r["scope"], "initial-inventory");
+    assert_eq!(r["status"], "complete");
+    assert!(r["base"].is_null() && r["delta"].is_null());
+    assert_eq!(r["candidate"], h.candidate);
+    assert_eq!(r["governance"], "not-evaluated");
+    assert_eq!(r["previous_enforcement"], "none");
+    assert_eq!(r["judges"][0]["process"]["exit_code"], 0);
+    assert_eq!(
+        r["judges"][0]["response"]["outputs"]["inventory"]["scope"],
+        "schema-references-checkout"
+    );
+    let stored: Value = serde_json::from_slice(
+        &fs::read(h.root().join(".chrono-harness/state/initial-report.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(r, stored);
+    let cfg: Value =
+        serde_json::from_slice(&fs::read(h.root().join(".chrono-harness/config.json")).unwrap())
+            .unwrap();
+    assert_eq!(cfg["status"], "proposed");
+    assert_eq!(cfg["input_closure"]["status"], "incomplete");
+}
 fn assert_report_contract(h: &Host, report: &Value) {
     // Required consumer fields come from SPEC §9, independently of serialization.
     let missing: Vec<_> = [
