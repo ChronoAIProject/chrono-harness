@@ -121,7 +121,7 @@ are a named decoder input and remain supported for existing v1 example profiles.
 The legacy adapter's additional selection and ambient-environment behavior remain
 explicitly scoped; missing legacy version contracts remain unverified. Current host
 tools use full declarations. This adapter retires when full native CI consumes the
-full contracts. Full host activation, Cargo/SDK closure, mixed/workflow judges,
+full contracts. Full host activation, Cargo/SDK closure, workflow judge,
 initial adoption, native CI/parity and delivery lifecycle are subsequent work.
 
 The dedicated routes/projects tests include actual processes, retained inputs,

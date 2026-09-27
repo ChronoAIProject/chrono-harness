@@ -116,6 +116,20 @@
         "judge-cost-tests"
       ],
       "reason": "Four-coordinate cost reporting, endpoint provenance and warning/error semantics"
+    },
+    {
+      "id": "mixed-classification",
+      "paths": [
+        "crates/judge-mixed/Cargo.toml",
+        "crates/judge-mixed/Cargo.lock",
+        "crates/judge-mixed/src/lib.rs",
+        "crates/judge-mixed/src/main.rs",
+        "crates/judge-mixed/src/semantic.rs"
+      ],
+      "tests": [
+        "judge-mixed-tests"
+      ],
+      "reason": "Explicit surface and semantic-field changes, mixed warnings and bound cost provenance"
     }
   ],
   "semantic_changes_require_integration": true,

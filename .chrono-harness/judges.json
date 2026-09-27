@@ -100,7 +100,8 @@
       "selector": "every-delta",
       "after": [
         "registration",
-        "filemap"
+        "filemap",
+        "cost"
       ],
       "modes": [
         "evaluate"
