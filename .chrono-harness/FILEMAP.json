@@ -2604,6 +2604,18 @@
           "to": "project:judge-cargo"
         }
       ]
+    },
+    {
+      "path": "crates/ci-tests/tests/initial_projection.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
