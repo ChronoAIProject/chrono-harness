@@ -514,11 +514,17 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 base.status 为 proposed 时记录 previous_enforcement:none，不能回填之前的成功；根提交之外不得伪造空 base。
 草案与 active 的迁移都不执行旧判官；启用必须填完 input_closure，声明完整仍不等于数学证明。
 
-未来自举按登记方式从指定产品提交构建，将结果放宿主 `.chrono-harness/bin/`，
+产品自举按登记方式从指定产品提交构建，将结果放宿主 `.chrono-harness/bin/`，
 写入具体版本、产品源提交、二进制摘要和工具链证据后，再调用唯一 check 指令。
 源提交记录在 state 构建证据中，由绑定摘要连接；源码与宿主 policy 始终是两个表面。
 更新已生效二进制绑定是规则变化，须 integration；AI 可自行完成，无人审批。
 构建失败、缺组件或 draft 配置不得生成成功报告；从本机取包也不得默默解析 latest。
+
+### 12.1 中央测试版分发
+
+产品发布统一维护在 chrono-harness Releases，宿主不跟踪产品源码包或二进制。独立 distribution/专属测试对负责显式发布清单、平台成员、版本与 SHA-256/长度锁定、采用及安装；宿主保留 `.chrono-harness/distribution.json` 与生成的 `install.py`。本地/CI 都运行该入口，再调用同一 check。平台选择只使用登记的 OS/架构，不读取宿主语言、项目目录或依赖清单。
+
+原生打包固定干净源提交/树，发布组合拒绝不同源、不同成员或重复平台。每份下载先验身份；全部所选成员验证后才替换，普通替换失败尝试回滚并报告恢复位置。显式更新可由 AI 自主执行；摘要不证明来源、完整工具链闭包或跨平台同判。完整格式、实现范围和故障边界见 docs/distribution.md。
 
 ## 13. 可执行验收矩阵（目标行为）
 

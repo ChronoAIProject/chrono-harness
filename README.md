@@ -4,12 +4,25 @@
 
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
+
+公开的独立示例宿主：
+
+| 仓库 | 用途 |
+| --- | --- |
+| [chrono-harness-examples-go](https://github.com/ChronoAIProject/chrono-harness-examples-go) | Go 生产模块与独立测试模块，显式构建、测试和文件登记 |
+| [chrono-harness-examples-ts](https://github.com/ChronoAIProject/chrono-harness-examples-ts) | TypeScript，无 package.json 或 tsconfig，分别登记生产与测试类型检查 |
+| [chrono-harness-examples-mix](https://github.com/ChronoAIProject/chrono-harness-examples-mix) | Go、TypeScript、独立 Python 脚本，共享数据通过显式依赖选择测试 |
+
+这三个仓库是测试版安装与本地/原生 CI 的实际验收宿主；覆盖范围和当前限制见 [示例索引](docs/examples.md)。
+
 宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`judge-workflow` / `judge-workflow-tests`、`inputs` / `inputs-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
 
 ```text
 crates/                    独立 Rust 生产项目及各自测试项目
   runner/                  判官运输与统一 check 入口
   runner-tests/
+  distribution/            发布打包、版本锁定和宿主安装
+  distribution-tests/
   inputs/                  显式输入采集与保留内容运输
   inputs-tests/
   judge-registration/      v1 登记结构、实际快照与受影响引用
@@ -92,3 +105,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 稳定性与规则语义变更的测试选择现已接入同一 routes/projects 执行链，见 [workflow 选择合同](docs/workflow-selection.md)。[workflow 判官](docs/workflow.md) 在 context v2 上核对分支新鲜度、实际 integration 证据及显式退休迁移。自动创建 worktree、提 PR、合并与核验落地仍待实现，当前由调用方负责。
 
 显式外部输入可由独立 `chrono-inputs capture/pair` 生成两端快照和保留内容，判官流式核对，无需把大文件字节塞进 JSON。调用及格式见 [输入快照合同](docs/inputs.md)。这不自动发现或补齐 Cargo/SDK 依赖，也不自动启用完整宿主。
+
+测试版统一从本库 [GitHub Releases](https://github.com/ChronoAIProject/chrono-harness/releases) 分发。独立 `chrono-distribution` 按显式清单打包、合并原生平台产物、生成宿主安装登记与入口，验证清单和二进制摘要后安装；宿主无需保留产品源码包或编译 Rust。合同与命令见 [发布与安装](docs/distribution.md)。

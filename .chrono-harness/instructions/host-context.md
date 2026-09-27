@@ -15,3 +15,5 @@ Full host registries remain proposed/incomplete. Workflow v2 declares the finite
 按任务目标自主实施、验证与修复，保持独立项目/专属测试和真实退出状态。分支约定与计划中的 integration 策略见 SPEC.md；Git 生命周期遵循当前任务授权，不从本文推断已启用机器门。不要改全局配置或参考仓库，不将过程转录写入本仓。
 
 `chrono-inputs` captures only fixed-config file/variable declarations and pairs explicit endpoint snapshots, optionally transporting retained blobs between roots. Registration accepts inline bytes or stream-verified state blob references and checks config/endpoint bindings. Snapshot publication is not a governance verdict and never updates expected hashes or infers dependencies. See docs/inputs.md; full Cargo/SDK closure and activation remain outstanding.
+
+`distribution` / `distribution-tests` is the independent release/install pair (26 manifests total). `chrono-distribution` packages only explicitly declared native assets and generates the pinned host installer. Product release recipes live in `.chrono-harness/release/`; generated host adoption stays under that host’s `.chrono-harness/`. Public product and Go/TS/mix consumer links are indexed in `docs/examples.md`. See `docs/distribution.md` for integrity, ordinary-error rollback and platform limits.

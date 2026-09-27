@@ -253,6 +253,24 @@
       "owner": "inputs-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/distribution/target/",
+      "owner": "distribution",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/distribution-tests/target/",
+      "owner": "distribution-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/",
+      "owner": "repository",
+      "kind": "build-cache",
+      "tracked": false
     }
   ],
   "environment": {
