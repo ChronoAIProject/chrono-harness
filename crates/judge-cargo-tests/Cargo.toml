@@ -19,3 +19,11 @@ path = "tests/contracts.rs"
 [[test]]
 name = "consumer"
 path = "tests/consumer.rs"
+
+[[test]]
+name = "inputs"
+path = "tests/inputs.rs"
+
+[[test]]
+name = "input_consumer"
+path = "tests/input_consumer.rs"

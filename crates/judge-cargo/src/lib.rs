@@ -1,4 +1,6 @@
 //! Optional Cargo-specific consistency checks. FILEMAP alone declares selection.
+pub mod guard;
+mod inputs;
 use chrono_harness::{
     facts, json, no_symlink_parents, relative_path,
     wire::{Finding, Request, Response, Status},
@@ -84,6 +86,17 @@ pub fn check(
     r: &Registrations,
     policy: &Policy,
     selected: &BTreeSet<String>,
+) -> Result<Vec<String>> {
+    check_policy(root, r, policy, selected, false)
+}
+// External dependencies are admitted only inside the metadata guard, which
+// validates their explicit retained inventory and actual resolution before use.
+fn check_policy(
+    root: &Path,
+    r: &Registrations,
+    policy: &Policy,
+    selected: &BTreeSet<String>,
+    metadata_guard: bool,
 ) -> Result<Vec<String>> {
     policy.validate()?;
     let projects = r.projects()["projects"].as_array().unwrap();
@@ -177,6 +190,9 @@ pub fn check(
                             return Err("E_TEST_PAIR: workspace dependency".into());
                         }
                         let Some(relative) = dep.get("path").and_then(toml::Value::as_str) else {
+                            if metadata_guard {
+                                continue;
+                            }
                             return Err(format!(
                                 "E_INPUT_UNDECLARED: retained registry/git Cargo input closure unresolved for {name}"
                             ));

@@ -186,7 +186,9 @@
         "crates/judge-cargo/Cargo.toml",
         "crates/judge-cargo/Cargo.lock",
         "crates/judge-cargo/src/lib.rs",
-        "crates/judge-cargo/src/main.rs"
+        "crates/judge-cargo/src/main.rs",
+        "crates/judge-cargo/src/inputs.rs",
+        "crates/judge-cargo/src/guard.rs"
       ],
       "tests": [
         "judge-cargo-tests"

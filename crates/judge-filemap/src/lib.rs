@@ -74,7 +74,9 @@ pub struct Impact {
     pub historical_ambiguities: Vec<NodeAmbiguity>,
     pub limits: Vec<String>,
 }
-fn edges(r: &Registrations) -> BTreeSet<Edge> {
+/// Read explicit edges. Consistency adapters may consume this inventory; it
+/// never discovers an input or creates an authoritative dependency.
+pub fn edges(r: &Registrations) -> BTreeSet<Edge> {
     let mut out = BTreeSet::new();
     let mut add = |from: &str, e: &Value| {
         out.insert(Edge {

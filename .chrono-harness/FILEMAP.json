@@ -2520,6 +2520,66 @@
       "surface": "documentation",
       "cost": "unmeasured",
       "edges": []
+    },
+    {
+      "path": "crates/judge-cargo-tests/tests/inputs.rs",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo/src/inputs.rs",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo/src/guard.rs",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/tests/support/cargo.rs",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-cargo-tests/tests/input_consumer.rs",
+      "owner": "judge-cargo-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -4437,6 +4497,31 @@
       "from": "project:judge-cargo",
       "kind": "runtime-input",
       "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "compile",
+      "to": "project:judge-cargo"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-cost",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-mixed",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-workflow",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
     }
   ],
   "test_costs": [
@@ -4683,9 +4768,13 @@
         "build.runner",
         "build.judge-registration",
         "build.judge-filemap",
+        "build.judge-cost",
+        "build.judge-mixed",
         "build.judge-routes",
         "build.judge-projects",
         "build.judge-cargo",
+        "build.judge-ci",
+        "build.judge-workflow",
         "test.judge-cargo-tests"
       ],
       "timeout_seconds": 600,
