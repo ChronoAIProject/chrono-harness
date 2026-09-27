@@ -85,6 +85,15 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。
 产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 
+### 2.1 形式化真源与实现对应
+
+chrono-harness 所需的通用形式化定义与证明统一归入 trureturing，按数学主题组织并优先复用已有结果；不建立独立 chrono-harness-trureturing 库，不为本产品复制证明或新增仅包装已有定理的数学声明。
+chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归用例，以及 SPEC 子句到形式模型的对应说明。两库独立构建；宿主使用 harness 二进制不因此需要 Lean、trureturing checkout 或特定宿主语言／目录结构。
+
+形式化 lane 使用 trureturing 的独立 worktree 与 PR 交付，其数学准入、编译及验证遵循该库现役规范。对应说明须固定所引用修订和声明，列明对象、参数、假设、结论与实际消费者；已找到、已编译、已证明模型命题、已检验实现对应是不同状态。未完成部分如实保留，不以引用或 CI 绿色冒领全部形式化。
+
+形式模型与反例可以推动 SPEC 演进：发现缺失前提、错误推论或实现不符时，分别修订适用的模型、产品合同或实现，并验证受影响义务。不得为匹配当前实现而静默缩小用户目标或改写旧结论的适用范围。Lean 核验只证明其形式陈述；Rust 实现符合模型仍需单独的对应证据，完整依赖登记、局部性与确定性等现实前提也不能由图闭包或一次通过自动取得。
+
 ## 3. 登记格式与字段合同
 
 Config/projects/judges use `schema_version: 1`; current FILEMAP and workflow use `schema_version: 2`. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
