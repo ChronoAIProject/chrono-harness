@@ -3,6 +3,50 @@ use serde_json::json;
 use std::fs;
 use tempfile::TempDir;
 
+#[test]
+fn standard_sha256_vectors_match_memory_stream_and_file() {
+    use std::io::{Cursor, Read};
+    struct Chunks(Cursor<Vec<u8>>);
+    impl Read for Chunks {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let length = buffer.len().min(63);
+            self.0.read(&mut buffer[..length])
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("input");
+    for (bytes, expected) in [
+        (
+            vec![],
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        ),
+        (
+            b"abc".to_vec(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        ),
+        (
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".to_vec(),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+        ),
+        (
+            vec![b'a'; 1_000_000],
+            "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0",
+        ),
+    ] {
+        assert_eq!(chrono_harness::sha256(&bytes), expected);
+        fs::write(&path, &bytes).unwrap();
+        assert_eq!(
+            chrono_harness::file_identity(&path).unwrap(),
+            (expected.into(), bytes.len() as u64)
+        );
+        let mut copied = Vec::new();
+        let identity =
+            chrono_harness::copy_hashed(Chunks(Cursor::new(bytes.clone())), &mut copied).unwrap();
+        assert_eq!(identity, (expected.into(), bytes.len() as u64));
+        assert_eq!(copied, bytes);
+    }
+}
+
 fn fixture(script: &str) -> (TempDir, String) {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/ci")).unwrap();
