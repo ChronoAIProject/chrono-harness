@@ -1918,6 +1918,65 @@
       "surface": "documentation",
       "cost": "unmeasured",
       "edges": []
+    },
+    {
+      "path": "crates/judge-filemap-tests/tests/workflow_selection.rs",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap/src/workflow.rs",
+      "owner": "judge-filemap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/host.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-filemap-tests/tests/workflow_consumer.rs",
+      "owner": "judge-filemap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/workflow-selection.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -3092,11 +3151,6 @@
       "to": "project:judge-mixed"
     },
     {
-      "from": "project:judge-filemap",
-      "kind": "compile",
-      "to": "project:judge-mixed"
-    },
-    {
       "from": "project:judge-mixed",
       "kind": "test-execution",
       "to": "test:judge-mixed-tests"
@@ -3229,17 +3283,27 @@
     {
       "from": "project:judge-cost",
       "kind": "compile",
-      "to": "project:judge-mixed"
-    },
-    {
-      "from": "project:judge-cost",
-      "kind": "compile",
       "to": "project:judge-mixed-tests"
     },
     {
       "from": "project:judge-cost",
       "kind": "runtime-input",
       "to": "project:judge-mixed-tests"
+    },
+    {
+      "from": "project:judge-mixed",
+      "kind": "compile",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
     }
   ],
   "test_costs": [
@@ -3348,6 +3412,8 @@
         "build.runner",
         "build.judge-registration",
         "build.judge-filemap",
+        "build.judge-routes",
+        "build.judge-projects",
         "test.judge-filemap-tests"
       ],
       "timeout_seconds": 600,

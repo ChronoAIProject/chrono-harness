@@ -176,6 +176,16 @@ fn actual_named_json_uses_fixed_git_bytes_and_rejects_invalid_utf8() {
     );
     fs::write(h.root().join("named.json"), b"{\"mode\":\"\xff\"}").unwrap();
     h.save();
-    let r = checked(&h, 2);
-    assert_eq!(mixed(&r)["findings"][0]["code"], "E_SEMANTIC_INPUT");
+    let (exit, r) = h.run();
+    assert_eq!(exit, 2, "{}", r["findings"]);
+    let judges = r["judges"].as_array().unwrap();
+    let filemap = judges.iter().find(|j| j["id"] == "filemap").unwrap();
+    assert_eq!(
+        filemap["response"]["findings"][0]["code"],
+        "E_SEMANTIC_INPUT"
+    );
+    assert_eq!(
+        judges.iter().find(|j| j["id"] == "mixed").unwrap()["state"],
+        "blocked"
+    );
 }

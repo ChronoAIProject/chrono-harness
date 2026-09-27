@@ -53,8 +53,18 @@ name = "chrono-judge-filemap"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-judge-mixed",
  "chrono-judge-registration",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-mixed"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
  "serde_json",
 ]
 

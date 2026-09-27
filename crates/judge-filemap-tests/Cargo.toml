@@ -19,3 +19,11 @@ path = "tests/impact.rs"
 [[test]]
 name = "consumer"
 path = "tests/consumer.rs"
+
+[[test]]
+name = "workflow_selection"
+path = "tests/workflow_selection.rs"
+
+[[test]]
+name = "workflow_consumer"
+path = "tests/workflow_consumer.rs"

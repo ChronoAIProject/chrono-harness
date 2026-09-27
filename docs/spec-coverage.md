@@ -43,8 +43,8 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 14 duplicate operation | implemented: routes preflight and full consumer | none in tested boundary |
 | 15 bypass/missing operation evidence | implemented bounded: actual invocation and receipt comparison | does not monitor arbitrary shell actions |
 | 16 mixed warning with integration | partial: mixed real-chain warning, zero exit, both groups and bound costs | workflow integration certification |
-| 17 engine stability | pending | workflow |
-| 18 policy requires integration | pending | workflow |
+| 17 engine stability | partial: FILEMAP workflow selection and real routes/projects execution | workflow integration certification |
+| 18 policy requires integration | partial: shared mixed classifier selects explicit integration suite | workflow integration evidence/freshness |
 | 19 changed integration binding | pending | workflow |
 | 20 stale branch | pending | workflow/lifecycle |
 | 21 threshold equality | pending | workflow with injected context time |
@@ -73,3 +73,5 @@ This increment adds mixed classification and adopted registrations together. **M
 The cost judge and its dedicated tests implement the [declared cost contract](costs.md): distinct endpoint values and source pointers, old-only costs, known/unknown coordinates, identity deduplication, affected-project members, declaration-only changes and docs locality. Real subprocess consumers verify pass/warn exits, missing impact failure, source fidelity and retained-environment impact with empty Git DELTA. Measurements are explicitly absent; no additive resource total or full-governance claim is made.
 
 The mixed judge implements [explicit rule/product classification](mixed.md). Dedicated behavior tests cover normal member/edge additions, real action changes, endpoint surfaces, array identity and ordering, historical patterns, named JSON and malformed inputs. Real subprocess tests check warnings, pass/error exits, exact cost and source fidelity, rule-only outputs, missing predecessors, stale binding rejection and strict UTF-8. Workflow remains responsible for stability and integration certification; this increment supplies its rule-change input.
+
+FILEMAP impact v2 now lowers explicit workflow stability and conditional integration test requirements before route execution. Dedicated tests retain base requirements, old costs and causal source pointers; real consumers prove additional tests run and shared operations run once. Named semantic-input errors now stop the FILEMAP stage. The mixed classifier remains the single implementation, with downstream FILEMAP/cost dependencies removed from its compilation graph. Freshness, evidence certification, legal joint retirement and migration validation remain unfinished. See [workflow selection](workflow-selection.md).
