@@ -5,7 +5,7 @@
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
 
-[公开测试版 v0.1.0-beta.3](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.3) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
+[公开测试版 v0.1.0-beta.4](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.4) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
 
 公开的独立示例宿主：
 
