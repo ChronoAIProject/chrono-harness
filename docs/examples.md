@@ -12,4 +12,4 @@
 
 已有实际验证包含：源码选择、文档不选业务测试、真实失败测试、未登记文件、指南漂移、任意源码路径搬移；混合宿主另验共享数据和独立脚本选择，TS 与混合宿主另验生产/测试类型错误边界。原生 integration、PR、dev 均已执行 scoped profile。
 
-这些示例当前使用 `chrono-ci-check/v1`。完整治理链的通用 projects schema 仍有 manifest/Cargo 耦合，完整输入闭包与跨平台同判尚未认证；示例成功不代表这些目标已完成。公开发布安装迁移完成前，示例仍含固定产品源码包；迁移后只保留版本、摘要、安装声明与入口。
+这些示例当前使用 `chrono-ci-check/v1`。完整治理链的通用 projects schema 仍有 manifest/Cargo 耦合，完整输入闭包与跨平台同判尚未认证；示例成功不代表这些目标已完成。三个示例已迁移到 [v0.1.0-beta.1](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.1)：已移除产品源码包和 Rust 构建，仅保留版本、摘要、安装声明与入口。本地 macOS arm64 及原生 CI Linux x86_64 均已通过公开 HTTPS 安装和实际宿主检查。
