@@ -1,6 +1,7 @@
 //! Explicit single-endpoint inventory transport. It never constructs a DELTA base.
 use crate::{
-    CommandSpec, ProcessResult, decode, facts, full, no_symlink_parents, run_process_bound, sha256,
+    CommandSpec, ProcessResult, decode, facts, full, no_symlink_parents, run_process_observed,
+    sha256,
     wire::{self, Binding, Checkout, Endpoint, Executable, Response, Status, TransportFailure},
 };
 use serde::{Deserialize, Serialize};
@@ -133,7 +134,13 @@ pub fn invoke(
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let p = run_process_bound(&req.candidate.root, &spec, &wire::canonical(req)?, hash)?;
+    let p = run_process_observed(&req.candidate.root, &spec, &wire::canonical(req)?, hash)?;
+    if let Some(message) = p.failure.clone() {
+        return Err(TransportFailure {
+            message,
+            process: Some(p),
+        });
+    }
     let response = decode::<Response>(&p.stdout_bytes).and_then(|r| {
         wire::validate_response_at(
             &req.candidate.root,
