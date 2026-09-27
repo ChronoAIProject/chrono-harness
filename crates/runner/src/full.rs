@@ -11,12 +11,19 @@ use std::{
 };
 
 pub fn schedule(bindings: &[Binding]) -> Result<Vec<Binding>, String> {
+    schedule_mode(bindings, "every-delta", "evaluate")
+}
+pub(crate) fn schedule_mode(
+    bindings: &[Binding],
+    selector: &str,
+    mode: &str,
+) -> Result<Vec<Binding>, String> {
     let mut pending = BTreeMap::new();
     for b in bindings {
         if b.id.is_empty() || pending.insert(b.id.clone(), b.clone()).is_some() {
             return Err("duplicate/empty judge ID".into());
         }
-        if b.selector != "every-delta" || b.modes != ["evaluate"] {
+        if b.selector != selector || b.modes != [mode] {
             return Err("unsupported judge transport selection/mode".into());
         }
         if b.after.iter().collect::<BTreeSet<_>>().len() != b.after.len() {

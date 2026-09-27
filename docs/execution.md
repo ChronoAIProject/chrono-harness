@@ -94,6 +94,76 @@ snapshots remain evidence. Interpreter/delegated toolchain/config/fixture bytes
 must be declared as effective inputs. A declaration and hashes do not prove no
 undisclosed inputs exist. This host remains proposed and explicitly incomplete.
 
+## Initial inventory
+
+A root commit can explicitly use a separate host profile under `.chrono-harness/`:
+
+```json
+{
+  "schema": "chrono-initial-check/v1",
+  "host_config": ".chrono-harness/config.json",
+  "timeout_seconds": 30,
+  "stdout_limit_bytes": 1048576,
+  "judges": [{
+    "id": "initial-registration",
+    "executable": ".chrono-harness/bin/chrono-judge-registration",
+    "version": "0.1.0",
+    "sha256": "<SHA-256 of the installed candidate executable>",
+    "argv": ["--protocol", "chrono-initial-judge/v1"],
+    "selector": "every-initial",
+    "modes": ["inventory"],
+    "after": []
+  }]
+}
+```
+
+Register this profile itself in FILEMAP, commit the complete initial inventory,
+and invoke the same entry locally and in CI:
+
+```sh
+.chrono-harness/bin/chrono-harness check --config .chrono-harness/initial.json --candidate FULL_OID --initial
+```
+
+This explicit profile rejects `--base` and `--context`. It does not change ordinary
+full or scoped profiles. The runner reads actual commit headers, so a nonroot
+commit cannot enter this mode merely because history is shallow or a Git replacement
+overlay hides its original parents. Shared immutable Git facts disable replacement
+objects; the scoped CI judge and event preparer reuse the same parent reader. Each declared
+judge runs with the full host config's explicit environment. `after` is a declared
+DAG; failed predecessors block dependents. Paths, languages and judge IDs do not
+select extra checks. Existing process bounds, byte digests, strict response JSON,
+request identities and exact status/exit validation remain in force. `{candidate}`
+can expand in judge argv; `{base}` is an error.
+
+The request uses `chrono-initial-judge/v1`, mode `inventory`, and a single candidate
+endpoint. It has no base or DELTA field. `profile_sha256` binds exact profile bytes;
+`registry_digest` is SHA-256 of the JCS map from each of the five candidate registry
+paths to its parsed JSON value. The request also binds profile/config paths,
+checkout, actual runner, observations and declared predecessor responses. Response
+fields match the ordinary response structure with this protocol identifier; finding
+references must be JSON pointers because there is no DELTA path collection.
+
+The default registration inventory judge checks proposed registry schemas, all
+current registration references and file membership, actual profile/executable
+binding, fixed candidate bytes and checkout cleanliness, including ignored dirt
+and unsupported index flags. These reuse ordinary registration policy in an
+explicit inventory scope with no historical endpoint. The default judge refuses
+active/enabled registries: later activation requires a real DELTA and the existing
+readiness/integration obligations. This inventory does not execute project tests,
+certify semantic pairing or toolchain/input completeness, or replace the other
+six governance judges. Other inventory judges/scripts require explicit bindings.
+
+The `chrono-initial-report/v1` report says `scope: initial-inventory`, has
+`base: null`, `delta: null`, `previous_enforcement: none`, and
+`governance: not-evaluated`. `status: complete` means the configured inventory
+checks completed successfully (exit 0); `failed` and `error` retain nonzero exits.
+Judge responses preserve pass/warn/fail/error and original process receipts.
+Reports are retained by content identity under `.chrono-harness/state/`, with the
+latest copy at `initial-report.json`; stdout contains the same JSON value. No
+registry status or input declaration is rewritten. Full bootstrap provenance,
+automatic initial-profile generation, activation and complete native parity remain
+outstanding.
+
 ## Historical transition and the scoped CI consumer
 
 Strict v1 readers reject v2. Candidate readers retain v1 structure as historical

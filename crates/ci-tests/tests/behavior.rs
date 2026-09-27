@@ -406,6 +406,18 @@ fn manual_full_range_and_explicit_initial() {
         true
     );
 }
+
+#[test]
+fn initial_event_reads_original_parents_through_git_replace_overlays() {
+    let (d, root, child) = repo();
+    git(d.path(), &["replace", &child, &root]);
+    let payload = json!({"inputs":{"candidate":child,"initial":true}});
+    assert!(
+        prepare(d.path(), &config(), "workflow_dispatch", &payload, &child)
+            .unwrap_err()
+            .contains("parents")
+    );
+}
 #[test]
 fn deletion_zero_missing_and_wrong_checkout_fail() {
     let (d, b, c) = repo();

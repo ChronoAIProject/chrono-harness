@@ -5,8 +5,9 @@ fn main() -> std::process::ExitCode {
         println!("chrono-judge-registration {}", env!("CARGO_PKG_VERSION"));
         return std::process::ExitCode::SUCCESS;
     }
-    if args != ["--protocol", "chrono-judge/v1"] {
-        eprintln!("E_USAGE: --protocol chrono-judge/v1");
+    let initial = args == ["--protocol", chrono_harness::initial::PROTOCOL];
+    if !initial && args != ["--protocol", "chrono-judge/v1"] {
+        eprintln!("E_USAGE: --protocol chrono-judge/v1 or chrono-initial-judge/v1");
         return std::process::ExitCode::from(2);
     }
     let mut bytes = vec![];
@@ -19,14 +20,18 @@ fn main() -> std::process::ExitCode {
         eprintln!("E_PROTOCOL: request read/bound");
         return std::process::ExitCode::from(2);
     }
-    let req: chrono_harness::wire::Request = match chrono_harness::decode(&bytes) {
+    let decoded = if initial {
+        chrono_harness::decode(&bytes).map(|r| chrono_judge_registration::initial::judge(&r))
+    } else {
+        chrono_harness::decode(&bytes).map(|r| chrono_judge_registration::judge(&r))
+    };
+    let response = match decoded {
         Ok(r) => r,
         Err(e) => {
             eprintln!("E_PROTOCOL: {e}");
             return std::process::ExitCode::from(2);
         }
     };
-    let response = chrono_judge_registration::judge(&req);
     match chrono_harness::wire::canonical(&response) {
         Ok(bytes) => {
             if std::io::stdout().write_all(&bytes).is_err() {

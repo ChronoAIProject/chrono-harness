@@ -21,6 +21,7 @@ pub type Tree = BTreeMap<String, Entry>;
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     let o = Command::new("git")
         .arg("--no-optional-locks")
+        .arg("--no-replace-objects")
         .arg("-C")
         .arg(root)
         .args(args)
@@ -71,6 +72,23 @@ pub fn verify_oid(root: &Path, oid: &str) -> Result<String, String> {
 pub fn blob(root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
     relative_path(path)?;
     git(root, &["show", &format!("{oid}:{path}")])
+}
+/// Read original commit headers, including parents hidden by a shallow boundary.
+pub fn parents(root: &Path, oid: &str) -> Result<Vec<String>, String> {
+    full_oid(oid)?;
+    let bytes = git(root, &["cat-file", "commit", oid])?;
+    let headers = bytes
+        .split(|b| *b == b'\n')
+        .take_while(|line| !line.is_empty());
+    let mut parents = vec![];
+    for line in headers {
+        if let Some(oid) = line.strip_prefix(b"parent ") {
+            let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
+            full_oid(oid)?;
+            parents.push(oid.into());
+        }
+    }
+    Ok(parents)
 }
 pub fn tree(root: &Path, oid: &str) -> Result<Tree, String> {
     let raw = git(root, &["ls-tree", "-rz", "--full-tree", oid])?;

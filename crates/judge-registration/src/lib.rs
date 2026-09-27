@@ -7,6 +7,7 @@ pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, replacements, retirement_requests,
     reused_tools, views,
 };
+pub mod initial;
 mod schema;
 use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
@@ -300,7 +301,15 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
         );
     }
     readiness(req, &old, &new, r)?;
-    references(req, &old, &new, &bt, &ct, r)?;
+    references(
+        root,
+        &req.candidate.commit,
+        Some(&old),
+        &new,
+        &req.delta,
+        &ct,
+        r,
+    )?;
     if r.status == Status::Pass {
         r.outputs.insert("registration_view".into(), view);
         r.outputs.insert("registration".into(),value!({"scope":"registration-only","base":req.base.commit,"candidate":req.candidate.commit,"registry_digest":req.registries.digest,"input_closure":"declared-complete","completeness_proven":false,"previous_enforcement":if old.config["status"]=="proposed"{"none"}else{"enabled"}}));
@@ -407,19 +416,24 @@ fn readiness(
     Ok(())
 }
 fn references(
-    req: &Request,
-    old: &Registrations,
+    root: &Path,
+    candidate: &str,
+    old: Option<&Registrations>,
     new: &Registrations,
-    _bt: &facts::Tree,
+    changes: &[wire::Delta],
     ct: &facts::Tree,
     r: &mut Response,
 ) -> Result<()> {
+    let initial = old.is_none();
+    // Inventory has no historical endpoint. The old column is never used to
+    // suppress a check in this mode; every current reference is selected.
+    let old = old.unwrap_or(new);
     let a = rows(&old.filemap, "files", "path");
     let b = rows(&new.filemap, "files", "path");
     let nodes = new.nodes();
     let old_nodes = old.nodes();
-    let changed_paths: BTreeSet<_> = req.delta.iter().map(|d| d.path.clone()).collect();
-    for d in &req.delta {
+    let changed_paths: BTreeSet<_> = changes.iter().map(|d| d.path.clone()).collect();
+    for d in changes {
         if (d.kind == "D" && !a.contains_key(&d.path))
             || (d.kind != "D" && !b.contains_key(&d.path))
         {
@@ -439,6 +453,19 @@ fn references(
                 d.path.clone(),
                 false,
             );
+        }
+    }
+    if initial {
+        for path in ct.keys() {
+            if !b.contains_key(path) {
+                issue(
+                    r,
+                    "E_UNREGISTERED",
+                    format!("initial file lacks registration: {path}"),
+                    "/candidate/tree",
+                    false,
+                );
+            }
         }
     }
     let owners = strings(&new.projects["owners"]);
@@ -477,7 +504,8 @@ fn references(
             }) || (old_nodes.contains(pr["producer"].as_str().unwrap())
                 && !nodes.contains(pr["producer"].as_str().unwrap()))
         });
-        let affected = changed_paths.contains(p)
+        let affected = initial
+            || changed_paths.contains(p)
             || a.get(p) != Some(f)
             || removed_target
             || owner_removed
@@ -546,8 +574,7 @@ fn references(
         }
         if let Some(e) = ct.get(p) {
             if e.mode == "120000" {
-                let actual =
-                    facts::utf8(facts::blob(&req.candidate.root, &req.candidate.commit, p)?)?;
+                let actual = facts::utf8(facts::blob(root, candidate, p)?)?;
                 if f["symlink"].as_str() != Some(actual.as_str()) {
                     issue(
                         r,
@@ -574,7 +601,7 @@ fn references(
             e[k].as_str()
                 .is_some_and(|s| old_nodes.contains(s) && !nodes.contains(s))
         });
-        if added || removed_target {
+        if initial || added || removed_target {
             edge_check(e, "/filemap/project_edges", r);
         }
     }
@@ -600,7 +627,8 @@ fn references(
                     changed_paths.contains(s) || (a.contains_key(s) && !b.contains_key(s))
                 })
             });
-            if before.get(id) == Some(p)
+            if !initial
+                && before.get(id) == Some(p)
                 && !removed_tool
                 && !removed_pair
                 && !affected_input
@@ -687,7 +715,8 @@ fn references(
                 .iter()
                 .filter_map(Value::as_str)
                 .any(|op| old_methods.contains_key(op) && !methods.contains_key(op));
-            if old.filemap.get("execution_plans").and_then(|p| p.get(test)) == Some(plan)
+            if !initial
+                && old.filemap.get("execution_plans").and_then(|p| p.get(test)) == Some(plan)
                 && !removed_method
             {
                 continue;
@@ -732,7 +761,8 @@ fn references(
     for cost in new.filemap["test_costs"].as_array().unwrap() {
         let test = format!("test:{}", cost["test"].as_str().unwrap());
         let name = cost["cost"].as_str().unwrap();
-        let affected = !old.filemap["test_costs"].as_array().unwrap().contains(cost)
+        let affected = initial
+            || !old.filemap["test_costs"].as_array().unwrap().contains(cost)
             || (old_nodes.contains(&test) && !nodes.contains(&test))
             || (old.filemap["cost_models"].get(name).is_some()
                 && new.filemap["cost_models"].get(name).is_none());
@@ -748,10 +778,11 @@ fn references(
     }
     for artifact in new.config["artifacts"].as_array().unwrap() {
         let owner = artifact["owner"].as_str().unwrap();
-        let affected = !old.config["artifacts"]
-            .as_array()
-            .unwrap()
-            .contains(artifact)
+        let affected = initial
+            || !old.config["artifacts"]
+                .as_array()
+                .unwrap()
+                .contains(artifact)
             || (strings(&old.projects["owners"]).contains(owner) && !owners.contains(owner));
         if affected && !owners.contains(owner) {
             issue(
@@ -765,10 +796,11 @@ fn references(
     }
     for field in new.config["semantic_fields"].as_array().unwrap() {
         let path = field["path"].as_str().unwrap();
-        let affected = !old.config["semantic_fields"]
-            .as_array()
-            .unwrap()
-            .contains(field)
+        let affected = initial
+            || !old.config["semantic_fields"]
+                .as_array()
+                .unwrap()
+                .contains(field)
             || (a.contains_key(path) && !b.contains_key(path));
         if affected && !b.contains_key(path) {
             issue(
@@ -782,7 +814,7 @@ fn references(
     }
     let old_stability = rows(&old.workflow, "stability", "id");
     for rule in new.workflow["stability"].as_array().unwrap() {
-        let changed = old_stability.get(rule["id"].as_str().unwrap()) != Some(rule);
+        let changed = initial || old_stability.get(rule["id"].as_str().unwrap()) != Some(rule);
         for path in rule["paths"].as_array().unwrap() {
             let p = path.as_str().unwrap();
             if !b.contains_key(p) && (changed || a.contains_key(p)) {
@@ -811,7 +843,9 @@ fn references(
     let old_tests = strings(&old.workflow["integration"]["tests"]);
     for test in strings(&new.workflow["integration"]["tests"]) {
         let id = format!("test:{test}");
-        if !nodes.contains(&id) && (!old_tests.contains(&test) || old_nodes.contains(&id)) {
+        if !nodes.contains(&id)
+            && (initial || !old_tests.contains(&test) || old_nodes.contains(&id))
+        {
             issue(
                 r,
                 "E_REFERENCE",
@@ -825,7 +859,8 @@ fn references(
         for k in ["script", "test"] {
             let id = format!("script:{}", m[k].as_str().unwrap());
             if !nodes.contains(&id)
-                && (!old.workflow["migrations"].as_array().unwrap().contains(m)
+                && (initial
+                    || !old.workflow["migrations"].as_array().unwrap().contains(m)
                     || old_nodes.contains(&id))
             {
                 issue(

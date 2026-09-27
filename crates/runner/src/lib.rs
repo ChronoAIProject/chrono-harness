@@ -1,6 +1,7 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
 pub mod facts;
 pub mod full;
+pub mod initial;
 pub mod observation;
 pub mod wire;
 use serde::{Deserialize, Serialize};
@@ -563,7 +564,7 @@ pub fn dispatch(args: &[&str]) -> CliOutput {
 }
 pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     match args{
-    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
+    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest, entry){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
@@ -604,6 +605,12 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     let candidate = candidate.ok_or("missing --candidate")?;
     let (root, config_path) = root_for_config(Path::new(config.ok_or("missing --config")?))?;
     let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
+    if profile.get("schema").and_then(Value::as_str) == Some(initial::PROFILE) {
+        if !initial || context.is_some() {
+            return Err("initial inventory requires --initial without --base or --context".into());
+        }
+        return initial::check(&root, &config_path, &candidate, entry);
+    }
     if profile.get("schema").and_then(Value::as_str) != Some("chrono-ci-check/v1") {
         return full::check_observed(
             &root,

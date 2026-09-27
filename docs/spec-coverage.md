@@ -12,12 +12,12 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 4 fixed snapshots/context/CI | partial | runner `facts.rs`, registration `lib.rs`; G `context_and_config_identity_mismatch`, `ignored_untracked_staged_and_wrong_checkout_fail` | full native CI/parity evidence, full Cargo/SDK closure beyond retained bounded inputs |
 | 5 DELTA graph | partial | filemap typed union/records/closure and CI adapter; F all tests, P `actual_runner_registration_filemap_*`; SPEC §5.1 pins two-state locality and the compiled seeded-edge closure theorem (trureturing PR #10868, draft), with the old execution-edge counterexample | complete host input closure and native activation; new theorem review/freeze; Rust refinement is unproved and reached-node equality does not preserve typed test selection |
 | 6 evolution/removal | partial | W actual replacement, joint retirement, alias repair and candidate migration certification; registration workflow v3 selects explicit endpoint versions, inputs consumer certifies a host config v1→v2 decoder with original snapshots | further host converters and full host activation |
-| 7 protocol | implemented within ordinary two-commit v1 | runner `wire.rs`, `full.rs`, shared process engine; R all tests | explicit full initial/bootstrap transport remains unfinished; a root commit has no prior base and must not produce a green DELTA verdict (§12); platform evidence limited to local Unix |
+| 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
 | 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports | autonomous fresh worktrees, stale rebuild, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
-| 12 bootstrap/initial | partial | registered bootstrap builds and installs registration/filemap/routes/projects | full source/toolchain provenance, activation migration and explicit initial transport |
+| 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base | full source/toolchain provenance, initial-profile generation and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
 | 14 boundaries | implemented documentation | README/SPEC/this map | update as later increments land |
 | 15 generic reference experience | partial | existing fixed-source references; no reference repo modifications | apply remaining generic workflow lessons |
@@ -58,7 +58,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 29 unknown costs | implemented: cost consumer warns with zero exit, preserves null and known coordinates; no-Delta retained-input case | full host activation |
 | 30 candidate migration validator | implemented finite contract: W original schema versions, real conversion/compatibility test, old method nonexecution and judge retirement; inputs consumer covers v3 version selection and config v1→v2 certification | further host converters and native activation |
 | 31 no DELTA | partial: G no-delta/dirt behavior | full input/workflow checks |
-| 32 initial root | partial: full CLI rejects absent base, no green | explicit initial report mode |
+| 32 initial root | implemented bounded: G root inventory, real/shallow parent rejection, checkout/reference failures and no activation | full bootstrap provenance/activation |
 | 33 check CLI | implemented bounded transport/registration plus existing slice | whole configured host remains nonzero until obligations implemented |
 | 34 unknown/malformed CLI | implemented: L `unknown_and_malformed_commands_are_errors` | — |
 | 35 spec status | implemented: L `status_help_and_version_are_information_only` | — |
@@ -101,3 +101,14 @@ exercise real compiler selection, rejection before metadata, configuration/inclu
 and wrapper conflicts, persistent post-consumer mutation and full/scoped docs
 locality. V2/v3 meanings remain supported. This does not certify compiler libraries,
 delegated processes, backend/linker/SDK, build scripts or complete native parity.
+
+The explicit initial profile uses `chrono-initial-judge/v1` for a single candidate,
+without a synthetic base or DELTA. The default registration consumer retains
+proposed/incomplete state and checks all initial registration references and
+checkout facts; ordinary DELTA reference selection is preserved. Root inventory
+completion is a separate report status, not governance success. Root, shallow
+history, Git replacement overlays, dirty/index, malformed/dangling, actual process and protocol cases live
+in the dedicated runner/registration/CI tests. Initial parent checks share the
+original-header reader across the new profile, scoped judge and event preparer.
+Source/toolchain bootstrap
+provenance, automatic initial-profile generation and activation remain outstanding.

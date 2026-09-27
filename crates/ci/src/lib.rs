@@ -463,12 +463,7 @@ pub fn prepare(
     if git(root, &["rev-parse", "HEAD"])?.trim() != candidate {
         return Err("checkout is not exact event candidate".into());
     }
-    if initial
-        && git(root, &["cat-file", "-p", &candidate])?
-            .lines()
-            .take_while(|line| !line.is_empty())
-            .any(|line| line.starts_with("parent "))
-    {
+    if initial && !chrono_harness::facts::parents(root, &candidate)?.is_empty() {
         return Err(if source == "baseline-creation-initial-inventory" {
             "baseline-creation candidate has parents and no prior baseline; supply an explicit range via workflow_dispatch or check --base/--candidate"
         } else {

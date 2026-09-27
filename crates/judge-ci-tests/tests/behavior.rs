@@ -385,6 +385,24 @@ fn initial_requires_parentless_commit_and_runs_declared_inventory() {
     assert_eq!(r.evidence["executed"], json!([]));
     assert_eq!(h.calls(), 1);
 }
+
+#[test]
+fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
+    let h = Host::new();
+    let root = h.head();
+    let child = h.commit();
+    h.git(&["replace", &child, &root]);
+    assert!(
+        !h.git(&["cat-file", "-p", &child])
+            .lines()
+            .take_while(|l| !l.is_empty())
+            .any(|l| l.starts_with("parent "))
+    );
+    let r = judge(&h.request(None, &child));
+    fail(&r, "initial requires parentless commit");
+    assert_eq!(r.evidence["executed"], json!([]));
+    assert_eq!(h.calls(), 0);
+}
 #[test]
 fn initial_rejects_actual_parents_in_full_and_shallow_history_before_operations() {
     for shallow in [false, true] {
