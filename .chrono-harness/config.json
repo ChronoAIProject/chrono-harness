@@ -19,13 +19,11 @@
       ".chrono-harness/bin/chrono-harness",
       "check",
       "--config",
-      ".chrono-harness/config.json",
+      ".chrono-harness/ci/check.json",
       "--base",
       "{base}",
       "--candidate",
-      "{candidate}",
-      "--context",
-      ".chrono-harness/state/context.json"
+      "{candidate}"
     ]
   },
   "tools": [
@@ -36,7 +34,25 @@
       "version_argv": [
         "--version"
       ],
-      "expected_version": null
+      "expected_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+    },
+    {
+      "id": "python3",
+      "program": "/usr/bin/python3",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "Python 3.9.6"
+    },
+    {
+      "id": "chrono-ci",
+      "program": ".chrono-harness/bin/chrono-ci",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-ci 0.1.0"
     }
   ],
   "protocol": {
@@ -57,9 +73,28 @@
     {
       "path": ".chrono-harness/FILEMAP.json",
       "pointers": [
-        "/files/*/surface"
+        "/files/*/surface",
+        "/execution_plans"
       ],
       "on": "modify-delete-existing"
+    },
+    {
+      "path": ".chrono-harness/workflow.json",
+      "pointers": [
+        "/historical_profiles",
+        "/migrations",
+        "/retirements"
+      ],
+      "on": "add-modify-delete"
+    },
+    {
+      "path": ".chrono-harness/config.json",
+      "pointers": [
+        "/tools",
+        "/environment",
+        "/canonical_check"
+      ],
+      "on": "add-modify-delete"
     }
   ],
   "artifacts": [
@@ -144,6 +179,30 @@
     {
       "path": "crates/judge-filemap-tests/target/",
       "owner": "judge-filemap-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-routes/target/",
+      "owner": "judge-routes",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-routes-tests/target/",
+      "owner": "judge-routes-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-projects/target/",
+      "owner": "judge-projects",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/judge-projects-tests/target/",
+      "owner": "judge-projects-tests",
       "kind": "cargo-output",
       "tracked": false
     }

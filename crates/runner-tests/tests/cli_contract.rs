@@ -304,3 +304,42 @@ fn symlinked_tool_preserves_invocation_identity() {
     assert_eq!(result.stdout, alias.to_str().unwrap());
     assert_eq!(result.executable, alias);
 }
+
+#[test]
+fn scoped_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
+    for (bytes, expected_exit) in [("bytes([239,191,189])", 0), ("bytes([255])", 2)] {
+        let script = format!(
+            "import json,sys\nr=json.load(sys.stdin)\ns={{'protocol':r['protocol'],'request_id':r['request_id'],'status':'passed','results':[{{'id':'encoding','status':'passed','cause':'MARKER','exit_code':0}}],'evidence':{{'executed':True}}}}\nsys.stdout.buffer.write(json.dumps(s).encode().replace(b'MARKER',{bytes}))"
+        );
+        let (_dir, p) = fixture(&script);
+        let output = std::process::Command::new(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../runner/target/debug/chrono-harness"),
+        )
+        .args([
+            "check",
+            "--config",
+            &p,
+            "--base",
+            &"a".repeat(40),
+            "--candidate",
+            &"b".repeat(40),
+        ])
+        .output()
+        .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(expected_exit),
+            "scoped CLI must reject original invalid bytes"
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let raw: Vec<u8> = serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
+        assert_eq!(std::str::from_utf8(&raw).is_ok(), expected_exit == 0);
+        assert_eq!(report["judge"]["exit_code"], 0);
+        if expected_exit == 0 {
+            assert_eq!(report["response"]["results"][0]["cause"], "�");
+        } else {
+            assert!(report.get("transport_failure").is_some());
+        }
+    }
+}

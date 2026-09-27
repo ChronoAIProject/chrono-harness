@@ -28,7 +28,7 @@ fn normalize(v: &Value, key: &str) -> Value {
     match v {
         Value::Array(a) => {
             let mut a: Vec<_> = a.iter().map(|v| normalize(v, "")).collect();
-            if !matches!(key, "argv" | "version_argv") {
+            if !matches!(key, "argv" | "version_argv" | "operations") {
                 a.sort_by_cached_key(|v| serde_json::to_string(v).unwrap());
             }
             Value::Array(a)
@@ -45,6 +45,7 @@ pub fn inventory(
     r: &Registrations,
     config_path: &str,
     nodes: &BTreeMap<String, NodeView<'_>>,
+    effective_environment: Option<&BTreeMap<String, String>>,
 ) -> BTreeMap<String, Record> {
     let mut out = BTreeMap::new();
     let mut add = |scope: &str,
@@ -92,7 +93,8 @@ pub fn inventory(
                 ("projects", "scripts") => Some(("id", "script")),
                 ("judges", "judges") => Some(("id", "judge")),
                 ("filemap", "test_costs") => Some(("test", "")),
-                ("config", "tools") | ("workflow", "stability") => Some(("id", "")),
+                ("config", "tools") => Some(("id", "tool")),
+                ("workflow", "stability") => Some(("id", "")),
                 ("config", "artifacts") => Some(("path", "")),
                 _ => None,
             };
@@ -115,6 +117,29 @@ pub fn inventory(
                         targets.insert(test);
                     }
                     add(scope, key, id, path, row, targets);
+                }
+            } else if scope == "filemap" && key == "execution_plans" {
+                for (test, plan) in v.as_object().unwrap() {
+                    let mut targets = BTreeSet::new();
+                    if let Some(view) = nodes.get(test) {
+                        targets.extend(view.definitions.iter().map(|d| d.identity.clone()));
+                    }
+                    for operation in plan["operations"].as_array().unwrap() {
+                        for (node, view) in nodes {
+                            if matches!(
+                                view.kind,
+                                chrono_judge_registration::NodeKind::Project
+                                    | chrono_judge_registration::NodeKind::Script
+                            ) && view.definitions.iter().any(|d| {
+                                d.value["actions"].as_object().is_some_and(|a| {
+                                    a.values().any(|a| a["operation"] == *operation)
+                                })
+                            }) {
+                                targets.insert(node.clone());
+                            }
+                        }
+                    }
+                    add(scope, key, test, path, plan, targets);
                 }
             } else if scope == "filemap" && key == "project_edges" {
                 for edge in v.as_array().unwrap() {
@@ -172,15 +197,28 @@ pub fn inventory(
                         BTreeSet::from([format!("input:{id}")]),
                     );
                 }
-                let rest = json!({"inherit":v["inherit"], "values":v["values"]});
-                add(
-                    scope,
-                    "fields",
-                    key,
-                    path,
-                    &rest,
-                    BTreeSet::from([format!("file:{path}")]),
-                );
+                let keys: BTreeSet<_> = v["inherit"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .chain(v["values"].as_object().unwrap().keys().map(String::as_str))
+                    .collect();
+                for name in keys {
+                    let inherited = v["inherit"].as_array().unwrap().contains(&json!(name));
+                    let mut value = json!({"inherit":inherited,"value":v["values"].get(name)});
+                    if let Some(effective) = effective_environment {
+                        value["effective"] = json!(effective.get(name));
+                    }
+                    add(
+                        scope,
+                        "environment",
+                        name,
+                        path,
+                        &value,
+                        BTreeSet::from([format!("environment:{name}")]),
+                    );
+                }
             } else {
                 add(
                     scope,

@@ -530,3 +530,127 @@ fn removed_test_record_seeds_alias_and_exposes_retained_dangling_edge() {
     assert!(!i.required_tests[0].candidate_present);
     assert_eq!(f.len(), 1);
 }
+
+#[test]
+fn execution_plan_order_is_semantic_and_selects_only_explicit_edges() {
+    let mut a = values();
+    a.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    a.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t": {
+        "operations":["prepare.p", "execute.t"], "timeout_seconds":30,"output_limit_bytes":4096
+    }});
+    a.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["build"] =
+        json!({"operation":"prepare.p","tool":"sh","argv":["-c","exit 0"]});
+    let mut b = a.clone();
+    b.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operations"] =
+        json!(["execute.t", "prepare.p"]);
+    let (i, f) = run(&a, &b, &[]);
+    assert!(f.is_empty(), "{f:?}");
+    assert_eq!(tests(&i), vec!["test:t"]);
+    assert!(
+        i.changes
+            .iter()
+            .any(|c| c.record.ends_with("/execution_plans/test:t")
+                && c.fields.contains(&"/operations".into()))
+    );
+    for v in [&mut a, &mut b] {
+        v.get_mut(FM).unwrap()["project_edges"] = json!([]);
+    }
+    assert!(tests(&run(&a, &b, &[]).0).is_empty());
+}
+
+#[test]
+fn tool_environment_and_retained_input_records_use_only_explicit_consumers() {
+    let mut a = values();
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("tool:sh", "runtime-input", "project:p"),
+            edge("environment:PATH", "runtime-input", "project:p"),
+            edge("input:data", "runtime-input", "project:p"),
+        ]);
+    a.get_mut(CONFIG).unwrap()["environment"]["inputs"] =
+        json!([{"id":"data","location":"data","sha256":"a".repeat(64)}]);
+    for mode in 0..3 {
+        let mut b = a.clone();
+        match mode {
+            0 => b.get_mut(CONFIG).unwrap()["tools"][0]["expected_version"] = json!("new"),
+            1 => b.get_mut(CONFIG).unwrap()["environment"]["values"]["PATH"] = json!("different"),
+            _ => {
+                b.get_mut(CONFIG).unwrap()["environment"]["inputs"][0]["sha256"] =
+                    json!("b".repeat(64))
+            }
+        }
+        let (i, f) = run(&a, &b, &[]);
+        assert!(f.is_empty(), "{f:?}");
+        assert_eq!(tests(&i), vec!["test:t"]);
+        let mut disconnected = a.clone();
+        disconnected.get_mut(FM).unwrap()["project_edges"] = json!([]);
+        b.get_mut(FM).unwrap()["project_edges"] = json!([]);
+        assert!(tests(&run(&disconnected, &b, &[]).0).is_empty());
+    }
+}
+
+#[test]
+fn explicit_historical_ambiguity_mapping_preserves_definitions_but_candidate_collision_fails() {
+    let mut a = values();
+    script_pair(&mut a, "t");
+    let mut b = a.clone();
+    b.get_mut(PROJECTS).unwrap()["scripts"] = json!([]);
+    b.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|e| e["from"] != "script:s");
+    b.get_mut(WORKFLOW).unwrap()["schema_version"] = json!(2);
+    b.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([{"id":"chrono-ci-check/v1","filemap_version":1,"profile_path":"profile.json","script":"decoder","test":"decoder-tests","mappings":[],"legacy_records":[],"ambiguities":[{"node":"test:t","definitions":["project:t","script:t"],"replacement":"test:t"}]}]);
+    let (i, f) = run(&a, &b, &[delta("src.bin")]);
+    assert!(f.iter().all(|f| f.code != "E_NODE_AMBIGUOUS"), "{f:?}");
+    assert_eq!(i.nodes["test:t"].base_definitions.len(), 2);
+    assert_eq!(tests(&i), vec!["test:t"]);
+    let mut missing = b.clone();
+    missing.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["ambiguities"] = json!([]);
+    assert!(
+        run(&a, &missing, &[delta("src.bin")])
+            .1
+            .iter()
+            .any(|f| f.code == "E_NODE_AMBIGUOUS")
+    );
+    let mut collision = a.clone();
+    collision.insert(WORKFLOW.into(), b[WORKFLOW].clone());
+    assert!(
+        run(&a, &collision, &[delta("src.bin")])
+            .1
+            .iter()
+            .any(|f| f.code == "E_NODE_AMBIGUOUS")
+    );
+}
+
+#[test]
+fn retained_effective_environment_api_preserves_old_edges_and_rejects_unknown_facts() {
+    let mut a = values();
+    a.get_mut(CONFIG).unwrap()["environment"]["inherit"] = json!(["MODE"]);
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(edge("environment:MODE", "runtime-input", "project:p"));
+    let mut b = a.clone();
+    b.get_mut(CONFIG).unwrap()["environment"]["inherit"] = json!([]);
+    b.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|e| e["from"] != "environment:MODE");
+    let endpoints = json!({"base":{"inherited":{"MODE":"old"},"environment":{"MODE":"old"}},"candidate":{"inherited":{},"environment":{}}});
+    let mut evidence = json!({"schema":"chrono-effective-inputs/v1","identity":chrono_harness::wire::digest(&endpoints).unwrap(),"endpoints":endpoints});
+    let (impact, findings) =
+        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), CONFIG, &[], &evidence)
+            .unwrap();
+    assert!(findings.is_empty());
+    assert_eq!(impact.tests, vec!["test:t"]);
+    assert!(impact.seeds.contains(&"environment:MODE".into()));
+    evidence["endpoints"]["candidate"]["environment"]["UNKNOWN"] = json!("unrepresented");
+    evidence["identity"] = json!(chrono_harness::wire::digest(&evidence["endpoints"]).unwrap());
+    assert!(
+        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), CONFIG, &[], &evidence)
+            .is_err()
+    );
+}

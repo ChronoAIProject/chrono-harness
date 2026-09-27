@@ -1,6 +1,7 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
 pub mod facts;
 pub mod full;
+pub mod observation;
 pub mod wire;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -45,6 +46,8 @@ pub struct CheckConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
+    #[serde(default)]
+    pub observations: Value,
     pub protocol: String,
     pub request_id: String,
     pub host_root: PathBuf,
@@ -79,8 +82,18 @@ pub struct Response {
     pub results: Vec<CheckResult>,
     pub evidence: Value,
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProcessResult {
+    pub argv: Vec<String>,
+    pub cwd: PathBuf,
+    pub environment: std::collections::BTreeMap<String, String>,
+    pub environment_digest: String,
+    pub stdin_sha256: String,
+    pub stdout_bytes: Vec<u8>,
+    pub stderr_bytes: Vec<u8>,
+    pub stdout_sha256: String,
+    pub stderr_sha256: String,
+    pub failure: Option<String>,
     pub exit_code: i32,
     pub stdout: String,
     pub stderr: String,
@@ -255,10 +268,25 @@ pub fn resolve_program(
     Err(format!("executable not found: {program}"))
 }
 pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<ProcessResult, String> {
-    run_process_inner(root, s, input, None)
+    finish_process(run_process_inner(root, s, input, None)?)
 }
 /// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
 pub fn run_process_bound(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+) -> Result<ProcessResult, String> {
+    finish_process(run_process_inner(root, s, input, Some(digest))?)
+}
+fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
+    if let Some(error) = &p.failure {
+        return Err(error.clone());
+    }
+    Ok(p)
+}
+/// Same engine, retaining partial output and true exit even when a process bound fires.
+pub fn run_process_observed(
     root: &Path,
     s: &CommandSpec,
     input: &[u8],
@@ -273,7 +301,19 @@ fn run_process_inner(
     expected: Option<&str>,
 ) -> Result<ProcessResult, String> {
     validate_command(s)?;
+    if expected.is_some() && !Path::new(&s.program).is_absolute() {
+        return Err("bound executable must be absolute; no ambient PATH resolution".into());
+    }
     let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
+    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let environment = if expected.is_some() {
+        s.env.clone()
+    } else {
+        let mut env: std::collections::BTreeMap<String, String> = std::env::vars().collect();
+        env.extend(s.env.clone());
+        env
+    };
+    let stdin_sha256 = sha256(input);
     let hash = sha256(&fs::read(&executable).map_err(|e| e.to_string())?);
     if expected.is_some_and(|v| v != hash) {
         return Err("prelaunch executable digest mismatch".into());
@@ -285,7 +325,7 @@ fn run_process_inner(
     command
         .args(&s.args)
         .envs(&s.env)
-        .current_dir(root)
+        .current_dir(&root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -340,7 +380,7 @@ fn run_process_inner(
     );
     let start = Instant::now();
     let mut failure = None;
-    let status = loop {
+    let mut status = loop {
         if exceeded.load(Ordering::Relaxed)
             || start.elapsed() >= Duration::from_secs(s.timeout_seconds)
         {
@@ -363,7 +403,7 @@ fn run_process_inner(
     }
     if status.is_none() {
         let _ = child.kill();
-        let _ = child.wait();
+        status = child.wait().ok();
     }
     let a = stdout
         .join()
@@ -374,16 +414,25 @@ fn run_process_inner(
         .map_err(|_| "stderr reader panicked")?
         .map_err(|e| e.to_string())?;
     let _ = writer.join();
-    if let Some(e) = failure {
-        return Err(e.into());
-    }
     if exceeded.load(Ordering::Relaxed) {
-        return Err("process output limit exceeded".into());
+        failure = Some("process output limit exceeded");
     }
     Ok(ProcessResult {
+        argv: std::iter::once(executable.to_string_lossy().into_owned())
+            .chain(s.args.clone())
+            .collect(),
+        cwd: root,
+        environment_digest: wire::digest(&environment)?,
+        environment,
+        stdin_sha256,
+        stdout_sha256: sha256(&a),
+        stderr_sha256: sha256(&b),
+        stdout: String::from_utf8_lossy(&a).into_owned(),
+        stderr: String::from_utf8_lossy(&b).into_owned(),
+        stdout_bytes: a,
+        stderr_bytes: b,
+        failure: failure.map(str::to_owned),
         exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
-        stdout: String::from_utf8(a).map_err(|_| "stdout not UTF-8")?,
-        stderr: String::from_utf8(b).map_err(|_| "stderr not UTF-8")?,
         executable,
         sha256: hash,
     })
@@ -472,15 +521,23 @@ fn root_for_config(path: &Path) -> Result<(PathBuf, String), String> {
     Err("config must reside beneath .chrono-harness".into())
 }
 pub fn dispatch(args: &[&str]) -> CliOutput {
+    let mut argv = vec![std::env::args().next().unwrap_or_default()];
+    argv.extend(args.iter().map(|s| s.to_string()));
+    dispatch_observed(
+        args,
+        serde_json::json!({"argv":argv,"cwd":std::env::current_dir().ok()}),
+    )
+}
+pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     match args{
     []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
-    ["check",rest @ ..]=>match check(rest){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
+    ["check",rest @ ..]=>match check(rest, entry){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
 }
-fn check(args: &[&str]) -> Result<(u8, String), String> {
+fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     let mut config = None;
     let mut base = None;
     let mut candidate = None;
@@ -515,13 +572,14 @@ fn check(args: &[&str]) -> Result<(u8, String), String> {
     let (root, config_path) = root_for_config(Path::new(config.ok_or("missing --config")?))?;
     let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
     if profile.get("schema").and_then(Value::as_str) != Some("chrono-ci-check/v1") {
-        return full::check(
+        return full::check_observed(
             &root,
             &config_path,
             base.as_deref()
                 .ok_or("full check requires --base; initial mode has no governance success")?,
             &candidate,
             Path::new(context.ok_or("full check requires --context")?),
+            entry,
         );
     }
     if context.is_some() {
@@ -539,6 +597,7 @@ fn check(args: &[&str]) -> Result<(u8, String), String> {
         .as_bytes(),
     );
     let req = Request {
+        observations: serde_json::json!({"entry":entry}),
         protocol: PROTOCOL.into(),
         request_id: request_id.clone(),
         host_root: root.clone(),
@@ -558,7 +617,7 @@ fn check(args: &[&str]) -> Result<(u8, String), String> {
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});
     let mut report = match proc {
         Ok(p) => {
-            let response: Result<Response, String> = decode(p.stdout.as_bytes());
+            let response: Result<Response, String> = decode(&p.stdout_bytes);
             match response.and_then(|r| {
                 validate_response(&r, &request_id, p.exit_code)?;
                 Ok(r)

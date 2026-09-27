@@ -12,51 +12,8 @@
     "projects": ".chrono-harness/projects.json",
     "tools": {
       "cargo": "cargo",
-      "chrono-ci": ".chrono-harness/bin/chrono-ci"
-    },
-    "bindings": {
-      "test:runner-tests": [
-        "fmt.runner",
-        "fmt.runner-tests",
-        "build.runner",
-        "test.runner-tests"
-      ],
-      "test:instructions-tests": [
-        "fmt.instructions",
-        "fmt.instructions-tests",
-        "build.instructions",
-        "test.instructions-tests"
-      ],
-      "test:judge-ci-tests": [
-        "fmt.judge-ci",
-        "fmt.judge-ci-tests",
-        "build.judge-ci",
-        "test.judge-ci-tests"
-      ],
-      "test:ci-tests": [
-        "fmt.ci",
-        "fmt.ci-tests",
-        "build.ci",
-        "test.ci-tests"
-      ],
-      "test:ci-verify": [
-        "ci.verify"
-      ],
-      "test:judge-registration-tests": [
-        "fmt.judge-registration",
-        "fmt.judge-registration-tests",
-        "build.runner",
-        "build.judge-registration",
-        "test.judge-registration-tests"
-      ],
-      "test:judge-filemap-tests": [
-        "fmt.judge-filemap",
-        "fmt.judge-filemap-tests",
-        "build.runner",
-        "build.judge-registration",
-        "build.judge-filemap",
-        "test.judge-filemap-tests"
-      ]
+      "chrono-ci": ".chrono-harness/bin/chrono-ci",
+      "python3": "/usr/bin/python3"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -72,7 +29,11 @@
       "crates/judge-registration/target/",
       "crates/judge-registration-tests/target/",
       "crates/judge-filemap/target/",
-      "crates/judge-filemap-tests/target/"
+      "crates/judge-filemap-tests/target/",
+      "crates/judge-routes/target/",
+      "crates/judge-routes-tests/target/",
+      "crates/judge-projects/target/",
+      "crates/judge-projects-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -87,6 +48,7 @@
     "environment": {
       "RUSTUP_TOOLCHAIN": "1.95.0",
       "CARGO_TERM_COLOR": "never"
-    }
+    },
+    "registration_config": ".chrono-harness/config.json"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "proposed",
   "cost_models": {
     "unmeasured": {
@@ -68,6 +68,14 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
         }
       ]
     },
@@ -116,6 +124,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -132,6 +144,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -156,6 +172,14 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -856,11 +880,11 @@
         },
         {
           "kind": "test-execution",
-          "to": "test:ci-verify"
+          "to": "test:judge-registration-tests"
         },
         {
-          "kind": "test-execution",
-          "to": "test:judge-registration-tests"
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -872,11 +896,11 @@
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:ci-verify"
+          "to": "test:ci-tests"
         },
         {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -886,10 +910,6 @@
       "surface": "membership",
       "cost": "unmeasured",
       "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-verify"
-        },
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
@@ -908,11 +928,11 @@
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:ci-verify"
+          "to": "test:ci-tests"
         },
         {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -924,11 +944,11 @@
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:ci-verify"
+          "to": "test:ci-tests"
         },
         {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
         }
       ],
       "projection": {
@@ -1351,6 +1371,10 @@
         {
           "kind": "compile",
           "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
         }
       ]
     },
@@ -1365,6 +1389,293 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/observation.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/execution.rs",
+      "owner": "judge-registration",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/inputs.rs",
+      "owner": "judge-registration",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration/src/transition.rs",
+      "owner": "judge-registration",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/Cargo.toml",
+      "owner": "judge-routes",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-routes"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/Cargo.lock",
+      "owner": "judge-routes",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-routes"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/lib.rs",
+      "owner": "judge-routes",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-routes"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/main.rs",
+      "owner": "judge-routes",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-routes"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/Cargo.toml",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/Cargo.lock",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/routes.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects/Cargo.toml",
+      "owner": "judge-projects",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-projects"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects/Cargo.lock",
+      "owner": "judge-projects",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-projects"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects/src/lib.rs",
+      "owner": "judge-projects",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects/src/main.rs",
+      "owner": "judge-projects",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/Cargo.toml",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/Cargo.lock",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/execution.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/consumer.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/migration.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/migrations/scoped-v1.py",
+      "owner": "scoped-v1",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/migrations/scoped-v1-tests.py",
+      "owner": "scoped-v1-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/execution.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -1437,11 +1748,6 @@
       "from": "project:runner",
       "kind": "compile",
       "to": "project:ci"
-    },
-    {
-      "from": "project:ci",
-      "kind": "test-execution",
-      "to": "test:ci-verify"
     },
     {
       "from": "project:judge-ci",
@@ -1527,6 +1833,866 @@
       "from": "project:judge-filemap",
       "kind": "runtime-input",
       "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "test-execution",
+      "to": "test:judge-routes-tests"
+    },
+    {
+      "from": "project:judge-routes-tests",
+      "kind": "test-execution",
+      "to": "test:judge-routes-tests"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "test-execution",
+      "to": "test:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-projects-tests",
+      "kind": "test-execution",
+      "to": "test:judge-projects-tests"
+    },
+    {
+      "from": "script:scoped-v1",
+      "kind": "test-execution",
+      "to": "test:scoped-v1-tests"
+    },
+    {
+      "from": "script:scoped-v1-tests",
+      "kind": "test-execution",
+      "to": "test:scoped-v1-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "compile",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "compile",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "compile",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "compile",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "tool:chrono-ci",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:runner"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:instructions"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:instructions-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-ci"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-registration"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-registration-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-routes"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-routes-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-projects"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "script:scoped-v1-tests"
+    },
+    {
+      "from": "project:ci",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
     }
   ],
   "test_costs": [
@@ -1547,16 +2713,126 @@
       "cost": "unmeasured"
     },
     {
-      "test": "ci-verify",
-      "cost": "unmeasured"
-    },
-    {
       "test": "judge-registration-tests",
       "cost": "unmeasured"
     },
     {
       "test": "judge-filemap-tests",
       "cost": "unmeasured"
+    },
+    {
+      "test": "judge-routes-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "judge-projects-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "scoped-v1-tests",
+      "cost": "unmeasured"
     }
-  ]
+  ],
+  "execution_plans": {
+    "test:runner-tests": {
+      "operations": [
+        "fmt.runner",
+        "fmt.runner-tests",
+        "build.runner",
+        "test.runner-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:instructions-tests": {
+      "operations": [
+        "fmt.instructions",
+        "fmt.instructions-tests",
+        "build.instructions",
+        "test.instructions-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-ci-tests": {
+      "operations": [
+        "fmt.judge-ci",
+        "fmt.judge-ci-tests",
+        "build.judge-ci",
+        "test.judge-ci-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:ci-tests": {
+      "operations": [
+        "fmt.ci",
+        "fmt.ci-tests",
+        "build.ci",
+        "test.ci-tests",
+        "ci.verify"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-registration-tests": {
+      "operations": [
+        "fmt.judge-registration",
+        "fmt.judge-registration-tests",
+        "build.runner",
+        "build.judge-registration",
+        "test.judge-registration-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-filemap-tests": {
+      "operations": [
+        "fmt.judge-filemap",
+        "fmt.judge-filemap-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "test.judge-filemap-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-routes-tests": {
+      "operations": [
+        "fmt.judge-routes",
+        "fmt.judge-routes-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-routes",
+        "test.judge-routes-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:judge-projects-tests": {
+      "operations": [
+        "fmt.judge-projects",
+        "fmt.judge-projects-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-routes",
+        "build.judge-projects",
+        "build.ci",
+        "build.judge-ci",
+        "test.judge-projects-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:scoped-v1-tests": {
+      "operations": [
+        "migration.scoped-v1-tests"
+      ],
+      "timeout_seconds": 30,
+      "output_limit_bytes": 1048576
+    }
+  }
 }

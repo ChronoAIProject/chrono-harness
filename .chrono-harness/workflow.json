@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "proposed",
   "target_branch": "dev",
   "feature_prefix": "feature/",
@@ -19,7 +19,8 @@
         "crates/runner/Cargo.lock",
         "crates/runner/src/wire.rs",
         "crates/runner/src/facts.rs",
-        "crates/runner/src/full.rs"
+        "crates/runner/src/full.rs",
+        "crates/runner/src/observation.rs"
       ],
       "tests": [
         "runner-tests"
@@ -51,7 +52,10 @@
         "crates/judge-registration/src/main.rs",
         "crates/judge-registration/Cargo.toml",
         "crates/judge-registration/Cargo.lock",
-        "crates/judge-registration/src/registrations.rs"
+        "crates/judge-registration/src/registrations.rs",
+        "crates/judge-registration/src/execution.rs",
+        "crates/judge-registration/src/inputs.rs",
+        "crates/judge-registration/src/transition.rs"
       ],
       "tests": [
         "judge-registration-tests"
@@ -73,6 +77,32 @@
         "judge-ci-tests"
       ],
       "reason": "Full declaration impact and shared operational CI closure selection"
+    },
+    {
+      "id": "judge-routes",
+      "paths": [
+        "crates/judge-routes/Cargo.toml",
+        "crates/judge-routes/Cargo.lock",
+        "crates/judge-routes/src/lib.rs",
+        "crates/judge-routes/src/main.rs"
+      ],
+      "tests": [
+        "judge-routes-tests"
+      ],
+      "reason": "Registered method/receipt and paired operation execution policy"
+    },
+    {
+      "id": "judge-projects",
+      "paths": [
+        "crates/judge-projects/Cargo.toml",
+        "crates/judge-projects/Cargo.lock",
+        "crates/judge-projects/src/lib.rs",
+        "crates/judge-projects/src/main.rs"
+      ],
+      "tests": [
+        "judge-projects-tests"
+      ],
+      "reason": "Registered method/receipt and paired operation execution policy"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -86,7 +116,9 @@
       "runner-tests",
       "instructions-tests",
       "judge-registration-tests",
-      "judge-filemap-tests"
+      "judge-filemap-tests",
+      "judge-routes-tests",
+      "judge-projects-tests"
     ],
     "bind": [
       "base",
@@ -101,6 +133,92 @@
     ],
     "evidence": ".chrono-harness/state/integration.json"
   },
-  "retirements": [],
-  "migrations": []
+  "retirements": [
+    {
+      "kind": "test",
+      "id": "ci-verify",
+      "replacement": "ci-tests",
+      "reason": "ci.verify moves unchanged into ci; ci-tests also executes verification on its existing additional triggers."
+    },
+    {
+      "kind": "script",
+      "id": "ci-verify",
+      "replacement": "ci",
+      "reason": "Retire malformed pseudo-script; actual ci method owns execution."
+    }
+  ],
+  "migrations": [
+    {
+      "from_version": 1,
+      "to_version": 2,
+      "script": "scoped-v1",
+      "test": "scoped-v1-tests",
+      "mappings": [
+        {
+          "from": "script:ci-verify",
+          "to": "project:ci"
+        },
+        {
+          "from": "test:ci-verify",
+          "to": "test:ci-tests"
+        },
+        {
+          "from": "owner:ci-verify",
+          "to": "owner:ci"
+        }
+      ],
+      "reason": "Finite historical chrono-ci-check/v1 binding decoder; workflow certification remains unresolved."
+    }
+  ],
+  "historical_profiles": [
+    {
+      "id": "chrono-ci-check/v1",
+      "filemap_version": 1,
+      "profile_path": ".chrono-harness/ci/check.json",
+      "script": "scoped-v1",
+      "test": "scoped-v1-tests",
+      "mappings": [
+        {
+          "from": "script:ci-verify",
+          "to": "project:ci"
+        },
+        {
+          "from": "test:ci-verify",
+          "to": "test:ci-tests"
+        },
+        {
+          "from": "owner:ci-verify",
+          "to": "owner:ci"
+        }
+      ],
+      "legacy_records": [
+        {
+          "collection": "scripts",
+          "id": "ci-verify",
+          "definition": {
+            "id": "ci-verify",
+            "kind": "test",
+            "actions": {
+              "execute": {
+                "operation": "ci.verify",
+                "tool": "chrono-ci",
+                "argv": [
+                  "verify",
+                  "--host-root",
+                  ".",
+                  "--config",
+                  ".chrono-harness/ci/github.json"
+                ]
+              }
+            }
+          },
+          "nodes": [
+            "script:ci-verify",
+            "test:ci-verify"
+          ]
+        }
+      ],
+      "ambiguities": []
+    }
+  ]
 }

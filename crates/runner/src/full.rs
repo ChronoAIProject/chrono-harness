@@ -101,12 +101,13 @@ pub fn execute(
     }
     Ok((status, records))
 }
-pub fn check(
+pub fn check_observed(
     root: &Path,
     config_path: &str,
     base: &str,
     candidate: &str,
     context: &Path,
+    entry: Value,
 ) -> Result<(u8, String), String> {
     let base_tree = facts::verify_oid(root, base)?;
     let candidate_tree = facts::verify_oid(root, candidate)?;
@@ -170,7 +171,12 @@ pub fn check(
         root.join(context)
     })
     .map_err(|e| e.to_string())?;
-    let context_digest = wire::digest(&json(&fs::read(&context).map_err(|e| e.to_string())?)?)?;
+    let context_value = json(&fs::read(&context).map_err(|e| e.to_string())?)?;
+    let context_digest = wire::digest(&context_value)?;
+    let retained = match context_value.get("retained_inputs").and_then(Value::as_str) {
+        Some(path) => json(&fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?)?,
+        None => Value::Null,
+    };
     let runner = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner = Executable {
         path: runner.to_str().ok_or("non UTF-8 runner path")?.into(),
@@ -178,6 +184,7 @@ pub fn check(
         version: env!("CARGO_PKG_VERSION").into(),
     };
     let req = Request {
+        observations: value!({"entry":entry,"run":format!("{}:{:?}",std::process::id(),std::time::SystemTime::now()),"environment":{"inherited":observed,"effective":env},"retained":retained}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
         judge_id: String::new(),
@@ -308,4 +315,15 @@ pub fn check(
     let path = no_symlink_parents(root, ".chrono-harness/state/report.json")?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
     Ok((status.exit_code() as u8, text))
+}
+
+/// Library callers supply their own observed entry through check_observed for routes validation.
+pub fn check(
+    root: &Path,
+    config_path: &str,
+    base: &str,
+    candidate: &str,
+    context: &Path,
+) -> Result<(u8, String), String> {
+    check_observed(root, config_path, base, candidate, context, Value::Null)
 }

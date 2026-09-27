@@ -96,9 +96,12 @@ fn valid_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> bool {
     match kind {
         EdgeKind::Compile => matches!(from, File | Project) && to == Project,
         EdgeKind::BuildInput | EdgeKind::RuntimeInput => {
-            matches!(from, File | Project | Script | Input) && to == Project
+            matches!(from, File | Project | Script | Input | Tool | Environment)
+                && matches!(to, Project | Script)
         }
-        EdgeKind::TestExecution => matches!(from, File | Project | Script | Input) && to == Test,
+        EdgeKind::TestExecution => {
+            matches!(from, File | Project | Script | Input | Tool | Environment) && to == Test
+        }
         EdgeKind::JudgeTrigger => matches!(from, File | Project) && to == Judge,
     }
 }
@@ -115,10 +118,41 @@ pub fn produce(
     config_path: &str,
     delta: &[Delta],
 ) -> (Impact, Vec<Finding>) {
+    produce_environment(base, candidate, config_path, delta, None)
+}
+/// Effective-input impact for validated retained endpoint facts. Declarations and
+/// effective values use the same explicit environment nodes; no edges are inferred.
+pub fn produce_with_inputs(
+    base: &Registrations,
+    candidate: &Registrations,
+    config_path: &str,
+    delta: &[Delta],
+    effective_inputs: &Value,
+) -> Result<(Impact, Vec<Finding>), String> {
+    let environments = chrono_judge_registration::inputs::effective_environments(
+        effective_inputs,
+        base,
+        candidate,
+    )?;
+    Ok(produce_environment(
+        base,
+        candidate,
+        config_path,
+        delta,
+        environments.as_ref(),
+    ))
+}
+fn produce_environment(
+    base: &Registrations,
+    candidate: &Registrations,
+    config_path: &str,
+    delta: &[Delta],
+    environments: Option<&[BTreeMap<String, String>; 2]>,
+) -> (Impact, Vec<Finding>) {
     let an = base.node_data();
     let bn = candidate.node_data();
-    let a = records::inventory(base, config_path, &an);
-    let b = records::inventory(candidate, config_path, &bn);
+    let a = records::inventory(base, config_path, &an, environments.map(|p| &p[0]));
+    let b = records::inventory(candidate, config_path, &bn, environments.map(|p| &p[1]));
     let mut records = BTreeMap::new();
     let mut changes = vec![];
     let mut seeds = BTreeSet::new();
@@ -235,6 +269,16 @@ pub fn produce(
                     .collect(),
             };
             if let Some(causes) = closure.reached.get(node) {
+                if endpoint == "base"
+                    && chrono_judge_registration::ambiguity_repaired(
+                        candidate,
+                        node,
+                        &ambiguity.definitions,
+                    )
+                {
+                    historical_ambiguities.push(ambiguity);
+                    continue;
+                }
                 let cause = causes.first().unwrap();
                 let seed = seeds.iter().find(|s| &s.id == cause).unwrap();
                 let mut witness = vec![seed.node.clone()];
@@ -385,6 +429,12 @@ pub fn produce(
                 "Declaration impact only; no test execution, retirement approval or cost verdict"
                     .into(),
                 "External input declaration changes are not retained input evidence".into(),
+                if environments.is_some() {
+                    "Retained effective environments compared; completeness remains unproven".into()
+                } else {
+                    "Declaration-only API: retained effective environment differences not evaluated"
+                        .into()
+                },
                 "Actual input completeness and locality are unproven; unknown costs remain null"
                     .into(),
             ],
@@ -395,11 +445,12 @@ pub fn produce(
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
     match evaluate(req) {
-        Ok((impact, findings)) => {
+        Ok((impact, findings, view)) => {
             if !findings.is_empty() {
                 response.status = Status::Fail;
             }
             response.findings = findings;
+            response.outputs.insert("registration_view".into(), view);
             response
                 .outputs
                 .insert("impact".into(), serde_json::to_value(impact).unwrap());
@@ -417,7 +468,7 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(req: &Request) -> Result<(Impact, Vec<Finding>), String> {
+fn evaluate(req: &Request) -> Result<(Impact, Vec<Finding>, Value), String> {
     req.validate()?;
     let root = &req.candidate.root;
     if facts::verify_oid(root, &req.base.commit)? != req.base.tree
@@ -432,12 +483,8 @@ fn evaluate(req: &Request) -> Result<(Impact, Vec<Finding>), String> {
     {
         return Err("DELTA differs from fixed endpoints".into());
     }
-    let a = facts::registry_values(root, &req.base.commit, &req.config_path)?;
-    let b = facts::registry_values(root, &req.candidate.commit, &req.config_path)?;
-    if facts::registry_digest(&a, &b)? != req.registries.digest {
-        return Err("registry digest mismatch".into());
-    }
-    let a = Registrations::load(&a, &req.config_path).map_err(|e| format!("base: {e}"))?;
-    let b = Registrations::load(&b, &req.config_path).map_err(|e| format!("candidate: {e}"))?;
-    Ok(produce(&a, &b, &req.config_path, &req.delta))
+    let (a, b, view) = chrono_judge_registration::views(req)?;
+    let inputs = chrono_judge_registration::inputs::validate(req, &a, &b)?;
+    let (impact, findings) = produce_with_inputs(&a, &b, &req.config_path, &req.delta, &inputs)?;
+    Ok((impact, findings, view))
 }

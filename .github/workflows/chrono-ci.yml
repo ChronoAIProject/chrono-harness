@@ -37,7 +37,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          'python3' '.chrono-harness/ci/bootstrap.py' '.'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.'
       - name: Prepare fixed event inputs
         id: inputs
         shell: bash

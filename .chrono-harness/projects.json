@@ -11,11 +11,16 @@
     "judge-ci-tests",
     "ci",
     "ci-tests",
-    "ci-verify",
     "judge-registration",
     "judge-registration-tests",
     "judge-filemap",
-    "judge-filemap-tests"
+    "judge-filemap-tests",
+    "judge-routes",
+    "judge-routes-tests",
+    "judge-projects",
+    "judge-projects-tests",
+    "scoped-v1",
+    "scoped-v1-tests"
   ],
   "projects": [
     {
@@ -363,6 +368,17 @@
             "--manifest-path",
             "crates/ci/Cargo.toml"
           ]
+        },
+        "execute": {
+          "operation": "ci.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/github.json"
+          ]
         }
       }
     },
@@ -601,22 +617,219 @@
           ]
         }
       }
+    },
+    {
+      "id": "judge-routes",
+      "kind": "production",
+      "manifest": "crates/judge-routes/Cargo.toml",
+      "lockfile": "crates/judge-routes/Cargo.lock",
+      "root": "crates/judge-routes",
+      "test_project": "judge-routes-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-routes-tests",
+      "kind": "test",
+      "manifest": "crates/judge-routes-tests/Cargo.toml",
+      "lockfile": "crates/judge-routes-tests/Cargo.lock",
+      "root": "crates/judge-routes-tests",
+      "tests_for": "judge-routes",
+      "actions": {
+        "build": {
+          "operation": "build.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-projects",
+      "kind": "production",
+      "manifest": "crates/judge-projects/Cargo.toml",
+      "lockfile": "crates/judge-projects/Cargo.lock",
+      "root": "crates/judge-projects",
+      "test_project": "judge-projects-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        }
+      }
+    },
+    {
+      "id": "judge-projects-tests",
+      "kind": "test",
+      "manifest": "crates/judge-projects-tests/Cargo.toml",
+      "lockfile": "crates/judge-projects-tests/Cargo.lock",
+      "root": "crates/judge-projects-tests",
+      "tests_for": "judge-projects",
+      "actions": {
+        "build": {
+          "operation": "build.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        }
+      }
     }
   ],
   "scripts": [
     {
-      "id": "ci-verify",
-      "kind": "test",
+      "id": "scoped-v1",
+      "path": ".chrono-harness/migrations/scoped-v1.py",
+      "test_script": "scoped-v1-tests",
       "actions": {
         "execute": {
-          "operation": "ci.verify",
-          "tool": "chrono-ci",
+          "operation": "migration.scoped-v1",
+          "tool": "python3",
           "argv": [
-            "verify",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/github.json"
+            "-B",
+            ".chrono-harness/migrations/scoped-v1.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "scoped-v1-tests",
+      "path": ".chrono-harness/migrations/scoped-v1-tests.py",
+      "tests_for": "scoped-v1",
+      "actions": {
+        "execute": {
+          "operation": "migration.scoped-v1-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/migrations/scoped-v1-tests.py"
           ]
         }
       }

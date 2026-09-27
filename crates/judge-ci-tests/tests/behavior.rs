@@ -82,6 +82,7 @@ impl Host {
     }
     fn request(&self, b: Option<&str>, c: &str) -> Request {
         Request {
+            observations: Value::Null,
             protocol: PROTOCOL.into(),
             request_id: "fixture-request".into(),
             host_root: self.root().to_path_buf(),

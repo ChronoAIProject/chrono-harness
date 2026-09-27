@@ -1,5 +1,9 @@
 //! Registration owns full-format schema, snapshot and affected-reference admissibility.
+pub mod execution;
+pub mod inputs;
 mod registrations;
+mod transition;
+pub use transition::{ambiguity_repaired, interpret, replacements, reused_tools, views};
 mod schema;
 use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
@@ -166,7 +170,7 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
             "operation",
             "integration_evidence",
         ],
-        &[],
+        &["retained_inputs"],
     )?;
     if context["schema_version"] != 1
         || context["base"] != req.base.commit
@@ -202,29 +206,10 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
     {
         return Err("invalid integration evidence digest".into());
     }
-    let old = match Registrations::load(&bv, &req.config_path) {
+    let (old, new, view) = match views(req) {
         Ok(v) => v,
         Err(e) => {
-            issue(
-                r,
-                "E_SCHEMA",
-                format!("base: {e}"),
-                "/registries/base",
-                true,
-            );
-            return Ok(());
-        }
-    };
-    let new = match Registrations::load(&cv, &req.config_path) {
-        Ok(v) => v,
-        Err(e) => {
-            issue(
-                r,
-                "E_SCHEMA",
-                format!("candidate: {e}"),
-                "/registries/candidate",
-                true,
-            );
+            issue(r, "E_SCHEMA", e, "/registries", true);
             return Ok(());
         }
     };
@@ -298,14 +283,20 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
             true,
         );
     }
-    readiness(req, &new, r)?;
+    readiness(req, &old, &new, r)?;
     references(req, &old, &new, &bt, &ct, r)?;
     if r.status == Status::Pass {
+        r.outputs.insert("registration_view".into(), view);
         r.outputs.insert("registration".into(),value!({"scope":"registration-only","base":req.base.commit,"candidate":req.candidate.commit,"registry_digest":req.registries.digest,"input_closure":"declared-complete","completeness_proven":false,"previous_enforcement":if old.config["status"]=="proposed"{"none"}else{"enabled"}}));
     }
     Ok(())
 }
-fn readiness(req: &Request, n: &Registrations, r: &mut Response) -> Result<()> {
+fn readiness(
+    req: &Request,
+    old: &Registrations,
+    n: &Registrations,
+    r: &mut Response,
+) -> Result<()> {
     for (name, v) in [
         ("config", &n.config),
         ("judges", &n.judges),
@@ -383,19 +374,19 @@ fn readiness(req: &Request, n: &Registrations, r: &mut Response) -> Result<()> {
             );
         }
     }
-    // Snapshot retention for external inputs is a downstream obligation, never a guessed pass.
-    if !n.config["environment"]["inputs"]
-        .as_array()
-        .unwrap()
-        .is_empty()
-    {
-        issue(
+    match inputs::validate(req, old, n) {
+        Ok(evidence) => {
+            if r.status == Status::Pass && !evidence.is_null() {
+                r.outputs.insert("effective_inputs".into(), evidence);
+            }
+        }
+        Err(e) => issue(
             r,
             "E_EVIDENCE_UNRESOLVED",
-            "external input snapshots are not yet transported; cannot certify their closure",
+            e,
             "/config/environment/inputs",
             true,
-        );
+        ),
     }
     Ok(())
 }
@@ -658,6 +649,52 @@ fn references(
                             action["tool"], action["operation"]
                         ),
                         &reference,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+    if let Some(plans) = new
+        .filemap
+        .get("execution_plans")
+        .and_then(Value::as_object)
+    {
+        let methods = execution::methods(new.projects())?;
+        let old_methods = execution::methods(old.projects())?;
+        for (test, plan) in plans {
+            let removed_method = plan["operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|op| old_methods.contains_key(op) && !methods.contains_key(op));
+            if old.filemap.get("execution_plans").and_then(|p| p.get(test)) == Some(plan)
+                && !removed_method
+            {
+                continue;
+            }
+            if !nodes.contains(test) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("execution plan test missing: {test}"),
+                    "/filemap/execution_plans",
+                    false,
+                );
+            }
+            for op in plan["operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(Value::as_str)
+            {
+                if !methods.contains_key(op) {
+                    issue(
+                        r,
+                        "E_REFERENCE",
+                        format!("execution plan operation missing: {op}"),
+                        "/filemap/execution_plans",
                         false,
                     );
                 }

@@ -12,3 +12,7 @@
 /crates/judge-registration-tests/target/
 /crates/judge-filemap/target/
 /crates/judge-filemap-tests/target/
+/crates/judge-routes/target/
+/crates/judge-routes-tests/target/
+/crates/judge-projects/target/
+/crates/judge-projects-tests/target/

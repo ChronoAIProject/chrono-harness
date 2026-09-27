@@ -15,6 +15,9 @@ test = false
 bench = false
 
 [dependencies]
+chrono-judge-registration = { path = "../judge-registration" }
+chrono-judge-routes = { path = "../judge-routes" }
+chrono-judge-projects = { path = "../judge-projects" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-harness = { path = "../runner" }
 serde = { version = "1", features = ["derive"] }

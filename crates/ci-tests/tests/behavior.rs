@@ -620,3 +620,51 @@ else:
         "operations ran despite component failure"
     );
 }
+
+#[test]
+fn standalone_version_is_actual_producer_and_rejects_extra_arguments() {
+    assert_eq!(
+        chrono_ci::dispatch(&["--version".into()]).unwrap(),
+        "chrono-ci 0.1.0\n"
+    );
+    assert!(chrono_ci::dispatch(&["--version".into(), "extra".into()]).is_err());
+}
+
+#[test]
+fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read =
+        |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
+    let config = read(".chrono-harness/config.json");
+    let tool = config["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["id"] == "python3")
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let shadow = dir.path().join("python3");
+    fs::write(&shadow, "#!/bin/sh\nprintf 'Python shadowed\\n'\nexit 0\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&shadow, fs::Permissions::from_mode(0o755)).unwrap();
+    let actual = Command::new(tool["program"].as_str().unwrap())
+        .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
+        .env_clear()
+        .env("PATH", dir.path())
+        .output()
+        .unwrap();
+    assert!(actual.status.success());
+    assert_eq!(
+        String::from_utf8(actual.stdout).unwrap().trim_end(),
+        tool["expected_version"].as_str().unwrap(),
+        "registered interpreter must survive unrelated PATH precedence"
+    );
+    assert_eq!(
+        read(".chrono-harness/ci/check.json")["policy"]["tools"]["python3"],
+        tool["program"]
+    );
+    assert_eq!(
+        read(".chrono-harness/ci/github.json")["bootstrap"][0],
+        tool["program"]
+    );
+}
