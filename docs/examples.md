@@ -12,6 +12,6 @@
 
 已有实际验证包含：源码选择、文档不选业务测试、真实失败测试、未登记文件、指南漂移、任意源码路径搬移；混合宿主另验共享数据和独立脚本选择，TS 与混合宿主另验生产/测试类型错误边界。原生 integration、PR、dev 均已执行 scoped profile。
 
-这些示例当前使用 `chrono-ci-check/v1`。通用 projects schema 和配对消费者现已接受三个示例现有的无 manifest 登记、自定义 action 与任意目录；完整输入闭包、完整治理启用与跨平台同判尚未认证；示例成功不代表这些目标已完成。三个示例已迁移到 [v0.1.0-beta.3](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.3)：已移除产品源码包和 Rust 构建，仅保留版本、摘要、安装声明与入口。本地 macOS arm64 及原生 CI Linux x86_64 均已通过公开 HTTPS 安装和实际宿主检查。
+这些示例当前使用 `chrono-ci-check/v1`。通用 projects schema 和配对消费者现已接受三个示例现有的无 manifest 登记、自定义 action 与任意目录；完整输入闭包、完整治理启用与跨平台同判尚未认证；示例成功不代表这些目标已完成。三个示例已迁移到 [v0.1.0-beta.4](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.4)：已移除产品源码包和 Rust 构建，仅保留版本、摘要、安装声明与入口。本地 macOS arm64 及原生 CI Linux x86_64 均已通过公开 HTTPS 安装和实际宿主检查。
 
 示例的 `push_baselines` 明确登记 `refs/heads/integration/` 对比 `refs/heads/dev`，每次 integration push 都检查完整分支差异；dev push 保持事件 before/after。登记保存在宿主 `.chrono-harness/ci/github.json`，不由语言或目录推断。
