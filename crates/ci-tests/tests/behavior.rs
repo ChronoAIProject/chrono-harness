@@ -184,6 +184,207 @@ fn pr_uses_head_not_merge_ref() {
     assert_eq!(r["workflow_source_revision"], b);
     assert_eq!(r["base"], b);
 }
+
+#[test]
+fn configured_push_baseline_covers_repeated_pushes_and_tracks_the_named_remote_ref() {
+    let (d, base, first) = repo();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "--bare", "-q"]);
+    git(
+        d.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    git(
+        d.path(),
+        &["push", "-q", "origin", &format!("{base}:refs/heads/stable")],
+    );
+    let mut raw = serde_json::to_value(config()).unwrap();
+    raw["push_baselines"] =
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/stable"}]);
+    let configured: Config = serde_json::from_value(raw).unwrap();
+    let first_context = prepare(d.path(), &configured, "push", &json!({"ref":"refs/heads/verify/change","before":"0".repeat(40),"after":first,"created":true}), &first).unwrap();
+    assert_eq!(first_context["base"], base);
+    assert_eq!(first_context["source"], "push-configured-baseline-ref");
+    fs::write(d.path().join("a"), "repair").unwrap();
+    git(d.path(), &["commit", "-qam", "repair"]);
+    let repaired = git(d.path(), &["rev-parse", "HEAD"]);
+    let event =
+        json!({"ref":"refs/heads/verify/change","before":first,"after":repaired,"created":false});
+    let context = prepare(d.path(), &configured, "push", &event, &repaired).unwrap();
+    assert_eq!(context["base"], base);
+    assert_eq!(context["candidate"], repaired);
+    assert_eq!(
+        context["canonical_argv"],
+        json!(chrono_harness::canonical_argv(
+            &configured.runner,
+            &configured.check_config,
+            Some(&base),
+            &repaired,
+            false
+        ))
+    );
+    git(
+        d.path(),
+        &[
+            "push",
+            "-q",
+            "origin",
+            &format!("{first}:refs/heads/stable"),
+        ],
+    );
+    let advanced = prepare(d.path(), &configured, "push", &event, &repaired).unwrap();
+    assert_eq!(advanced["base"], first);
+    assert_eq!(context["base"], base);
+    let ordinary = json!({"ref":"refs/heads/dev","before":first,"after":repaired,"created":false});
+    let control = prepare(d.path(), &configured, "push", &ordinary, &repaired).unwrap();
+    assert_eq!(control["base"], first);
+    assert_eq!(control["source"], "push-before-after");
+}
+
+#[test]
+fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() {
+    let host = tempfile::tempdir().unwrap();
+    for rules in [
+        json!([{"ref_prefix":"refs/heads/verify/*","base_ref":"refs/heads/stable"}]),
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"stable"}]),
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/verify/self"}]),
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/stable"},{"ref_prefix":"refs/heads/verify/nested/","base_ref":"refs/heads/stable"}]),
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/stable"},{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/other"}]),
+    ] {
+        let mut raw = serde_json::to_value(config()).unwrap();
+        raw["push_baselines"] = rules;
+        let source = host.path().join("input.json");
+        fs::write(&source, serde_json::to_vec(&raw).unwrap()).unwrap();
+        assert!(init(host.path(), &source).is_err());
+        assert!(!host.path().join(".github/workflows/check.yml").exists());
+    }
+    let (d, base, candidate) = repo();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "--bare", "-q"]);
+    git(
+        d.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    let mut raw = serde_json::to_value(config()).unwrap();
+    raw["push_baselines"] =
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/missing"}]);
+    let configured: Config = serde_json::from_value(raw).unwrap();
+    let event = json!({"ref":"refs/heads/verify/change","before":base,"after":candidate});
+    assert!(
+        prepare(d.path(), &configured, "push", &event, &candidate)
+            .unwrap_err()
+            .contains("remote baseline ref")
+    );
+    for event in [
+        json!({"before":base,"after":candidate}),
+        json!({"ref":"refs/heads/verify/bad..ref","before":base,"after":candidate}),
+        json!({"ref":"refs/heads/verify/change","before":"HEAD","after":candidate}),
+        json!({"ref":"refs/heads/verify/change","before":"0".repeat(40),"after":candidate,"created":false}),
+        json!({"ref":"refs/heads/verify/change","before":base,"after":"HEAD"}),
+    ] {
+        assert!(prepare(d.path(), &configured, "push", &event, &candidate).is_err());
+    }
+}
+
+#[test]
+fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_customization() {
+    let (d, base, candidate) = repo();
+    let remote = tempfile::tempdir().unwrap();
+    git(remote.path(), &["init", "--bare", "-q"]);
+    git(
+        d.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    git(
+        d.path(),
+        &["push", "-q", "origin", &format!("{base}:refs/heads/stable")],
+    );
+    let writer = tempfile::tempdir().unwrap();
+    git(
+        writer.path(),
+        &[
+            "clone",
+            "-q",
+            "--branch",
+            "stable",
+            remote.path().to_str().unwrap(),
+            ".",
+        ],
+    );
+    git(
+        writer.path(),
+        &["config", "user.email", "fixture@example.invalid"],
+    );
+    git(writer.path(), &["config", "user.name", "Fixture"]);
+    fs::write(writer.path().join("a"), "remote advancement").unwrap();
+    git(writer.path(), &["commit", "-qam", "advance baseline"]);
+    let advanced = git(writer.path(), &["rev-parse", "HEAD"]);
+    git(writer.path(), &["push", "-q", "origin", "stable"]);
+    assert!(
+        !Command::new("git")
+            .current_dir(d.path())
+            .args(["cat-file", "-e", &advanced])
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let mut raw = serde_json::to_value(config()).unwrap();
+    raw["push_baselines"] =
+        json!([{"ref_prefix":"refs/heads/verify/","base_ref":"refs/heads/stable"}]);
+    let configured: Config = serde_json::from_value(raw).unwrap();
+    let input = d.path().join("input.json");
+    write(&input, &configured);
+    init(d.path(), &input).unwrap();
+    write(&input, &config());
+    assert!(!init(d.path(), &input).unwrap());
+    let payload = d.path().join("event.json");
+    fs::write(
+        &payload,
+        serde_json::to_vec(
+            &json!({"ref":"refs/heads/verify/change","before":base,"after":candidate}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let output = d.path().join("outputs");
+    fs::write(&output, "").unwrap();
+    let args: Vec<String> = [
+        "prepare",
+        "--host-root",
+        d.path().to_str().unwrap(),
+        "--config",
+        ".chrono-harness/ci/github.json",
+        "--event",
+        "push",
+        "--payload",
+        payload.to_str().unwrap(),
+        "--workflow-revision",
+        &candidate,
+        "--github-output",
+        output.to_str().unwrap(),
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    let context: Value = serde_json::from_str(&chrono_ci::dispatch(&args).unwrap()).unwrap();
+    assert_eq!(context["base"], advanced);
+    assert_eq!(context["candidate"], candidate);
+    assert_eq!(context["source"], "push-configured-baseline-ref");
+    assert_eq!(
+        git(d.path(), &["rev-parse", &format!("{advanced}^{{commit}}")]),
+        advanced
+    );
+    assert!(
+        fs::read_to_string(output)
+            .unwrap()
+            .contains(&format!("base={advanced}\n"))
+    );
+    let saved: Value =
+        serde_json::from_slice(&fs::read(d.path().join(&configured.context_path)).unwrap())
+            .unwrap();
+    assert_eq!(saved, context);
+}
 #[test]
 fn manual_full_range_and_explicit_initial() {
     let (d, b, c) = repo();
@@ -437,7 +638,7 @@ fn integration_creation_at_existing_baseline_is_an_honest_noop() {
     assert_eq!(context["base"], candidate);
     assert_eq!(context["initial"], false);
     assert_eq!(context["mode"], "delta");
-    assert_eq!(context["source"], "branch-creation-baseline-ref");
+    assert_eq!(context["source"], "push-configured-baseline-ref");
     let report = execute_context(root.path(), &context, 0);
     assert_eq!(report["response"]["evidence"]["selected"], json!([]));
     assert_eq!(report["response"]["evidence"]["executed"], json!([]));
@@ -471,7 +672,7 @@ fn creation_requires_valid_event_branch_and_available_baseline() {
     }
     let payload = json!({"ref":"refs/heads/integration/new","before":"0".repeat(40),"after":c,"created":true});
     let error = prepare(d.path(), &config(), "push", &payload, &c).unwrap_err();
-    assert!(error.contains("fetch"), "{error}");
+    assert!(error.contains("ls-remote"), "{error}");
 }
 #[test]
 fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {

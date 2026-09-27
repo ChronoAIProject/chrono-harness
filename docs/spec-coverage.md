@@ -48,7 +48,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 19 changed integration binding | implemented bounded: W base/tree/receipt/completed-report rejection, same-tree commit acceptance | full native activation and complete effective inputs |
 | 20 stale branch | partial: W explicit dev/fork/time freshness rejects either excess | autonomous stale reconstruction |
 | 21 threshold equality | implemented: W count/age equality, nanosecond excess and configured limits | — |
-| 22 same local/CI command | partial: existing scoped CI generator | full native events and exact inputs |
+| 22 same local/CI command | partial: scoped CI generator with explicit push-baseline configuration; CI behavior tests cover repeated pushes, remote advancement, missing refs and real CLI persistence | full native events and exact inputs |
 | 23 same complete deterministic inputs | pending | deterministic evidence/parity comparison |
 | 24 parity unestablished | implemented field: full runner report; G external host | unresolved closure remains nonzero |
 | 25 staged/unstaged/untracked | implemented: G dirt cases | no hidden dirty mode |

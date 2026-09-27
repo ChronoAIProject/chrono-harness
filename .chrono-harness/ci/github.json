@@ -23,5 +23,11 @@
   "generator": ".chrono-harness/bin/chrono-ci",
   "check_config": ".chrono-harness/ci/check.json",
   "context_path": ".chrono-harness/state/context.json",
-  "artifact_directory": ".chrono-harness/state/"
+  "artifact_directory": ".chrono-harness/state/",
+  "push_baselines": [
+    {
+      "ref_prefix": "refs/heads/integration/",
+      "base_ref": "refs/heads/dev"
+    }
+  ]
 }

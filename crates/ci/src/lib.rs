@@ -17,6 +17,8 @@ pub struct Config {
     pub push_branches: Vec<String>,
     pub pull_request_branches: Vec<String>,
     pub branch_creation_base_ref: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub push_baselines: Vec<PushBaseline>,
     pub checkout_action: String,
     pub upload_artifact_action: String,
     pub timeout_minutes: u32,
@@ -26,6 +28,12 @@ pub struct Config {
     pub check_config: String,
     pub context_path: String,
     pub artifact_directory: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PushBaseline {
+    pub ref_prefix: String,
+    pub base_ref: String,
 }
 fn scalar(s: &str) -> String {
     serde_json::to_string(s).expect("string serialization")
@@ -96,6 +104,29 @@ fn validate(c: &Config) -> Result<(), String> {
         || c.branch_creation_base_ref.contains([' ', '\n', '\0'])
     {
         return Err("branch creation requires explicit refs/heads/... baseline".into());
+    }
+    for (i, rule) in c.push_baselines.iter().enumerate() {
+        if !rule.ref_prefix.starts_with("refs/heads/")
+            || !rule.ref_prefix.ends_with('/')
+            || rule.ref_prefix.len() <= "refs/heads/".len()
+            || rule
+                .ref_prefix
+                .contains([' ', '\n', '\r', '\0', '*', '?', '[', '\\'])
+            || !rule.base_ref.starts_with("refs/heads/")
+            || rule.base_ref.contains([' ', '\n', '\r', '\0'])
+            || rule.base_ref.starts_with(&rule.ref_prefix)
+        {
+            return Err(
+                "invalid push baseline: literal branch prefix and separate baseline ref required"
+                    .into(),
+            );
+        }
+        if c.push_baselines[..i].iter().any(|other| {
+            rule.ref_prefix.starts_with(&other.ref_prefix)
+                || other.ref_prefix.starts_with(&rule.ref_prefix)
+        }) {
+            return Err("ambiguous overlapping push baseline prefixes".into());
+        }
     }
     action(&c.checkout_action, "actions/checkout")?;
     action(&c.upload_artifact_action, "actions/upload-artifact")?;
@@ -310,6 +341,20 @@ fn require_commit(root: &Path, oid: &str) -> Result<(), String> {
     }
     Ok(())
 }
+fn remote_baseline(root: &Path, reference: &str) -> Result<String, String> {
+    git(root, &["check-ref-format", reference])?;
+    let observed = git(root, &["ls-remote", "--refs", "origin", reference])?;
+    let fields: Vec<_> = observed.split_whitespace().collect();
+    if fields.len() != 2 || fields[1] != reference || !full_oid(fields[0]) {
+        return Err(format!(
+            "missing or ambiguous remote baseline ref: {reference}"
+        ));
+    }
+    // Bind the observed ref once; later fetches never reread shared FETCH_HEAD.
+    let base = fields[0].to_owned();
+    require_commit(root, &base)?;
+    Ok(base)
+}
 pub fn prepare(
     root: &Path,
     c: &Config,
@@ -333,25 +378,45 @@ pub fn prepare(
             }
             let candidate = string(&payload["after"])?;
             let before = string(&payload["before"])?;
-            if before.bytes().all(|b| b == b'0') && matches!(before.len(), 40 | 64) {
-                if payload["created"].as_bool() != Some(true) {
-                    return Err("zero before without branch-creation event".into());
-                }
-                let event_ref = payload["ref"]
+            if !full_oid(&candidate) {
+                return Err(format!("invalid full OID: {candidate}"));
+            }
+            let creation = before.bytes().all(|b| b == b'0') && matches!(before.len(), 40 | 64);
+            if creation && payload["created"].as_bool() != Some(true) {
+                return Err("zero before without branch-creation event".into());
+            }
+            if !creation && !full_oid(&before) {
+                return Err(format!("invalid full OID: {before}"));
+            }
+            let event_ref = if creation || !c.push_baselines.is_empty() {
+                let reference = payload["ref"]
                     .as_str()
                     .filter(|r| r.starts_with("refs/heads/"))
-                    .ok_or("branch-creation event requires refs/heads/... ref")?;
-                git(root, &["check-ref-format", event_ref])?;
+                    .ok_or(if creation {
+                        "branch-creation event requires refs/heads/... ref"
+                    } else {
+                        "configured push baseline requires refs/heads/... ref"
+                    })?;
+                git(root, &["check-ref-format", reference])?;
+                Some(reference)
+            } else {
+                None
+            };
+            if let Some(rule) = c.push_baselines.iter().find(|rule| {
+                event_ref.is_some_and(|reference| reference.starts_with(&rule.ref_prefix))
+            }) {
+                (
+                    false,
+                    Some(remote_baseline(root, &rule.base_ref)?),
+                    candidate,
+                    "push-configured-baseline-ref",
+                )
+            } else if creation {
+                let event_ref = event_ref.unwrap();
                 if event_ref == c.branch_creation_base_ref {
                     (true, None, candidate, "baseline-creation-initial-inventory")
                 } else {
-                    git(
-                        root,
-                        &["fetch", "--no-tags", "origin", &c.branch_creation_base_ref],
-                    )?;
-                    let base = git(root, &["rev-parse", "FETCH_HEAD^{commit}"])?
-                        .trim()
-                        .to_owned();
+                    let base = remote_baseline(root, &c.branch_creation_base_ref)?;
                     (false, Some(base), candidate, "branch-creation-baseline-ref")
                 }
             } else {
