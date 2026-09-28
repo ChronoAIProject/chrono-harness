@@ -3,6 +3,11 @@ use serde_json::json as value;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
+// Ordinary protocol cases test responses, not startup latency. Real child
+// startup has exceeded five seconds on the shared host. Deliberate timeout
+// cases below keep their separate two-second bound and thirty-second stall.
+const FIXTURE_TIMEOUT_SECONDS: u64 = 30;
+
 #[test]
 fn published_rfc8785_vectors() {
     // RFC 8785 §3.2.2 and §3.2.3, not produced by this implementation.
@@ -98,8 +103,13 @@ fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
         let (dir, request, binding) = initial_fixture(&format!(
             "{RESPONSE}assert 'base' not in r and 'delta' not in r\n{tail}"
         ));
-        let result =
-            chrono_harness::initial::invoke(&request, &binding, &Default::default(), 5, 8192);
+        let result = chrono_harness::initial::invoke(
+            &request,
+            &binding,
+            &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS,
+            8192,
+        );
         if tail == "print(json.dumps(s))" {
             let (response, process) = result.unwrap();
             assert_eq!(response.status, wire::Status::Pass);
@@ -131,8 +141,14 @@ fn initial_transport_rejects_wrong_mode_digest_and_base_placeholder_before_launc
             _ => unreachable!(),
         }
         assert!(
-            chrono_harness::initial::invoke(&request, &binding, &Default::default(), 5, 8192)
-                .is_err(),
+            chrono_harness::initial::invoke(
+                &request,
+                &binding,
+                &Default::default(),
+                FIXTURE_TIMEOUT_SECONDS,
+                8192
+            )
+            .is_err(),
             "{case}"
         );
         assert!(!dir.path().join("ran").exists(), "{case}");
@@ -208,7 +224,7 @@ fn bounded_delta_transport_retains_process_evidence() {
         );
         // Match ordinary protocol fixtures' startup guard when testing output;
         // the deliberately shorter timeout is only the timeout case's subject.
-        let seconds = if timeout { 2 } else { 5 };
+        let seconds = if timeout { 2 } else { FIXTURE_TIMEOUT_SECONDS };
         let failure = wire::invoke_detailed(&request, &binding, &Default::default(), seconds, 1024)
             .expect_err("a process bound is an error despite a valid response");
         assert_bound_evidence(failure, timeout);
@@ -225,7 +241,7 @@ fn bounded_initial_transport_retains_process_evidence() {
             &request.request_id,
             timeout,
         );
-        let seconds = if timeout { 2 } else { 5 };
+        let seconds = if timeout { 2 } else { FIXTURE_TIMEOUT_SECONDS };
         let failure =
             chrono_harness::initial::invoke(&request, &binding, &Default::default(), seconds, 1024)
                 .expect_err("an initial process bound cannot complete inventory");
@@ -234,7 +250,7 @@ fn bounded_initial_transport_retains_process_evidence() {
 }
 fn invoke(script: &str) -> Result<wire::Response, String> {
     let (_dir, r, b) = fixture(script);
-    wire::invoke(&r, &b, &Default::default(), 5, 8192).map(|v| v.0)
+    wire::invoke(&r, &b, &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192).map(|v| v.0)
 }
 #[test]
 fn four_statuses_exact_exits_and_identity() {
@@ -287,7 +303,7 @@ fn evidence_exists_and_is_bound_to_bytes() {
         "{RESPONSE}s['evidence']=[{{'path':'.chrono-harness/state/proof','sha256':'{}','kind':'fixture'}}]\nprint(json.dumps(s))",
         sha256(b"proof")
     ));
-    let call = || wire::invoke(&r, &b, &Default::default(), 5, 8192);
+    let call = || wire::invoke(&r, &b, &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192);
     assert!(call().is_err());
     fs::create_dir_all(dir.path().join(".chrono-harness/state")).unwrap();
     fs::write(dir.path().join(".chrono-harness/state/proof"), "tampered").unwrap();
@@ -304,11 +320,11 @@ fn digest_checked_before_launch_environment_cleared_and_literal_argv() {
     ));
     b.argv = vec![literal.into()];
     let env = std::collections::BTreeMap::from([("EXPLICIT".into(), "yes".into())]);
-    let outcome = wire::invoke(&r, &b, &env, 5, 8192);
+    let outcome = wire::invoke(&r, &b, &env, FIXTURE_TIMEOUT_SECONDS, 8192);
     assert!(outcome.is_ok(), "{outcome:?}");
     fs::write(dir.path().join("judge"), "#!/bin/sh\ntouch launched\n").unwrap();
     assert!(
-        wire::invoke(&r, &b, &env, 5, 8192)
+        wire::invoke(&r, &b, &env, FIXTURE_TIMEOUT_SECONDS, 8192)
             .unwrap_err()
             .contains("digest")
     );
@@ -335,7 +351,8 @@ fn endpoint_argv_placeholders_replace_only_complete_arguments() {
     b.argv = vec!["{candidate}".into(), "{base}".into()];
     b.argv.extend(literals.iter().map(|s| s.to_string()));
     b.argv.push("{base}".into());
-    let (response, process) = wire::invoke(&r, &b, &Default::default(), 5, 8192).unwrap();
+    let (response, process) =
+        wire::invoke(&r, &b, &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192).unwrap();
     assert_eq!(process.exit_code, 0);
     let mut expected = vec![r.candidate.commit.clone(), r.base.commit.clone()];
     expected.extend(literals.iter().map(|s| s.to_string()));
@@ -374,8 +391,14 @@ fn dag_forwards_only_direct_predecessors_and_named_outputs() {
         binding("b", &["a"]),
         binding("a", &[]),
     ];
-    let (status, records) =
-        chrono_harness::full::execute(&r, &plan, &Default::default(), 5, 8192).unwrap();
+    let (status, records) = chrono_harness::full::execute(
+        &r,
+        &plan,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
     assert_eq!(status, wire::Status::Pass, "{records:#?}");
     assert_eq!(records.len(), 4);
     assert!(records.iter().all(|r| r["state"] == "executed"));
@@ -397,8 +420,14 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
         binding("independent", &[]),
         binding("bad", &[]),
     ];
-    let (status, records) =
-        chrono_harness::full::execute(&r, &plan, &Default::default(), 5, 8192).unwrap();
+    let (status, records) = chrono_harness::full::execute(
+        &r,
+        &plan,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
     assert_eq!(status, wire::Status::Error);
     assert_eq!(records[1]["state"], "blocked");
     assert_eq!(records[2]["id"], "independent");
@@ -415,7 +444,8 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
 fn invalid_response_retains_actual_process_exit_in_report() {
     let (_dir, r, b) = fixture("import sys\nprint('invalid JSON')\nsys.exit(9)");
     let (status, records) =
-        chrono_harness::full::execute(&r, &[b], &Default::default(), 5, 8192).unwrap();
+        chrono_harness::full::execute(&r, &[b], &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192)
+            .unwrap();
     assert_eq!(status, wire::Status::Error);
     assert_eq!(records[0]["state"], "executed");
     assert_eq!(records[0]["exit_code"], 9);
@@ -429,8 +459,14 @@ fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
             "{RESPONSE}s['outputs']['note']='MARKER'\nsys.stdout.buffer.write(json.dumps(s).encode().replace(b'MARKER',{bytes}))"
         );
         let (_dir, r, b) = fixture(&script);
-        let (status, records) =
-            chrono_harness::full::execute(&r, &[b], &Default::default(), 5, 8192).unwrap();
+        let (status, records) = chrono_harness::full::execute(
+            &r,
+            &[b],
+            &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS,
+            8192,
+        )
+        .unwrap();
         assert_eq!(
             status,
             if accepted {

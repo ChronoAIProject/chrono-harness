@@ -333,10 +333,13 @@ fn invalid_git_references_fail_before_version_or_objects() {
 
 #[test]
 fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
-    for fault in ["timeout", "output", "dirty-config"] {
+    for fault in ["timeout", "object-timeout", "output", "dirty-config"] {
         let body = match fault {
-            "timeout" => {
-                "case \"$*\" in *'ls-tree'*) printf 'before-timeout'; /bin/sleep 10;; esac"
+            "timeout" => "case \"$*\" in --version) printf 'before-timeout'; /bin/sleep 10;; esac",
+            // Object acquisition keeps its normal startup guard. Its deliberate
+            // stall is longer, so this separately checks the post-version path.
+            "object-timeout" => {
+                "case \"$*\" in *'ls-tree'*) printf 'before-timeout'; /bin/sleep 60;; esac"
             }
             "output" => {
                 "case \"$*\" in *'ls-tree'*) i=0; while [ $i -lt 400 ]; do printf '0123456789012345678901234567890123456789'; i=$((i+1)); done;; esac"
@@ -345,7 +348,9 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
         };
         let mut h = BoundHost::new(false, body);
         h.host.edit(CONFIG, |c| {
-            c["protocol"]["timeout_seconds"] = json!(5);
+            // Keep the short version bound separate from object setup. Set
+            // both explicitly; the historical full config defaults to 120s.
+            c["protocol"]["timeout_seconds"] = json!(if fault == "timeout" { 5 } else { 30 });
             c["protocol"]["stdout_limit_bytes"] = json!(4096);
         });
         if fault == "dirty-config" {
@@ -357,13 +362,47 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
         assert_ne!(exit, 0, "{fault}");
         assert!(error.contains("E_GIT_FACTS"), "{fault}: {error}");
         let expected = match fault {
-            "timeout" => "process timed out",
+            "timeout" | "object-timeout" => "process timed out",
             "output" => "process output limit exceeded",
             _ => "config differs from fixed candidate",
         };
         assert!(error.contains(expected), "{fault}: {error}");
-        if fault == "timeout" {
-            assert!(error.contains("before-timeout"), "{error}");
+        if matches!(fault, "timeout" | "object-timeout") {
+            let observed: Value =
+                serde_json::from_str(error.trim().strip_prefix("E_CHECK: E_GIT_FACTS: ").unwrap())
+                    .unwrap();
+            let processes = observed["observation"]["processes"].as_array().unwrap();
+            let process = processes.last().unwrap();
+            if fault == "timeout" {
+                assert_eq!(processes.len(), 1, "timeout must stop before object reads");
+                assert_eq!(process["argv"], json!([h.program, "--version"]));
+            } else {
+                assert!(
+                    process["argv"]
+                        .as_array()
+                        .unwrap()
+                        .contains(&json!("ls-tree"))
+                );
+                assert_eq!(process["stdout"], "before-timeout");
+            }
+            assert_eq!(process["failure"], "process timed out");
+            assert_eq!(process["exit_code"], -1);
+            for stream in ["stdout", "stderr"] {
+                let bytes: Vec<u8> =
+                    serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+                assert_eq!(process[format!("{stream}_sha256")], json!(sha256(&bytes)));
+                assert_eq!(process[stream], String::from_utf8(bytes.clone()).unwrap());
+                if stream == "stdout" {
+                    // A wall-clock bound may fire before the script starts or
+                    // during its first write. Retain exactly the actual prefix.
+                    assert!(b"before-timeout".starts_with(&bytes), "{error}");
+                } else {
+                    assert!(bytes.is_empty(), "{error}");
+                }
+            }
+            if fault == "timeout" {
+                assert!(matches!(h.trace().as_str(), "" | "--version\n"));
+            }
         }
         if fault == "output" {
             assert!(error.contains("0123456789"), "{error}");
