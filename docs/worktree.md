@@ -264,7 +264,7 @@ Maintenance operations return the ordinary stored/stdout report with actual proc
 bytes, `governance: not-evaluated` and `parity: unestablished`; success exits 0,
 failure exits 2. They preserve source work. Interrupted owned checkouts with a
 retained intent use the separate contract below. Damaged/missing Git metadata,
-lost recovery identity and remote branch retirement need their own contracts; no automatic metadata deletion or
+lost recovery identity need their own contracts; no automatic metadata deletion or
 semantic reconciliation is provided. PR/merge/landing producers remain pending.
 These commands are included in the public beta.8 release and installed through
 the same pinned host distribution entry.
@@ -383,7 +383,7 @@ cleanup locking. They also cover absent/empty/truncated results, terminal-result
 refusal, identity drift and occupied intent paths. These are bounded process
 interruption checks, without a power-loss or concurrent-writer transaction
 guarantee. Interrupted fetches use the separate intent below. Missing intent,
-damaged Git metadata, remote retirement and PR/merge orchestration remain outside
+damaged Git metadata and PR/merge orchestration remain outside
 this contract. No governance or local/CI parity guarantee is added.
 
 ## Interrupted fetch cleanup
@@ -443,6 +443,72 @@ Real CLI tests cover process termination after fetch and after ref removal,
 start/reconstruct consumers, absent/empty/truncated results, explicit retry,
 identity/retention drift, symbolic refs, terminal reports, occupied publication
 paths and evidence changed during deletion. Missing both usable receipt and
-intent, damaged Git metadata, remote retirement and PR/merge orchestration remain
+intent, damaged Git metadata and PR/merge orchestration remain
 outside this contract. These observations do not make concurrent writers atomic,
 provide power-loss durability, or certify governance and local/CI parity.
+
+
+## Remote branch retirement
+
+The source now provides `cleanup-remote`; it is newer than public beta.9. It uses
+an explicit plan and the same registered worktree configuration and process
+reporting as local maintenance:
+
+```sh
+.chrono-harness/bin/chrono-worktree cleanup-remote \
+  --host-root . --config .chrono-harness/worktree.json \
+  --plan .chrono-harness/state/remote-cleanup.json
+```
+
+```json
+{
+  "schema": "chrono-worktree-maintenance/v1",
+  "operation": "cleanup-remote",
+  "branch": "integration/finished-task",
+  "head": "EXPECTED_FULL_REMOTE_BRANCH_OID",
+  "expected_url": "https://example.org/owner/project.git",
+  "retained_ref": "refs/heads/dev",
+  "retained_commit": "EXPECTED_FULL_TARGET_OID",
+  "retention": "same-tree",
+  "allow_absent_ref": false
+}
+```
+
+The source registries must declare the work branch prefix and target branch;
+`retained_ref` must be that distinct target. The configured remote must resolve
+to exactly one push URL matching the plan. Both remote refs are observed at that
+URL, without consulting remote-tracking refs. The target must match the fixed
+retained commit locally and remotely. Existing saved-work checks require either
+`ancestor` or `same-tree` retention. Objects must already exist locally; this entry
+does not infer or fetch missing history, a landing, PR status or tests.
+
+The push names only that URL and full branch ref, disables following tags and
+submodule pushes, and requires `--force-with-lease=REF:EXPECTED_OID`. A changed
+branch is preserved by Git's lease. Local worktrees, local branches, other remote
+refs and Git configuration are not disposal targets. The plan and committed
+policy bytes, endpoint and saved work are checked around the operation. Symbolic,
+unexpected, duplicate or malformed remote ref advertisements fail.
+
+Success requires a successful push followed by observed branch absence and
+matching retention/plan/endpoint checks. The report uses `remote_branch_removal`
+with `not-attempted`, `attempted-unverified`, `verified-absent` or `already-absent`.
+`remote_branch_removed` is true only for this invocation's verified removal. A
+failed command may already have deleted the branch; its original bytes and exit
+remain in the failed report. An explicit `allow_absent_ref: true` retry validates
+retention and absence without rewriting the original result. Reports keep
+`governance: not-evaluated` and `parity: unestablished`.
+
+The lease protects the disposal ref's expected OID. Target/URL observations and
+local checks are not an atomic transaction with the remote server, do not prevent
+all concurrent writers or transient changes, and do not close Git configuration,
+hook, transport, credential or OS inputs. If the target changes during a push,
+the final observation can fail after deletion. An interrupted attempt has unknown
+outcome and can use an explicit absence-tolerant plan after the caller establishes
+it has stopped. No remote recovery intent, server lock, PR authorization or merge
+certificate is inferred. Credentials may still be required by the configured
+transport; do not put secret-bearing URLs in a retained plan/report.
+
+Real bare-remote consumers cover unchanged local dirty work, explicit endpoint
+selection despite configured push refspecs, squash retention and absence retries,
+endpoint/branch/retention rejection, symbolic refs, concurrent branch updates,
+original failure after deletion, and target/plan changes after deletion.
