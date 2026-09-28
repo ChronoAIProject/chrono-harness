@@ -26,6 +26,7 @@ jobs:
       - name: Build and verify registered native release
         run: python3 .chrono-harness/release/build.py . .chrono-harness/cache/release-platform
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
           name: chrono-release-${{ matrix.runner }}
           path: .chrono-harness/cache/release-platform/

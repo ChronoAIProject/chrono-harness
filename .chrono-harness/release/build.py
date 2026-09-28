@@ -67,40 +67,75 @@ def preflight(root):
 
 def main(root, output):
     cfg, tools, operations = preflight(root)
+    if os.path.lexists(output):
+        raise ValueError('release output already exists')
     env = dict(os.environ, RUSTUP_TOOLCHAIN=cfg['rust_toolchain'], CARGO_PROFILE_RELEASE_STRIP='symbols')
-    subprocess.run([tools['rustup'], 'toolchain', 'install', cfg['rust_toolchain'], '--profile', 'minimal'], cwd=root, env=env, check=True)
-    versions = {tool: subprocess.check_output([tools[tool], '--version'], cwd=root, env=env, text=True).strip() for tool in ['cargo', 'rustc']}
-    if not versions['rustc'].startswith('rustc ' + cfg['rust_toolchain'] + ' '):
-        raise ValueError('unexpected compiler')
-    for manifest in cfg['manifests']:
-        subprocess.run([tools['cargo'], 'build', '--release', '--locked', '--manifest-path', manifest], cwd=root, env=env, check=True)
-    verified = []
-    for operation, tool, argv in operations:
+    report = {
+        'schema': 'chrono-native-build/v3', 'status': 'failed',
+        'system': platform.system(), 'machine': platform.machine(),
+        'source_commit': None, 'versions': {}, 'manifests': cfg['manifests'],
+        'verification_operations': cfg['verification_operations'],
+        'processes': [], 'failure': None,
+    }
+    phase = 'source-identity'
+
+    def run(label, argv, operation=None):
+        nonlocal phase
+        phase = label
         process = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        report['processes'].append({
+            'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(root),
+            'exit_code': process.returncode,
+            'stdout_bytes': list(process.stdout), 'stderr_bytes': list(process.stderr),
+            'stdout_sha256': hashlib.sha256(process.stdout).hexdigest(),
+            'stderr_sha256': hashlib.sha256(process.stderr).hexdigest(),
+        })
         sys.stdout.buffer.write(process.stdout)
         sys.stdout.buffer.flush()
         sys.stderr.buffer.write(process.stderr)
         sys.stderr.buffer.flush()
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, argv)
-        verified.append({
-            'operation': operation, 'tool': tool, 'argv': argv, 'cwd': str(root),
-            'exit_code': process.returncode,
-            'stdout_bytes': list(process.stdout), 'stderr_bytes': list(process.stderr),
-            'stdout_sha256': hashlib.sha256(process.stdout).hexdigest(),
-            'stderr_sha256': hashlib.sha256(process.stderr).hexdigest(),
-        })
-    subprocess.run([str(root / 'crates/distribution/target/release/chrono-distribution'), 'pack', '--root', str(root), '--plan', str(root / '.chrono-harness/release/plan.json'), '--output', str(output)], cwd=root, env=env, check=True)
-    (output / 'build.json').write_text(json.dumps({
-        'schema': 'chrono-native-build/v2', 'system': platform.system(), 'machine': platform.machine(),
-        'versions': versions, 'source_commit': subprocess.check_output([tools['git'], 'rev-parse', 'HEAD'], cwd=root, env=env, text=True).strip(),
-        'manifests': cfg['manifests'], 'verification': verified,
-    }, indent=2) + '\n')
+        return process.stdout
+
+    exit_code = 0
+    try:
+        source = run('source-identity', [tools['git'], 'rev-parse', 'HEAD']).decode('utf-8').strip()
+        if len(source) not in (40, 64) or any(c not in '0123456789abcdef' for c in source):
+            raise ValueError('invalid source commit observation')
+        report['source_commit'] = source
+        run('toolchain-install', [tools['rustup'], 'toolchain', 'install', cfg['rust_toolchain'], '--profile', 'minimal'])
+        for tool in ['cargo', 'rustc']:
+            report['versions'][tool] = run('compiler-version', [tools[tool], '--version']).decode('utf-8').strip()
+        if not report['versions']['rustc'].startswith('rustc ' + cfg['rust_toolchain'] + ' '):
+            raise ValueError('unexpected compiler')
+        for manifest in cfg['manifests']:
+            run('build', [tools['cargo'], 'build', '--release', '--locked', '--manifest-path', manifest])
+        for operation, _tool, argv in operations:
+            run('verification', argv, operation)
+        run('package', [str(root / 'crates/distribution/target/release/chrono-distribution'), 'pack', '--root', str(root), '--plan', str(root / '.chrono-harness/release/plan.json'), '--output', str(output)])
+        report['status'] = 'passed'
+    except (subprocess.CalledProcessError, ValueError, OSError) as error:
+        actual_exit = error.returncode if isinstance(error, subprocess.CalledProcessError) else None
+        report['failure'] = {'phase': phase, 'message': str(error), 'exit_code': actual_exit}
+        exit_code = (actual_exit if actual_exit > 0 else 128 - actual_exit) if actual_exit is not None else 2
+        print(str(error), file=sys.stderr)
+    try:
+        output.mkdir(parents=True, exist_ok=True)
+        with (output / 'build.json').open('x') as stream:
+            stream.write(json.dumps(report, indent=2) + '\n')
+    except OSError as error:
+        print('cannot retain native build evidence: ' + str(error), file=sys.stderr)
+        # Reporting cannot replace an already observed child failure with success.
+        return exit_code or 2
+    return exit_code
 
 
 if __name__ == '__main__':
     try:
-        main(*(Path(p).resolve() for p in sys.argv[1:]))
-    except subprocess.CalledProcessError as error:
+        if len(sys.argv) != 3:
+            raise ValueError('usage: build.py ROOT ABSENT_OUTPUT')
+        sys.exit(main(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).absolute()))
+    except (ValueError, OSError) as error:
         print(str(error), file=sys.stderr)
-        sys.exit(error.returncode if error.returncode > 0 else 128 - error.returncode)
+        sys.exit(2)
