@@ -123,7 +123,9 @@ impl Cleanup {
             None if self.allow_absent_ref => true,
             Some(ref oid) if oid == &self.head => false,
             _ => {
-                return Err("remote branch changed or absent without an explicit retry plan".into());
+                return Err(
+                    "remote branch changed or absent without an explicit retry plan".into(),
+                );
             }
         };
         stable()?;
