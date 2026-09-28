@@ -262,9 +262,9 @@ mutations.
 
 Maintenance operations return the ordinary stored/stdout report with actual process
 bytes, `governance: not-evaluated` and `parity: unestablished`; success exits 0,
-failure exits 2. They preserve source work. Damaged/missing Git metadata,
-interrupted report publication and remote branch
-retirement need their own recovery contracts; no automatic metadata deletion or
+failure exits 2. They preserve source work. Interrupted owned checkouts with a
+retained intent use the separate contract below. Damaged/missing Git metadata,
+lost recovery identity and remote branch retirement need their own contracts; no automatic metadata deletion or
 semantic reconciliation is provided. PR/merge/landing producers remain pending.
 These commands are included in the public beta.7 release and installed through
 the same pinned host distribution entry.
@@ -314,3 +314,72 @@ removal and absence check. A failed command can have changed the ref. Set
 must still hold. This does not reconstruct a missing/interrupted original report
 or make concurrent ref/configuration writers atomic. It exits and reports through
 the same maintenance contract above and is included in public beta.7.
+
+## Interrupted checkout recovery
+
+The candidate implementation also provides `recover-interrupted`. It is not in
+public beta.7; bootstrap the candidate to use it. Before `start`/`reconstruct`
+creates a checkout, and before `cleanup` acquires its checkout lock, the producer
+publishes a `chrono-worktree-recovery-intent/v1` file next to the result path,
+with the suffix `.intent.json`. It writes and syncs a temporary file, then
+publishes without replacing an existing path. Publication failure prevents that
+subsequent checkout/lock operation. Earlier preparation, including fetching,
+can already have occurred.
+
+The intent retains source/configuration/registry identity, selected base,
+destination, branch, invocation lock reason and final-result path. It contains
+no outcome or fabricated process exit. A completed result references its path
+and digest. If the process stops before final publication, the caller can select
+the corresponding explicit intent using the observed invocation/lock identity;
+the tool does not scan for or guess an owner. Keep this file and any incomplete
+result until recovery is complete. Its presence does not prove that the original
+invocation stopped: the AI caller must establish that before starting recovery.
+
+Use the same registered policy and an explicit state plan:
+
+```sh
+.chrono-harness/bin/chrono-worktree recover-interrupted \
+  --host-root . --config .chrono-harness/worktree.json \
+  --plan .chrono-harness/state/interrupted-recovery.json
+```
+
+```json
+{
+  "schema": "chrono-worktree-maintenance/v1",
+  "operation": "recover-interrupted",
+  "intent": {
+    "path": ".chrono-harness/state/worktrees/start-INVOCATION.json.intent.json",
+    "sha256": "ACTUAL_INTENT_SHA256"
+  },
+  "result": {"presence": "absent"},
+  "head": "CURRENT_RECONCILED_HEAD_OID",
+  "index_tree": "CURRENT_RECONCILED_INDEX_TREE_OID"
+}
+```
+
+When an empty or truncated result file exists, use
+`"result": {"presence": "present", "sha256": "ACTUAL_RESULT_SHA256"}`.
+Missing and empty are different observations. The reader rejects changed
+presence/bytes, nonregular or linked inputs, mismatched intent/configuration,
+and an original JSON result that declares a terminal worktree outcome. Use the
+ordinary maintenance contract for such a retained result; do not remove it to
+make this path eligible.
+
+Recovery reuses the original `recover` checks for actual checkout, common
+repository, branch, owned lock, base ancestry, reconciled HEAD/index, unstaged
+changes and declared artifacts. It rechecks the selected evidence before and
+after releasing the lock. The new report retains the original intent and any
+result bytes, sets `original_outcome: unknown`, and reports only the current
+recovery outcome. It neither completes the interrupted command nor restores a
+lost original index. Staged work still needs a candidate commit and the canonical
+check. If cleanup already removed the checkout, use its explicit absence-tolerant
+cleanup plan instead of claiming a recovered checkout.
+
+Real Git tests terminate the CLI after checkout creation, patch application and
+cleanup locking. They also cover absent/empty/truncated results, terminal-result
+refusal, identity drift and occupied intent paths. These are bounded process
+interruption checks, without a power-loss or concurrent-writer transaction
+guarantee. Missing intent, damaged Git metadata, interruption before this
+checkpoint (including incomplete fetch observations), remote retirement and
+PR/merge orchestration remain outside this contract. No governance or
+local/CI parity guarantee is added.

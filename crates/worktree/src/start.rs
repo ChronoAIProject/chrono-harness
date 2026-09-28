@@ -364,6 +364,7 @@ pub(crate) fn execute(
     report["branch_started_at"] = value!(started);
     report["registry_digest"] = value!(registry_digest);
     let path = target.to_str().ok_or("destination is not UTF-8")?;
+    crate::recovery::publish(source, report)?;
     // No existing branch reset, no inherited tracking setup, no restore recipe.
     r.git(
         source,

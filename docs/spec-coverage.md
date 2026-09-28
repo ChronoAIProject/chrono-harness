@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch consumers | AI reconciliation, damaged/missing metadata and interrupted receipts, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch plus retained-intent interrupted recovery consumers | AI reconciliation, damaged/missing metadata, lost intent or pre-checkpoint interruption, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -151,8 +151,8 @@ loader and artifact classifier. Real consumers cover failed-hook recovery,
 reconciled reconstruction, original-report preservation, identity/lock/index
 refusals, explicit artifact disposal, ancestor/squash preservation, retries and
 actual removal/ref races and recovery of cleanup locks after retained-ref races. These operations do not certify governance or remote
-landing. Damaged/missing metadata, interrupted publication,
-remote branch retirement and autonomous provider orchestration remain pending.
+landing. Damaged/missing metadata, lost recovery identity, interruption before
+the retained checkpoint, remote branch retirement and autonomous provider orchestration remain pending.
 
 Receipt-bound temporary-ref cleanup reuses maintenance receipt and saved-commit
 validation. Real Git tests cover preservation, explicit absence retries, malformed
@@ -160,3 +160,13 @@ identity/retention, symbolic refs, concurrent ref updates, and removal followed
 by a failed Git exit. It preserves the original failure and reports unverified
 effects separately from verified absence. It requires a complete original report;
 interrupted or missing receipts remain outside this recovery contract.
+
+Candidate interrupted checkout recovery publishes immutable identity before
+creation or cleanup locking and consumes an explicitly selected intent with
+absent/partial result identity. Dedicated real CLI interruption tests cover
+creation, reconstruction and cleanup, original-byte preservation, terminal-result
+refusal, identity drift and publication collisions. It reuses the reconciled
+checkout release checks and leaves the original outcome unknown. Missing intent,
+pre-checkpoint interruption and damaged metadata remain unresolved; caller
+confirmation that the original process stopped is a premise, not a fact proven
+by the intent. This source addition is not in public beta.7.
