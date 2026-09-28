@@ -17,6 +17,8 @@ pub struct Entry {
     pub oid: String,
     pub kind: String,
 }
+pub use crate::facts_binding::{Reader, declaration as git_declaration};
+
 pub type Tree = BTreeMap<String, Entry>;
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     let o = Command::new("git")
@@ -53,64 +55,17 @@ pub fn full_oid(s: &str) -> Result<(), String> {
     Ok(())
 }
 pub fn verify_oid(root: &Path, oid: &str) -> Result<String, String> {
-    full_oid(oid)?;
-    if utf8(git(
-        root,
-        &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
-    )?)?
-    .trim()
-        != oid
-    {
-        return Err("OID is not a commit".into());
-    }
-    Ok(
-        utf8(git(root, &["rev-parse", &format!("{oid}^{{tree}}")])?)?
-            .trim()
-            .into(),
-    )
+    Reader::legacy().verify_oid(root, oid)
 }
 pub fn blob(root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
-    relative_path(path)?;
-    git(root, &["show", &format!("{oid}:{path}")])
+    Reader::legacy().blob(root, oid, path)
 }
 /// Read original commit headers, including parents hidden by a shallow boundary.
 pub fn parents(root: &Path, oid: &str) -> Result<Vec<String>, String> {
-    full_oid(oid)?;
-    let bytes = git(root, &["cat-file", "commit", oid])?;
-    let headers = bytes
-        .split(|b| *b == b'\n')
-        .take_while(|line| !line.is_empty());
-    let mut parents = vec![];
-    for line in headers {
-        if let Some(oid) = line.strip_prefix(b"parent ") {
-            let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
-            full_oid(oid)?;
-            parents.push(oid.into());
-        }
-    }
-    Ok(parents)
+    Reader::legacy().parents(root, oid)
 }
 pub fn tree(root: &Path, oid: &str) -> Result<Tree, String> {
-    let raw = git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
-    let mut out = Tree::new();
-    for row in raw.split(|b| *b == 0).filter(|v| !v.is_empty()) {
-        let s = std::str::from_utf8(row).map_err(|_| "E_INPUT_UNSUPPORTED: non UTF-8 tree path")?;
-        let (meta, path) = s.split_once('\t').ok_or("invalid Git tree row")?;
-        let f: Vec<_> = meta.split(' ').collect();
-        if f.len() != 3 {
-            return Err("invalid Git tree metadata".into());
-        }
-        relative_path(path)?;
-        out.insert(
-            path.into(),
-            Entry {
-                mode: f[0].into(),
-                kind: f[1].into(),
-                oid: f[2].into(),
-            },
-        );
-    }
-    Ok(out)
+    Reader::legacy().tree(root, oid)
 }
 pub fn delta(a: &Tree, b: &Tree) -> Vec<Delta> {
     a.keys()
@@ -146,92 +101,14 @@ fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {
         .collect()
 }
 pub fn index_flags(root: &Path) -> Result<Vec<IndexFlag>, String> {
-    git(root, &["ls-files", "-v", "-z"])?
-        .split(|b| *b == 0)
-        .filter(|s| !s.is_empty())
-        .map(|row| {
-            if row.len() < 3 || row[1] != b' ' || !row[0].is_ascii_alphabetic() {
-                return Err("invalid Git index flag record".into());
-            }
-            Ok(IndexFlag {
-                path: utf8(row[2..].to_vec())?,
-                tag: (row[0] as char).to_string(),
-            })
-        })
-        .collect()
+    Reader::legacy().index_flags(root)
 }
 pub fn checkout(root: &Path, candidate: &str) -> Result<Checkout, String> {
-    let head = utf8(git(root, &["rev-parse", "HEAD"])?)?.trim().into();
-    let mut tracked = paths(git(
-        root,
-        &[
-            "diff",
-            "--no-ext-diff",
-            "--name-only",
-            "-z",
-            candidate,
-            "--",
-        ],
-    )?)?;
-    tracked.extend(paths(git(
-        root,
-        &[
-            "diff",
-            "--no-ext-diff",
-            "--cached",
-            "--name-only",
-            "-z",
-            candidate,
-            "--",
-        ],
-    )?)?);
-    tracked.sort();
-    tracked.dedup();
-    let mut untracked = paths(git(
-        root,
-        &["ls-files", "--others", "--exclude-standard", "-z"],
-    )?)?;
-    untracked.extend(paths(git(
-        root,
-        &[
-            "ls-files",
-            "--others",
-            "--ignored",
-            "--exclude-standard",
-            "-z",
-        ],
-    )?)?);
-    untracked.sort();
-    untracked.dedup();
-    Ok(Checkout {
-        head,
-        tracked,
-        untracked,
-        index_flags: index_flags(root)?,
-    })
+    Reader::legacy().checkout(root, candidate)
 }
 /// Export immutable bytes, never run base code; supported files are read-only.
 pub fn export(root: &Path, oid: &str, t: &Tree, dest: &Path) -> Result<(), String> {
-    for (path, e) in t {
-        if e.kind != "blob" {
-            continue;
-        }
-        let p = no_symlink_parents(dest, path)?;
-        fs::create_dir_all(p.parent().ok_or("snapshot parent")?).map_err(|e| e.to_string())?;
-        let bytes = blob(root, oid, path)?;
-        if e.mode == "120000" {
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(utf8(bytes)?, &p).map_err(|e| e.to_string())?;
-            #[cfg(not(unix))]
-            return Err("E_INPUT_UNSUPPORTED: symlink snapshot".into());
-        } else {
-            fs::write(&p, bytes).map_err(|e| e.to_string())?;
-            let mut perm = fs::metadata(&p).map_err(|e| e.to_string())?.permissions();
-            perm.set_readonly(true);
-            fs::set_permissions(&p, perm).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
+    Reader::legacy().export(root, oid, t, dest)
 }
 pub fn registry_paths(config: &Value, path: &str) -> Result<Vec<String>, String> {
     let mut paths = vec![path.to_string()];
@@ -249,7 +126,7 @@ pub fn registry_values(
     oid: &str,
     path: &str,
 ) -> Result<BTreeMap<String, Value>, String> {
-    Ok(registry_snapshot(root, oid, path)?.values)
+    Reader::legacy().registry_values(root, oid, path)
 }
 /// Original bytes and parsed values from one registry read, without a global cache.
 pub struct RegistrySnapshot {
@@ -257,26 +134,190 @@ pub struct RegistrySnapshot {
     pub values: BTreeMap<String, Value>,
 }
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
-    let original = blob(root, oid, path)?;
-    let config = json(&original)?;
-    let paths = registry_paths(&config, path)?;
-    let mut snapshot = RegistrySnapshot {
-        bytes: BTreeMap::from([(path.into(), original)]),
-        values: BTreeMap::from([(path.into(), config)]),
-    };
-    for path in paths {
-        if !snapshot.bytes.contains_key(&path) {
-            let original = blob(root, oid, &path)?;
-            let value = json(&original)?;
-            snapshot.bytes.insert(path.clone(), original);
-            snapshot.values.insert(path, value);
-        }
-    }
-    Ok(snapshot)
+    Reader::legacy().registry_snapshot(root, oid, path)
 }
 pub fn registry_digest(
     base: &BTreeMap<String, Value>,
     candidate: &BTreeMap<String, Value>,
 ) -> Result<String, String> {
     crate::wire::digest(&value!({"base":base,"candidate":candidate}))
+}
+
+impl Reader {
+    pub fn verify_oid(&self, root: &Path, oid: &str) -> Result<String, String> {
+        full_oid(oid)?;
+        if utf8(self.git(
+            root,
+            &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
+        )?)?
+        .trim()
+            != oid
+        {
+            return Err("OID is not a commit".into());
+        }
+        Ok(
+            utf8(self.git(root, &["rev-parse", &format!("{oid}^{{tree}}")])?)?
+                .trim()
+                .into(),
+        )
+    }
+    pub fn blob(&self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
+        relative_path(path)?;
+        self.git(root, &["show", &format!("{oid}:{path}")])
+    }
+    pub fn parents(&self, root: &Path, oid: &str) -> Result<Vec<String>, String> {
+        full_oid(oid)?;
+        let bytes = self.git(root, &["cat-file", "commit", oid])?;
+        let headers = bytes
+            .split(|b| *b == b'\n')
+            .take_while(|line| !line.is_empty());
+        let mut parents = vec![];
+        for line in headers {
+            if let Some(oid) = line.strip_prefix(b"parent ") {
+                let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
+                full_oid(oid)?;
+                parents.push(oid.into());
+            }
+        }
+        Ok(parents)
+    }
+    pub fn tree(&self, root: &Path, oid: &str) -> Result<Tree, String> {
+        let raw = self.git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
+        let mut out = Tree::new();
+        for row in raw.split(|b| *b == 0).filter(|v| !v.is_empty()) {
+            let s =
+                std::str::from_utf8(row).map_err(|_| "E_INPUT_UNSUPPORTED: non UTF-8 tree path")?;
+            let (meta, path) = s.split_once('\t').ok_or("invalid Git tree row")?;
+            let f: Vec<_> = meta.split(' ').collect();
+            if f.len() != 3 {
+                return Err("invalid Git tree metadata".into());
+            }
+            relative_path(path)?;
+            out.insert(
+                path.into(),
+                Entry {
+                    mode: f[0].into(),
+                    kind: f[1].into(),
+                    oid: f[2].into(),
+                },
+            );
+        }
+        Ok(out)
+    }
+    pub fn index_flags(&self, root: &Path) -> Result<Vec<IndexFlag>, String> {
+        self.git(root, &["ls-files", "-v", "-z"])?
+            .split(|b| *b == 0)
+            .filter(|s| !s.is_empty())
+            .map(|row| {
+                if row.len() < 3 || row[1] != b' ' || !row[0].is_ascii_alphabetic() {
+                    return Err("invalid Git index flag record".into());
+                }
+                Ok(IndexFlag {
+                    path: utf8(row[2..].to_vec())?,
+                    tag: (row[0] as char).to_string(),
+                })
+            })
+            .collect()
+    }
+    pub fn checkout(&self, root: &Path, candidate: &str) -> Result<Checkout, String> {
+        let head = utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into();
+        let mut tracked = paths(self.git(
+            root,
+            &[
+                "diff",
+                "--no-ext-diff",
+                "--name-only",
+                "-z",
+                candidate,
+                "--",
+            ],
+        )?)?;
+        tracked.extend(paths(self.git(
+            root,
+            &[
+                "diff",
+                "--no-ext-diff",
+                "--cached",
+                "--name-only",
+                "-z",
+                candidate,
+                "--",
+            ],
+        )?)?);
+        tracked.sort();
+        tracked.dedup();
+        let mut untracked =
+            paths(self.git(root, &["ls-files", "--others", "--exclude-standard", "-z"])?)?;
+        untracked.extend(paths(self.git(
+            root,
+            &[
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+            ],
+        )?)?);
+        untracked.sort();
+        untracked.dedup();
+        Ok(Checkout {
+            head,
+            tracked,
+            untracked,
+            index_flags: self.index_flags(root)?,
+        })
+    }
+    pub fn export(&self, root: &Path, oid: &str, t: &Tree, dest: &Path) -> Result<(), String> {
+        for (path, e) in t {
+            if e.kind != "blob" {
+                continue;
+            }
+            let p = no_symlink_parents(dest, path)?;
+            fs::create_dir_all(p.parent().ok_or("snapshot parent")?).map_err(|e| e.to_string())?;
+            let bytes = self.blob(root, oid, path)?;
+            if e.mode == "120000" {
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(utf8(bytes)?, &p).map_err(|e| e.to_string())?;
+                #[cfg(not(unix))]
+                return Err("E_INPUT_UNSUPPORTED: symlink snapshot".into());
+            } else {
+                fs::write(&p, bytes).map_err(|e| e.to_string())?;
+                let mut perm = fs::metadata(&p).map_err(|e| e.to_string())?.permissions();
+                perm.set_readonly(true);
+                fs::set_permissions(&p, perm).map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+    pub fn registry_values(
+        &self,
+        root: &Path,
+        oid: &str,
+        path: &str,
+    ) -> Result<BTreeMap<String, Value>, String> {
+        Ok(self.registry_snapshot(root, oid, path)?.values)
+    }
+    pub fn registry_snapshot(
+        &self,
+        root: &Path,
+        oid: &str,
+        path: &str,
+    ) -> Result<RegistrySnapshot, String> {
+        let original = self.blob(root, oid, path)?;
+        let config = json(&original)?;
+        let paths = registry_paths(&config, path)?;
+        let mut snapshot = RegistrySnapshot {
+            bytes: BTreeMap::from([(path.into(), original)]),
+            values: BTreeMap::from([(path.into(), config)]),
+        };
+        for path in paths {
+            if !snapshot.bytes.contains_key(&path) {
+                let original = self.blob(root, oid, &path)?;
+                let value = json(&original)?;
+                snapshot.bytes.insert(path.clone(), original);
+                snapshot.values.insert(path, value);
+            }
+        }
+        Ok(snapshot)
+    }
 }

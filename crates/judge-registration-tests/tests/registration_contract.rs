@@ -6,6 +6,8 @@ use std::{
     process::Command,
 };
 use tempfile::TempDir;
+#[path = "git_facts.rs"]
+mod git_facts;
 struct Host {
     dir: TempDir,
     base: String,

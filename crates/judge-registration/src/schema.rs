@@ -150,22 +150,23 @@ fn edge(v: &Value, from: bool) -> Result {
     Ok(())
 }
 pub fn config(v: &Value) -> Result {
-    common_versions(
-        v,
-        &[
-            "enforcement",
-            "runner",
-            "registries",
-            "canonical_check",
-            "tools",
-            "protocol",
-            "semantic_fields",
-            "artifacts",
-            "environment",
-            "input_closure",
-        ],
-        &[1, 2],
-    )?;
+    let mut fields = vec![
+        "enforcement",
+        "runner",
+        "registries",
+        "canonical_check",
+        "tools",
+        "protocol",
+        "semantic_fields",
+        "artifacts",
+        "environment",
+        "input_closure",
+    ];
+    if v["schema_version"] == 3 {
+        fields.push("facts_git");
+        chrono_harness::facts::git_declaration(v)?;
+    }
+    common_versions(v, &fields, &[1, 2, 3])?;
     choice(&v["enforcement"], &["enabled", "not-implemented"])?;
     object(&v["runner"], &["path", "version", "sha256"], &[])?;
     path(&v["runner"]["path"])?;
@@ -255,7 +256,7 @@ pub fn config(v: &Value) -> Result {
     }
     unique(&v["environment"]["inputs"], Some("id"))?;
     for i in array(&v["environment"]["inputs"])? {
-        if v["schema_version"] == 2 {
+        if matches!(v["schema_version"].as_u64(), Some(2 | 3)) {
             choice(&i["presence"], &["present", "absent"])?;
             if i["presence"] == "absent" {
                 object(i, &["id", "location", "presence"], &[])?;

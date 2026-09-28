@@ -120,10 +120,12 @@ pub fn check_observed(
     context: &Path,
     entry: Value,
 ) -> Result<(u8, String), String> {
-    let base_tree = facts::verify_oid(root, base)?;
-    let candidate_tree = facts::verify_oid(root, candidate)?;
-    let base_values = facts::registry_values(root, base, config_path)?;
-    let candidate_values = facts::registry_values(root, candidate, config_path)?;
+    let reader = facts::Reader::for_config(root, config_path)?;
+    reader.verify_config(root, candidate)?;
+    let base_tree = reader.verify_oid(root, base)?;
+    let candidate_tree = reader.verify_oid(root, candidate)?;
+    let base_values = reader.registry_values(root, base, config_path)?;
+    let candidate_values = reader.registry_values(root, candidate, config_path)?;
     let cfg = &candidate_values[config_path];
     let judges_path = cfg["registries"]["judges"]
         .as_str()
@@ -164,17 +166,17 @@ pub fn check_observed(
         .as_u64()
         .filter(|n| *n > 0 && *n <= 64 * 1024 * 1024)
         .ok_or("invalid protocol output bound")? as usize;
-    let a = facts::tree(root, base)?;
-    let b = facts::tree(root, candidate)?;
+    let a = reader.tree(root, base)?;
+    let b = reader.tree(root, candidate)?;
     let delta = facts::delta(&a, &b);
-    let checkout = facts::checkout(root, candidate)?;
+    let checkout = reader.checkout(root, candidate)?;
     let state = no_symlink_parents(root, ".chrono-harness/state")?;
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
     let snapshot = tempfile::Builder::new()
         .prefix("base-")
         .tempdir_in(&state)
         .map_err(|e| e.to_string())?;
-    facts::export(root, base, &a, snapshot.path())?;
+    reader.export(root, base, &a, snapshot.path())?;
     let snapshot = snapshot.keep();
     let context = fs::canonicalize(if context.is_absolute() {
         context.to_path_buf()
@@ -203,7 +205,7 @@ pub fn check_observed(
         .open(&retained_report)
         .map_err(|e| e.to_string())?;
     let req = Request {
-        observations: value!({"entry":entry,"run":run,"report_path":report_path,"environment":{"inherited":observed,"effective":env},"retained":retained}),
+        observations: value!({"git_facts":reader.observation(),"entry":entry,"run":run,"report_path":report_path,"environment":{"inherited":observed,"effective":env},"retained":retained}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
         judge_id: String::new(),
@@ -287,6 +289,7 @@ pub fn check_observed(
         value!(findings)
     };
     let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"executables":executables,"environment":{"inherited":observed,"effective":env},"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
+    report["git_facts"] = reader.observation();
     report["report_path"] = value!(report_path);
     // Only validated named outputs supply these fields. Configuration and absent
     // producers cannot stand in for observations; conflicting results remain visible.

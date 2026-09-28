@@ -33,6 +33,13 @@ fn load_view(view: &Value, config: &str) -> Result<(Registrations, Registrations
     Ok((old, Registrations::load(&b, config)?))
 }
 pub fn views(req: &Request) -> Result<(Registrations, Registrations, Value), String> {
+    let reader = facts::Reader::for_request(req)?;
+    views_with_reader(req, &reader)
+}
+pub fn views_with_reader(
+    req: &Request,
+    reader: &facts::Reader,
+) -> Result<(Registrations, Registrations, Value), String> {
     let binding = value!({"base":req.base.commit,"candidate":req.candidate.commit,"registry":req.registries.digest,"context":req.context.sha256});
     let prior: Vec<_> = req
         .prior_results
@@ -46,14 +53,15 @@ pub fn views(req: &Request) -> Result<(Registrations, Registrations, Value), Str
         let (a, b) = load_view(v, &req.config_path)?;
         return Ok((a, b, (*v).clone()));
     }
-    let a = facts::registry_values(&req.candidate.root, &req.base.commit, &req.config_path)?;
-    let b = facts::registry_values(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
+    let a = reader.registry_values(&req.candidate.root, &req.base.commit, &req.config_path)?;
+    let b = reader.registry_values(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
     if facts::registry_digest(&a, &b)? != req.registries.digest {
         return Err("registry digest mismatch".into());
     }
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .unwrap_or_default();
     let (a, b, mut view) = interpret_mode(
+        reader,
         &req.candidate.root,
         &req.base.commit,
         &req.candidate.commit,
@@ -75,9 +83,22 @@ pub fn interpret(
     candidate: Values,
     env: &BTreeMap<String, String>,
 ) -> Result<(Registrations, Registrations, Value), String> {
-    interpret_mode(root, base, candidate_oid, config, raw, candidate, env, None)
+    let reader = facts::Reader::for_config(root, config)?;
+    reader.verify_config(root, candidate_oid)?;
+    interpret_mode(
+        &reader,
+        root,
+        base,
+        candidate_oid,
+        config,
+        raw,
+        candidate,
+        env,
+        None,
+    )
 }
 fn interpret_mode(
+    reader: &facts::Reader,
     root: &Path,
     base: &str,
     candidate_oid: &str,
@@ -117,7 +138,13 @@ fn interpret_mode(
         } else if profile["filemap_version"] == raw[filemap]["schema_version"] {
             legacy_required = true;
             let path = profile["profile_path"].as_str().unwrap();
-            if let Ok(bytes) = facts::blob(root, base, path) {
+            let original = reader.blob(root, base, path);
+            if let Err(e) = &original {
+                if e.starts_with("E_GIT_FACTS:") {
+                    return Err(e.clone());
+                }
+            }
+            if let Ok(bytes) = original {
                 let value = json(&bytes)?;
                 if value["schema"] == profile["id"] {
                     matching.push((profile, value!(path), value!(bytes), value));
@@ -162,7 +189,7 @@ fn interpret_mode(
         .ok_or("migration tool missing")?;
     let argv: Vec<String> =
         serde_json::from_value(t["version_argv"].clone()).map_err(|e| e.to_string())?;
-    let before = facts::checkout(root, candidate_oid)?;
+    let before = reader.checkout(root, candidate_oid)?;
     let tool = observation::tool(
         root,
         t["program"].as_str().unwrap(),
@@ -182,7 +209,7 @@ fn interpret_mode(
     }
     let raw_bytes: BTreeMap<_, _> = raw
         .keys()
-        .map(|p| Ok((p.clone(), facts::blob(root, base, p)?)))
+        .map(|p| Ok((p.clone(), reader.blob(root, base, p)?)))
         .collect::<Result<_, String>>()?;
     let input = if profile.get("from_versions").is_some() {
         value!({"schema":"chrono-historical-decode/v2","config_path":config,"original":raw,"original_bytes":raw_bytes,"candidate":candidate,"profile":profile})
@@ -191,7 +218,7 @@ fn interpret_mode(
     };
     let script_path = script["path"].as_str().unwrap();
     let script_bytes = fs::read(root.join(script_path)).map_err(|e| e.to_string())?;
-    if script_bytes != facts::blob(root, candidate_oid, script_path)? {
+    if script_bytes != reader.blob(root, candidate_oid, script_path)? {
         return Err("E_MIGRATION: decoder differs from fixed candidate".into());
     }
     let spec = CommandSpec {
@@ -208,7 +235,7 @@ fn interpret_mode(
             receipt.exit_code, receipt.stderr
         ));
     }
-    let after = facts::checkout(root, candidate_oid)?;
+    let after = reader.checkout(root, candidate_oid)?;
     if before != after {
         return Err("E_SNAPSHOT_DIRTY: migration changed candidate inputs".into());
     }

@@ -142,10 +142,19 @@ pub fn load_documents(
     a: &Registrations,
     b: &Registrations,
 ) -> Result<[Documents; 2], String> {
+    let reader = facts::Reader::for_request(req)?;
+    load_documents_with_reader(req, a, b, &reader)
+}
+pub fn load_documents_with_reader(
+    req: &Request,
+    a: &Registrations,
+    b: &Registrations,
+    reader: &facts::Reader,
+) -> Result<[Documents; 2], String> {
     let paths = patterns(a, b).into_iter().map(|(p, _, _)| p).collect();
     Ok([
-        documents(req, a, true, &paths)?,
-        documents(req, b, false, &paths)?,
+        documents(req, a, true, &paths, reader)?,
+        documents(req, b, false, &paths, reader)?,
     ])
 }
 
@@ -154,6 +163,7 @@ fn documents(
     r: &Registrations,
     base: bool,
     paths: &BTreeSet<String>,
+    reader: &facts::Reader,
 ) -> Result<Documents, String> {
     let mut docs = Documents::new();
     for path in paths {
@@ -186,7 +196,7 @@ fn documents(
                 } else {
                     &req.candidate.commit
                 };
-                let bytes = facts::blob(&req.candidate.root, commit, path)?;
+                let bytes = reader.blob(&req.candidate.root, commit, path)?;
                 chrono_harness::decode(&bytes)
                     .map_err(|e| format!("E_SEMANTIC_INPUT: {path}: {e}"))?
             }
@@ -195,9 +205,9 @@ fn documents(
     }
     Ok(docs)
 }
-fn evaluate(req: &Request) -> Result<(Value, String), String> {
+fn evaluate(req: &Request, reader: &facts::Reader) -> Result<(Value, String), String> {
     req.validate()?;
-    let (base, candidate, _) = chrono_judge_registration::views(req)?;
+    let (base, candidate, _) = chrono_judge_registration::views_with_reader(req, reader)?;
     if req.impact["schema"] != "chrono-filemap-impact/v2" {
         return Err("E_IMPACT: unsupported schema".into());
     }
@@ -226,7 +236,7 @@ fn evaluate(req: &Request) -> Result<(Value, String), String> {
             "E_COST_INPUT: conflicting costs or mismatched endpoint/context binding".into(),
         );
     }
-    let [before, after] = load_documents(req, &base, &candidate)?;
+    let [before, after] = load_documents_with_reader(req, &base, &candidate, reader)?;
     let mut output = produce(&base, &candidate, &req.delta, &before, &after, costs)?;
     output["binding"] = binding;
     Ok((
@@ -239,7 +249,15 @@ fn evaluate(req: &Request) -> Result<(Value, String), String> {
 }
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    match evaluate(req) {
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
+    match result {
         Ok((output, code)) => {
             if output["mixed"] == true {
                 response.status = Status::Warn;

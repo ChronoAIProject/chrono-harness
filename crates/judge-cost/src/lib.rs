@@ -1,5 +1,8 @@
 //! Explicit declared costs for the already-selected FILEMAP impact. No cost inference.
-use chrono_harness::wire::{Finding, Request, Response, Status};
+use chrono_harness::{
+    facts,
+    wire::{Finding, Request, Response, Status},
+};
 use chrono_judge_filemap::{IMPACT_SCHEMA, Impact};
 use chrono_judge_registration::Registrations;
 use serde_json::{Map, Value, json};
@@ -151,7 +154,15 @@ pub fn produce(
 
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    match evaluate(req) {
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
+    match result {
         Ok(costs) => {
             if !costs["unknown"].as_array().unwrap().is_empty() {
                 response.status = Status::Warn;
@@ -185,9 +196,9 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(req: &Request) -> Result<Value, String> {
+fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
     req.validate()?;
-    let (base, candidate, _) = chrono_judge_registration::views(req)?;
+    let (base, candidate, _) = chrono_judge_registration::views_with_reader(req, reader)?;
     let impact: Impact =
         serde_json::from_value(req.impact.clone()).map_err(|e| format!("E_IMPACT: {e}"))?;
     let sources: Vec<_> = req

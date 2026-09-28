@@ -67,15 +67,17 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
 }
 pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<Value, String> {
     state(root, output)?;
-    facts::verify_oid(root, commit)?;
-    if facts::utf8(facts::git(root, &["rev-parse", "HEAD"])?)?.trim() != commit {
+    let reader = facts::Reader::for_config(root, config)?;
+    reader.verify_config(root, commit)?;
+    reader.verify_oid(root, commit)?;
+    if facts::utf8(reader.git(root, &["rev-parse", "HEAD"])?)?.trim() != commit {
         return Err("E_SNAPSHOT_IDENTITY: capture requires the explicit checked-out commit".into());
     }
-    let bytes = facts::blob(root, commit, config)?;
+    let bytes = reader.blob(root, commit, config)?;
     if fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())? != bytes {
         return Err("E_SNAPSHOT_IDENTITY: config differs from the fixed commit".into());
     }
-    let values = facts::registry_values(root, commit, config)?;
+    let values = reader.registry_values(root, commit, config)?;
     let r = Registrations::load(&values, config)?;
     let mut environment = serde_json::Map::new();
     for key in r.config()["environment"]["inherit"].as_array().unwrap() {
@@ -90,7 +92,7 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
     let mut files = serde_json::Map::new();
     for input in r.config()["environment"]["inputs"].as_array().unwrap() {
         let path = root.join(input["location"].as_str().unwrap());
-        let retained = if r.config()["schema_version"] == 2 {
+        let retained = if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3)) {
             match observe_file(&path)? {
                 None => value!({"absent":true}),
                 Some(identity) => {

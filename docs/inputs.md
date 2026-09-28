@@ -4,7 +4,8 @@
 `environment.inputs` and the variable names in `environment.inherit`. It does not
 discover dependencies, rewrite expected hashes, add tests or declare input closure
 complete. It is an independent Rust production/test pair. Git must be available
-to read the explicit fixed commit. This host still has incomplete Cargo/SDK input
+to read the explicit fixed commit. Config v3 uses the explicit
+[Git facts binding](git-facts.md); v1/v2 retain their prior reader. This host still has incomplete Cargo/SDK input
 registration; installing this transport does not activate full governance.
 
 ```sh

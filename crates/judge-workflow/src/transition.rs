@@ -17,6 +17,7 @@ fn declaration<'a>(r: &'a Registrations, kind: &str, id: &str) -> Result<&'a Val
 }
 /// Adjudicate changed/removed identities; unchanged historical records are context.
 pub fn evaluate(
+    reader: &facts::Reader,
     req: &Request,
     a: &Registrations,
     b: &Registrations,
@@ -158,8 +159,9 @@ pub fn evaluate(
             decisions.push(json!({"kind":kind,"id":id,"replacement":d["replacement"],"status":"declared-removal"}));
         }
     }
-    let raw = facts::registry_values(&req.candidate.root, &req.base.commit, &req.config_path)?;
-    let now = facts::registry_values(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
+    let raw = reader.registry_values(&req.candidate.root, &req.base.commit, &req.config_path)?;
+    let now =
+        reader.registry_values(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
     let mut changes = BTreeSet::new();
     for key in ["config", "filemap", "projects", "judges", "workflow"] {
         let op = if key == "config" {

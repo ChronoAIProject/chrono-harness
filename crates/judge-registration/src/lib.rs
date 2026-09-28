@@ -5,7 +5,7 @@ mod registrations;
 mod transition;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, replacements, retirement_requests,
-    reused_tools, views,
+    reused_tools, views, views_with_reader,
 };
 pub mod initial;
 mod schema;
@@ -75,16 +75,24 @@ pub fn nonartifact_paths(config: &Value, paths: &[String]) -> Vec<String> {
 }
 pub fn judge(req: &Request) -> Response {
     let mut r = req.response(Status::Pass);
-    if let Err(e) = evaluate(req, &mut r) {
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, &mut r, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut r);
+    }
+    if let Err(e) = result {
         issue(&mut r, "E_INPUT", e, "/request", true);
     }
     r
 }
-fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
+fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<()> {
     req.validate()?;
     let root = &req.candidate.root;
     let actual_root =
-        fs::canonicalize(facts::utf8(facts::git(root, &["rev-parse", "--show-toplevel"])?)?.trim())
+        fs::canonicalize(facts::utf8(reader.git(root, &["rev-parse", "--show-toplevel"])?)?.trim())
             .map_err(|e| e.to_string())?;
     if actual_root != *root {
         issue(
@@ -96,8 +104,8 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
         );
         return Ok(());
     }
-    if facts::verify_oid(root, &req.base.commit)? != req.base.tree
-        || facts::verify_oid(root, &req.candidate.commit)? != req.candidate.tree
+    if reader.verify_oid(root, &req.base.commit)? != req.base.tree
+        || reader.verify_oid(root, &req.candidate.commit)? != req.candidate.tree
     {
         issue(
             r,
@@ -108,8 +116,8 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
         );
         return Ok(());
     }
-    let bt = facts::tree(root, &req.base.commit)?;
-    let ct = facts::tree(root, &req.candidate.commit)?;
+    let bt = reader.tree(root, &req.base.commit)?;
+    let ct = reader.tree(root, &req.candidate.commit)?;
     if req.delta != facts::delta(&bt, &ct) {
         issue(
             r,
@@ -120,11 +128,11 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
         );
         return Ok(());
     }
-    let observed = facts::checkout(root, &req.candidate.commit)?;
+    let observed = reader.checkout(root, &req.candidate.commit)?;
     // Newly written state artifacts may differ since acquisition; compare all governed dirt below.
-    let bv = facts::registry_values(root, &req.base.commit, &req.config_path)?;
+    let bv = reader.registry_values(root, &req.base.commit, &req.config_path)?;
     let candidate_snapshot =
-        facts::registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
+        reader.registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
     let cv = candidate_snapshot.values;
     if facts::registry_digest(&bv, &cv)? != req.registries.digest
         || req.registries.base != req.base.root.join(".chrono-harness")
@@ -221,7 +229,7 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
         return Err("context v2 requires integration/delivery run_kind".into());
     }
     schema::string(&context["branch_ref"])?;
-    facts::verify_oid(root, schema::string(&context["fork_point"])?)?;
+    reader.verify_oid(root, schema::string(&context["fork_point"])?)?;
     for k in ["branch_started_at", "observed_at"] {
         let dt = time::OffsetDateTime::parse(
             schema::string(&context[k])?,
@@ -239,7 +247,7 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
     {
         return Err("invalid integration evidence digest".into());
     }
-    let (old, new, view) = match views(req) {
+    let (old, new, view) = match views_with_reader(req, reader) {
         Ok(v) => v,
         Err(e) => {
             issue(r, "E_SCHEMA", e, "/registries", true);
@@ -306,6 +314,7 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
     }
     readiness(req, &old, &new, r)?;
     references(
+        reader,
         root,
         &req.candidate.commit,
         Some(&old),
@@ -420,6 +429,7 @@ fn readiness(
     Ok(())
 }
 fn references(
+    reader: &facts::Reader,
     root: &Path,
     candidate: &str,
     old: Option<&Registrations>,
@@ -578,7 +588,7 @@ fn references(
         }
         if let Some(e) = ct.get(p) {
             if e.mode == "120000" {
-                let actual = facts::utf8(facts::blob(root, candidate, p)?)?;
+                let actual = facts::utf8(reader.blob(root, candidate, p)?)?;
                 if f["symlink"].as_str() != Some(actual.as_str()) {
                     issue(
                         r,
