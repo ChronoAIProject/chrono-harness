@@ -29,6 +29,28 @@ impl Runner {
         args: &[&str],
         input: &[u8],
     ) -> Result<ProcessResult, String> {
+        self.observe(root, args, input, false)
+    }
+    fn observe(
+        &mut self,
+        root: &Path,
+        args: &[&str],
+        input: &[u8],
+        literal_inventory: bool,
+    ) -> Result<ProcessResult, String> {
+        let mut environment = self.environment.clone();
+        if literal_inventory {
+            // Artifact ownership uses literal, case-sensitive registered prefixes.
+            // Record these command-specific overrides in the actual process result.
+            for key in [
+                "GIT_LITERAL_PATHSPECS",
+                "GIT_GLOB_PATHSPECS",
+                "GIT_NOGLOB_PATHSPECS",
+                "GIT_ICASE_PATHSPECS",
+            ] {
+                environment.insert(key.into(), "0".into());
+            }
+        }
         let mut argv = vec!["--no-replace-objects".into()];
         argv.extend(args.iter().map(|s| (*s).into()));
         let spec = CommandSpec {
@@ -39,7 +61,7 @@ impl Runner {
                 .ok_or("Git path is not UTF-8")?
                 .into(),
             args: argv.clone(),
-            env: self.environment.clone(),
+            env: environment,
             timeout_seconds: self.config.timeout_seconds,
             output_limit_bytes: self.config.output_limit_bytes,
         };
@@ -61,6 +83,13 @@ impl Runner {
     }
     pub(crate) fn git(&mut self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
         let process = self.command(root, args)?;
+        Self::output(process, args)
+    }
+    fn literal_inventory(&mut self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+        let process = self.observe(root, args, &[], true)?;
+        Self::output(process, args)
+    }
+    fn output(process: ProcessResult, args: &[&str]) -> Result<Vec<u8>, String> {
         if process.exit_code != 0 {
             return Err(format!(
                 "Git {} exited {}: {}",
@@ -154,33 +183,56 @@ pub(crate) fn ensure_identity(
     }
     Ok(())
 }
+pub(crate) fn paths(bytes: Vec<u8>) -> Result<BTreeSet<String>, String> {
+    let text = String::from_utf8(bytes).map_err(|_| "Git path is not UTF-8")?;
+    if !text.is_empty() && !text.ends_with('\0') {
+        return Err("incomplete Git path inventory".into());
+    }
+    let mut paths = BTreeSet::new();
+    for path in text.split('\0').filter(|p| !p.is_empty()) {
+        chrono_harness::relative_path(path)?;
+        if !paths.insert(path.to_string()) {
+            return Err("duplicate Git path".into());
+        }
+    }
+    Ok(paths)
+}
 pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
-    let status = r.text(
+    // Always inspect tracked changes, including those beneath artifact directories.
+    let tracked = r.git(
         target,
         &[
             "status",
             "--porcelain=v1",
             "-z",
-            "--untracked-files=all",
-            "--ignored",
+            "--untracked-files=no",
+            "--ignored=no",
         ],
     )?;
-    let mut untracked = vec![];
-    for entry in status.split('\0').filter(|s| !s.is_empty()) {
-        if let Some(path) = entry
-            .strip_prefix("?? ")
-            .or_else(|| entry.strip_prefix("!! "))
-        {
-            untracked.push(path.to_string());
-        } else {
-            return Err(
-                "created checkout differs from requested clean snapshot; preserve it for recovery"
-                    .into(),
-            );
-        }
+    if !tracked.is_empty() {
+        return Err(
+            "checkout differs from requested clean snapshot; preserve it for recovery".into(),
+        );
     }
-    if !chrono_judge_registration::nonartifact_paths(config, &untracked).is_empty() {
-        return Err("created checkout has unregistered files; preserve it for recovery".into());
+    let exclusions: Vec<String> = config["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| format!(":(top,exclude,literal){}", a["path"].as_str().unwrap()))
+        .collect();
+    for ignored in [false, true] {
+        let mut args = vec!["ls-files", "--others", "--exclude-standard", "-z"];
+        if ignored {
+            args.push("--ignored");
+        }
+        args.extend(["--", "."]);
+        args.extend(exclusions.iter().map(String::as_str));
+        let observed: Vec<_> = paths(r.literal_inventory(target, &args)?)?
+            .into_iter()
+            .collect();
+        if !chrono_judge_registration::nonartifact_paths(config, &observed).is_empty() {
+            return Err("checkout has unregistered files; preserve it for recovery".into());
+        }
     }
     Ok(())
 }

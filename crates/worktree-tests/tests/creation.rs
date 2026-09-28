@@ -799,3 +799,132 @@ fn empty_reconstruction_and_existing_destination_keep_explicit_boundaries() {
     );
     assert_eq!(git(&h.root, &["rev-parse", "HEAD"]), base);
 }
+
+#[test]
+fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
+    let h = Host::new("payload");
+    h.policy(|p| p["output_limit_bytes"] = value!(16384));
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    let directory = h.root.join(".chrono-harness/state/large-build");
+    fs::create_dir_all(&directory).unwrap();
+    for i in 0..512 {
+        fs::write(
+            directory.join(format!("{i:04}-{}", "artifact".repeat(8))),
+            "retained",
+        )
+        .unwrap();
+    }
+    let old = Command::new("git")
+        .current_dir(&h.root)
+        .args([
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--ignored",
+        ])
+        .output()
+        .unwrap();
+    assert!(old.status.success() && old.stdout.len() > 16384);
+    let (code, r, error) =
+        h.reconstruct(reconstruction(&base, &base, value!([])), "large-artifacts");
+    assert_eq!(code, 0, "{} {error}", r["error"]);
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 512);
+    assert!(
+        r["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["process"]["stdout_bytes"].as_array().unwrap().len() <= 16384)
+    );
+}
+
+fn register_artifact(h: &Host, artifact: &str, ignore: &str) {
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({"path":artifact,"owner":"host","kind":"build","tracked":false}));
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    fs::write(
+        h.root.join(".gitignore"),
+        format!(".chrono-harness/state/\n{ignore}\n"),
+    )
+    .unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+}
+
+#[test]
+fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_files_visible() {
+    let h = Host::new("payload");
+    register_artifact(&h, "cache[1]/allowed/", "cache*/");
+    register_artifact(&h, "CacheCase/allowed/", "cache*/\nCacheCase/");
+    h.policy(|p| {
+        p["environment"]["values"]["GIT_LITERAL_PATHSPECS"] = value!("1");
+        p["environment"]["values"]["GIT_ICASE_PATHSPECS"] = value!("1");
+    });
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    let allowed = h.root.join("cache[1]/allowed");
+    fs::create_dir_all(&allowed).unwrap();
+    fs::write(allowed.join("kept"), "declared").unwrap();
+    for (i, path) in [
+        "cache[1]/outside",
+        "cache1/allowed/foreign",
+        "cachecase/allowed/foreign",
+        "untracked/outside",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let file = h.root.join(path);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, "unregistered").unwrap();
+        let name = format!("neighbor-{i}");
+        let (code, r, _) = h.reconstruct(reconstruction(&base, &base, value!([])), &name);
+        assert_ne!(code, 0);
+        assert!(r["error"].as_str().unwrap().contains("unregistered"));
+        assert!(!h.parent.join(name).exists());
+        assert_eq!(fs::read(&file).unwrap(), b"unregistered");
+        fs::remove_file(file).unwrap();
+    }
+    let (code, r, error) =
+        h.reconstruct(reconstruction(&base, &base, value!([])), "allowed-literal");
+    assert_eq!(code, 0, "{} {error}", r["error"]);
+    assert_eq!(fs::read(allowed.join("kept")).unwrap(), b"declared");
+}
+
+#[test]
+fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
+    use std::os::unix::fs::symlink;
+    let h = Host::new("tree/input");
+    register_artifact(&h, "tree/", "");
+    register_artifact(&h, "declared-directory/", "");
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    let original = fs::read(h.root.join("tree/input")).unwrap();
+    fs::write(h.root.join("tree/input"), "tracked dirty work").unwrap();
+    let (code, r, _) = h.reconstruct(reconstruction(&base, &base, value!([])), "tracked-dirty");
+    assert_ne!(code, 0);
+    assert!(r["error"].as_str().unwrap().contains("clean snapshot"));
+    assert!(!h.parent.join("tracked-dirty").exists());
+    fs::write(h.root.join("tree/input"), original).unwrap();
+    for is_link in [false, true] {
+        let path = h.root.join("declared-directory");
+        if is_link {
+            symlink("tree", &path).unwrap();
+        } else {
+            fs::write(&path, "not a directory").unwrap();
+        }
+        let name = if is_link {
+            "artifact-link"
+        } else {
+            "artifact-file"
+        };
+        let (code, r, _) = h.reconstruct(reconstruction(&base, &base, value!([])), name);
+        assert_ne!(code, 0);
+        assert!(r["error"].as_str().unwrap().contains("unregistered"));
+        assert!(!h.parent.join(name).exists());
+        assert!(fs::symlink_metadata(&path).is_ok());
+        fs::remove_file(path).unwrap();
+    }
+}

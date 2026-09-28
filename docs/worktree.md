@@ -48,6 +48,10 @@ The producer resolves the configured Git executable once for observation and
 binds its actual bytes for every Git operation. Optional expected digest and
 version values reject mismatches; a null value makes no expected-identity claim.
 Only the declared environment is inherited, and explicit values override it.
+For untracked inventories, the producer explicitly disables Git global literal,
+glob, noglob and case-folding pathspec modes in that child environment. The
+exclusion arguments themselves are literal and case-sensitive; each process
+records its actual environment, including these scoped overrides.
 Git repository-redirection variables are rejected. Git configuration, credential
 helpers and hooks are not certified as a complete input closure. No global
 configuration is edited, and new branches explicitly disable automatic tracking.
@@ -63,7 +67,13 @@ An advanced source checkout or unrelated dirty source files are not reset.
 Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before
 unlocking it. The producer reuses registration's artifact classifier: declared
-untracked artifact paths are allowed and preserved. Existing paths and branches
+untracked artifact paths are allowed and preserved. Tracked changes are always
+checked separately, including beneath artifact roots. Separate ignored and
+nonignored file queries exclude only explicitly registered artifact directories
+before returning paths; large build outputs therefore do not consume the path
+observation bound. Remaining paths use the original registration classifier.
+Unknown neighbors, literal or case lookalikes, and a file or symlink in place of a
+registered directory remain errors. The output bound is unchanged. Existing paths and branches
 are preserved. A failing checkout hook,
 timeout, changed identity or dirty new checkout fails creation and preserves the
 new branch/worktree for recovery. There is no automatic deletion or success
