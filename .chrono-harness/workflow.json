@@ -204,7 +204,8 @@
         "crates/worktree/src/main.rs",
         "crates/worktree/src/start.rs",
         "crates/worktree/src/reconstruct.rs",
-        ".chrono-harness/worktree.json"
+        ".chrono-harness/worktree.json",
+        "crates/worktree/src/remote.rs"
       ],
       "tests": [
         "worktree-tests"

@@ -511,9 +511,12 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 fresh 创建后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
 
-现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作，核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。丢失全部恢复身份、损坏 Git 元数据、远端分支退休及 PR／合并编排仍未完成；格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
+现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作，核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。丢失全部恢复身份、损坏 Git 元数据及 PR／合并编排仍未完成；格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
 
 所有交付最终进入 dev；feature 与 integration 均从当时最新 dev 创建。
+
+现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口尚未包含在公开 beta.9，合同见 [远端分支退休](docs/worktree.md#remote-branch-retirement)。
+
 workflow 当前草案阈值：落后 dev **超过 3 个提交**，或本分支年龄 **超过 24 小时**，
 任一成立即 E_BRANCH_STALE；等于阈值仍允许。二者在 workflow.json 可配置。
 behind 是 fork_point 到 context.dev_tip 的提交数；年龄为 observed_at − branch_started_at。

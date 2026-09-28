@@ -160,7 +160,7 @@ reconciled reconstruction, original-report preservation, identity/lock/index
 refusals, explicit artifact disposal, ancestor/squash preservation, retries and
 actual removal/ref races and recovery of cleanup locks after retained-ref races. These operations do not certify governance or remote
 landing. Damaged/missing metadata, lost recovery identity, interruption before
-the retained checkpoint, remote branch retirement and autonomous provider orchestration remain pending.
+the retained checkpoint and autonomous provider orchestration remain pending.
 
 Receipt-bound temporary-ref cleanup reuses maintenance receipt and saved-commit
 validation. Real Git tests cover preservation, explicit absence retries, malformed
@@ -188,3 +188,12 @@ check absent/partial original results, identity/retention drift, terminal-result
 refusal, publication collisions and post-deletion evidence changes. Original
 outcomes stay unknown; loss of all recovery identity and damaged metadata remain
 unresolved. This entry is included in public beta.8. The four landed public examples verify both interrupted checkout and fetch consumers on macOS arm64; see [the example index](examples.md).
+
+
+Remote branch retirement now has an explicit `cleanup-remote` consumer, reusing
+registered Git/process and saved-work checks. Real CLI tests exercise a unique
+expected push endpoint, local/remote target binding, exact branch leases, squash
+retention, dirty local-work preservation, failed post-deletion exits, concurrent
+branch updates, changed targets/plans and explicit absence retries. This is newer
+than public beta.9. It does not certify remote transactions, Git/delegated input
+closure, PR/merge/landing orchestration, full governance or deterministic parity.

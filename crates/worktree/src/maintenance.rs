@@ -22,6 +22,17 @@ struct Receipt {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "lowercase", deny_unknown_fields)]
 enum Plan {
+    #[serde(rename = "cleanup-remote")]
+    CleanupRemote {
+        schema: String,
+        head: String,
+        retained_commit: String,
+        branch: String,
+        expected_url: String,
+        retained_ref: String,
+        retention: Retention,
+        allow_absent_ref: bool,
+    },
     Recover {
         schema: String,
         receipt: Receipt,
@@ -70,14 +81,14 @@ enum Plan {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
-enum Retention {
+pub(crate) enum Retention {
     Ancestor,
     SameTree,
 }
 
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
-        return Err("usage: chrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted --host-root ROOT --config POLICY --plan STATE_PATH".into());
+        return Err("usage: chrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config POLICY --plan STATE_PATH".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
@@ -95,6 +106,15 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     let bytes = state_bytes(&root, plan_path)?;
     let plan: Plan = decode(&bytes)?;
     let (schema, operation, head) = match &plan {
+        Plan::CleanupRemote {
+            schema,
+            head,
+            retained_commit,
+            ..
+        } => {
+            facts::full_oid(retained_commit)?;
+            (schema, "cleanup-remote", head)
+        }
         Plan::Recover {
             schema,
             head,
@@ -215,6 +235,32 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             report["source_commit"] = value!(source_head);
             report["registry_digest"] = value!(digest);
             match plan {
+                Plan::CleanupRemote {
+                    head,
+                    retained_commit,
+                    branch,
+                    expected_url,
+                    retained_ref,
+                    retention,
+                    allow_absent_ref,
+                    ..
+                } => crate::remote::Cleanup {
+                    head,
+                    retained_commit,
+                    branch,
+                    expected_url,
+                    retained_ref,
+                    retention,
+                    allow_absent_ref,
+                }
+                .execute(r, &root, &registrations, report, || {
+                    if state_bytes(&root, plan_path)? != bytes
+                        || crate::configuration(&root, config_path)?.1 != config_bytes
+                    {
+                        return Err("remote cleanup plan or policy changed".into());
+                    }
+                    Ok(())
+                }),
                 Plan::Recover {
                     receipt,
                     head,
@@ -534,7 +580,7 @@ fn release_reconciled(
     report["context"] = value!({"base":base,"candidate":null,"branch_ref":branch});
     Ok(())
 }
-fn saved_commit(
+pub(crate) fn saved_commit(
     r: &mut Runner,
     root: &Path,
     head: &str,
