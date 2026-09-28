@@ -382,7 +382,68 @@ Real Git tests terminate the CLI after checkout creation, patch application and
 cleanup locking. They also cover absent/empty/truncated results, terminal-result
 refusal, identity drift and occupied intent paths. These are bounded process
 interruption checks, without a power-loss or concurrent-writer transaction
-guarantee. Missing intent, damaged Git metadata, interruption before this
-checkpoint (including incomplete fetch observations), remote retirement and
-PR/merge orchestration remain outside this contract. No governance or
-local/CI parity guarantee is added.
+guarantee. Interrupted fetches use the separate intent below. Missing intent,
+damaged Git metadata, remote retirement and PR/merge orchestration remain outside
+this contract. No governance or local/CI parity guarantee is added.
+
+## Interrupted fetch cleanup
+
+The candidate also provides `cleanup-fetch-interrupted`; it is not in public
+beta.7. Before `start` or `reconstruct` runs Git fetch, it validates the source
+policy/report artifact registrations and publishes an immutable
+`chrono-worktree-fetch-intent/v1` at `REPORT_PATH.fetch-intent.json`. It uses the
+same synced, no-clobber publication as checkout recovery. Publication failure
+prevents fetch. The completed result references this intent separately from any
+later checkout intent.
+
+The fetch intent binds the source commit and registry digest, source/configuration
+identity, remote, target ref, invocation token, exact temporary fetch ref and final
+result path. It has no fetched base or outcome: neither exists as an observed fact
+at publication time. A stopped invocation can leave a ref or already have removed
+it while its final report is still absent, empty or incomplete. The caller must
+establish that the original invocation has stopped before cleanup.
+
+```sh
+.chrono-harness/bin/chrono-worktree cleanup-fetch-interrupted \
+  --host-root . --config .chrono-harness/worktree.json \
+  --plan .chrono-harness/state/interrupted-fetch-cleanup.json
+```
+
+```json
+{
+  "schema": "chrono-worktree-maintenance/v1",
+  "operation": "cleanup-fetch-interrupted",
+  "intent": {
+    "path": ".chrono-harness/state/worktrees/start-INVOCATION.json.fetch-intent.json",
+    "sha256": "ACTUAL_FETCH_INTENT_SHA256"
+  },
+  "result": {"presence": "present", "sha256": "ACTUAL_PARTIAL_RESULT_SHA256"},
+  "head": "CURRENT_EXPECTED_FETCH_COMMIT_OID",
+  "retained_ref": "refs/heads/dev",
+  "retained_commit": "EXPECTED_RETAINED_COMMIT_OID",
+  "allow_absent_ref": false
+}
+```
+
+The strict `result` variants are the same as checkout interruption recovery;
+use `{"presence":"absent"}` only when the original result is absent. A retained
+terminal result is refused and must use ordinary receipt maintenance. No intent
+or owner is discovered from a directory or ref prefix.
+
+The entry reuses ordinary `cleanup-fetch`: it requires a direct temporary ref,
+the explicitly expected current OID, and a separate local branch retaining that
+commit; deletion uses the expected OID and verifies absence. Only an explicit
+`allow_absent_ref: true` accepts an already absent ref. It retains original intent
+and result bytes, rechecks them before disposal and after final retention checks,
+and reports `original_outcome: unknown`. A post-effect failure retains the actual
+removal state and process results; it does not roll back or fabricate the original
+fetch outcome. It neither unlocks nor removes any checkout that the original
+invocation might have created later.
+
+Real CLI tests cover process termination after fetch and after ref removal,
+start/reconstruct consumers, absent/empty/truncated results, explicit retry,
+identity/retention drift, symbolic refs, terminal reports, occupied publication
+paths and evidence changed during deletion. Missing both usable receipt and
+intent, damaged Git metadata, remote retirement and PR/merge orchestration remain
+outside this contract. These observations do not make concurrent writers atomic,
+provide power-loss durability, or certify governance and local/CI parity.

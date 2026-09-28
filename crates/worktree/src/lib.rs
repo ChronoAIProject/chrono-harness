@@ -4,6 +4,7 @@ mod reconstruct;
 mod recovery;
 mod start;
 use chrono_harness::{CliOutput, decode, no_symlink_parents, relative_path};
+mod fetch_recovery;
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -82,11 +83,17 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
     }
     let result = if matches!(
         args.first().map(String::as_str),
-        Some("recover" | "recover-interrupted" | "cleanup" | "cleanup-fetch")
+        Some(
+            "recover"
+                | "recover-interrupted"
+                | "cleanup"
+                | "cleanup-fetch"
+                | "cleanup-fetch-interrupted"
+        )
     ) {
         maintenance::run(args)
     } else {

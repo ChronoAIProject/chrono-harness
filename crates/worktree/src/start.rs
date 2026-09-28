@@ -284,6 +284,17 @@ pub(crate) fn execute(
     let spec = format!("{target_ref}:{fetch_ref}");
     report["fetch_ref"] = value!(fetch_ref);
     report["remote"] = value!(remote);
+    report["target_ref"] = value!(target_ref);
+    let source_config_path = r.config.host_config.clone();
+    let (source_registrations, source_digest) =
+        registrations(r, source, &source_head, &source_config_path)?;
+    registered_policy(
+        &source_registrations,
+        &o.config_path,
+        &r.config.report_directory,
+    )?;
+    report["source_registry_digest"] = value!(source_digest);
+    crate::fetch_recovery::publish(source, report)?;
     r.git(
         source,
         &[
@@ -319,27 +330,7 @@ pub(crate) fn execute(
     if workflow["target_branch"] != target_branch {
         return Err("fetched target changed target branch; adopt its configuration".into());
     }
-    if !registrations.filemap()["files"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|f| f["path"] == o.config_path)
-    {
-        return Err("worktree configuration is not explicitly registered in FILEMAP".into());
-    }
-    if !registrations.config()["artifacts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|a| {
-            a["tracked"] == false
-                && a["path"]
-                    .as_str()
-                    .is_some_and(|p| r.config.report_directory.starts_with(p))
-        })
-    {
-        return Err("worktree report directory lacks a registered untracked artifact owner".into());
-    }
+    registered_policy(&registrations, &o.config_path, &r.config.report_directory)?;
     let prefix_key = format!("{}_prefix", o.kind);
     let prefix = workflow[&prefix_key]
         .as_str()
@@ -389,6 +380,34 @@ pub(crate) fn execute(
         return Ok(());
     }
     unlock(r, source, path, &branch_ref, &base)
+}
+fn registered_policy(
+    registrations: &Registrations,
+    policy: &str,
+    report_directory: &str,
+) -> Result<(), String> {
+    if !registrations.filemap()["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|f| f["path"] == policy)
+    {
+        return Err("worktree configuration is not explicitly registered in FILEMAP".into());
+    }
+    if !registrations.config()["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|a| {
+            a["tracked"] == false
+                && a["path"]
+                    .as_str()
+                    .is_some_and(|p| report_directory.starts_with(p))
+        })
+    {
+        return Err("worktree report directory lacks a registered untracked artifact owner".into());
+    }
+    Ok(())
 }
 pub(crate) fn unlock(
     r: &mut Runner,

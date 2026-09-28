@@ -123,4 +123,4 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 
 `chrono-worktree recover`／`cleanup`／`cleanup-fetch` 消费宿主 state 下的显式维护计划：保留原失败报告，验证重建后的状态和锁，或核对保留引用与工件白名单后清理指定工作树。它们不产生治理或合并通过判词；完整格式及未实现的恢复范围见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。这三个入口已包含在公开 beta.7 中，可由宿主的版本锁定安装入口取得。
 
-候选源码还提供 `recover-interrupted`：在创建工作树或取得清理锁前保留恢复身份，对缺失／截断结果按显式计划核对当前状态并解锁，原操作结果仍标未知。该入口尚未进入公开 beta.7；格式与剩余恢复范围见 [中断恢复](docs/worktree.md#interrupted-checkout-recovery)。
+候选源码还提供 `recover-interrupted`：在创建工作树或取得清理锁前保留恢复身份，对缺失／截断结果按显式计划核对当前状态并解锁，原操作结果仍标未知。`cleanup-fetch-interrupted` 还按 fetch 前保留的独立身份清理中断留下的临时 ref，要求明确的当前 OID 与保留分支。这两个入口尚未进入公开 beta.7；格式与剩余恢复范围见 [中断恢复](docs/worktree.md#interrupted-checkout-recovery)。
