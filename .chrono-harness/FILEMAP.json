@@ -180,6 +180,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
         }
       ]
     },
@@ -2640,6 +2644,18 @@
           "to": "project:runner-tests"
         }
       ]
+    },
+    {
+      "path": "crates/ci-tests/tests/initial_projection.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -4582,6 +4598,11 @@
       "from": "project:judge-workflow",
       "kind": "runtime-input",
       "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
     }
   ],
   "test_costs": [
@@ -4681,6 +4702,8 @@
       "operations": [
         "fmt.ci",
         "fmt.ci-tests",
+        "build.runner",
+        "build.judge-registration",
         "build.ci",
         "test.ci-tests",
         "ci.verify"

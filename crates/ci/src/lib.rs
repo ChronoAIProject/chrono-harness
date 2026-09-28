@@ -1,6 +1,6 @@
 //! Owned GitHub Actions projection and event input preparation; no judgment or test discovery.
 use chrono_harness::{canonical_argv, decode, no_symlink_parents, relative_path};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,8 +26,25 @@ pub struct Config {
     pub runner: String,
     pub generator: String,
     pub check_config: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "inventory_present"
+    )]
+    pub initial_inventory: Option<InitialInventory>,
     pub context_path: String,
     pub artifact_directory: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InitialInventory {
+    pub path: String,
+    pub profile: chrono_harness::initial::Profile,
+}
+fn inventory_present<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<InitialInventory>, D::Error> {
+    InitialInventory::deserialize(d).map(Some)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,13 +74,19 @@ fn action(s: &str, repo: &str) -> Result<(), String> {
     }
     Ok(())
 }
+fn overlap(a: &str, b: &str) -> bool {
+    a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
+}
 pub fn load(path: &Path) -> Result<Config, String> {
     let c: Config = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
     validate(&c)?;
     Ok(c)
 }
 fn validate(c: &Config) -> Result<(), String> {
-    if c.schema != "chrono-github-ci/v1" {
+    if !matches!(
+        (c.schema.as_str(), &c.initial_inventory),
+        ("chrono-github-ci/v1", None) | ("chrono-github-ci/v2", Some(_))
+    ) {
         return Err("unsupported CI provider/schema".into());
     }
     for p in [
@@ -89,6 +112,29 @@ fn validate(c: &Config) -> Result<(), String> {
     relative_path(c.artifact_directory.trim_end_matches('/'))?;
     if !c.context_path.starts_with(&c.artifact_directory) {
         return Err("context must reside in artifact directory".into());
+    }
+    if let Some(initial) = &c.initial_inventory {
+        relative_path(&initial.path)?;
+        initial.profile.validate()?;
+        if !initial.path.starts_with(".chrono-harness/ci/")
+            || initial.path.starts_with(&c.artifact_directory)
+            || [
+                &c.check_config,
+                &c.context_path,
+                &c.runner,
+                &c.generator,
+                &initial.profile.host_config,
+            ]
+            .iter()
+            .any(|path| overlap(&initial.path, path))
+            || initial
+                .profile
+                .judges
+                .iter()
+                .any(|b| overlap(&initial.path, &b.executable))
+        {
+            return Err("initial inventory output must have separate CI-owned path".into());
+        }
     }
     if c.name.is_empty()
         || c.runs_on.is_empty()
@@ -135,7 +181,7 @@ fn validate(c: &Config) -> Result<(), String> {
 fn invoke(c: &Config, initial: bool) -> String {
     canonical_argv(
         &c.runner,
-        &c.check_config,
+        check_profile(c, initial),
         if initial { None } else { Some("$CHRONO_BASE") },
         "$CHRONO_CANDIDATE",
         initial,
@@ -151,9 +197,23 @@ fn invoke(c: &Config, initial: bool) -> String {
     .collect::<Vec<_>>()
     .join(" ")
 }
+fn check_profile(c: &Config, initial: bool) -> &str {
+    if initial {
+        if let Some(projection) = &c.initial_inventory {
+            return &projection.path;
+        }
+    }
+    &c.check_config
+}
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
     validate(c)?;
     relative_path(config_path)?;
+    if c.initial_inventory
+        .as_ref()
+        .is_some_and(|p| overlap(&p.path, config_path))
+    {
+        return Err("initial inventory output collides with CI source".into());
+    }
     let bootstrap = c
         .bootstrap
         .iter()
@@ -280,18 +340,59 @@ fn write_file(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     }
     result
 }
+fn inventory_output(c: &Config) -> Result<Option<(&str, Vec<u8>)>, String> {
+    c.initial_inventory
+        .as_ref()
+        .map(|p| {
+            let mut bytes = serde_json::to_vec_pretty(&p.profile).map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            Ok((p.path.as_str(), bytes))
+        })
+        .transpose()
+}
+fn inventory_preflight(
+    root: &Path,
+    path: &str,
+    expected: &[u8],
+    adopting: bool,
+) -> Result<bool, String> {
+    let target = no_symlink_parents(root, path)?;
+    match fs::read(target) {
+        Ok(bytes) if adopting && bytes != expected => {
+            Err(format!("initial inventory adoption collision: {path}"))
+        }
+        Ok(bytes) => Ok(bytes == expected),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
 pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, String> {
     relative_path(config_path)?;
     let c = load(&no_symlink_parents(root, config_path)?)?;
     let rendered = render(&c, config_path)?;
     let same = output_preflight(root, &c.workflow_path, &rendered)?;
+    let initial = inventory_output(&c)?;
+    let initial_same = match &initial {
+        Some((path, bytes)) => inventory_preflight(root, path, bytes, false)?,
+        None => true,
+    };
     if verify && !same {
         return Err(format!("generated workflow drift: {}", c.workflow_path));
+    }
+    if verify && !initial_same {
+        return Err(format!(
+            "generated initial inventory drift: {}",
+            initial.as_ref().unwrap().0
+        ));
+    }
+    if !verify && !initial_same {
+        let (path, bytes) = initial.as_ref().unwrap();
+        write_file(root, path, bytes)?;
     }
     if !verify && !same {
         write_file(root, &c.workflow_path, rendered.as_bytes())?
     }
-    Ok(!same)
+    Ok(!same || !initial_same)
 }
 pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     let incoming = load(input)?;
@@ -301,6 +402,15 @@ pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     let c = if existing { load(&dest)? } else { incoming };
     let rendered = render(&c, path)?;
     let same = output_preflight(root, &c.workflow_path, &rendered)?;
+    let initial = inventory_output(&c)?;
+    let initial_same = match &initial {
+        Some((path, bytes)) => inventory_preflight(root, path, bytes, !existing)?,
+        None => true,
+    };
+    if !initial_same {
+        let (path, bytes) = initial.as_ref().unwrap();
+        write_file(root, path, bytes)?;
+    }
     if !existing {
         write_file(
             root,
@@ -311,7 +421,7 @@ pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     if !same {
         write_file(root, &c.workflow_path, rendered.as_bytes())?
     }
-    Ok(!existing || !same)
+    Ok(!existing || !same || !initial_same)
 }
 fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     let o = Command::new("git")
@@ -471,7 +581,7 @@ pub fn prepare(
         }.into());
     }
     Ok(
-        json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,&c.check_config,base.as_deref(),&candidate,initial)}),
+        json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,check_profile(c,initial),base.as_deref(),&candidate,initial)}),
     )
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {

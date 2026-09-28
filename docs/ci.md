@@ -178,6 +178,61 @@ runner label, event branches and job timeout are data; selected test commands
 never appear in YAML. Runner command rendering uses the same canonical argv
 constructor as event evidence.
 
+For a separate root inventory, opt in to `chrono-github-ci/v2` and add the
+following explicit declaration to the same source (supply the actual selected
+judge digest). The remaining provider fields retain their v1 meanings:
+
+```json
+"initial_inventory": {
+  "path": ".chrono-harness/ci/initial.json",
+  "profile": {
+    "schema": "chrono-initial-check/v1",
+    "host_config": ".chrono-harness/config.json",
+    "timeout_seconds": 30,
+    "stdout_limit_bytes": 1048576,
+    "judges": [{
+      "id": "initial-registration",
+      "executable": ".chrono-harness/bin/chrono-judge-registration",
+      "version": "0.1.0",
+      "sha256": "<actual installed binary SHA-256>",
+      "argv": ["--protocol", "chrono-initial-judge/v1"],
+      "selector": "every-initial",
+      "modes": ["inventory"],
+      "after": []
+    }]
+  }
+}
+```
+
+`init` and `generate` assemble this declaration into the registered JSON profile
+and generate the workflow. `verify` checks both outputs without modifying either.
+The source declaration owns its profile output: edit the source, then generate;
+do not maintain an independent profile policy. Initial event preparation and the
+workflow's initial branch select this exact profile through the same canonical
+argv constructor. Ordinary DELTA checks continue to use `check_config`. V1 rejects
+the extension and retains its original single-profile behavior; v2 requires it.
+Neither version nor a null field silently selects a fallback.
+
+The profile uses the runner's actual validator for schemas, bindings, digests and
+DAGs. No judge IDs, binary identities, host language or layout are discovered.
+The output is a separate path under `.chrono-harness/ci/`, outside artifact paths
+and distinct from source, normal check, host config and executable paths. Source
+and output must both be explicitly enrolled in the host FILEMAP. The generator
+does not inspect or synthesize the five host registries or certify their content.
+
+New adoption preflights both outputs and rejects a different existing profile;
+an exact existing projection is reusable. Existing adopted source customization
+is preserved. Once enrolled, generation replaces profile drift according to that
+source; workflow marker and all symlink checks still apply. Changing/removing an
+output declaration does not delete the old file: the AI explicitly retires its
+old registration and artifact. Existing v1 source is never automatically upgraded.
+
+Dedicated tests exercise the generated profile with actual runner/registration
+processes on a committed parentless host, including a rejected unregistered file,
+spaced paths, unrelated cwd and stored/stdout report identity. This is bounded
+consumer evidence; native first-push v2 adoption, complete bootstrap provenance
+and full governance activation remain separate obligations.
+
 Optional `push_baselines` rows explicitly bind a literal branch-ref prefix to a
 baseline branch on `origin`. This host and the copyable example adopt:
 
@@ -207,9 +262,10 @@ any directory, adopts it into `H/.chrono-harness/ci/github.json`, and produces t
 workflow. Existing adopted configuration is preserved. Init preflights output
 ownership before adopting new data. `generate` renders deterministically, does
 not rewrite identical output, and refuses unowned/symlink collisions. `verify`
-uses the same renderer and never repairs drift. Only the single owned regular
-workflow file is published; unrelated workflows are preserved. No concurrent
-writer, multi-file crash transaction, or broad provider framework is promised.
+uses the same renderer and never repairs drift. V1 publishes the single owned regular workflow file; unrelated workflows are
+preserved. No concurrent writer, multi-file crash transaction, or broad provider
+framework is promised. An IO failure can leave some generated outputs published;
+it remains an error and a later generation must reconcile the declared outputs.
 
 Event mapping is preparation, not policy:
 
