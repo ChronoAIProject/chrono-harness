@@ -359,7 +359,10 @@ Use the same registered policy and an explicit state plan:
 
 When an empty or truncated result file exists, use
 `"result": {"presence": "present", "sha256": "ACTUAL_RESULT_SHA256"}`.
-Missing and empty are different observations. The reader rejects changed
+Missing and empty are different observations. The `absent` variant accepts no
+payload fields; `present` requires its string `sha256`. Unknown fields, missing or
+unknown presence tags and invalid payload types fail plan parsing before Git
+observation or report creation. The reader rejects changed
 presence/bytes, nonregular or linked inputs, mismatched intent/configuration,
 and an original JSON result that declares a terminal worktree outcome. Use the
 ordinary maintenance contract for such a retained result; do not remove it to

@@ -2,10 +2,13 @@ use super::*;
 
 impl Host {
     fn maintain(&self, operation: &str, plan: Value) -> (i32, Value, String) {
+        self.received(self.maintenance_output(operation, plan))
+    }
+    fn maintenance_output(&self, operation: &str, plan: Value) -> std::process::Output {
         let path = ".chrono-harness/state/maintenance.json";
         fs::create_dir_all(self.root.join(".chrono-harness/state")).unwrap();
         fs::write(self.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -19,8 +22,7 @@ impl Host {
                 path,
             ])
             .output()
-            .unwrap();
-        self.received(output)
+            .unwrap()
     }
     fn recovery(&self, report: &Value, target: &Path) -> Value {
         let path = report["report_path"].as_str().unwrap();

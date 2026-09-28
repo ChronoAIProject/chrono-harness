@@ -91,7 +91,7 @@ pub(crate) fn publish(root: &Path, report: &mut Value) -> Result<(), String> {
 #[derive(Deserialize)]
 #[serde(tag = "presence", rename_all = "lowercase", deny_unknown_fields)]
 pub(crate) enum ExpectedResult {
-    Absent,
+    Absent {},
     Present { sha256: String },
 }
 pub(crate) struct Evidence {
@@ -154,7 +154,7 @@ pub(crate) fn inspect(
     facts::full_oid(&intent.base)?;
     let result = original_bytes(root, &intent.report_path)?;
     match (expected, &result) {
-        (ExpectedResult::Absent, None) => (),
+        (ExpectedResult::Absent {}, None) => (),
         (ExpectedResult::Present { sha256: digest }, Some(bytes)) if sha256(bytes) == *digest => (),
         _ => return Err("original result presence or digest mismatch".into()),
     }
