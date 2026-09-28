@@ -2,6 +2,27 @@ use super::*;
 use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
 
 impl Host {
+    fn reject_result_shape(&self, result: Value, diagnostic: &str) {
+        self.interrupting_git("printf invoked > \"$HOME/unexpected-plan-git\" || exit $?");
+        let plan = value!({"schema":"chrono-worktree-maintenance/v1","operation":"recover-interrupted",
+            "intent":{"path":".chrono-harness/state/missing.intent.json","sha256":"0".repeat(64)},
+            "result":result,"head":git(&self.root,&["rev-parse","HEAD"]),
+            "index_tree":git(&self.root,&["rev-parse","HEAD^{tree}"])});
+        let output = self.maintenance_output("recover-interrupted", plan);
+        assert_eq!(output.status.code(), Some(2), "{result}: {output:?}");
+        assert!(
+            !self.parent.join("unexpected-plan-git").exists(),
+            "malformed result {result} must fail before invoking Git"
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "parse failure must have empty stdout"
+        );
+        assert!(!self.root.join(".chrono-harness/state/worktrees").exists());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.contains(diagnostic), "{result}: {error}");
+    }
+
     fn interrupting_git(&self, extra: &str) {
         let real = Command::new("/bin/sh")
             .args(["-c", "command -v git"])
@@ -112,6 +133,34 @@ exec REAL "$@"
             ],
             "worktree add",
         );
+    }
+}
+
+#[test]
+fn interrupted_recovery_rejects_payload_on_absent_result() {
+    for result in [
+        value!({"presence":"absent","sha256":"0".repeat(64)}),
+        value!({"presence":"absent","sha256":null}),
+        value!({"presence":"absent","path":"unexpected"}),
+    ] {
+        Host::new("payload").reject_result_shape(result, "unknown field");
+    }
+}
+
+#[test]
+fn interrupted_recovery_rejects_malformed_result_shapes() {
+    for (result, diagnostic) in [
+        (value!({}), "missing field"),
+        (value!({"presence":"missing"}), "unknown variant"),
+        (value!({"presence":null}), "invalid type"),
+        (value!({"presence":"present"}), "missing field"),
+        (value!({"presence":"present","sha256":null}), "invalid type"),
+        (
+            value!({"presence":"present","sha256":"0".repeat(64),"extra":true}),
+            "unknown field",
+        ),
+    ] {
+        Host::new("payload").reject_result_shape(result, diagnostic);
     }
 }
 
