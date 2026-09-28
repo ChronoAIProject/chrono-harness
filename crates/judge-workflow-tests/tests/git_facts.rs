@@ -23,7 +23,14 @@ fn all_full_judges_and_integration_delivery_use_candidate_bound_git() {
     fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
     let version = Command::new(&real).arg("--version").output().unwrap();
     assert!(version.status.success());
+    h.tool = fs::canonicalize(&h.tool).unwrap();
     let cfg = h.values.get_mut(CONFIG).unwrap();
+    cfg["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == "python")
+        .unwrap()["program"] = json!(h.tool);
     cfg["schema_version"] = json!(3);
     cfg["facts_git"] = json!({"tool":"facts-git","input":"git-bytes"});
     cfg["tools"].as_array_mut().unwrap().push(json!({"id":"facts-git","program":selected,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}));
