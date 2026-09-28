@@ -2,15 +2,10 @@ use crate::{
     Start,
     start::{self, Runner, paths},
 };
-use chrono_harness::{decode, facts, json, no_symlink_parents, relative_path, sha256};
-use chrono_judge_registration::Registrations;
+use chrono_harness::{decode, facts, no_symlink_parents, relative_path, sha256};
 use serde::Deserialize;
 use serde_json::{Value, json as value};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs,
-    path::Path,
-};
+use std::{collections::BTreeSet, fs, path::Path};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -95,12 +90,7 @@ pub(crate) fn execute(
         ));
     }
     let config_path = r.config.host_config.clone();
-    let config = json(&r.blob(&o.root, &p.candidate, &config_path)?)?;
-    let mut values = BTreeMap::new();
-    for path in facts::registry_paths(&config, &config_path)? {
-        values.insert(path.clone(), json(&r.blob(&o.root, &p.candidate, &path)?)?);
-    }
-    let registrations = Registrations::load(&values, &config_path)?;
+    let (registrations, _) = start::registrations(r, &o.root, &p.candidate, &config_path)?;
     if !chrono_judge_registration::nonartifact_paths(registrations.config(), &[input.path.clone()])
         .is_empty()
     {

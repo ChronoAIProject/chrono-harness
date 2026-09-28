@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict and failure preservation | AI reconciliation, recovery/cleanup, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup consumers | AI reconciliation, damaged/missing metadata and fetch-ref recovery, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -145,3 +145,11 @@ exits and packaging suppression. Public beta.6 includes worktree; the completed
 native release run passed the 15 distribution and 23 worktree tests on each platform, and anonymous downloads
 verified the manifest plus both platforms’ worktree and installer assets.
 This recipe does not certify full input closure or deterministic parity.
+
+Registered worktree maintenance reuses the existing Git/process, strict registry
+loader and artifact classifier. Real consumers cover failed-hook recovery,
+reconciled reconstruction, original-report preservation, identity/lock/index
+refusals, explicit artifact disposal, ancestor/squash preservation, retries and
+actual removal/ref races and recovery of cleanup locks after retained-ref races. These operations do not certify governance or remote
+landing. Damaged/missing metadata, interrupted publication, temporary fetch refs,
+remote branch retirement and autonomous provider orchestration remain pending.
