@@ -260,11 +260,57 @@ must still match. Configuration, hooks and concurrent filesystem writers are not
 an atomic transaction; these checks do not claim exclusion of all concurrent
 mutations.
 
-Both operations return the ordinary stored/stdout report with actual process
+Maintenance operations return the ordinary stored/stdout report with actual process
 bytes, `governance: not-evaluated` and `parity: unestablished`; success exits 0,
 failure exits 2. They preserve source work. Damaged/missing Git metadata,
-interrupted report publication, temporary fetch-ref repair and remote branch
+interrupted report publication and remote branch
 retirement need their own recovery contracts; no automatic metadata deletion or
 semantic reconciliation is provided. PR/merge/landing producers remain pending.
 These commands are source additions after public beta.6 and need a candidate
 bootstrap until a later release explicitly includes them.
+
+
+### Temporary fetch-ref cleanup
+
+A failed fetch or temporary-ref deletion can retain a ref without creating a
+worktree. With the original failed report available, use the same maintenance
+entry configuration and a `cleanup-fetch` plan:
+
+```sh
+.chrono-harness/bin/chrono-worktree cleanup-fetch \
+  --host-root . --config .chrono-harness/worktree.json \
+  --plan .chrono-harness/state/cleanup-fetch.json
+```
+
+```json
+{
+  "schema": "chrono-worktree-maintenance/v1",
+  "operation": "cleanup-fetch",
+  "receipt": {
+    "path": ".chrono-harness/state/worktrees/FAILED_REPORT.json",
+    "sha256": "FULL_ORIGINAL_REPORT_SHA256"
+  },
+  "head": "FULL_EXPECTED_FETCH_COMMIT",
+  "retained_ref": "refs/heads/dev",
+  "retained_commit": "FULL_EXPECTED_RETAINED_COMMIT",
+  "allow_absent_ref": false
+}
+```
+
+The original report must bind this source/configuration and a failed `start` or
+`reconstruct` invocation whose temporary ref was not reported removed. Its
+`fetch_ref` must equal `refs/chrono-harness/fetch/` plus its invocation token.
+If it recorded a base, that base must match the plan's `head`. The exact expected
+commit must be an ancestor of the explicitly named local retention branch at
+`retained_commit`. A symbolic temporary ref, changed OID or moved retention
+branch fails. No worktree, other ref or remote branch is removed.
+
+The producer rechecks retention and original report bytes, deletes with the
+expected OID, and observes ref absence. Original failure bytes remain intact.
+`fetch_ref_removal` uses `not-attempted`, `attempted-unverified`, `verified-absent`
+and `already-absent`; `fetch_ref_removed` is true only after this invocation's
+removal and absence check. A failed command can have changed the ref. Set
+`allow_absent_ref: true` only for an explicit absence-tolerant retry; retention
+must still hold. This does not reconstruct a missing/interrupted original report
+or make concurrent ref/configuration writers atomic. It exits and reports through
+the same maintenance contract above and is not included in public beta.6.

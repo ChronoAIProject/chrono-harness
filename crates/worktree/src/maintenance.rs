@@ -37,6 +37,15 @@ enum Plan {
         remove_branch: bool,
         allow_absent_worktree: bool,
     },
+    #[serde(rename = "cleanup-fetch")]
+    CleanupFetch {
+        schema: String,
+        receipt: Receipt,
+        head: String,
+        retained_ref: String,
+        retained_commit: String,
+        allow_absent_ref: bool,
+    },
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -54,7 +63,7 @@ fn state_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
 }
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
-        return Err("usage: chrono-worktree recover|cleanup --host-root ROOT --config POLICY --plan STATE_PATH".into());
+        return Err("usage: chrono-worktree recover|cleanup|cleanup-fetch --host-root ROOT --config POLICY --plan STATE_PATH".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
@@ -102,6 +111,20 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             }
             (schema, "cleanup", head)
         }
+        Plan::CleanupFetch {
+            schema,
+            receipt,
+            head,
+            retained_commit,
+            ..
+        } => {
+            facts::full_oid(retained_commit)?;
+            if receipt.sha256.len() != 64 || !receipt.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err("invalid original receipt digest".into());
+            }
+            (schema, "cleanup-fetch", head)
+        }
     };
     facts::full_oid(head)?;
     if schema != "chrono-worktree-maintenance/v1" || args[0] != operation {
@@ -119,6 +142,9 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             "cleaned"
         },
         |r, token, report| {
+            if operation == "cleanup-fetch" {
+                report["fetch_ref_removal"] = value!("not-attempted");
+            }
             report["maintenance_plan"] =
                 value!({"path":plan_path,"sha256":sha256(&bytes),"input_bytes":bytes});
             report["recovery"] = value!(
@@ -190,6 +216,26 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                     };
                     cleanup.execute(r, &root, &registrations, token, report)
                 }
+                Plan::CleanupFetch {
+                    receipt,
+                    head,
+                    retained_ref,
+                    retained_commit,
+                    allow_absent_ref,
+                    ..
+                } => cleanup_fetch(
+                    r,
+                    &root,
+                    config_path,
+                    &config_bytes,
+                    &registrations,
+                    report,
+                    receipt,
+                    &head,
+                    &retained_ref,
+                    &retained_commit,
+                    allow_absent_ref,
+                ),
             }
         },
     )
@@ -261,6 +307,37 @@ fn field<'a>(v: &'a Value, name: &str) -> Result<&'a str, String> {
         .filter(|s| !s.is_empty())
         .ok_or_else(|| format!("original report lacks {name}"))
 }
+fn failed_report(
+    root: &Path,
+    config_path: &str,
+    config_bytes: &[u8],
+    registrations: &Registrations,
+    report: &mut Value,
+    receipt: &Receipt,
+    operations: &[&str],
+) -> Result<(Value, Vec<u8>), String> {
+    artifacts(registrations, &[&receipt.path])?;
+    let bytes = state_bytes(root, &receipt.path)?;
+    if sha256(&bytes) != receipt.sha256 {
+        return Err("original report digest mismatch".into());
+    }
+    let original = json(&bytes)?;
+    report["prior_report"] =
+        value!({"path":receipt.path,"sha256":receipt.sha256,"input_bytes":bytes,"report":original});
+    if original["schema"] != "chrono-worktree-report/v1"
+        || original["status"] != "failed"
+        || !original["operation"]
+            .as_str()
+            .is_some_and(|operation| operations.contains(&operation))
+        || original["source_root"] != value!(root)
+        || original["config_path"] != config_path
+        || original["config_sha256"] != sha256(config_bytes)
+        || original["report_path"] != receipt.path
+    {
+        return Err("original failed-operation/configuration identity mismatch".into());
+    }
+    Ok((original, bytes))
+}
 fn recover(
     r: &mut Runner,
     root: &Path,
@@ -272,27 +349,15 @@ fn recover(
     head: &str,
     tree: &str,
 ) -> Result<(), String> {
-    artifacts(registrations, &[&receipt.path])?;
-    let bytes = state_bytes(root, &receipt.path)?;
-    if sha256(&bytes) != receipt.sha256 {
-        return Err("original report digest mismatch".into());
-    }
-    let original = json(&bytes)?;
-    report["prior_report"] =
-        value!({"path":receipt.path,"sha256":receipt.sha256,"input_bytes":bytes,"report":original});
-    if original["schema"] != "chrono-worktree-report/v1"
-        || original["status"] != "failed"
-        || !matches!(
-            original["operation"].as_str(),
-            Some("start" | "reconstruct" | "cleanup")
-        )
-        || original["source_root"] != value!(root)
-        || original["config_path"] != config_path
-        || original["config_sha256"] != sha256(config_bytes)
-        || original["report_path"] != receipt.path
-    {
-        return Err("original failed-operation/configuration identity mismatch".into());
-    }
+    let (original, bytes) = failed_report(
+        root,
+        config_path,
+        config_bytes,
+        registrations,
+        report,
+        &receipt,
+        &["start", "reconstruct", "cleanup"],
+    )?;
     let target = Path::new(field(&original, "destination")?);
     let branch = field(&original, "branch_ref")?;
     let base = field(&original, "base")?;
@@ -348,6 +413,38 @@ fn recover(
     report["context"] = value!({"base":base,"candidate":null,"branch_ref":branch});
     Ok(())
 }
+fn saved_commit(
+    r: &mut Runner,
+    root: &Path,
+    head: &str,
+    retained_ref: &str,
+    retained_commit: &str,
+    retention: &Retention,
+) -> Result<(), String> {
+    if r.oid(root, retained_ref)? != retained_commit {
+        return Err("retained reference changed".into());
+    }
+    if r.oid(root, &format!("{}^{{commit}}", head))? != head {
+        return Err("cleanup HEAD is not a commit".into());
+    }
+    match retention {
+        Retention::Ancestor => {
+            r.git(
+                root,
+                &["merge-base", "--is-ancestor", head, retained_commit],
+            )?;
+        }
+        Retention::SameTree => {
+            if r.oid(root, &format!("{}^{{tree}}", head))?
+                != r.oid(root, &format!("{}^{{tree}}", retained_commit))?
+            {
+                return Err("retained commit does not preserve the exact worktree tree".into());
+            }
+        }
+    }
+    Ok(())
+}
+
 struct Cleanup {
     path: PathBuf,
     branch: String,
@@ -361,33 +458,14 @@ struct Cleanup {
 }
 impl Cleanup {
     fn saved(&self, r: &mut Runner, root: &Path) -> Result<(), String> {
-        if r.oid(root, &self.retained_ref)? != self.retained_commit {
-            return Err("retained reference changed".into());
-        }
-        if r.oid(root, &format!("{}^{{commit}}", self.head))? != self.head {
-            return Err("cleanup HEAD is not a commit".into());
-        }
-        match self.retention {
-            Retention::Ancestor => {
-                r.git(
-                    root,
-                    &[
-                        "merge-base",
-                        "--is-ancestor",
-                        &self.head,
-                        &self.retained_commit,
-                    ],
-                )?;
-            }
-            Retention::SameTree => {
-                if r.oid(root, &format!("{}^{{tree}}", self.head))?
-                    != r.oid(root, &format!("{}^{{tree}}", self.retained_commit))?
-                {
-                    return Err("retained commit does not preserve the exact worktree tree".into());
-                }
-            }
-        }
-        Ok(())
+        saved_commit(
+            r,
+            root,
+            &self.head,
+            &self.retained_ref,
+            &self.retained_commit,
+            &self.retention,
+        )
     }
     fn absent(&self, r: &mut Runner, root: &Path) -> Result<(), String> {
         match fs::symlink_metadata(&self.path) {
@@ -531,4 +609,103 @@ impl Cleanup {
         self.saved(r, root)?;
         self.absent(r, root)
     }
+}
+
+fn cleanup_fetch(
+    r: &mut Runner,
+    root: &Path,
+    config_path: &str,
+    config_bytes: &[u8],
+    registrations: &Registrations,
+    report: &mut Value,
+    receipt: Receipt,
+    head: &str,
+    retained_ref: &str,
+    retained_commit: &str,
+    allow_absent: bool,
+) -> Result<(), String> {
+    let (original, bytes) = failed_report(
+        root,
+        config_path,
+        config_bytes,
+        registrations,
+        report,
+        &receipt,
+        &["start", "reconstruct"],
+    )?;
+    let fetch_ref = field(&original, "fetch_ref")?;
+    if fetch_ref
+        != format!(
+            "refs/chrono-harness/fetch/{}",
+            field(&original, "lock_reason")?
+        )
+        || original["fetch_ref_removed"] != false
+        || original.get("base").is_some_and(|base| base != head)
+    {
+        return Err("original report does not identify this unresolved temporary fetch ref".into());
+    }
+    r.git(root, &["check-ref-format", fetch_ref])?;
+    r.git(root, &["check-ref-format", retained_ref])?;
+    if !retained_ref.starts_with("refs/heads/") {
+        return Err("fetch retention must name an explicit local branch".into());
+    }
+    report["fetch_ref"] = value!(fetch_ref);
+    report["head"] = value!(head);
+    report["retained_ref"] = value!(retained_ref);
+    report["retained_commit"] = value!(retained_commit);
+    saved_commit(
+        r,
+        root,
+        head,
+        retained_ref,
+        retained_commit,
+        &Retention::Ancestor,
+    )?;
+    let symbolic = r.command(root, &["symbolic-ref", "--quiet", fetch_ref])?;
+    if symbolic.exit_code != 1 {
+        return Err("temporary fetch ref must be a direct ref".into());
+    }
+    let exists = r.command(root, &["show-ref", "--verify", "--quiet", fetch_ref])?;
+    match exists.exit_code {
+        1 if allow_absent => report["fetch_ref_removal"] = value!("already-absent"),
+        0 => {
+            if r.oid(root, fetch_ref)? != head {
+                return Err("temporary fetch ref changed; preserve its current value".into());
+            }
+            if state_bytes(root, &receipt.path)? != bytes {
+                return Err("original report changed during fetch-ref cleanup".into());
+            }
+            saved_commit(
+                r,
+                root,
+                head,
+                retained_ref,
+                retained_commit,
+                &Retention::Ancestor,
+            )?;
+            report["fetch_ref_removal"] = value!("attempted-unverified");
+            r.git(root, &["update-ref", "--no-deref", "-d", fetch_ref, head])?;
+            if r.command(root, &["show-ref", "--verify", "--quiet", fetch_ref])?
+                .exit_code
+                != 1
+            {
+                return Err("temporary fetch-ref absence was not verified after deletion".into());
+            }
+            report["fetch_ref_removed"] = value!(true);
+            report["fetch_ref_removal"] = value!("verified-absent");
+        }
+        code => {
+            return Err(format!(
+                "temporary fetch-ref lookup exited {code}; absence requires an explicit retry plan"
+            ));
+        }
+    }
+    saved_commit(
+        r,
+        root,
+        head,
+        retained_ref,
+        retained_commit,
+        &Retention::Ancestor,
+    )
 }

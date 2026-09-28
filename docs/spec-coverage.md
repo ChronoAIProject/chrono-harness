@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup consumers | AI reconciliation, damaged/missing metadata and fetch-ref recovery, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch consumers | AI reconciliation, damaged/missing metadata and interrupted receipts, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -128,7 +128,7 @@ adopted policy and native asset build are explicitly registered; public beta.6
 ships this binary on macOS arm64 and Linux x86_64. Its native release recipe
 passed all 23 dedicated worktree tests on each platform.
 
-Explicit reconstruction reuses the worktree producer and its original process/identity helpers. Real CLI tests cover an advanced target, complete carry/retire choices, original source preservation, binary/mode/link/add/delete changes, literal paths, failed apply conflicts, source mutation, patch output bounds and empty/reused destinations. A successful result is a staged index tree, without a candidate commit or governance/integration verdict. AI reconciliation, recovery/cleanup and provider delivery remain unfinished.
+Explicit reconstruction reuses the worktree producer and its original process/identity helpers. Real CLI tests cover an advanced target, complete carry/retire choices, original source preservation, binary/mode/link/add/delete changes, literal paths, failed apply conflicts, source mutation, patch output bounds and empty/reused destinations. A successful result is a staged index tree, without a candidate commit or governance/integration verdict. AI reconciliation and provider delivery remain unfinished; registered maintenance is described below.
 
 Worktree cleanliness observes tracked changes separately and excludes explicitly
 registered artifact directories from ignored and nonignored Git inventories
@@ -151,5 +151,12 @@ loader and artifact classifier. Real consumers cover failed-hook recovery,
 reconciled reconstruction, original-report preservation, identity/lock/index
 refusals, explicit artifact disposal, ancestor/squash preservation, retries and
 actual removal/ref races and recovery of cleanup locks after retained-ref races. These operations do not certify governance or remote
-landing. Damaged/missing metadata, interrupted publication, temporary fetch refs,
+landing. Damaged/missing metadata, interrupted publication,
 remote branch retirement and autonomous provider orchestration remain pending.
+
+Receipt-bound temporary-ref cleanup reuses maintenance receipt and saved-commit
+validation. Real Git tests cover preservation, explicit absence retries, malformed
+identity/retention, symbolic refs, concurrent ref updates, and removal followed
+by a failed Git exit. It preserves the original failure and reports unverified
+effects separately from verified absence. It requires a complete original report;
+interrupted or missing receipts remain outside this recovery contract.

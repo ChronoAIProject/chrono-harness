@@ -461,3 +461,237 @@ fn maintenance_rechecks_work_after_releasing_owned_locks() {
         );
     }
 }
+
+impl Host {
+    fn failed_fetch(&self, after_fetch: bool) -> Value {
+        use std::os::unix::fs::PermissionsExt;
+        let real = Command::new("/bin/sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap();
+        let real = String::from_utf8(real.stdout)
+            .unwrap()
+            .trim()
+            .replace('\'', "'\\''");
+        let wrapper = self.parent.join("fetch-git-wrapper");
+        let body = r#"if [ "$2" = fetch ] && [ "$(cat "$HOME/fetch-action")" = fetch-block ]; then
+ REAL "$@" || exit $?; echo failure-after-fetch >&2; exit 72
+fi
+if [ "$2" = update-ref ] && [ "$4" = -d ]; then
+ case "$5" in refs/chrono-harness/fetch/*)
+  case "$(cat "$HOME/fetch-action")" in
+   block) echo original-fetch-ref-removal-failure >&2; exit 71;;
+   race) REAL update-ref "$5" "$(cat "$HOME/fetch-new-head")" || exit $?;;
+   remove-fail) REAL "$@" || exit $?; echo failure-after-ref-removal >&2; exit 73;;
+  esac
+ esac
+fi
+exec REAL "$@"
+"#;
+        fs::write(
+            &wrapper,
+            format!("#!/bin/sh\n{}", body.replace("REAL", &format!("'{real}'"))),
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(
+            self.parent.join("fetch-action"),
+            if after_fetch { "fetch-block" } else { "block" },
+        )
+        .unwrap();
+        self.policy(|p| p["git"]["program"] = value!(wrapper));
+        let target = self.parent.join("never-created");
+        let (code, original, error) = self.invoke("feature", "fetch-failure", &target);
+        assert_ne!(code, 0, "{original} {error}");
+        assert_eq!(original["status"], "failed");
+        assert_eq!(original["fetch_ref_removed"], false);
+        let fetched = git(
+            &self.root,
+            &["rev-parse", original["fetch_ref"].as_str().unwrap()],
+        );
+        if after_fetch {
+            assert!(original.get("base").is_none());
+        } else {
+            assert_eq!(fetched, original["base"]);
+        }
+        assert!(!target.exists());
+        fs::write(self.parent.join("fetch-action"), "normal").unwrap();
+        original
+    }
+    fn fetch_cleanup(&self, original: &Value) -> Value {
+        let path = original["report_path"].as_str().unwrap();
+        value!({"schema":"chrono-worktree-maintenance/v1","operation":"cleanup-fetch",
+            "receipt":{"path":path,"sha256":sha256(&fs::read(self.root.join(path)).unwrap())},
+            "head":git(&self.root, &["rev-parse", original["fetch_ref"].as_str().unwrap()]),"retained_ref":"refs/heads/dev",
+            "retained_commit":git(&self.root,&["rev-parse","refs/heads/dev"]),"allow_absent_ref":false})
+    }
+}
+
+#[test]
+fn fetch_cleanup_removes_retained_receipt_ref_and_supports_explicit_retry() {
+    for after_fetch in [false, true] {
+        let h = Host::new("different/program.go");
+        let original = h.failed_fetch(after_fetch);
+        let path = h.root.join(original["report_path"].as_str().unwrap());
+        let bytes = fs::read(&path).unwrap();
+        let expected = git(
+            &h.root,
+            &["rev-parse", original["fetch_ref"].as_str().unwrap()],
+        );
+        let unrelated = "refs/chrono-harness/fetch/keep-unrelated";
+        git(&h.root, &["update-ref", unrelated, "HEAD"]);
+        fs::write(h.root.join("different/program.go"), "unsaved source work\n").unwrap();
+        let source_diff = git(&h.root, &["diff", "--binary"]);
+        let mut plan = h.fetch_cleanup(&original);
+        let (code, r, error) = h.maintain("cleanup-fetch", plan.clone());
+        assert_eq!(code, 0, "{r} {error}");
+        assert_eq!(r["status"], "cleaned");
+        assert_eq!(r["fetch_ref_removed"], true);
+        assert_eq!(r["fetch_ref_removal"], "verified-absent");
+        assert_eq!(r["prior_report"]["report"], original);
+        assert_eq!(r["prior_report"]["sha256"], sha256(&bytes));
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        assert_eq!(git(&h.root, &["rev-parse", unrelated]), expected);
+        assert_eq!(git(&h.root, &["diff", "--binary"]), source_diff);
+        assert!(
+            !git(&h.root, &["for-each-ref", "--format=%(refname)"])
+                .lines()
+                .any(|x| x == original["fetch_ref"].as_str().unwrap())
+        );
+        assert_ne!(h.maintain("cleanup-fetch", plan.clone()).0, 0);
+        plan["allow_absent_ref"] = value!(true);
+        let (code, r, error) = h.maintain("cleanup-fetch", plan);
+        assert_eq!(code, 0, "{r} {error}");
+        assert_eq!(r["fetch_ref_removed"], false);
+        assert_eq!(r["fetch_ref_removal"], "already-absent");
+    }
+}
+
+#[test]
+fn fetch_cleanup_rejects_receipt_identity_ref_and_retention_changes() {
+    for fault in [
+        "digest",
+        "source",
+        "namespace",
+        "removed",
+        "base",
+        "head",
+        "ref-changed",
+        "retention-moved",
+        "unretained",
+        "symbolic",
+    ] {
+        let h = Host::new("unusual/source.ts");
+        let mut original = h.failed_fetch(false);
+        let fetch_ref = original["fetch_ref"].as_str().unwrap().to_string();
+        let mut plan = h.fetch_cleanup(&original);
+        match fault {
+            "digest" => plan["receipt"]["sha256"] = value!("0".repeat(64)),
+            "source" => original["source_root"] = value!(h.parent),
+            "namespace" => original["fetch_ref"] = value!("refs/heads/dev"),
+            "removed" => original["fetch_ref_removed"] = value!(true),
+            "base" => original["base"] = value!("0".repeat(40)),
+            "head" => plan["head"] = value!(git(&h.root, &["rev-parse", "HEAD^"])),
+            "ref-changed" => {
+                git(&h.root, &["update-ref", &fetch_ref, "HEAD^"]);
+            }
+            "retention-moved" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
+            }
+            "unretained" => {
+                git(&h.root, &["update-ref", "refs/heads/old", "HEAD^"]);
+                plan["retained_ref"] = value!("refs/heads/old");
+                plan["retained_commit"] = value!(git(&h.root, &["rev-parse", "refs/heads/old"]));
+            }
+            _ => {
+                git(&h.root, &["symbolic-ref", &fetch_ref, "refs/heads/dev"]);
+            }
+        }
+        if ["source", "namespace", "removed", "base"].contains(&fault) {
+            let path = h.root.join(original["report_path"].as_str().unwrap());
+            fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
+            plan["receipt"]["sha256"] = value!(sha256(&fs::read(path).unwrap()));
+        }
+        let before = git(
+            &h.root,
+            &[
+                "for-each-ref",
+                "--format=%(refname) %(objectname) %(symref)",
+            ],
+        );
+        let (code, r, error) = h.maintain("cleanup-fetch", plan);
+        assert_ne!(code, 0, "{fault}: {r} {error}");
+        assert_eq!(
+            r["fetch_ref_removal"], "not-attempted",
+            "{fault}: {r} {error}"
+        );
+        assert_eq!(
+            git(
+                &h.root,
+                &[
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname) %(symref)"
+                ]
+            ),
+            before
+        );
+    }
+}
+
+#[test]
+fn fetch_cleanup_preserves_concurrent_ref_and_original_failure() {
+    for action in ["block", "race", "remove-fail"] {
+        let h = Host::new("payload");
+        let original = h.failed_fetch(false);
+        let plan = h.fetch_cleanup(&original);
+        let old = fs::read(h.root.join(original["report_path"].as_str().unwrap())).unwrap();
+        fs::write(
+            h.parent.join("fetch-new-head"),
+            git(&h.root, &["rev-parse", "HEAD^"]),
+        )
+        .unwrap();
+        fs::write(h.parent.join("fetch-action"), action).unwrap();
+        let (code, r, error) = h.maintain("cleanup-fetch", plan);
+        assert_ne!(code, 0, "{action}: {r} {error}");
+        assert_eq!(
+            r["fetch_ref_removal"], "attempted-unverified",
+            "{action}: {r} {error}"
+        );
+        assert_eq!(r["fetch_ref_removed"], false);
+        assert_eq!(
+            fs::read(h.root.join(original["report_path"].as_str().unwrap())).unwrap(),
+            old
+        );
+        let fetch_ref = original["fetch_ref"].as_str().unwrap();
+        match action {
+            "race" => assert_eq!(
+                git(&h.root, &["rev-parse", fetch_ref]),
+                git(&h.root, &["rev-parse", "HEAD^"])
+            ),
+            "block" => {
+                assert_eq!(git(&h.root, &["rev-parse", fetch_ref]), original["base"]);
+                assert!(
+                    r["processes"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|x| x["process"]["exit_code"] == 71)
+                );
+            }
+            _ => {
+                assert!(
+                    !git(&h.root, &["for-each-ref", "--format=%(refname)"])
+                        .lines()
+                        .any(|x| x == fetch_ref)
+                );
+                assert!(
+                    r["processes"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|x| x["process"]["exit_code"] == 73)
+                );
+            }
+        }
+    }
+}
