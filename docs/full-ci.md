@@ -9,8 +9,15 @@ the caller's full context to the same runner command used locally:
   --context .chrono-harness/state/full/context.json
 ```
 
-This source extension is newer than public beta.9. It does not activate the
+This extension is distributed in public beta.10. It does not activate the
 product host's proposed full registries or replace its current scoped CI.
+
+The fixed-source beta.10 release ran the registered CI and seven-judge consumer
+tests on macOS arm64 and Linux x86_64. An anonymously downloaded macOS CI binary
+also verified release/full generation, drift rejection/regeneration and exact
+context/argv preparation on a real Git fixture. These are native product and local
+public-binary consumers; generated full-dispatch execution on GitHub and full
+host activation remain outstanding. See [release evidence](distribution.md).
 
 ## Explicit source and adoption
 

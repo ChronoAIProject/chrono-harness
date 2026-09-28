@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch plus retained-intent interrupted checkout and fetch consumers | AI reconciliation, damaged/missing metadata, lost recovery identity, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch, explicit leased remote retirement, and retained-intent interrupted checkout and fetch consumers | AI reconciliation, damaged/missing metadata, lost recovery identity, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -74,7 +74,7 @@ Scoped profile v2 independently opts into Git binding with policy.facts_config. 
 
 Full activation and all other remaining obligations stay active. Generic project fixtures validate declared method execution and ownership; independent Cargo fixtures validate explicitly adopted TOML consistency. Neither proves Cargo/SDK completeness. Single-worker checks do not certify independent review, native CI or landing.
 
-Public [beta.9](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.9) ships the explicit Git-binding extensions and native release recipe v3/report v4. Its [fixed-source native build](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36447808917) passed 352 tests across ten dedicated projects on each of macOS arm64 and Linux x86_64, including full/scoped Git-binding consumers. Both original reports retain 31 actual processes, 28 staged consumer destinations and 24 matching identity observations. This validates those native consumers; generated provider-v3 host adoption, full input closure and deterministic parity remain outstanding. The current host release workflow is generated from an explicit chrono-github-release/v1 source; see [release CI](release-ci.md). That generator extension is newer than beta.9.
+Public [beta.10](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.10) ships explicit Git binding, release/full CI generation, remote branch retirement and native release recipe v3/report v4. Its [fixed-source native build](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944) passed 371 tests across ten dedicated projects on each of macOS arm64 and Linux x86_64, including full/scoped Git-binding consumers. Both original reports retain 31 actual processes, 28 staged consumer destinations and 24 matching identity observations. This validates those native consumers; generated provider-v3 host adoption, full input closure and deterministic parity remain outstanding. The current host release workflow is generated from an explicit chrono-github-release/v1 source; see [release CI](release-ci.md). That generator extension is distributed in beta.10; the linked native release uses its generated workflow.
 
 This increment adds mixed classification and adopted registrations together. **Mixed policy/product change warning:** the project pair, semantic comparisons, bootstrap binding and execution plan expand the validation surface. Costs remain unmeasured. Dedicated tests validate the mixed report and shared cost consumer; host activation still requires the outstanding governance and input obligations.
 
@@ -194,9 +194,10 @@ Remote branch retirement now has an explicit `cleanup-remote` consumer, reusing
 registered Git/process and saved-work checks. Real CLI tests exercise a unique
 expected push endpoint, local/remote target binding, exact branch leases, squash
 retention, dirty local-work preservation, failed post-deletion exits, concurrent
-branch updates, changed targets/plans and explicit absence retries. This is newer
-than public beta.9. It does not certify remote transactions, Git/delegated input
-closure, PR/merge/landing orchestration, full governance or deterministic parity.
+branch updates, changed targets/plans and explicit absence retries. This is distributed
+in public beta.10; the actual public macOS binary retired the release and four
+example adoption branches after verified landing. It does not certify remote
+transactions, Git/delegated input closure, PR/merge/landing orchestration, full governance or deterministic parity.
 
 Full CI context transport is an explicit `chrono-github-full-ci/v1` projection.
 The CI tests reuse the actual bound-Git fixture for exact bytes, candidate/config/
@@ -206,3 +207,11 @@ for local and prepared integration/delivery contexts, including rejected stale
 context. Preparation remains `not-evaluated` governance and `unestablished` parity.
 See [the adoption and retry boundary](full-ci.md). No product full-host activation
 or native generated dispatch execution is claimed by these consumer tests.
+
+Public beta.10 CI consumption verifies release/full generation, drift handling and
+exact context transport using the anonymously downloaded macOS binary. All four
+[example hosts](examples.md) adopted the pinned public release through actual
+local/integration/PR/dev checks, then verified public-origin start, local cleanup
+and leased remote retirement. These are bounded product and scoped-host results;
+full generated dispatch adoption, complete input closure, activation, parity,
+AI reconciliation/PR/merge orchestration and formal refinement remain pending.

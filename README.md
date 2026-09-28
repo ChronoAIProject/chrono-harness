@@ -5,7 +5,7 @@
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
 
-[公开测试版 v0.1.0-beta.9](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.9) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
+[公开测试版 v0.1.0-beta.10](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.10) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
 
 公开的独立示例宿主：
 
@@ -119,11 +119,11 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 
 测试版统一从本库 [GitHub Releases](https://github.com/ChronoAIProject/chrono-harness/releases) 分发。独立 `chrono-distribution` 按显式清单打包、合并原生平台产物、生成宿主安装登记与入口，验证清单和二进制摘要后安装；宿主无需保留产品源码包或编译 Rust。合同与命令见 [发布与安装](docs/distribution.md)。
 
-`chrono-ci` 还可按显式 `chrono-github-release/v1` 源生成和核对发布构建工作流，复用同一 init/generate/verify 入口。平台、命令和产物目录均由宿主登记，本地与 CI 执行同一发布命令；该扩展尚未进入 beta.9，见[发布 CI 合同](docs/release-ci.md)。
+`chrono-ci` 还可按显式 `chrono-github-release/v1` 源生成和核对发布构建工作流，复用同一 init/generate/verify 入口。平台、命令和产物目录均由宿主登记，本地与 CI 执行同一发布命令；该扩展已包含在 beta.10，见[发布 CI 合同](docs/release-ci.md)。
 
 完整治理可显式采用 `chrono-github-full-ci/v1`：传入固定 context 原字节，生成 CI
 调用与本地相同的 `check … --context …`。工具和引用证据由宿主 bootstrap 供应；准备
-成功不等于判官通过。该扩展尚未进入 beta.9，本仓完整宿主仍未启用，见[完整 CI](docs/full-ci.md)。
+成功不等于判官通过。该扩展已包含在 beta.10，本仓完整宿主仍未启用，见[完整 CI](docs/full-ci.md)。
 
 通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查及已登记 registry/Git 输入、metadata 与真实操作的联合校验属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
 
