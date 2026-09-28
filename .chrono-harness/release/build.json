@@ -20,7 +20,7 @@
   ],
   "projects": ".chrono-harness/projects.json",
   "tools": {
-    "rustup": "rustup",
+    "rustup": "/usr/bin/false",
     "cargo": "cargo",
     "rustc": "rustc",
     "git": "git"
