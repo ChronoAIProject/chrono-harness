@@ -2628,6 +2628,18 @@
           "to": "project:judge-registration"
         }
       ]
+    },
+    {
+      "path": "crates/runner-tests/tests/registry_snapshot.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

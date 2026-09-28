@@ -18,5 +18,9 @@ path = "tests/cli_contract.rs"
 name = "protocol_v1"
 path = "tests/protocol_v1.rs"
 
+[[test]]
+name = "registry_snapshot"
+path = "tests/registry_snapshot.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3
