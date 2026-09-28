@@ -206,8 +206,12 @@ fn bounded_delta_transport_retains_process_evidence() {
             &request.request_id,
             timeout,
         );
-        let failure = wire::invoke_detailed(&request, &binding, &Default::default(), 2, 1024)
-            .expect_err("a process bound is an error despite a valid response");
+        // Match ordinary protocol fixtures' startup guard when testing output;
+        // the deliberately shorter timeout is only the timeout case's subject.
+        let seconds = if timeout { 2 } else { 5 };
+        let failure =
+            wire::invoke_detailed(&request, &binding, &Default::default(), seconds, 1024)
+                .expect_err("a process bound is an error despite a valid response");
         assert_bound_evidence(failure, timeout);
     }
 }
@@ -222,9 +226,15 @@ fn bounded_initial_transport_retains_process_evidence() {
             &request.request_id,
             timeout,
         );
-        let failure =
-            chrono_harness::initial::invoke(&request, &binding, &Default::default(), 2, 1024)
-                .expect_err("an initial process bound cannot complete inventory");
+        let seconds = if timeout { 2 } else { 5 };
+        let failure = chrono_harness::initial::invoke(
+            &request,
+            &binding,
+            &Default::default(),
+            seconds,
+            1024,
+        )
+        .expect_err("an initial process bound cannot complete inventory");
         assert_bound_evidence(failure, timeout);
     }
 }
