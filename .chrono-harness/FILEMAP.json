@@ -76,6 +76,14 @@
         {
           "kind": "runtime-input",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:distribution-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
         }
       ]
     },

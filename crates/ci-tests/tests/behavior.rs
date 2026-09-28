@@ -849,17 +849,35 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     let read =
         |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
     let config = read(".chrono-harness/config.json");
-    let tool = config["tools"]
+    let mut tool = config["tools"]
         .as_array()
         .unwrap()
         .iter()
         .find(|t| t["id"] == "python3")
+        .unwrap()
+        .clone();
+    // This synthetic host adopts its actual interpreter. The product host's fixed
+    // interpreter pin is checked by the separately registered host migration tests.
+    let observed = Command::new(tool["program"].as_str().unwrap())
+        .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
+        .env_clear()
+        .output()
         .unwrap();
+    assert!(observed.status.success());
+    tool["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
     let dir = tempfile::tempdir().unwrap();
     let shadow = dir.path().join("python3");
     fs::write(&shadow, "#!/bin/sh\nprintf 'Python shadowed\\n'\nexit 0\n").unwrap();
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(&shadow, fs::Permissions::from_mode(0o755)).unwrap();
+    let control = Command::new("python3")
+        .env_clear()
+        .env("PATH", dir.path())
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(control.status.success());
+    assert_eq!(control.stdout, b"Python shadowed\n");
     let actual = Command::new(tool["program"].as_str().unwrap())
         .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
         .env_clear()

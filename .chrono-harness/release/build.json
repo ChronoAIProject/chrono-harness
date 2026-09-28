@@ -1,5 +1,5 @@
 {
-  "schema": "chrono-release-build/v2",
+  "schema": "chrono-release-build/v3",
   "rust_toolchain": "1.95.0",
   "manifests": [
     "crates/runner/Cargo.toml",
@@ -26,9 +26,122 @@
     "git": "git"
   },
   "verification_operations": [
-    "build.distribution",
     "test.distribution-tests",
-    "build.worktree",
-    "test.worktree-tests"
+    "test.worktree-tests",
+    "test.runner-tests",
+    "test.inputs-tests",
+    "test.ci-tests",
+    "test.judge-ci-tests",
+    "test.judge-registration-tests",
+    "test.judge-projects-tests",
+    "test.judge-workflow-tests",
+    "test.judge-cargo-tests"
+  ],
+  "consumer_staging": {
+    "release_plan": ".chrono-harness/release/plan.json",
+    "host_config": ".chrono-harness/config.json",
+    "bindings": [
+      {
+        "asset": "chrono-harness",
+        "destinations": [
+          "crates/runner/target/debug/chrono-harness",
+          ".chrono-harness/bin/chrono-harness"
+        ]
+      },
+      {
+        "asset": "chrono-judge-ci",
+        "destinations": [
+          "crates/judge-ci/target/debug/chrono-judge-ci",
+          ".chrono-harness/bin/chrono-judge-ci"
+        ]
+      },
+      {
+        "asset": "chrono-ci",
+        "destinations": [
+          "crates/ci/target/debug/chrono-ci",
+          ".chrono-harness/bin/chrono-ci"
+        ]
+      },
+      {
+        "asset": "chrono-judge-registration",
+        "destinations": [
+          "crates/judge-registration/target/debug/chrono-judge-registration",
+          ".chrono-harness/bin/chrono-judge-registration"
+        ]
+      },
+      {
+        "asset": "chrono-judge-filemap",
+        "destinations": [
+          "crates/judge-filemap/target/debug/chrono-judge-filemap",
+          ".chrono-harness/bin/chrono-judge-filemap"
+        ]
+      },
+      {
+        "asset": "chrono-judge-routes",
+        "destinations": [
+          "crates/judge-routes/target/debug/chrono-judge-routes",
+          ".chrono-harness/bin/chrono-judge-routes"
+        ]
+      },
+      {
+        "asset": "chrono-judge-projects",
+        "destinations": [
+          "crates/judge-projects/target/debug/chrono-judge-projects",
+          ".chrono-harness/bin/chrono-judge-projects"
+        ]
+      },
+      {
+        "asset": "chrono-judge-cost",
+        "destinations": [
+          "crates/judge-cost/target/debug/chrono-judge-cost",
+          ".chrono-harness/bin/chrono-judge-cost"
+        ]
+      },
+      {
+        "asset": "chrono-judge-mixed",
+        "destinations": [
+          "crates/judge-mixed/target/debug/chrono-judge-mixed",
+          ".chrono-harness/bin/chrono-judge-mixed"
+        ]
+      },
+      {
+        "asset": "chrono-judge-workflow",
+        "destinations": [
+          "crates/judge-workflow/target/debug/chrono-judge-workflow",
+          ".chrono-harness/bin/chrono-judge-workflow"
+        ]
+      },
+      {
+        "asset": "chrono-inputs",
+        "destinations": [
+          "crates/inputs/target/debug/chrono-inputs",
+          ".chrono-harness/bin/chrono-inputs"
+        ]
+      },
+      {
+        "asset": "chrono-distribution",
+        "destinations": [
+          "crates/distribution/target/debug/chrono-distribution",
+          ".chrono-harness/bin/chrono-distribution"
+        ]
+      },
+      {
+        "asset": "chrono-judge-cargo",
+        "destinations": [
+          "crates/judge-cargo/target/debug/chrono-judge-cargo",
+          ".chrono-harness/bin/chrono-judge-cargo"
+        ]
+      },
+      {
+        "asset": "chrono-worktree",
+        "destinations": [
+          "crates/worktree/target/debug/chrono-worktree",
+          ".chrono-harness/bin/chrono-worktree"
+        ]
+      }
+    ]
+  },
+  "rust_components": [
+    "rustfmt"
   ]
 }
