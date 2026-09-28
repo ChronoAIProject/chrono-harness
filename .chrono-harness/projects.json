@@ -393,6 +393,17 @@
             "--config",
             ".chrono-harness/ci/github.json"
           ]
+        },
+        "verify_release": {
+          "operation": "ci.release.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/release.json"
+          ]
         }
       }
     },

@@ -20,7 +20,7 @@ v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以�
 
 这里仅消费显式操作登记并保存实测结果，不代表完整治理准入、构建输入闭包、二进制来源证明或跨平台同判。消费者必须核对相应版本的状态、实际操作与源身份，不能以目录或报告存在判定发布成功。
 
-这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。这个发布工作流仍由宿主维护，尚未由 `chrono-ci` 生成。
+这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。这个发布工作流由 `chrono-ci` 从宿主显式[发布源](../.chrono-harness/ci/release.json)生成，合同与扩展边界见 [release CI](release-ci.md)；公开 beta.9 尚不包含该生成扩展。
 
 [beta.9](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.9) 已从固定源码 `c817a9043d9b9596547a3916d6eed84752ded2e5` 公开发布，包含两个平台各 15 个工具、合并清单以及各平台的原始构建报告和打包清单，共 35 个资产。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36447808917)使用 v3 配方／v4 报告，在每个平台通过十个专属测试项目的 352 项测试；核对 31 个实际进程、28 个暂存目的路径及 24 轮身份观察。已匿名下载核对合并清单及两个平台的 worktree／installer 字节。beta.9 包含显式 Git 绑定及上述发布证据合同，宿主须自行选择采用相应版本配置；测试与摘要核验不证明完整输入闭包或确定性同判。
 

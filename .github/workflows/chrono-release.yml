@@ -1,33 +1,56 @@
-name: chrono-release-build
+# chrono-ci: owned github-release/v1
+name: "chrono-release-build"
 on:
   push:
-    branches: [integration/distribution]
+    branches: ["integration/distribution","integration/release-ci"]
   workflow_dispatch:
     inputs:
       source:
-        description: Full source commit OID to package
+        description: Source revision to check out
         required: true
         type: string
 permissions:
   contents: read
 jobs:
-  native:
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-24.04, macos-14]
-    runs-on: ${{ matrix.runner }}
+  linux:
+    if: ${{ github.event.deleted != true }}
+    runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Build and verify registered native release
-        run: python3 .chrono-harness/release/build.py . .chrono-harness/cache/release-platform
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
+      - name: Run registered release command
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-platform'
+      - name: Preserve original release artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: chrono-release-${{ matrix.runner }}
-          path: .chrono-harness/cache/release-platform/
+          name: "chrono-release-ubuntu-24.04"
+          path: ".chrono-harness/cache/release-platform/"
+          if-no-files-found: error
+  macos:
+    if: ${{ github.event.deleted != true }}
+    runs-on: "macos-14"
+    timeout-minutes: 45
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Run registered release command
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-platform'
+      - name: Preserve original release artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-macos-14"
+          path: ".chrono-harness/cache/release-platform/"
           if-no-files-found: error

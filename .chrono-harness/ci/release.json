@@ -1,0 +1,39 @@
+{
+  "schema": "chrono-github-release/v1",
+  "workflow_path": ".github/workflows/chrono-release.yml",
+  "name": "chrono-release-build",
+  "push_branches": [
+    "integration/distribution",
+    "integration/release-ci"
+  ],
+  "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+  "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+  "jobs": [
+    {
+      "id": "linux",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-platform"
+      ],
+      "artifact_name": "chrono-release-ubuntu-24.04",
+      "artifact_directory": ".chrono-harness/cache/release-platform/"
+    },
+    {
+      "id": "macos",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-platform"
+      ],
+      "artifact_name": "chrono-release-macos-14",
+      "artifact_directory": ".chrono-harness/cache/release-platform/"
+    }
+  ]
+}
