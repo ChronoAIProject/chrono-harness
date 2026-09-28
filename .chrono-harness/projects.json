@@ -32,7 +32,9 @@
     "distribution",
     "distribution-tests",
     "judge-cargo",
-    "judge-cargo-tests"
+    "judge-cargo-tests",
+    "worktree",
+    "worktree-tests"
   ],
   "projects": [
     {
@@ -1365,6 +1367,98 @@
         }
       },
       "tests_for": "judge-cargo"
+    },
+    {
+      "id": "worktree",
+      "kind": "production",
+      "manifest": "crates/worktree/Cargo.toml",
+      "lockfile": "crates/worktree/Cargo.lock",
+      "root": "crates/worktree",
+      "actions": {
+        "build": {
+          "operation": "build.worktree",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.worktree",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.worktree",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "worktree-tests"
+    },
+    {
+      "id": "worktree-tests",
+      "kind": "test",
+      "manifest": "crates/worktree-tests/Cargo.toml",
+      "lockfile": "crates/worktree-tests/Cargo.lock",
+      "root": "crates/worktree-tests",
+      "actions": {
+        "build": {
+          "operation": "build.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "worktree"
     }
   ],
   "scripts": [

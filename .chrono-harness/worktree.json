@@ -1,0 +1,17 @@
+{
+  "schema": "chrono-worktree-config/v1",
+  "host_config": ".chrono-harness/config.json",
+  "remote": "origin",
+  "git": {
+    "program": "git",
+    "expected_version": null,
+    "sha256": null
+  },
+  "environment": {
+    "inherit": ["PATH", "HOME", "SSH_AUTH_SOCK"],
+    "values": {"GIT_TERMINAL_PROMPT": "0"}
+  },
+  "timeout_seconds": 120,
+  "output_limit_bytes": 1048576,
+  "report_directory": ".chrono-harness/state/worktrees/"
+}

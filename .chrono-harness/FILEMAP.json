@@ -1399,6 +1399,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
         }
       ]
     },
@@ -2656,6 +2660,121 @@
           "to": "project:ci-tests"
         }
       ]
+    },
+    {
+      "path": "crates/worktree/Cargo.toml",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/Cargo.lock",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/lib.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/main.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/start.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/Cargo.toml",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/Cargo.lock",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/creation.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/worktree.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/worktree.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -4603,6 +4722,126 @@
       "from": "project:judge-registration",
       "kind": "runtime-input",
       "to": "project:ci-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:worktree"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:worktree"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:worktree"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "test-execution",
+      "to": "test:worktree-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "project:judge-registration",
+      "kind": "compile",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "project:worktree-tests",
+      "kind": "test-execution",
+      "to": "test:worktree-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
     }
   ],
   "test_costs": [
@@ -4664,6 +4903,10 @@
     },
     {
       "test": "judge-cargo-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "worktree-tests",
       "cost": "unmeasured"
     }
   ],
@@ -4859,6 +5102,16 @@
         "build.judge-ci",
         "build.judge-workflow",
         "test.judge-cargo-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:worktree-tests": {
+      "operations": [
+        "fmt.worktree",
+        "fmt.worktree-tests",
+        "build.worktree",
+        "test.worktree-tests"
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576

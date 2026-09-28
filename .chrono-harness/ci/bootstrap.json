@@ -18,7 +18,8 @@
     "build.judge-workflow",
     "build.inputs",
     "build.distribution",
-    "build.judge-cargo"
+    "build.judge-cargo",
+    "build.worktree"
   ],
   "install": [
     {
@@ -72,6 +73,10 @@
     {
       "source": "crates/judge-cargo/target/debug/chrono-judge-cargo",
       "destination": ".chrono-harness/bin/chrono-judge-cargo"
+    },
+    {
+      "source": "crates/worktree/target/debug/chrono-worktree",
+      "destination": ".chrono-harness/bin/chrono-worktree"
     }
   ]
 }

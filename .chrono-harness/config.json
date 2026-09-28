@@ -283,6 +283,18 @@
       "owner": "judge-cargo-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/worktree/target/",
+      "owner": "worktree",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/worktree-tests/target/",
+      "owner": "worktree-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

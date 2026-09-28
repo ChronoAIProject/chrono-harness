@@ -59,6 +59,20 @@ fn strings(v: &Value) -> BTreeSet<String> {
         .map(str::to_owned)
         .collect()
 }
+/// Classify observed untracked paths using an already schema-validated host configuration.
+pub fn nonartifact_paths(config: &Value, paths: &[String]) -> Vec<String> {
+    let artifacts: Vec<_> = config["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["path"].as_str().unwrap())
+        .collect();
+    paths
+        .iter()
+        .filter(|p| !artifacts.iter().any(|a| p.starts_with(a)))
+        .cloned()
+        .collect()
+}
 pub fn judge(req: &Request) -> Response {
     let mut r = req.response(Status::Pass);
     if let Err(e) = evaluate(req, &mut r) {
@@ -232,19 +246,7 @@ fn evaluate(req: &Request, r: &mut Response) -> Result<()> {
             return Ok(());
         }
     };
-    let artifacts: Vec<_> = new.config["artifacts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a["path"].as_str().unwrap())
-        .collect();
-    let nonartifact = |paths: &Vec<String>| -> Vec<String> {
-        paths
-            .iter()
-            .filter(|p| !artifacts.iter().any(|a| p.starts_with(a)))
-            .cloned()
-            .collect()
-    };
+    let nonartifact = |paths: &[String]| nonartifact_paths(new.config(), paths);
     if observed.head != req.checkout.head
         || observed.tracked != req.checkout.tracked
         || nonartifact(&observed.untracked) != nonartifact(&req.checkout.untracked)

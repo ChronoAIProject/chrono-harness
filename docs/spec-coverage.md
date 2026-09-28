@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports | autonomous fresh worktrees, stale rebuild, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy and failure preservation | autonomous stale rebuild, recovery/cleanup, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -52,7 +52,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 23 same complete deterministic inputs | pending | deterministic evidence/parity comparison |
 | 24 parity unestablished | implemented field: full runner report; G external host | unresolved closure remains nonzero |
 | 25 staged/unstaged/untracked | implemented: G dirt cases | no hidden dirty mode |
-| 26 missing history | implemented bounded: G object checks, W common ancestry and shallow boundaries | caller fetch/reconstruction remains external |
+| 26 missing history | implemented bounded: G object checks, W common ancestry and shallow boundaries; worktree producer fetches its explicitly registered target | general missing-history recovery/reconstruction remains external |
 | 27 empty/invalid stdout | implemented: R `malformed_stdout_crash_and_bounds`, R/L embedded-invalid-UTF-8 subprocess/CLI cases and valid U+FFFD controls | — |
 | 28 crash/timeout/digest | implemented: R bounds and prelaunch digest tests | resource guard is infrastructure, not functional verdict |
 | 29 unknown costs | implemented: cost consumer warns with zero exit, preserves null and known coordinates; no-Delta retained-input case | full host activation |
@@ -118,3 +118,11 @@ push and subsequent ordinary integration/PR/dev DELTA checks, explicitly scoped
 to macOS arm64. Source/toolchain bootstrap provenance, complete input closure,
 cross-platform initial profiles, activation and deterministic parity remain
 outstanding; inventory completion does not certify them.
+
+The registered [worktree producer](worktree.md) adds actual fresh target fetch,
+isolated branch creation and source/process identity reports. Its dedicated tests
+exercise public library/CLI behavior with real remotes and checkout hooks, and
+reuse the existing strict registration loader and bounded process engine. Creation
+does not certify full governance, stale recovery, PR delivery or landing. The
+adopted policy and future native asset build are explicitly registered; published
+beta.5 remains unchanged and lacks this new binary.

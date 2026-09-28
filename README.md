@@ -18,12 +18,14 @@
 
 这四个仓库是测试版安装与本地/原生 CI 的实际验收宿主；覆盖范围和当前限制见 [示例索引](docs/examples.md)。
 
-宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cargo` / `judge-cargo-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`judge-workflow` / `judge-workflow-tests`、`inputs` / `inputs-tests`、`distribution` / `distribution-tests`、`ci` / `ci-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
+宿主约束仅放在 [.chrono-harness](.chrono-harness/config.json)。Rust 项目集中在 `crates/`，生产/测试配对为 `runner` / `runner-tests`、`judge-ci` / `judge-ci-tests`、`judge-registration` / `judge-registration-tests`、`judge-filemap` / `judge-filemap-tests`、`judge-routes` / `judge-routes-tests`、`judge-projects` / `judge-projects-tests`、`judge-cargo` / `judge-cargo-tests`、`judge-cost` / `judge-cost-tests`、`judge-mixed` / `judge-mixed-tests`、`judge-workflow` / `judge-workflow-tests`、`inputs` / `inputs-tests`、`distribution` / `distribution-tests`、`ci` / `ci-tests` 、`worktree` / `worktree-tests` 和 `instructions` / `instructions-tests`；各自独立 manifest、lockfile、target，无根 workspace。指令生成器保持独立；CI 判官与生成器复用 runner 的通用运输/argv 接口。
 
 ```text
 crates/                    独立 Rust 生产项目及各自测试项目
   runner/                  判官运输与统一 check 入口
   runner-tests/
+  worktree/                  显式目标抓取与独立工作树创建
+  worktree-tests/
   distribution/            发布打包、版本锁定和宿主安装
   distribution-tests/
   inputs/                  显式输入采集与保留内容运输
@@ -116,3 +118,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 测试版统一从本库 [GitHub Releases](https://github.com/ChronoAIProject/chrono-harness/releases) 分发。独立 `chrono-distribution` 按显式清单打包、合并原生平台产物、生成宿主安装登记与入口，验证清单和二进制摘要后安装；宿主无需保留产品源码包或编译 Rust。合同与命令见 [发布与安装](docs/distribution.md)。
 
 通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查及已登记 registry/Git 输入、metadata 与真实操作的联合校验属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
+
+新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。创建合同、失败保留与尚未实现的重建／PR／落地范围见 [worktree 文档](docs/worktree.md)。该新二进制已登记到后续原生发布构建；现有 beta.5 不含它。
