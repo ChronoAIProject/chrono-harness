@@ -142,7 +142,8 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
                 result
                     .executed
                     .iter()
-                    .map(|r| (&r.operation, &r.status, &r.error, &r.process))
+                    .filter(|r| r.status != "passed")
+                    .map(|r| (&r.operation, &r.status, &r.error, &r.receipt))
                     .collect::<Vec<_>>()
             )
         });
