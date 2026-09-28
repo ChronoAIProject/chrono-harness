@@ -1,5 +1,5 @@
 {
-  "schema": "chrono-release-build/v1",
+  "schema": "chrono-release-build/v2",
   "rust_toolchain": "1.95.0",
   "manifests": [
     "crates/runner/Cargo.toml",
@@ -17,5 +17,18 @@
     "crates/distribution/Cargo.toml",
     "crates/judge-cargo/Cargo.toml",
     "crates/worktree/Cargo.toml"
+  ],
+  "projects": ".chrono-harness/projects.json",
+  "tools": {
+    "rustup": "rustup",
+    "cargo": "cargo",
+    "rustc": "rustc",
+    "git": "git"
+  },
+  "verification_operations": [
+    "build.distribution",
+    "test.distribution-tests",
+    "build.worktree",
+    "test.worktree-tests"
   ]
 }
