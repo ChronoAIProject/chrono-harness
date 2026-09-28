@@ -6,9 +6,15 @@
 
 本库 `.chrono-harness/release/build.json` 使用 `chrono-release-build/v2`，显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`；`plan.json` 显式列版本、二进制名称与已构建路径。`build.py ROOT OUTPUT` 构建这些成员后，按操作 ID 从登记项目或独立 scripts 的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现。当前明确选择 distribution 与 worktree 的生产构建及专属测试；新增验证只需登记工具和操作，不扫描项目、不复制测试命令。
 
-配方在构建前拒绝未知、重复、歧义操作、无效 argv 与缺失工具；实际验证子进程非零会停止打包并保留退出码和输出。成功包中的 `build.json` 使用 `chrono-native-build/v2`，保留平台、工具版本、源码提交，以及已完成操作的顺序、实际 argv/cwd、退出码、原始 stdout/stderr 字节和摘要。这里仅消费显式操作登记，不代表完整治理准入、环境闭包或跨平台同判。
+配方在构建前拒绝未知、重复、歧义操作、无效 argv 与缺失工具；输出路径必须不存在，已有目录、文件或链接不会被覆盖。预检失败不启动子进程，也不伪造构建报告。
 
-这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方；上传构建 artifacts 不等于已发布。[beta.8](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.8) 已公开发布，包含两个平台各 15 个工具，其中包括 `chrono-worktree`。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36395468123)在每个平台通过 distribution 的 15 个测试和 worktree 的 49 个测试；已匿名下载核对 manifest 及两个平台的 worktree／installer 字节。测试与摘要核验不证明完整输入闭包或确定性同判。
+当前源代码的 `build.json` 使用 `chrono-native-build/v3`，明确区分 `status: passed | failed`；beta.8 的成功报告仍为 v2。v3 的 `processes` 按实际顺序保留源码身份读取、工具链安装、版本读取、各 manifest 构建、登记验证和打包的 argv/cwd、退出码、原始 stdout/stderr 字节及摘要。验证项以 `phase: verification` 和原始 `operation` ID 标识；声明的 `verification_operations` 不是已执行清单。版本和源码身份只记录已成功取得的读数，未知源码为 null。
+
+普通子进程失败会先保留本次及先前结果，再以原始退出码停止后续工作；被信号终止的负退出码仍留在过程记录中，CLI 以 `128 + 信号号` 退出。版本不符、程序未启动等失败单独记录阶段与原因，不把成功子进程的零退出改成非零，也不制造未启动进程。失败时输出目录可只含报告；它不是成功包。报告写入失败会明确报错，不能把已有子进程失败变成成功。该机制不承诺硬终止、断电、并发写入或不可写存储下的完整恢复。
+
+这里仅消费显式操作登记并保存实测结果，不代表完整治理准入、构建输入闭包、二进制来源证明或跨平台同判。消费者必须核对 v3 状态、实际操作与源身份，不能以目录或报告存在判定发布成功。
+
+这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。[beta.8](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.8) 已公开发布，包含两个平台各 15 个工具，其中包括 `chrono-worktree`。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36395468123)在每个平台通过 distribution 的 15 个测试和 worktree 的 49 个测试；已匿名下载核对 manifest 及两个平台的 worktree／installer 字节。测试与摘要核验不证明完整输入闭包或确定性同判。
 
 ```sh
 chrono-distribution pack --root PRODUCT --plan PRODUCT/.chrono-harness/release/plan.json --output ABSENT_OUTPUT
