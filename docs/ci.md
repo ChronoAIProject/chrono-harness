@@ -190,6 +190,11 @@ registered interpreter. No plugin registry or alternate platform is implied.
 
 ## Owned GitHub projection
 
+Full governance has a separate explicit dispatch schema,
+[`chrono-github-full-ci/v1`](full-ci.md), preserving caller context bytes and
+using the same full runner command locally and in CI. The event profiles below
+retain their scoped semantics; adoption never silently upgrades them.
+
 ### Registered event Git
 
 The source implementation accepts `chrono-github-ci/v3` with an explicit

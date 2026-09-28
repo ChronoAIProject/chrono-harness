@@ -272,6 +272,16 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。
 不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
 
+`chrono-github-full-ci/v1` 是显式完整 context 的独立 dispatch 投影。调用方提供
+context 原始 UTF-8 JSON 字符串与所有引用证据；生成器不推断角色、时间、宿主布局或
+证据获取方式。候选 config v3 的 Git 绑定核对 HEAD、配置、provider 源和指定 workflow
+修订中的投影字节，只在精确缺对象读数后补取固定 OID。准备阶段保留 context 原字节，
+另存 Git 观察、源身份和同一完整 check argv；其 `prepared` 不承担治理裁决，
+parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺失证据。
+输出冲突不得覆盖旧证据，原始进程失败须保留并传播。单文件发布不认证并发或跨文件
+事务；此投影不自动启用完整宿主、PR/合并流程或 required check。字段、重试与采用
+边界见 [完整 CI 传输合同](docs/full-ci.md)。
+
 ## 5. DELTA 与依赖图算法
 
 DELTA 选择充分的前提是：两状态所有实际语义输入及其直接/间接依赖均完整登记，且判官/测试

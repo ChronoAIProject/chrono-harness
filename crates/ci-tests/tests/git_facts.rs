@@ -1,3 +1,5 @@
+#[path = "full.rs"]
+mod full;
 use chrono_ci::{Config, generate, init, load, prepare};
 use chrono_harness::sha256;
 use serde_json::{Value, json};

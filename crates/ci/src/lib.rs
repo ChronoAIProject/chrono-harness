@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 mod event_git;
+pub mod full;
 pub mod release;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
@@ -94,6 +95,7 @@ pub fn load(path: &Path) -> Result<Config, String> {
 }
 enum Projection {
     Check(Config),
+    Full(full::Config),
     Release(release::Config),
 }
 fn load_projection(path: &Path) -> Result<Projection, String> {
@@ -103,6 +105,10 @@ fn load_projection(path: &Path) -> Result<Projection, String> {
         let c = decode(&bytes)?;
         release::validate(&c)?;
         Ok(Projection::Release(c))
+    } else if value["schema"] == full::SCHEMA {
+        let c = decode(&bytes)?;
+        full::validate(&c)?;
+        Ok(Projection::Full(c))
     } else {
         let c = decode(&bytes)?;
         validate(&c)?;
@@ -413,6 +419,7 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
     relative_path(config_path)?;
     let c = match load_projection(&no_symlink_parents(root, config_path)?)? {
         Projection::Check(c) => c,
+        Projection::Full(c) => return full::generate(root, config_path, &c, verify),
         Projection::Release(c) => {
             if !config_path.starts_with(".chrono-harness/") {
                 return Err("release configuration must belong to .chrono-harness".into());
@@ -448,6 +455,7 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
 pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     let incoming = match load_projection(input)? {
         Projection::Check(c) => c,
+        Projection::Full(c) => return full::init(root, c),
         Projection::Release(c) => return release::init(root, c),
     };
     let path = ".chrono-harness/ci/github.json";
@@ -655,11 +663,29 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             generate(&root, config, command == "verify")?
         )),
         "prepare" => {
-            let c = load(&no_symlink_parents(&root, config)?)?;
+            let projection = load_projection(&no_symlink_parents(&root, config)?)?;
             let payload = chrono_harness::json(
                 &fs::read(opts.get("--payload").ok_or("--payload required")?)
                     .map_err(|e| e.to_string())?,
             )?;
+            let c = match projection {
+                Projection::Full(c) => {
+                    return full::prepare_dispatch(
+                        &root,
+                        config,
+                        &c,
+                        opts.get("--event").ok_or("--event required")?,
+                        &payload,
+                        opts.get("--workflow-revision")
+                            .ok_or("--workflow-revision required")?,
+                        opts.get("--github-output").copied(),
+                    );
+                }
+                Projection::Check(c) => c,
+                Projection::Release(_) => {
+                    return Err("release projection has no check event preparation".into());
+                }
+            };
             let context = prepare(
                 &root,
                 &c,

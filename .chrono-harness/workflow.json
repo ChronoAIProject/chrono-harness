@@ -217,10 +217,12 @@
       "paths": [
         "crates/ci/src/lib.rs",
         "crates/ci/src/release.rs",
-        ".chrono-harness/ci/release.json"
+        ".chrono-harness/ci/release.json",
+        "crates/ci/src/full.rs"
       ],
       "tests": [
-        "ci-tests"
+        "ci-tests",
+        "judge-workflow-tests"
       ],
       "reason": "Explicit check/release source dispatch, shared output ownership and native workflow generation"
     }

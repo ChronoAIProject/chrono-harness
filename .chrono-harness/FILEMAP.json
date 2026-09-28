@@ -3033,6 +3033,37 @@
           "to": "project:worktree-tests"
         }
       ]
+    },
+    {
+      "path": "crates/ci/src/full.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/full.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/full-ci.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -5100,6 +5131,11 @@
       "from": "project:worktree",
       "kind": "runtime-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "from": "project:ci",
+      "kind": "runtime-input",
+      "to": "project:judge-workflow-tests"
     }
   ],
   "test_costs": [
@@ -5313,6 +5349,7 @@
         "build.judge-routes",
         "build.judge-projects",
         "build.judge-workflow",
+        "build.ci",
         "test.judge-workflow-tests"
       ],
       "timeout_seconds": 600,
