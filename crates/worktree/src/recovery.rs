@@ -46,27 +46,44 @@ struct Intent {
 }
 
 pub(crate) fn publish(root: &Path, report: &mut Value) -> Result<(), String> {
-    let mut intent = value!({"schema":"chrono-worktree-recovery-intent/v1"});
-    for field in [
-        "operation",
-        "source_root",
-        "source_commit",
-        "config_path",
-        "config_sha256",
-        "registry_digest",
-        "base",
-        "destination",
-        "branch_ref",
-        "lock_reason",
-        "report_path",
-    ] {
+    publish_fields(
+        root,
+        report,
+        "chrono-worktree-recovery-intent/v1",
+        ".intent.json",
+        "recovery_intent",
+        &[
+            "operation",
+            "source_root",
+            "source_commit",
+            "config_path",
+            "config_sha256",
+            "registry_digest",
+            "base",
+            "destination",
+            "branch_ref",
+            "lock_reason",
+            "report_path",
+        ],
+    )
+}
+pub(crate) fn publish_fields(
+    root: &Path,
+    report: &mut Value,
+    schema: &str,
+    suffix: &str,
+    binding: &str,
+    fields: &[&str],
+) -> Result<(), String> {
+    let mut intent = value!({"schema":schema});
+    for &field in fields {
         let text = report[field]
             .as_str()
             .filter(|s| !s.is_empty())
             .ok_or_else(|| format!("recovery intent lacks {field}"))?;
         intent[field] = value!(text);
     }
-    let path = format!("{}.intent.json", intent["report_path"].as_str().unwrap());
+    let path = format!("{}{suffix}", intent["report_path"].as_str().unwrap());
     let target = state_path(root, &path)?;
     let mut bytes = serde_json::to_vec_pretty(&intent).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
@@ -84,7 +101,7 @@ pub(crate) fn publish(root: &Path, report: &mut Value) -> Result<(), String> {
     output
         .persist_noclobber(&target)
         .map_err(|e| format!("recovery intent publication: {e}"))?;
-    report["recovery_intent"] = value!({"path":path,"sha256":sha256(&bytes)});
+    report[binding] = value!({"path":path,"sha256":sha256(&bytes)});
     Ok(())
 }
 
@@ -122,14 +139,8 @@ pub(crate) fn inspect(
     expected: &ExpectedResult,
     report: &mut Value,
 ) -> Result<Evidence, String> {
-    let bytes = state_bytes(root, path)?;
-    if sha256(&bytes) != digest {
-        return Err("recovery intent digest mismatch".into());
-    }
+    let (bytes, descriptor) = read_intent(root, path, digest, report)?;
     let intent: Intent = decode(&bytes)?;
-    let descriptor = json(&bytes)?;
-    report["prior_intent"] =
-        value!({"path":path,"sha256":digest,"input_bytes":bytes,"intent":descriptor});
     let config: crate::Config = decode(config_bytes)?;
     if intent.schema != "chrono-worktree-recovery-intent/v1"
         || !matches!(
@@ -152,7 +163,43 @@ pub(crate) fn inspect(
     }
     facts::full_oid(&intent.source_commit)?;
     facts::full_oid(&intent.base)?;
-    let result = original_bytes(root, &intent.report_path)?;
+    observe_result(
+        root,
+        path,
+        bytes,
+        descriptor,
+        &intent.report_path,
+        expected,
+        report,
+    )
+}
+
+pub(crate) fn read_intent(
+    root: &Path,
+    path: &str,
+    digest: &str,
+    report: &mut Value,
+) -> Result<(Vec<u8>, Value), String> {
+    let bytes = state_bytes(root, path)?;
+    if sha256(&bytes) != digest {
+        return Err("recovery intent digest mismatch".into());
+    }
+    let descriptor = json(&bytes)?;
+    report["prior_intent"] =
+        value!({"path":path,"sha256":digest,"input_bytes":bytes,"intent":descriptor});
+    Ok((bytes, descriptor))
+}
+
+pub(crate) fn observe_result(
+    root: &Path,
+    path: &str,
+    bytes: Vec<u8>,
+    descriptor: Value,
+    result_path: &str,
+    expected: &ExpectedResult,
+    report: &mut Value,
+) -> Result<Evidence, String> {
+    let result = original_bytes(root, result_path)?;
     match (expected, &result) {
         (ExpectedResult::Absent {}, None) => (),
         (ExpectedResult::Present { sha256: digest }, Some(bytes)) if sha256(bytes) == *digest => (),
@@ -160,9 +207,9 @@ pub(crate) fn inspect(
     }
     report["prior_result"] = match &result {
         Some(bytes) => {
-            value!({"path":intent.report_path,"presence":"present","sha256":sha256(bytes),"input_bytes":bytes})
+            value!({"path":result_path,"presence":"present","sha256":sha256(bytes),"input_bytes":bytes})
         }
-        None => value!({"path":intent.report_path,"presence":"absent"}),
+        None => value!({"path":result_path,"presence":"absent"}),
     };
     // A retained terminal result is never silently recast as an interrupted attempt.
     if let Some(bytes) = &result {
@@ -183,7 +230,7 @@ pub(crate) fn inspect(
         root: root.into(),
         intent_path: path.into(),
         intent_bytes: bytes,
-        result_path: intent.report_path,
+        result_path: result_path.into(),
         result_bytes: result,
     })
 }

@@ -57,6 +57,16 @@ enum Plan {
         retained_commit: String,
         allow_absent_ref: bool,
     },
+    #[serde(rename = "cleanup-fetch-interrupted")]
+    CleanupFetchInterrupted {
+        schema: String,
+        intent: Receipt,
+        result: ExpectedResult,
+        head: String,
+        retained_ref: String,
+        retained_commit: String,
+        allow_absent_ref: bool,
+    },
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -67,7 +77,7 @@ enum Retention {
 
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
-        return Err("usage: chrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch --host-root ROOT --config POLICY --plan STATE_PATH".into());
+        return Err("usage: chrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted --host-root ROOT --config POLICY --plan STATE_PATH".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
@@ -142,6 +152,19 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             }
             (schema, "cleanup-fetch", head)
         }
+        Plan::CleanupFetchInterrupted {
+            schema,
+            intent,
+            head,
+            retained_commit,
+            ..
+        } => {
+            facts::full_oid(retained_commit)?;
+            if intent.sha256.len() != 64 || !intent.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err("invalid fetch intent digest".into());
+            }
+            (schema, "cleanup-fetch-interrupted", head)
+        }
     };
     facts::full_oid(head)?;
     if schema != "chrono-worktree-maintenance/v1" || args[0] != operation {
@@ -159,7 +182,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             "cleaned"
         },
         |r, token, report| {
-            if operation == "cleanup-fetch" {
+            if matches!(operation, "cleanup-fetch" | "cleanup-fetch-interrupted") {
                 report["fetch_ref_removal"] = value!("not-attempted");
             }
             report["maintenance_plan"] =
@@ -284,6 +307,41 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                     &retained_commit,
                     allow_absent_ref,
                 ),
+                Plan::CleanupFetchInterrupted {
+                    intent,
+                    result,
+                    head,
+                    retained_ref,
+                    retained_commit,
+                    allow_absent_ref,
+                    ..
+                } => {
+                    artifacts(&registrations, &[&intent.path])?;
+                    let evidence = crate::fetch_recovery::inspect(
+                        &root,
+                        config_path,
+                        &config_bytes,
+                        &intent.path,
+                        &intent.sha256,
+                        &result,
+                        report,
+                    )?;
+                    artifacts(
+                        &registrations,
+                        &[field(&evidence.descriptor, "report_path")?],
+                    )?;
+                    cleanup_fetch_ref(
+                        r,
+                        &root,
+                        report,
+                        field(&evidence.descriptor, "fetch_ref")?,
+                        &head,
+                        &retained_ref,
+                        &retained_commit,
+                        allow_absent_ref,
+                        || evidence.stable(),
+                    )
+                }
             }
         },
     )
@@ -708,6 +766,34 @@ fn cleanup_fetch(
     {
         return Err("original report does not identify this unresolved temporary fetch ref".into());
     }
+    cleanup_fetch_ref(
+        r,
+        root,
+        report,
+        fetch_ref,
+        head,
+        retained_ref,
+        retained_commit,
+        allow_absent,
+        || {
+            if state_bytes(root, &receipt.path)? != bytes {
+                return Err("original report changed during fetch-ref cleanup".into());
+            }
+            Ok(())
+        },
+    )
+}
+fn cleanup_fetch_ref(
+    r: &mut Runner,
+    root: &Path,
+    report: &mut Value,
+    fetch_ref: &str,
+    head: &str,
+    retained_ref: &str,
+    retained_commit: &str,
+    allow_absent: bool,
+    stable: impl Fn() -> Result<(), String>,
+) -> Result<(), String> {
     r.git(root, &["check-ref-format", fetch_ref])?;
     r.git(root, &["check-ref-format", retained_ref])?;
     if !retained_ref.starts_with("refs/heads/") {
@@ -736,9 +822,7 @@ fn cleanup_fetch(
             if r.oid(root, fetch_ref)? != head {
                 return Err("temporary fetch ref changed; preserve its current value".into());
             }
-            if state_bytes(root, &receipt.path)? != bytes {
-                return Err("original report changed during fetch-ref cleanup".into());
-            }
+            stable()?;
             saved_commit(
                 r,
                 root,
@@ -771,5 +855,6 @@ fn cleanup_fetch(
         retained_ref,
         retained_commit,
         &Retention::Ancestor,
-    )
+    )?;
+    stable()
 }

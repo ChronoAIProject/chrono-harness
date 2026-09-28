@@ -1,6 +1,9 @@
 use super::*;
 use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
 
+#[path = "fetch_interruption.rs"]
+mod fetch_interruption;
+
 impl Host {
     fn reject_result_shape(&self, result: Value, diagnostic: &str) {
         self.interrupting_git("printf invoked > \"$HOME/unexpected-plan-git\" || exit $?");
@@ -46,8 +49,8 @@ exec REAL "$@"
             &wrapper,
             format!(
                 "#!/bin/sh\n{}",
-                body.replace("REAL", &format!("'{real}'"))
-                    .replace("EXTRA", extra)
+                body.replace("EXTRA", extra)
+                    .replace("REAL", &format!("'{real}'"))
             ),
         )
         .unwrap();

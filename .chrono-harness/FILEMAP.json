@@ -2837,7 +2837,31 @@
       ]
     },
     {
+      "path": "crates/worktree-tests/tests/fetch_interruption.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree/src/recovery.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/fetch_recovery.rs",
       "owner": "worktree",
       "surface": "product",
       "cost": "unmeasured",
