@@ -1,6 +1,9 @@
 //! Explicit saved-state maintenance; this produces observations, never judge verdicts.
-use crate::start::{self, Runner};
-use chrono_harness::{decode, facts, json, no_symlink_parents, relative_path, sha256};
+use crate::{
+    recovery::{self, ExpectedResult, state_bytes},
+    start::{self, Runner},
+};
+use chrono_harness::{decode, facts, json, relative_path, sha256};
 use chrono_judge_registration::Registrations;
 use serde::Deserialize;
 use serde_json::{Value, json as value};
@@ -22,6 +25,14 @@ enum Plan {
     Recover {
         schema: String,
         receipt: Receipt,
+        head: String,
+        index_tree: String,
+    },
+    #[serde(rename = "recover-interrupted")]
+    RecoverInterrupted {
+        schema: String,
+        intent: Receipt,
+        result: ExpectedResult,
         head: String,
         index_tree: String,
     },
@@ -54,16 +65,9 @@ enum Retention {
     SameTree,
 }
 
-fn state_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
-    relative_path(path)?;
-    if !path.starts_with(".chrono-harness/state/") {
-        return Err("maintenance inputs must be under .chrono-harness/state".into());
-    }
-    fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())
-}
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
-        return Err("usage: chrono-worktree recover|cleanup|cleanup-fetch --host-root ROOT --config POLICY --plan STATE_PATH".into());
+        return Err("usage: chrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch --host-root ROOT --config POLICY --plan STATE_PATH".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
@@ -93,6 +97,19 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                 return Err("invalid original receipt digest".into());
             }
             (schema, "recover", head)
+        }
+        Plan::RecoverInterrupted {
+            schema,
+            head,
+            index_tree,
+            intent,
+            ..
+        } => {
+            facts::full_oid(index_tree)?;
+            if intent.sha256.len() != 64 || !intent.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err("invalid recovery intent digest".into());
+            }
+            (schema, "recover-interrupted", head)
         }
         Plan::Cleanup {
             schema,
@@ -136,7 +153,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
         config,
         &config_bytes,
         operation,
-        if operation == "recover" {
+        if matches!(operation, "recover" | "recover-interrupted") {
             "recovered"
         } else {
             "cleaned"
@@ -191,6 +208,37 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                     &head,
                     &index_tree,
                 ),
+                Plan::RecoverInterrupted {
+                    intent,
+                    result,
+                    head,
+                    index_tree,
+                    ..
+                } => {
+                    artifacts(&registrations, &[&intent.path])?;
+                    let evidence = recovery::inspect(
+                        &root,
+                        config_path,
+                        &config_bytes,
+                        &intent.path,
+                        &intent.sha256,
+                        &result,
+                        report,
+                    )?;
+                    artifacts(
+                        &registrations,
+                        &[field(&evidence.descriptor, "report_path")?],
+                    )?;
+                    release_reconciled(
+                        r,
+                        &root,
+                        report,
+                        &evidence.descriptor,
+                        &head,
+                        &index_tree,
+                        || evidence.stable(),
+                    )
+                }
                 Plan::Cleanup {
                     path,
                     branch,
@@ -358,7 +406,23 @@ fn recover(
         &receipt,
         &["start", "reconstruct", "cleanup"],
     )?;
-    let target = Path::new(field(&original, "destination")?);
+    release_reconciled(r, root, report, &original, head, tree, || {
+        if state_bytes(root, &receipt.path)? != bytes {
+            return Err("original report changed during recovery".into());
+        }
+        Ok(())
+    })
+}
+fn release_reconciled(
+    r: &mut Runner,
+    root: &Path,
+    report: &mut Value,
+    original: &Value,
+    head: &str,
+    tree: &str,
+    stable: impl Fn() -> Result<(), String>,
+) -> Result<(), String> {
+    let target = Path::new(field(original, "destination")?);
     let branch = field(&original, "branch_ref")?;
     let base = field(&original, "base")?;
     let lock = field(&original, "lock_reason")?;
@@ -382,9 +446,7 @@ fn recover(
     }
     start::untracked(r, target, target_registrations.config())?;
     identity(r, root, target, branch, head, Some(lock))?;
-    if state_bytes(root, &receipt.path)? != bytes {
-        return Err("original report changed during recovery".into());
-    }
+    stable()?;
     start::unlock(
         r,
         root,
@@ -406,6 +468,7 @@ fn recover(
         ],
     )?;
     start::untracked(r, target, target_registrations.config())?;
+    stable()?;
     report["destination"] = value!(target);
     report["branch_ref"] = value!(branch);
     report["head"] = value!(head);
@@ -563,6 +626,7 @@ impl Cleanup {
                     .retain(|a| self.discard_artifacts.iter().any(|p| a["path"] == *p));
                 start::cleanliness(r, &target, &disposal)?;
                 let path = target.to_str().ok_or("cleanup path is not UTF-8")?;
+                recovery::publish(root, report)?;
                 r.git(root, &["worktree", "lock", "--reason", token, "--", path])?;
                 identity(r, root, &target, &self.branch, &self.head, Some(token))?;
                 self.saved(r, root)?;

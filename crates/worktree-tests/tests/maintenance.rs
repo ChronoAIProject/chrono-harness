@@ -695,3 +695,6 @@ fn fetch_cleanup_preserves_concurrent_ref_and_original_failure() {
         }
     }
 }
+
+#[path = "interruption.rs"]
+mod interruption;

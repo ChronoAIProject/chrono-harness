@@ -122,3 +122,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。`reconstruct` 通过逐路径计划在新工作树暂存仍需保留的旧变化；冲突和旧工作均保留，完成后仍须重新提交检查。创建／重建合同及尚未实现的 PR／落地范围见 [worktree 文档](docs/worktree.md)。该二进制已随 beta.7 在 macOS arm64 / Linux x86_64 公开发布；宿主通过锁定的发布安装登记采用。
 
 `chrono-worktree recover`／`cleanup`／`cleanup-fetch` 消费宿主 state 下的显式维护计划：保留原失败报告，验证重建后的状态和锁，或核对保留引用与工件白名单后清理指定工作树。它们不产生治理或合并通过判词；完整格式及未实现的恢复范围见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。这三个入口已包含在公开 beta.7 中，可由宿主的版本锁定安装入口取得。
+
+候选源码还提供 `recover-interrupted`：在创建工作树或取得清理锁前保留恢复身份，对缺失／截断结果按显式计划核对当前状态并解锁，原操作结果仍标未知。该入口尚未进入公开 beta.7；格式与剩余恢复范围见 [中断恢复](docs/worktree.md#interrupted-checkout-recovery)。
