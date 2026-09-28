@@ -127,7 +127,12 @@ fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_by
             .is_file()
     );
     let (exit, inline) = h.run_with_context(
-        |_| {},
+        |inputs| {
+            let interpreter = json!({"bytes":fs::read(&h.tool).unwrap()});
+            for endpoint in ["base", "candidate"] {
+                inputs[endpoint]["files"]["interpreter"] = interpreter.clone();
+            }
+        },
         |ctx| {
             ctx["schema_version"] = 2.into();
             ctx["run_kind"] = "integration".into()
