@@ -38,3 +38,11 @@ saved-work checks, performs an exact leased deletion, and observes absence while
 preserving original failures and explicit retry states. It does not certify an
 atomic remote transaction, PR/merge, input closure or governance. This command is
 newer than public beta.9; see docs/worktree.md#remote-branch-retirement.
+
+Source-only full CI transport uses `chrono-github-full-ci/v1` with explicit
+workflow_dispatch context bytes. Candidate-bound Git v3 checks policy, provider,
+checkout and supplied workflow projection; preparation stores original context
+separately from process observations and invokes the same full check argv.
+It does not infer branch roles/times, supply missing evidence or activate this
+host. Seven-judge consumers live in judge-workflow-tests and explicitly require
+build.ci. See docs/full-ci.md for collision/retry and provenance boundaries.

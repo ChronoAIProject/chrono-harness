@@ -48,7 +48,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 19 changed integration binding | implemented bounded: W base/tree/receipt/completed-report rejection, same-tree commit acceptance | full native activation and complete effective inputs |
 | 20 stale branch | partial: W explicit dev/fork/time freshness rejects either excess; worktree reconstruct replays complete explicit carry/retire choices onto a fetched target and preserves conflicts | AI semantic reconciliation and autonomous delivery orchestration |
 | 21 threshold equality | implemented: W count/age equality, nanosecond excess and configured limits | — |
-| 22 same local/CI command | partial: scoped CI generator with explicit push-baseline configuration; CI behavior tests cover repeated pushes, remote advancement, missing refs and real CLI persistence | full native events and exact inputs |
+| 22 same local/CI command | partial: scoped CI generator with explicit push-baseline configuration; CI behavior tests cover repeated pushes, remote advancement, missing refs and real CLI persistence | full dispatch transport is implemented (docs/full-ci.md); native generated dispatch adoption and complete inputs remain |
 | 23 same complete deterministic inputs | pending | deterministic evidence/parity comparison |
 | 24 parity unestablished | implemented field: full runner report; G external host | unresolved closure remains nonzero |
 | 25 staged/unstaged/untracked | implemented: G dirt cases | no hidden dirty mode |
@@ -197,3 +197,12 @@ retention, dirty local-work preservation, failed post-deletion exits, concurrent
 branch updates, changed targets/plans and explicit absence retries. This is newer
 than public beta.9. It does not certify remote transactions, Git/delegated input
 closure, PR/merge/landing orchestration, full governance or deterministic parity.
+
+Full CI context transport is an explicit `chrono-github-full-ci/v1` projection.
+The CI tests reuse the actual bound-Git fixture for exact bytes, candidate/config/
+provider/workflow bindings, missing history, failed processes, output collisions
+and literal generated Bash. The workflow tests reuse the seven-judge fixture
+for local and prepared integration/delivery contexts, including rejected stale
+context. Preparation remains `not-evaluated` governance and `unestablished` parity.
+See [the adoption and retry boundary](full-ci.md). No product full-host activation
+or native generated dispatch execution is claimed by these consumer tests.
