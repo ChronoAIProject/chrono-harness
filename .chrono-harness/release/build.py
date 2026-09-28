@@ -36,9 +36,12 @@ def overlaps(a, b):
 
 def staging_plan(root, cfg):
     if cfg['schema'] == 'chrono-release-build/v2':
-        if 'consumer_staging' in cfg:
-            raise ValueError('consumer_staging requires release build v3')
+        if 'consumer_staging' in cfg or 'rust_components' in cfg:
+            raise ValueError('consumer_staging and rust_components require release build v3')
         return None
+    components = cfg['rust_components']
+    if not isinstance(components, list) or any(not isinstance(c, str) or not c or '\0' in c for c in components) or len(set(components)) != len(components):
+        raise ValueError('rust_components must list unique nonempty component names')
     declaration = cfg['consumer_staging']
     plan = json.loads(path(root, declaration['release_plan']).read_text())
     if plan['schema'] != 'chrono-release-plan/v1' or not plan['assets']:
@@ -225,11 +228,12 @@ def main(root, output):
             raise ValueError('invalid source commit observation')
         report['source_commit'] = source
         if staging is not None:
-            tracked = run('consumer-tracking', [tools['git'], 'ls-files', '-z', '--',
+            tracked = run('consumer-tracking', [tools['git'], '--literal-pathspecs', 'ls-files', '-z', '--',
                           *[row['destination'] for row in staging['bindings']]])
             if tracked:
                 raise ValueError('release consumer destination is tracked by Git')
-        run('toolchain-install', [tools['rustup'], 'toolchain', 'install', cfg['rust_toolchain'], '--profile', 'minimal'])
+        component_args = [arg for component in cfg.get('rust_components', []) for arg in ['--component', component]]
+        run('toolchain-install', [tools['rustup'], 'toolchain', 'install', cfg['rust_toolchain'], '--profile', 'minimal', *component_args])
         for tool in ['cargo', 'rustc']:
             report['versions'][tool] = run('compiler-version', [tools[tool], '--version']).decode('utf-8').strip()
         if not report['versions']['rustc'].startswith('rustc ' + cfg['rust_toolchain'] + ' '):
@@ -257,9 +261,13 @@ def main(root, output):
         if staging is not None:
             checked_snapshot('before-package')
         release_plan = staging['release_plan'] if staging is not None else '.chrono-harness/release/plan.json'
-        run('package', [str(root / 'crates/distribution/target/release/chrono-distribution'), 'pack', '--root', str(root), '--plan', str(root / release_plan), '--output', str(output)])
-        if staging is not None:
-            checked_snapshot('after-package')
+        try:
+            run('package', [str(root / 'crates/distribution/target/release/chrono-distribution'), 'pack', '--root', str(root), '--plan', str(root / release_plan), '--output', str(output)])
+        finally:
+            intact = staging is None or observe(root, staging, 'after-package')
+        if not intact:
+            phase = 'after-package'
+            raise ValueError('release consumer identity changed after package')
         report['status'] = 'passed'
     except (subprocess.CalledProcessError, ValueError, OSError) as error:
         actual_exit = error.returncode if isinstance(error, subprocess.CalledProcessError) else None

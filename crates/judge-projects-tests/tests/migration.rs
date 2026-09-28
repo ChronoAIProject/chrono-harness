@@ -46,6 +46,27 @@ fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
         )
         .unwrap();
     }
+    // The copied candidate is a test host on the executing native platform.
+    // Preserve the historical snapshot; explicitly adopt the current interpreter
+    // only in the new fixture. Wrong-version rejection remains a separate test.
+    let mut config: Value = serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    let python = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|t| t["id"] == "python3")
+        .unwrap();
+    let observed = Command::new(python["program"].as_str().unwrap())
+        .args(serde_json::from_value::<Vec<String>>(python["version_argv"].clone()).unwrap())
+        .output()
+        .unwrap();
+    assert!(observed.status.success());
+    python["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
+    fs::write(
+        root.join(CONFIG),
+        serde_json::to_vec_pretty(&config).unwrap(),
+    )
+    .unwrap();
     let workflow = ".github/workflows/chrono-ci.yml";
     let mut bytes = fs::read(root.join(workflow)).unwrap();
     bytes.extend_from_slice(b"\n# real workflow drift\n");
@@ -121,7 +142,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
                 result
                     .executed
                     .iter()
-                    .map(|r| (&r.operation, &r.status, &r.error))
+                    .map(|r| (&r.operation, &r.status, &r.error, &r.process))
                     .collect::<Vec<_>>()
             )
         });

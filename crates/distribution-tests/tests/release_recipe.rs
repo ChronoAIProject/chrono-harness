@@ -24,6 +24,7 @@ if ((failure == 'source' and name == 'git') or
     sys.stdout.buffer.write(b'failed phase\xff\n')
     sys.stderr.buffer.write(b'original diagnostic\xfe\n')
     if failure == 'pack':
+        if Path('consumer/bin/tool').exists(): Path('consumer/bin/tool').write_bytes(b'pack side-effect')
         Path(sys.argv[sys.argv.index('--output')+1]).mkdir()
     sys.exit(41)
 if failure == 'version' and name == 'rustc':
@@ -32,7 +33,7 @@ if failure == 'version' and name == 'rustc':
 if name == 'rustc': print('rustc 1.95.0 fixture')
 elif name == 'cargo' and sys.argv[1:] == ['--version']: print('cargo fixture')
 elif name == 'git':
-    if sys.argv[1:2] == ['ls-files']:
+    if 'ls-files' in sys.argv[1:]:
         if failure == 'tracked': sys.stdout.buffer.write(b'consumer/bin/tool\0')
     else: print('a'*40)
 elif name == 'probe':
@@ -451,6 +452,7 @@ fn staged_recipe() -> Recipe {
     );
     f.edit(BUILD, |v| {
         v["schema"] = json!("chrono-release-build/v3");
+        v["rust_components"] = json!([]);
         v["consumer_staging"] = json!({"release_plan":PLAN,"host_config":HOST,"bindings":[{"asset":"chosen","destinations":[CONSUMER]}]});
         v["verification_operations"] = json!(["verify.consumer"]);
     });
@@ -573,7 +575,7 @@ fn release_consumers_retain_child_failure_and_changed_identity_together() {
 
 #[test]
 fn release_consumers_reject_invalid_or_overlapping_registration_before_builds() {
-    for case in 0..9 {
+    for case in 0..11 {
         let f = staged_recipe();
         match case {
             0 => f.edit(BUILD, |v| v["schema"] = json!("chrono-release-build/v2")),
@@ -595,6 +597,10 @@ fn release_consumers_reject_invalid_or_overlapping_registration_before_builds() 
             7 => f.edit(BUILD, |v| {
                 v["consumer_staging"]["bindings"][0]["destinations"] = json!(["consumer/../source"])
             }),
+            9 => f.edit(BUILD, |v| {
+                v["rust_components"] = json!(["rustfmt", "rustfmt"])
+            }),
+            10 => f.edit(BUILD, |v| v["rust_components"] = json!("rustfmt")),
             _ => {
                 fs::create_dir_all(f.root.join("elsewhere")).unwrap();
                 std::os::unix::fs::symlink("elsewhere", f.root.join("consumer")).unwrap();
@@ -632,4 +638,84 @@ fn release_consumers_refuse_tracked_destinations_and_missing_release_before_exec
             );
         }
     }
+}
+
+#[test]
+fn release_consumers_tracking_treats_registered_paths_as_literal_names() {
+    let f = staged_recipe();
+    let git =
+        chrono_harness::resolve_program(&f.root, "git", std::env::var("PATH").ok().as_deref())
+            .unwrap();
+    let run = |args: &[&str]| {
+        let out = Command::new(&git)
+            .current_dir(&f.root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    run(&["init", "-q"]);
+    fs::create_dir_all(f.root.join("consumer/bin")).unwrap();
+    fs::write(f.root.join("consumer/bin/other"), "preserved source").unwrap();
+    run(&["add", "--", "consumer/bin/other"]);
+    run(&[
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "tracked neighbor",
+    ]);
+    f.edit(BUILD, |v| {
+        v["tools"]["git"] = json!(git);
+        v["consumer_staging"]["bindings"][0]["destinations"] = json!(["consumer/bin/*"]);
+    });
+    f.edit(PROJECTS, |v| {
+        v["scripts"][0]["actions"]["execute"]["argv"][1] = json!("consumer/bin/*")
+    });
+    let out = f.run("");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        fs::read(f.root.join("consumer/bin/*")).unwrap(),
+        RELEASE_BYTES.as_bytes()
+    );
+    assert_eq!(
+        fs::read_to_string(f.root.join("consumer/bin/other")).unwrap(),
+        "preserved source"
+    );
+    assert_eq!(staged_evidence(&f)["status"], "passed");
+}
+
+#[test]
+fn release_consumers_observe_failed_pack_without_masking_its_exit() {
+    let f = staged_recipe();
+    let out = f.run("pack");
+    assert_eq!(out.status.code(), Some(41));
+    let report = staged_evidence(&f);
+    assert_eq!(report["status"], "failed");
+    assert_eq!(report["failure"]["phase"], "package");
+    assert_eq!(report["failure"]["exit_code"], 41);
+    let last = report["consumer_staging"]["observations"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap();
+    assert_eq!(last["phase"], "after-package");
+    assert_eq!(last["matches"], false);
+    let process = report["processes"].as_array().unwrap().last().unwrap();
+    assert_eq!(process["phase"], "package");
+    assert_eq!(process["exit_code"], 41);
+    assert_eq!(
+        process["stderr_bytes"],
+        json!(b"original diagnostic\xfe\n".to_vec())
+    );
 }

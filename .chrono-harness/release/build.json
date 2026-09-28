@@ -140,5 +140,8 @@
         ]
       }
     ]
-  }
+  },
+  "rust_components": [
+    "rustfmt"
+  ]
 }

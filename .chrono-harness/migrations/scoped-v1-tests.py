@@ -34,6 +34,17 @@ def request():
 
 
 class DecoderTests(unittest.TestCase):
+    def test_adopted_host_interpreter_matches_registered_version(self):
+        # Host policy validation belongs to the host's registered script suite;
+        # portable product fixtures independently adopt their executing platform.
+        cfg = json.loads((ROOT / ".chrono-harness/config.json").read_text())
+        tool = next(t for t in cfg["tools"] if t["id"] == "python3")
+        self.assertTrue(Path(tool["program"]).is_absolute())
+        observed = subprocess.run([tool["program"], *tool["version_argv"]],
+                                  env={}, capture_output=True)
+        self.assertEqual(observed.returncode, 0, observed.stderr)
+        self.assertEqual(observed.stdout.decode().strip(), tool["expected_version"])
+
     def test_real_old_records_edges_costs_and_obligations_survive(self):
         req = request()
         out = DECODER.convert(req)
@@ -68,4 +79,4 @@ class DecoderTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)
