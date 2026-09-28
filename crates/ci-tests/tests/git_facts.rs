@@ -487,3 +487,50 @@ fn legacy_event_profile_remains_unbound() {
     assert!(report.get("git_facts").is_none());
     assert!(h.trace().is_empty());
 }
+
+#[test]
+fn relative_host_root_uses_the_same_bound_checkout() {
+    let h = Host::new("");
+    write(
+        &h.root,
+        ".chrono-harness/state/relative-payload.json",
+        &json!({"before":h.candidate,"after":h.candidate,"created":false}),
+    );
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
+    let out = Command::new(binary)
+        .current_dir(h.root.parent().unwrap())
+        .env_clear()
+        .env("PATH", &h.shadow)
+        .args([
+            "prepare",
+            "--host-root",
+            h.root.file_name().unwrap().to_str().unwrap(),
+            "--config",
+            SOURCE,
+            "--event",
+            "push",
+            "--payload",
+            h.root
+                .join(".chrono-harness/state/relative-payload.json")
+                .to_str()
+                .unwrap(),
+            "--workflow-revision",
+            &h.candidate,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "relative host root must work: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["candidate"], h.candidate);
+    assert_eq!(report["base"], h.candidate);
+    for process in processes(&report["git_facts"]) {
+        let argv = process["argv"].as_array().unwrap();
+        if let Some(i) = argv.iter().position(|v| v == "-C") {
+            assert_eq!(argv[i + 1], json!(h.root));
+        }
+    }
+}

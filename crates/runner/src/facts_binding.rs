@@ -362,11 +362,12 @@ impl Reader {
         }
     }
     fn git_input(&self, root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>, String> {
+        let bound = self.bound.as_ref().ok_or("missing binding")?;
         let argv = [
             "--no-optional-locks",
             "--no-replace-objects",
             "-C",
-            root.to_str().ok_or("root UTF-8")?,
+            bound.root.to_str().ok_or("root UTF-8")?,
         ]
         .into_iter()
         .chain(args.iter().copied())

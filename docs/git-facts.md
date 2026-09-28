@@ -23,6 +23,9 @@ inheritance. Bare tool names require a declared PATH, including an explicitly
 empty PATH. An unrelated ambient Git cannot supply facts. GIT_DIR, GIT_WORK_TREE
 and GIT_INDEX_FILE are rejected when explicitly supplied because they redirect
 the checkout. Existing no-replace-objects/no-optional-locks arguments remain.
+Git's `-C` argument uses the bound canonical checkout path. Caller-relative host
+roots are checked against that binding before invocation, avoiding a second
+relative-path interpretation after the process changes its working directory.
 
 Each Git invocation uses the configured protocol timeout and output bound. The
 reader checks the config bytes, selected path and executable/input digest before
