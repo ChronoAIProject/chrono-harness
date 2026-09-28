@@ -76,6 +76,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:distribution-tests"
         }
       ]
     },
