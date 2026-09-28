@@ -124,8 +124,9 @@ isolated branch creation and source/process identity reports. Its dedicated test
 exercise public library/CLI behavior with real remotes and checkout hooks, and
 reuse the existing strict registration loader and bounded process engine. Creation
 does not certify full governance, stale recovery, PR delivery or landing. The
-adopted policy and future native asset build are explicitly registered; published
-beta.5 remains unchanged and lacks this new binary.
+adopted policy and native asset build are explicitly registered; public beta.6
+ships this binary on macOS arm64 and Linux x86_64. Its native release recipe
+passed all 23 dedicated worktree tests on each platform.
 
 Explicit reconstruction reuses the worktree producer and its original process/identity helpers. Real CLI tests cover an advanced target, complete carry/retire choices, original source preservation, binary/mode/link/add/delete changes, literal paths, failed apply conflicts, source mutation, patch output bounds and empty/reused destinations. A successful result is a staged index tree, without a candidate commit or governance/integration verdict. AI reconciliation, recovery/cleanup and provider delivery remain unfinished.
 
@@ -140,6 +141,7 @@ this does not certify complete Git configuration or external-input closure.
 The product native release recipe consumes an explicit ordered set of registered
 project actions, with preflight rejection and actual process bytes in build v2
 reports. Dedicated consumers test literal arguments, action ambiguity, failure
-exits and packaging suppression. The beta.6 plan includes worktree; public
-availability and real platform behavior require completed native release runs.
+exits and packaging suppression. Public beta.6 includes worktree; the completed
+native release run passed the 15 distribution and 23 worktree tests on each platform, and anonymous downloads
+verified the manifest plus both platforms’ worktree and installer assets.
 This recipe does not certify full input closure or deterministic parity.
