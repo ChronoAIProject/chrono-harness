@@ -508,7 +508,7 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 fresh 创建后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
 
-现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作，核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。损坏 Git 元数据、临时 fetch ref、远端分支退休及 PR／合并编排仍未完成；格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
+现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作，核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。损坏 Git 元数据、缺失或中断的回执、远端分支退休及 PR／合并编排仍未完成；格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
 
 所有交付最终进入 dev；feature 与 integration 均从当时最新 dev 创建。
 workflow 当前草案阈值：落后 dev **超过 3 个提交**，或本分支年龄 **超过 24 小时**，
