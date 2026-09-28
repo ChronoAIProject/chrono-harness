@@ -22,7 +22,7 @@ impl Host {
             &["ls-remote", "warehouse", &format!("refs/heads/{branch}")],
         )
     }
-    fn remote_wrapper(&self, body: &str) {
+    pub(crate) fn remote_wrapper(&self, body: &str) {
         use std::os::unix::fs::PermissionsExt;
         let real = Command::new("/bin/sh")
             .args(["-c", "command -v git"])

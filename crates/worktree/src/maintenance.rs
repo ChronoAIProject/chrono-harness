@@ -22,6 +22,17 @@ struct Receipt {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "lowercase", deny_unknown_fields)]
 enum Plan {
+    #[serde(rename = "inspect-rebind")]
+    InspectRebind {
+        schema: String,
+        head: String,
+        binding: crate::rebind::Binding,
+    },
+    Rebind {
+        schema: String,
+        head: String,
+        binding: crate::rebind::Binding,
+    },
     #[serde(rename = "cleanup-remote")]
     CleanupRemote {
         schema: String,
@@ -88,7 +99,7 @@ pub(crate) enum Retention {
 
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
-        return Err("usage: chrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config POLICY --plan STATE_PATH".into());
+        return Err("usage: chrono-worktree inspect-rebind|rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config POLICY --plan STATE_PATH".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
@@ -106,6 +117,8 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     let bytes = state_bytes(&root, plan_path)?;
     let plan: Plan = decode(&bytes)?;
     let (schema, operation, head) = match &plan {
+        Plan::InspectRebind { schema, head, .. } => (schema, "inspect-rebind", head),
+        Plan::Rebind { schema, head, .. } => (schema, "rebind", head),
         Plan::CleanupRemote {
             schema,
             head,
@@ -196,7 +209,11 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
         config,
         &config_bytes,
         operation,
-        if matches!(operation, "recover" | "recover-interrupted") {
+        if operation == "inspect-rebind" {
+            "observed"
+        } else if operation == "rebind" {
+            "rebound"
+        } else if matches!(operation, "recover" | "recover-interrupted") {
             "recovered"
         } else {
             "cleaned"
@@ -235,6 +252,28 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             report["source_commit"] = value!(source_head);
             report["registry_digest"] = value!(digest);
             match plan {
+                Plan::InspectRebind { head, binding, .. } => binding.execute(
+                    r,
+                    &root,
+                    &registrations,
+                    token,
+                    report,
+                    &head,
+                    plan_path,
+                    &bytes,
+                    true,
+                ),
+                Plan::Rebind { head, binding, .. } => binding.execute(
+                    r,
+                    &root,
+                    &registrations,
+                    token,
+                    report,
+                    &head,
+                    plan_path,
+                    &bytes,
+                    false,
+                ),
                 Plan::CleanupRemote {
                     head,
                     retained_commit,
@@ -392,7 +431,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
         },
     )
 }
-fn artifacts(registrations: &Registrations, paths: &[&str]) -> Result<(), String> {
+pub(crate) fn artifacts(registrations: &Registrations, paths: &[&str]) -> Result<(), String> {
     let paths: Vec<_> = paths.iter().map(|p| (*p).to_string()).collect();
     if !chrono_judge_registration::nonartifact_paths(registrations.config(), &paths).is_empty() {
         return Err("maintenance input/output lacks a registered artifact owner".into());
@@ -508,7 +547,7 @@ fn recover(
         registrations,
         report,
         &receipt,
-        &["start", "reconstruct", "cleanup"],
+        &["start", "reconstruct", "cleanup", "rebind"],
     )?;
     release_reconciled(r, root, report, &original, head, tree, || {
         if state_bytes(root, &receipt.path)? != bytes {

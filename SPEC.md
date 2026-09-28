@@ -521,11 +521,13 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 fresh 创建后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
 
-现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作，核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。丢失全部恢复身份、损坏 Git 元数据及 PR／合并编排仍未完成；格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
+现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作，核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。这些入口不重建损坏元数据；显式重建见下款，PR／合并编排仍未完成。格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
+
+源码新增 `inspect-rebind`／`rebind`：旧收据、intent 或 linked-worktree 元数据缺失／损坏时，由 AI 显式登记现有目标目录、已有工作分支及 HEAD、要采用的 index tree、原元数据成员、全新备份和 donor 路径。观察只为该范围生成文件内容／mode／字面链接身份，不发现依赖或推断丢失的原索引。执行前绑定观察和计划、保留 intent，将原 gitfile 与残存元数据保存在登记 state 中，再用同一 Git 创建 locked/no-checkout donor、应用显式 index tree 并 repair 指针；成功须核可见工作、备份、分支及索引，随后释放锁。原操作结果始终未知；重建成功不代表检查或治理通过。普通失败保留实际输出、阶段、备份和部分效果；已附着且仍持原锁的失败可经既有 `recover` 在 AI 解决工作后释放，丢失重建结果的自动续跑尚未实现。备份 rename 要求同文件系统，不保证并发或掉电事务。公开 beta.10 不含这两个入口；完整格式与边界见 [元数据重建](docs/worktree.md#explicit-metadata-rebind)。
 
 所有交付最终进入 dev；feature 与 integration 均从当时最新 dev 创建。
 
-现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口尚未包含在公开 beta.9，合同见 [远端分支退休](docs/worktree.md#remote-branch-retirement)。
+现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口已包含在公开 beta.10，合同见 [远端分支退休](docs/worktree.md#remote-branch-retirement)。
 
 workflow 当前草案阈值：落后 dev **超过 3 个提交**，或本分支年龄 **超过 24 小时**，
 任一成立即 E_BRANCH_STALE；等于阈值仍允许。二者在 workflow.json 可配置。
