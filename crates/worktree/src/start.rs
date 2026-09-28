@@ -214,6 +214,9 @@ pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Resu
             "checkout differs from requested clean snapshot; preserve it for recovery".into(),
         );
     }
+    untracked(r, target, config)
+}
+pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let exclusions: Vec<String> = config["artifacts"]
         .as_array()
         .unwrap()
@@ -311,12 +314,7 @@ pub(crate) fn execute(
         );
     }
     let config_path = r.config.host_config.clone();
-    let host = json(&r.blob(source, &base, &config_path)?)?;
-    let mut values = BTreeMap::new();
-    for path in facts::registry_paths(&host, &config_path)? {
-        values.insert(path.clone(), json(&r.blob(source, &base, &path)?)?);
-    }
-    let registrations = Registrations::load(&values, &config_path)?;
+    let (registrations, registry_digest) = registrations(r, source, &base, &config_path)?;
     let workflow = registrations.workflow();
     if workflow["target_branch"] != target_branch {
         return Err("fetched target changed target branch; adopt its configuration".into());
@@ -364,7 +362,7 @@ pub(crate) fn execute(
     report["branch_ref"] = value!(branch);
     report["destination"] = value!(target);
     report["branch_started_at"] = value!(started);
-    report["registry_digest"] = value!(chrono_harness::wire::digest(&value!(values))?);
+    report["registry_digest"] = value!(registry_digest);
     let path = target.to_str().ok_or("destination is not UTF-8")?;
     // No existing branch reset, no inherited tracking setup, no restore recipe.
     r.git(
@@ -416,8 +414,39 @@ pub(super) fn create(
     bytes: Vec<u8>,
     plan: Option<crate::reconstruct::Input>,
 ) -> Result<Value, String> {
-    let root = fs::canonicalize(&o.root).map_err(|e| e.to_string())?;
-    if root != o.root {
+    let operation = if plan.is_some() {
+        "reconstruct"
+    } else {
+        "start"
+    };
+    let success = if plan.is_some() {
+        "reconstructed"
+    } else {
+        "created"
+    };
+    with_report(
+        &o.root,
+        &o.config_path,
+        config,
+        &bytes,
+        operation,
+        success,
+        |runner, token, report| match plan {
+            Some(plan) => crate::reconstruct::execute(runner, &o, &bytes, token, report, plan),
+            None => execute(runner, &o, &bytes, token, report, false),
+        },
+    )
+}
+pub(crate) fn with_report(
+    root: &Path,
+    config_path: &str,
+    config: Config,
+    bytes: &[u8],
+    operation: &str,
+    success: &str,
+    execute: impl FnOnce(&mut Runner, &str, &mut Value) -> Result<(), String>,
+) -> Result<Value, String> {
+    if fs::canonicalize(root).map_err(|e| e.to_string())? != root {
         return Err("host root must be canonical".into());
     }
     let dir = no_symlink_parents(&root, config.report_directory.trim_end_matches('/'))?;
@@ -480,11 +509,6 @@ pub(super) fn create(
         config.output_limit_bytes,
     )?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let operation = if plan.is_some() {
-        "reconstruct"
-    } else {
-        "start"
-    };
     let mut output = tempfile::Builder::new()
         .prefix(&format!("{operation}-"))
         .suffix(".json")
@@ -504,7 +528,7 @@ pub(super) fn create(
         .to_str()
         .ok_or("report path UTF-8")?
         .to_string();
-    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":o.config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
+    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
             Some(format!(
@@ -537,21 +561,10 @@ pub(super) fn create(
     };
     let result = match version_error {
         Some(e) => Err(e),
-        None => match plan {
-            Some(plan) => {
-                crate::reconstruct::execute(&mut runner, &o, &bytes, &name, &mut report, plan)
-            }
-            None => execute(&mut runner, &o, &bytes, &name, &mut report, false),
-        },
+        None => execute(&mut runner, &name, &mut report),
     };
     match result {
-        Ok(()) => {
-            report["status"] = value!(if operation == "start" {
-                "created"
-            } else {
-                "reconstructed"
-            })
-        }
+        Ok(()) => report["status"] = value!(success),
         Err(e) => report["error"] = value!(e),
     }
     report["processes"] = value!(runner.processes);
@@ -561,4 +574,22 @@ pub(super) fn create(
     output.as_file().sync_all().map_err(|e| e.to_string())?;
     output.keep().map_err(|e| e.to_string())?;
     Ok(report)
+}
+
+pub(crate) fn registrations(
+    r: &mut Runner,
+    root: &Path,
+    head: &str,
+    config_path: &str,
+) -> Result<(Registrations, String), String> {
+    let host = json(&r.blob(root, head, config_path)?)?;
+    let mut values = BTreeMap::new();
+    for path in facts::registry_paths(&host, config_path)? {
+        values.insert(path.clone(), json(&r.blob(root, head, &path)?)?);
+    }
+    let registrations = Registrations::load(&values, config_path)?;
+    Ok((
+        registrations,
+        chrono_harness::wire::digest(&value!(values))?,
+    ))
 }

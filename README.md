@@ -120,3 +120,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查及已登记 registry/Git 输入、metadata 与真实操作的联合校验属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
 
 新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。`reconstruct` 通过逐路径计划在新工作树暂存仍需保留的旧变化；冲突和旧工作均保留，完成后仍须重新提交检查。创建／重建合同及尚未实现的 PR／落地范围见 [worktree 文档](docs/worktree.md)。该二进制已随 beta.6 在 macOS arm64 / Linux x86_64 公开发布；宿主通过锁定的发布安装登记采用。
+
+源码中的 `chrono-worktree recover`／`cleanup` 消费宿主 state 下的显式维护计划：保留原失败报告，验证重建后的状态和锁，或核对保留引用与工件白名单后清理指定工作树。它们不产生治理或合并通过判词；完整格式及未实现的恢复范围见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。公开 beta.6 尚未包含这两个后续入口，当前需构建候选。
