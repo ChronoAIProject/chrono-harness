@@ -173,7 +173,11 @@ impl Host {
     ) -> (i32, Value) {
         let root = self.root();
         fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
-        let files = json!({"interpreter":{"bytes":fs::read(&self.tool).unwrap()},"data":{"bytes":b"bounded input\n".to_vec()}});
+        let interpreter = fs::read(&self.tool).unwrap();
+        let digest = sha256(&interpreter);
+        let blob = format!(".chrono-harness/state/interpreter-{digest}");
+        fs::write(root.join(&blob), &interpreter).unwrap();
+        let files = json!({"interpreter":{"blob":blob,"sha256":digest,"length":interpreter.len()},"data":{"bytes":b"bounded input\n".to_vec()}});
         let mut inputs = json!({"base":{"commit":self.base,"environment":{"DECLARED_EMPTY":"","DECLARED_ABSENT":null},"files":files},"candidate":{"commit":self.candidate,"environment":{"DECLARED_EMPTY":"","DECLARED_ABSENT":null},"files":files}});
         edit(&mut inputs);
         fs::write(
