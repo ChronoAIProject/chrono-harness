@@ -1,4 +1,5 @@
 //! Produce real Git worktrees and observations; governance remains with the judges.
+mod reconstruct;
 mod start;
 use chrono_harness::{CliOutput, decode, no_symlink_parents, relative_path};
 use serde::Deserialize;
@@ -37,13 +38,17 @@ pub struct Start {
     pub destination: PathBuf,
 }
 
-fn arguments(args: &[String]) -> Result<Start, String> {
-    if args.first().map(String::as_str) != Some("start") || args.len() != 11 {
-        return Err("usage: chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION".into());
+fn arguments(args: &[String]) -> Result<(Start, Option<String>), String> {
+    let reconstruction = args.first().map(String::as_str) == Some("reconstruct");
+    if (!reconstruction && args.first().map(String::as_str) != Some("start"))
+        || args.len() != if reconstruction { 13 } else { 11 }
+    {
+        return Err("usage: chrono-worktree start|reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION [--plan STATE_PATH (required for reconstruct)]".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
         if !["--host-root", "--config", "--kind", "--name", "--path"].contains(&pair[0].as_str())
+            && !(reconstruction && pair[0] == "--plan")
             || pair[1].is_empty()
             || values.insert(pair[0].as_str(), pair[1].as_str()).is_some()
         {
@@ -51,13 +56,16 @@ fn arguments(args: &[String]) -> Result<Start, String> {
         }
     }
     let root = fs::canonicalize(values["--host-root"]).map_err(|e| e.to_string())?;
-    Ok(Start {
-        destination: root.join(values["--path"]),
-        root,
-        config_path: values["--config"].into(),
-        kind: values["--kind"].into(),
-        name: values["--name"].into(),
-    })
+    Ok((
+        Start {
+            destination: root.join(values["--path"]),
+            root,
+            config_path: values["--config"].into(),
+            kind: values["--kind"].into(),
+            name: values["--name"].into(),
+        },
+        values.get("--plan").map(|v| (*v).to_string()),
+    ))
 }
 pub fn run(args: &[String]) -> CliOutput {
     if args == ["--version"] {
@@ -68,11 +76,18 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nCreates from a fetched registered target; does not certify governance or perform PR/merge/cleanup.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nCreates from a fetched registered target. Reconstruction stages explicit choices and preserves old work and conflicts; no governance, PR/merge/cleanup claim.\n".into(), stderr: String::new() };
     }
-    match arguments(args).and_then(start) {
+    match arguments(args).and_then(|(options, plan)| match plan {
+        Some(path) => reconstruct(options, &path),
+        None => start(options),
+    }) {
         Ok(report) => CliOutput {
-            exit_code: if report["status"] == "created" { 0 } else { 2 },
+            exit_code: if report["status"] == "created" || report["status"] == "reconstructed" {
+                0
+            } else {
+                2
+            },
             stdout: format!("{}\n", serde_json::to_string_pretty(&report).unwrap()),
             stderr: String::new(),
         },
@@ -83,7 +98,7 @@ pub fn run(args: &[String]) -> CliOutput {
         },
     }
 }
-pub fn start(options: Start) -> Result<serde_json::Value, String> {
+fn configuration(options: &Start) -> Result<(Config, Vec<u8>), String> {
     relative_path(&options.config_path)?;
     if !options.config_path.starts_with(".chrono-harness/") {
         return Err("worktree configuration must be under .chrono-harness".into());
@@ -107,5 +122,14 @@ pub fn start(options: Start) -> Result<serde_json::Value, String> {
     }
     relative_path(&config.host_config)?;
     relative_path(config.report_directory.trim_end_matches('/'))?;
-    start::create(options, config, bytes)
+    Ok((config, bytes))
+}
+pub fn start(options: Start) -> Result<serde_json::Value, String> {
+    let (config, bytes) = configuration(&options)?;
+    start::create(options, config, bytes, None)
+}
+pub fn reconstruct(options: Start, plan_path: &str) -> Result<serde_json::Value, String> {
+    let (config, bytes) = configuration(&options)?;
+    let plan = reconstruct::read(&options.root, plan_path)?;
+    start::create(options, config, bytes, Some(plan))
 }

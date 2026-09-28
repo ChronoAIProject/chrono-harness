@@ -24,7 +24,7 @@
 crates/                    独立 Rust 生产项目及各自测试项目
   runner/                  判官运输与统一 check 入口
   runner-tests/
-  worktree/                  显式目标抓取与独立工作树创建
+  worktree/                  显式目标抓取、工作树创建与登记重建
   worktree-tests/
   distribution/            发布打包、版本锁定和宿主安装
   distribution-tests/
@@ -111,7 +111,7 @@ full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findin
 
 Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; workflow has bounded certification; autonomous delivery remains future work. Mixed classification and warnings use the [explicit surface contract](docs/mixed.md). Declared costs and unknown warnings have their own [cost contract](docs/costs.md).
 
-稳定性与规则语义变更的测试选择现已接入同一 routes/projects 执行链，见 [workflow 选择合同](docs/workflow-selection.md)。[workflow 判官](docs/workflow.md) 在 context v2 上核对分支新鲜度、实际 integration 证据及显式退休迁移。自动创建 worktree、提 PR、合并与核验落地仍待实现，当前由调用方负责。
+稳定性与规则语义变更的测试选择现已接入同一 routes/projects 执行链，见 [workflow 选择合同](docs/workflow-selection.md)。[workflow 判官](docs/workflow.md) 在 context v2 上核对分支新鲜度、实际 integration 证据及显式退休迁移。工作树创建与按显式计划重新应用旧 DELTA 由独立工具实现；AI 语义协调、提 PR、合并与核验落地仍由调用方负责。
 
 显式外部输入可由独立 `chrono-inputs capture/pair` 生成两端快照和保留内容，判官流式核对，无需把大文件字节塞进 JSON。调用及格式见 [输入快照合同](docs/inputs.md)。这不自动发现或补齐 Cargo/SDK 依赖，也不自动启用完整宿主。
 
@@ -119,4 +119,4 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 
 通用 projects 登记不要求 manifest、lockfile 或根目录，actions 可使用任意非空登记名称。Cargo workspace/路径依赖检查及已登记 registry/Git 输入、metadata 与真实操作的联合校验属于独立可选 [chrono-judge-cargo](docs/cargo-projects.md)；宿主目录和语言不承担隐式登记或选测权威。
 
-新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。创建合同、失败保留与尚未实现的重建／PR／落地范围见 [worktree 文档](docs/worktree.md)。该新二进制已登记到后续原生发布构建；现有 beta.5 不含它。
+新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。`reconstruct` 通过逐路径计划在新工作树暂存仍需保留的旧变化；冲突和旧工作均保留，完成后仍须重新提交检查。创建／重建合同及尚未实现的 PR／落地范围见 [worktree 文档](docs/worktree.md)。该新二进制已登记到后续原生发布构建；现有 beta.5 不含它。

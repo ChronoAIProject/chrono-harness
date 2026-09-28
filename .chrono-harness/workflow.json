@@ -203,12 +203,13 @@
         "crates/worktree/src/lib.rs",
         "crates/worktree/src/main.rs",
         "crates/worktree/src/start.rs",
+        "crates/worktree/src/reconstruct.rs",
         ".chrono-harness/worktree.json"
       ],
       "tests": [
         "worktree-tests"
       ],
-      "reason": "Explicit fresh worktree production, real Git observations and failure preservation"
+      "reason": "Explicit fresh worktree creation and registered DELTA reconstruction with original process observations and failure preservation"
     }
   ],
   "semantic_changes_require_integration": true,
