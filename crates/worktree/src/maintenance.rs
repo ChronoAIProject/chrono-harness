@@ -420,6 +420,12 @@ impl Cleanup {
     ) -> Result<(), String> {
         report["worktree_removed"] = value!(false);
         report["branch_removed"] = value!(false);
+        report["worktree_removal"] = value!("not-attempted");
+        report["branch_removal"] = value!(if self.remove_branch {
+            "not-attempted"
+        } else {
+            "not-requested"
+        });
         let branch_ref = format!("refs/heads/{}", self.branch);
         r.git(root, &["check-ref-format", &branch_ref])?;
         r.git(root, &["check-ref-format", &self.retained_ref])?;
@@ -448,7 +454,8 @@ impl Cleanup {
         report["retained_commit"] = value!(self.retained_commit);
         match fs::symlink_metadata(&target) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && self.allow_absent_worktree => {
-                self.absent(r, root)?
+                self.absent(r, root)?;
+                report["worktree_removal"] = value!("already-absent");
             }
             Err(e) => return Err(format!("cleanup worktree unavailable: {e}")),
             Ok(_) => {
@@ -486,21 +493,26 @@ impl Cleanup {
                 identity(r, root, &target, &self.branch, &self.head, None)?;
                 self.saved(r, root)?;
                 start::cleanliness(r, &target, &disposal)?;
+                report["worktree_removal"] = value!("attempted-unverified");
                 r.git(root, &["worktree", "remove", "--force", "--", path])?;
                 self.absent(r, root)?;
                 report["worktree_removed"] = value!(true);
+                report["worktree_removal"] = value!("verified-absent");
             }
         }
         self.saved(r, root)?;
         if self.remove_branch {
             let lookup = r.command(root, &["show-ref", "--verify", "--quiet", &branch_ref])?;
             match lookup.exit_code {
-                1 if self.allow_absent_worktree => (),
+                1 if self.allow_absent_worktree => {
+                    report["branch_removal"] = value!("already-absent")
+                }
                 0 => {
                     self.absent(r, root)?;
                     if r.oid(root, &branch_ref)? != self.head {
                         return Err("cleanup branch changed; preserve its current ref".into());
                     }
+                    report["branch_removal"] = value!("attempted-unverified");
                     r.git(
                         root,
                         &["update-ref", "--no-deref", "-d", &branch_ref, &self.head],
@@ -511,6 +523,7 @@ impl Cleanup {
                         return Err("branch absence was not verified after deletion".into());
                     }
                     report["branch_removed"] = value!(true);
+                    report["branch_removal"] = value!("verified-absent");
                 }
                 n => return Err(format!("cleanup branch lookup exited {n}")),
             }

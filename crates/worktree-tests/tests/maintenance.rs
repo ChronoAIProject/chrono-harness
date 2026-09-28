@@ -154,6 +154,8 @@ fn maintenance_cleanup_preserves_saved_work_and_declared_artifact_boundaries() {
     assert_eq!(r["status"], "cleaned");
     assert_eq!(r["worktree_removed"], true);
     assert_eq!(r["branch_removed"], true);
+    assert_eq!(r["worktree_removal"], "verified-absent");
+    assert_eq!(r["branch_removal"], "verified-absent");
     assert!(!target.exists());
     assert_eq!(
         git(&h.root, &["rev-parse", "refs/heads/dev"]),
@@ -194,6 +196,8 @@ fn maintenance_cleanup_accepts_squash_tree_preservation_and_explicit_retry() {
     plan["remove_branch"] = value!(false);
     let (code, r, error) = h.maintain("cleanup", plan.clone());
     assert_eq!(code, 0, "{r} {error}");
+    assert_eq!(r["worktree_removal"], "verified-absent");
+    assert_eq!(r["branch_removal"], "not-requested");
     assert_eq!(
         git(&h.root, &["rev-parse", "refs/heads/integration/saved"]),
         candidate
@@ -205,9 +209,13 @@ fn maintenance_cleanup_accepts_squash_tree_preservation_and_explicit_retry() {
     assert_eq!(code, 0, "{r} {error}");
     assert_eq!(r["worktree_removed"], false);
     assert_eq!(r["branch_removed"], true);
+    assert_eq!(r["worktree_removal"], "already-absent");
+    assert_eq!(r["branch_removal"], "verified-absent");
     let (code, r, error) = h.maintain("cleanup", plan);
     assert_eq!(code, 0, "{r} {error}");
     assert_eq!(r["branch_removed"], false);
+    assert_eq!(r["worktree_removal"], "already-absent");
+    assert_eq!(r["branch_removal"], "already-absent");
 }
 
 #[test]
@@ -308,6 +316,22 @@ fn maintenance_cleanup_retains_actual_remove_failure_and_concurrent_branch_updat
         assert_eq!(r["status"], "failed");
         assert_eq!(r["worktree_removed"], concurrent);
         assert_eq!(r["branch_removed"], false);
+        assert_eq!(
+            r["worktree_removal"],
+            if concurrent {
+                "verified-absent"
+            } else {
+                "attempted-unverified"
+            }
+        );
+        assert_eq!(
+            r["branch_removal"],
+            if concurrent {
+                "attempted-unverified"
+            } else {
+                "not-attempted"
+            }
+        );
         if concurrent {
             assert!(!target.exists());
             assert_eq!(

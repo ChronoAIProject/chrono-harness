@@ -248,7 +248,12 @@ acquires an invocation lock, rechecks, releases only that lock, rechecks saved w
 the worktree. It verifies path/inventory absence before any optional branch deletion.
 Branch removal uses the expected OID and checks that no registered worktree still
 uses it. Failures retain actual process results and explicit partial effects;
-there is no rollback claim. `allow_absent_worktree: true` explicitly permits a
+there is no rollback claim. `worktree_removal` and `branch_removal` distinguish
+`not-attempted`, `attempted-unverified`, `verified-absent` and `already-absent`;
+a branch kept by the plan is `not-requested`. The `*_removed` booleans are true
+only after this invocation's removal and absence checks succeed. False does not
+prove that a failed Git operation had no effect; inspect the explicit state and
+original process evidence. `allow_absent_worktree: true` explicitly permits a
 retry after partial removal, including a remaining branch. Already absent work
 is observed as absent and is not reported as a new removal. The retained branch
 must still match. Configuration, hooks and concurrent filesystem writers are not
