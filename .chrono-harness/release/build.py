@@ -42,7 +42,7 @@ def preflight(root):
             raise ValueError('missing tool binding: ' + name)
     projects = json.loads(path(root, cfg['projects']).read_text())
     actions = {}
-    for project in projects['projects']:
+    for project in projects['projects'] + projects['scripts']:
         for action in project['actions'].values():
             operation = action['operation']
             if operation in actions:

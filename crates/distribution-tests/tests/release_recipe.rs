@@ -77,8 +77,9 @@ impl Recipe {
             &root.join(PROJECTS),
             &json!({"projects":[{"id":"custom","actions":{
                 "first":{"operation":"prepare.custom","tool":"probe","argv":["prepare", "a space", "$literal\n`text`"]},
-                "second":{"operation":"verify.custom","tool":"probe","argv":["verify", "--declared"]},
-                "third":{"operation":"finish.custom","tool":"probe","argv":[]}
+                "second":{"operation":"verify.custom","tool":"probe","argv":["verify", "--declared"]}
+            }}],"scripts":[{"id":"standalone","actions":{
+                "run":{"operation":"finish.custom","tool":"probe","argv":[]}
             }}]}),
         );
         Self {

@@ -4,7 +4,7 @@
 
 ## 发布者
 
-本库 `.chrono-harness/release/build.json` 使用 `chrono-release-build/v2`，显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`；`plan.json` 显式列版本、二进制名称与已构建路径。`build.py ROOT OUTPUT` 构建这些成员后，按操作 ID 从登记项目的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现。当前明确选择 distribution 与 worktree 的生产构建及专属测试；新增验证只需登记工具和操作，不扫描项目、不复制测试命令。
+本库 `.chrono-harness/release/build.json` 使用 `chrono-release-build/v2`，显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`；`plan.json` 显式列版本、二进制名称与已构建路径。`build.py ROOT OUTPUT` 构建这些成员后，按操作 ID 从登记项目或独立 scripts 的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现。当前明确选择 distribution 与 worktree 的生产构建及专属测试；新增验证只需登记工具和操作，不扫描项目、不复制测试命令。
 
 配方在构建前拒绝未知、重复、歧义操作、无效 argv 与缺失工具；实际验证子进程非零会停止打包并保留退出码和输出。成功包中的 `build.json` 使用 `chrono-native-build/v2`，保留平台、工具版本、源码提交，以及已完成操作的顺序、实际 argv/cwd、退出码、原始 stdout/stderr 字节和摘要。这里仅消费显式操作登记，不代表完整治理准入、环境闭包或跨平台同判。
 
