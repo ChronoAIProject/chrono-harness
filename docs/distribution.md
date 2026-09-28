@@ -8,7 +8,7 @@
 
 配方在构建前拒绝未知、重复、歧义操作、无效 argv 与缺失工具；实际验证子进程非零会停止打包并保留退出码和输出。成功包中的 `build.json` 使用 `chrono-native-build/v2`，保留平台、工具版本、源码提交，以及已完成操作的顺序、实际 argv/cwd、退出码、原始 stdout/stderr 字节和摘要。这里仅消费显式操作登记，不代表完整治理准入、环境闭包或跨平台同判。
 
-这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方；上传构建 artifacts 不等于已发布。当前发布计划为 beta.6，是否公开可用以 Releases 为准；已经发布的 beta.5 不变。
+这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方；上传构建 artifacts 不等于已发布。[beta.6](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.6) 已公开发布，包含两个平台各 15 个工具，其中包括 `chrono-worktree`。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36376005166)在每个平台通过 distribution 的 15 个测试和 worktree 的 23 个测试；已匿名下载核对 manifest 及两个平台的 worktree／installer 字节。测试与摘要核验不证明完整输入闭包或确定性同判。
 
 ```sh
 chrono-distribution pack --root PRODUCT --plan PRODUCT/.chrono-harness/release/plan.json --output ABSENT_OUTPUT

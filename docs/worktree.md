@@ -30,7 +30,8 @@ reuses their existing strict loader. A successful load or creation is not full
 reference admission, complete input certification, freshness certification or
 activation. Workflow's normal judge still evaluates delivery context and DELTA.
 
-After installing the candidate binary through the registered bootstrap:
+Install `chrono-worktree` from the pinned public beta.6 release through the host’s
+registered installer (the product repository can also bootstrap its candidate):
 
 ```sh
 .chrono-harness/bin/chrono-worktree start \
@@ -95,8 +96,10 @@ The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
 remote policy drift, missing remotes, tool mismatch and real checkout hooks. The
 adopted policy has an actual subprocess consumer. The host registers both the
-binary and dedicated test plan; future native release builds also register this
-asset. Already published beta.5 assets are unchanged and do not contain this tool.
+binary and dedicated test plan. Public beta.6 includes this tool for macOS arm64
+and Linux x86_64; its native release recipe passed all 23 dedicated worktree tests
+on each platform. The four [example hosts](examples.md) explicitly adopt the tool
+and policy; no host-language or directory inference supplies their registrations.
 
 Complete AI reconciliation, retry/cleanup recovery, PR provider operations,
 merge and actual landing orchestration remain unfinished. Subsequent governance
