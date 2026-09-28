@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 mod event_git;
+pub mod release;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -90,6 +91,23 @@ pub fn load(path: &Path) -> Result<Config, String> {
     let c: Config = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
     validate(&c)?;
     Ok(c)
+}
+enum Projection {
+    Check(Config),
+    Release(release::Config),
+}
+fn load_projection(path: &Path) -> Result<Projection, String> {
+    let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let value: Value = decode(&bytes)?;
+    if value["schema"] == release::SCHEMA {
+        let c = decode(&bytes)?;
+        release::validate(&c)?;
+        Ok(Projection::Release(c))
+    } else {
+        let c = decode(&bytes)?;
+        validate(&c)?;
+        Ok(Projection::Check(c))
+    }
 }
 fn validate(c: &Config) -> Result<(), String> {
     if !matches!(
@@ -329,12 +347,12 @@ jobs:
         artifacts = scalar(&c.artifact_directory)
     ))
 }
-fn output_preflight(root: &Path, path: &str, expected: &str) -> Result<bool, String> {
+fn output_preflight(root: &Path, path: &str, expected: &str, marker: &str) -> Result<bool, String> {
     let target = no_symlink_parents(root, path)?;
     match fs::read(&target) {
         Ok(bytes) => {
             let text = std::str::from_utf8(&bytes).map_err(|_| "owned output is not UTF-8")?;
-            if !text.starts_with(MARKER) {
+            if !text.starts_with(marker) {
                 return Err(format!("unowned workflow collision: {path}"));
             }
             Ok(text == expected)
@@ -393,9 +411,17 @@ fn inventory_preflight(
 }
 pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, String> {
     relative_path(config_path)?;
-    let c = load(&no_symlink_parents(root, config_path)?)?;
+    let c = match load_projection(&no_symlink_parents(root, config_path)?)? {
+        Projection::Check(c) => c,
+        Projection::Release(c) => {
+            if !config_path.starts_with(".chrono-harness/") {
+                return Err("release configuration must belong to .chrono-harness".into());
+            }
+            return release::generate(root, &c, verify);
+        }
+    };
     let rendered = render(&c, config_path)?;
-    let same = output_preflight(root, &c.workflow_path, &rendered)?;
+    let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
     let initial = inventory_output(&c)?;
     let initial_same = match &initial {
         Some((path, bytes)) => inventory_preflight(root, path, bytes, false)?,
@@ -420,13 +446,16 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
     Ok(!same || !initial_same)
 }
 pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
-    let incoming = load(input)?;
+    let incoming = match load_projection(input)? {
+        Projection::Check(c) => c,
+        Projection::Release(c) => return release::init(root, c),
+    };
     let path = ".chrono-harness/ci/github.json";
     let dest = no_symlink_parents(root, path)?;
     let existing = dest.exists();
     let c = if existing { load(&dest)? } else { incoming };
     let rendered = render(&c, path)?;
-    let same = output_preflight(root, &c.workflow_path, &rendered)?;
+    let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
     let initial = inventory_output(&c)?;
     let initial_same = match &initial {
         Some((path, bytes)) => inventory_preflight(root, path, bytes, !existing)?,

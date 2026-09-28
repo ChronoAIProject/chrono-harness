@@ -210,6 +210,18 @@
         "worktree-tests"
       ],
       "reason": "Explicit fresh worktree creation and registered DELTA reconstruction with original process observations and failure preservation"
+    },
+    {
+      "id": "ci-projections",
+      "paths": [
+        "crates/ci/src/lib.rs",
+        "crates/ci/src/release.rs",
+        ".chrono-harness/ci/release.json"
+      ],
+      "tests": [
+        "ci-tests"
+      ],
+      "reason": "Explicit check/release source dispatch, shared output ownership and native workflow generation"
     }
   ],
   "semantic_changes_require_integration": true,

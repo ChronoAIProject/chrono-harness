@@ -2441,6 +2441,10 @@
         {
           "kind": "test-execution",
           "to": "test:distribution-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
         }
       ]
     },
@@ -2958,6 +2962,53 @@
           "to": "project:ci"
         }
       ]
+    },
+    {
+      "path": "crates/ci/src/release.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/release.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/release.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:distribution-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/release-ci.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [
@@ -5132,7 +5183,8 @@
         "build.judge-registration",
         "build.ci",
         "test.ci-tests",
-        "ci.verify"
+        "ci.verify",
+        "ci.release.verify"
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576
