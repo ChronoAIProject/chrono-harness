@@ -30,7 +30,7 @@ reuses their existing strict loader. A successful load or creation is not full
 reference admission, complete input certification, freshness certification or
 activation. Workflow's normal judge still evaluates delivery context and DELTA.
 
-Install `chrono-worktree` from the pinned public beta.6 release through the host’s
+Install `chrono-worktree` from the pinned public beta.7 release through the host’s
 registered installer (the product repository can also bootstrap its candidate):
 
 ```sh
@@ -96,8 +96,8 @@ The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
 remote policy drift, missing remotes, tool mismatch and real checkout hooks. The
 adopted policy has an actual subprocess consumer. The host registers both the
-binary and dedicated test plan. Public beta.6 includes this tool for macOS arm64
-and Linux x86_64; its native release recipe passed all 23 dedicated worktree tests
+binary and dedicated test plan. Public beta.7 includes this tool for macOS arm64
+and Linux x86_64; its native release recipe passed all 36 dedicated worktree tests
 on each platform. The four [example hosts](examples.md) explicitly adopt the tool
 and policy; no host-language or directory inference supplies their registrations.
 
@@ -266,8 +266,8 @@ failure exits 2. They preserve source work. Damaged/missing Git metadata,
 interrupted report publication and remote branch
 retirement need their own recovery contracts; no automatic metadata deletion or
 semantic reconciliation is provided. PR/merge/landing producers remain pending.
-These commands are source additions after public beta.6 and need a candidate
-bootstrap until a later release explicitly includes them.
+These commands are included in the public beta.7 release and installed through
+the same pinned host distribution entry.
 
 
 ### Temporary fetch-ref cleanup
@@ -313,4 +313,4 @@ removal and absence check. A failed command can have changed the ref. Set
 `allow_absent_ref: true` only for an explicit absence-tolerant retry; retention
 must still hold. This does not reconstruct a missing/interrupted original report
 or make concurrent ref/configuration writers atomic. It exits and reports through
-the same maintenance contract above and is not included in public beta.6.
+the same maintenance contract above and is included in public beta.7.
