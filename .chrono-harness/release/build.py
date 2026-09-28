@@ -205,7 +205,7 @@ def main(root, output):
     def run(label, argv, operation=None):
         nonlocal phase
         phase = label
-        process = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
         report['processes'].append({
             'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(root),
             'exit_code': process.returncode,
@@ -269,6 +269,18 @@ def main(root, output):
             phase = 'after-package'
             raise ValueError('release consumer identity changed after package')
         report['status'] = 'passed'
+    except subprocess.TimeoutExpired as error:
+        # Diagnostic-only source: the parent enforces an observation bound.
+        # No normal child exit or complete stream is asserted for this operation.
+        report['failure'] = {
+            'phase': phase, 'message': 'diagnostic observation bound reached',
+            'exit_code': None, 'timeout_seconds': 300, 'argv': error.cmd,
+            'partial_stdout_bytes': list(error.stdout or b''),
+            'partial_stderr_bytes': list(error.stderr or b''),
+        }
+        sys.stdout.buffer.write(error.stdout or b'')
+        sys.stderr.buffer.write(error.stderr or b'')
+        exit_code = 124
     except (subprocess.CalledProcessError, ValueError, OSError) as error:
         actual_exit = error.returncode if isinstance(error, subprocess.CalledProcessError) else None
         report['failure'] = {'phase': phase, 'message': str(error), 'exit_code': actual_exit}
