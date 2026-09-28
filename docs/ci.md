@@ -168,6 +168,56 @@ registered interpreter. No plugin registry or alternate platform is implied.
 
 ## Owned GitHub projection
 
+### Registered event Git
+
+The source implementation accepts `chrono-github-ci/v3` with an explicit
+`facts_config: ".chrono-harness/<registered-config>.json"`. That file must use
+full config v3 and declare the [Git tool/input binding](git-facts.md). It must be
+a policy input outside the artifact directory, distinct from generated initial
+profiles and executable/context outputs. Enroll it and its actual consumers in
+FILEMAP; the generator does not infer dependencies or create the Git declaration.
+This capability is not part of public beta.8.
+
+V3 retains the existing event and canonical check command construction. The
+optional `initial_inventory` declaration keeps its existing projection semantics;
+omission retains the single check profile. V1/v2 reject `facts_config`, including
+null, and preserve their prior Git and initial-profile contracts. Adoption is
+explicit; `init` preserves an existing source's customization and version.
+
+Before event network observation, the selected Git checks the binding config's
+original bytes against the fixed candidate and checks that HEAD is that candidate.
+All v3 event reads, remote baseline observations, object probes, fetches and
+initial parent reads use this same candidate binding with its declared environment
+and per-process bounds. The event library still consumes the caller-supplied
+`Config` and payload; it does not certify their provider provenance or that the CI
+source itself matches the candidate. Generated workflow and event identity must
+be verified by the actual delivery consumer.
+
+The batch object probe sends one full OID on stdin. Only an exact successful
+`OID commit` response establishes presence; only `OID missing` permits an explicit
+fetch from `origin`. Nonzero exit, timeout, overflow, wrong type and malformed or
+extra output are errors. Successful fetch is followed by another probe and commit
+identity verification. This avoids interpreting diagnostic text or any arbitrary
+probe failure as missing history. The old versions keep their legacy probe path.
+
+Successful `chrono-ci-inputs/v1` contexts add `git_facts` observations. Once bound,
+errors retain them in `E_CI_GIT` diagnostics; failures during binding keep the
+reader's `E_GIT_FACTS` diagnostic where available. Each actual process retains
+argv, stdin digest, original output bytes/digests, exit and bound failure. No
+unstarted process or successful context is invented. Failure does not overwrite
+an old context file; the caller must use the invocation's actual exit status.
+
+The dedicated tests use actual local remotes and a selected Git entry, including
+an actual CLI run from another cwd with ambient Git shadowed. They cover missing
+history, failed/malformed probes, failed fetch, configured integration baselines,
+initial/manual/PR inputs, source/checkout drift and old-version controls.
+Native tests of these fixtures do not establish generated-v3 host event adoption.
+The product host still uses v1 event preparation and its scoped judge. Network,
+credentials, Git configuration, helpers, OS and delegated input closure remain
+unverified; repository-configured implicit Git behavior is not disabled or made
+complete by this binding. Full activation, scoped-judge migration and deterministic
+local/CI parity remain separate obligations.
+
 `.chrono-harness/ci/github.json` uses `schema: chrono-github-ci/v1` and explicit
 `workflow_path`, `name`, `runs_on`, `push_branches`, `pull_request_branches`,
 `branch_creation_base_ref`, SHA-pinned `checkout_action` and `upload_artifact_action`,

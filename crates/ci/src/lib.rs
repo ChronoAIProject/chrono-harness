@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+mod event_git;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -29,6 +29,12 @@ pub struct Config {
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
+        deserialize_with = "facts_present"
+    )]
+    pub facts_config: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
         deserialize_with = "inventory_present"
     )]
     pub initial_inventory: Option<InitialInventory>,
@@ -45,6 +51,9 @@ fn inventory_present<'de, D: Deserializer<'de>>(
     d: D,
 ) -> Result<Option<InitialInventory>, D::Error> {
     InitialInventory::deserialize(d).map(Some)
+}
+fn facts_present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    String::deserialize(d).map(Some)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -84,8 +93,10 @@ pub fn load(path: &Path) -> Result<Config, String> {
 }
 fn validate(c: &Config) -> Result<(), String> {
     if !matches!(
-        (c.schema.as_str(), &c.initial_inventory),
-        ("chrono-github-ci/v1", None) | ("chrono-github-ci/v2", Some(_))
+        (c.schema.as_str(), &c.initial_inventory, &c.facts_config),
+        ("chrono-github-ci/v1", None, None)
+            | ("chrono-github-ci/v2", Some(_), None)
+            | ("chrono-github-ci/v3", _, Some(_))
     ) {
         return Err("unsupported CI provider/schema".into());
     }
@@ -112,6 +123,20 @@ fn validate(c: &Config) -> Result<(), String> {
     relative_path(c.artifact_directory.trim_end_matches('/'))?;
     if !c.context_path.starts_with(&c.artifact_directory) {
         return Err("context must reside in artifact directory".into());
+    }
+    if let Some(path) = &c.facts_config {
+        relative_path(path)?;
+        if !path.starts_with(".chrono-harness/")
+            || path.starts_with(&c.artifact_directory)
+            || [&c.context_path, &c.runner, &c.generator]
+                .iter()
+                .any(|p| overlap(path, p))
+            || c.initial_inventory
+                .as_ref()
+                .is_some_and(|p| overlap(path, &p.path))
+        {
+            return Err("facts_config must name a separate host policy input".into());
+        }
     }
     if let Some(initial) = &c.initial_inventory {
         relative_path(&initial.path)?;
@@ -423,48 +448,6 @@ pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     }
     Ok(!existing || !same || !initial_same)
 }
-fn git(root: &Path, args: &[&str]) -> Result<String, String> {
-    let o = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !o.status.success() {
-        return Err(format!(
-            "git {}: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&o.stderr)
-        ));
-    }
-    String::from_utf8(o.stdout).map_err(|_| "git output not UTF-8".into())
-}
-fn require_commit(root: &Path, oid: &str) -> Result<(), String> {
-    if !full_oid(oid) {
-        return Err(format!("invalid full OID: {oid}"));
-    }
-    if git(root, &["cat-file", "-e", &format!("{oid}^{{commit}}")]).is_err() {
-        git(root, &["fetch", "--no-tags", "origin", oid])?;
-    }
-    if git(root, &["rev-parse", &format!("{oid}^{{commit}}")])?.trim() != oid {
-        return Err("commit identity mismatch".into());
-    }
-    Ok(())
-}
-fn remote_baseline(root: &Path, reference: &str) -> Result<String, String> {
-    git(root, &["check-ref-format", reference])?;
-    let observed = git(root, &["ls-remote", "--refs", "origin", reference])?;
-    let fields: Vec<_> = observed.split_whitespace().collect();
-    if fields.len() != 2 || fields[1] != reference || !full_oid(fields[0]) {
-        return Err(format!(
-            "missing or ambiguous remote baseline ref: {reference}"
-        ));
-    }
-    // Bind the observed ref once; later fetches never reread shared FETCH_HEAD.
-    let base = fields[0].to_owned();
-    require_commit(root, &base)?;
-    Ok(base)
-}
 pub fn prepare(
     root: &Path,
     c: &Config,
@@ -476,113 +459,129 @@ pub fn prepare(
     if !full_oid(workflow_revision) {
         return Err("workflow source revision must be full OID".into());
     }
-    let string = |v: &Value| {
-        v.as_str()
-            .map(str::to_string)
-            .ok_or_else(|| "event missing string input".to_string())
+    let event_candidate = match event {
+        "push" => &payload["after"],
+        "pull_request" => &payload["pull_request"]["head"]["sha"],
+        "workflow_dispatch" => &payload["inputs"]["candidate"],
+        _ => &Value::Null,
     };
-    let (initial, base, candidate, source) = match event {
-        "push" => {
-            if payload["deleted"].as_bool() == Some(true) {
-                return Err("branch deletion has no candidate".into());
-            }
-            let candidate = string(&payload["after"])?;
-            let before = string(&payload["before"])?;
-            if !full_oid(&candidate) {
-                return Err(format!("invalid full OID: {candidate}"));
-            }
-            let creation = before.bytes().all(|b| b == b'0') && matches!(before.len(), 40 | 64);
-            if creation && payload["created"].as_bool() != Some(true) {
-                return Err("zero before without branch-creation event".into());
-            }
-            if !creation && !full_oid(&before) {
-                return Err(format!("invalid full OID: {before}"));
-            }
-            let event_ref = if creation || !c.push_baselines.is_empty() {
-                let reference = payload["ref"]
-                    .as_str()
-                    .filter(|r| r.starts_with("refs/heads/"))
-                    .ok_or(if creation {
-                        "branch-creation event requires refs/heads/... ref"
-                    } else {
-                        "configured push baseline requires refs/heads/... ref"
-                    })?;
-                git(root, &["check-ref-format", reference])?;
-                Some(reference)
-            } else {
-                None
-            };
-            if let Some(rule) = c.push_baselines.iter().find(|rule| {
-                event_ref.is_some_and(|reference| reference.starts_with(&rule.ref_prefix))
-            }) {
-                (
-                    false,
-                    Some(remote_baseline(root, &rule.base_ref)?),
-                    candidate,
-                    "push-configured-baseline-ref",
-                )
-            } else if creation {
-                let event_ref = event_ref.unwrap();
-                if event_ref == c.branch_creation_base_ref {
-                    (true, None, candidate, "baseline-creation-initial-inventory")
-                } else {
-                    let base = remote_baseline(root, &c.branch_creation_base_ref)?;
-                    (false, Some(base), candidate, "branch-creation-baseline-ref")
+    let facts = event_git::EventGit::new(root, c, event_candidate.as_str().unwrap_or(""))?;
+    let result = (|| {
+        let string = |v: &Value| {
+            v.as_str()
+                .map(str::to_string)
+                .ok_or_else(|| "event missing string input".to_string())
+        };
+        let (initial, base, candidate, source) = match event {
+            "push" => {
+                if payload["deleted"].as_bool() == Some(true) {
+                    return Err("branch deletion has no candidate".into());
                 }
-            } else {
-                (false, Some(before), candidate, "push-before-after")
-            }
-        }
-        "pull_request" => (
-            false,
-            Some(string(&payload["pull_request"]["base"]["sha"])?),
-            string(&payload["pull_request"]["head"]["sha"])?,
-            "pr-base-head",
-        ),
-        "workflow_dispatch" => {
-            let initial = match &payload["inputs"]["initial"] {
-                Value::Bool(v) => *v,
-                Value::String(v) if v == "true" => true,
-                Value::String(v) if v == "false" => false,
-                _ => return Err("manual initial must be explicit boolean".into()),
-            };
-            let base = payload["inputs"]["base"].as_str().unwrap_or("");
-            if initial && !base.is_empty() {
-                return Err("manual initial cannot include base".into());
-            }
-            (
-                initial,
-                if base.is_empty() {
-                    None
+                let candidate = string(&payload["after"])?;
+                let before = string(&payload["before"])?;
+                if !full_oid(&candidate) {
+                    return Err(format!("invalid full OID: {candidate}"));
+                }
+                let creation = before.bytes().all(|b| b == b'0') && matches!(before.len(), 40 | 64);
+                if creation && payload["created"].as_bool() != Some(true) {
+                    return Err("zero before without branch-creation event".into());
+                }
+                if !creation && !full_oid(&before) {
+                    return Err(format!("invalid full OID: {before}"));
+                }
+                let event_ref = if creation || !c.push_baselines.is_empty() {
+                    let reference = payload["ref"]
+                        .as_str()
+                        .filter(|r| r.starts_with("refs/heads/"))
+                        .ok_or(if creation {
+                            "branch-creation event requires refs/heads/... ref"
+                        } else {
+                            "configured push baseline requires refs/heads/... ref"
+                        })?;
+                    facts.git(&["check-ref-format", reference])?;
+                    Some(reference)
                 } else {
-                    Some(base.to_string())
-                },
-                string(&payload["inputs"]["candidate"])?,
-                "manual-explicit",
-            )
+                    None
+                };
+                if let Some(rule) = c.push_baselines.iter().find(|rule| {
+                    event_ref.is_some_and(|reference| reference.starts_with(&rule.ref_prefix))
+                }) {
+                    (
+                        false,
+                        Some(facts.remote_baseline(&rule.base_ref)?),
+                        candidate,
+                        "push-configured-baseline-ref",
+                    )
+                } else if creation {
+                    let event_ref = event_ref.unwrap();
+                    if event_ref == c.branch_creation_base_ref {
+                        (true, None, candidate, "baseline-creation-initial-inventory")
+                    } else {
+                        let base = facts.remote_baseline(&c.branch_creation_base_ref)?;
+                        (false, Some(base), candidate, "branch-creation-baseline-ref")
+                    }
+                } else {
+                    (false, Some(before), candidate, "push-before-after")
+                }
+            }
+            "pull_request" => (
+                false,
+                Some(string(&payload["pull_request"]["base"]["sha"])?),
+                string(&payload["pull_request"]["head"]["sha"])?,
+                "pr-base-head",
+            ),
+            "workflow_dispatch" => {
+                let initial = match &payload["inputs"]["initial"] {
+                    Value::Bool(v) => *v,
+                    Value::String(v) if v == "true" => true,
+                    Value::String(v) if v == "false" => false,
+                    _ => return Err("manual initial must be explicit boolean".into()),
+                };
+                let base = payload["inputs"]["base"].as_str().unwrap_or("");
+                if initial && !base.is_empty() {
+                    return Err("manual initial cannot include base".into());
+                }
+                (
+                    initial,
+                    if base.is_empty() {
+                        None
+                    } else {
+                        Some(base.to_string())
+                    },
+                    string(&payload["inputs"]["candidate"])?,
+                    "manual-explicit",
+                )
+            }
+            _ => return Err(format!("unsupported event: {event}")),
+        };
+        if !initial && base.is_none() {
+            return Err("base required".into());
         }
-        _ => return Err(format!("unsupported event: {event}")),
-    };
-    if !initial && base.is_none() {
-        return Err("base required".into());
-    }
-    require_commit(root, &candidate)?;
-    if let Some(base) = &base {
-        require_commit(root, base)?
-    }
-    if git(root, &["rev-parse", "HEAD"])?.trim() != candidate {
-        return Err("checkout is not exact event candidate".into());
-    }
-    if initial && !chrono_harness::facts::parents(root, &candidate)?.is_empty() {
-        return Err(if source == "baseline-creation-initial-inventory" {
+        facts.require_commit(&candidate)?;
+        if let Some(base) = &base {
+            facts.require_commit(base)?
+        }
+        if facts.git(&["rev-parse", "HEAD"])?.trim() != candidate {
+            return Err("checkout is not exact event candidate".into());
+        }
+        if initial && !facts.parents(&candidate)?.is_empty() {
+            return Err(if source == "baseline-creation-initial-inventory" {
             "baseline-creation candidate has parents and no prior baseline; supply an explicit range via workflow_dispatch or check --base/--candidate"
         } else {
             "initial candidate has parents"
         }.into());
+        }
+        Ok(
+            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,check_profile(c,initial),base.as_deref(),&candidate,initial)}),
+        )
+    })();
+    match result {
+        Ok(mut context) => {
+            facts.record(&mut context);
+            Ok(context)
+        }
+        Err(error) => Err(facts.error(error)),
     }
-    Ok(
-        json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,check_profile(c,initial),base.as_deref(),&candidate,initial)}),
-    )
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
     if args == ["--version"] {
