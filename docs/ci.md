@@ -229,9 +229,15 @@ old registration and artifact. Existing v1 source is never automatically upgrade
 
 Dedicated tests exercise the generated profile with actual runner/registration
 processes on a committed parentless host, including a rejected unregistered file,
-spaced paths, unrelated cwd and stored/stdout report identity. This is bounded
-consumer evidence; native first-push v2 adoption, complete bootstrap provenance
-and full governance activation remain separate obligations.
+spaced paths, unrelated cwd and stored/stdout report identity. The public
+[initial-host example](https://github.com/ChronoAIProject/chrono-harness-examples-initial)
+also installs beta.5 and exercises a real parentless first push with generated v2
+CI, followed by ordinary documentation DELTA checks on integration, PR and dev.
+It explicitly registers macOS arm64 / `macos-14` and that platform's initial
+judge digest. See the [example index](examples.md) for the actual evidence and
+scope. This does not establish cross-platform initial profiles, complete
+bootstrap provenance, full input closure, governance activation or deterministic
+local/CI parity.
 
 Optional `push_baselines` rows explicitly bind a literal branch-ref prefix to a
 baseline branch on `origin`. This host and the copyable example adopt:

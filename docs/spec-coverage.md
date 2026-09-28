@@ -112,5 +112,9 @@ in the dedicated runner/registration/CI tests. Initial parent checks share the
 original-header reader across the new profile, scoped judge and event preparer.
 The CI v2 source explicitly declares and generates the initial profile alongside
 the workflow; its dedicated tests exercise actual root registration and rejection,
-exact event argv, preserved v1 behavior, drift and adoption collisions. Source/toolchain
-bootstrap provenance, native v2 first-push adoption and activation remain outstanding.
+exact event argv, preserved v1 behavior, drift and adoption collisions. The public
+[initial-host example](examples.md) verifies beta.5 on a native parentless first
+push and subsequent ordinary integration/PR/dev DELTA checks, explicitly scoped
+to macOS arm64. Source/toolchain bootstrap provenance, complete input closure,
+cross-platform initial profiles, activation and deterministic parity remain
+outstanding; inventory completion does not certify them.
