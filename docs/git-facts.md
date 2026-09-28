@@ -23,6 +23,9 @@ inheritance. Bare tool names require a declared PATH, including an explicitly
 empty PATH. An unrelated ambient Git cannot supply facts. GIT_DIR, GIT_WORK_TREE
 and GIT_INDEX_FILE are rejected when explicitly supplied because they redirect
 the checkout. Existing no-replace-objects/no-optional-locks arguments remain.
+Git's `-C` argument uses the bound canonical checkout path. Caller-relative host
+roots are checked against that binding before invocation, avoiding a second
+relative-path interpretation after the process changes its working directory.
 
 Each Git invocation uses the configured protocol timeout and output bound. The
 reader checks the config bytes, selected path and executable/input digest before
@@ -51,8 +54,9 @@ chrono-harness check --config .chrono-harness/config.json \
   --context .chrono-harness/state/context.json
 ```
 
-This does not change the scoped `chrono-ci-check/v1` contract or CI event input
-preparation. The product repository still uses its registered scoped CI and
+The scoped `chrono-ci-check/v1` contract and legacy CI event preparation remain
+unchanged. CI provider v3 explicitly selects this reader through `facts_config`
+for event acquisition; see [the event contract](ci.md#registered-event-git). The product repository still uses its registered scoped CI and
 proposed full registries. Version 3 binding does not establish full governance,
 Git configuration or delegated dependency closure, deterministic-input parity,
 or freedom from transient concurrent replacement. Hosts must explicitly register

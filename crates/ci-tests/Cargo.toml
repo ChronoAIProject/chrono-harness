@@ -19,5 +19,9 @@ path = "tests/behavior.rs"
 name = "initial_projection"
 path = "tests/initial_projection.rs"
 
+[[test]]
+name = "git_facts"
+path = "tests/git_facts.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3

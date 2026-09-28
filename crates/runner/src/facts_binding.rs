@@ -243,7 +243,7 @@ impl Reader {
             }
             let argv: Vec<String> =
                 serde_json::from_value(tool["version_argv"].clone()).map_err(|e| e.to_string())?;
-            let bytes = reader.invoke(root, argv)?;
+            let bytes = reader.invoke(root, argv, &[])?;
             if std::str::from_utf8(&bytes)
                 .map_err(|_| reader.error("non UTF-8 version"))?
                 .trim_end()
@@ -268,6 +268,9 @@ impl Reader {
                 "config_sha256":sha256(&b.config_bytes),"binding":b.binding,"environment":b.environment,
                 "processes":*self.processes.borrow(),"input_closure_complete":false}),
         }
+    }
+    pub fn is_bound(&self) -> bool {
+        self.bound.is_some()
     }
     pub fn record(&self, response: &mut wire::Response) {
         if self.bound.is_some() {
@@ -303,7 +306,7 @@ impl Reader {
         }
         Ok(())
     }
-    fn invoke(&self, root: &Path, args: Vec<String>) -> Result<Vec<u8>, String> {
+    fn invoke(&self, root: &Path, args: Vec<String>, input: &[u8]) -> Result<Vec<u8>, String> {
         let b = self.bound.as_ref().ok_or("missing binding")?;
         if fs::canonicalize(root).map_err(|e| self.error(&e.to_string()))? != b.root {
             return Err(self.error("Git facts root mismatch"));
@@ -313,7 +316,7 @@ impl Reader {
             args,
             ..b.spec.clone()
         };
-        let result = run_process_observed(root, &spec, &[], text(&b.binding, "sha256")?)
+        let result = run_process_observed(root, &spec, input, text(&b.binding, "sha256")?)
             .map_err(|e| self.error(&e))?;
         let failure = result.failure.clone().or_else(|| {
             (result.exit_code != 0).then(|| format!("Git facts process exit {}", result.exit_code))
@@ -339,16 +342,37 @@ impl Reader {
         if self.bound.is_none() {
             return facts::git(root, args);
         }
+        self.git_input(root, args, &[])
+    }
+    /// Only an exact successful batch response proves absence. Process errors,
+    /// wrong types and malformed responses are never converted to missing history.
+    pub fn commit_available(&self, root: &Path, oid: &str) -> Result<bool, String> {
+        facts::full_oid(oid)?;
+        let bytes = self.git_input(
+            root,
+            &["cat-file", "--batch-check=%(objectname) %(objecttype)"],
+            format!("{oid}\n").as_bytes(),
+        )?;
+        if bytes == format!("{oid} commit\n").as_bytes() {
+            Ok(true)
+        } else if bytes == format!("{oid} missing\n").as_bytes() {
+            Ok(false)
+        } else {
+            Err(self.error("expected exact commit or missing object response"))
+        }
+    }
+    fn git_input(&self, root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>, String> {
+        let bound = self.bound.as_ref().ok_or("missing binding")?;
         let argv = [
             "--no-optional-locks",
             "--no-replace-objects",
             "-C",
-            root.to_str().ok_or("root UTF-8")?,
+            bound.root.to_str().ok_or("root UTF-8")?,
         ]
         .into_iter()
         .chain(args.iter().copied())
         .map(str::to_string)
         .collect();
-        self.invoke(root, argv)
+        self.invoke(root, argv, input)
     }
 }
