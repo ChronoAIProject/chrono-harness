@@ -1,6 +1,6 @@
 use crate::{
     Start,
-    start::{self, Runner},
+    start::{self, Runner, paths},
 };
 use chrono_harness::{decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
@@ -65,20 +65,6 @@ pub(crate) fn read(root: &Path, path: &str) -> Result<Input, String> {
         bytes,
         plan,
     })
-}
-fn paths(bytes: Vec<u8>) -> Result<BTreeSet<String>, String> {
-    let text = String::from_utf8(bytes).map_err(|_| "DELTA path is not UTF-8")?;
-    if !text.is_empty() && !text.ends_with('\0') {
-        return Err("incomplete Git path inventory".into());
-    }
-    let mut paths = BTreeSet::new();
-    for path in text.split('\0').filter(|p| !p.is_empty()) {
-        relative_path(path)?;
-        if !paths.insert(path.to_string()) {
-            return Err("duplicate DELTA path".into());
-        }
-    }
-    Ok(paths)
 }
 pub(crate) fn execute(
     r: &mut Runner,

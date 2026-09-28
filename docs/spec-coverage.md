@@ -128,3 +128,11 @@ adopted policy and future native asset build are explicitly registered; publishe
 beta.5 remains unchanged and lacks this new binary.
 
 Explicit reconstruction reuses the worktree producer and its original process/identity helpers. Real CLI tests cover an advanced target, complete carry/retire choices, original source preservation, binary/mode/link/add/delete changes, literal paths, failed apply conflicts, source mutation, patch output bounds and empty/reused destinations. A successful result is a staged index tree, without a candidate commit or governance/integration verdict. AI reconciliation, recovery/cleanup and provider delivery remain unfinished.
+
+Worktree cleanliness observes tracked changes separately and excludes explicitly
+registered artifact directories from ignored and nonignored Git inventories
+before bounded capture. Dedicated regressions reproduce the former artifact-output
+limit failure and preserve detection of unknown neighbors, literal/case lookalikes,
+tracked changes, and files or symlinks at artifact directory names. Git pathspec
+environment normalization is confined to those queries and recorded per process;
+this does not certify complete Git configuration or external-input closure.
