@@ -236,7 +236,10 @@ pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String>
 }
 pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
     let c: CheckConfig = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
-    if c.schema != "chrono-ci-check/v1" {
+    if !matches!(
+        c.schema.as_str(),
+        "chrono-ci-check/v1" | "chrono-ci-check/v2"
+    ) {
         return Err("unsupported check profile; full governance remains not implemented".into());
     }
     validate_command(&c.judge)?;
@@ -612,7 +615,10 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         }
         return initial::check(&root, &config_path, &candidate, entry);
     }
-    if profile.get("schema").and_then(Value::as_str) != Some("chrono-ci-check/v1") {
+    if !matches!(
+        profile.get("schema").and_then(Value::as_str),
+        Some("chrono-ci-check/v1" | "chrono-ci-check/v2")
+    ) {
         return full::check_observed(
             &root,
             &config_path,

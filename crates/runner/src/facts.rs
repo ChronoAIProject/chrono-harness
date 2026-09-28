@@ -17,7 +17,7 @@ pub struct Entry {
     pub oid: String,
     pub kind: String,
 }
-pub use crate::facts_binding::{Reader, declaration as git_declaration};
+pub use crate::facts_binding::{OpenFailure, Reader, declaration as git_declaration};
 
 pub type Tree = BTreeMap<String, Entry>;
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {

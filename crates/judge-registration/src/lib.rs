@@ -4,8 +4,8 @@ pub mod inputs;
 mod registrations;
 mod transition;
 pub use transition::{
-    ambiguity_repaired, downstream_validator, interpret, replacements, retirement_requests,
-    reused_tools, views, views_with_reader,
+    ambiguity_repaired, downstream_validator, interpret, interpret_with_reader, replacements,
+    retirement_requests, reused_tools, views, views_with_reader,
 };
 pub mod initial;
 mod schema;

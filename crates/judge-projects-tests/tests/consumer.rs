@@ -169,6 +169,15 @@ fn resource_failure_is_infrastructure_error_with_observed_output() {
 
 #[test]
 fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
+    scoped_adapter(false);
+}
+
+#[test]
+fn scoped_v2_git_binding_reuses_reader_through_full_registration_and_execution() {
+    scoped_adapter(true);
+}
+
+fn scoped_adapter(bound: bool) {
     let mut h = Host::new(true);
     let root = h.root();
     let profile = ".chrono-harness/scoped.json";
@@ -193,7 +202,42 @@ fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
         .iter()
         .map(|a| a["path"].clone())
         .collect();
-    let config = json!({"schema":"chrono-ci-check/v1","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":30,"output_limit_bytes":1048576},"report_path":".chrono-harness/state/scoped.json","policy":{"filemap":FM,"projects":PROJECTS,"registration_config":CONFIG,"tools":{"python":h.tool},"artifacts":artifacts,"required_inputs":[profile],"operation_timeout_seconds":15,"operation_output_limit_bytes":4096,"environment":{}}});
+    let mut config = json!({"schema":"chrono-ci-check/v1","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":30,"output_limit_bytes":1048576},"report_path":".chrono-harness/state/scoped.json","policy":{"filemap":FM,"projects":PROJECTS,"registration_config":CONFIG,"tools":{"python":h.tool},"artifacts":artifacts,"required_inputs":[profile],"operation_timeout_seconds":15,"operation_output_limit_bytes":4096,"environment":{}}});
+    let trace = root.join(".chrono-harness/state/scoped-git.trace");
+    let shadow = root.join(".chrono-harness/state/shadow");
+    if bound {
+        use std::os::unix::fs::PermissionsExt;
+        let facts = ".chrono-harness/scoped-facts.json";
+        let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
+        let version = Command::new(&git).arg("--version").output().unwrap();
+        assert!(version.status.success());
+        let chosen = root.join(".chrono-harness/bin/chosen git");
+        let quoted = format!("'{}'", git.to_str().unwrap().replace('\'', "'\\''"));
+        fs::write(&chosen, format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$SCOPED_TRACE\" || exit $?\nexec {quoted} \"$@\"\n")).unwrap();
+        fs::set_permissions(&chosen, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::create_dir_all(&shadow).unwrap();
+        fs::write(
+            shadow.join("git"),
+            "#!/bin/sh\necho unbound-registration-git >&2\nexit 83\n",
+        )
+        .unwrap();
+        fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
+        let facts_config = json!({"schema_version":3,
+            "facts_git":{"tool":"git","input":"git-bytes"},
+            "tools":[{"id":"git","program":chosen,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
+            "environment":{"inherit":[],"values":{"SCOPED_TRACE":trace,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+                "inputs":[{"id":"git-bytes","location":chosen,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&chosen).unwrap())}]},
+            "protocol":{"timeout_seconds":30,"stdout_limit_bytes":1048576}});
+        h.values.insert(facts.into(), facts_config);
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(file(facts, json!([])));
+        config["schema"] = json!("chrono-ci-check/v2");
+        config["policy"]["facts_config"] = json!(facts);
+        config["judge"]["timeout_seconds"] = json!(120);
+        config["judge"]["output_limit_bytes"] = json!(8 * 1024 * 1024);
+    }
     fs::write(root.join(profile), serde_json::to_vec(&config).unwrap()).unwrap();
     h.values.get_mut(FM).unwrap()["files"]
         .as_array_mut()
@@ -227,11 +271,11 @@ fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
                 &h.candidate,
             ]
         };
-        let output = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
-            .current_dir("/")
-            .args(args)
-            .output()
-            .unwrap();
+        let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+        if bound {
+            command.env_clear().env("PATH", &shadow);
+        }
+        let output = command.current_dir("/").args(args).output().unwrap();
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         (output.status.code().unwrap(), report)
     };
@@ -252,6 +296,31 @@ fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
         fs::read_to_string(root.join(".chrono-harness/state/order")).unwrap(),
         "pt"
     );
+    if bound {
+        let facts = &report["response"]["evidence"]["git_facts"];
+        let processes = facts["processes"].as_array().unwrap();
+        let trace_bytes = fs::read_to_string(&trace).unwrap();
+        assert_eq!(processes.len(), trace_bytes.lines().count());
+        assert_eq!(
+            trace_bytes
+                .lines()
+                .filter(|line| *line == "--version")
+                .count(),
+            1
+        );
+        assert!(trace_bytes.contains(CONFIG));
+        for process in processes {
+            for stream in ["stdout", "stderr"] {
+                let bytes: Vec<u8> =
+                    serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+                assert_eq!(
+                    process[format!("{stream}_sha256")],
+                    json!(chrono_harness::sha256(&bytes))
+                );
+            }
+        }
+        fs::write(&trace, "").unwrap();
+    }
     let (code, report) = call(true);
     assert_ne!(code, 0);
     assert!(
@@ -264,6 +333,15 @@ fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
         "pt",
         "unregistered invocation launched nothing"
     );
+    if bound {
+        assert_eq!(
+            report["response"]["evidence"]["git_facts"]["processes"]
+                .as_array()
+                .unwrap()
+                .len(),
+            fs::read_to_string(trace).unwrap().lines().count()
+        );
+    }
 }
 
 #[test]

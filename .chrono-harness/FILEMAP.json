@@ -781,6 +781,18 @@
       ]
     },
     {
+      "path": "crates/judge-ci-tests/tests/git_facts.rs",
+      "owner": "judge-ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/ci/Cargo.toml",
       "owner": "ci",
       "surface": "product",

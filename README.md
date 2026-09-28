@@ -107,7 +107,7 @@ python3 .chrono-harness/ci/bootstrap.py .
 
 带 `--context .chrono-harness/state/context.json` 的 full check 调用登记的 v1 外部判官，绑定请求身份、候选二进制摘要、白名单环境与直接前驱 DAG。registration 验证五份结构、固定身份、工作树 dirt、保留输入及受影响引用，并提供唯一历史解释视图。FILEMAP 生成两端 impact v2，并按显式 stability 与 integration 登记选择测试；routes 合并显式执行计划并绑定实际工具；projects 核配对并执行、核对真实回执。现役 scoped CI 复用该规划和执行路径，保留其已注明的选择及输入边界。版本化输出见 [FILEMAP impact 合同](docs/filemap-impact.md) 和 [执行合同](docs/execution.md)。`.chrono-harness/config.json` 仍 proposed、缺完整输入闭包与绑定，完整宿主检查必须非零。完整 SPEC 的生产者、直接测试与缺口见 [覆盖矩阵](docs/spec-coverage.md)。完整 Cargo/SDK 输入闭包、裁决确定性、本地/CI 同判、完整宿主的分支与 integration 接线仍未认证。原生 GitHub 事件须以实际 run 的固定身份和结果验证；本地测试不能替代。
 
-配置 v3 可用 `facts_git` 显式绑定 Git 的工具、输入摘要、版本和环境，贯穿 full/initial 读取及下游判官；v1/v2 保持旧语义。调用方式与边界见 [Git 事实绑定](docs/git-facts.md)。CI provider v3 可通过 `facts_config` 显式选择同一绑定机制用于事件准备；仅明确缺失的对象触发 fetch，工具失败保留原始证据。该扩展尚未发布到 beta.8，本仓 scoped CI 与完整输入闭包状态见下文。
+配置 v3 可用 `facts_git` 显式绑定 Git 的工具、输入摘要、版本和环境，贯穿 full/initial 读取及下游判官；v1/v2 保持旧语义。调用方式与边界见 [Git 事实绑定](docs/git-facts.md)。CI provider v3 可通过 `facts_config` 显式选择同一绑定机制用于事件准备；仅明确缺失的对象触发 fetch，工具失败保留原始证据。scoped profile v2 也可通过 `policy.facts_config` 选择该绑定，两端快照及可选完整登记解释复用同一 Git，成功与失败均保留实际进程证据；选测和操作环境仍沿用 scoped 合同。这些扩展尚未发布到 beta.8，本仓继续使用 scoped v1，完整输入闭包尚未完成。
 
 full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 为 unestablished，有界 registration/filemap pass 不表示完整治理成功。
 
