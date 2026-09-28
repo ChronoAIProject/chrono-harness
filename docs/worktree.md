@@ -30,7 +30,7 @@ reuses their existing strict loader. A successful load or creation is not full
 reference admission, complete input certification, freshness certification or
 activation. Workflow's normal judge still evaluates delivery context and DELTA.
 
-Install `chrono-worktree` from the pinned public beta.7 release through the host’s
+Install `chrono-worktree` from the pinned public beta.8 release through the host’s
 registered installer (the product repository can also bootstrap its candidate):
 
 ```sh
@@ -96,8 +96,8 @@ The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
 remote policy drift, missing remotes, tool mismatch and real checkout hooks. The
 adopted policy has an actual subprocess consumer. The host registers both the
-binary and dedicated test plan. Public beta.7 includes this tool for macOS arm64
-and Linux x86_64; its native release recipe passed all 36 dedicated worktree tests
+binary and dedicated test plan. Public beta.8 includes this tool for macOS arm64
+and Linux x86_64; its native release recipe passed all 49 dedicated worktree tests
 on each platform. The four [example hosts](examples.md) explicitly adopt the tool
 and policy; no host-language or directory inference supplies their registrations.
 
@@ -266,7 +266,7 @@ failure exits 2. They preserve source work. Interrupted owned checkouts with a
 retained intent use the separate contract below. Damaged/missing Git metadata,
 lost recovery identity and remote branch retirement need their own contracts; no automatic metadata deletion or
 semantic reconciliation is provided. PR/merge/landing producers remain pending.
-These commands are included in the public beta.7 release and installed through
+These commands are included in the public beta.8 release and installed through
 the same pinned host distribution entry.
 
 
@@ -313,12 +313,12 @@ removal and absence check. A failed command can have changed the ref. Set
 `allow_absent_ref: true` only for an explicit absence-tolerant retry; retention
 must still hold. This does not reconstruct a missing/interrupted original report
 or make concurrent ref/configuration writers atomic. It exits and reports through
-the same maintenance contract above and is included in public beta.7.
+the same maintenance contract above and is included in public beta.8.
 
 ## Interrupted checkout recovery
 
-The candidate implementation also provides `recover-interrupted`. It is not in
-public beta.7; bootstrap the candidate to use it. Before `start`/`reconstruct`
+Public beta.8 also provides `recover-interrupted`, installed through the host’s
+pinned distribution lock. Before `start`/`reconstruct`
 creates a checkout, and before `cleanup` acquires its checkout lock, the producer
 publishes a `chrono-worktree-recovery-intent/v1` file next to the result path,
 with the suffix `.intent.json`. It writes and syncs a temporary file, then
@@ -388,8 +388,7 @@ this contract. No governance or local/CI parity guarantee is added.
 
 ## Interrupted fetch cleanup
 
-The candidate also provides `cleanup-fetch-interrupted`; it is not in public
-beta.7. Before `start` or `reconstruct` runs Git fetch, it validates the source
+Public beta.8 also provides `cleanup-fetch-interrupted`. Before `start` or `reconstruct` runs Git fetch, it validates the source
 policy/report artifact registrations and publishes an immutable
 `chrono-worktree-fetch-intent/v1` at `REPORT_PATH.fetch-intent.json`. It uses the
 same synced, no-clobber publication as checkout recovery. Publication failure
