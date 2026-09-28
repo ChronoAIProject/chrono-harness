@@ -54,9 +54,18 @@ chrono-harness check --config .chrono-harness/config.json \
   --context .chrono-harness/state/context.json
 ```
 
-The scoped `chrono-ci-check/v1` contract and legacy CI event preparation remain
-unchanged. CI provider v3 explicitly selects this reader through `facts_config`
-for event acquisition; see [the event contract](ci.md#registered-event-git). The product repository still uses its registered scoped CI and
+Scoped `chrono-ci-check/v2` explicitly selects this reader through
+`policy.facts_config`, independently of optional full `registration_config`.
+Both endpoint snapshots, original parents, index and dirty checks, registry
+interpretation and post-execution checks share that reader. Structured
+`evidence.git_facts` retains successful and failed process observations, including
+version-binding failures. The scoped v1 contract remains unchanged and rejects
+the new field even when null. Selection and operation environments keep their
+scoped semantics; the binding does not silently activate full governance.
+See [the scoped contract](ci.md#configuration-and-selection-contract).
+
+CI provider v3 explicitly selects this reader through `facts_config`
+for event acquisition; see [the event contract](ci.md#registered-event-git). The product repository still uses its registered scoped v1 CI and
 proposed full registries. Version 3 binding does not establish full governance,
 Git configuration or delegated dependency closure, deterministic-input parity,
 or freedom from transient concurrent replacement. Hosts must explicitly register

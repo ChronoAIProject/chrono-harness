@@ -89,18 +89,40 @@ validate every proposed field's semantics.
 
 | Field | Contract |
 | --- | --- |
-| schema | Exactly `chrono-ci-check/v1` |
+| schema | `chrono-ci-check/v1` or explicit Git-binding `chrono-ci-check/v2` |
 | judge | `{program, args, env?, timeout_seconds, output_limit_bytes}`; explicit executable/interpreter plus argv; positive bounds, at most 64 MiB per captured stream |
 | report_path | Safe relative file beneath `.chrono-harness/state/`, also covered by a declared artifact directory |
 | policy.filemap / projects | Explicit relative paths; FILEMAP v1 historical/v2 current, projects v1; registry path migration across an enforced range is unsupported |
 | policy.tools | Tool ID → executable path or PATH command; legacy scoped resolution; current registration_config supplies actual version declarations; selected tools bind once per plan |
 | policy.bindings | Historical FILEMAP v1 only; current v2 rejects duplicate bindings and consumes FILEMAP.execution_plans |
 | policy.registration_config | Optional full config path; current host uses its candidate historical decoder and tool declarations |
+| policy.facts_config | Required by scoped v2: literal path under `.chrono-harness/` selecting candidate full-v3 Git binding; v1 rejects the field, including null |
 | policy.environment | Explicit environment overrides passed to operations; this host sets `RUSTUP_TOOLCHAIN=1.95.0` |
 | policy.artifacts | Relative directory prefixes ending `/`; ignored execution products may exist there; tracked files may not overlap them |
 | policy.required_inputs | Explicit regular tracked inputs required by this profile |
 | policy.adoption_base | Null or exact full base OID whose missing prior CI profile is deliberately accepted |
 | policy.operation_timeout_seconds / operation_output_limit_bytes | Positive serial operation process bounds |
+
+Scoped v2 changes Git acquisition, preserving the selection, execution and
+operation-environment contracts below. Its explicit `facts_config` binds the Git
+executable, file digest, exact version, environment and per-process bounds using
+the [full-v3 reader](git-facts.md). The candidate binding reads both endpoints;
+the binding config and check profile must match their fixed candidate blobs.
+There is no ambient fallback. Git binding alone does not require full registry
+adoption: `registration_config` independently opts into the existing full
+interpretation and observed canonical-invocation checks. When supplied under v2,
+that interpreter reuses the same reader, including its recorded processes.
+
+Successful and failed scoped v2 responses carry `evidence.git_facts` once the
+binding is constructed, including failed version execution or version mismatch.
+The record contains original stdout/stderr bytes and hashes, actual exits and
+timeout/output-bound failures. Pre-binding validation cannot invent processes.
+`previous_enforcement` names the actual base profile version, or `none` for
+initial inventory/explicit adoption; reading a v1 base never executes its Git.
+The canonical local/CI command and scoped judge protocol are unchanged. V1
+retains its prior acquisition behavior; existing hosts are not auto-upgraded.
+The product host still uses scoped v1. Scoped v2 is not included in beta.8 and
+does not establish complete input closure, full governance or deterministic parity.
 
 Both endpoint trees are read as NUL-delimited `git ls-tree -rz` records, preserving
 path, blob identity and mode. Comparing these inventories implements A/M/D and
@@ -215,7 +237,7 @@ Native tests of these fixtures do not establish generated-v3 host event adoption
 The product host still uses v1 event preparation and its scoped judge. Network,
 credentials, Git configuration, helpers, OS and delegated input closure remain
 unverified; repository-configured implicit Git behavior is not disabled or made
-complete by this binding. Full activation, scoped-judge migration and deterministic
+complete by this binding. Full activation, host adoption of scoped v2 and deterministic
 local/CI parity remain separate obligations.
 
 `.chrono-harness/ci/github.json` uses `schema: chrono-github-ci/v1` and explicit

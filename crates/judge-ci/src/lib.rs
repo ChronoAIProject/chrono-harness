@@ -13,6 +13,8 @@ use std::path::Path;
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub facts_config: Option<String>,
     #[serde(default)]
     pub registration_config: Option<String>,
     pub filemap: String,
@@ -39,7 +41,7 @@ struct Snapshot {
     plans: BTreeMap<String, chrono_judge_registration::execution::Plan>,
     execute: BTreeMap<String, String>,
 }
-use chrono_harness::facts::{git, utf8};
+use chrono_harness::facts::{Reader, utf8};
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str, String> {
     v.get(k)
         .and_then(Value::as_str)
@@ -81,9 +83,9 @@ pub fn full_oid(s: &str) -> Result<(), String> {
     }
     Ok(())
 }
-fn verify_oid(root: &Path, oid: &str) -> Result<(), String> {
+fn verify_oid(reader: &Reader, root: &Path, oid: &str) -> Result<(), String> {
     full_oid(oid)?;
-    if utf8(git(
+    if utf8(reader.git(
         root,
         &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
     )?)?
@@ -94,12 +96,16 @@ fn verify_oid(root: &Path, oid: &str) -> Result<(), String> {
     }
     Ok(())
 }
-fn at(root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
+fn at(reader: &Reader, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
     relative_path(path)?;
-    git(root, &["show", &format!("{oid}:{path}")])
+    reader.git(root, &["show", &format!("{oid}:{path}")])
 }
-fn tree(root: &Path, oid: &str) -> Result<BTreeMap<String, (String, String)>, String> {
-    let raw = git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
+fn tree(
+    reader: &Reader,
+    root: &Path,
+    oid: &str,
+) -> Result<BTreeMap<String, (String, String)>, String> {
+    let raw = reader.git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
     let mut out = BTreeMap::new();
     for row in raw.split(|b| *b == 0).filter(|v| !v.is_empty()) {
         let s = std::str::from_utf8(row).map_err(|_| "non UTF-8 tree path")?;
@@ -117,10 +123,26 @@ fn tree(root: &Path, oid: &str) -> Result<BTreeMap<String, (String, String)>, St
     Ok(out)
 }
 fn policy(c: &CheckConfig) -> Result<Policy, String> {
-    if c.schema != "chrono-ci-check/v1" {
+    if !matches!(
+        c.schema.as_str(),
+        "chrono-ci-check/v1" | "chrono-ci-check/v2"
+    ) {
         return Err("unsupported CI profile".into());
     }
+    if c.schema == "chrono-ci-check/v1" && c.policy.get("facts_config").is_some() {
+        return Err("v1 cannot declare facts_config, including null".into());
+    }
     let p: Policy = serde_json::from_value(c.policy.clone()).map_err(|e| e.to_string())?;
+    if c.schema == "chrono-ci-check/v2" {
+        let path = p
+            .facts_config
+            .as_deref()
+            .ok_or("v2 requires facts_config")?;
+        relative_path(path)?;
+        if !path.starts_with(".chrono-harness/") {
+            return Err("facts_config must reside in .chrono-harness/".into());
+        }
+    }
     relative_path(&p.filemap)?;
     relative_path(&p.projects)?;
     if p.artifacts.is_empty() {
@@ -155,9 +177,9 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
     }
     Ok(p)
 }
-fn snapshot(root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
-    let fm = json(&at(root, oid, &p.filemap)?)?;
-    let pr = json(&at(root, oid, &p.projects)?)?;
+fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
+    let fm = json(&at(reader, root, oid, &p.filemap)?)?;
+    let pr = json(&at(reader, root, oid, &p.projects)?)?;
     if ![object!(1), object!(2)].contains(&fm["schema_version"]) || pr["schema_version"] != 1 {
         return Err("unsupported registry version".into());
     }
@@ -195,7 +217,7 @@ fn snapshot(root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
     let mut ops = BTreeMap::new();
     let mut nodes = BTreeSet::new();
     if let Some(config) = &p.registration_config {
-        let config = json(&at(root, oid, config)?)?;
+        let config = json(&at(reader, root, oid, config)?)?;
         for tool in config["tools"].as_array().ok_or("tools missing")? {
             nodes.insert(format!("tool:{}", text(tool, "id")?));
         }
@@ -279,7 +301,7 @@ fn snapshot(root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
             }
         }
     }
-    let tree = tree(root, oid)?;
+    let tree = tree(reader, root, oid)?;
     let mut files = BTreeMap::new();
     for f in array(&fm, "files")? {
         let path = text(f, "path")?;
@@ -320,7 +342,7 @@ fn snapshot(root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
         match (mode.as_str(), f.get("symlink")) {
             ("120000", Some(Value::String(target))) => {
                 relative_path(target)?;
-                if utf8(at(root, oid, path)?)? != *target {
+                if utf8(at(reader, root, oid, path)?)? != *target {
                     return Err(format!("symlink target mismatch: {path}"));
                 }
                 let dest = Path::new(path)
@@ -395,13 +417,13 @@ fn snapshot(root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
         execute,
     })
 }
-fn clean(root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
-    if utf8(git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate {
+fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
+    if utf8(reader.git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate {
         return Err("checkout HEAD does not equal candidate".into());
     }
     // -v lowercases tags for assume-unchanged; S/s marks skip-worktree.
     // Paths follow the two-byte tag prefix and end at NUL, never whitespace.
-    for entry in chrono_harness::facts::index_flags(root)? {
+    for entry in reader.index_flags(root)? {
         let assume_unchanged = entry.tag.as_bytes()[0].is_ascii_lowercase();
         let skip_worktree = entry.tag.eq_ignore_ascii_case("S");
         if assume_unchanged || skip_worktree {
@@ -414,12 +436,15 @@ fn clean(root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
             return Err(format!("unsupported index flags ({flag}): {path}"));
         }
     }
-    if !git(root, &["diff", "--cached", "--raw", "-z", candidate, "--"])?.is_empty()
-        || !git(root, &["diff", "--raw", "-z", "--"])?.is_empty()
+    if !reader
+        .git(root, &["diff", "--cached", "--raw", "-z", candidate, "--"])?
+        .is_empty()
+        || !reader.git(root, &["diff", "--raw", "-z", "--"])?.is_empty()
     {
         return Err("dirty tracked candidate inputs/index".into());
     }
-    for path in git(root, &["ls-files", "--others", "-z"])?
+    for path in reader
+        .git(root, &["ls-files", "--others", "-z"])?
         .split(|b| *b == 0)
         .filter(|s| !s.is_empty())
     {
@@ -554,7 +579,11 @@ fn ci_impact(
 }
 
 pub fn judge(req: &Request) -> Response {
-    match evaluate(req) {
+    let mut reader = Reader::legacy();
+    let mut opening = Value::Null;
+    let mut scope = "chrono-ci-check/v1".to_owned();
+    let result = evaluate(req, &mut reader, &mut opening, &mut scope);
+    let mut response = match result {
         Ok(r) => r,
         Err(e) => Response {
             protocol: PROTOCOL.into(),
@@ -566,41 +595,68 @@ pub fn judge(req: &Request) -> Response {
                 cause: e,
                 exit_code: None,
             }],
-            evidence: object!({"scope":"chrono-ci-check/v1","candidate":req.candidate,"base":req.base,"selected":[],"executed":[],"blocked":["selection or snapshot validation failed"],"parity":"unestablished"}),
+            evidence: object!({"scope":scope,"candidate":req.candidate,"base":req.base,"selected":[],"executed":[],"blocked":["selection or snapshot validation failed"],"parity":"unestablished"}),
         },
+    };
+    if reader.is_bound() {
+        response.evidence["git_facts"] = reader.observation();
+    } else if !opening.is_null() {
+        response.evidence["git_facts"] = opening;
     }
+    response
 }
-fn evaluate(req: &Request) -> Result<Response, String> {
+fn evaluate(
+    req: &Request,
+    reader: &mut Reader,
+    opening: &mut Value,
+    scope: &mut String,
+) -> Result<Response, String> {
     if req.protocol != PROTOCOL || req.request_id.is_empty() {
         return Err("invalid request protocol/identity".into());
     }
     relative_path(&req.config_path)?;
     let root = &req.host_root;
-    verify_oid(root, &req.candidate)?;
     let bytes = fs::read(root.join(&req.config_path)).map_err(|e| e.to_string())?;
-    if sha256(&bytes) != req.config_sha256 || at(root, &req.candidate, &req.config_path)? != bytes {
+    if sha256(&bytes) != req.config_sha256 {
         return Err("config does not match candidate/request".into());
     }
     let config: CheckConfig = decode(&bytes)?;
+    *scope = config.schema.clone();
     let p = policy(&config)?;
-    clean(root, &req.candidate, &p)?;
-    let mut previous = "chrono-ci-check/v1";
+    full_oid(&req.candidate)?;
+    if let Some(path) = &p.facts_config {
+        *reader = Reader::for_config_observed(root, path).map_err(|failure| {
+            *opening = failure.observation;
+            failure.message
+        })?;
+        if !reader.is_bound() {
+            return Err("scoped v2 requires a bound full-v3 facts_config".into());
+        }
+        reader.verify_config(root, &req.candidate)?;
+    }
+    verify_oid(reader, root, &req.candidate)?;
+    if at(reader, root, &req.candidate, &req.config_path)? != bytes {
+        return Err("config does not match candidate/request".into());
+    }
+    clean(reader, root, &req.candidate, &p)?;
+    let previous;
     let old = if req.initial {
         if req.base.is_some() {
             return Err("initial cannot have base".into());
         }
-        if !chrono_harness::facts::parents(root, &req.candidate)?.is_empty() {
+        if !reader.parents(root, &req.candidate)?.is_empty() {
             return Err("initial requires parentless commit".into());
         }
-        previous = "none";
+        previous = "none".to_owned();
         None
     } else {
         let base = req.base.as_deref().ok_or("base required")?;
-        verify_oid(root, base)?;
-        let base_tree = tree(root, base)?;
+        verify_oid(reader, root, base)?;
+        let base_tree = tree(reader, root, base)?;
         let op = if base_tree.contains_key(&req.config_path) {
-            let c: CheckConfig = decode(&at(root, base, &req.config_path)?)?;
+            let c: CheckConfig = decode(&at(reader, root, base, &req.config_path)?)?;
             let op = policy(&c)?;
+            previous = c.schema;
             if op.filemap != p.filemap || op.projects != p.projects {
                 return Err("registry path migration unsupported".into());
             }
@@ -609,10 +665,10 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             if p.adoption_base.as_deref() != Some(base) {
                 return Err("base profile absent; explicit exact adoption_base required".into());
             }
-            previous = "none";
+            previous = "none".to_owned();
             // Adoption projects the explicitly supplied bindings onto the real base registry;
             // it never fabricates a base tree or executes historical operations.
-            let registry = json(&at(root, base, &p.projects)?)?;
+            let registry = json(&at(reader, root, base, &p.projects)?)?;
             let mut names = BTreeSet::new();
             let mut old_ops = BTreeSet::new();
             for collection in ["projects", "scripts"] {
@@ -636,9 +692,9 @@ fn evaluate(req: &Request) -> Result<Response, String> {
                 .retain(|k, v| names.contains(k) && v.iter().all(|op| old_ops.contains(op)));
             adopted
         };
-        Some(snapshot(root, base, op)?)
+        Some(snapshot(reader, root, base, op)?)
     };
-    let new = snapshot(root, &req.candidate, p.clone())?;
+    let new = snapshot(reader, root, &req.candidate, p.clone())?;
     let (paths, mut selected, selection_explanation) = ci_impact(old.as_ref(), &new);
     let mut blocked = vec![];
     let mut removed = BTreeMap::new();
@@ -648,8 +704,8 @@ fn evaluate(req: &Request) -> Result<Response, String> {
     environment.extend(p.environment.clone());
     let mut declarations=object!(p.tools.iter().map(|(id,program)|object!({"id":id,"program":program,"version_argv":["--version"],"expected_version":null})).collect::<Vec<_>>());
     if let (Some(config_path), Some(base)) = (&p.registration_config, &req.base) {
-        let a = chrono_harness::facts::registry_values(root, base, config_path)?;
-        let b = chrono_harness::facts::registry_values(root, &req.candidate, config_path)?;
+        let a = reader.registry_values(root, base, config_path)?;
+        let b = reader.registry_values(root, &req.candidate, config_path)?;
         let template: Vec<String> =
             serde_json::from_value(b[config_path]["canonical_check"]["argv"].clone())
                 .map_err(|e| e.to_string())?;
@@ -679,15 +735,28 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             );
         }
         environment.extend(p.environment.clone());
-        let (_, r, view) = chrono_judge_registration::interpret(
-            root,
-            base,
-            &req.candidate,
-            config_path,
-            a,
-            b,
-            &environment,
-        )?;
+        let (_, r, view) = if reader.is_bound() {
+            chrono_judge_registration::interpret_with_reader(
+                reader,
+                root,
+                base,
+                &req.candidate,
+                config_path,
+                a,
+                b,
+                &environment,
+            )?
+        } else {
+            chrono_judge_registration::interpret(
+                root,
+                base,
+                &req.candidate,
+                config_path,
+                a,
+                b,
+                &environment,
+            )?
+        };
         declarations = r.config()["tools"].clone();
         reused = chrono_judge_registration::reused_tools(&view)?;
         conversion = view["conversion"].clone();
@@ -828,7 +897,7 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             exit_code: None,
         });
     }
-    if let Err(e) = clean(root, &req.candidate, &p) {
+    if let Err(e) = clean(reader, root, &req.candidate, &p) {
         results.push(CheckResult {
             id: "ci.post-snapshot".into(),
             status: Status::Failed,
@@ -848,6 +917,6 @@ fn evaluate(req: &Request) -> Result<Response, String> {
             Status::Passed
         },
         results,
-        evidence: object!({"scope":"chrono-ci-check/v1","mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     })
 }

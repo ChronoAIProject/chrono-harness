@@ -15,6 +15,12 @@ pub struct Reader {
     bound: Option<Bound>,
     processes: RefCell<Vec<ProcessResult>>,
 }
+/// Original binding observations when construction fails, without decoding diagnostics.
+#[derive(Debug)]
+pub struct OpenFailure {
+    pub message: String,
+    pub observation: Value,
+}
 struct Bound {
     root: PathBuf,
     config_path: String,
@@ -84,7 +90,16 @@ impl Reader {
         }
     }
     pub fn for_config(root: &Path, config: &str) -> Result<Self, String> {
-        Self::open(root, config, None, None)
+        Self::open(root, config, None, None, None)
+    }
+    pub fn for_config_observed(root: &Path, config: &str) -> Result<Self, OpenFailure> {
+        let mut observation = Value::Null;
+        Self::open(root, config, None, None, Some(&mut observation)).map_err(|message| {
+            OpenFailure {
+                message,
+                observation,
+            }
+        })
     }
     pub fn for_request(req: &wire::Request) -> Result<Self, String> {
         req.validate()?;
@@ -106,6 +121,7 @@ impl Reader {
             config,
             Some(&observations["environment"]),
             Some(&observations["git_facts"]),
+            None,
         )?;
         reader.verify_config(root, candidate)?;
         Ok(reader)
@@ -115,6 +131,7 @@ impl Reader {
         config: &str,
         observed_env: Option<&Value>,
         prior: Option<&Value>,
+        opening_observation: Option<&mut Value>,
     ) -> Result<Self, String> {
         let result = (|| {
             let bytes = fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())?;
@@ -243,7 +260,11 @@ impl Reader {
             }
             let argv: Vec<String> =
                 serde_json::from_value(tool["version_argv"].clone()).map_err(|e| e.to_string())?;
-            let bytes = reader.invoke(root, argv, &[])?;
+            let result = reader.invoke(root, argv, &[]);
+            if let Some(observation) = opening_observation {
+                *observation = reader.observation();
+            }
+            let bytes = result?;
             if std::str::from_utf8(&bytes)
                 .map_err(|_| reader.error("non UTF-8 version"))?
                 .trim_end()

@@ -84,9 +84,31 @@ pub fn interpret(
     env: &BTreeMap<String, String>,
 ) -> Result<(Registrations, Registrations, Value), String> {
     let reader = facts::Reader::for_config(root, config)?;
+    interpret_with_reader(
+        &reader,
+        root,
+        base,
+        candidate_oid,
+        config,
+        raw,
+        candidate,
+        env,
+    )
+}
+/// Reuse the caller's selected facts reader and retain its complete acquisition record.
+pub fn interpret_with_reader(
+    reader: &facts::Reader,
+    root: &Path,
+    base: &str,
+    candidate_oid: &str,
+    config: &str,
+    raw: Values,
+    candidate: Values,
+    env: &BTreeMap<String, String>,
+) -> Result<(Registrations, Registrations, Value), String> {
     reader.verify_config(root, candidate_oid)?;
     interpret_mode(
-        &reader,
+        reader,
         root,
         base,
         candidate_oid,
