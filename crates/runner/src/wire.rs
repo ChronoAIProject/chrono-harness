@@ -1,5 +1,5 @@
 //! Shared chrono-judge/v1 wire types and transport. No host admissibility policy.
-use crate::{CommandSpec, ProcessResult, decode, no_symlink_parents, run_process_bound, sha256};
+use crate::{CommandSpec, ProcessResult, decode, no_symlink_parents, run_process_observed, sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fs, path::PathBuf};
@@ -298,7 +298,13 @@ pub fn invoke_detailed(
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let p = run_process_bound(&req.candidate.root, &spec, &canonical(req)?, hash)?;
+    let p = run_process_observed(&req.candidate.root, &spec, &canonical(req)?, hash)?;
+    if let Some(message) = p.failure.clone() {
+        return Err(TransportFailure {
+            message,
+            process: Some(p),
+        });
+    }
     let result = decode::<Response>(&p.stdout_bytes).and_then(|response| {
         validate_response(req, &response, p.exit_code)?;
         Ok(response)
