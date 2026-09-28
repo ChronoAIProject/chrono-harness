@@ -450,7 +450,13 @@ provide power-loss durability, or certify governance and local/CI parity.
 
 ## Remote branch retirement
 
-The source now provides `cleanup-remote`; it is newer than public beta.9. It uses
+The beta.10 public macOS binary retired the product release branch and each of
+the four example adoption branches after verified landing. Original process
+bytes, expected branch/target identities, leased deletion and observed absence
+were checked. Dedicated worktree tests also ran in both native release jobs;
+see [release evidence](distribution.md) and [example adoption](examples.md).
+
+Public beta.10 provides `cleanup-remote`. It uses
 an explicit plan and the same registered worktree configuration and process
 reporting as local maintenance:
 
