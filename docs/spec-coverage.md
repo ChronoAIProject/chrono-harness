@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy and failure preservation | autonomous stale rebuild, recovery/cleanup, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict and failure preservation | AI reconciliation, recovery/cleanup, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -46,7 +46,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 17 engine stability | implemented bounded: explicit FILEMAP selection, W completed integration | full native activation |
 | 18 policy requires integration | implemented bounded: W missing certificate failure and completed evidence acceptance | full native activation |
 | 19 changed integration binding | implemented bounded: W base/tree/receipt/completed-report rejection, same-tree commit acceptance | full native activation and complete effective inputs |
-| 20 stale branch | partial: W explicit dev/fork/time freshness rejects either excess | autonomous stale reconstruction |
+| 20 stale branch | partial: W explicit dev/fork/time freshness rejects either excess; worktree reconstruct replays complete explicit carry/retire choices onto a fetched target and preserves conflicts | AI semantic reconciliation and autonomous delivery orchestration |
 | 21 threshold equality | implemented: W count/age equality, nanosecond excess and configured limits | — |
 | 22 same local/CI command | partial: scoped CI generator with explicit push-baseline configuration; CI behavior tests cover repeated pushes, remote advancement, missing refs and real CLI persistence | full native events and exact inputs |
 | 23 same complete deterministic inputs | pending | deterministic evidence/parity comparison |
@@ -126,3 +126,5 @@ reuse the existing strict registration loader and bounded process engine. Creati
 does not certify full governance, stale recovery, PR delivery or landing. The
 adopted policy and future native asset build are explicitly registered; published
 beta.5 remains unchanged and lacks this new binary.
+
+Explicit reconstruction reuses the worktree producer and its original process/identity helpers. Real CLI tests cover an advanced target, complete carry/retire choices, original source preservation, binary/mode/link/add/delete changes, literal paths, failed apply conflicts, source mutation, patch output bounds and empty/reused destinations. A successful result is a staged index tree, without a candidate commit or governance/integration verdict. AI reconciliation, recovery/cleanup and provider delivery remain unfinished.

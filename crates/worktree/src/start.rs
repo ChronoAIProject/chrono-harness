@@ -13,14 +13,22 @@ use std::{
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-struct Runner {
-    config: Config,
+pub(crate) struct Runner {
+    pub(crate) config: Config,
     environment: BTreeMap<String, String>,
     tool: observation::Tool,
     processes: Vec<Value>,
 }
 impl Runner {
-    fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
+    pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
+        self.input(root, args, &[])
+    }
+    pub(crate) fn input(
+        &mut self,
+        root: &Path,
+        args: &[&str],
+        input: &[u8],
+    ) -> Result<ProcessResult, String> {
         let mut argv = vec!["--no-replace-objects".into()];
         argv.extend(args.iter().map(|s| (*s).into()));
         let spec = CommandSpec {
@@ -35,7 +43,7 @@ impl Runner {
             timeout_seconds: self.config.timeout_seconds,
             output_limit_bytes: self.config.output_limit_bytes,
         };
-        match run_process_observed(root, &spec, &[], &self.tool.sha256) {
+        match run_process_observed(root, &spec, input, &self.tool.sha256) {
             Ok(process) => {
                 self.processes
                     .push(value!({"root":root,"argv":argv,"process":process}));
@@ -51,7 +59,7 @@ impl Runner {
             }
         }
     }
-    fn git(&mut self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+    pub(crate) fn git(&mut self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
         let process = self.command(root, args)?;
         if process.exit_code != 0 {
             return Err(format!(
@@ -61,10 +69,10 @@ impl Runner {
         }
         Ok(process.stdout_bytes)
     }
-    fn text(&mut self, root: &Path, args: &[&str]) -> Result<String, String> {
+    pub(crate) fn text(&mut self, root: &Path, args: &[&str]) -> Result<String, String> {
         String::from_utf8(self.git(root, args)?).map_err(|_| "Git output is not UTF-8".into())
     }
-    fn oid(&mut self, root: &Path, revision: &str) -> Result<String, String> {
+    pub(crate) fn oid(&mut self, root: &Path, revision: &str) -> Result<String, String> {
         let oid = self
             .text(
                 root,
@@ -75,10 +83,13 @@ impl Runner {
         facts::full_oid(&oid)?;
         Ok(oid)
     }
-    fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
+    pub(crate) fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         self.git(root, &["show", &format!("{oid}:{path}")])
     }
-    fn inventory(&mut self, root: &Path) -> Result<Vec<BTreeMap<String, String>>, String> {
+    pub(crate) fn inventory(
+        &mut self,
+        root: &Path,
+    ) -> Result<Vec<BTreeMap<String, String>>, String> {
         let text = self.text(root, &["worktree", "list", "--porcelain", "-z"])?;
         let mut rows = vec![];
         for record in text.split("\0\0").filter(|r| !r.is_empty()) {
@@ -109,14 +120,13 @@ fn destination(path: &Path) -> Result<PathBuf, String> {
         Err(e) => Err(e.to_string()),
     }
 }
-fn ensure_created(
+pub(crate) fn ensure_identity(
     r: &mut Runner,
     source: &Path,
     target: &Path,
     branch: &str,
     base: &str,
     token: &str,
-    config: &Value,
 ) -> Result<(), String> {
     let inventory = r.inventory(source)?;
     let rows: Vec<_> = inventory
@@ -142,6 +152,9 @@ fn ensure_created(
                 .into(),
         );
     }
+    Ok(())
+}
+pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let status = r.text(
         target,
         &[
@@ -171,12 +184,13 @@ fn ensure_created(
     }
     Ok(())
 }
-fn execute(
+pub(crate) fn execute(
     r: &mut Runner,
     o: &Start,
     bytes: &[u8],
     token: &str,
     report: &mut Value,
+    keep_locked: bool,
 ) -> Result<(), String> {
     let source = &o.root;
     if fs::canonicalize(r.text(source, &["rev-parse", "--show-toplevel"])?.trim())
@@ -317,29 +331,39 @@ fn execute(
             &base,
         ],
     )?;
-    ensure_created(
-        r,
-        source,
-        &target,
-        &branch,
-        &base,
-        token,
-        registrations.config(),
-    )?;
+    ensure_identity(r, source, &target, &branch, &base, token)?;
+    cleanliness(r, &target, registrations.config())?;
+    report["context"] = value!({"base":base,"candidate":base,"dev_tip":base,"fork_point":base,"branch_ref":branch,"branch_started_at":started});
+    if keep_locked {
+        return Ok(());
+    }
+    unlock(r, source, path, &branch_ref, &base)
+}
+pub(crate) fn unlock(
+    r: &mut Runner,
+    source: &Path,
+    path: &str,
+    branch_ref: &str,
+    base: &str,
+) -> Result<(), String> {
     r.git(source, &["worktree", "unlock", path])?;
     let rows = r.inventory(source)?;
     if !rows.iter().any(|row| {
         row.get("worktree").is_some_and(|p| p == path)
-            && row.get("HEAD") == Some(&base)
-            && row.get("branch") == Some(&branch_ref)
+            && row.get("HEAD").map(String::as_str) == Some(base)
+            && row.get("branch").map(String::as_str) == Some(branch_ref)
             && !row.contains_key("locked")
     }) {
         return Err("worktree changed during final observation".into());
     }
-    report["context"] = value!({"base":base,"candidate":base,"dev_tip":base,"fork_point":base,"branch_ref":branch,"branch_started_at":started});
     Ok(())
 }
-pub(super) fn create(o: Start, config: Config, bytes: Vec<u8>) -> Result<Value, String> {
+pub(super) fn create(
+    o: Start,
+    config: Config,
+    bytes: Vec<u8>,
+    plan: Option<crate::reconstruct::Input>,
+) -> Result<Value, String> {
     let root = fs::canonicalize(&o.root).map_err(|e| e.to_string())?;
     if root != o.root {
         return Err("host root must be canonical".into());
@@ -404,8 +428,13 @@ pub(super) fn create(o: Start, config: Config, bytes: Vec<u8>) -> Result<Value, 
         config.output_limit_bytes,
     )?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let operation = if plan.is_some() {
+        "reconstruct"
+    } else {
+        "start"
+    };
     let mut output = tempfile::Builder::new()
-        .prefix("start-")
+        .prefix(&format!("{operation}-"))
         .suffix(".json")
         .tempfile_in(&dir)
         .map_err(|e| e.to_string())?;
@@ -423,7 +452,7 @@ pub(super) fn create(o: Start, config: Config, bytes: Vec<u8>) -> Result<Value, 
         .to_str()
         .ok_or("report path UTF-8")?
         .to_string();
-    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":"start","status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":o.config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
+    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":o.config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
             Some(format!(
@@ -456,10 +485,21 @@ pub(super) fn create(o: Start, config: Config, bytes: Vec<u8>) -> Result<Value, 
     };
     let result = match version_error {
         Some(e) => Err(e),
-        None => execute(&mut runner, &o, &bytes, &name, &mut report),
+        None => match plan {
+            Some(plan) => {
+                crate::reconstruct::execute(&mut runner, &o, &bytes, &name, &mut report, plan)
+            }
+            None => execute(&mut runner, &o, &bytes, &name, &mut report, false),
+        },
     };
     match result {
-        Ok(()) => report["status"] = value!("created"),
+        Ok(()) => {
+            report["status"] = value!(if operation == "start" {
+                "created"
+            } else {
+                "reconstructed"
+            })
+        }
         Err(e) => report["error"] = value!(e),
     }
     report["processes"] = value!(runner.processes);

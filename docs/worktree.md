@@ -88,9 +88,67 @@ adopted policy has an actual subprocess consumer. The host registers both the
 binary and dedicated test plan; future native release builds also register this
 asset. Already published beta.5 assets are unchanged and do not contain this tool.
 
-Automatic stale reconstruction, retry/cleanup recovery, PR provider operations,
+Complete AI reconciliation, retry/cleanup recovery, PR provider operations,
 merge and actual landing orchestration remain unfinished. Subsequent governance
 checks continue to use the same registered `chrono-harness check` command locally
 and in CI. This increment changes product and adopted policy together; validation
 scope expands by the new project/test pair and bootstrap/release registrations.
 Declared costs remain unknown, and no acknowledgement or human approval is added.
+
+
+## Explicit reconstruction
+
+Use the same host policy and an explicit run-local plan under the host's registered
+untracked `.chrono-harness/state/` artifacts:
+
+```sh
+.chrono-harness/bin/chrono-worktree reconstruct \
+  --host-root . --config .chrono-harness/worktree.json \
+  --kind integration --name task-r2 --path ../task-r2 \
+  --plan .chrono-harness/state/reconstruction.json
+```
+
+The strict `chrono-worktree-reconstruction/v1` plan names fixed full commit IDs
+and the complete original net DELTA. Renames are deletion plus addition. Example
+shape (replace endpoint placeholders with actual full commit IDs):
+
+```json
+{
+  "schema": "chrono-worktree-reconstruction/v1",
+  "base": "OLD_FULL_BASE_OID",
+  "candidate": "OLD_FULL_CANDIDATE_OID",
+  "changes": [
+    {"path": "arbitrary/source.ext", "action": "carry"},
+    {"path": "obsolete-change.data", "action": "retire", "reason": "Superseded requirement"}
+  ]
+}
+```
+
+Every changed path must appear exactly once, with no unrelated entries. Retirement
+requires a nonempty reason. The AI chooses continued necessity; the tool checks
+coverage and applies the chosen changes without inferring language or test scope.
+The old base must be a Git ancestor of the source candidate; the latter must equal
+source HEAD. Source work must be committed and clean except declared artifacts.
+The plan itself must have a registered artifact owner. Existing policy-adoption
+requirements still apply before creating the new worktree.
+
+The producer extracts the original binary/full-index patch with literal paths,
+no rename heuristic, external diff or text conversion. It reuses `start` to fetch
+the target and create a new branch; it never merges the old branch. Git applies
+the selected patch with `--3way --index`. Raw diff and apply process results are
+retained, including the patch input hash. Output bounds fail before creation if
+the patch cannot be retained. Empty or retired-only DELTAs do not run apply.
+
+A successful result has `status: reconstructed`, exit 0, the new target parent,
+actual staged path set and `reconstruction.index_tree`; the partial context's
+`candidate` is null because the staged changes are not a new commit. No source
+worktree or branch is deleted. Failure is exit 2; conflicts, original process
+failure and the invocation lock are preserved for AI reconciliation. Source
+mutation or a changed destination identity also fails without deleting work.
+
+After success, the AI reviews the staged result, reconciles semantic changes and
+registrations, commits it, and runs the same registered canonical check with new
+evidence. A reconstruction result is neither a freshness verdict nor a check or
+integration certificate. The workflow judge continues to own freshness policy;
+Git/config/hook closure, automatic conflict resolution, cleanup and provider
+orchestration remain outside this producer's current guarantee.

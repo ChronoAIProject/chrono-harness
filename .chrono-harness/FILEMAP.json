@@ -2722,6 +2722,18 @@
       ]
     },
     {
+      "path": "crates/worktree/src/reconstruct.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree-tests/Cargo.toml",
       "owner": "worktree-tests",
       "surface": "test",

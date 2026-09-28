@@ -7,7 +7,7 @@ interpreted endpoints, FILEMAP selection, routes' plan, projects' actual results
 costs and runner process observations. It reuses the existing executor and receipt
 comparison. The judge does not create worktrees, PRs or merges. The separate
 [worktree producer](worktree.md) now creates fresh registered worktrees and
-retains actual Git observations. Stale reconstruction, recovery, PR/merge and
+retains actual Git observations. Explicit reconstruction plans now stage selected old changes on a freshly fetched target. AI reconciliation, recovery, PR/merge and
 landing orchestration remain caller-owned pending their producers.
 
 Use the same registered `chrono-harness check` invocation locally and in CI.
@@ -85,5 +85,5 @@ Bounded fixtures exercise the complete seven-judge chain. This host remains
 proposed with incomplete Cargo/SDK input closure and bindings; native CI still
 uses its documented scoped adapter. Certificates explicitly report
 `input_completeness_proven: false` in workflow verdicts. Full activation, complete
-inputs, deterministic parity and autonomous reconstruction/PR/landing remain
+inputs, deterministic parity and complete AI reconciliation/PR/landing orchestration remain
 separate unfinished obligations. Worktree creation alone does not discharge them.
