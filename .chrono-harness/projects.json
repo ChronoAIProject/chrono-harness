@@ -1088,6 +1088,78 @@
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
+        },
+        "profile.workflow.0.inline": {
+          "operation": "profile.workflow.0.inline",
+          "tool": "profile-env",
+          "argv": [
+            "CHRONO_PROFILE_RETAINED=inline",
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metadata_change",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "profile.workflow.1.blob": {
+          "operation": "profile.workflow.1.blob",
+          "tool": "profile-env",
+          "argv": [
+            "CHRONO_PROFILE_RETAINED=blob",
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metadata_change",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "profile.workflow.2.blob": {
+          "operation": "profile.workflow.2.blob",
+          "tool": "profile-env",
+          "argv": [
+            "CHRONO_PROFILE_RETAINED=blob",
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metadata_change",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "profile.workflow.3.inline": {
+          "operation": "profile.workflow.3.inline",
+          "tool": "profile-env",
+          "argv": [
+            "CHRONO_PROFILE_RETAINED=inline",
+            "cargo",
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metadata_change",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
         }
       },
       "tests_for": "judge-workflow"

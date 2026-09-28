@@ -23,19 +23,14 @@
     "rustup": "rustup",
     "cargo": "cargo",
     "rustc": "rustc",
-    "git": "git"
+    "git": "git",
+    "profile-env": "env"
   },
   "verification_operations": [
-    "test.distribution-tests",
-    "test.worktree-tests",
-    "test.runner-tests",
-    "test.inputs-tests",
-    "test.ci-tests",
-    "test.judge-ci-tests",
-    "test.judge-registration-tests",
-    "test.judge-projects-tests",
-    "test.judge-workflow-tests",
-    "test.judge-cargo-tests"
+    "profile.workflow.0.inline",
+    "profile.workflow.1.blob",
+    "profile.workflow.2.blob",
+    "profile.workflow.3.inline"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",

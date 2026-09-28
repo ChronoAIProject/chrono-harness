@@ -171,9 +171,21 @@ impl Host {
         edit: impl FnOnce(&mut Value),
         context_edit: impl FnOnce(&mut Value),
     ) -> (i32, Value) {
+        let tick = std::time::Instant::now();
         let root = self.root();
         fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
-        let files = json!({"interpreter":{"bytes":fs::read(&self.tool).unwrap()},"data":{"bytes":b"bounded input\n".to_vec()}});
+        let raw = fs::read(&self.tool).unwrap();
+        let mode = std::env::var("CHRONO_PROFILE_RETAINED").unwrap();
+        let size = raw.len();
+        let digest = sha256(&raw);
+        let interpreter = if mode == "blob" {
+            let path = format!(".chrono-harness/state/{digest}");
+            fs::write(root.join(&path), &raw).unwrap();
+            json!({"blob":path,"sha256":digest,"length":size})
+        } else {
+            json!({"bytes":raw})
+        };
+        let files = json!({"interpreter":interpreter,"data":{"bytes":b"bounded input\n".to_vec()}});
         let mut inputs = json!({"base":{"commit":self.base,"environment":{"DECLARED_EMPTY":"","DECLARED_ABSENT":null},"files":files},"candidate":{"commit":self.candidate,"environment":{"DECLARED_EMPTY":"","DECLARED_ABSENT":null},"files":files}});
         edit(&mut inputs);
         fs::write(
@@ -181,6 +193,10 @@ impl Host {
             serde_json::to_vec(&inputs).unwrap(),
         )
         .unwrap();
+        eprintln!(
+            "PROFILE {}",
+            json!({"phase":"retained","mode":mode,"interpreter_size":size,"interpreter_sha256":digest,"json_size":fs::metadata(root.join(".chrono-harness/state/inputs.json")).unwrap().len(),"seconds":tick.elapsed().as_secs_f64()})
+        );
         let mut ctx = json!({"schema_version":1,"base":self.base,"candidate":self.candidate,"dev_tip":self.base,"branch_ref":"integration/fixture","fork_point":self.base,"branch_started_at":"2026-01-01T00:00:00Z","observed_at":"2026-01-01T01:00:00Z","operation":"validate.delta","integration_evidence":null,"retained_inputs":".chrono-harness/state/inputs.json"});
         context_edit(&mut ctx);
         fs::write(
@@ -188,6 +204,7 @@ impl Host {
             serde_json::to_vec(&ctx).unwrap(),
         )
         .unwrap();
+        let execution = std::time::Instant::now();
         let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
             .current_dir("/")
             .env("DECLARED_EMPTY", "")
@@ -207,8 +224,17 @@ impl Host {
             ])
             .output()
             .unwrap();
+        eprintln!(
+            "PROFILE {}",
+            json!({"phase":"execution","mode":mode,"seconds":execution.elapsed().as_secs_f64(),"exit":out.status.code(),"stdout_size":out.stdout.len(),"stderr_size":out.stderr.len()})
+        );
+        let parsing = std::time::Instant::now();
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
+        eprintln!(
+            "PROFILE {}",
+            json!({"phase":"parse","mode":mode,"seconds":parsing.elapsed().as_secs_f64(),"total_seconds":tick.elapsed().as_secs_f64()})
+        );
         (out.status.code().unwrap(), v)
     }
 }

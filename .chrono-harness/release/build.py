@@ -10,6 +10,7 @@ import stat
 import subprocess
 import tempfile
 import sys
+import time
 
 
 def path(root, value):
@@ -205,9 +206,11 @@ def main(root, output):
     def run(label, argv, operation=None):
         nonlocal phase
         phase = label
+        started = time.monotonic()
         process = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         report['processes'].append({
             'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(root),
+            'elapsed_seconds': time.monotonic() - started,
             'exit_code': process.returncode,
             'stdout_bytes': list(process.stdout), 'stderr_bytes': list(process.stderr),
             'stdout_sha256': hashlib.sha256(process.stdout).hexdigest(),
