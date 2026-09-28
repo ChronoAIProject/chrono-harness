@@ -259,7 +259,15 @@ pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Res
     Ok(())
 }
 pub fn snapshot(root: &Path, candidate: &str, artifacts: &[String]) -> Result<(), String> {
-    let state = facts::checkout(root, candidate)?;
+    snapshot_with_reader(root, candidate, artifacts, &facts::Reader::legacy())
+}
+pub fn snapshot_with_reader(
+    root: &Path,
+    candidate: &str,
+    artifacts: &[String],
+    reader: &facts::Reader,
+) -> Result<(), String> {
+    let state = reader.checkout(root, candidate)?;
     if state.head != candidate
         || !state.tracked.is_empty()
         || state
@@ -277,7 +285,15 @@ pub fn snapshot(root: &Path, candidate: &str, artifacts: &[String]) -> Result<()
 }
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    match evaluate(req, &mut response) {
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, &mut response, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
+    match result {
         Ok(()) => {}
         Err(message) => {
             if response.status != Status::Error {
@@ -294,9 +310,9 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(req: &Request, response: &mut Response) -> Result<(), String> {
+fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> Result<(), String> {
     req.validate()?;
-    let (old, r, _) = chrono_judge_registration::views(req)?;
+    let (old, r, _) = chrono_judge_registration::views_with_reader(req, reader)?;
     let inputs = chrono_judge_registration::inputs::validate(req, &old, &r)?;
     let plans: Vec<_> = req
         .prior_results
@@ -323,7 +339,12 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<(), String> {
         .iter()
         .map(|a| a["path"].as_str().unwrap().to_string())
         .collect();
-    snapshot(&req.candidate.root, &req.candidate.commit, &artifacts)?;
+    snapshot_with_reader(
+        &req.candidate.root,
+        &req.candidate.commit,
+        &artifacts,
+        reader,
+    )?;
     let mut results = execute(&plan)?;
     if results.has_errors() {
         response.status = Status::Error;
@@ -354,7 +375,12 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<(), String> {
     response
         .outputs
         .insert("tests".into(), serde_json::to_value(&results).unwrap());
-    snapshot(&req.candidate.root, &req.candidate.commit, &artifacts)?;
+    snapshot_with_reader(
+        &req.candidate.root,
+        &req.candidate.commit,
+        &artifacts,
+        reader,
+    )?;
     chrono_judge_registration::inputs::validate(req, &old, &r)
         .map_err(|e| format!("E_EVIDENCE_UNRESOLVED: post-execution {e}"))?;
     if !results.passed() {

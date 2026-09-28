@@ -168,14 +168,16 @@ pub fn check(
     candidate: &str,
     entry: Value,
 ) -> Result<(u8, String), String> {
-    let tree = facts::verify_oid(root, candidate)?;
-    if !facts::parents(root, candidate)?.is_empty() {
-        return Err("initial inventory requires parentless commit".into());
-    }
     let bytes = fs::read(no_symlink_parents(root, profile_path)?).map_err(|e| e.to_string())?;
     let profile: Profile = decode(&bytes)?;
     profile.validate()?;
-    let registries = facts::registry_values(root, candidate, &profile.host_config)?;
+    let reader = facts::Reader::for_config(root, &profile.host_config)?;
+    reader.verify_config(root, candidate)?;
+    let tree = reader.verify_oid(root, candidate)?;
+    if !reader.parents(root, candidate)?.is_empty() {
+        return Err("initial inventory requires parentless commit".into());
+    }
+    let registries = reader.registry_values(root, candidate, &profile.host_config)?;
     let cfg = &registries[&profile.host_config];
     let mut environment = BTreeMap::<String, String>::new();
     let mut inherited = BTreeMap::<String, Option<String>>::new();
@@ -216,9 +218,9 @@ pub fn check(
         profile_sha256: sha256(&bytes),
         config_path: profile.host_config.clone(),
         registry_digest: wire::digest(&registries)?,
-        checkout: facts::checkout(root, candidate)?,
+        checkout: reader.checkout(root, candidate)?,
         runner: runner.clone(),
-        observations: value!({"entry":entry,"environment":{"inherited":inherited,"effective":environment}}),
+        observations: value!({"git_facts":reader.observation(),"entry":entry,"environment":{"inherited":inherited,"effective":environment}}),
         prior_results: vec![],
     };
     let mut responses = BTreeMap::<String, Response>::new();
@@ -266,7 +268,7 @@ pub fn check(
     }
     let state = no_symlink_parents(root, ".chrono-harness/state")?;
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
-    let report = value!({"schema":"chrono-initial-report/v1","scope":"initial-inventory",
+    let report = value!({"schema":"chrono-initial-report/v1","git_facts":reader.observation(),"scope":"initial-inventory",
         "status":match status {Status::Pass|Status::Warn=>"complete",Status::Fail=>"failed",Status::Error=>"error"},
         "base":null,"delta":null,"candidate":candidate,"candidate_tree":tree,"governance":"not-evaluated",
         "previous_enforcement":"none","parity":"unestablished","profile_path":profile_path,"profile_sha256":request.profile_sha256,

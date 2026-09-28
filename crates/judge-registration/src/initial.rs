@@ -11,21 +11,36 @@ use std::fs;
 
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    if let Err(e) = evaluate(req, &mut response) {
+    let reader = req.validate().and_then(|()| {
+        facts::Reader::from_observations(
+            &req.candidate.root,
+            &req.config_path,
+            &req.candidate.commit,
+            &req.observations,
+        )
+    });
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, &mut response, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
+    if let Err(e) = result {
         issue(&mut response, "E_INITIAL_INPUT", e, "/request", true);
     }
     response
 }
 
-fn evaluate(req: &Request, response: &mut Response) -> Result<()> {
+fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> Result<()> {
     req.validate()?;
     let root = &req.candidate.root;
     let actual =
-        fs::canonicalize(facts::utf8(facts::git(root, &["rev-parse", "--show-toplevel"])?)?.trim())
+        fs::canonicalize(facts::utf8(reader.git(root, &["rev-parse", "--show-toplevel"])?)?.trim())
             .map_err(|e| e.to_string())?;
     if actual != *root
-        || facts::verify_oid(root, &req.candidate.commit)? != req.candidate.tree
-        || !facts::parents(root, &req.candidate.commit)?.is_empty()
+        || reader.verify_oid(root, &req.candidate.commit)? != req.candidate.tree
+        || !reader.parents(root, &req.candidate.commit)?.is_empty()
     {
         return Err("initial requires the actual checkout root and a parentless candidate".into());
     }
@@ -35,7 +50,7 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<()> {
     let bytes =
         fs::read(no_symlink_parents(root, &req.profile_path)?).map_err(|e| e.to_string())?;
     if sha256(&bytes) != req.profile_sha256
-        || bytes != facts::blob(root, &req.candidate.commit, &req.profile_path)?
+        || bytes != reader.blob(root, &req.candidate.commit, &req.profile_path)?
     {
         return Err("initial profile differs from fixed candidate".into());
     }
@@ -59,7 +74,7 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<()> {
     {
         return Err("initial binding differs from actual registration executable".into());
     }
-    let snapshot = facts::registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
+    let snapshot = reader.registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
     let values = snapshot.values;
     if wire::digest(&values)? != req.registry_digest {
         return Err("initial registry digest mismatch".into());
@@ -78,7 +93,7 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<()> {
                 .into(),
         );
     }
-    let observed = facts::checkout(root, &req.candidate.commit)?;
+    let observed = reader.checkout(root, &req.candidate.commit)?;
     let nonartifact = |paths: &[String]| -> Vec<String> {
         paths
             .iter()
@@ -109,14 +124,23 @@ fn evaluate(req: &Request, response: &mut Response) -> Result<()> {
     {
         return Err("initial inventory rejects unsupported index flags".into());
     }
-    let tree = facts::tree(root, &req.candidate.commit)?;
+    let tree = reader.tree(root, &req.candidate.commit)?;
     if tree
         .values()
         .any(|e| e.kind != "blob" || !matches!(e.mode.as_str(), "100644" | "100755" | "120000"))
     {
         return Err("initial inventory rejects unsupported tree entries".into());
     }
-    crate::references(root, &req.candidate.commit, None, &r, &[], &tree, response)?;
+    crate::references(
+        reader,
+        root,
+        &req.candidate.commit,
+        None,
+        &r,
+        &[],
+        &tree,
+        response,
+    )?;
     if response.status == Status::Pass {
         response.outputs.insert("inventory".into(), json!({"scope":"schema-references-checkout",
             "candidate":req.candidate.commit,"tree":req.candidate.tree,"files":tree.len(),

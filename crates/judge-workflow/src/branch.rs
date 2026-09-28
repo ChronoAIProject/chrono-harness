@@ -15,25 +15,37 @@ fn moment(v: &Value, k: &str) -> Result<OffsetDateTime, String> {
     }
     Ok(d)
 }
-fn commits(root: &Path, oid: &str) -> Result<BTreeSet<String>, String> {
-    Ok(facts::utf8(facts::git(root, &["rev-list", oid])?)?
+fn commits(reader: &facts::Reader, root: &Path, oid: &str) -> Result<BTreeSet<String>, String> {
+    Ok(facts::utf8(reader.git(root, &["rev-list", oid])?)?
         .lines()
         .map(str::to_string)
         .collect())
 }
 /// Fixed Git/context inputs only. No branch discovery, wall clock or commit-date inference.
 pub fn branch(root: &Path, candidate: &str, ctx: &Value, w: &Value) -> Result<Value, String> {
+    with_reader(&facts::Reader::legacy(), root, candidate, ctx, w)
+}
+pub fn with_reader(
+    reader: &facts::Reader,
+    root: &Path,
+    candidate: &str,
+    ctx: &Value,
+    w: &Value,
+) -> Result<Value, String> {
     let dev = text(ctx, "dev_tip")?;
     let fork = text(ctx, "fork_point")?;
     for oid in [candidate, dev, fork] {
-        facts::verify_oid(root, oid).map_err(|e| format!("E_HISTORY_MISSING: {e}"))?;
+        reader
+            .verify_oid(root, oid)
+            .map_err(|e| format!("E_HISTORY_MISSING: {e}"))?;
     }
     if ctx["base"] != dev {
         return Err("E_BRANCH_CONTEXT: base/dev mismatch".into());
     }
     let source = text(ctx, "branch_ref")?;
-    facts::git(root, &["check-ref-format", &format!("refs/heads/{source}")])
-        .map_err(|_| "E_BRANCH_CONTEXT: invalid Git branch name".to_string())?;
+    reader
+        .git(root, &["check-ref-format", &format!("refs/heads/{source}")])
+        .map_err(|e| format!("E_BRANCH_CONTEXT: invalid Git branch name: {e}"))?;
     let mut kinds = vec![];
     for (kind, key) in [
         ("feature", "feature_prefix"),
@@ -56,12 +68,12 @@ pub fn branch(root: &Path, candidate: &str, ctx: &Value, w: &Value) -> Result<Va
     if age.is_negative() {
         return Err("E_BRANCH_CONTEXT: negative age".into());
     }
-    let dev_ancestors = commits(root, dev)?;
-    let branch_ancestors = commits(root, candidate)?;
+    let dev_ancestors = commits(reader, root, dev)?;
+    let branch_ancestors = commits(reader, root, candidate)?;
     // Shallow boundaries are acceptable only at/before the proven fork. Any other
     // truncated relevant history prevents a complete count or ancestry decision.
-    let fork_ancestors = commits(root, fork)?;
-    let shallow_path = facts::utf8(facts::git(root, &["rev-parse", "--git-path", "shallow"])?)?;
+    let fork_ancestors = commits(reader, root, fork)?;
+    let shallow_path = facts::utf8(reader.git(root, &["rev-parse", "--git-path", "shallow"])?)?;
     let path = root.join(shallow_path.trim());
     if path.exists() {
         let shallow =

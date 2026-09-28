@@ -532,7 +532,15 @@ fn produce_environment(
 }
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    match evaluate(req) {
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
+    match result {
         Ok((impact, findings, view)) => {
             if !findings.is_empty() {
                 response.status = Status::Fail;
@@ -563,24 +571,27 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(req: &Request) -> Result<(Impact, Vec<Finding>, Value), String> {
+fn evaluate(
+    req: &Request,
+    reader: &facts::Reader,
+) -> Result<(Impact, Vec<Finding>, Value), String> {
     req.validate()?;
     let root = &req.candidate.root;
-    if facts::verify_oid(root, &req.base.commit)? != req.base.tree
-        || facts::verify_oid(root, &req.candidate.commit)? != req.candidate.tree
+    if reader.verify_oid(root, &req.base.commit)? != req.base.tree
+        || reader.verify_oid(root, &req.candidate.commit)? != req.candidate.tree
     {
         return Err("fixed endpoint tree mismatch".into());
     }
     if facts::delta(
-        &facts::tree(root, &req.base.commit)?,
-        &facts::tree(root, &req.candidate.commit)?,
+        &reader.tree(root, &req.base.commit)?,
+        &reader.tree(root, &req.candidate.commit)?,
     ) != req.delta
     {
         return Err("DELTA differs from fixed endpoints".into());
     }
-    let (a, b, view) = chrono_judge_registration::views(req)?;
+    let (a, b, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     let inputs = chrono_judge_registration::inputs::validate(req, &a, &b)?;
-    let documents = chrono_judge_mixed::load_documents(req, &a, &b)?;
+    let documents = chrono_judge_mixed::load_documents_with_reader(req, &a, &b, reader)?;
     let (impact, findings) = produce_with_inputs_and_documents(
         &a,
         &b,

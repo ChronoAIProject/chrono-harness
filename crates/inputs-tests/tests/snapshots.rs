@@ -609,3 +609,77 @@ fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
     s["files"]["data"]["absent"] = value!(false);
     assert!(snapshot_shape(&s).is_err());
 }
+
+#[test]
+fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, _data, mut values, _) = fixture();
+    let root = fs::canonicalize(dir.path()).unwrap();
+    let state = root.join(".chrono-harness/state");
+    fs::create_dir_all(&state).unwrap();
+    let program = state.join("snapshot Git λ");
+    let trace = state.join("git-trace");
+    let real = chrono_harness::resolve_program(&root, "git", None).unwrap();
+    let version = Command::new(&real).arg("--version").output().unwrap();
+    assert!(version.status.success());
+    let quoted = |p: &Path| format!("'{}'", p.to_str().unwrap().replace('\'', "'\\''"));
+    fs::write(&program, format!("#!/bin/sh\n[ \"$SNAPSHOT_GIT\" = declared ] || exit 81\n[ -z \"$SHOULD_NOT_LEAK\" ] || exit 82\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",quoted(&trace),quoted(&real))).unwrap();
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+    let config = values.get_mut(CONFIG).unwrap();
+    config["schema_version"] = value!(3);
+    config["facts_git"] = value!({"tool":"chosen-git","input":"git-input"});
+    config["tools"].as_array_mut().unwrap().push(value!({"id":"chosen-git","program":program,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}));
+    config["environment"]["values"]["SNAPSHOT_GIT"] = value!("declared");
+    for input in config["environment"]["inputs"].as_array_mut().unwrap() {
+        input["presence"] = value!("present");
+        input["location"] = value!(fs::canonicalize(input["location"].as_str().unwrap()).unwrap());
+    }
+    config["environment"]["inputs"].as_array_mut().unwrap().push(value!({"id":"git-input","location":program,"presence":"present","sha256":sha256(&fs::read(&program).unwrap())}));
+    config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({"id":"absent","location":state.join("absent-input"),"presence":"absent"}));
+    write_values(&root, &values);
+    let oid = commit(&root);
+    let (exit, snapshot, error) = invoke(
+        &root,
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/v3.json",
+        ],
+    );
+    assert_eq!(exit, 0, "{error}");
+    assert_eq!(snapshot["schema"], "chrono-input-snapshot/v2");
+    assert_eq!(snapshot["files"]["absent"], value!({"absent":true}));
+    assert_eq!(
+        snapshot["config_digest"],
+        chrono_harness::wire::digest(&values[CONFIG]).unwrap()
+    );
+    assert_eq!(
+        snapshot["files"]["git-input"]["sha256"],
+        sha256(&fs::read(&program).unwrap())
+    );
+    assert!(fs::read_to_string(trace).unwrap().contains("rev-parse"));
+    fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
+    let (exit, _, error) = invoke(
+        &root,
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/rejected.json",
+        ],
+    );
+    assert_ne!(exit, 0);
+    assert!(error.contains("E_GIT_FACTS"));
+    assert!(!state.join("rejected.json").exists());
+    assert!(state.join("v3.json").exists());
+}

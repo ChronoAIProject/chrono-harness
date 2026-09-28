@@ -1,6 +1,6 @@
 //! Routes owns method planning and comparison with runner-produced observations.
 use chrono_harness::{
-    ProcessResult,
+    ProcessResult, facts,
     observation::{self, Tool},
     wire::{self, Finding, Request, Response, Status},
 };
@@ -413,8 +413,16 @@ pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
 }
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    match evaluate(req) {
-        Ok(outputs) => response.outputs = outputs,
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
+    match result {
+        Ok(outputs) => response.outputs.extend(outputs),
         Err(message) => {
             response.status = Status::Fail;
             response.findings.push(Finding {
@@ -428,9 +436,9 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(req: &Request) -> Result<BTreeMap<String, Value>, String> {
+fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
     req.validate()?;
-    let (old, r, view) = chrono_judge_registration::views(req)?;
+    let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     canonical(req, &r)?;
     let inputs = chrono_judge_registration::inputs::validate(req, &old, &r)?;
     let impact: chrono_judge_filemap::Impact =

@@ -15,7 +15,7 @@ pub const SNAPSHOT_SCHEMA: &str = "chrono-input-snapshot/v1";
 pub const SNAPSHOT_SCHEMA_V2: &str = "chrono-input-snapshot/v2";
 
 pub fn snapshot_schema(config: &Value) -> &'static str {
-    if config["schema_version"] == 2 {
+    if matches!(config["schema_version"].as_u64(), Some(2 | 3)) {
         SNAPSHOT_SCHEMA_V2
     } else {
         SNAPSHOT_SCHEMA
@@ -242,7 +242,9 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
     for (name, endpoint, r) in [("base", &req.base, old), ("candidate", &req.candidate, new)] {
         let cfg = r.config();
         let retained = &req.observations["retained"][name];
-        if cfg["schema_version"] == 2 && retained["schema"] != SNAPSHOT_SCHEMA_V2 {
+        if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
+            && retained["schema"] != SNAPSHOT_SCHEMA_V2
+        {
             return Err(format!("{name}: config v2 requires snapshot v2"));
         }
         if retained.get("schema").is_some() {
@@ -301,7 +303,8 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
             let identity = retained_identity(&req.candidate.root, value)
                 .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
             match &identity {
-                None if cfg["schema_version"] == 2 && input["presence"] == "absent" => {}
+                None if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
+                    && input["presence"] == "absent" => {}
                 Some((digest, _))
                     if input["presence"] != "absent"
                         && input["sha256"].as_str() == Some(digest) => {}
@@ -318,7 +321,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                 } else {
                     req.candidate.root.join(path)
                 };
-                let actual = if cfg["schema_version"] == 2 {
+                let actual = if matches!(cfg["schema_version"].as_u64(), Some(2 | 3)) {
                     observe_file(&path)
                 } else {
                     file_identity(&path).map(Some)
@@ -333,7 +336,9 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                     json!({"sha256":digest,"length":length,"location":input["location"]})
                 }
             };
-            if cfg["schema_version"] == 2 && fact.get("presence").is_none() {
+            if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
+                && fact.get("presence").is_none()
+            {
                 fact["presence"] = json!("present");
             }
             evidence.insert(id.to_string(), fact);
@@ -347,7 +352,9 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
 }
 
 fn effective_schema(old: &Registrations, new: &Registrations) -> &'static str {
-    if old.config()["schema_version"] == 2 || new.config()["schema_version"] == 2 {
+    if matches!(old.config()["schema_version"].as_u64(), Some(2 | 3))
+        || matches!(new.config()["schema_version"].as_u64(), Some(2 | 3))
+    {
         "chrono-effective-inputs/v2"
     } else {
         "chrono-effective-inputs/v1"

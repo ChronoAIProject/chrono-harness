@@ -5,7 +5,7 @@ mod evidence;
 mod transition;
 pub use branch::branch;
 use chrono_harness::{
-    json,
+    facts, json,
     wire::{self, Finding, Request, Response, Status},
 };
 use chrono_judge_projects::Results;
@@ -14,7 +14,15 @@ use serde_json::{Value, json as value};
 
 pub fn judge(req: &Request) -> Response {
     let mut r = req.response(Status::Pass);
-    match evaluate(req) {
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut r);
+    }
+    match result {
         Ok(v) => {
             r.outputs.insert("workflow".into(), v);
         }
@@ -48,9 +56,9 @@ pub fn judge(req: &Request) -> Response {
     }
     r
 }
-fn evaluate(req: &Request) -> Result<Value, String> {
+fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
     req.validate()?;
-    let (a, b, view) = chrono_judge_registration::views(req)?;
+    let (a, b, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     let ctx = json(&std::fs::read(&req.context.path).map_err(|e| e.to_string())?)?;
     if wire::digest(&ctx)? != req.context.sha256
         || ctx["schema_version"] != 2
@@ -59,7 +67,8 @@ fn evaluate(req: &Request) -> Result<Value, String> {
     {
         return Err("E_BRANCH_CONTEXT: workflow requires matching explicit v2 context".into());
     }
-    let state = branch(
+    let state = branch::with_reader(
+        reader,
         &req.candidate.root,
         &req.candidate.commit,
         &ctx,
@@ -87,6 +96,7 @@ fn evaluate(req: &Request) -> Result<Value, String> {
     let effective = chrono_judge_registration::inputs::validate(req, &a, &b)?;
     let binding = evidence::binding(req, &b, &plan, &results, impact, &effective)?;
     let transitions = transition::evaluate(
+        reader,
         req,
         &a,
         &b,
@@ -102,7 +112,10 @@ fn evaluate(req: &Request) -> Result<Value, String> {
             certificate::produce(req, &b, &ctx, binding, &plan, &results, &effective)?,
         )
     } else if required {
-        ("delivery", certificate::consume(req, &b, &ctx, &binding)?)
+        (
+            "delivery",
+            certificate::consume(reader, req, &b, &ctx, &binding)?,
+        )
     } else {
         ("ordinary_delta", Value::Null)
     };

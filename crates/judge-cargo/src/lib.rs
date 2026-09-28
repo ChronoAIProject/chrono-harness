@@ -245,9 +245,11 @@ fn read_policy(root: &Path, path: &str) -> Result<Policy> {
 }
 pub fn judge(req: &Request, path: &str) -> Response {
     let mut response = req.response(Status::Pass);
+    let reader = facts::Reader::for_request(req);
     let result = (|| -> Result<Value> {
         req.validate()?;
-        let (old, r, _) = chrono_judge_registration::views(req)?;
+        let reader = reader.as_ref().map_err(Clone::clone)?;
+        let (old, r, _) = chrono_judge_registration::views_with_reader(req, reader)?;
         chrono_judge_registration::inputs::validate(req, &old, &r)?;
         if !r.filemap()["files"]
             .as_array()
@@ -259,7 +261,7 @@ pub fn judge(req: &Request, path: &str) -> Response {
         }
         let policy = read_policy(&req.candidate.root, path)?;
         if fs::read(req.candidate.root.join(path)).map_err(|e| e.to_string())?
-            != facts::blob(&req.candidate.root, &req.candidate.commit, path)?
+            != reader.blob(&req.candidate.root, &req.candidate.commit, path)?
         {
             return Err("E_SNAPSHOT_DIRTY: Cargo policy changed".into());
         }
@@ -278,6 +280,9 @@ pub fn judge(req: &Request, path: &str) -> Response {
         let checked = check(&req.candidate.root, &r, &policy, &selected)?;
         Ok(serde_json::json!({"policy":path,"checked":checked,"input_closure_complete":false}))
     })();
+    if let Ok(reader) = &reader {
+        reader.record(&mut response);
+    }
     match result {
         Ok(value) => {
             response.outputs.insert("cargo_projects".into(), value);

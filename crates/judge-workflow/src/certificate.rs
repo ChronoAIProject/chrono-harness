@@ -1,4 +1,4 @@
-use crate::{branch, evidence};
+use crate::evidence;
 use chrono_harness::{
     json, no_symlink_parents, sha256,
     wire::{self, Request},
@@ -88,6 +88,7 @@ fn report_output<'a>(report: &'a Value, key: &str) -> Result<&'a Value, String> 
     Ok(values[0])
 }
 pub fn consume(
+    reader: &chrono_harness::facts::Reader,
     req: &Request,
     r: &Registrations,
     ctx: &Value,
@@ -116,8 +117,7 @@ pub fn consume(
         let candidate = producer["candidate"]
             .as_str()
             .ok_or("missing producer candidate")?;
-        if chrono_harness::facts::verify_oid(&req.candidate.root, candidate)? != req.candidate.tree
-        {
+        if reader.verify_oid(&req.candidate.root, candidate)? != req.candidate.tree {
             return Err("producer candidate tree differs".into());
         }
         let old_ctx = &proof["context"];
@@ -151,7 +151,9 @@ pub fn consume(
         }
         let mut now = old_ctx.clone();
         now["observed_at"] = ctx["observed_at"].clone();
-        if branch(&req.candidate.root, candidate, &now, r.workflow())?["kind"] != "integration" {
+        if crate::branch::with_reader(reader, &req.candidate.root, candidate, &now, r.workflow())?["kind"]
+            != "integration"
+        {
             return Err("producer is not integration".into());
         }
         let plan: Execution =
