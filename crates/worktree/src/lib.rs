@@ -1,5 +1,7 @@
 //! Produce real Git worktrees and observations; governance remains with the judges.
 mod maintenance;
+mod rebind;
+mod rebind_inputs;
 mod reconstruct;
 mod recovery;
 mod remote;
@@ -84,12 +86,14 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
     }
     let result = if matches!(
         args.first().map(String::as_str),
         Some(
-            "recover"
+            "inspect-rebind"
+                | "rebind"
+                | "recover"
                 | "recover-interrupted"
                 | "cleanup"
                 | "cleanup-fetch"
@@ -108,7 +112,9 @@ pub fn run(args: &[String]) -> CliOutput {
         Ok(report) => CliOutput {
             exit_code: if matches!(
                 report["status"].as_str(),
-                Some("created" | "reconstructed" | "recovered" | "cleaned")
+                Some(
+                    "created" | "reconstructed" | "recovered" | "cleaned" | "observed" | "rebound"
+                )
             ) {
                 0
             } else {

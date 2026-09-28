@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch, explicit leased remote retirement, and retained-intent interrupted checkout and fetch consumers | AI reconciliation, damaged/missing metadata, lost recovery identity, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch, explicit leased remote retirement, retained-intent interrupted checkout and fetch consumers, and explicit metadata rebind without old receipts | AI reconciliation, interrupted/partial-rebind continuation, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -159,8 +159,9 @@ loader and artifact classifier. Real consumers cover failed-hook recovery,
 reconciled reconstruction, original-report preservation, identity/lock/index
 refusals, explicit artifact disposal, ancestor/squash preservation, retries and
 actual removal/ref races and recovery of cleanup locks after retained-ref races. These operations do not certify governance or remote
-landing. Damaged/missing metadata, lost recovery identity, interruption before
-the retained checkpoint and autonomous provider orchestration remain pending.
+landing. Interrupted/partial-rebind continuation and autonomous provider orchestration
+remain pending; missing old receipts and damaged metadata use the explicit
+rebind contract below.
 
 Receipt-bound temporary-ref cleanup reuses maintenance receipt and saved-commit
 validation. Real Git tests cover preservation, explicit absence retries, malformed
@@ -174,7 +175,7 @@ creation or cleanup locking and consumes an explicitly selected intent with
 absent/partial result identity. Dedicated real CLI interruption tests cover
 creation, reconstruction and cleanup, original-byte preservation, terminal-result
 refusal, identity drift and publication collisions. It reuses the reconciled
-checkout release checks and leaves the original outcome unknown. Missing intent and damaged metadata remain unresolved; caller
+checkout release checks and leaves the original outcome unknown. This intent-based entry does not handle missing intent or damaged metadata; caller
 confirmation that the original process stopped is a premise, not a fact proven
 by the intent. This entry is included in public beta.8.
 
@@ -186,8 +187,7 @@ absence; an already absent ref requires an explicit retry plan. Real CLI tests
 terminate start/reconstruct after fetching and start after temporary-ref deletion,
 check absent/partial original results, identity/retention drift, terminal-result
 refusal, publication collisions and post-deletion evidence changes. Original
-outcomes stay unknown; loss of all recovery identity and damaged metadata remain
-unresolved. This entry is included in public beta.8. The four landed public examples verify both interrupted checkout and fetch consumers on macOS arm64; see [the example index](examples.md).
+outcomes stay unknown; missing identity is not reconstructed by this fetch entry. This entry is included in public beta.8. The four landed public examples verify both interrupted checkout and fetch consumers on macOS arm64; see [the example index](examples.md).
 
 
 Remote branch retirement now has an explicit `cleanup-remote` consumer, reusing
@@ -215,3 +215,15 @@ local/integration/PR/dev checks, then verified public-origin start, local cleanu
 and leased remote retirement. These are bounded product and scoped-host results;
 full generated dispatch adoption, complete input closure, activation, parity,
 AI reconciliation/PR/merge orchestration and formal refinement remain pending.
+
+
+Explicit metadata rebind now has separate inspect/execute plans with declared
+branch, HEAD, index tree, original metadata member, backup and donor. Real CLI
+regressions cover absent gitfile/metadata/parent and old receipts, corrupt index,
+relative or corrupt pointers with owned backlinks, byte/mode/symlink preservation,
+input and reference drift, wrong ownership, collisions, original failed process
+bytes and partial donor effects. Reconciled attached failures reuse existing
+`recover`; the original failed report is retained. Backup is rechecked before
+success. This source addition is not in beta.10 and does not recover a lost
+historical index. Interrupted rebind continuation, concurrent/crash atomicity and
+full governance remain outside the contract. See [worktree](worktree.md#explicit-metadata-rebind).

@@ -10,6 +10,7 @@ use std::{
 use support::*;
 const POLICY: &str = ".chrono-harness/worktree.json";
 mod maintenance;
+mod rebind;
 
 struct Host {
     _dir: tempfile::TempDir,

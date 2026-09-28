@@ -205,12 +205,17 @@
         "crates/worktree/src/start.rs",
         "crates/worktree/src/reconstruct.rs",
         ".chrono-harness/worktree.json",
-        "crates/worktree/src/remote.rs"
+        "crates/worktree/src/remote.rs",
+        "crates/worktree/src/maintenance.rs",
+        "crates/worktree/src/recovery.rs",
+        "crates/worktree/src/fetch_recovery.rs",
+        "crates/worktree/src/rebind.rs",
+        "crates/worktree/src/rebind_inputs.rs"
       ],
       "tests": [
         "worktree-tests"
       ],
-      "reason": "Explicit fresh worktree creation and registered DELTA reconstruction with original process observations and failure preservation"
+      "reason": "Explicit worktree creation, reconstruction, recovery, metadata rebind and retirement with original process observations and work preservation"
     },
     {
       "id": "ci-projections",

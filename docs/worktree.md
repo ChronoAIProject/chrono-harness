@@ -102,7 +102,7 @@ on each platform. The four [example hosts](examples.md) explicitly adopt the too
 and policy; no host-language or directory inference supplies their registrations.
 
 Registered maintenance below adds recovery of reconciled checkouts and explicit
-cleanup. AI semantic reconciliation, damaged-metadata recovery, PR provider
+cleanup. AI semantic reconciliation, interrupted-rebind continuation, PR provider
 operations, merge and actual landing orchestration remain unfinished. Subsequent governance
 checks continue to use the same registered `chrono-harness check` command locally
 and in CI. This increment changes product and adopted policy together; validation
@@ -263,8 +263,8 @@ mutations.
 Maintenance operations return the ordinary stored/stdout report with actual process
 bytes, `governance: not-evaluated` and `parity: unestablished`; success exits 0,
 failure exits 2. They preserve source work. Interrupted owned checkouts with a
-retained intent use the separate contract below. Damaged/missing Git metadata,
-lost recovery identity need their own contracts; no automatic metadata deletion or
+retained intent use the separate contract below. Damaged/missing Git metadata and lost old receipts use the separate explicit
+metadata-rebind contract below; no automatic metadata deletion or
 semantic reconciliation is provided. PR/merge/landing producers remain pending.
 These commands are included in the public beta.8 release and installed through
 the same pinned host distribution entry.
@@ -383,7 +383,7 @@ cleanup locking. They also cover absent/empty/truncated results, terminal-result
 refusal, identity drift and occupied intent paths. These are bounded process
 interruption checks, without a power-loss or concurrent-writer transaction
 guarantee. Interrupted fetches use the separate intent below. Missing intent,
-damaged Git metadata and PR/merge orchestration remain outside
+metadata rebind and PR/merge orchestration remain outside
 this contract. No governance or local/CI parity guarantee is added.
 
 ## Interrupted fetch cleanup
@@ -443,7 +443,7 @@ Real CLI tests cover process termination after fetch and after ref removal,
 start/reconstruct consumers, absent/empty/truncated results, explicit retry,
 identity/retention drift, symbolic refs, terminal reports, occupied publication
 paths and evidence changed during deletion. Missing both usable receipt and
-intent, damaged Git metadata and PR/merge orchestration remain
+intent and PR/merge orchestration remain
 outside this contract. These observations do not make concurrent writers atomic,
 provide power-loss durability, or certify governance and local/CI parity.
 
@@ -518,3 +518,94 @@ Real bare-remote consumers cover unchanged local dirty work, explicit endpoint
 selection despite configured push refspecs, squash retention and absence retries,
 endpoint/branch/retention rejection, symbolic refs, concurrent branch updates,
 original failure after deletion, and target/plan changes after deletion.
+
+## Explicit metadata rebind
+
+`inspect-rebind` and `rebind` are source additions, not part of public beta.10.
+They recover a linked checkout's Git attachment when its metadata is missing or
+unusable, including loss of all old operation receipts. The AI supplies the
+existing branch, exact current commit, desired index tree and each path. The old
+index and original operation outcome are never inferred. A healthy attachment
+uses ordinary maintenance.
+
+Both commands use the registered worktree policy and the maintenance plan:
+
+```sh
+chrono-worktree inspect-rebind --host-root ROOT --config .chrono-harness/worktree.json --plan .chrono-harness/state/rebind-inspection.json
+chrono-worktree rebind --host-root ROOT --config .chrono-harness/worktree.json --plan .chrono-harness/state/rebind-plan.json
+```
+
+The inspection plan is explicit data; OIDs below must be replaced with actual
+commit/tree identities. `index_tree` declares the index to install, which can
+represent chosen staged work and may differ from HEAD.
+
+```json
+{
+  "schema": "chrono-worktree-maintenance/v1",
+  "operation": "inspect-rebind",
+  "head": "<existing branch commit OID>",
+  "binding": {
+    "path": "../orphan checkout",
+    "branch": "feature/recovered-work",
+    "index_tree": "<chosen Git tree OID>",
+    "metadata_id": "orphan-checkout",
+    "backup": ".chrono-harness/state/original-metadata",
+    "donor": "../fresh-donor",
+    "expected": null
+  }
+}
+```
+
+Inspection reports `observed` and a `proposed_plan` with `operation: rebind` and
+observed `expected` identities. Save that exact proposed plan in registered state
+before executing it. `expected` contains nullable gitfile identity
+(`sha256`, `size`, permission `mode`), nullable metadata digest and the visible
+subtree digest. The report retains the scope entries with raw path bytes, regular
+file content hashes/sizes/modes and literal symlink targets. Only the target root
+`.git` is excluded from visible work. This filesystem observation verifies an
+explicit preservation scope; it never enrolls files or derives test dependencies.
+Inspection writes its state report but does not change the selected checkout.
+
+The target must be a physical directory outside the source/common Git directory
+and other checkouts. The branch must use a registered work prefix, exist at the
+declared HEAD and not belong to another checkout. The original metadata member is
+explicitly selected under the same common repository's `worktrees` directory;
+that parent may itself be absent. A usable old gitfile pointer and metadata
+backlink must agree with the selected target/member. Relative pointers are
+resolved lexically from the containing directory; symlink aliases are not treated
+as equivalent physical ownership. If metadata exists, at least one usable link
+must identify it. Missing old receipts do not authorize another checkout's
+metadata. Root `.git` directories/symlinks and special files in the preservation
+scope are rejected.
+
+Backup must be an absent path under registered `.chrono-harness/state/` with
+existing physical parents. Donor must be an absent directory with an existing
+parent and must not overlap protected paths. Choose a donor basename that is not
+a prefix of `metadata_id`, so Git cannot reuse the old allocation. Before effects,
+execution rechecks source/configuration/branch/plan and observed identities and
+publishes immutable `chrono-worktree-rebind-intent/v1` containing the exact plan
+hash and expected-input digest. It copies the old gitfile bytes/mode, renames
+remaining metadata into `backup/metadata`, then creates a locked detached donor
+with `--no-checkout`. It sets the declared branch and index, publishes the donor
+pointer, runs Git repair, verifies attachment, removes the empty donor and
+releases the lock. No checkout/reset writes the original working files. Final
+success also rechecks the visible subtree and preserved backup.
+
+`rebound` means the declared attachment/index are verified and the observed work
+was preserved. It reports `index_origin: explicit-plan`,
+`original_outcome: unknown`, `governance: not-evaluated` and
+`parity: unestablished`; staged or unstaged work remains the caller's responsibility
+before canonical checks. It does not certify historical-index recovery, full
+input closure or a checked candidate.
+
+An ordinary failure retains phase, original process bytes/exit, immutable intent,
+backup and partial effects. Never rerun blindly over a nonempty backup/donor.
+Once Git repair has attached the destination and its original ownership lock is
+still present, existing receipt-bound `recover` can release it after explicit AI
+reconciliation; the original failed report, backup and any remaining donor stay
+untouched. Before attachment, or if the rebind result itself is missing, automated
+continuation is not yet implemented. The AI must first establish that the old
+process stopped and reconcile the retained evidence. Backup uses same-filesystem
+rename; cross-device failure is reported without deleting old metadata. There is
+no concurrent-writer isolation or crash/power-loss atomicity guarantee, and the
+observed identity does not preserve timestamps, ACLs, xattrs or hardlink topology.

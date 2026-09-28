@@ -217,7 +217,15 @@ pub(crate) fn observe_result(
             if original["schema"] == "chrono-worktree-report/v1"
                 && matches!(
                     original["status"].as_str(),
-                    Some("failed" | "created" | "reconstructed" | "recovered" | "cleaned")
+                    Some(
+                        "failed"
+                            | "created"
+                            | "reconstructed"
+                            | "recovered"
+                            | "cleaned"
+                            | "observed"
+                            | "rebound"
+                    )
                 )
             {
                 return Err("original result declares a terminal outcome; use its ordinary maintenance contract".into());
