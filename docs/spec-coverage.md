@@ -136,3 +136,10 @@ limit failure and preserve detection of unknown neighbors, literal/case lookalik
 tracked changes, and files or symlinks at artifact directory names. Git pathspec
 environment normalization is confined to those queries and recorded per process;
 this does not certify complete Git configuration or external-input closure.
+
+The product native release recipe consumes an explicit ordered set of registered
+project actions, with preflight rejection and actual process bytes in build v2
+reports. Dedicated consumers test literal arguments, action ambiguity, failure
+exits and packaging suppression. The beta.6 plan includes worktree; public
+availability and real platform behavior require completed native release runs.
+This recipe does not certify full input closure or deterministic parity.

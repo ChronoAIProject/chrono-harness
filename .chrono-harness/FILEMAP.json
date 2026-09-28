@@ -2353,6 +2353,18 @@
       ]
     },
     {
+      "path": "crates/distribution-tests/tests/release_recipe.rs",
+      "owner": "distribution-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:distribution-tests"
+        }
+      ]
+    },
+    {
       "path": "assets/distribution/bootstrap.py",
       "owner": "distribution",
       "surface": "product",

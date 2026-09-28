@@ -4,7 +4,11 @@
 
 ## 发布者
 
-本库 `.chrono-harness/release/build.json` 显式列独立构建 manifest、Rust 工具链；`plan.json` 显式列版本、二进制名称与已构建路径。`build.py ROOT OUTPUT` 构建这些成员、运行专属安装测试，调用唯一 `pack` 实现并保留实际平台/工具版本。它是本产品的宿主配方，不是其它语言仓库的要求。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行此配方；上传构建 artifacts 不等于已发布。
+本库 `.chrono-harness/release/build.json` 使用 `chrono-release-build/v2`，显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`；`plan.json` 显式列版本、二进制名称与已构建路径。`build.py ROOT OUTPUT` 构建这些成员后，按操作 ID 从登记项目或独立 scripts 的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现。当前明确选择 distribution 与 worktree 的生产构建及专属测试；新增验证只需登记工具和操作，不扫描项目、不复制测试命令。
+
+配方在构建前拒绝未知、重复、歧义操作、无效 argv 与缺失工具；实际验证子进程非零会停止打包并保留退出码和输出。成功包中的 `build.json` 使用 `chrono-native-build/v2`，保留平台、工具版本、源码提交，以及已完成操作的顺序、实际 argv/cwd、退出码、原始 stdout/stderr 字节和摘要。这里仅消费显式操作登记，不代表完整治理准入、环境闭包或跨平台同判。
+
+这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方；上传构建 artifacts 不等于已发布。当前发布计划为 beta.6，是否公开可用以 Releases 为准；已经发布的 beta.5 不变。
 
 ```sh
 chrono-distribution pack --root PRODUCT --plan PRODUCT/.chrono-harness/release/plan.json --output ABSENT_OUTPUT
@@ -42,3 +46,5 @@ python3 HOST/.chrono-harness/install.py HOST
 同一宿主的协作安装由 `.chrono-harness/.distribution-lock` 排他。普通文件替换失败尝试逆序恢复，失败报告恢复目录。没有崩溃原子性或与不合作并发写者的隔离保证；进程被强杀后的锁/恢复目录须核实后恢复。源/目的 symlink、越界路径和非文件覆盖被拒绝。支持 Unix；不声称 Windows 支持。
 
 专属测试覆盖安装、升级、损坏后修复、重复安装、保留宿主 SDK、坏清单/晚到坏资产不替换、普通替换失败回滚、平台/成员/安装器错配、目的冲突、路径与 symlink、配置定制保护、bootstrap 真退出及实际安装器在含空格路径/不同 cwd 下运行。发布与实际宿主 check 各保留自身成功/失败；安装成功不是治理通过。
+
+发布配方专属消费者测试通过实际 Python 入口验证显式操作顺序、含空格路径与不同 cwd、参数原样传递、未知／重复／歧义登记在构建前失败、失败阻止打包及保留原始非 UTF-8 输出。这些夹具验证配方委托；真实 Rust 测试与平台行为另由原生发布作业验证。
