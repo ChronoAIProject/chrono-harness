@@ -124,9 +124,9 @@ isolated branch creation and source/process identity reports. Its dedicated test
 exercise public library/CLI behavior with real remotes and checkout hooks, and
 reuse the existing strict registration loader and bounded process engine. Creation
 does not certify full governance, stale recovery, PR delivery or landing. The
-adopted policy and native asset build are explicitly registered; public beta.7
+adopted policy and native asset build are explicitly registered; public beta.8
 ships this binary on macOS arm64 and Linux x86_64. Its native release recipe
-passed all 36 dedicated worktree tests on each platform.
+passed all 49 dedicated worktree tests on each platform.
 
 Explicit reconstruction reuses the worktree producer and its original process/identity helpers. Real CLI tests cover an advanced target, complete carry/retire choices, original source preservation, binary/mode/link/add/delete changes, literal paths, failed apply conflicts, source mutation, patch output bounds and empty/reused destinations. A successful result is a staged index tree, without a candidate commit or governance/integration verdict. AI reconciliation and provider delivery remain unfinished; registered maintenance is described below.
 
@@ -141,8 +141,8 @@ this does not certify complete Git configuration or external-input closure.
 The product native release recipe consumes an explicit ordered set of registered
 project actions, with preflight rejection and actual process bytes in build v2
 reports. Dedicated consumers test literal arguments, action ambiguity, failure
-exits and packaging suppression. Public beta.7 includes worktree; the completed
-native release run passed the 15 distribution and 36 worktree tests on each platform, and anonymous downloads
+exits and packaging suppression. Public beta.8 includes worktree; the completed
+native release run passed the 15 distribution and 49 worktree tests on each platform, and anonymous downloads
 verified the manifest plus both platforms’ worktree and installer assets.
 This recipe does not certify full input closure or deterministic parity.
 
@@ -161,17 +161,17 @@ by a failed Git exit. It preserves the original failure and reports unverified
 effects separately from verified absence. It requires a complete original report;
 interrupted or missing receipts remain outside this recovery contract.
 
-Candidate interrupted checkout recovery publishes immutable identity before
+Released interrupted checkout recovery publishes immutable identity before
 creation or cleanup locking and consumes an explicitly selected intent with
 absent/partial result identity. Dedicated real CLI interruption tests cover
 creation, reconstruction and cleanup, original-byte preservation, terminal-result
 refusal, identity drift and publication collisions. It reuses the reconciled
 checkout release checks and leaves the original outcome unknown. Missing intent and damaged metadata remain unresolved; caller
 confirmation that the original process stopped is a premise, not a fact proven
-by the intent. This source addition is not in public beta.7.
+by the intent. This entry is included in public beta.8.
 
 
-Candidate interrupted fetch cleanup publishes a separate immutable identity before
+Released interrupted fetch cleanup publishes a separate immutable identity before
 fetch, without an invented base or outcome. `cleanup-fetch-interrupted` reuses
 ordinary direct-ref/expected-OID cleanup, explicit commit retention and verified
 absence; an already absent ref requires an explicit retry plan. Real CLI tests
@@ -179,4 +179,4 @@ terminate start/reconstruct after fetching and start after temporary-ref deletio
 check absent/partial original results, identity/retention drift, terminal-result
 refusal, publication collisions and post-deletion evidence changes. Original
 outcomes stay unknown; loss of all recovery identity and damaged metadata remain
-unresolved. This addition is not in public beta.7.
+unresolved. This entry is included in public beta.8. The four landed public examples verify both interrupted checkout and fetch consumers on macOS arm64; see [the example index](examples.md).
