@@ -15,5 +15,9 @@ tempfile = "3"
 name = "behavior"
 path = "tests/behavior.rs"
 
+[[test]]
+name = "initial_projection"
+path = "tests/initial_projection.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3

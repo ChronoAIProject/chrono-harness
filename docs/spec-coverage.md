@@ -17,7 +17,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
 | 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports | autonomous fresh worktrees, stale rebuild, PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
-| 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base | full source/toolchain provenance, initial-profile generation and activation migration |
+| 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base | full source/toolchain provenance, native v2 initial adoption and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
 | 14 boundaries | implemented documentation | README/SPEC/this map | update as later increments land |
 | 15 generic reference experience | partial | existing fixed-source references; no reference repo modifications | apply remaining generic workflow lessons |
@@ -110,5 +110,7 @@ completion is a separate report status, not governance success. Root, shallow
 history, Git replacement overlays, dirty/index, malformed/dangling, actual process and protocol cases live
 in the dedicated runner/registration/CI tests. Initial parent checks share the
 original-header reader across the new profile, scoped judge and event preparer.
-Source/toolchain bootstrap
-provenance, automatic initial-profile generation and activation remain outstanding.
+The CI v2 source explicitly declares and generates the initial profile alongside
+the workflow; its dedicated tests exercise actual root registration and rejection,
+exact event argv, preserved v1 behavior, drift and adoption collisions. Source/toolchain
+bootstrap provenance, native v2 first-push adoption and activation remain outstanding.
