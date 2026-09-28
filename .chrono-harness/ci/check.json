@@ -46,7 +46,9 @@
       "crates/distribution-tests/target/",
       ".chrono-harness/cache/",
       "crates/judge-cargo/target/",
-      "crates/judge-cargo-tests/target/"
+      "crates/judge-cargo-tests/target/",
+      "crates/worktree/target/",
+      "crates/worktree-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",

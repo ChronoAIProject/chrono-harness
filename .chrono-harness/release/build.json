@@ -15,6 +15,7 @@
     "crates/judge-workflow/Cargo.toml",
     "crates/inputs/Cargo.toml",
     "crates/distribution/Cargo.toml",
-    "crates/judge-cargo/Cargo.toml"
+    "crates/judge-cargo/Cargo.toml",
+    "crates/worktree/Cargo.toml"
   ]
 }

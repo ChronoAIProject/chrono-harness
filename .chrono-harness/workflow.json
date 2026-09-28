@@ -194,6 +194,21 @@
         "judge-cargo-tests"
       ],
       "reason": "Optional Cargo consistency; generic core has no language or directory semantics"
+    },
+    {
+      "id": "worktree-creation",
+      "paths": [
+        "crates/worktree/Cargo.toml",
+        "crates/worktree/Cargo.lock",
+        "crates/worktree/src/lib.rs",
+        "crates/worktree/src/main.rs",
+        "crates/worktree/src/start.rs",
+        ".chrono-harness/worktree.json"
+      ],
+      "tests": [
+        "worktree-tests"
+      ],
+      "reason": "Explicit fresh worktree production, real Git observations and failure preservation"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -215,7 +230,8 @@
       "judge-workflow-tests",
       "inputs-tests",
       "distribution-tests",
-      "judge-cargo-tests"
+      "judge-cargo-tests",
+      "worktree-tests"
     ],
     "bind": [
       "base",

@@ -34,6 +34,8 @@ crates/                         独立 Cargo 项目的目录分组
   runner-tests/                 runner 专属测试
   inputs/                       显式输入快照与保留内容运输
   inputs-tests/                 输入生产者专属测试
+  worktree/                     显式远端目标上的新工作树生产者
+  worktree-tests/                真实 Git 创建与失败保留测试
   judge-registration/           v1 登记结构、快照与受影响引用判官
   judge-registration-tests/     registration 专属测试
   judge-filemap/                v1 完整声明图与 impact，复用注册数据
@@ -501,6 +503,8 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 这些未知项仍不是完整治理成功。完整报告、专门生产者及完整输入证据的义务不因此减免。
 
 ## 10. dev、integration 与过期分支
+
+现役 `chrono-worktree start` 按宿主 `.chrono-harness/worktree.json`、五份登记及实际远端抓取结果创建新工作树，记录固定 base/tree、分支、开始时间和真实 Git 回执。它只生产操作结果，不产生新鲜度、integration 或治理通过判词；后续仍调用相同的登记 check 入口。创建失败保留工作和身份供恢复，不重置已有分支或删除已有目录。实际合同与当前恢复、PR、合并边界见 [worktree 合同](docs/worktree.md)。
 
 所有交付最终进入 dev；feature 与 integration 均从当时最新 dev 创建。
 workflow 当前草案阈值：落后 dev **超过 3 个提交**，或本分支年龄 **超过 24 小时**，

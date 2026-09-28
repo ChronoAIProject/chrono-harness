@@ -1,0 +1,20 @@
+[package]
+name = "chrono-worktree-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-worktree = { path = "../worktree" }
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+serde_json = "1"
+tempfile = "3"
+
+[[test]]
+name = "creation"
+path = "tests/creation.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

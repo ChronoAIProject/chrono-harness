@@ -1,0 +1,96 @@
+# Registered worktree creation
+
+`chrono-worktree` is an independent Rust producer with its own `worktree-tests`
+project. It creates a new feature or integration worktree from a freshly fetched,
+explicit remote target. It does not select projects from directory names, run a
+language restore, reset existing branches, open PRs or claim a governance verdict.
+
+The host registers `.chrono-harness/worktree.json` in FILEMAP. Its schema is
+`chrono-worktree-config/v1`; the adopted file supplies the complete shape:
+
+```json
+{
+  "schema": "chrono-worktree-config/v1",
+  "host_config": ".chrono-harness/config.json",
+  "remote": "origin",
+  "git": {"program": "git", "expected_version": null, "sha256": null},
+  "environment": {
+    "inherit": ["PATH", "HOME", "SSH_AUTH_SOCK"],
+    "values": {"GIT_TERMINAL_PROMPT": "0"}
+  },
+  "timeout_seconds": 120,
+  "output_limit_bytes": 1048576,
+  "report_directory": ".chrono-harness/state/worktrees/"
+}
+```
+
+The five host registries remain the authority for target branch, feature and
+integration prefixes, FILEMAP membership and artifact ownership. The producer
+reuses their existing strict loader. A successful load or creation is not full
+reference admission, complete input certification, freshness certification or
+activation. Workflow's normal judge still evaluates delivery context and DELTA.
+
+After installing the candidate binary through the registered bootstrap:
+
+```sh
+.chrono-harness/bin/chrono-worktree start \
+  --host-root . --config .chrono-harness/worktree.json \
+  --kind integration --name task --path ../new-task-checkout
+```
+
+All five arguments are required; unknown, repeated or empty arguments fail.
+The destination is explicit, its parent must exist, and it must not exist or be
+nested within an existing registered worktree. Paths are relative to the supplied
+host root, not the caller's working directory. Spaces and UTF-8 names are literal
+arguments. This version supports the tested Unix Git interface.
+
+The producer resolves the configured Git executable once for observation and
+binds its actual bytes for every Git operation. Optional expected digest and
+version values reject mismatches; a null value makes no expected-identity claim.
+Only the declared environment is inherited, and explicit values override it.
+Git repository-redirection variables are rejected. Git configuration, credential
+helpers and hooks are not certified as a complete input closure. No global
+configuration is edited, and new branches explicitly disable automatic tracking.
+
+The local policy must match the source commit. The producer reads the declared
+workflow target, fetches that exact remote branch into a unique temporary ref,
+records its commit and tree, then deletes only that temporary ref using its
+observed OID. It reads the fetched registries and requires the policy bytes and
+target branch to remain compatible before creating anything. Remote movement
+after the fetch is not claimed absent; the receipt identifies the observed tip.
+An advanced source checkout or unrelated dirty source files are not reset.
+
+Creation uses a new branch and a worktree lock tied to this invocation. Actual
+Git inventory, HEAD, branch, root and checkout cleanliness are checked before
+unlocking it. The producer reuses registration's artifact classifier: declared
+untracked artifact paths are allowed and preserved. Existing paths and branches
+are preserved. A failing checkout hook,
+timeout, changed identity or dirty new checkout fails creation and preserves the
+new branch/worktree for recovery. There is no automatic deletion or success
+inference from a partially completed Git command. A failed fetch may retain its
+named temporary ref; inspect the report before recovery.
+
+Each observed attempt writes a unique `chrono-worktree-report/v1` JSON file under
+the configured state directory and returns the same JSON on stdout. It contains
+source identity, observed base/tree, branch/destination, start time, configuration
+digest, inherited/effective environment, Git version observation and actual
+subprocess argv, bytes, hashes, exits and bound failures. Failures before tool
+observation/configuration acceptance return a nonzero diagnostic without inventing
+a process receipt. After observation, `status` is `created` or `failed` and the
+CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
+remains `unestablished`. The partial `context` is an input for later work, not a
+complete check context or integration certificate.
+
+The dedicated tests use real bare remotes, advanced remote commits, arbitrary
+host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
+remote policy drift, missing remotes, tool mismatch and real checkout hooks. The
+adopted policy has an actual subprocess consumer. The host registers both the
+binary and dedicated test plan; future native release builds also register this
+asset. Already published beta.5 assets are unchanged and do not contain this tool.
+
+Automatic stale reconstruction, retry/cleanup recovery, PR provider operations,
+merge and actual landing orchestration remain unfinished. Subsequent governance
+checks continue to use the same registered `chrono-harness check` command locally
+and in CI. This increment changes product and adopted policy together; validation
+scope expands by the new project/test pair and bootstrap/release registrations.
+Declared costs remain unknown, and no acknowledgement or human approval is added.
