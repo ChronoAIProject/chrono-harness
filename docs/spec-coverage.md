@@ -238,3 +238,10 @@ unsaved work on creation/recovery/cleanup; they share the same tree/index compar
 through the existing registered Git runner. This source addition is not in
 beta.10. It establishes neither full input closure nor deterministic parity;
 see [Git facts](git-facts.md#literal-checkout-identity).
+
+Source cleanup disposes only explicitly selected untracked artifacts under its
+owned lock before the bounded Git removal. Real consumers verify effect ordering,
+tracked-content refusal before disposal, preserved external symlink targets, and
+original Git failure plus explicit retry. This is newer than beta.11; recovery of
+older partial source deletion and atomic concurrent/power-loss disposal remain
+outside this increment. See [artifact disposal](worktree.md#declared-artifact-disposal-before-checkout-removal).

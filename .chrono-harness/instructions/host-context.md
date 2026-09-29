@@ -69,3 +69,5 @@ their existing Git runner, flags, artifact and process contracts. Hosts must
 materialize exact registered snapshot bytes; CRLF/filter/symlink emulation is not
 silently normalized. Full Git/delegated/SDK closure remains unfinished. See
 docs/git-facts.md#literal-checkout-identity; beta.10 lacks this source addition.
+
+Source cleanup now preflights every explicitly selected artifact directory, rejects tracked contents, and disposes registered untracked outputs under the owned lock before bounded Git checkout removal. Per-path effects and later Git failures are preserved; filesystem deletion stays in the host job lifecycle without a Git subprocess deadline. Existing recovery and explicit retry handle artifact-only partial failures. This source addition is newer than beta.11; older partial source deletion, concurrent/power-loss transactions and arbitrary source-volume deadlines are not covered. See docs/worktree.md#declared-artifact-disposal-before-checkout-removal.

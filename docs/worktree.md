@@ -620,3 +620,30 @@ Cleanup preserves such unsaved work; recovery keeps its lock until the actual
 files match the explicitly supplied index tree. The existing artifact exclusion
 and saved-commit checks still apply. This source change is not in beta.10 and
 does not claim complete Git configuration closure or concurrent deletion safety.
+
+## Declared artifact disposal before checkout removal
+
+Source `cleanup` now separates explicitly selected generated output directories
+from the bounded Git checkout-removal process. Before deleting any selected
+directory, it verifies every entry is an untracked artifact in both endpoint
+registries, contains no tracked candidate path, and is absent or a physical
+directory without symlink ancestors. Existing saved-work, branch, checkout,
+unknown-file and nested-worktree checks still apply. Disposal runs under the
+owned worktree lock; literal checkout and retention are checked again before
+unlock and Git removal. The plan never discovers disposable directories.
+
+`artifact_disposals` records each attempted path with `already-absent`,
+`attempted-unverified`, or `verified-absent`. The filesystem phase is within the
+caller’s host job lifecycle and has no Git subprocess deadline. A filesystem
+failure may partially delete the authorized artifacts while retaining the lock;
+resolve the cause and use existing receipt/intent recovery before explicit retry.
+A later Git failure retains the original process bytes and the completed artifact
+effects. Neither failure is rewritten as successful checkout removal.
+
+This addresses generated build outputs consuming the Git-removal deadline and
+leaving a partially deleted checkout. It does not make concurrent changes or
+power loss atomic, recover a checkout already partially deleted by an older
+Git-removal attempt, or guarantee a deadline for arbitrary tracked source volume.
+The change is newer than beta.11. Dedicated real-Git consumers verify removal
+ordering independently of elapsed time, tracked-content rejection before any
+disposal, internal-symlink target preservation and a later Git failure/retry.

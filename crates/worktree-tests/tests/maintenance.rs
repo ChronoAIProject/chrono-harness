@@ -748,3 +748,131 @@ mod interruption;
 
 #[path = "remote.rs"]
 mod remote;
+
+fn artifact_removal_git(h: &Host, condition: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let real = Command::new("/bin/sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap();
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
+    let wrapper = h.parent.join("artifact-git");
+    fs::write(
+        &wrapper,
+        format!("#!/bin/sh\nif [ \"$2\" = worktree ] && [ \"$3\" = remove ]; then\n{condition}\nfi\nexec '{real}' \"$@\"\n"),
+    ).unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    h.policy(|p| p["git"]["program"] = value!(wrapper));
+}
+
+#[test]
+fn cleanup_artifact_disposal_precedes_git_removal() {
+    use std::os::unix::fs::symlink;
+    let h = Host::new("payload");
+    artifact_removal_git(
+        &h,
+        "if [ -e \"$6/.chrono-harness/state/output\" ]; then echo artifacts-reached-git-removal >&2; exit 71; fi",
+    );
+    let target = h.parent.join("artifact disposal λ");
+    assert_eq!(h.invoke("feature", "artifacts", &target).0, 0);
+    let outside = h.parent.join("preserved outside");
+    fs::write(&outside, b"not disposable").unwrap();
+    fs::create_dir_all(target.join(".chrono-harness/state/nested")).unwrap();
+    fs::write(target.join(".chrono-harness/state/output"), b"generated").unwrap();
+    symlink(&outside, target.join(".chrono-harness/state/nested/link")).unwrap();
+    let mut plan = h.cleanup(&target);
+    plan["discard_artifacts"] = value!([".chrono-harness/state/", ".chrono-harness/bin/"]);
+    let (code, report, error) = h.maintain("cleanup", plan);
+    assert_eq!(code, 0, "{} {error}", report["error"]);
+    assert_eq!(
+        report["artifact_disposals"],
+        value!([
+            {"path":".chrono-harness/state/", "status":"verified-absent"},
+            {"path":".chrono-harness/bin/", "status":"already-absent"}
+        ])
+    );
+    assert_eq!(report["worktree_removal"], "verified-absent");
+    assert_eq!(fs::read(outside).unwrap(), b"not disposable");
+    assert!(!target.exists());
+}
+
+#[test]
+fn cleanup_artifact_disposal_rejects_tracked_content_before_any_effect() {
+    let h = Host::new("owned/payload");
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"owned/", "owner":"host", "kind":"cache", "tracked":false
+    }));
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    h.policy(|_| {});
+    let target = h.parent.join("tracked artifact conflict");
+    assert_eq!(h.invoke("feature", "tracked-artifact", &target).0, 0);
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        target.join(".chrono-harness/state/output"),
+        b"keep on preflight failure",
+    )
+    .unwrap();
+    let original = fs::read(target.join("owned/payload")).unwrap();
+    let mut plan = h.cleanup(&target);
+    plan["discard_artifacts"] = value!([".chrono-harness/state/", "owned/"]);
+    let (code, report, _) = h.maintain("cleanup", plan);
+    assert_ne!(code, 0, "tracked artifact contents must prevent disposal");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("contains tracked paths")
+    );
+    assert_eq!(fs::read(target.join("owned/payload")).unwrap(), original);
+    assert_eq!(
+        fs::read(target.join(".chrono-harness/state/output")).unwrap(),
+        b"keep on preflight failure"
+    );
+    assert_eq!(report["worktree_removal"], "not-attempted");
+    assert_eq!(report["artifact_disposals"], value!([]));
+}
+
+#[test]
+fn cleanup_artifact_disposal_retains_partial_failure_and_explicit_retry() {
+    let h = Host::new("payload");
+    artifact_removal_git(
+        &h,
+        "if [ -e \"$HOME/fail-remove\" ]; then echo original-remove-failure >&2; exit 71; fi",
+    );
+    let target = h.parent.join("partial artifact cleanup");
+    assert_eq!(h.invoke("feature", "partial-artifacts", &target).0, 0);
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    fs::write(target.join(".chrono-harness/state/output"), b"disposable").unwrap();
+    fs::write(h.parent.join("fail-remove"), b"one failed attempt").unwrap();
+    let payload = fs::read(target.join("payload")).unwrap();
+    let mut plan = h.cleanup(&target);
+    plan["discard_artifacts"] = value!([".chrono-harness/state/"]);
+    let (code, failed, _) = h.maintain("cleanup", plan.clone());
+    assert_ne!(code, 0);
+    assert!(
+        !target.join(".chrono-harness/state").exists(),
+        "selected artifacts must be disposed before the failing Git command"
+    );
+    assert_eq!(fs::read(target.join("payload")).unwrap(), payload);
+    assert_eq!(failed["artifact_disposals"][0]["status"], "verified-absent");
+    assert_eq!(failed["worktree_removal"], "attempted-unverified");
+    assert!(failed["processes"].as_array().unwrap().iter().any(|row| {
+        row["process"]["exit_code"] == 71
+            && row["process"]["stderr"]
+                .as_str()
+                .unwrap()
+                .contains("original-remove-failure")
+    }));
+    let receipt = h.root.join(failed["report_path"].as_str().unwrap());
+    let original = fs::read(&receipt).unwrap();
+    fs::remove_file(h.parent.join("fail-remove")).unwrap();
+    let (code, repaired, error) = h.maintain("cleanup", plan);
+    assert_eq!(code, 0, "{} {error}", repaired["error"]);
+    assert_eq!(
+        repaired["artifact_disposals"][0]["status"],
+        "already-absent"
+    );
+    assert_eq!(repaired["worktree_removal"], "verified-absent");
+    assert_eq!(fs::read(receipt).unwrap(), original);
+}
