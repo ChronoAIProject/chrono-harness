@@ -259,8 +259,17 @@ Global DELTA obligations are checked before partitioning; gathering binds origin
 workflow sources, endpoints and attempts. The [public examples](examples.md)
 verify separate SDK profiles, actual failure/cancellation isolation, selective
 retry and zero-DELTA collection. The three business hosts’ binary upgrades preserve
-CI/SDK sources and generated workflows byte for byte. Product independent native
-workflow adoption remains pending; ambiguous provider runs still fail explicitly.
+CI/SDK sources and generated workflows byte for byte. The product host also
+registers sixteen independent complete-plan workflows and a collector, with an
+explicit three-tool bootstrap configuration. The bootstrap regression exercises
+configured operation/install selection, unchanged default behavior and failure
+propagation. Historical repair and initial-profile consumers use the adopted
+provider without reinterpreting historical definitions. The source-only historical
+method replacement extension binds exact original/current methods and mapped
+owners, rejects missing/stale/duplicate/unbound declarations, retains the omitted
+field's strict contract and exercises actual drift detection and repair.
+Ambiguous provider runs
+still fail explicitly; this does not certify full input closure or governance.
 
 Public beta.13 adds owned projection migration from explicit scoped v1/units
 sources to units. Tests preserve custom initialization, source bytes and unrelated

@@ -292,6 +292,47 @@ fn interpret_mode(
     }
     let nodes = new.node_data();
     let mappings = profile["mappings"].as_array().unwrap();
+    // A replacement is an exact, same-operation declaration, not an inference
+    // from a renamed path or a waiver of the original execution obligation.
+    let mut replacements = BTreeSet::new();
+    for replacement in profile["method_replacements"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let from: execution::Method = serde_json::from_value(replacement["from"].clone())
+            .map_err(|e| format!("E_MIGRATION: {e}"))?;
+        let to: execution::Method = serde_json::from_value(replacement["to"].clone())
+            .map_err(|e| format!("E_MIGRATION: {e}"))?;
+        let originals: Vec<_> = profile["legacy_records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|record| {
+                record["definition"]["actions"]
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|actions| actions.values())
+                    .map(move |action| (record, action))
+            })
+            .filter(|(_, action)| action["operation"] == from.operation)
+            .collect();
+        let original_matches = originals.len() == 1 && {
+            let (record, action) = originals[0];
+            from.owner == format!("script:{}", record["id"].as_str().unwrap())
+                && action["tool"] == from.tool
+                && action["argv"] == value!(from.argv)
+        };
+        let target = all.get(&to.operation);
+        let owner_mapped = from.owner == to.owner
+            || mappings
+                .iter()
+                .any(|m| m["from"] == from.owner && m["to"] == to.owner);
+        if !original_matches || !owner_mapped || target != Some(&vec![to]) {
+            return Err("E_MIGRATION: method replacement must bind original and unique candidate methods with an explicit owner mapping".into());
+        }
+        replacements.insert(from.operation);
+    }
     for record in profile["legacy_records"].as_array().unwrap() {
         for node in record["nodes"].as_array().unwrap() {
             let matches: Vec<_> = mappings.iter().filter(|m| m["from"] == *node).collect();
@@ -331,7 +372,7 @@ fn interpret_mode(
             .unwrap()
             .values()
         {
-            if deferred {
+            if deferred || replacements.contains(action["operation"].as_str().unwrap()) {
                 continue;
             }
             let current = all

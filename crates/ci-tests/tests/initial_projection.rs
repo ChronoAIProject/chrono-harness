@@ -3,8 +3,9 @@ use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
 
 fn source() -> Value {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/ci/github.json");
-    let mut c: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/ci/units.json");
+    let provider: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let mut c = provider["collection"].clone();
     c["schema"] = "chrono-github-ci/v2".into();
     c["initial_inventory"] = json!({
         "path":".chrono-harness/ci/root inventory.json",

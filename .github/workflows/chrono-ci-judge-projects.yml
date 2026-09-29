@@ -1,16 +1,30 @@
 # chrono-ci: owned github-units/v1
-name: "chrono / collection"
+name: "chrono / judge-projects"
 on:
   push:
     branches: ["dev","integration/**"]
   pull_request:
     branches: ["dev"]
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Full base commit OID (omit only with initial)
+        required: false
+        type: string
+      candidate:
+        description: Full candidate commit OID
+        required: true
+        type: string
+      initial:
+        description: Explicit parentless initial inventory
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: read
-  actions: read
 jobs:
   check:
-    name: "chrono / collection"
+    name: "chrono / judge-projects"
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
     timeout-minutes: 45
@@ -31,13 +45,7 @@ jobs:
         env:
           CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
-          '.chrono-harness/bin/chrono-ci' prepare --host-root . --config '.chrono-harness/ci/units.json' --event "$GITHUB_EVENT_NAME" --payload "$GITHUB_EVENT_PATH" --workflow-revision "$CHRONO_WORKFLOW_REVISION" --github-output "$GITHUB_OUTPUT"
-      - name: Gather independent unit reports
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          '.chrono-harness/bin/chrono-ci' gather --host-root . --config '.chrono-harness/ci/units.json' --repository "$GITHUB_REPOSITORY"
+          '.chrono-harness/bin/chrono-ci' prepare --host-root . --config '.chrono-harness/ci/units.json' --event "$GITHUB_EVENT_NAME" --payload "$GITHUB_EVENT_PATH" --workflow-revision "$CHRONO_WORKFLOW_REVISION" --github-output "$GITHUB_OUTPUT" --unit 'judge-projects'
       - name: Canonical harness check
         shell: bash
         env:
@@ -46,14 +54,14 @@ jobs:
           CHRONO_INITIAL: ${{ steps.inputs.outputs.initial }}
         run: |
           if [ "$CHRONO_INITIAL" = true ]; then
-            '.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--candidate' "$CHRONO_CANDIDATE" '--initial' '--collect' '.chrono-harness/state/collection/manifest.json'
+            '.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--candidate' "$CHRONO_CANDIDATE" '--initial' '--unit' 'judge-projects'
           else
-            '.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--base' "$CHRONO_BASE" '--candidate' "$CHRONO_CANDIDATE" '--collect' '.chrono-harness/state/collection/manifest.json'
+            '.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--base' "$CHRONO_BASE" '--candidate' "$CHRONO_CANDIDATE" '--unit' 'judge-projects'
           fi
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: chrono-collection-${{ github.run_id }}-${{ github.run_attempt }}
+          name: chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error

@@ -210,8 +210,13 @@ pass. Joint producer/test removal can explicitly retire a test without executing
 Original schema identities and historical costs remain available after decoding.
 The [workflow contract](workflow.md) defines actual migration/retirement certification.
 
-`ci.verify` has moved unchanged into `ci.actions.execute`; `ci` ↔ `ci-tests` remains
+`ci.verify` belongs to `ci.actions.execute`; `ci` ↔ `ci-tests` remains
 the real dedicated pair. `chrono-ci --version` observes that producer's version.
+Its historical profile now declares the exact same-operation method replacement
+from the old provider path to `units.json`, using the
+[method replacement contract](workflow.md). The old legacy action is retained
+verbatim. The real migration consumer rejects missing or mismatched replacements,
+executes the current complete plan, detects workflow drift and verifies repair.
 The pseudo-script/owner/test `ci-verify` is retired with `ci-tests` as replacement.
 All six prior incoming verification edges already had equivalent same-source,
 same-kind ci-tests edges. Their effect survives. Adding verification to the ci-tests

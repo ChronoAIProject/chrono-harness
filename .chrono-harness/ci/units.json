@@ -1,0 +1,282 @@
+{
+  "schema": "chrono-github-units/v1",
+  "collection": {
+    "schema": "chrono-github-ci/v1",
+    "workflow_path": ".github/workflows/chrono-ci.yml",
+    "name": "chrono / collection",
+    "runs_on": "macos-14",
+    "push_branches": [
+      "dev",
+      "integration/**"
+    ],
+    "pull_request_branches": [
+      "dev"
+    ],
+    "branch_creation_base_ref": "refs/heads/dev",
+    "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "timeout_minutes": 45,
+    "bootstrap": [
+      "/usr/bin/python3",
+      ".chrono-harness/ci/bootstrap.py",
+      ".",
+      ".chrono-harness/ci/bootstrap-core.json"
+    ],
+    "runner": ".chrono-harness/bin/chrono-harness",
+    "generator": ".chrono-harness/bin/chrono-ci",
+    "check_config": ".chrono-harness/ci/check.json",
+    "context_path": ".chrono-harness/state/collection/context.json",
+    "artifact_directory": ".chrono-harness/state/",
+    "push_baselines": [
+      {
+        "ref_prefix": "refs/heads/integration/",
+        "base_ref": "refs/heads/dev"
+      }
+    ]
+  },
+  "units": {
+    "runner": {
+      "workflow_path": ".github/workflows/chrono-ci-runner.yml",
+      "name": "chrono / runner",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/runner/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "instructions": {
+      "workflow_path": ".github/workflows/chrono-ci-instructions.yml",
+      "name": "chrono / instructions",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/instructions/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-ci": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-ci.yml",
+      "name": "chrono / judge-ci",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-ci/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "ci": {
+      "workflow_path": ".github/workflows/chrono-ci-ci.yml",
+      "name": "chrono / ci",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/ci/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-registration": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-registration.yml",
+      "name": "chrono / judge-registration",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-registration/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-filemap": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-filemap.yml",
+      "name": "chrono / judge-filemap",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-filemap/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-routes": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-routes.yml",
+      "name": "chrono / judge-routes",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-routes/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-projects": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-projects.yml",
+      "name": "chrono / judge-projects",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-projects/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "scoped-v1": {
+      "workflow_path": ".github/workflows/chrono-ci-scoped-v1.yml",
+      "name": "chrono / scoped-v1",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/scoped-v1/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-cost": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-cost.yml",
+      "name": "chrono / judge-cost",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-cost/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-mixed": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-mixed.yml",
+      "name": "chrono / judge-mixed",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-workflow": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-workflow.yml",
+      "name": "chrono / judge-workflow",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "inputs": {
+      "workflow_path": ".github/workflows/chrono-ci-inputs.yml",
+      "name": "chrono / inputs",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/inputs/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "distribution": {
+      "workflow_path": ".github/workflows/chrono-ci-distribution.yml",
+      "name": "chrono / distribution",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/distribution/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-cargo": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-cargo.yml",
+      "name": "chrono / judge-cargo",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-cargo/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "worktree": {
+      "workflow_path": ".github/workflows/chrono-ci-worktree.yml",
+      "name": "chrono / worktree",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/worktree/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    }
+  },
+  "gather": {
+    "program": "gh",
+    "inherit_environment": [
+      "PATH",
+      "HOME",
+      "GH_TOKEN"
+    ],
+    "credential_environment": [
+      "GH_TOKEN"
+    ],
+    "environment": {},
+    "timeout_seconds": 60,
+    "output_limit_bytes": 8388608,
+    "wait_seconds": 1800,
+    "poll_seconds": 30,
+    "manifest_path": ".chrono-harness/state/collection/manifest.json",
+    "download_directory": ".chrono-harness/state/collection/downloads/",
+    "report_path": ".chrono-harness/state/collection/gather.json"
+  }
+}
