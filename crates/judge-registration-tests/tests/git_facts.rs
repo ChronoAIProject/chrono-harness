@@ -51,7 +51,11 @@ impl BoundHost {
         write(&root, CONFIG, &config);
         let path = ".chrono-harness/FILEMAP.json";
         let mut map: Value = serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
-        map["project_edges"] = json!([{"from":"input:facts-git-bytes","kind":"judge-trigger","to":"judge:registration"}]);
+        map["project_edges"] = json!([
+            {"from":"tool:facts-git","kind":"runtime-input","to":"judge:registration"},
+            {"from":"input:facts-git-bytes","kind":"judge-trigger","to":"judge:registration"},
+            {"from":"environment:PATH","kind":"runtime-input","to":"judge:registration"}
+        ]);
         write(&root, path, &map);
         if initial {
             amend_initial(&mut h);
@@ -510,4 +514,38 @@ fn input_closure_bindings_reject_unknown_nodes_without_discovery() {
         assert_ne!(exit, 0, "{field}: {report} {error}");
         assert!(finding(&report, "E_REFERENCE"), "{field}: {report} {error}");
     }
+}
+
+#[test]
+fn input_closure_bindings_require_explicit_project_edges() {
+    let mut h = BoundHost::new(false, "");
+    h.host.edit(CONFIG, |config| {
+        config["input_closure"]["bindings"] = json!([{
+            "id": "registration-git-facts",
+            "consumer": "judge:registration",
+            "kind": "git-facts",
+            "inputs": [
+                "tool:facts-git",
+                "input:facts-git-bytes",
+                "environment:PATH"
+            ]
+        }]);
+    });
+    h.host.edit(".chrono-harness/FILEMAP.json", |filemap| {
+        filemap["project_edges"] = json!([
+            {"from":"input:facts-git-bytes","kind":"judge-trigger","to":"judge:registration"},
+            {"from":"environment:PATH","kind":"runtime-input","to":"judge:registration"}
+        ]);
+    });
+    h.host.base = h.host.candidate.clone();
+    fs::write(
+        h.host.root().join("document.txt"),
+        "candidate after missing closure edge",
+    )
+    .unwrap();
+    h.host.candidate = commit(h.host.root());
+    let (exit, report, error) = h.run(false);
+    assert_ne!(exit, 0, "missing input edge must fail: {report} {error}");
+    assert!(finding(&report, "E_REFERENCE"), "{report} {error}");
+    assert!(format!("{report} {error}").contains("tool:facts-git"));
 }
