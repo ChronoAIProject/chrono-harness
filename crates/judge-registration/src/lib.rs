@@ -441,6 +441,23 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
         return;
     };
     let nodes = n.node_data();
+    // Input closure is a whitelist over the same explicit graph consumed by
+    // FILEMAP.  A binding by itself is only a free-form claim; every declared
+    // input must also have a registered incoming edge to its consumer.  Keep
+    // the edge kind independent from the binding's caller-defined `kind`:
+    // the latter names the closure interpretation, while FILEMAP records the
+    // graph operation that carries the dependency.
+    let project_edges: BTreeSet<(String, String)> = n.filemap["project_edges"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|edge| {
+            Some((
+                edge["from"].as_str()?.to_owned(),
+                edge["to"].as_str()?.to_owned(),
+            ))
+        })
+        .collect();
     for (binding_index, binding) in bindings.iter().enumerate() {
         let consumer = binding["consumer"].as_str().unwrap_or_default();
         let consumer_reference = format!("/config/input_closure/bindings/{binding_index}/consumer");
@@ -476,16 +493,27 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
                     r,
                     "E_REFERENCE",
                     format!("input closure reference is not an external input node: {input}"),
-                    reference,
+                    reference.clone(),
                     false,
                 ),
                 None => issue(
                     r,
                     "E_REFERENCE",
                     format!("unknown input closure reference {input}"),
-                    reference,
+                    reference.clone(),
                     false,
                 ),
+            }
+            if !project_edges.contains(&(input.to_owned(), consumer.to_owned())) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!(
+                        "input closure binding lacks explicit project edge {input} -> {consumer}"
+                    ),
+                    reference,
+                    false,
+                );
             }
         }
     }

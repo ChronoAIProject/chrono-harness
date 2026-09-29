@@ -25,9 +25,12 @@ non-empty `inputs` list:
 
 The consumer must already be a registered `project`, `script`, `test`, or
 `judge` node. Each input must already be a registered `tool`, `input`, or
-`environment` node. Registration validates these references and reports
-`E_REFERENCE` for unknown nodes or an invalid node kind. Config v1 and v2 reject
-the field, preserving their historical schemas.
+`environment` node. The FILEMAP `project_edges` table must also contain an
+explicit edge from every listed input node to that consumer. The edge `kind`
+is checked by the FILEMAP schema independently and need not equal the binding's
+caller-defined `kind`. Registration reports `E_REFERENCE` for an unknown node,
+an invalid node kind, or a missing input-to-consumer edge. Config v1 and v2
+reject the field, preserving their historical schemas.
 
 This is an explicit relationship table, not a dependency discoverer. The
 registration judge never scans directories, manifests, language files, commands,
