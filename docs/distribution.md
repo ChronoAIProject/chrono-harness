@@ -22,7 +22,7 @@ v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以�
 
 这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。这个发布工作流由 `chrono-ci` 从宿主显式[发布源](../.chrono-harness/ci/release.json)生成，合同与扩展边界见 [release CI](release-ci.md)；公开 beta.10 已包含该生成扩展。
 
-[beta.10](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.10) 已从固定源码 `ccc34c5e651875db183752af15dd6bb88149c700` 公开发布，包含两个平台各 15 个工具、合并清单以及各平台的原始构建报告和打包清单，共 35 个资产。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)使用 v3 配方／v4 报告，在每个平台通过十个专属测试项目的 371 项测试；核对 31 个实际进程、28 个暂存目的路径及 24 轮身份观察。已匿名下载核对合并清单及两个平台的 worktree／installer／CI 字节。合并清单 SHA-256 为 `e0afe45bb30a96f165eb5e660b5013428dec8eed4037a68de2e8c24c542b0084`。beta.10 包含显式 Git 绑定、发布 CI 生成、完整 context 传递、远端分支清理及上述发布证据合同，宿主须自行选择采用相应版本配置；测试与摘要核验不证明完整输入闭包或确定性同判。
+[beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) 已从固定源码 `a4af1a0ca7f3a69f7b3298abc5b187a74578b3f9` 公开发布，包含两个平台各 15 个工具、合并清单以及各平台的原始构建报告和打包清单，共 35 个资产。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36566708631)使用 v3 配方／v4 报告，在每个平台通过十个专属测试项目的 391 项测试；核对 31 个实际进程、28 个暂存目的路径及 24 轮身份观察。已匿名下载核对合并清单及两个平台的 worktree／installer／CI／runner／scoped judge 字节。合并清单 SHA-256 为 `93c6d9b2a0da66a7bc555a4d475c6f300f6d705d0ee7c634c92c445c0e435330`。beta.11 新增显式元数据重建与原始 checkout 身份核对，并包含先前发布的 Git 绑定、CI 生成、context 传递、远端清理和发布证据合同，宿主须自行选择采用相应版本配置；测试与摘要核验不证明完整输入闭包或确定性同判。
 
 已用匿名下载的 macOS arm64 `chrono-ci` 验证发布／full 工作流生成、漂移拒绝与恢复、原始 context 字节及规范 argv；用公开 `chrono-worktree` 清理实际交付分支并核对远端缺席。这些消费验证不代表生成的 full 工作流已在 GitHub 原生执行；具体范围见 [full CI](full-ci.md) 与 [worktree](worktree.md#remote-branch-retirement)。
 
@@ -64,3 +64,5 @@ python3 HOST/.chrono-harness/install.py HOST
 专属测试覆盖安装、升级、损坏后修复、重复安装、保留宿主 SDK、坏清单/晚到坏资产不替换、普通替换失败回滚、平台/成员/安装器错配、目的冲突、路径与 symlink、配置定制保护、bootstrap 真退出及实际安装器在含空格路径/不同 cwd 下运行。发布与实际宿主 check 各保留自身成功/失败；安装成功不是治理通过。
 
 发布配方专属消费者测试通过实际 Python 入口验证显式操作顺序、含空格路径与不同 cwd、参数原样传递、未知／重复／歧义登记在构建前失败、失败阻止打包及保留原始非 UTF-8 输出。这些夹具验证配方委托；真实 Rust 测试与平台行为另由原生发布作业验证。
+
+beta.11 的匿名公开安装入口在已升级混合宿主的真实 clone 和含空格／Unicode 的子工作树中运行，核对所选工具的公开摘要。原始 checkout 消费拒绝 Git `core.filemode=false` 隐藏的执行位变化；重建消费保留暂存／未暂存、二进制、可执行文件、字面 symlink 与旧 metadata，并通过登记 cleanup 清理已保存工作。该次消费平台为 macOS arm64；不外推其它恢复状态或原生 full dispatch。

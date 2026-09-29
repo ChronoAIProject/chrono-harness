@@ -5,7 +5,7 @@
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
 
-[公开测试版 v0.1.0-beta.10](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.10) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
+[公开测试版 v0.1.0-beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
 
 公开的独立示例宿主：
 
@@ -131,6 +131,8 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 
 `chrono-worktree recover`／`cleanup`／`cleanup-fetch` 消费宿主 state 下的显式维护计划：保留原失败报告，验证重建后的状态和锁，或核对保留引用与工件白名单后清理指定工作树。它们不产生治理或合并通过判词；完整格式及未实现的恢复范围见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。这三个入口已包含在公开 beta.8 中，可由宿主的版本锁定安装入口取得。
 
-源码新增 `chrono-worktree cleanup-remote`，以显式远端地址、提交保留关系及精确 OID lease 清理远端工作分支，保留失败和缺失重试结果。该入口新版尚未公开发布；见 [远端清理合同](docs/worktree.md#remote-branch-retirement)。
+公开测试版提供 `chrono-worktree cleanup-remote`，以显式远端地址、提交保留关系及精确 OID lease 清理远端工作分支，保留失败和缺失重试结果。该入口从 beta.10 起公开分发；见 [远端清理合同](docs/worktree.md#remote-branch-retirement)。
 
 公开 beta.8 还提供 `recover-interrupted`：在创建工作树或取得清理锁前保留恢复身份，对缺失／截断结果按显式计划核对当前状态并解锁，原操作结果仍标未知。`cleanup-fetch-interrupted` 还按 fetch 前保留的独立身份清理中断留下的临时 ref，要求明确的当前 OID 与保留分支。这两个入口已包含在公开 beta.8 中；格式与剩余恢复范围见 [中断恢复](docs/worktree.md#interrupted-checkout-recovery)。
+
+beta.11 新增显式 `inspect-rebind`／`rebind` 元数据重建，以及所有现役检查／worktree 消费者共用的原始 checkout 身份核对。真实公开混合宿主已验证：Git 配置隐藏的执行位变化仍被拒绝，损坏索引重建保留未提交工作、显式选择的索引和旧元数据。重建不推断丢失的历史索引，不证明原操作成功；中断重建续跑仍未实现。见[元数据重建](docs/worktree.md#explicit-metadata-rebind)与[原始快照身份](docs/git-facts.md#literal-checkout-identity)。

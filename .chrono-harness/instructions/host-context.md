@@ -22,7 +22,7 @@ The full generic projects schema permits omitted manifest/lockfile/root and arbi
 
 This host explicitly adopts CI push_baselines for refs/heads/integration/ against refs/heads/dev on origin. Creation and later repair pushes bind the entire branch range to that observed dev tip; unmatched push events retain before/after behavior. This event-input preparation does not replace the full workflow judge or certify input completeness. See docs/ci.md.
 
-`worktree` / `worktree-tests` owns fresh creation and explicit DELTA reconstruction from a fetched target. Reconstruction plans enumerate every old changed path as carry/retire; conflicts preserve original failures and work. Successful reconstruction is a staged tree with no candidate/check/integration success. Host policy is `.chrono-harness/worktree.json`; target and branch prefixes come from the registered workflow. The report retains actual Git process evidence and never claims governance activation. See `docs/worktree.md`. Public beta.10 contains chrono-worktree for macOS arm64 and Linux x86_64, with 55 dedicated worktree tests among the 371 tests executed by the native release recipe on each platform. All four public examples adopt beta.10; local/integration/PR/dev reports and installed macOS arm64 public-origin start/cleanup consumers were verified. Exact adoption and consumer evidence are indexed in docs/examples.md. The recorded public-origin recover-interrupted/cleanup-fetch-interrupted consumers, retained staged work and cleanup used beta.8; later binary upgrades do not relabel that evidence.
+`worktree` / `worktree-tests` owns fresh creation and explicit DELTA reconstruction from a fetched target. Reconstruction plans enumerate every old changed path as carry/retire; conflicts preserve original failures and work. Successful reconstruction is a staged tree with no candidate/check/integration success. Host policy is `.chrono-harness/worktree.json`; target and branch prefixes come from the registered workflow. The report retains actual Git process evidence and never claims governance activation. See `docs/worktree.md`. Public beta.11 contains chrono-worktree for macOS arm64 and Linux x86_64, with 67 dedicated worktree tests among the 391 tests executed by the native release recipe on each platform. All four public examples adopt beta.11; local/integration/PR/dev reports and installed macOS arm64 public-origin start/cleanup consumers were verified. Exact adoption and consumer evidence are indexed in docs/examples.md. The recorded public-origin recover-interrupted/cleanup-fetch-interrupted consumers, retained staged work and cleanup used beta.8; later binary upgrades do not relabel that evidence.
 
 Full config v3 explicitly binds candidate Git via facts_git tool/input references before object acquisition and through full consumers, initial and input capture. Config v1/v2 retain their previous semantics. Scoped profile v2 explicitly selects full-v3 policy.facts_config before acquisition; both endpoints, optional full-registration interpretation and post-execution checks share that Reader, retaining structured success/failure observations including failed version binding. Scoped v1 and old CI provider versions retain their previous behavior. Git binding does not change scoped selection/operation environments or require full registry adoption; this host still uses scoped v1. Provider v3 explicitly selects a full-v3 facts_config for event reads/fetches, retains process observations and fetches only on an exact missing-object response. The host has not adopted that provider version; see docs/ci.md. Original process bytes, failures and per-process bounds are retained; missing or mismatched request bindings fail. Git configuration/OS/delegated closure, host activation and parity remain incomplete. See docs/git-facts.md.
 
@@ -53,21 +53,21 @@ rejection/regeneration and exact context/argv preparation. This is a local real-
 transport consumer, not native generated full-dispatch adoption. The four examples
 retain their explicit scoped profiles; docs/examples.md binds adoption and dev runs.
 
-Source-only `chrono-worktree inspect-rebind`/`rebind` consumes explicit branch,
+Public beta.11 `chrono-worktree inspect-rebind`/`rebind` consumes explicit branch,
 HEAD/index tree, metadata member, backup/donor and observed preservation identities.
 It preserves visible work and remaining old metadata, including absent old
 receipts, without inferring the historical index or original outcome. Attached
 failed results can reuse receipt-bound reconciled `recover`; interrupted rebind
-continuation remains unfinished. Public beta.10 does not contain these commands.
+continuation remains unfinished. Actual public macOS mixed-host consumption verified preserved work, explicit index and old metadata; original outcome remains unknown.
 See docs/worktree.md#explicit-metadata-rebind for filesystem and failure boundaries.
 
-Source-only literal checkout identity compares fixed tree entries, index stages
+Public beta.11 literal checkout identity compares fixed tree entries, index stages
 and raw physical bytes/types/owner-executable bits with streaming Git blob hashes.
 It does not invoke working-tree diff or filters. Full/initial/scoped consumers and
 worktree creation/reconstruction/recovery/cleanup share this checker while keeping
 their existing Git runner, flags, artifact and process contracts. Hosts must
 materialize exact registered snapshot bytes; CRLF/filter/symlink emulation is not
 silently normalized. Full Git/delegated/SDK closure remains unfinished. See
-docs/git-facts.md#literal-checkout-identity; beta.10 lacks this source addition.
+docs/git-facts.md#literal-checkout-identity; the public macOS mixed-host consumer verified hidden-mode check/cleanup rejection and preservation.
 
 Source cleanup now preflights every explicitly selected artifact directory, rejects tracked contents, and disposes registered untracked outputs under the owned lock before bounded Git checkout removal. Per-path effects and later Git failures are preserved; filesystem deletion stays in the host job lifecycle without a Git subprocess deadline. Existing recovery and explicit retry handle artifact-only partial failures. This source addition is newer than beta.11; older partial source deletion, concurrent/power-loss transactions and arbitrary source-volume deadlines are not covered. See docs/worktree.md#declared-artifact-disposal-before-checkout-removal.
