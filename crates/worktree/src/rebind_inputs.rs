@@ -11,9 +11,9 @@ use std::{
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct FileIdentity {
-    sha256: String,
-    size: u64,
-    mode: u32,
+    pub(crate) sha256: String,
+    pub(crate) size: u64,
+    pub(crate) mode: u32,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -25,7 +25,6 @@ pub(crate) struct Expected {
 pub(crate) struct Observation {
     pub(crate) expected: Expected,
     pub(crate) gitfile_bytes: Option<Vec<u8>>,
-    pub(crate) gitfile_mode: Option<u32>,
     pub(crate) visible: Value,
     pub(crate) metadata: Option<Value>,
 }
@@ -43,30 +42,6 @@ pub(crate) fn pointer(base: &Path, value: &str) -> Result<PathBuf, String> {
         }
     }
     Ok(path)
-}
-pub(crate) fn verify_backup(backup: &Path, observed: &Observation) -> Result<(), String> {
-    let saved = observe(backup, &backup.join("metadata"))?;
-    // The saved pointer is named gitfile, not .git: never treat the backup as a checkout.
-    let pointer = backup.join("gitfile");
-    match &observed.gitfile_bytes {
-        Some(bytes)
-            if fs::read(&pointer).map_err(|e| e.to_string())? == *bytes
-                && fs::symlink_metadata(&pointer)
-                    .map_err(|e| e.to_string())?
-                    .permissions()
-                    .mode()
-                    & 0o7777
-                    == observed.gitfile_mode.unwrap() =>
-        {
-            ()
-        }
-        None if !pointer.try_exists().map_err(|e| e.to_string())? => (),
-        _ => return Err("preserved Git pointer identity changed".into()),
-    }
-    if saved.metadata != observed.metadata {
-        return Err("preserved metadata identity changed".into());
-    }
-    Ok(())
 }
 pub(crate) fn snapshot(root: &Path, exclude_gitfile: bool) -> Result<Value, String> {
     fn visit(root: &Path, path: &Path, exclude: bool, rows: &mut Vec<Value>) -> Result<(), String> {
@@ -115,8 +90,8 @@ pub(crate) fn snapshot(root: &Path, exclude_gitfile: bool) -> Result<Value, Stri
 }
 pub(crate) fn observe(target: &Path, metadata: &Path) -> Result<Observation, String> {
     let gitfile = target.join(".git");
-    let (identity, bytes, mode) = match fs::symlink_metadata(&gitfile) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, None, None),
+    let (identity, bytes) = match fs::symlink_metadata(&gitfile) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (None, None),
         Err(e) => return Err(e.to_string()),
         Ok(m) if m.is_file() => {
             let bytes = fs::read(&gitfile).map_err(|e| e.to_string())?;
@@ -128,7 +103,6 @@ pub(crate) fn observe(target: &Path, metadata: &Path) -> Result<Observation, Str
                     mode,
                 }),
                 Some(bytes),
-                Some(mode),
             )
         }
         Ok(_) => {
@@ -154,8 +128,27 @@ pub(crate) fn observe(target: &Path, metadata: &Path) -> Result<Observation, Str
             visible: visible["sha256"].as_str().unwrap().to_string(),
         },
         gitfile_bytes: bytes,
-        gitfile_mode: mode,
         visible,
         metadata,
     })
+}
+
+/// Literal optional regular-file identity; absence never includes a dangling link.
+pub(crate) fn identity(path: &Path) -> Result<Option<FileIdentity>, String> {
+    match fs::symlink_metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+        Ok(m) if m.is_file() => {
+            let (sha256, size) = file_identity(path)?;
+            Ok(Some(FileIdentity {
+                sha256,
+                size,
+                mode: m.permissions().mode() & 0o7777,
+            }))
+        }
+        Ok(_) => Err(format!(
+            "expected an absent or regular file: {}",
+            path.display()
+        )),
+    }
 }

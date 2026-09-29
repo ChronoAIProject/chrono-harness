@@ -102,7 +102,7 @@ on each platform. The four [example hosts](examples.md) explicitly adopt the too
 and policy; no host-language or directory inference supplies their registrations.
 
 Registered maintenance below adds recovery of reconciled checkouts and explicit
-cleanup. AI semantic reconciliation, interrupted-rebind continuation, PR provider
+cleanup. AI semantic reconciliation, PR provider
 operations, merge and actual landing orchestration remain unfinished. Subsequent governance
 checks continue to use the same registered `chrono-harness check` command locally
 and in CI. This increment changes product and adopted policy together; validation
@@ -603,12 +603,70 @@ backup and partial effects. Never rerun blindly over a nonempty backup/donor.
 Once Git repair has attached the destination and its original ownership lock is
 still present, existing receipt-bound `recover` can release it after explicit AI
 reconciliation; the original failed report, backup and any remaining donor stay
-untouched. Before attachment, or if the rebind result itself is missing, automated
-continuation is not yet implemented. The AI must first establish that the old
-process stopped and reconcile the retained evidence. Backup uses same-filesystem
+untouched. `resume-rebind` below also handles pre-attachment failures and missing
+results using the original intent and plan. The AI must first establish that the
+old process stopped and reconcile conflicts in the retained evidence. Backup uses same-filesystem
 rename; cross-device failure is reported without deleting old metadata. There is
 no concurrent-writer isolation or crash/power-loss atomicity guarantee, and the
 observed identity does not preserve timestamps, ACLs, xattrs or hardlink topology.
+
+### Continue an interrupted or failed rebind
+
+The source adds `resume-rebind`; public beta.14 does not include it. It consumes
+an existing `chrono-worktree-rebind-intent/v1` and the exact original rebind plan
+at the intent's `plan_path`. The continuation plan must use its own registered
+state path. No new index, backup, donor or ownership choice is inferred.
+
+```sh
+chrono-worktree resume-rebind --host-root ROOT --config .chrono-harness/worktree.json --plan .chrono-harness/state/resume-rebind.json
+```
+
+```json
+{
+  "schema": "chrono-worktree-maintenance/v1",
+  "operation": "resume-rebind",
+  "head": "<original branch HEAD>",
+  "intent": {
+    "path": ".chrono-harness/state/worktrees/rebind-INVOCATION.json.rebind-intent.json",
+    "sha256": "<observed original intent digest>"
+  },
+  "result": {"presence": "present", "sha256": "<observed original result digest>"}
+}
+```
+
+Use `result: {"presence": "absent"}` only for an observed missing result. Empty
+and partial result bytes use the present form. A complete original failed rebind
+must match its intent; it remains `original_outcome: failed`. Missing/partial
+results remain `original_outcome: unknown`. A completed successful result is
+refused. The original intent, plan, result and preserved metadata remain unchanged;
+the new report retains their input identities and original process evidence.
+
+Initial and resumed rebind share the same preservation/attachment code. It checks
+source commit, registry, policy, plan bytes, branch HEAD and explicit index tree;
+visible file bytes/modes/literal links must still match the original observation.
+It completes missing pointer preservation or metadata relocation, reuses only the
+original locked donor, installs an absent index from the declared tree, attaches
+the target, removes the empty donor and releases its own lock. Existing indices
+must already match; no index or visible work is overwritten to force agreement.
+An already attached, unlocked destination is accepted only with the exact branch,
+index and original backup and an absent donor. Continuation may itself be retried
+against the unchanged original intent and result after its prior process stops.
+
+Conflicting backups, changed visible work, donor files, another lock/branch,
+metadata belonging elsewhere, stale plan/result/configuration and ambiguous
+allocation are preserved and rejected before continuation effects. Interrupted
+Git `index.lock`/`HEAD.lock`, incomplete donor metadata, partial temporary files
+or a partially written old backup need explicit AI reconciliation; the tool does
+not discard those bytes or guess their meaning. Saved pointer publication now
+uses an atomic file replacement. Backup relocation still requires the same
+filesystem. Neither the intent nor this command proves the prior process stopped,
+concurrent-writer exclusion, power-loss atomicity or historical-index recovery.
+
+Real CLI tests terminate the producer before preservation and around donor
+creation, branch/index preparation, pointer attachment, repair and unlock. They
+also cover absent/partial/failed results, repeated continuation interruption,
+changed identities and completed-result refusal. `rebound` verifies the current
+attachment and preservation only; it is not a candidate check or governance pass.
 
 ### Exact physical snapshot before release or deletion
 

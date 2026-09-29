@@ -33,6 +33,13 @@ enum Plan {
         head: String,
         binding: crate::rebind::Binding,
     },
+    #[serde(rename = "resume-rebind")]
+    ResumeRebind {
+        schema: String,
+        head: String,
+        intent: Receipt,
+        result: ExpectedResult,
+    },
     #[serde(rename = "cleanup-remote")]
     CleanupRemote {
         schema: String,
@@ -99,7 +106,7 @@ pub(crate) enum Retention {
 
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
-        return Err("usage: chrono-worktree inspect-rebind|rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config POLICY --plan STATE_PATH".into());
+        return Err("usage: chrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config POLICY --plan STATE_PATH".into());
     }
     let mut values = BTreeMap::new();
     for pair in args[1..].chunks_exact(2) {
@@ -119,6 +126,17 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     let (schema, operation, head) = match &plan {
         Plan::InspectRebind { schema, head, .. } => (schema, "inspect-rebind", head),
         Plan::Rebind { schema, head, .. } => (schema, "rebind", head),
+        Plan::ResumeRebind {
+            schema,
+            head,
+            intent,
+            ..
+        } => {
+            if intent.sha256.len() != 64 || !intent.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err("invalid rebind intent digest".into());
+            }
+            (schema, "resume-rebind", head)
+        }
         Plan::CleanupRemote {
             schema,
             head,
@@ -211,7 +229,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
         operation,
         if operation == "inspect-rebind" {
             "observed"
-        } else if operation == "rebind" {
+        } else if matches!(operation, "rebind" | "resume-rebind") {
             "rebound"
         } else if matches!(operation, "recover" | "recover-interrupted") {
             "recovered"
@@ -262,6 +280,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                     plan_path,
                     &bytes,
                     true,
+                    None,
                 ),
                 Plan::Rebind { head, binding, .. } => binding.execute(
                     r,
@@ -273,6 +292,24 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                     plan_path,
                     &bytes,
                     false,
+                    None,
+                ),
+                Plan::ResumeRebind {
+                    head,
+                    intent,
+                    result,
+                    ..
+                } => crate::rebind_resume::execute(
+                    r,
+                    &root,
+                    &registrations,
+                    report,
+                    &head,
+                    &intent.path,
+                    &intent.sha256,
+                    &result,
+                    plan_path,
+                    &bytes,
                 ),
                 Plan::CleanupRemote {
                     head,

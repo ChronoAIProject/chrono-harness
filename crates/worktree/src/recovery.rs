@@ -199,6 +199,48 @@ pub(crate) fn observe_result(
     expected: &ExpectedResult,
     report: &mut Value,
 ) -> Result<Evidence, String> {
+    observe_result_kind(
+        root,
+        path,
+        bytes,
+        descriptor,
+        result_path,
+        expected,
+        report,
+        false,
+    )
+}
+
+pub(crate) fn observe_rebind_result(
+    root: &Path,
+    path: &str,
+    bytes: Vec<u8>,
+    descriptor: Value,
+    result_path: &str,
+    expected: &ExpectedResult,
+    report: &mut Value,
+) -> Result<Evidence, String> {
+    observe_result_kind(
+        root,
+        path,
+        bytes,
+        descriptor,
+        result_path,
+        expected,
+        report,
+        true,
+    )
+}
+fn observe_result_kind(
+    root: &Path,
+    path: &str,
+    bytes: Vec<u8>,
+    descriptor: Value,
+    result_path: &str,
+    expected: &ExpectedResult,
+    report: &mut Value,
+    allow_failed_rebind: bool,
+) -> Result<Evidence, String> {
     let result = original_bytes(root, result_path)?;
     match (expected, &result) {
         (ExpectedResult::Absent {}, None) => (),
@@ -228,11 +270,36 @@ pub(crate) fn observe_result(
                     )
                 )
             {
-                return Err("original result declares a terminal outcome; use its ordinary maintenance contract".into());
+                if !allow_failed_rebind
+                    || original["status"] != "failed"
+                    || original["operation"] != "rebind"
+                {
+                    return Err("original result declares a terminal outcome; use its ordinary maintenance contract".into());
+                }
+                for field in [
+                    "source_root",
+                    "source_commit",
+                    "config_path",
+                    "config_sha256",
+                    "registry_digest",
+                    "report_path",
+                    "lock_reason",
+                    "destination",
+                    "branch_ref",
+                    "head",
+                    "index_tree",
+                ] {
+                    if original[field] != descriptor[field] {
+                        return Err("original failed rebind differs from retained intent".into());
+                    }
+                }
+                report["original_outcome"] = value!("failed");
             }
         }
     }
-    report["original_outcome"] = value!("unknown");
+    if report["original_outcome"] != "failed" {
+        report["original_outcome"] = value!("unknown");
+    }
     Ok(Evidence {
         descriptor,
         root: root.into(),

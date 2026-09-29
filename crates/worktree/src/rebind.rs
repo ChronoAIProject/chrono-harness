@@ -3,7 +3,7 @@ use crate::{
     maintenance,
     rebind_inputs::{self, Expected},
     recovery,
-    start::{self, Runner},
+    start::Runner,
 };
 use chrono_harness::{facts, no_symlink_parents, relative_path};
 use chrono_judge_registration::Registrations;
@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
     fs,
-    io::Write,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
@@ -25,7 +23,7 @@ pub(crate) struct Binding {
     metadata_id: String,
     backup: String,
     donor: String,
-    expected: Option<Expected>,
+    pub(crate) expected: Option<Expected>,
 }
 fn text(path: &Path) -> Result<&str, String> {
     path.to_str()
@@ -38,12 +36,14 @@ fn absent(path: &Path) -> Result<(), String> {
         Ok(_) => Err(format!("rebind output already exists: {}", path.display())),
     }
 }
-fn new_path(root: &Path, path: &str) -> Result<PathBuf, String> {
+fn new_path(root: &Path, path: &str, resuming: bool) -> Result<PathBuf, String> {
     let path = root.join(path);
     let parent = fs::canonicalize(path.parent().ok_or("rebind output lacks parent")?)
         .map_err(|e| e.to_string())?;
     let result = parent.join(path.file_name().ok_or("rebind output lacks name")?);
-    absent(&result)?;
+    if !resuming {
+        absent(&result)?;
+    }
     Ok(result)
 }
 fn overlap(a: &Path, b: &Path) -> bool {
@@ -89,6 +89,7 @@ impl Binding {
         plan_path: &str,
         bytes: &[u8],
         inspect: bool,
+        continuation: Option<&crate::rebind_resume::Continuation>,
     ) -> Result<(), String> {
         facts::full_oid(&self.index_tree)?;
         relative_path(&self.metadata_id)?;
@@ -137,7 +138,7 @@ impl Binding {
             }
         }
         let metadata = parent.join(&self.metadata_id);
-        let donor = new_path(root, &self.donor)?;
+        let donor = new_path(root, &self.donor, continuation.is_some())?;
         if self
             .metadata_id
             .starts_with(text(Path::new(donor.file_name().unwrap()))?)
@@ -152,7 +153,9 @@ impl Binding {
         }
         maintenance::artifacts(registrations, &[&self.backup])?;
         let backup = no_symlink_parents(root, &self.backup)?;
-        absent(&backup)?;
+        if continuation.is_none() {
+            absent(&backup)?;
+        }
         if overlap(&target, root)
             || overlap(&target, &common)
             || overlap(&target, &donor)
@@ -167,14 +170,15 @@ impl Binding {
             if i == 0 && path == target {
                 return Err("cannot rebind main worktree".into());
             }
-            if overlap(path, &donor)
+            if (overlap(path, &donor) && !(continuation.is_some() && path == donor))
                 || (path != target
-                    && (overlap(path, &target) || row.get("branch") == Some(&branch)))
+                    && (overlap(path, &target)
+                        || (row.get("branch") == Some(&branch)
+                            && !(continuation.is_some() && path == donor))))
             {
                 return Err("rebind path or branch belongs to another worktree".into());
             }
         }
-        let observed = rebind_inputs::observe(&target, &metadata)?;
         report["destination"] = value!(target);
         report["branch_ref"] = value!(self.branch);
         report["base"] = value!(head);
@@ -185,6 +189,27 @@ impl Binding {
         report["metadata_path"] = value!(metadata);
         report["backup_path"] = value!(backup);
         report["donor_path"] = value!(donor);
+        if let Some(resume) = continuation {
+            resume.matches(report)?;
+            report["visible_before"] = value!(self.expected.as_ref().unwrap().visible);
+            report["observed_inputs"] = value!(self.expected);
+            return self.finish(
+                r,
+                root,
+                report,
+                &target,
+                &metadata,
+                &backup,
+                &donor,
+                &branch,
+                head,
+                token,
+                plan_path,
+                bytes,
+                continuation,
+            );
+        }
+        let observed = rebind_inputs::observe(&target, &metadata)?;
         report["observed_inputs"] = value!(observed.expected);
         report["visible_inputs"] = observed.visible["entries"].clone();
         report["visible_before"] = value!(observed.expected.visible);
@@ -280,115 +305,47 @@ impl Binding {
             return Err("rebind inputs changed before preservation".into());
         }
         stable_source(r, root, report, plan_path, bytes, &branch, head)?;
-        fs::create_dir(&backup).map_err(|e| format!("rebind backup: {e}"))?;
-        report["phase"] = value!("backup-created");
-        if let Some(original) = &observed.gitfile_bytes {
-            let mut f = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(backup.join("gitfile"))
-                .map_err(|e| e.to_string())?;
-            f.write_all(original).map_err(|e| e.to_string())?;
-            f.set_permissions(fs::Permissions::from_mode(observed.gitfile_mode.unwrap()))
-                .map_err(|e| e.to_string())?;
-            f.sync_all().map_err(|e| e.to_string())?;
-        }
-        if observed.metadata.is_some() {
-            fs::rename(&metadata, backup.join("metadata"))
-                .map_err(|e| format!("preserve original metadata: {e}"))?;
-            if rebind_inputs::snapshot(&backup.join("metadata"), false)?
-                != observed.metadata.clone().unwrap()
-            {
-                return Err("preserved metadata identity changed".into());
-            }
-        }
-        report["phase"] = value!("original-metadata-preserved");
-        stable_source(r, root, report, plan_path, bytes, &branch, head)?;
-        r.git(
+        self.finish(
+            r, root, report, &target, &metadata, &backup, &donor, &branch, head, token, plan_path,
+            bytes, None,
+        )
+    }
+    fn finish(
+        &self,
+        r: &mut Runner,
+        root: &Path,
+        report: &mut Value,
+        target: &Path,
+        metadata: &Path,
+        backup: &Path,
+        donor: &Path,
+        branch: &str,
+        head: &str,
+        token: &str,
+        plan_path: &str,
+        bytes: &[u8],
+        continuation: Option<&crate::rebind_resume::Continuation>,
+    ) -> Result<(), String> {
+        let scope = crate::rebind_steps::Scope {
             root,
-            &[
-                "worktree",
-                "add",
-                "--detach",
-                "--no-checkout",
-                "--lock",
-                "--reason",
-                token,
-                "--",
-                text(&donor)?,
-                head,
-            ],
-        )?;
-        report["phase"] = value!("donor-created");
-        r.git(&donor, &["symbolic-ref", "HEAD", &branch])?;
-        r.git(&donor, &["read-tree", &self.index_tree])?;
-        let new_metadata =
-            fs::canonicalize(r.text(&donor, &["rev-parse", "--absolute-git-dir"])?.trim())
-                .map_err(|e| e.to_string())?;
-        if new_metadata.parent() != Some(parent.as_path()) || new_metadata == metadata {
-            return Err("donor metadata is not a new common-repository member".into());
-        }
-        report["new_metadata_path"] = value!(new_metadata);
-        let new_gitfile = fs::read(donor.join(".git")).map_err(|e| e.to_string())?;
-        let current = rebind_inputs::observe(&target, &metadata)?;
-        if current.expected.gitfile != observed.expected.gitfile
-            || current.expected.visible != observed.expected.visible
-            || current.expected.metadata.is_some()
-        {
-            return Err("original work changed before attachment".into());
-        }
-        stable_source(r, root, report, plan_path, bytes, &branch, head)?;
-        let mut replacement = tempfile::Builder::new()
-            .prefix(".chrono-rebind-")
-            .tempfile_in(&target)
-            .map_err(|e| e.to_string())?;
-        replacement
-            .write_all(&new_gitfile)
-            .map_err(|e| e.to_string())?;
-        replacement
-            .as_file()
-            .set_permissions(
-                fs::metadata(donor.join(".git"))
-                    .map_err(|e| e.to_string())?
-                    .permissions(),
-            )
-            .map_err(|e| e.to_string())?;
-        replacement
-            .as_file()
-            .sync_all()
-            .map_err(|e| e.to_string())?;
-        replacement
-            .persist(target.join(".git"))
-            .map_err(|e| format!("new Git pointer publication: {e}"))?;
-        report["phase"] = value!("pointer-published");
-        r.git(root, &["worktree", "repair", "--", text(&target)?])?;
-        start::ensure_identity(r, root, &target, &self.branch, head, token)?;
-        if r.text(&target, &["write-tree"])?.trim() != self.index_tree {
-            return Err("rebound index differs from explicit tree".into());
-        }
-        if fs::read(donor.join(".git")).map_err(|e| e.to_string())? != new_gitfile {
-            return Err("donor pointer changed; preserve it".into());
-        }
-        fs::remove_file(donor.join(".git")).map_err(|e| e.to_string())?;
-        fs::remove_dir(&donor).map_err(|e| format!("preserve nonempty donor: {e}"))?;
-        report["phase"] = value!("attached");
-        let after = rebind_inputs::snapshot(&target, true)?;
-        report["visible_after"] = after["sha256"].clone();
-        if after["sha256"] != observed.expected.visible {
-            return Err("visible work changed during metadata rebind".into());
-        }
-        stable_source(r, root, report, plan_path, bytes, &branch, head)?;
-        start::unlock(r, root, text(&target)?, &branch, head)?;
-        if r.text(&target, &["write-tree"])?.trim() != self.index_tree
-            || rebind_inputs::snapshot(&target, true)?["sha256"] != observed.expected.visible
-        {
-            return Err("rebound work changed after unlock".into());
-        }
-        stable_source(r, root, report, plan_path, bytes, &branch, head)?;
-        rebind_inputs::verify_backup(&backup, &observed)?;
-        report["phase"] = value!("verified");
-        report["backup_preserved"] = value!(true);
-        report["donor_removed"] = value!(true);
-        Ok(())
+            target,
+            metadata,
+            backup,
+            donor,
+            branch,
+            head,
+            tree: &self.index_tree,
+            token,
+            expected: self
+                .expected
+                .as_ref()
+                .ok_or("rebind expected identities missing")?,
+        };
+        scope.finish(r, report, |r, report| {
+            if let Some(resume) = continuation {
+                resume.stable()?;
+            }
+            stable_source(r, root, report, plan_path, bytes, branch, head)
+        })
     }
 }
