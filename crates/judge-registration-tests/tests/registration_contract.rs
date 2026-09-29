@@ -1085,6 +1085,26 @@ fn strict_five_schemas_duplicate_keys_ids_and_unknown_fields() {
     assert_eq!(exit, 2);
     assert!(r.to_string().contains("duplicate JSON"));
 }
+
+#[test]
+fn input_closure_bindings_are_v3_only() {
+    for schema_version in [1, 2] {
+        let mut h = Host::new();
+        h.edit(".chrono-harness/config.json", |v| {
+            v["schema_version"] = schema_version.into();
+            v["input_closure"]["bindings"] = json!([{
+                "id": "legacy-closure",
+                "consumer": "judge:registration",
+                "kind": "toolchain",
+                "inputs": ["tool:python"]
+            }]);
+        });
+        let (exit, r) = h.run();
+        assert_eq!(exit, 2, "schema {schema_version}: {r:#}");
+        assert!(finding(&r, "E_SCHEMA"), "schema {schema_version}: {r:#}");
+    }
+}
+
 #[test]
 fn changed_references_fail_and_unrelated_historical_ones_are_not_rejudged() {
     let mut h = Host::new();

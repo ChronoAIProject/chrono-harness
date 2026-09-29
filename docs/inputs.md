@@ -8,6 +8,34 @@ to read the explicit fixed commit. Config v3 uses the explicit
 [Git facts binding](git-facts.md); v1/v2 retain their prior reader. This host still has incomplete Cargo/SDK input
 registration; installing this transport does not activate full governance.
 
+## Explicit consumer closure bindings
+
+Config schema v3 may carry an optional `input_closure.bindings` whitelist. Each
+binding has a unique `id`, a `consumer`, a non-empty caller-defined `kind`, and a
+non-empty `inputs` list:
+
+```json
+{
+  "id": "registration-git-facts",
+  "consumer": "judge:registration",
+  "kind": "git-facts",
+  "inputs": ["tool:facts-git", "input:facts-git-bytes", "environment:PATH"]
+}
+```
+
+The consumer must already be a registered `project`, `script`, `test`, or
+`judge` node. Each input must already be a registered `tool`, `input`, or
+`environment` node. Registration validates these references and reports
+`E_REFERENCE` for unknown nodes or an invalid node kind. Config v1 and v2 reject
+the field, preserving their historical schemas.
+
+This is an explicit relationship table, not a dependency discoverer. The
+registration judge never scans directories, manifests, language files, commands,
+or toolchains to add bindings. A valid binding records what the AI registered;
+it does not prove that the real host has no omitted input. `input_closure.status`
+and `unresolved` therefore remain independent completeness evidence, and the
+Cargo/compiler/SDK closure still requires its own registrations and tests.
+
 ```sh
 chrono-inputs capture --host-root /path/to/host \
   --config .chrono-harness/config.json --commit FULL_COMMIT_OID \
