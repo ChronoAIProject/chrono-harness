@@ -187,6 +187,16 @@ keeps its complete existing build/check/test operations. Shared operations are
 listed in the check profile and repeat only in isolated checkouts. The default
 full bootstrap remains available when its existing configuration is selected.
 
+The CI generator consumer also executes the generated unit workflow's actual
+`chrono-ci prepare` CLI against a committed push event, checks the
+candidate-bound workflow source and context, then invokes the recorded local
+`chrono-harness check` argv and reads the retained unit report. It checks the
+literal generated command shape and the selected operation in
+`crates/ci-tests/tests/units.rs`, so a projection change cannot silently diverge
+from the local command. This is bounded host-side adoption evidence for the
+units projection; it does not claim a live GitHub dispatch, complete external
+input closure, or generated-v3 provider adoption.
+
 ## Host customization and updates
 
 Use the host's registered source paths. The table identifies which declaration
