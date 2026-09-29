@@ -393,3 +393,151 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
         );
     }
 }
+
+#[test]
+fn unit_init_preserves_host_customization_across_generation() {
+    let d = fixture();
+    let root = d.path();
+    let source = ".chrono-harness/ci/units.json";
+    let mut custom = config_value();
+    custom["units"]["alpha"]["bootstrap"] = json!(["host-bootstrap", "space value", "$literal"]);
+    custom["units"]["alpha"]["runs_on"] = json!("self-hosted-custom");
+    custom["units"]["alpha"]["timeout_minutes"] = json!(37);
+    json_file(root, source, &custom);
+    let original = fs::read(root.join(source)).unwrap();
+    let incoming = root.join("defaults.json");
+    fs::write(&incoming, serde_json::to_vec(&config_value()).unwrap()).unwrap();
+    assert!(init(root, &incoming).unwrap());
+    assert!(!init(root, &incoming).unwrap());
+    assert_eq!(fs::read(root.join(source)).unwrap(), original);
+    assert!(!generate(root, source, true).unwrap());
+    let output = fs::read_to_string(root.join(".github/workflows/alpha.yml")).unwrap();
+    assert!(output.contains("'host-bootstrap' 'space value' '$literal'"));
+    assert!(output.contains("self-hosted-custom"));
+    assert!(output.contains("timeout-minutes: 37"));
+}
+
+fn migrate(root: &Path, prior: &str, prior_source: Option<&str>) -> Result<String, String> {
+    let mut args = vec![
+        "migrate".into(),
+        "--host-root".into(),
+        root.to_str().unwrap().into(),
+        "--from".into(),
+        prior.into(),
+        "--config".into(),
+        ".chrono-harness/ci/units.json".into(),
+    ];
+    if let Some(path) = prior_source {
+        args.extend(["--previous-config".into(), path.into()]);
+    }
+    chrono_ci::dispatch(&args)
+}
+
+#[test]
+fn migration_adopts_units_preserving_custom_source_and_unrelated_workflow() {
+    let d = fixture();
+    let root = d.path();
+    let prior = ".chrono-harness/ci/github.json";
+    let mut old = config();
+    old.workflow_path = ".github/workflows/collection.yml".into();
+    write(&root.join(prior), &old);
+    generate(root, prior, false).unwrap();
+    let mut custom = config_value();
+    custom["units"]["alpha"]["bootstrap"] = json!(["my-custom-entry", "--literal", "a b"]);
+    json_file(root, ".chrono-harness/ci/units.json", &custom);
+    let original = fs::read(root.join(".chrono-harness/ci/units.json")).unwrap();
+    fs::write(
+        root.join(".github/workflows/host.yml"),
+        "host workflow stays\n",
+    )
+    .unwrap();
+    let report: Value = serde_json::from_str(&migrate(root, prior, None).unwrap()).unwrap();
+    assert_eq!(report["status"], "migrated");
+    assert_eq!(report["retired_source"], prior);
+    assert!(!root.join(prior).exists());
+    assert_eq!(
+        fs::read(root.join(".chrono-harness/ci/units.json")).unwrap(),
+        original
+    );
+    assert_eq!(
+        fs::read_to_string(root.join(".github/workflows/host.yml")).unwrap(),
+        "host workflow stays\n"
+    );
+    assert!(!generate(root, ".chrono-harness/ci/units.json", true).unwrap());
+    assert!(
+        fs::read_to_string(root.join(".github/workflows/alpha.yml"))
+            .unwrap()
+            .contains("'my-custom-entry' '--literal' 'a b'")
+    );
+}
+
+#[test]
+fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
+    for conflict in ["none", "old-edit", "new-collision"] {
+        let d = fixture();
+        let root = d.path();
+        let source = ".chrono-harness/ci/units.json";
+        generate(root, source, false).unwrap();
+        let prior = ".chrono-harness/state/previous-units.json";
+        fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+        fs::copy(root.join(source), root.join(prior)).unwrap();
+        let mut next = config_value();
+        next["units"]["alpha"]["workflow_path"] = json!(".github/workflows/renamed.yml");
+        next["units"]["beta"]["timeout_minutes"] = json!(23);
+        json_file(root, source, &next);
+        let source_bytes = fs::read(root.join(source)).unwrap();
+        let beta = fs::read(root.join(".github/workflows/beta.yml")).unwrap();
+        let alpha = fs::read(root.join(".github/workflows/alpha.yml")).unwrap();
+        if conflict == "old-edit" {
+            fs::write(
+                root.join(".github/workflows/alpha.yml"),
+                "host-edited original\n",
+            )
+            .unwrap();
+        }
+        if conflict == "new-collision" {
+            fs::write(
+                root.join(".github/workflows/renamed.yml"),
+                "host-owned target\n",
+            )
+            .unwrap();
+        }
+        let result = migrate(root, prior, Some(source));
+        if conflict != "none" {
+            let error = result.unwrap_err();
+            if conflict == "old-edit" {
+                assert!(error.contains("previous projection differs"));
+                assert!(!root.join(".github/workflows/renamed.yml").exists());
+                assert_eq!(
+                    fs::read_to_string(root.join(".github/workflows/alpha.yml")).unwrap(),
+                    "host-edited original\n"
+                );
+            } else {
+                assert!(error.contains("new workflow collision"));
+                assert_eq!(
+                    fs::read_to_string(root.join(".github/workflows/renamed.yml")).unwrap(),
+                    "host-owned target\n"
+                );
+                assert_eq!(
+                    fs::read(root.join(".github/workflows/alpha.yml")).unwrap(),
+                    alpha
+                );
+            }
+            assert_eq!(
+                fs::read(root.join(".github/workflows/beta.yml")).unwrap(),
+                beta
+            );
+        } else {
+            let report: Value = serde_json::from_str(&result.unwrap()).unwrap();
+            assert_eq!(
+                report["retired_workflows"],
+                json!([".github/workflows/alpha.yml"])
+            );
+            assert!(report["retired_source"].is_null());
+            assert!(!root.join(".github/workflows/alpha.yml").exists());
+            assert!(!generate(root, source, true).unwrap());
+        }
+        assert_eq!(fs::read(root.join(source)).unwrap(), source_bytes);
+        assert!(root.join(prior).is_file());
+    }
+}

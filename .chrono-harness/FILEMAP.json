@@ -3231,6 +3231,18 @@
       "surface": "documentation",
       "cost": "unmeasured",
       "edges": []
+    },
+    {
+      "path": "crates/ci/src/migrate.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
     }
   ],
   "project_edges": [
