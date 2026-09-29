@@ -46,6 +46,125 @@ fn generator_projects_independent_workflows_with_exact_scoped_commands() {
 }
 
 #[test]
+fn generated_unit_workflow_cli_adoption_uses_the_local_canonical_command() {
+    let (host, base, candidate) = consumer();
+    let root = host.path();
+    let event_path = ".chrono-harness/state/generated-event.json";
+    json_file(
+        root,
+        event_path,
+        &json!({
+            "ref": "refs/heads/dev",
+            "before": base,
+            "after": candidate,
+            "created": false,
+            "deleted": false
+        }),
+    );
+    let output_path = root.join(".chrono-harness/state/generated-output");
+    let workflow = fs::read_to_string(root.join(".github/workflows/alpha.yml")).unwrap();
+    // This is the literal generated command. The values supplied by the event
+    // are intentionally variables; the command shape must remain the same as
+    // the local argv recorded by prepare.
+    assert!(workflow.contains(
+        "'.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--base' \"$CHRONO_BASE\" '--candidate' \"$CHRONO_CANDIDATE\" '--unit' 'alpha'"
+    ));
+
+    let prepare_line = workflow
+        .lines()
+        .find(|line| {
+            line.contains(" prepare --host-root . --config '.chrono-harness/ci/units.json'")
+        })
+        .expect("generated workflow must contain its prepare command")
+        .trim();
+    let check_line = workflow
+        .lines()
+        .find(|line| {
+            line.contains("chrono-harness' 'check'")
+                && line.contains("'--base'")
+                && line.contains("'--unit' 'alpha'")
+        })
+        .expect("generated workflow must contain its unit check command")
+        .trim();
+    assert!(root.join(".chrono-harness/bin/chrono-ci").is_file());
+    assert!(root.join(".chrono-harness/bin/chrono-harness").is_file());
+    let prepared = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+        .current_dir(root)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_EVENT_PATH", root.join(event_path))
+        .env("CHRONO_WORKFLOW_REVISION", &candidate)
+        .env("GITHUB_OUTPUT", &output_path)
+        .env("CHRONO_BASE", &base)
+        .env("CHRONO_CANDIDATE", &candidate)
+        .env("CHRONO_INITIAL", "false")
+        .args([
+            "prepare",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units.json",
+            "--event",
+            "push",
+            "--payload",
+            event_path,
+            "--workflow-revision",
+            &candidate,
+            "--unit",
+            "alpha",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        prepared.status.success(),
+        "prepare={prepare_line}\nstdout={}\nstderr={}",
+        String::from_utf8_lossy(&prepared.stdout),
+        String::from_utf8_lossy(&prepared.stderr)
+    );
+    let context: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/state/alpha/context.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(context["candidate"], candidate);
+    assert_eq!(context["base"], base);
+    assert_eq!(context["workflow_source_revision"], candidate);
+    assert_eq!(
+        context["canonical_argv"],
+        json!([
+            ".chrono-harness/bin/chrono-harness",
+            "check",
+            "--config",
+            ".chrono-harness/ci/check.json",
+            "--base",
+            base,
+            "--candidate",
+            candidate,
+            "--unit",
+            "alpha"
+        ])
+    );
+
+    // The generated check line and local execution use the same argv recorded
+    // by the event preparation context.
+    assert!(check_line.contains("'--base' \"$CHRONO_BASE\""));
+    let local = execute_context(root, &context, 0);
+    assert_eq!(local["response"]["status"], "passed");
+    let report: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/state/alpha/check.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(report["response"]["status"], "passed");
+    assert_eq!(
+        report["response"]["evidence"]["scope"],
+        "chrono-ci-check/v3"
+    );
+    let executed = report["response"]["evidence"]["executed"]
+        .as_array()
+        .unwrap();
+    assert_eq!(executed.len(), 1);
+    assert_eq!(executed[0]["operation"], "test.a");
+}
+
+#[test]
 fn generator_preflights_all_outputs_before_any_unit_write() {
     let d = fixture();
     fs::create_dir_all(d.path().join(".github/workflows")).unwrap();
