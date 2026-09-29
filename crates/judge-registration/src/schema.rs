@@ -37,6 +37,14 @@ fn strings(v: &Value) -> Result {
     }
     Ok(())
 }
+fn nonempty_strings(v: &Value) -> Result {
+    for s in array(v)? {
+        if string(s).is_err() {
+            return Err("expected nonempty string array".into());
+        }
+    }
+    Ok(())
+}
 fn unique(v: &Value, key: Option<&str>) -> Result {
     let mut seen = BTreeSet::new();
     for row in array(v)? {
@@ -273,12 +281,31 @@ pub fn config(v: &Value) -> Result {
             path(&i["location"])?;
         }
     }
-    object(&v["input_closure"], &["status", "unresolved"], &[])?;
+    let closure_optional = if v["schema_version"] == 3 {
+        vec!["bindings"]
+    } else {
+        vec![]
+    };
+    object(
+        &v["input_closure"],
+        &["status", "unresolved"],
+        &closure_optional,
+    )?;
     choice(
         &v["input_closure"]["status"],
         &["incomplete", "declared-complete"],
     )?;
     strings(&v["input_closure"]["unresolved"])?;
+    if let Some(bindings) = v["input_closure"].get("bindings") {
+        unique(bindings, Some("id"))?;
+        for binding in array(bindings)? {
+            object(binding, &["id", "consumer", "kind", "inputs"], &[])?;
+            string(&binding["id"])?;
+            string(&binding["consumer"])?;
+            string(&binding["kind"])?;
+            nonempty_strings(&binding["inputs"])?;
+        }
+    }
     Ok(())
 }
 pub fn projects(v: &Value) -> Result {

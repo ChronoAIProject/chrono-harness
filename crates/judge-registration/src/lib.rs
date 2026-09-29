@@ -426,7 +426,69 @@ fn readiness(
             true,
         ),
     }
+    validate_input_closure_bindings(n, r);
     Ok(())
+}
+
+/// Validate only the explicit closure whitelist. The registration owns the
+/// node inventory, but it never discovers additional dependencies from the
+/// filesystem, commands, language or directory layout.
+fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
+    let Some(bindings) = n.config["input_closure"]
+        .get("bindings")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    let nodes = n.node_data();
+    for (binding_index, binding) in bindings.iter().enumerate() {
+        let consumer = binding["consumer"].as_str().unwrap_or_default();
+        let consumer_reference = format!("/config/input_closure/bindings/{binding_index}/consumer");
+        match nodes.get(consumer).map(|view| view.kind) {
+            Some(NodeKind::Project | NodeKind::Script | NodeKind::Test | NodeKind::Judge) => {}
+            Some(_) => issue(
+                r,
+                "E_REFERENCE",
+                format!("input closure consumer is not an executable node: {consumer}"),
+                consumer_reference,
+                false,
+            ),
+            None => issue(
+                r,
+                "E_REFERENCE",
+                format!("unknown input closure consumer {consumer}"),
+                consumer_reference,
+                false,
+            ),
+        }
+        for (input_index, input) in binding["inputs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .enumerate()
+        {
+            let reference =
+                format!("/config/input_closure/bindings/{binding_index}/inputs/{input_index}");
+            match nodes.get(input).map(|view| view.kind) {
+                Some(NodeKind::Tool | NodeKind::Input | NodeKind::Environment) => {}
+                Some(_) => issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("input closure reference is not an external input node: {input}"),
+                    reference,
+                    false,
+                ),
+                None => issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("unknown input closure reference {input}"),
+                    reference,
+                    false,
+                ),
+            }
+        }
+    }
 }
 fn references(
     reader: &facts::Reader,

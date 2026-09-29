@@ -115,7 +115,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
 | facts_git | config v3 必填 `{tool, input}`，分别引用唯一 tools 与 present 文件输入；v1/v2 不接纳此字段，包括 null |
 | environment | `{inherit: string[], values: object, inputs: object[]}`；v1 输入 `{id, location, sha256}`，v2/v3 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
-| input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[]}`；工程声明，不是完备性证明 |
+| input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[]}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
 | semantic_fields | `{path, pointers: string[], on}[]`；语义字段分类，见 §8 |
 | artifacts | `{path, owner, kind, tracked: false}[]`；明确生成目录白名单 |
@@ -139,6 +139,13 @@ PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声�
 会影响裁决的随机种子、时钟值、网络响应和超时/资源条件也须显式固定并登记为有效输入。
 文件输入用 FILEMAP 或 environment.inputs 登记；后者以 input:<id> 显式连接消费者，不推断边。
 当前 input_closure 为 incomplete，inputs 为空；补齐工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。
+Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`、可执行消费者
+`project:<id>`、`script:<id>`、`test:<id>` 或 `judge:<id>`、非空 `kind` 以及非空
+`inputs`。`inputs` 只能逐项引用已登记的 `tool:<id>`、`input:<id>` 或
+`environment:<name>` 节点；未知节点、错误种类或悬空引用由 registration 报
+`E_REFERENCE`。v1/v2 拒绝该字段。bindings 只记录 AI 明确选择的关系，registration
+不扫描目录、语言、命令、manifest 或工具链来补齐依赖，也不把登记成功解释为现实中
+没有遗漏输入；完整性仍由 `status`、`unresolved` 和各消费者的实际证据共同决定。
 未知或已知缺失项返回 E_INPUT_UNDECLARED / E_EVIDENCE_UNRESOLVED；登记有效不证明真实输入完整。
 
 | projects 字段 | 类型与约束 |

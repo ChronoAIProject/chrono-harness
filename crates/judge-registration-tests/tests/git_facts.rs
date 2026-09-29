@@ -452,3 +452,62 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
         }
     }
 }
+
+#[test]
+fn input_closure_bindings_accept_explicit_external_nodes() {
+    let mut h = BoundHost::new(false, "");
+    h.host.edit(CONFIG, |config| {
+        config["input_closure"]["bindings"] = json!([{
+            "id": "registration-git-facts",
+            "consumer": "judge:registration",
+            "kind": "git-facts",
+            "inputs": [
+                "tool:facts-git",
+                "input:facts-git-bytes",
+                "environment:PATH"
+            ]
+        }]);
+    });
+    h.host.base = h.host.candidate.clone();
+    fs::write(
+        h.host.root().join("document.txt"),
+        "candidate after closure binding",
+    )
+    .unwrap();
+    h.host.candidate = commit(h.host.root());
+    let (exit, report, error) = h.run(false);
+    assert_eq!(
+        exit, 0,
+        "explicit closure binding must pass: {error} {report}"
+    );
+    assert_eq!(report["status"], "pass");
+}
+
+#[test]
+fn input_closure_bindings_reject_unknown_nodes_without_discovery() {
+    for (field, value) in [
+        ("consumer", json!("project:unknown")),
+        ("inputs", json!(["input:unknown"])),
+    ] {
+        let mut h = BoundHost::new(false, "");
+        h.host.edit(CONFIG, |config| {
+            config["input_closure"]["bindings"] = json!([{
+                "id": "invalid-closure",
+                "consumer": "judge:registration",
+                "kind": "git-facts",
+                "inputs": ["tool:facts-git"]
+            }]);
+            config["input_closure"]["bindings"][0][field] = value.clone();
+        });
+        h.host.base = h.host.candidate.clone();
+        fs::write(
+            h.host.root().join("document.txt"),
+            "candidate after invalid closure binding",
+        )
+        .unwrap();
+        h.host.candidate = commit(h.host.root());
+        let (exit, report, error) = h.run(false);
+        assert_ne!(exit, 0, "{field}: {report} {error}");
+        assert!(finding(&report, "E_REFERENCE"), "{field}: {report} {error}");
+    }
+}
