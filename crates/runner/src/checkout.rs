@@ -134,10 +134,9 @@ fn object_hash(oid: &str, size: u64, source: &mut impl Read) -> Result<String, S
 }
 fn matches_entry(root: &Path, name: &str, entry: &Entry) -> Result<bool, String> {
     if entry.kind != "blob" || !matches!(entry.mode.as_str(), "100644" | "100755" | "120000") {
-        return Err(format!(
-            "unsupported checkout entry {name}: {} {}",
-            entry.kind, entry.mode
-        ));
+        // Unsupported entries never match. Keep observations available so the
+        // registration judge can emit its structured unsupported-input finding.
+        return Ok(false);
     }
     let Some(path) = physical(root, name)? else {
         return Ok(false);
