@@ -20,6 +20,7 @@ pub struct Entry {
 pub use crate::facts_binding::{OpenFailure, Reader, declaration as git_declaration};
 
 pub type Tree = BTreeMap<String, Entry>;
+pub use crate::checkout::{changes as checkout_changes, tree as parse_tree};
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     let o = Command::new("git")
         .arg("--no-optional-locks")
@@ -183,26 +184,12 @@ impl Reader {
     }
     pub fn tree(&self, root: &Path, oid: &str) -> Result<Tree, String> {
         let raw = self.git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
-        let mut out = Tree::new();
-        for row in raw.split(|b| *b == 0).filter(|v| !v.is_empty()) {
-            let s =
-                std::str::from_utf8(row).map_err(|_| "E_INPUT_UNSUPPORTED: non UTF-8 tree path")?;
-            let (meta, path) = s.split_once('\t').ok_or("invalid Git tree row")?;
-            let f: Vec<_> = meta.split(' ').collect();
-            if f.len() != 3 {
-                return Err("invalid Git tree metadata".into());
-            }
-            relative_path(path)?;
-            out.insert(
-                path.into(),
-                Entry {
-                    mode: f[0].into(),
-                    kind: f[1].into(),
-                    oid: f[2].into(),
-                },
-            );
-        }
-        Ok(out)
+        parse_tree(&raw)
+    }
+    pub fn tracked_changes(&self, root: &Path, candidate: &str) -> Result<Vec<String>, String> {
+        let tree = self.tree(root, candidate)?;
+        let index = self.git(root, &["ls-files", "--stage", "-z"])?;
+        checkout_changes(root, &tree, &index)
     }
     pub fn index_flags(&self, root: &Path) -> Result<Vec<IndexFlag>, String> {
         self.git(root, &["ls-files", "-v", "-z"])?
@@ -221,31 +208,7 @@ impl Reader {
     }
     pub fn checkout(&self, root: &Path, candidate: &str) -> Result<Checkout, String> {
         let head = utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into();
-        let mut tracked = paths(self.git(
-            root,
-            &[
-                "diff",
-                "--no-ext-diff",
-                "--name-only",
-                "-z",
-                candidate,
-                "--",
-            ],
-        )?)?;
-        tracked.extend(paths(self.git(
-            root,
-            &[
-                "diff",
-                "--no-ext-diff",
-                "--cached",
-                "--name-only",
-                "-z",
-                candidate,
-                "--",
-            ],
-        )?)?);
-        tracked.sort();
-        tracked.dedup();
+        let tracked = self.tracked_changes(root, candidate)?;
         let mut untracked =
             paths(self.git(root, &["ls-files", "--others", "--exclude-standard", "-z"])?)?;
         untracked.extend(paths(self.git(

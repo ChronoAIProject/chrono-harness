@@ -574,16 +574,7 @@ fn release_reconciled(
     r.git(target, &["merge-base", "--is-ancestor", base, head])?;
     let config_path = r.config.host_config.clone();
     let (target_registrations, _) = start::registrations(r, target, head, &config_path)?;
-    r.git(
-        target,
-        &[
-            "diff",
-            "--exit-code",
-            "--quiet",
-            "--no-ext-diff",
-            "--no-textconv",
-        ],
-    )?;
+    start::exact_checkout(r, target, tree)?;
     if r.text(target, &["write-tree"])?.trim() != tree {
         return Err("reconciled index tree mismatch".into());
     }
@@ -600,16 +591,7 @@ fn release_reconciled(
     if r.text(target, &["write-tree"])?.trim() != tree {
         return Err("index changed while releasing recovery lock".into());
     }
-    r.git(
-        target,
-        &[
-            "diff",
-            "--exit-code",
-            "--quiet",
-            "--no-ext-diff",
-            "--no-textconv",
-        ],
-    )?;
+    start::exact_checkout(r, target, tree)?;
     start::untracked(r, target, target_registrations.config())?;
     stable()?;
     report["destination"] = value!(target);

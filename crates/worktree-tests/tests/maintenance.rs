@@ -278,6 +278,51 @@ fn maintenance_cleanup_rejects_wrong_dirty_locked_main_and_nested_worktrees() {
 }
 
 #[test]
+fn raw_checkout_cleanup_preserves_mode_changes_hidden_by_git_configuration() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = Host::new("payload");
+    let target = h.parent.join("unsaved mode");
+    assert_eq!(h.invoke("feature", "unsaved-mode", &target).0, 0);
+    let plan = h.cleanup(&target);
+    git(&h.root, &["config", "core.filemode", "false"]);
+    fs::set_permissions(target.join("payload"), fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(git(&target, &["status", "--porcelain"]).is_empty());
+    let (code, report, error) = h.maintain("cleanup", plan);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(report["error"].as_str().unwrap().contains("clean snapshot"));
+    assert!(target.join("payload").exists());
+    assert_eq!(
+        fs::metadata(target.join("payload"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o100,
+        0o100
+    );
+}
+
+#[test]
+fn raw_checkout_recovery_keeps_lock_until_physical_work_matches_saved_index() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = Host::new("payload");
+    h.hook("exit 17");
+    let target = h.parent.join("unreconciled mode");
+    let (code, original, _) = h.invoke("feature", "unreconciled-mode", &target);
+    assert_ne!(code, 0);
+    let plan = h.recovery(&original, &target);
+    git(&h.root, &["config", "core.filemode", "false"]);
+    fs::set_permissions(target.join("payload"), fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(git(&target, &["diff", "--name-only"]).is_empty());
+    let (code, report, error) = h.maintain("recover", plan);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(report["error"].as_str().unwrap().contains("clean snapshot"));
+    assert!(git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked"));
+    git(&target, &["update-index", "--chmod=+x", "payload"]);
+    let (code, report, error) = h.maintain("recover", h.recovery(&original, &target));
+    assert_eq!(code, 0, "{report} {error}");
+}
+
+#[test]
 fn maintenance_cleanup_retains_actual_remove_failure_and_concurrent_branch_update() {
     use std::os::unix::fs::PermissionsExt;
     for concurrent in [false, true] {

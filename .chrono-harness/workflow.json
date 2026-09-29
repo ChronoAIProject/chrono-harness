@@ -20,7 +20,8 @@
         "crates/runner/src/wire.rs",
         "crates/runner/src/facts.rs",
         "crates/runner/src/full.rs",
-        "crates/runner/src/observation.rs"
+        "crates/runner/src/observation.rs",
+        "crates/runner/src/checkout.rs"
       ],
       "tests": [
         "runner-tests"

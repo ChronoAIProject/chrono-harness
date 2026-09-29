@@ -391,6 +391,19 @@ fn successful_hook_with_dirty_checkout_cannot_report_created() {
         "changed\n"
     );
 }
+
+#[test]
+fn raw_checkout_creation_rejects_hidden_mode_from_successful_hook() {
+    let h = Host::new("payload");
+    git(&h.root, &["config", "core.filemode", "false"]);
+    h.hook("chmod +x payload\nexit 0");
+    let target = h.parent.join("hidden hook change");
+    let (code, report, error) = h.invoke("feature", "hidden-hook", &target);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(report["error"].as_str().unwrap().contains("clean snapshot"));
+    assert!(target.join("payload").exists());
+    assert!(git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked"));
+}
 #[test]
 fn strict_cli_and_configuration_fail_without_creating_a_worktree() {
     let h = Host::new("payload");

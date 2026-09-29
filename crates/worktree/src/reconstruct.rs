@@ -176,16 +176,9 @@ pub(crate) fn execute(
         }
     }
     start::ensure_identity(r, &o.root, target_path, &branch, &base, token)?;
-    r.git(
-        target_path,
-        &[
-            "diff",
-            "--exit-code",
-            "--quiet",
-            "--no-ext-diff",
-            "--no-textconv",
-        ],
-    )?;
+    let tree = r.text(target_path, &["write-tree"])?.trim().to_string();
+    facts::full_oid(&tree)?;
+    start::exact_checkout(r, target_path, &tree)?;
     let staged = paths(r.git(
         target_path,
         &[
@@ -203,8 +196,6 @@ pub(crate) fn execute(
     if !staged.is_subset(&carried) {
         return Err("reconstruction changed an undeclared path; preserve worktree and lock".into());
     }
-    let tree = r.text(target_path, &["write-tree"])?.trim().to_string();
-    facts::full_oid(&tree)?;
     if r.oid(&o.root, "HEAD")? != p.candidate {
         return Err("source HEAD changed during reconstruction; preserve both worktrees".into());
     }
