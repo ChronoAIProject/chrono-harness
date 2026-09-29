@@ -1,7 +1,7 @@
 # Registered Git facts
 
-Public beta.10 includes the full-v3/scoped-v2/provider-v3 Git binding. The literal
-checkout identity change below is a subsequent source addition.
+Public beta.11 includes the previously released full-v3/scoped-v2/provider-v3 Git binding. The literal
+checkout identity change below is included in beta.11.
 
 Full config v3 requires `facts_git: {"tool": "git", "input": "git-executable"}`.
 Both IDs are explicit: `tools` supplies `program`, `resolution: "PATH-once"`,
@@ -117,4 +117,11 @@ entries remain regular files and literal symlinks with UTF-8 registered paths;
 Gitlinks and special files are not accepted as matching regular source files.
 Complete Git configuration, delegated executable, OS, compiler/SDK input closure
 and full host activation remain separate unfinished obligations. The source
-change is not in beta.10.
+change is distributed in beta.11.
+
+The beta.11 public macOS runner/scoped judge and worktree binary were consumed
+in an actual upgraded mixed-host clone. With local `core.filemode=false`, Git
+reported no changed path for an executable-bit change; the canonical check and
+registered cleanup both rejected it, preserving the checkout. Restoring the
+mode restored acceptance. This is a bounded public-binary consumer, not input
+closure or deterministic-parity certification.

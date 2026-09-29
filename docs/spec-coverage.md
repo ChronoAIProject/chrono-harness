@@ -74,7 +74,7 @@ Scoped profile v2 independently opts into Git binding with policy.facts_config. 
 
 Full activation and all other remaining obligations stay active. Generic project fixtures validate declared method execution and ownership; independent Cargo fixtures validate explicitly adopted TOML consistency. Neither proves Cargo/SDK completeness. Single-worker checks do not certify independent review, native CI or landing.
 
-Public [beta.10](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.10) ships explicit Git binding, release/full CI generation, remote branch retirement and native release recipe v3/report v4. Its [fixed-source native build](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944) passed 371 tests across ten dedicated projects on each of macOS arm64 and Linux x86_64, including full/scoped Git-binding consumers. Both original reports retain 31 actual processes, 28 staged consumer destinations and 24 matching identity observations. This validates those native consumers; generated provider-v3 host adoption, full input closure and deterministic parity remain outstanding. The current host release workflow is generated from an explicit chrono-github-release/v1 source; see [release CI](release-ci.md). That generator extension is distributed in beta.10; the linked native release uses its generated workflow.
+Public [beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) adds explicit metadata rebind and literal checkout identity, alongside the previously released Git binding, CI generation, remote retirement and recipe v3/report v4. Its [fixed-source native build](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36566708631) passed 391 tests across ten dedicated projects on each of macOS arm64 and Linux x86_64, including full/scoped Git-binding consumers. Both original reports retain 31 actual processes, 28 staged consumer destinations and 24 matching identity observations. This validates those native consumers; generated provider-v3 host adoption, full input closure and deterministic parity remain outstanding. The current host release workflow is generated from an explicit chrono-github-release/v1 source; see [release CI](release-ci.md). That generator extension is distributed in beta.10; the linked native release uses its generated workflow.
 
 This increment adds mixed classification and adopted registrations together. **Mixed policy/product change warning:** the project pair, semantic comparisons, bootstrap binding and execution plan expand the validation surface. Costs remain unmeasured. Dedicated tests validate the mixed report and shared cost consumer; host activation still requires the outstanding governance and input obligations.
 
@@ -224,7 +224,7 @@ relative or corrupt pointers with owned backlinks, byte/mode/symlink preservatio
 input and reference drift, wrong ownership, collisions, original failed process
 bytes and partial donor effects. Reconciled attached failures reuse existing
 `recover`; the original failed report is retained. Backup is rechecked before
-success. This source addition is not in beta.10 and does not recover a lost
+success. This addition is distributed in beta.11 and does not recover a lost
 historical index. Interrupted rebind continuation, concurrent/crash atomicity and
 full governance remain outside the contract. See [worktree](worktree.md#explicit-metadata-rebind).
 
@@ -235,8 +235,8 @@ objects, executable class, CRLF normalization, clean filters, symlink emulation,
 physical parents and staged cancellation. Full/initial and scoped consumers reject
 hidden mode changes, including after an operation. Worktree consumers preserve
 unsaved work on creation/recovery/cleanup; they share the same tree/index comparer
-through the existing registered Git runner. This source addition is not in
-beta.10. It establishes neither full input closure nor deterministic parity;
+through the existing registered Git runner. This addition is distributed in
+beta.11. It establishes neither full input closure nor deterministic parity;
 see [Git facts](git-facts.md#literal-checkout-identity).
 
 Source cleanup disposes only explicitly selected untracked artifacts under its
@@ -245,3 +245,10 @@ tracked-content refusal before disposal, preserved external symlink targets, and
 original Git failure plus explicit retry. This is newer than beta.11; recovery of
 older partial source deletion and atomic concurrent/power-loss disposal remain
 outside this increment. See [artifact disposal](worktree.md#declared-artifact-disposal-before-checkout-removal).
+
+The beta.11 release and [all four example upgrades](examples.md) have exact
+landing and dev evidence. A public macOS mixed-host consumer additionally
+verified hidden-mode rejection/preservation and explicit metadata rebind with
+a damaged index and absent prior receipts, preserving saved/unsaved work and
+old metadata. Interrupted rebind continuation, complete input closure, full
+activation, deterministic parity and Rust formal refinement remain unfinished.

@@ -521,7 +521,7 @@ original failure after deletion, and target/plan changes after deletion.
 
 ## Explicit metadata rebind
 
-`inspect-rebind` and `rebind` are source additions, not part of public beta.10.
+Public beta.11 includes `inspect-rebind` and `rebind`.
 They recover a linked checkout's Git attachment when its metadata is missing or
 unusable, including loss of all old operation receipts. The AI supplies the
 existing branch, exact current commit, desired index tree and each path. The old
@@ -618,7 +618,7 @@ reconciled recovery and cleanup reject bytes, link representation and owner
 execute changes even when Git configuration reports a clean working tree.
 Cleanup preserves such unsaved work; recovery keeps its lock until the actual
 files match the explicitly supplied index tree. The existing artifact exclusion
-and saved-commit checks still apply. This source change is not in beta.10 and
+and saved-commit checks still apply. This change is distributed in beta.11 and
 does not claim complete Git configuration closure or concurrent deletion safety.
 
 ## Declared artifact disposal before checkout removal
@@ -647,3 +647,11 @@ Git-removal attempt, or guarantee a deadline for arbitrary tracked source volume
 The change is newer than beta.11. Dedicated real-Git consumers verify removal
 ordering independently of elapsed time, tracked-content rejection before any
 disposal, internal-symlink target preservation and a later Git failure/retry.
+
+The beta.11 anonymous macOS binaries were installed in a clone of the upgraded
+public mixed host and its owned checkout. With the old receipts removed and
+the index damaged, explicit inspect/rebind preserved staged and unstaged work,
+raw binary bytes, executable mode, literal symlink, selected index and original
+metadata. The original outcome stayed unknown. Retained work was committed
+before registered cleanup verified checkout/branch removal. This does not cover
+interrupted rebind continuation; see [example adoption](examples.md).
