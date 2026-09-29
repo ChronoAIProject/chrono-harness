@@ -156,6 +156,24 @@ fn ordinary_doc_delta_runs_no_test_and_needs_no_integration() {
     assert_eq!(r["tests"]["executed"], json!([]));
     assert!(!h.root().join(".chrono-harness/state/order").exists());
 }
+
+#[test]
+fn no_delta_still_runs_the_full_workflow_gate_without_business_tests() {
+    let mut h = host();
+    h.base = h.candidate.clone();
+    let (e, r) = run(&h, "delivery", None, |ctx| {
+        ctx["branch_ref"] = "feature/no-delta".into()
+    });
+    passed(e, &r);
+    assert_eq!(r["delta"], json!([]));
+    assert_eq!(workflow(&r)["mode"], "ordinary_delta");
+    assert_eq!(r["tests"]["executed"], json!([]));
+    assert!(r["judges"].as_array().unwrap().iter().all(|judge| {
+        judge["state"] == "executed" || judge["state"] == "completed" || judge["state"] == "pass"
+    }));
+    assert!(!h.root().join(".chrono-harness/state/order").exists());
+}
+
 #[test]
 fn changed_tree_and_stale_producer_evidence_are_rejected() {
     let mut h = host();

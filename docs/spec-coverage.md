@@ -57,7 +57,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 28 crash/timeout/digest | implemented: R bounds and prelaunch digest tests | resource guard is infrastructure, not functional verdict |
 | 29 unknown costs | implemented: cost consumer warns with zero exit, preserves null and known coordinates; no-Delta retained-input case | full host activation |
 | 30 candidate migration validator | implemented finite contract: W original schema versions, real conversion/compatibility test, old method nonexecution and judge retirement; inputs consumer covers v3 version selection and config v1→v2 certification | further host converters and native activation |
-| 31 no DELTA | partial: G no-delta/dirt behavior | full input/workflow checks |
+| 31 no DELTA | implemented bounded: G no-delta/dirt behavior; W `no_delta_still_runs_the_full_workflow_gate_without_business_tests` executes the complete judge chain with an empty DELTA and no business test | full native activation and complete host input closure |
 | 32 initial root | implemented bounded: G root inventory, real/shallow parent rejection, checkout/reference failures and no activation | full bootstrap provenance/activation |
 | 33 check CLI | implemented bounded transport/registration plus existing slice | whole configured host remains nonzero until obligations implemented |
 | 34 unknown/malformed CLI | implemented: L `unknown_and_malformed_commands_are_errors` | — |
