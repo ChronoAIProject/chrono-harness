@@ -64,9 +64,21 @@ null retirement requires removal of its paired producer and a matching producer
 declaration. Removed judges need declarations, never execution of old binaries.
 Historical test aliases may be repaired by naming every old definition and a
 unique replacement, including the same surviving alias. Old costs and definitions
-remain visible. Routes/projects defer changed historical methods only when the
-configured downstream migration validator consumes their results; standalone and
-scoped consumers keep their stricter preservation contract.
+remain visible. Routes/projects defer changed historical methods when the
+configured downstream migration validator consumes their results. Standalone and
+scoped consumers preserve each old operation in its replacement plan.
+
+Historical profiles in workflow v2/v3 can explicitly register optional
+`method_replacements`. Each row contains `from`, `to`, and a nonempty `reason`;
+both methods contain exact `owner`, `operation`, `tool`, and literal `argv`.
+`from` must match one original legacy action; `to` must match the unique current
+method. Both retain the same operation ID. An owner change requires the existing
+profile's explicit identity mapping. Duplicate, unchanged, stale, unused and
+unbound replacements fail. Omission retains strict tool/argv preservation for
+standalone consumers. Original legacy definitions, plans and costs stay intact;
+this declaration does not certify semantic equivalence or test success. Existing
+execution and workflow validation still own those verdicts. This source extension
+is not included in public beta.13; earlier readers reject the new field.
 
 Schema changes are compared using original versions before decoding. FILEMAP
 selects explicit compatibility tests and integration requirements. Workflow checks

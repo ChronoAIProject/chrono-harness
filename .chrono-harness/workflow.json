@@ -273,7 +273,7 @@
       "kind": "test",
       "id": "ci-verify",
       "replacement": "ci-tests",
-      "reason": "ci.verify moves unchanged into ci; ci-tests also executes verification on its existing additional triggers."
+      "reason": "ci.verify belongs to ci and the complete ci-tests plan; historical method replacement explicitly binds its current provider."
     },
     {
       "kind": "script",
@@ -353,7 +353,36 @@
           ]
         }
       ],
-      "ambiguities": []
+      "ambiguities": [],
+      "method_replacements": [
+        {
+          "from": {
+            "owner": "script:ci-verify",
+            "operation": "ci.verify",
+            "tool": "chrono-ci",
+            "argv": [
+              "verify",
+              "--host-root",
+              ".",
+              "--config",
+              ".chrono-harness/ci/github.json"
+            ]
+          },
+          "to": {
+            "owner": "project:ci",
+            "operation": "ci.verify",
+            "tool": "chrono-ci",
+            "argv": [
+              "verify",
+              "--host-root",
+              ".",
+              "--config",
+              ".chrono-harness/ci/units.json"
+            ]
+          },
+          "reason": "Preserve the ci.verify operation and complete ci-tests plan while explicitly adopting the independent-unit provider."
+        }
+      ]
     }
   ]
 }

@@ -264,7 +264,11 @@ registers sixteen independent complete-plan workflows and a collector, with an
 explicit three-tool bootstrap configuration. The bootstrap regression exercises
 configured operation/install selection, unchanged default behavior and failure
 propagation. Historical repair and initial-profile consumers use the adopted
-provider without reinterpreting historical definitions. Ambiguous provider runs
+provider without reinterpreting historical definitions. The source-only historical
+method replacement extension binds exact original/current methods and mapped
+owners, rejects missing/stale/duplicate/unbound declarations, retains the omitted
+field's strict contract and exercises actual drift detection and repair.
+Ambiguous provider runs
 still fail explicitly; this does not certify full input closure or governance.
 
 Public beta.13 adds owned projection migration from explicit scoped v1/units

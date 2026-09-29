@@ -214,6 +214,7 @@ Default binaries use `.chrono-harness/bin/chrono-judge-<id>`. All seven judges h
 | integration | `{tests, bind, evidence}`；精确绑定字段与状态目录路径 |
 | retirements | `{kind, id, replacement: string|null, reason}[]`；显式退出/迁移事实 |
 | historical_profiles | workflow v2 retains the named FILEMAP v1 profile `{id,filemap_version,profile_path,script,test,mappings,legacy_records,ambiguities}`. Workflow v3 also accepts `{id,from_versions,to_versions,script,test,mappings,legacy_records,ambiguities}`; both version maps explicitly name all five registries (`config,filemap,projects,judges,workflow`). Selection requires exact before/after version agreement and one matching profile. |
+| historical_profiles.method_replacements | Optional explicit `{from,to,reason}` rows in workflow v2/v3. Each method has exact `{owner,operation,tool,argv}`. Require one original legacy action and one current method, equal operation IDs and explicit changed-owner mapping. Duplicate, unchanged, stale or unused declarations fail; omission preserves the standalone strict old-method contract. Original definitions and operation obligations remain; semantic equivalence is not inferred. Source extension after beta.13; see docs/workflow.md. |
 | migrations | `{from_version, to_version, script, test, mappings, reason}[]`；mappings 为旧/新记录 ID 对 |
 
 本节每份文件有共同 schema_version/status，表格列出其余字段；不另设未登记的规则文件。

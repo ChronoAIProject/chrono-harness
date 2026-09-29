@@ -97,7 +97,7 @@ impl Host {
         .unwrap();
         fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let mut source = read(&repo, SOURCE);
+        let mut source = read(&repo, ".chrono-harness/ci/units.json")["collection"].clone();
         source["schema"] = "chrono-github-ci/v3".into();
         source["facts_config"] = FACTS.into();
         source["push_baselines"] = json!([]);
@@ -250,7 +250,7 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
         String::from_utf8_lossy(&out.stderr)
     );
     let report: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(read(&h.root, ".chrono-harness/state/context.json"), report);
+    assert_eq!(read(&h.root, &h.config().context_path), report);
     let facts = &report["git_facts"];
     assert_eq!(facts["binding"]["path"], json!(h.program));
     assert_eq!(facts["input_closure_complete"], false);

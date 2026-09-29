@@ -84,6 +84,104 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
     let mut env: BTreeMap<String, String> = std::env::vars().collect();
     env.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
     env.insert("CARGO_TERM_COLOR".into(), "never".into());
+    // The historical decoder retains the original method. The current host
+    // explicitly replaces its provider; standalone consumers may not infer it.
+    let mut missing_method = new.clone();
+    missing_method.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("method_replacements");
+    assert!(
+        interpret(
+            &root,
+            &base,
+            &candidate,
+            CONFIG,
+            raw.clone(),
+            missing_method.clone(),
+            &env
+        )
+        .err()
+        .unwrap()
+        .contains("historical method changed")
+    );
+    let old_action = raw[PROJECTS]["scripts"][0]["actions"]["execute"].clone();
+    missing_method.get_mut(PROJECTS).unwrap()["projects"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|p| p["id"] == "ci")
+        .unwrap()["actions"]["execute"] = old_action;
+    assert!(
+        interpret(
+            &root,
+            &base,
+            &candidate,
+            CONFIG,
+            raw.clone(),
+            missing_method,
+            &env
+        )
+        .is_ok(),
+        "omitted replacements must retain the original strict unchanged-method contract"
+    );
+    for (pointer, value) in [
+        ("/from/argv", json!(["invented historical method"])),
+        ("/from/owner", json!("script:missing")),
+        ("/to/argv", json!(["stale candidate method"])),
+        ("/to/tool", json!("missing-tool")),
+        ("/to/owner", json!("project:runner")),
+        ("/to/operation", json!("renamed.operation")),
+        ("/to/argv", json!("not-an-array")),
+        ("/reason", json!("")),
+    ] {
+        let mut invalid = new.clone();
+        *invalid.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["method_replacements"][0]
+            .pointer_mut(pointer)
+            .unwrap() = value;
+        assert!(
+            interpret(&root, &base, &candidate, CONFIG, raw.clone(), invalid, &env).is_err(),
+            "unbound replacement accepted: {pointer}"
+        );
+    }
+    for variant in [
+        "duplicate",
+        "unknown-field",
+        "unchanged",
+        "unused",
+        "ambiguous-target",
+    ] {
+        let mut invalid = new.clone();
+        let rows =
+            invalid.get_mut(WORKFLOW).unwrap()["historical_profiles"][0]["method_replacements"]
+                .as_array_mut()
+                .unwrap();
+        match variant {
+            "duplicate" => rows.push(rows[0].clone()),
+            "unknown-field" => rows[0]["waiver"] = json!(true),
+            "unchanged" => rows[0]["to"] = rows[0]["from"].clone(),
+            "unused" => {
+                rows[0]["from"]["operation"] = json!("unused.operation");
+                rows[0]["to"]["operation"] = json!("unused.operation");
+            }
+            "ambiguous-target" => {
+                let action = invalid.get_mut(PROJECTS).unwrap()["projects"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|p| p["id"] == "ci")
+                    .unwrap()["actions"]
+                    .as_object_mut()
+                    .unwrap();
+                action.insert("duplicate".into(), action["execute"].clone());
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            interpret(&root, &base, &candidate, CONFIG, raw.clone(), invalid, &env).is_err(),
+            "invalid method replacement accepted: {variant}"
+        );
+    }
     let (old, current, view) =
         interpret(&root, &base, &candidate, CONFIG, raw.clone(), new, &env).unwrap();
     assert!(

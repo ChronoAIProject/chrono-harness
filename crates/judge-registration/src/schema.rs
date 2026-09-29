@@ -458,7 +458,7 @@ pub fn workflow(v: &Value) -> Result {
             ];
             if v["schema_version"] == 3 && profile.get("from_versions").is_some() {
                 fields.extend(["from_versions", "to_versions"]);
-                object(profile, &fields, &[])?;
+                object(profile, &fields, &["method_replacements"])?;
                 for side in ["from_versions", "to_versions"] {
                     let versions = object(
                         &profile[side],
@@ -477,7 +477,7 @@ pub fn workflow(v: &Value) -> Result {
                 }
             } else {
                 fields.extend(["filemap_version", "profile_path"]);
-                object(profile, &fields, &[])?;
+                object(profile, &fields, &["method_replacements"])?;
                 path(&profile["profile_path"])?;
                 if profile["filemap_version"] != 1 {
                     return Err(
@@ -493,6 +493,28 @@ pub fn workflow(v: &Value) -> Result {
                 object(mapping, &["from", "to"], &[])?;
                 string(&mapping["from"])?;
                 string(&mapping["to"])?;
+            }
+            if let Some(replacements) = profile.get("method_replacements") {
+                let mut seen = BTreeSet::new();
+                for replacement in array(replacements)? {
+                    object(replacement, &["from", "to", "reason"], &[])?;
+                    string(&replacement["reason"])?;
+                    for side in ["from", "to"] {
+                        let method = &replacement[side];
+                        object(method, &["owner", "operation", "tool", "argv"], &[])?;
+                        for key in ["owner", "operation", "tool"] {
+                            string(&method[key])?;
+                        }
+                        strings(&method["argv"])?;
+                    }
+                    let operation = string(&replacement["from"]["operation"])?;
+                    if !seen.insert(operation)
+                        || replacement["to"]["operation"] != operation
+                        || replacement["from"] == replacement["to"]
+                    {
+                        return Err("invalid/duplicate historical method replacement".into());
+                    }
+                }
             }
             for record in array(&profile["legacy_records"])? {
                 object(record, &["collection", "id", "definition", "nodes"], &[])?;
