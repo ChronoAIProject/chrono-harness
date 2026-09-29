@@ -5,7 +5,7 @@
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
 
-[公开测试版 v0.1.0-beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
+[公开测试版 v0.1.0-beta.13](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.13) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
 
 公开的独立示例宿主：
 
@@ -102,6 +102,8 @@ python3 .chrono-harness/ci/bootstrap.py .
 # 候选须已提交且检出干净；本地和 CI 使用完全相同的入口
 .chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID
 ```
+
+公开工具还支持[按显式单元生成独立 workflow、汇总原始报告及保留宿主自定义的迁移](docs/ci-units.md)。Go、TS、混合示例已采用独立 workflow；本仓自身仍使用上面的全局 scoped 入口。宿主维护自己的单元、SDK、启动参数、平台与超时；升级二进制不重置这些源，路径变化可用 `chrono-ci migrate` 核验并退休旧投影。
 
 复制二进制初始化新仓、操作扩展、schema、首次采用和事件合同见 [docs/ci.md](docs/ci.md)；可复制完整实例见 [examples/ci-host](examples/ci-host/README.md)。`verify` 检测工作流漂移，不先修复输出。未知路径、缺对象、脏输入、无效登记或失败命令均非零；文档等闭包外变更明确报告未选项目检查。
 

@@ -242,7 +242,7 @@ see [Git facts](git-facts.md#literal-checkout-identity).
 Source cleanup disposes only explicitly selected untracked artifacts under its
 owned lock before the bounded Git removal. Real consumers verify effect ordering,
 tracked-content refusal before disposal, preserved external symlink targets, and
-original Git failure plus explicit retry. This is newer than beta.11; recovery of
+original Git failure plus explicit retry. This is distributed from beta.12; recovery of
 older partial source deletion and atomic concurrent/power-loss disposal remain
 outside this increment. See [artifact disposal](worktree.md#declared-artifact-disposal-before-checkout-removal).
 
@@ -252,3 +252,20 @@ verified hidden-mode rejection/preservation and explicit metadata rebind with
 a damaged index and absent prior receipts, preserving saved/unsaved work and
 old metadata. Interrupted rebind continuation, complete input closure, full
 activation, deterministic parity and Rust formal refinement remain unfinished.
+
+Public beta.12/13 scoped CI provides explicit complete-plan unit ownership,
+shared-operation declarations, independent workflows and offline collection.
+Global DELTA obligations are checked before partitioning; gathering binds original
+workflow sources, endpoints and attempts. The [public examples](examples.md)
+verify separate SDK profiles, actual failure/cancellation isolation, selective
+retry and zero-DELTA collection. The three business hosts’ binary upgrades preserve
+CI/SDK sources and generated workflows byte for byte. Product independent native
+workflow adoption remains pending; ambiguous provider runs still fail explicitly.
+
+Public beta.13 adds owned projection migration from explicit scoped v1/units
+sources to units. Tests preserve custom initialization, source bytes and unrelated
+workflows; old edits and new destination collisions reject before writes. Actual
+public macOS consumers migrate the three delivered host configurations and verify
+the resulting workflow bytes. Initial/full/release migrations, multi-file atomicity,
+complete input closure, full activation, deterministic parity and formal refinement
+are not certified by this mechanism. See [CI customization](ci-units.md#host-customization-and-updates).

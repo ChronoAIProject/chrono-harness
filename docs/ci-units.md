@@ -8,7 +8,8 @@ and directory layouts are opaque to both contracts.
 
 These contracts extend the scoped CI adapter. They do not activate the full
 seven-judge profile, prove complete input closure or establish deterministic
-local/CI parity. Public beta.11 predates these source changes.
+local/CI parity. Public beta.12 introduced these contracts; beta.13 adds the
+explicit customization-preserving migration below.
 
 ## Assignment and execution
 
@@ -175,10 +176,31 @@ changes while separate workflows prepare their inputs.
 
 Source behavior tests include actual candidate binaries in independently cloned
 hosts, concurrent execution, offline collection, and synthetic GitHub transport
-responses. Native generated workflow adoption and public release/example
-upgrades must be verified separately before claiming those delivery stages.
+responses. The public Go, TypeScript and mixed [example hosts](examples.md) use
+independent native workflows. Their local/integration/PR/dev reports were checked,
+as were actual cancellation with selective retry, business failure with another
+unit passing, and restoration with zero selected business operations. Initial
+inventory remains a separate contract. The product repository has not yet adopted
+independent native unit workflows; this evidence does not imply that adoption.
 
 ## Host customization and updates
+
+Use the host's registered source paths. The table identifies which declaration
+owns each customization; the generator requires no business directory layout
+or language convention.
+
+| Change | Host-owned source | Apply |
+| --- | --- | --- |
+| Commands, tests or dependencies | Project/script actions and FILEMAP edges/plans | Update declarations and run the canonical DELTA check |
+| Unit boundaries or shared operations | Check profile `policy.units` / `policy.shared_operations`, plus provider `units` | Keep each complete test plan assigned once; regenerate owned workflows |
+| SDKs, runner image, timeout or startup | Provider `bootstrap`, `runs_on`, `timeout_minutes` and explicitly registered bootstrap data | Generate, verify, then check the changed native event |
+| Workflow paths or removed units | Previous and next provider sources | Use `migrate` below to verify ownership and retire obsolete outputs |
+| Harness version | Public distribution pin and selected tool list | Adopt the new pinned release; keep the host's CI and SDK sources |
+
+The [Go, TS and mixed examples](examples.md) demonstrate the last row by changing
+only their distribution lock and README. None requires editing Rust or adding a
+language-specific case to the generator. Schema/behavior changes still need an
+explicit migration; a version bump does not certify compatibility on its own.
 
 The host owns the provider JSON, check profile, unit assignments and bootstrap
 commands. Customize these explicit sources; generated workflows are projections.
@@ -192,9 +214,9 @@ not replace it. After installing a pinned newer binary, use the same `generate`
 and `verify` commands on that source. Verification of projections is separate from
 the actual canonical checks and native event validation.
 
-The source tree adds `chrono-ci migrate` for an explicit projection transition;
-public beta.12 does not yet include this command. Prepare the new check profile,
-assignments and provider source, then migrate the verified old owned workflow:
+Public beta.13 provides `chrono-ci migrate` for an explicit projection transition.
+Prepare the new check profile, assignments and provider source, then migrate the
+verified old owned workflow:
 
 ```sh
 chrono-ci migrate --host-root . \
