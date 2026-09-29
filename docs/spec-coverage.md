@@ -264,8 +264,8 @@ registers sixteen independent complete-plan workflows and a collector, with an
 explicit three-tool bootstrap configuration. The bootstrap regression exercises
 configured operation/install selection, unchanged default behavior and failure
 propagation. Historical repair and initial-profile consumers use the adopted
-provider without reinterpreting historical definitions. The source-only historical
-method replacement extension binds exact original/current methods and mapped
+provider without reinterpreting historical definitions. Public beta.14 historical
+method replacement support binds exact original/current methods and mapped
 owners, rejects missing/stale/duplicate/unbound declarations, retains the omitted
 field's strict contract and exercises actual drift detection and repair.
 Ambiguous provider runs
