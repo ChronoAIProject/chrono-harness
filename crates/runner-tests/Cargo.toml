@@ -22,5 +22,9 @@ path = "tests/protocol_v1.rs"
 name = "registry_snapshot"
 path = "tests/registry_snapshot.rs"
 
+[[test]]
+name = "parity"
+path = "tests/parity.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3

@@ -249,6 +249,16 @@ DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candida
 配置和环境相同，并且判官/测试确定性求值。仅 Cargo 版本或环境摘要存在不足以证明这些前提。
 前提未建立时报告 parity:unestablished；输入/证据不足仍报错，不能承诺裁决相同。
 
+完成两次独立的 full check 后，可显式运行
+`chrono-harness parity --host-root H --report P --compared-report Q` 生成成对对等证据。
+该命令只消费两个已发布报告，不替代 canonical check，也不重新执行业务判官；它要求两份报告
+均为 `configured-judges` 完成报告、所有 verdict-bearing 字段及判官响应均已观察、
+`effective_inputs.completeness_proven = true` 且没有未解决的关键输入。它比较状态、快照身份、
+环境、工具、有效输入、DELTA、影响、测试、findings 及判官结果；绝对执行路径按已观察二进制摘要
+归一化，路径敏感性必须由有效输入显式登记。比较失败会保留当前报告并以非零错误退出，不能把
+相同的未知或不完整报告标成 `parity:established`。这是一份有边界的成对确定性证据，不能替代
+宿主尚未登记的 compiler、SDK、网络、凭据或其他外部输入闭包。
+
 v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 dirty-worktree 验证模式。
 工作树必须检出 candidate，索引和已跟踪文件必须等于 candidate，子模块不得隐式展开。
 未跟踪文件须登记并提交；只有 config.artifacts 中生成目录可忽略。

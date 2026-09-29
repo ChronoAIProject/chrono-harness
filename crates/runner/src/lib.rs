@@ -5,6 +5,7 @@ mod facts_binding;
 pub mod full;
 pub mod initial;
 pub mod observation;
+pub mod parity;
 pub mod units;
 pub mod wire;
 use serde::{Deserialize, Serialize};
@@ -589,10 +590,11 @@ pub fn dispatch(args: &[&str]) -> CliOutput {
 }
 pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     match args{
-    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
+    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nchrono-harness parity --host-root H --report P --compared-report P\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. The parity command adds fail-closed evidence to two completed full reports; it never changes the canonical check command. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest, entry){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
+    ["parity",rest @ ..]=>parity_command(rest),
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
 }
@@ -745,4 +747,81 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         .map_err(|e| e.to_string())?;
     fs::write(report_path, &text).map_err(|e| e.to_string())?;
     Ok((code, text))
+}
+
+fn parity_command(args: &[&str]) -> CliOutput {
+    let parsed =
+        (|| -> Result<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf), String> {
+            let mut root = None;
+            let mut report = None;
+            let mut compared = None;
+            let mut seen = BTreeSet::new();
+            let mut i = 0;
+            while i < args.len() {
+                let key = args[i];
+                if !seen.insert(key) {
+                    return Err(format!("duplicate argument {key}"));
+                }
+                if !matches!(key, "--host-root" | "--report" | "--compared-report") {
+                    return Err(format!("unknown argument {key}"));
+                }
+                let value = args.get(i + 1).ok_or("missing argument value")?;
+                match key {
+                    "--host-root" => root = Some(PathBuf::from(value)),
+                    "--report" => report = Some(PathBuf::from(value)),
+                    "--compared-report" => compared = Some(PathBuf::from(value)),
+                    _ => unreachable!(),
+                }
+                i += 2;
+            }
+            let root = fs::canonicalize(root.ok_or("missing --host-root")?)
+                .map_err(|e| format!("E_PARITY_INPUT: {e}"))?;
+            let report = report.ok_or("missing --report")?;
+            let compared = compared.ok_or("missing --compared-report")?;
+            if report.is_absolute() || compared.is_absolute() {
+                return Err("E_PARITY_INPUT: report paths must be relative to host root".into());
+            }
+            let report_text = report.to_str().ok_or("non UTF-8 report path")?;
+            let compared_text = compared.to_str().ok_or("non UTF-8 compared report path")?;
+            let report_resolved = no_symlink_parents(&root, report_text)?;
+            let compared_resolved = no_symlink_parents(&root, compared_text)?;
+            if report_resolved == compared_resolved {
+                return Err("E_PARITY_INPUT: reports must be distinct".into());
+            }
+            Ok((root, report, compared))
+        })();
+    let (root, report_path, compared_path) = match parsed {
+        Ok(v) => v,
+        Err(e) => {
+            return CliOutput {
+                exit_code: 2,
+                stdout: String::new(),
+                stderr: format!("E_PARITY: {e}\n"),
+            };
+        }
+    };
+    match parity::update_files(&root, &report_path, &compared_path) {
+        Ok((current, established)) => CliOutput {
+            exit_code: if established { 0 } else { 2 },
+            stdout: serde_json::to_string_pretty(&current).unwrap_or_default() + "\n",
+            stderr: if established {
+                String::new()
+            } else {
+                current["unresolved"]["/parity"]
+                    .as_str()
+                    .unwrap_or("E_PARITY_UNESTABLISHED")
+                    .to_owned()
+                    + "\n"
+            },
+        },
+        Err(error) => parity_error(format!("E_PARITY_OUTPUT: {error}")),
+    }
+}
+
+fn parity_error(error: String) -> CliOutput {
+    CliOutput {
+        exit_code: 2,
+        stdout: String::new(),
+        stderr: format!("E_PARITY: {error}\n"),
+    }
 }

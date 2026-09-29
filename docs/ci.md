@@ -78,6 +78,22 @@ failure exits 2. Information commands (`--help`, `--version`, `spec status`) do
 not perform checks. A valid no-project-check result still validates snapshots and
 registered inventory and reports each unselected binding as `not-required`.
 
+After the local and CI invocations have each published a full report, an
+explicit parity evidence step may consume them:
+
+```sh
+.chrono-harness/bin/chrono-harness parity \
+  --host-root . \
+  --report .chrono-harness/state/report.json \
+  --compared-report .chrono-harness/state/ci-report.json
+```
+
+This step does not rerun a judge or alter the canonical command. It marks parity
+established only when both reports prove complete effective inputs and their
+verdict-bearing projections match; otherwise it preserves the unresolved reason
+and exits 2. Absolute executable paths are compared by observed digest/version,
+while path-sensitive behavior remains an explicitly registered effective input.
+
 Reports reside in the ignored `.chrono-harness/state/` directory. `check.json`
 contains the request, runner and judge identities, actual selected operations,
 executions with exit/output/executable hashes, blocked and not-required entries,

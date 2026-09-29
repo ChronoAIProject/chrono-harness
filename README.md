@@ -111,7 +111,11 @@ cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
 
 配置 v3 可用 `facts_git` 显式绑定 Git 的工具、输入摘要、版本和环境，贯穿 full/initial 读取及下游判官；v1/v2 保持旧语义。调用方式与边界见 [Git 事实绑定](docs/git-facts.md)。CI provider v3 可通过 `facts_config` 显式选择同一绑定机制用于事件准备；仅明确缺失的对象触发 fetch，工具失败保留原始证据。scoped profile v2 也可通过 `policy.facts_config` 选择该绑定，两端快照及可选完整登记解释复用同一 Git，成功与失败均保留实际进程证据；选测和操作环境仍沿用 scoped 合同。这些扩展已包含在 beta.9；升级二进制不自动采用新版配置。本仓使用 scoped v3 的独立单元扩展，没有自动采用上述 Git 绑定；完整输入闭包尚未完成。
 
-full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 为 unestablished，有界 registration/filemap pass 不表示完整治理成功。
+full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 默认是 unestablished；有界 registration/filemap pass 不表示完整治理成功。
+
+两次独立 full check 均取得完整有效输入证据后，可运行
+`.chrono-harness/bin/chrono-harness parity --host-root . --report .chrono-harness/state/report.json --compared-report .chrono-harness/state/ci-report.json`。
+该命令只比较已发布报告的裁决字段，成功时同步更新当前报告及其 retained `report_path`；输入不完整或裁决不同均保留 unresolved 并以非零退出。它提供成对 parity 证据，不改变本地和 CI 的 canonical check 指令，也不替代未登记外部输入闭包。
 
 Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; workflow has bounded certification; autonomous delivery remains future work. Mixed classification and warnings use the [explicit surface contract](docs/mixed.md). Declared costs and unknown warnings have their own [cost contract](docs/costs.md).
 
