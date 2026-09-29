@@ -612,7 +612,7 @@ observed identity does not preserve timestamps, ACLs, xattrs or hardlink topolog
 
 ### Continue an interrupted or failed rebind
 
-The source adds `resume-rebind`; public beta.14 does not include it. It consumes
+The source adds `resume-rebind`; public beta.15 includes it. It consumes
 an existing `chrono-worktree-rebind-intent/v1` and the exact original rebind plan
 at the intent's `plan_path`. The continuation plan must use its own registered
 state path. No new index, backup, donor or ownership choice is inferred.
