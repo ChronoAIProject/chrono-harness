@@ -458,6 +458,7 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
             ))
         })
         .collect();
+    let mut bound_inputs = BTreeSet::new();
     for (binding_index, binding) in bindings.iter().enumerate() {
         let consumer = binding["consumer"].as_str().unwrap_or_default();
         let consumer_reference = format!("/config/input_closure/bindings/{binding_index}/consumer");
@@ -487,6 +488,7 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
         {
             let reference =
                 format!("/config/input_closure/bindings/{binding_index}/inputs/{input_index}");
+            bound_inputs.insert(input.to_owned());
             match nodes.get(input).map(|view| view.kind) {
                 Some(NodeKind::Tool | NodeKind::Input | NodeKind::Environment) => {}
                 Some(_) => issue(
@@ -512,6 +514,26 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
                         "input closure binding lacks explicit project edge {input} -> {consumer}"
                     ),
                     reference,
+                    false,
+                );
+            }
+        }
+    }
+    if n.config["schema_version"] == 3 && n.config["input_closure"]["status"] == "declared-complete"
+    {
+        for (identity, view) in &nodes {
+            if !matches!(
+                view.kind,
+                NodeKind::Tool | NodeKind::Input | NodeKind::Environment
+            ) {
+                continue;
+            }
+            if !bound_inputs.contains(identity) {
+                issue(
+                    r,
+                    "E_INPUT_UNDECLARED",
+                    format!("declared-complete input closure omits external input node {identity}"),
+                    "/config/input_closure/bindings",
                     false,
                 );
             }

@@ -48,13 +48,35 @@ impl BoundHost {
         config["environment"] = json!({"inherit":[],"values":{"PATH":std::env::var("PATH").unwrap(),
             "CHRONO_FACTS_TRACE":trace,"BOUND_FACTS_VALUE":"declared","GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
             "inputs":[{"id":"facts-git-bytes","location":program,"presence":"present","sha256":sha256(&fs::read(&program).unwrap())}]});
+        config["input_closure"] = json!({
+            "status": "declared-complete",
+            "unresolved": [],
+            "bindings": [{
+                "id": "registration-git-facts",
+                "consumer": "judge:registration",
+                "kind": "git-facts",
+                "inputs": [
+                    "tool:facts-git",
+                    "input:facts-git-bytes",
+                    "environment:PATH",
+                    "environment:CHRONO_FACTS_TRACE",
+                    "environment:BOUND_FACTS_VALUE",
+                    "environment:GIT_CONFIG_NOSYSTEM",
+                    "environment:GIT_CONFIG_GLOBAL"
+                ]
+            }]
+        });
         write(&root, CONFIG, &config);
         let path = ".chrono-harness/FILEMAP.json";
         let mut map: Value = serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
         map["project_edges"] = json!([
             {"from":"tool:facts-git","kind":"runtime-input","to":"judge:registration"},
             {"from":"input:facts-git-bytes","kind":"judge-trigger","to":"judge:registration"},
-            {"from":"environment:PATH","kind":"runtime-input","to":"judge:registration"}
+            {"from":"environment:PATH","kind":"runtime-input","to":"judge:registration"},
+            {"from":"environment:CHRONO_FACTS_TRACE","kind":"runtime-input","to":"judge:registration"},
+            {"from":"environment:BOUND_FACTS_VALUE","kind":"runtime-input","to":"judge:registration"},
+            {"from":"environment:GIT_CONFIG_NOSYSTEM","kind":"runtime-input","to":"judge:registration"},
+            {"from":"environment:GIT_CONFIG_GLOBAL","kind":"runtime-input","to":"judge:registration"}
         ]);
         write(&root, path, &map);
         if initial {
@@ -398,7 +420,11 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
             // Keep the short version bound separate from object setup. Set
             // both explicitly; the historical full config defaults to 120s.
             c["protocol"]["timeout_seconds"] = json!(if fault == "timeout" { 5 } else { 30 });
-            c["protocol"]["stdout_limit_bytes"] = json!(4096);
+            // The v3 binding is part of the retained Git input. Leave enough
+            // room for its config snapshot so object-timeout cases reach the
+            // intended post-version process; the output fixture remains above
+            // this bound.
+            c["protocol"]["stdout_limit_bytes"] = json!(8192);
         });
         if fault == "dirty-config" {
             let mut original = fs::read(h.host.root().join(CONFIG)).unwrap();
@@ -464,11 +490,15 @@ fn input_closure_bindings_accept_explicit_external_nodes() {
         config["input_closure"]["bindings"] = json!([{
             "id": "registration-git-facts",
             "consumer": "judge:registration",
-            "kind": "git-facts",
+            "kind": "git-facts-explicit",
             "inputs": [
                 "tool:facts-git",
                 "input:facts-git-bytes",
-                "environment:PATH"
+                "environment:PATH",
+                "environment:CHRONO_FACTS_TRACE",
+                "environment:BOUND_FACTS_VALUE",
+                "environment:GIT_CONFIG_NOSYSTEM",
+                "environment:GIT_CONFIG_GLOBAL"
             ]
         }]);
     });
@@ -485,6 +515,82 @@ fn input_closure_bindings_accept_explicit_external_nodes() {
         "explicit closure binding must pass: {error} {report}"
     );
     assert_eq!(report["status"], "pass");
+}
+
+#[test]
+fn declared_complete_v3_closure_requires_all_external_nodes() {
+    let mut h = BoundHost::new(false, "");
+    h.host.edit(CONFIG, |config| {
+        config["input_closure"] = json!({
+            "status": "declared-complete",
+            "unresolved": [],
+            "bindings": [{
+                "id": "registration-git-facts",
+                "consumer": "judge:registration",
+                "kind": "git-facts",
+                "inputs": ["input:facts-git-bytes"]
+            }]
+        });
+    });
+    h.host.base = h.host.candidate.clone();
+    fs::write(
+        h.host.root().join("document.txt"),
+        "candidate after incomplete declared closure",
+    )
+    .unwrap();
+    h.host.candidate = commit(h.host.root());
+    let (exit, report, error) = h.run(false);
+    assert_ne!(
+        exit, 0,
+        "omitted external nodes must fail: {report} {error}"
+    );
+    assert!(finding(&report, "E_INPUT_UNDECLARED"), "{report} {error}");
+    assert!(format!("{report} {error}").contains("tool:facts-git"));
+}
+
+#[test]
+fn declared_complete_v3_closure_accepts_explicit_external_inventory() {
+    let mut h = BoundHost::new(false, "");
+    // BoundHost already installs this complete v3 inventory. Retain the
+    // fixture's candidate transition below so the test exercises the reader
+    // without creating a no-op commit.
+    h.host.base = h.host.candidate.clone();
+    fs::write(
+        h.host.root().join("document.txt"),
+        "candidate after complete declared closure",
+    )
+    .unwrap();
+    h.host.candidate = commit(h.host.root());
+    let (exit, report, error) = h.run(false);
+    assert_eq!(
+        exit, 0,
+        "explicit external inventory must pass: {report} {error}"
+    );
+    assert_eq!(report["status"], "pass");
+}
+
+#[test]
+fn declared_complete_v3_input_closure_requires_bindings_field() {
+    let mut h = BoundHost::new(false, "");
+    h.host.edit(CONFIG, |config| {
+        config["input_closure"] = json!({
+            "status": "declared-complete",
+            "unresolved": []
+        });
+    });
+    h.host.base = h.host.candidate.clone();
+    fs::write(
+        h.host.root().join("document.txt"),
+        "candidate after missing bindings field",
+    )
+    .unwrap();
+    h.host.candidate = commit(h.host.root());
+    let (exit, report, error) = h.run(false);
+    assert_ne!(
+        exit, 0,
+        "missing bindings must fail schema validation: {report} {error}"
+    );
+    assert!(finding(&report, "E_SCHEMA"), "{report} {error}");
 }
 
 #[test]

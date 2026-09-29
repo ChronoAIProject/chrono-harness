@@ -296,6 +296,12 @@ pub fn config(v: &Value) -> Result {
         &["incomplete", "declared-complete"],
     )?;
     strings(&v["input_closure"]["unresolved"])?;
+    if v["schema_version"] == 3
+        && v["input_closure"]["status"] == "declared-complete"
+        && v["input_closure"].get("bindings").is_none()
+    {
+        return Err("schema v3 declared-complete input closure requires bindings".into());
+    }
     if let Some(bindings) = v["input_closure"].get("bindings") {
         unique(bindings, Some("id"))?;
         for binding in array(bindings)? {
