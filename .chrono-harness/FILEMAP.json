@@ -1135,7 +1135,31 @@
       ]
     },
     {
+      "path": "crates/runner/src/parity.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
       "path": "crates/runner-tests/tests/protocol_v1.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/parity.rs",
       "owner": "runner-tests",
       "surface": "test",
       "cost": "unmeasured",
