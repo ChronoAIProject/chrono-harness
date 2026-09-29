@@ -2,6 +2,9 @@ use chrono_harness::facts;
 use serde_json::json;
 use std::{collections::BTreeMap, fs, path::Path, process::Command};
 
+#[path = "checkout.rs"]
+mod checkout;
+
 const CONFIG: &str = ".chrono-harness/config with spaces.json";
 
 fn git(root: &Path, args: &[&str]) -> String {

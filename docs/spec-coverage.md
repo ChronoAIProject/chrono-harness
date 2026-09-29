@@ -51,7 +51,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 22 same local/CI command | partial: scoped CI generator with explicit push-baseline configuration; CI behavior tests cover repeated pushes, remote advancement, missing refs and real CLI persistence | full dispatch transport is implemented (docs/full-ci.md); native generated dispatch adoption and complete inputs remain |
 | 23 same complete deterministic inputs | pending | deterministic evidence/parity comparison |
 | 24 parity unestablished | implemented field: full runner report; G external host | unresolved closure remains nonzero |
-| 25 staged/unstaged/untracked | implemented: G dirt cases | no hidden dirty mode |
+| 25 staged/unstaged/untracked | implemented: G dirt cases plus shared raw tree/index/physical identity checks, clean-filter/CRLF/mode/symlink counterexamples, full/initial/scoped and worktree consumers | complete configuration/OS input closure and concurrency isolation remain separate |
 | 26 missing history | implemented bounded: G object checks, W common ancestry and shallow boundaries; worktree producer fetches its explicitly registered target | general missing-history recovery/reconstruction remains external |
 | 27 empty/invalid stdout | implemented: R `malformed_stdout_crash_and_bounds`, R/L embedded-invalid-UTF-8 subprocess/CLI cases and valid U+FFFD controls | — |
 | 28 crash/timeout/digest | implemented: R bounds and prelaunch digest tests | resource guard is infrastructure, not functional verdict |
@@ -227,3 +227,14 @@ bytes and partial donor effects. Reconciled attached failures reuse existing
 success. This source addition is not in beta.10 and does not recover a lost
 historical index. Interrupted rebind continuation, concurrent/crash atomicity and
 full governance remain outside the contract. See [worktree](worktree.md#explicit-metadata-rebind).
+
+
+Literal checkout comparison closes demonstrated configuration-hidden snapshot
+mismatches. Runner tests check raw blob hashes against real SHA-1/SHA-256 Git
+objects, executable class, CRLF normalization, clean filters, symlink emulation,
+physical parents and staged cancellation. Full/initial and scoped consumers reject
+hidden mode changes, including after an operation. Worktree consumers preserve
+unsaved work on creation/recovery/cleanup; they share the same tree/index comparer
+through the existing registered Git runner. This source addition is not in
+beta.10. It establishes neither full input closure nor deterministic parity;
+see [Git facts](git-facts.md#literal-checkout-identity).

@@ -1,6 +1,7 @@
 # Registered Git facts
 
-This source increment is not included in public beta.8.
+Public beta.10 includes the full-v3/scoped-v2/provider-v3 Git binding. The literal
+checkout identity change below is a subsequent source addition.
 
 Full config v3 requires `facts_git: {"tool": "git", "input": "git-executable"}`.
 Both IDs are explicit: `tools` supplies `program`, `resolution: "PATH-once"`,
@@ -77,3 +78,43 @@ shadowing, full/initial consumers, seven-judge integration and delivery, invalid
 references, request/environment substitutions, wrong digest/version, persistent
 byte drift, original binary output/exit, output bounds and timeout. These are
 bounded implementation checks, not a Lean refinement proof or independent review.
+
+## Literal checkout identity
+
+A configured Git diff can hide raw differences: `core.filemode=false` ignores
+executable changes, text attributes normalize line endings, `core.symlinks=false`
+accepts a link represented by a regular file, and clean filters can turn changed
+physical bytes into an unchanged blob. Running a diff can also execute a filter.
+The checkout reader now compares literal files against the fixed Git tree, and
+separately compares every index stage/mode/OID with that tree. Opposite index and
+working-file changes cannot cancel. It does not run working-tree diff, clean or
+textconv filters for this comparison.
+
+The shared runner implementation consumes the existing explicit tree/index
+inventories. It streams regular bytes through RustCrypto SHA-1 or SHA-256 with the
+Git blob header, checks regular-file versus literal-symlink type and Git's owner
+execute bit, and hashes the symlink target bytes without following it. Missing or
+mismatched files are changed inputs. A directory alias cannot make an observed
+file match a different physical parent. Files are opened without following the
+final symlink or blocking on a substituted FIFO; IO and malformed inventory
+errors fail. This is a Git object identity check, not a new cryptographic trust
+claim. It does not inspect dependencies, register policy or select tests.
+
+Full and initial consumers use the shared checkout reader; scoped CI uses its
+tracked comparison before and after selected operations. Worktree creation and
+cleanup compare against HEAD; reconstruction and reconciled recovery compare
+against the explicitly chosen staged tree. They use the existing registered Git
+process runner for inventories and preserve the original operation reports and
+partial work. Rebind remains a separate preservation contract and does not
+require its intentionally dirty work to match the new index.
+
+Configuration that produces CRLF/filtered files or regular-file symlink emulation
+must be changed by the host to materialize the registered exact snapshot. The
+checker does not silently normalize those files. Permissions outside Git's
+executable class, timestamps, ACLs, xattrs and hardlink topology are not Git tree
+identity; no concurrent-writer or crash-atomic snapshot is claimed. Supported
+entries remain regular files and literal symlinks with UTF-8 registered paths;
+Gitlinks and special files are not accepted as matching regular source files.
+Complete Git configuration, delegated executable, OS, compiler/SDK input closure
+and full host activation remain separate unfinished obligations. The source
+change is not in beta.10.

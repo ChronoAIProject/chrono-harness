@@ -198,23 +198,19 @@ pub(crate) fn paths(bytes: Vec<u8>) -> Result<BTreeSet<String>, String> {
     Ok(paths)
 }
 pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
-    // Always inspect tracked changes, including those beneath artifact directories.
-    let tracked = r.git(
-        target,
-        &[
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=no",
-            "--ignored=no",
-        ],
-    )?;
-    if !tracked.is_empty() {
+    let head = r.oid(target, "HEAD")?;
+    exact_checkout(r, target, &head)?;
+    untracked(r, target, config)
+}
+pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Result<(), String> {
+    let expected = facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", tree])?)?;
+    let index = r.git(target, &["ls-files", "--stage", "-z"])?;
+    if !facts::checkout_changes(target, &expected, &index)?.is_empty() {
         return Err(
             "checkout differs from requested clean snapshot; preserve it for recovery".into(),
         );
     }
-    untracked(r, target, config)
+    Ok(())
 }
 pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let exclusions: Vec<String> = config["artifacts"]

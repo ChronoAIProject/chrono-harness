@@ -171,6 +171,49 @@ fn initial_inventory_uses_registered_git_and_keeps_initial_scope() {
 }
 
 #[test]
+fn full_and_initial_bound_checks_reject_configuration_hidden_mode_changes() {
+    for initial in [false, true] {
+        let h = BoundHost::new(initial, "");
+        git(h.host.root(), &["config", "core.filemode", "false"]);
+        fs::set_permissions(
+            h.host.root().join("document.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        assert!(
+            git(
+                h.host.root(),
+                &["diff", "--name-only", &h.host.candidate, "--"]
+            )
+            .is_empty()
+        );
+        let (exit, report, error) = h.run(initial);
+        assert_ne!(exit, 0, "{initial}: {report} {error}");
+        if initial {
+            assert!(
+                format!("{report} {error}")
+                    .contains("initial candidate checkout is dirty or changed")
+            );
+        } else {
+            assert!(
+                report["findings"]
+                    .as_array()
+                    .is_some_and(|findings| findings
+                        .iter()
+                        .any(|f| f["code"] == "E_SNAPSHOT_DIRTY")),
+                "findings={}, error={error}",
+                report["findings"]
+            );
+        }
+        assert!(h.trace().contains("ls-files --stage -z"));
+        assert!(
+            !h.trace().contains("diff"),
+            "raw identity must not delegate to filters"
+        );
+    }
+}
+
+#[test]
 fn registered_git_rejects_digest_and_version_before_object_acquisition() {
     for fault in ["digest", "version"] {
         let mut h = BoundHost::new(false, "");

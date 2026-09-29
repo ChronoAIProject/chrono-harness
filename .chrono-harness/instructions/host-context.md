@@ -60,3 +60,12 @@ receipts, without inferring the historical index or original outcome. Attached
 failed results can reuse receipt-bound reconciled `recover`; interrupted rebind
 continuation remains unfinished. Public beta.10 does not contain these commands.
 See docs/worktree.md#explicit-metadata-rebind for filesystem and failure boundaries.
+
+Source-only literal checkout identity compares fixed tree entries, index stages
+and raw physical bytes/types/owner-executable bits with streaming Git blob hashes.
+It does not invoke working-tree diff or filters. Full/initial/scoped consumers and
+worktree creation/reconstruction/recovery/cleanup share this checker while keeping
+their existing Git runner, flags, artifact and process contracts. Hosts must
+materialize exact registered snapshot bytes; CRLF/filter/symlink emulation is not
+silently normalized. Full Git/delegated/SDK closure remains unfinished. See
+docs/git-facts.md#literal-checkout-identity; beta.10 lacks this source addition.

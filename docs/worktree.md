@@ -609,3 +609,14 @@ process stopped and reconcile the retained evidence. Backup uses same-filesystem
 rename; cross-device failure is reported without deleting old metadata. There is
 no concurrent-writer isolation or crash/power-loss atomicity guarantee, and the
 observed identity does not preserve timestamps, ACLs, xattrs or hardlink topology.
+
+### Exact physical snapshot before release or deletion
+
+The source checkout guard now reuses the runner's literal file/index comparison
+([contract](git-facts.md#literal-checkout-identity)). Creation, reconstruction,
+reconciled recovery and cleanup reject bytes, link representation and owner
+execute changes even when Git configuration reports a clean working tree.
+Cleanup preserves such unsaved work; recovery keeps its lock until the actual
+files match the explicitly supplied index tree. The existing artifact exclusion
+and saved-commit checks still apply. This source change is not in beta.10 and
+does not claim complete Git configuration closure or concurrent deletion safety.

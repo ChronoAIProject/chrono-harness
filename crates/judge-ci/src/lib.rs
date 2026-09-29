@@ -436,11 +436,7 @@ fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<()
             return Err(format!("unsupported index flags ({flag}): {path}"));
         }
     }
-    if !reader
-        .git(root, &["diff", "--cached", "--raw", "-z", candidate, "--"])?
-        .is_empty()
-        || !reader.git(root, &["diff", "--raw", "-z", "--"])?.is_empty()
-    {
+    if !reader.tracked_changes(root, candidate)?.is_empty() {
         return Err("dirty tracked candidate inputs/index".into());
     }
     for path in reader

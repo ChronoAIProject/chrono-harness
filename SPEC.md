@@ -282,6 +282,8 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 事务；此投影不自动启用完整宿主、PR/合并流程或 required check。字段、重试与采用
 边界见 [完整 CI 传输合同](docs/full-ci.md)。
 
+固定快照的干净检查须同时比较 candidate 树、索引 stage 和实际文件。现役源码按 Git 对象头与原始字节计算 SHA-1／SHA-256 blob 身份，逐项核常规文件类型及 Git 的 owner-executable 位、符号链接字面目标；目录祖先不得沿链接读取。它不通过工作区 diff、textconv、clean filter 或换行转换决定文件身份；配置隐藏的字节、类型与执行位差异仍须拒绝。索引的新增／删除／mode／OID／未合并 stage 独立比较，不能由相反工作区变化抵消；既有 index flag 和 untracked/artifact 检查继续适用。核验只消费固定树／索引清单，不登记依赖、不选测试，不因缓存或 Git status 干净而跳过读取。完整／initial／scoped 检查及 worktree 创建、重建、恢复、清理复用同一文件比较实现，各自通过已有 Git 绑定读取树和索引。Gitlink、特殊文件及非 UTF-8 登记路径尚不支持；时间戳、ACL、xattr 不是 Git 树身份的一部分，且不承诺并发原子快照。完整 Git 配置、委托程序、工具链／SDK 输入闭包仍须另行补齐。详见 [原始快照身份](docs/git-facts.md#literal-checkout-identity)。
+
 ## 5. DELTA 与依赖图算法
 
 DELTA 选择充分的前提是：两状态所有实际语义输入及其直接/间接依赖均完整登记，且判官/测试

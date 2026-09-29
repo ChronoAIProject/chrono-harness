@@ -6,6 +6,8 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 const CONFIG: &str = ".chrono-harness/ci/check.json";
+#[path = "checkout.rs"]
+mod checkout;
 #[path = "git_facts.rs"]
 mod git_facts;
 struct Host {

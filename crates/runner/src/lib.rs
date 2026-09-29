@@ -1,4 +1,5 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
+mod checkout;
 pub mod facts;
 mod facts_binding;
 pub mod full;

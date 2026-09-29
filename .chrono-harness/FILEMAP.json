@@ -3100,6 +3100,42 @@
           "to": "project:worktree-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/checkout.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/checkout.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-ci-tests/tests/checkout.rs",
+      "owner": "judge-ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -5384,8 +5420,8 @@
         "build.judge-mixed",
         "build.judge-routes",
         "build.judge-projects",
-        "build.judge-workflow",
         "build.ci",
+        "build.judge-workflow",
         "test.judge-workflow-tests"
       ],
       "timeout_seconds": 600,
