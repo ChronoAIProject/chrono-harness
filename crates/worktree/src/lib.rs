@@ -2,6 +2,8 @@
 mod maintenance;
 mod rebind;
 mod rebind_inputs;
+mod rebind_resume;
+mod rebind_steps;
 mod reconstruct;
 mod recovery;
 mod remote;
@@ -86,13 +88,14 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
     }
     let result = if matches!(
         args.first().map(String::as_str),
         Some(
             "inspect-rebind"
                 | "rebind"
+                | "resume-rebind"
                 | "recover"
                 | "recover-interrupted"
                 | "cleanup"

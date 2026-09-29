@@ -15,7 +15,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 7 protocol | implemented bounded: ordinary two-commit v1 and explicit initial profile | runner `wire.rs`, `full.rs`, `initial.rs`, shared process engine; R transport tests; G actual root consumers | bootstrap provenance and activation; initial inventory never claims a green DELTA; platform evidence limited to tested Unix |
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
-| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch, explicit leased remote retirement, retained-intent interrupted checkout and fetch consumers, and explicit metadata rebind without old receipts | AI reconciliation, interrupted/partial-rebind continuation, PR/merge/landing orchestration |
+| 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch, explicit leased remote retirement, retained-intent interrupted checkout and fetch consumers, and explicit metadata rebind without old receipts plus retained-intent continuation | AI reconciliation of conflicting/ambiguous recovery state and PR/merge/landing orchestration |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -159,8 +159,8 @@ loader and artifact classifier. Real consumers cover failed-hook recovery,
 reconciled reconstruction, original-report preservation, identity/lock/index
 refusals, explicit artifact disposal, ancestor/squash preservation, retries and
 actual removal/ref races and recovery of cleanup locks after retained-ref races. These operations do not certify governance or remote
-landing. Interrupted/partial-rebind continuation and autonomous provider orchestration
-remain pending; missing old receipts and damaged metadata use the explicit
+landing. Retained-intent rebind continuation is described below; autonomous provider
+orchestration remains pending; missing old receipts and damaged metadata use the explicit
 rebind contract below.
 
 Receipt-bound temporary-ref cleanup reuses maintenance receipt and saved-commit
@@ -225,8 +225,8 @@ input and reference drift, wrong ownership, collisions, original failed process
 bytes and partial donor effects. Reconciled attached failures reuse existing
 `recover`; the original failed report is retained. Backup is rechecked before
 success. This addition is distributed in beta.11 and does not recover a lost
-historical index. Interrupted rebind continuation, concurrent/crash atomicity and
-full governance remain outside the contract. See [worktree](worktree.md#explicit-metadata-rebind).
+historical index. Retained-intent continuation is described below; concurrent/crash
+atomicity and full governance remain outside the contract. See [worktree](worktree.md#explicit-metadata-rebind).
 
 
 Literal checkout comparison closes demonstrated configuration-hidden snapshot
@@ -250,8 +250,9 @@ The beta.11 release and [all four example upgrades](examples.md) have exact
 landing and dev evidence. A public macOS mixed-host consumer additionally
 verified hidden-mode rejection/preservation and explicit metadata rebind with
 a damaged index and absent prior receipts, preserving saved/unsaved work and
-old metadata. Interrupted rebind continuation, complete input closure, full
-activation, deterministic parity and Rust formal refinement remain unfinished.
+old metadata. That public beta.11 consumer did not exercise interrupted rebind.
+Complete input closure, full activation, deterministic parity and Rust formal
+refinement remain unfinished.
 
 Public beta.12/13 scoped CI provides explicit complete-plan unit ownership,
 shared-operation declarations, independent workflows and offline collection.
@@ -278,3 +279,15 @@ public macOS consumers migrate the three delivered host configurations and verif
 the resulting workflow bytes. Initial/full/release migrations, multi-file atomicity,
 complete input closure, full activation, deterministic parity and formal refinement
 are not certified by this mechanism. See [CI customization](ci-units.md#host-customization-and-updates).
+
+
+Source `resume-rebind` consumes an original v1 rebind intent, its exact plan and
+explicit missing/partial/failed result identity. Initial and resumed execution
+share the same preservation and attachment steps. The dedicated worktree tests
+terminate real producer processes around every governed Git phase, preserve
+visible work, original result/intent/plan and backup bytes, and retry interruptions
+of continuation itself. Conflicting inputs, foreign ownership, index drift,
+completed results and ambiguous partial allocations reject without discarding
+work. Caller reconciliation of unknown temporary files/Git locks, concurrent
+writers and power-loss recovery remain outside this bounded contract. This source
+extension is newer than beta.14; see [continuation](worktree.md#continue-an-interrupted-or-failed-rebind).

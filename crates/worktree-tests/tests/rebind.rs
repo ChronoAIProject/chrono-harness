@@ -378,3 +378,6 @@ fi"#);
     );
     visible(&target);
 }
+
+#[path = "rebind_resume.rs"]
+mod resume;
