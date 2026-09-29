@@ -5420,8 +5420,8 @@
         "build.judge-mixed",
         "build.judge-routes",
         "build.judge-projects",
-        "build.judge-workflow",
         "build.ci",
+        "build.judge-workflow",
         "test.judge-workflow-tests"
       ],
       "timeout_seconds": 600,
