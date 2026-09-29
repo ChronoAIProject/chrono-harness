@@ -639,6 +639,51 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
         .as_array_mut()
         .unwrap()
         .push(value!({"id":"absent","location":state.join("absent-input"),"presence":"absent"}));
+    // A v3 declared-complete config must carry the explicit external-input
+    // inventory. Capture consumes the registration snapshot contract directly,
+    // so keep every tool, retained file and environment value visible here.
+    config["input_closure"] = value!({
+        "status": "declared-complete",
+        "unresolved": [],
+        "bindings": [{
+            "id": "snapshot-capture-inputs",
+            "consumer": "judge:registration",
+            "kind": "snapshot-capture",
+            "inputs": [
+                "tool:sh",
+                "tool:chosen-git",
+                "input:data",
+                "input:same-bytes",
+                "input:git-input",
+                "input:absent",
+                "environment:DECLARED_EMPTY",
+                "environment:DECLARED_ABSENT",
+                "environment:FIXED",
+                "environment:SNAPSHOT_GIT"
+            ]
+        }]
+    });
+    let edges = values.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap();
+    for input in [
+        "tool:sh",
+        "tool:chosen-git",
+        "input:data",
+        "input:same-bytes",
+        "input:git-input",
+        "input:absent",
+        "environment:DECLARED_EMPTY",
+        "environment:DECLARED_ABSENT",
+        "environment:FIXED",
+        "environment:SNAPSHOT_GIT",
+    ] {
+        edges.push(value!({
+            "from": input,
+            "kind": "runtime-input",
+            "to": "judge:registration"
+        }));
+    }
     write_values(&root, &values);
     let oid = commit(&root);
     let (exit, snapshot, error) = invoke(

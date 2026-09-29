@@ -40,6 +40,42 @@ fn bound_host() -> Host {
     cfg["environment"]["inputs"].as_array_mut().unwrap().push(json!({"id":"git-bytes","location":selected,"presence":"present","sha256":sha256(&fs::read(&selected).unwrap())}));
     cfg["environment"]["values"]["PATH"] = json!(shadow);
     cfg["environment"]["values"]["FACTS_SENTINEL"] = json!("declared");
+    // Schema v3's declared-complete status is an explicit inventory claim.
+    // Keep this fixture's complete whitelist and FILEMAP edges visible here;
+    // registration must not infer any of these relationships from the
+    // commands, paths, or host layout.
+    cfg["input_closure"] = json!({
+        "status": "declared-complete",
+        "unresolved": [],
+        "bindings": [
+            {
+                "id": "registration-git-facts",
+                "consumer": "judge:registration",
+                "kind": "git-facts",
+                "inputs": [
+                    "tool:facts-git",
+                    "input:git-bytes",
+                    "environment:PATH",
+                    "environment:FACTS_SENTINEL"
+                ]
+            },
+            {
+                "id": "projects-execution",
+                "consumer": "judge:projects",
+                "kind": "project-execution",
+                "inputs": [
+                    "tool:python",
+                    "input:interpreter",
+                    "input:data",
+                    "environment:DECLARED_EMPTY",
+                    "environment:DECLARED_ABSENT",
+                    "environment:EMPTY",
+                    "environment:PATH",
+                    "environment:FACTS_SENTINEL"
+                ]
+            }
+        ]
+    });
     cfg["semantic_fields"]
         .as_array_mut()
         .unwrap()
@@ -47,11 +83,36 @@ fn bound_host() -> Host {
     h.values.get_mut(FM).unwrap()["project_edges"]
         .as_array_mut()
         .unwrap()
-        .push(edge(
-            "input:git-bytes",
-            "judge-trigger",
-            "judge:registration",
-        ));
+        .extend([
+            edge("tool:facts-git", "runtime-input", "judge:registration"),
+            edge("input:git-bytes", "judge-trigger", "judge:registration"),
+            edge("environment:PATH", "runtime-input", "judge:registration"),
+            edge(
+                "environment:FACTS_SENTINEL",
+                "runtime-input",
+                "judge:registration",
+            ),
+            edge("tool:python", "runtime-input", "judge:projects"),
+            edge("input:interpreter", "runtime-input", "judge:projects"),
+            edge("input:data", "runtime-input", "judge:projects"),
+            edge(
+                "environment:DECLARED_EMPTY",
+                "runtime-input",
+                "judge:projects",
+            ),
+            edge(
+                "environment:DECLARED_ABSENT",
+                "runtime-input",
+                "judge:projects",
+            ),
+            edge("environment:EMPTY", "runtime-input", "judge:projects"),
+            edge("environment:PATH", "runtime-input", "judge:projects"),
+            edge(
+                "environment:FACTS_SENTINEL",
+                "runtime-input",
+                "judge:projects",
+            ),
+        ]);
     let mut policy = file("policy.json", json!([]));
     policy["surface"] = json!("judge-policy");
     h.values.get_mut(FM).unwrap()["files"]

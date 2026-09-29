@@ -32,6 +32,13 @@ caller-defined `kind`. Registration reports `E_REFERENCE` for an unknown node,
 an invalid node kind, or a missing input-to-consumer edge. Config v1 and v2
 reject the field, preserving their historical schemas.
 
+When schema v3 declares the closure `declared-complete`, the `bindings` field
+is mandatory and every registered `tool`, `input`, and `environment` node
+must occur in at least one binding. This is a fail-closed inventory consistency
+check; it still does not prove that the host has no unregistered external
+input, so reports retain `completeness_proven: false` until independent
+evidence establishes that boundary.
+
 This is an explicit relationship table, not a dependency discoverer. The
 registration judge never scans directories, manifests, language files, commands,
 or toolchains to add bindings. A valid binding records what the AI registered;
