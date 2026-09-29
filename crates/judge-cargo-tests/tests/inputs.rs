@@ -787,3 +787,71 @@ fn compiler_binding_requires_versioned_present_bindings_without_legacy_reinterpr
     assert!(r["metadata"].is_null() && r["operation"].is_null());
     assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
 }
+
+#[test]
+fn toolchain_binding_records_sysroot_backend_linker_sdk_and_build_inputs() {
+    let mut f = Fixture::new();
+    toolchain_binding(&mut f);
+    let (exit, report, stderr) = f.call();
+    assert_eq!(exit, 0, "{report} {stderr}");
+    assert_eq!(report["schema"], "chrono-cargo-run/v3");
+    assert_eq!(report["toolchain"]["sysroot"]["files"], 1);
+    assert_eq!(report["toolchain"]["backend"], json!(["toolchain.backend"]));
+    assert_eq!(report["toolchain"]["sdks"][0]["files"], 1);
+    assert_eq!(
+        report["toolchain"]["build_script_inputs"],
+        json!(["toolchain.build-script"])
+    );
+    let linker_environment = format!(
+        "CARGO_TARGET_{}_LINKER",
+        f.contract["target"]
+            .as_str()
+            .unwrap()
+            .replace('-', "_")
+            .to_uppercase()
+    );
+    assert_eq!(
+        report["toolchain"]["linker_environment"],
+        linker_environment
+    );
+    assert!(report["linker"]["path"].is_string(), "{report}");
+    assert_eq!(report["operation"]["exit_code"], 0);
+}
+
+#[test]
+fn toolchain_binding_rejects_selection_and_inventory_drift_before_cargo() {
+    let mut f = Fixture::new();
+    toolchain_binding(&mut f);
+    f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTFLAGS"] =
+        json!("--sysroot=/tmp/not-the-registered-sysroot");
+    f.save();
+    let (exit, report, stderr) = f.call();
+    assert_ne!(exit, 0, "{report} {stderr}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("exact RUSTFLAGS sysroot selection"),
+        "{report}"
+    );
+    assert!(report["metadata"].is_null() && report["operation"].is_null());
+
+    let mut f = Fixture::new();
+    toolchain_binding(&mut f);
+    let manifest = f.root().join(".chrono-harness/state/sdk.json");
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest).unwrap()).unwrap();
+    value["files"][0]["sha256"] =
+        json!("sha256:0000000000000000000000000000000000000000000000000000000000000000");
+    fs::write(&manifest, serde_json::to_vec(&value).unwrap()).unwrap();
+    let (exit, report, stderr) = f.call();
+    assert_ne!(exit, 0, "{report} {stderr}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("input identity changed"),
+        "{report}"
+    );
+    assert!(report["metadata"].is_null() && report["operation"].is_null());
+}

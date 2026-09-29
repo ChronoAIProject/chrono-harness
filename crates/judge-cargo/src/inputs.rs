@@ -27,6 +27,29 @@ pub(crate) struct Compiler {
     pub tool: String,
     input: String,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BoundTool {
+    pub tool: String,
+    pub input: String,
+    pub environment: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DirectoryInventory {
+    pub root: String,
+    pub manifest: String,
+    pub environment: Option<String>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Toolchain {
+    pub sysroot: DirectoryInventory,
+    pub backend: Vec<String>,
+    pub linker: BoundTool,
+    pub sdks: Vec<DirectoryInventory>,
+    pub build_script_inputs: Vec<String>,
+}
 pub(crate) struct ToolInput {
     pub path: PathBuf,
     pub sha256: String,
@@ -44,9 +67,27 @@ pub(crate) struct Contract {
     configuration_ancestors: Option<crate::configuration::Ancestors>,
     cargo_input: Option<String>,
     pub compiler: Option<Compiler>,
+    pub toolchain: Option<Toolchain>,
     packages: Vec<Package>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
+}
+
+#[derive(Clone, Serialize)]
+pub(crate) struct DirectoryEvidence {
+    pub root: String,
+    pub manifest: String,
+    pub files: usize,
+}
+
+#[derive(Clone, Serialize)]
+pub(crate) struct ToolchainEvidence {
+    pub sysroot: DirectoryEvidence,
+    pub backend: Vec<String>,
+    pub linker: Option<chrono_harness::observation::Tool>,
+    pub linker_environment: String,
+    pub sdks: Vec<DirectoryEvidence>,
+    pub build_script_inputs: Vec<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -79,12 +120,19 @@ pub(crate) struct Check {
     pub contract: Contract,
     pub configuration: crate::configuration::Checked,
     pub tool_inputs: BTreeMap<String, ToolInput>,
+    pub toolchain: Option<ToolchainEvidence>,
     manifests: BTreeMap<String, PathBuf>,
     sources: BTreeMap<String, BTreeSet<PathBuf>>,
     target_directory: PathBuf,
     inputs: BTreeMap<PathBuf, (PathBuf, String)>,
     absent_inputs: Vec<PathBuf>,
     strict_inputs: Vec<PathBuf>,
+    directories: Vec<DirectoryBinding>,
+}
+
+struct DirectoryBinding {
+    root: PathBuf,
+    files: Vec<(PathBuf, String)>,
 }
 fn error(s: impl std::fmt::Display) -> String {
     format!("E_CARGO_INPUT: {s}")
@@ -227,6 +275,112 @@ fn inventory(root: &Path) -> Result<BTreeSet<PathBuf>> {
     }
     Ok(files)
 }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryManifest {
+    schema: String,
+    root: String,
+    files: Vec<DirectoryFile>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryFile {
+    path: String,
+    sha256: String,
+}
+
+fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
+    chrono_harness::relative_path(relative)?;
+    let mut path = root.to_path_buf();
+    for component in Path::new(relative).components() {
+        path.push(component);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(error(format!(
+                    "directory inventory contains symlink: {}",
+                    path.display()
+                )));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(error(format!(
+                    "directory inventory file is missing: {}",
+                    path.display()
+                )));
+            }
+            Err(e) => return Err(error(e)),
+        }
+    }
+    if !path.is_file() {
+        return Err(error(format!(
+            "directory inventory entry is not a file: {}",
+            path.display()
+        )));
+    }
+    Ok(path)
+}
+
+fn directory_binding(
+    root: &Path,
+    declaration: &DirectoryInventory,
+    manifest: &Path,
+) -> Result<(DirectoryBinding, DirectoryEvidence)> {
+    if declaration.root.is_empty() || declaration.manifest.is_empty() {
+        return Err(error("directory inventory root/manifest is empty"));
+    }
+    let directory = if Path::new(&declaration.root).is_absolute() {
+        PathBuf::from(&declaration.root)
+    } else {
+        root.join(&declaration.root)
+    };
+    let directory = fs::canonicalize(&directory).map_err(error)?;
+    if !directory.is_dir() {
+        return Err(error(format!(
+            "directory inventory root is not a directory: {}",
+            directory.display()
+        )));
+    }
+    let value = json(&fs::read(manifest).map_err(error)?)?;
+    let parsed: DirectoryManifest = serde_json::from_value(value).map_err(error)?;
+    if parsed.schema != "chrono-input-directory/v1" || parsed.root != declaration.root {
+        return Err(error("directory inventory manifest schema/root mismatch"));
+    }
+    let mut seen = BTreeSet::new();
+    let mut files = Vec::new();
+    for entry in parsed.files {
+        chrono_harness::wire::is_digest(&entry.sha256)
+            .then_some(())
+            .ok_or_else(|| error("directory inventory digest is invalid"))?;
+        if !seen.insert(entry.path.clone()) {
+            return Err(error("directory inventory contains a duplicate path"));
+        }
+        let path = regular_path(&directory, &entry.path)?;
+        let actual = file_identity(&path).map_err(error)?.0;
+        if actual != entry.sha256 {
+            return Err(error(format!(
+                "directory inventory digest differs: {}",
+                path.display()
+            )));
+        }
+        files.push((path, entry.sha256));
+    }
+    if files.is_empty() {
+        return Err(error("directory inventory must contain a file"));
+    }
+    Ok((
+        DirectoryBinding {
+            root: directory,
+            files,
+        },
+        DirectoryEvidence {
+            root: declaration.root.clone(),
+            manifest: declaration.manifest.clone(),
+            files: seen.len(),
+        },
+    ))
+}
 pub(crate) fn prepare(
     root: &Path,
     r: &Registrations,
@@ -247,16 +401,25 @@ pub(crate) fn prepare(
             contract.configuration_ancestors.is_none()
                 && value.get("cargo_input").is_none()
                 && value.get("compiler").is_none()
+                && contract.toolchain.is_none()
         }
         "chrono-cargo-inputs/v3" => {
             contract.configuration_ancestors.is_some()
                 && value.get("cargo_input").is_none()
                 && value.get("compiler").is_none()
+                && contract.toolchain.is_none()
         }
         "chrono-cargo-inputs/v4" => {
             contract.configuration_ancestors.is_some()
                 && contract.cargo_input.is_some()
                 && contract.compiler.is_some()
+                && contract.toolchain.is_none()
+        }
+        "chrono-cargo-inputs/v5" => {
+            contract.configuration_ancestors.is_some()
+                && contract.cargo_input.is_some()
+                && contract.compiler.is_some()
+                && contract.toolchain.is_some()
         }
         _ => false,
     };
@@ -267,7 +430,7 @@ pub(crate) fn prepare(
         || contract.output_limit_bytes > 64 * 1024 * 1024
     {
         return Err(error(
-            "invalid chrono-cargo-inputs/v2, v3 or v4 contract schema/ancestor policy/tool bindings/target/process limits",
+            "invalid chrono-cargo-inputs/v2, v3, v4 or v5 contract schema/ancestor policy/tool bindings/target/process limits",
         ));
     }
     let root_package = contract
@@ -446,6 +609,8 @@ pub(crate) fn prepare(
     };
     let mut absent_inputs = Vec::new();
     let mut tool_inputs = BTreeMap::new();
+    let mut directories = Vec::new();
+    let mut toolchain_evidence = None;
     if let Some(compiler) = &contract.compiler {
         for key in [
             "CARGO_BUILD_RUSTC",
@@ -492,6 +657,122 @@ pub(crate) fn prepare(
             }
         }
     }
+    if let Some(toolchain) = &contract.toolchain {
+        if toolchain.sysroot.environment.is_some() {
+            return Err(error("sysroot selection must use RUSTFLAGS only"));
+        }
+        let backend = strings(&toolchain.backend)?;
+        let build_script_inputs = strings(&toolchain.build_script_inputs)?;
+        if toolchain.linker.tool.is_empty()
+            || toolchain.linker.input.is_empty()
+            || toolchain.linker.environment.is_empty()
+            || toolchain.linker.environment.contains('=')
+        {
+            return Err(error("linker binding is incomplete"));
+        }
+        let sysroot_manifest = input(&toolchain.sysroot.manifest)?;
+        let sysroot_directory = if Path::new(&toolchain.sysroot.root).is_absolute() {
+            fs::canonicalize(&toolchain.sysroot.root).map_err(error)?
+        } else {
+            fs::canonicalize(root.join(&toolchain.sysroot.root)).map_err(error)?
+        };
+        if environment.get("RUSTFLAGS")
+            != Some(&format!("--sysroot={}", sysroot_directory.display()))
+        {
+            return Err(error(
+                "toolchain binding requires exact RUSTFLAGS sysroot selection",
+            ));
+        }
+        let (sysroot_binding, sysroot_evidence) =
+            directory_binding(root, &toolchain.sysroot, &sysroot_manifest)?;
+        directories.push(sysroot_binding);
+        for id in &backend {
+            input(id)?;
+        }
+        for id in &build_script_inputs {
+            input(id)?;
+        }
+        let linker_path = input(&toolchain.linker.input)?;
+        let linker_path = fs::canonicalize(&linker_path).map_err(error)?;
+        let linker_path_string = linker_path
+            .to_str()
+            .ok_or_else(|| error("linker path UTF-8"))?;
+        if environment
+            .get(&toolchain.linker.environment)
+            .map(String::as_str)
+            != Some(linker_path_string)
+        {
+            return Err(error(
+                "linker environment must select the explicitly bound linker path",
+            ));
+        }
+        if [&contract.metadata.tool]
+            .into_iter()
+            .chain(contract.compiler.iter().map(|compiler| &compiler.tool))
+            .any(|tool| tool == &toolchain.linker.tool)
+        {
+            return Err(error("Cargo, compiler and linker tools must be distinct"));
+        }
+        let linker_input = declarations
+            .iter()
+            .find(|row| row["id"] == toolchain.linker.input)
+            .ok_or_else(|| error("linker input declaration missing"))?;
+        let linker_digest = linker_input["sha256"]
+            .as_str()
+            .ok_or_else(|| error("linker input digest missing"))?;
+        if tool_inputs
+            .insert(
+                toolchain.linker.tool.clone(),
+                ToolInput {
+                    path: linker_path,
+                    sha256: linker_digest.into(),
+                },
+            )
+            .is_some()
+        {
+            return Err(error("duplicate linker tool binding"));
+        }
+        let mut sdk_evidence = Vec::new();
+        let mut sdk_roots = BTreeSet::new();
+        for sdk in &toolchain.sdks {
+            let environment_key = sdk
+                .environment
+                .as_deref()
+                .filter(|key| !key.is_empty() && !key.contains('='))
+                .ok_or_else(|| error("SDK binding requires an environment key"))?;
+            let sdk_manifest = input(&sdk.manifest)?;
+            let sdk_directory = if Path::new(&sdk.root).is_absolute() {
+                fs::canonicalize(&sdk.root).map_err(error)?
+            } else {
+                fs::canonicalize(root.join(&sdk.root)).map_err(error)?
+            };
+            if !sdk_roots.insert(sdk_directory.clone()) {
+                return Err(error("duplicate SDK root"));
+            }
+            if environment.get(environment_key).map(String::as_str)
+                != Some(
+                    sdk_directory
+                        .to_str()
+                        .ok_or_else(|| error("SDK path UTF-8"))?,
+                )
+            {
+                return Err(error(format!(
+                    "SDK environment {environment_key} must select its explicit root"
+                )));
+            }
+            let (binding, evidence) = directory_binding(root, sdk, &sdk_manifest)?;
+            directories.push(binding);
+            sdk_evidence.push(evidence);
+        }
+        toolchain_evidence = Some(ToolchainEvidence {
+            sysroot: sysroot_evidence,
+            backend: backend.into_iter().collect(),
+            linker: None,
+            linker_environment: toolchain.linker.environment.clone(),
+            sdks: sdk_evidence,
+            build_script_inputs: build_script_inputs.into_iter().collect(),
+        });
+    }
     for row in declarations
         .iter()
         .filter(|d| connected(&format!("input:{}", d["id"].as_str().unwrap())))
@@ -516,6 +797,11 @@ pub(crate) fn prepare(
         contract.configuration_ancestors,
         &observing.configurations,
         contract.compiler.is_some(),
+        contract
+            .toolchain
+            .as_ref()
+            .map(|toolchain| toolchain.linker.environment.as_str()),
+        contract.toolchain.is_some(),
         input,
     )?;
     let selected: BTreeSet<_> = contract
@@ -655,12 +941,14 @@ pub(crate) fn prepare(
         contract,
         configuration,
         tool_inputs,
+        toolchain: toolchain_evidence,
         manifests,
         sources,
         target_directory,
         inputs: retained.into_inner(),
         absent_inputs,
         strict_inputs: strict_inputs.into_inner(),
+        directories,
     })
 }
 impl Check {
@@ -688,6 +976,22 @@ impl Check {
                     "input changed during guarded operation: {}",
                     path.display()
                 )));
+            }
+        }
+        for directory in &self.directories {
+            if !directory.root.is_dir() {
+                return Err(error(format!(
+                    "toolchain directory disappeared: {}",
+                    directory.root.display()
+                )));
+            }
+            for (path, digest) in &directory.files {
+                if file_identity(path).map_err(error)?.0 != *digest {
+                    return Err(error(format!(
+                        "toolchain directory input changed during guarded operation: {}",
+                        path.display()
+                    )));
+                }
             }
         }
         for p in self
