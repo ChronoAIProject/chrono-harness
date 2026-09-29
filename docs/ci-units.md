@@ -177,3 +177,57 @@ Source behavior tests include actual candidate binaries in independently cloned
 hosts, concurrent execution, offline collection, and synthetic GitHub transport
 responses. Native generated workflow adoption and public release/example
 upgrades must be verified separately before claiming those delivery stages.
+
+## Host customization and updates
+
+The host owns the provider JSON, check profile, unit assignments and bootstrap
+commands. Customize these explicit sources; generated workflows are projections.
+A unit can call any registered script or plugin through its literal bootstrap
+argv and complete test plan. Unrelated host workflows can coexist. The generator
+never selects a language, SDK, directory layout or dependency on the host's behalf.
+
+`init` preserves an existing host source byte for byte, including custom runner,
+timeout, bootstrap arguments, context and artifact settings. Supplied defaults do
+not replace it. After installing a pinned newer binary, use the same `generate`
+and `verify` commands on that source. Verification of projections is separate from
+the actual canonical checks and native event validation.
+
+The source tree adds `chrono-ci migrate` for an explicit projection transition;
+public beta.12 does not yet include this command. Prepare the new check profile,
+assignments and provider source, then migrate the verified old owned workflow:
+
+```sh
+chrono-ci migrate --host-root . \
+  --from .chrono-harness/ci/github.json \
+  --config .chrono-harness/ci/units.json
+```
+
+This accepts a scoped v1 or units provider as the previous source and an explicitly
+configured units provider as the destination. It verifies every old generated file
+and every new output collision before writing. It preserves the destination JSON
+exactly, writes the new projections, removes only obsolete previous workflows and
+retires the distinct previous source only when its bytes match the explicit input.
+A host-edited old projection or colliding new file fails before any write. Unrelated
+files are preserved. Initial-inventory, full-governance and release-provider
+transitions are rejected by this command; it never silently weakens those contracts.
+
+For an update at the same source path, retain the previous source bytes before
+editing (a run-local file belongs beneath `.chrono-harness/state/`). Supply its
+original source address explicitly so embedded workflow commands remain bound to
+the correct source:
+
+```sh
+chrono-ci migrate --host-root . \
+  --from .chrono-harness/state/previous-units.json \
+  --previous-config .chrono-harness/ci/units.json \
+  --config .chrono-harness/ci/units.json
+```
+
+This also retires explicitly removed or renamed workflow paths. It leaves the
+new source and retained prior-input file untouched. The JSON result lists written
+and retired paths and input hashes. Update FILEMAP and any explicit consumers for
+those paths, then run the canonical DELTA checks. Migration does not infer or edit
+the host's registration policy, and its success does not certify governance or CI.
+Filesystem failure reports completed changes; there is no cross-file transaction
+or concurrent-writer isolation. Preserve the original result and reconcile the
+reported paths before retrying; once migrated, ordinary generation is idempotent.

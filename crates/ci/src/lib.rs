@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 mod event_git;
 pub mod full;
 mod gather;
+pub mod migrate;
 pub mod release;
 pub mod units;
 
@@ -700,7 +701,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let command = args
         .first()
-        .ok_or("use init/generate/verify/prepare --host-root H --config P")?;
+        .ok_or("use init/generate/verify/migrate/prepare/gather --host-root H --config P")?;
     let mut opts = std::collections::BTreeMap::new();
     let mut i = 1;
     while i < args.len() {
@@ -715,6 +716,8 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             "--github-output",
             "--unit",
             "--repository",
+            "--from",
+            "--previous-config",
         ]
         .contains(&k.as_str())
             || opts.insert(k.as_str(), v.as_str()).is_some()
@@ -725,10 +728,27 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let root = PathBuf::from(*opts.get("--host-root").ok_or("--host-root required")?);
     let config = *opts.get("--config").ok_or("--config required")?;
-    if !matches!(command.as_str(), "prepare" | "gather") && opts.len() != 2 {
+    if !matches!(command.as_str(), "prepare" | "gather" | "migrate") && opts.len() != 2 {
         return Err("extra arguments".into());
     }
     match command.as_str() {
+        "migrate" => {
+            if opts
+                .keys()
+                .any(|k| !["--host-root", "--config", "--from", "--previous-config"].contains(k))
+            {
+                return Err(
+                    "migrate accepts only host-root, config, from and previous-config".into(),
+                );
+            }
+            let previous = *opts.get("--from").ok_or("--from required")?;
+            migrate::migrate(
+                &root,
+                previous,
+                opts.get("--previous-config").copied().unwrap_or(previous),
+                config,
+            )
+        }
         "init" => Ok(format!(
             "initialized; changed={}\n",
             init(&root, Path::new(config))?
@@ -753,8 +773,11 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             )
         }
         "prepare" => {
-            if opts.contains_key("--repository") {
-                return Err("unexpected repository for prepare".into());
+            if ["--repository", "--from", "--previous-config"]
+                .iter()
+                .any(|k| opts.contains_key(k))
+            {
+                return Err("unexpected transport or migration option for prepare".into());
             }
             let projection = load_projection(&no_symlink_parents(&root, config)?)?;
             if opts.contains_key("--unit") && !matches!(&projection, Projection::Units(_)) {

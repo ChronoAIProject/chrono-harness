@@ -148,7 +148,7 @@ pub fn validate(c: &Config) -> Result<(), String> {
     Ok(())
 }
 
-fn profile(
+pub(super) fn profile(
     root: &Path,
     c: &Config,
 ) -> Result<(chrono_harness::CheckConfig, BTreeMap<String, Unit>), String> {
