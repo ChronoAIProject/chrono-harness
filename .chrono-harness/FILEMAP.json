@@ -2487,6 +2487,18 @@
       "edges": []
     },
     {
+      "path": "docs/native-ci-adoption.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-cargo/Cargo.toml",
       "owner": "judge-cargo",
       "surface": "judge-implementation",

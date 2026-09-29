@@ -193,9 +193,12 @@ candidate-bound workflow source and context, then invokes the recorded local
 `chrono-harness check` argv and reads the retained unit report. It checks the
 literal generated command shape and the selected operation in
 `crates/ci-tests/tests/units.rs`, so a projection change cannot silently diverge
-from the local command. This is bounded host-side adoption evidence for the
-units projection; it does not claim a live GitHub dispatch, complete external
-input closure, or generated-v3 provider adoption.
+from the local command. Live push and pull-request dispatches for the public
+Go, TypeScript and mixed hosts, including their collection and every declared
+unit, are recorded in [native adoption evidence](native-ci-adoption.md).
+That closes generated-unit adoption for this bounded profile. Complete
+effective-input closure, `chrono-github-ci/v3` host adoption, deterministic
+parity and full host activation remain separate obligations.
 
 ## Host customization and updates
 
