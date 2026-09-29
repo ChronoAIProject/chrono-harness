@@ -423,3 +423,10 @@ checked base `4f08aef7ab40d7b0a3fb6ba42af2620600f18d98` to landed candidate
 passed. Its tree equals the independently reviewed candidate tree; full parity
 remains unestablished.
 Failed migration binding now preserves expected and observed version diagnostics.
+
+## Independent workflows
+
+The source unit extension assigns complete plans explicitly and generates one
+workflow per unit plus an offline report collection workflow. Local and native
+unit execution use the same `check --unit` command. See [CI units](ci-units.md)
+for the v3 profile, sharing, collection, provider contracts and adoption boundary.

@@ -3136,6 +3136,101 @@
           "to": "project:judge-ci-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/units.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-ci/src/units.rs",
+      "owner": "judge-ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-ci/src/collect.rs",
+      "owner": "judge-ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci/src/units.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci/src/gather.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-ci-tests/tests/units.rs",
+      "owner": "judge-ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/units.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/ci-units.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
     }
   ],
   "project_edges": [

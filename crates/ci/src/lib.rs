@@ -6,7 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 mod event_git;
 pub mod full;
+mod gather;
 pub mod release;
+pub mod units;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -94,6 +96,7 @@ pub fn load(path: &Path) -> Result<Config, String> {
     Ok(c)
 }
 enum Projection {
+    Units(units::Config),
     Check(Config),
     Full(full::Config),
     Release(release::Config),
@@ -101,7 +104,11 @@ enum Projection {
 fn load_projection(path: &Path) -> Result<Projection, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let value: Value = decode(&bytes)?;
-    if value["schema"] == release::SCHEMA {
+    if value["schema"] == units::SCHEMA {
+        let c = decode(&bytes)?;
+        units::validate(&c)?;
+        Ok(Projection::Units(c))
+    } else if value["schema"] == release::SCHEMA {
         let c = decode(&bytes)?;
         release::validate(&c)?;
         Ok(Projection::Release(c))
@@ -255,6 +262,17 @@ fn check_profile(c: &Config, initial: bool) -> &str {
     &c.check_config
 }
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
+    render_extended(c, config_path, None, "", "", "chrono-check", false)
+}
+fn render_extended(
+    c: &Config,
+    config_path: &str,
+    scope: Option<&chrono_harness::units::Scope>,
+    prepare_suffix: &str,
+    pre_check: &str,
+    artifact_prefix: &str,
+    read_actions: bool,
+) -> Result<String, String> {
     validate(c)?;
     relative_path(config_path)?;
     if c.initial_inventory
@@ -273,15 +291,21 @@ pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
         "{} prepare --host-root . --config {} --event \"$GITHUB_EVENT_NAME\" --payload \"$GITHUB_EVENT_PATH\" --workflow-revision \"$CHRONO_WORKFLOW_REVISION\" --github-output \"$GITHUB_OUTPUT\"",
         shell(&c.generator),
         shell(config_path)
-    );
-    Ok(format!(
-        r#"{MARKER}name: {name}
-on:
-  push:
-    branches: {push}
-  pull_request:
-    branches: {pr}
-  workflow_dispatch:
+    ) + prepare_suffix;
+    let suffix = scope
+        .map(|s| {
+            s.argv()
+                .iter()
+                .map(|v| shell(v))
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .map(|s| format!(" {s}"))
+        .unwrap_or_default();
+    let manual_dispatch = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
+        ""
+    } else {
+        r#"  workflow_dispatch:
     inputs:
       base:
         description: Full base commit OID (omit only with initial)
@@ -296,11 +320,31 @@ on:
         required: true
         default: false
         type: boolean
-permissions:
+"#
+    };
+    let job_name = if scope.is_some() {
+        format!("    name: {}\n", scalar(&c.name))
+    } else {
+        String::new()
+    };
+    let permissions = if read_actions {
+        "  actions: read\n"
+    } else {
+        ""
+    };
+
+    Ok(format!(
+        r#"{MARKER}name: {name}
+on:
+  push:
+    branches: {push}
+  pull_request:
+    branches: {pr}
+{manual_dispatch}permissions:
   contents: read
-jobs:
+{permissions}jobs:
   check:
-    if: ${{{{ github.event.deleted != true }}}}
+{job_name}    if: ${{{{ github.event.deleted != true }}}}
     runs-on: {runs_on}
     timeout-minutes: {timeout}
     steps:
@@ -321,7 +365,7 @@ jobs:
           CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}
         run: |
           {prepare}
-      - name: Canonical harness check
+{pre_check}      - name: Canonical harness check
         shell: bash
         env:
           CHRONO_BASE: ${{{{ steps.inputs.outputs.base }}}}
@@ -337,7 +381,7 @@ jobs:
         if: ${{{{ always() }}}}
         uses: {upload}
         with:
-          name: chrono-check-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
+          name: {artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
           path: {artifacts}
           if-no-files-found: error
 "#,
@@ -348,8 +392,8 @@ jobs:
         timeout = c.timeout_minutes,
         checkout = c.checkout_action,
         upload = c.upload_artifact_action,
-        initial = invoke(c, true),
-        normal = invoke(c, false),
+        initial = invoke(c, true) + &suffix,
+        normal = invoke(c, false) + &suffix,
         artifacts = scalar(&c.artifact_directory)
     ))
 }
@@ -419,6 +463,7 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
     relative_path(config_path)?;
     let c = match load_projection(&no_symlink_parents(root, config_path)?)? {
         Projection::Check(c) => c,
+        Projection::Units(c) => return units::generate(root, config_path, &c, verify),
         Projection::Full(c) => return full::generate(root, config_path, &c, verify),
         Projection::Release(c) => {
             if !config_path.starts_with(".chrono-harness/") {
@@ -455,6 +500,7 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
 pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     let incoming = match load_projection(input)? {
         Projection::Check(c) => c,
+        Projection::Units(c) => return units::init(root, c),
         Projection::Full(c) => return full::init(root, c),
         Projection::Release(c) => return release::init(root, c),
     };
@@ -620,6 +666,34 @@ pub fn prepare(
         Err(error) => Err(facts.error(error)),
     }
 }
+fn store_context(
+    root: &Path,
+    path: &str,
+    context: &Value,
+    output: Option<&str>,
+) -> Result<(), String> {
+    write_file(
+        root,
+        path,
+        &(serde_json::to_string_pretty(context).map_err(|e| e.to_string())? + "\n").into_bytes(),
+    )?;
+    if let Some(output) = output {
+        use std::io::Write;
+        let mut f = fs::OpenOptions::new()
+            .append(true)
+            .open(output)
+            .map_err(|e| e.to_string())?;
+        writeln!(
+            f,
+            "base={}\ncandidate={}\ninitial={}",
+            context["base"].as_str().unwrap_or(""),
+            context["candidate"].as_str().ok_or("candidate absent")?,
+            context["initial"]
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
 pub fn dispatch(args: &[String]) -> Result<String, String> {
     if args == ["--version"] {
         return Ok(format!("chrono-ci {}\n", env!("CARGO_PKG_VERSION")));
@@ -639,6 +713,8 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             "--payload",
             "--workflow-revision",
             "--github-output",
+            "--unit",
+            "--repository",
         ]
         .contains(&k.as_str())
             || opts.insert(k.as_str(), v.as_str()).is_some()
@@ -649,7 +725,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let root = PathBuf::from(*opts.get("--host-root").ok_or("--host-root required")?);
     let config = *opts.get("--config").ok_or("--config required")?;
-    if command != "prepare" && opts.len() != 2 {
+    if !matches!(command.as_str(), "prepare" | "gather") && opts.len() != 2 {
         return Err("extra arguments".into());
     }
     match command.as_str() {
@@ -662,13 +738,53 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             command,
             generate(&root, config, command == "verify")?
         )),
+        "gather" => {
+            if opts.len() != 3 {
+                return Err("gather requires only host-root, config, repository".into());
+            }
+            let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
+                return Err("gather requires unit provider".into());
+            };
+            gather::gather(
+                &root,
+                config,
+                &c,
+                opts.get("--repository").ok_or("--repository required")?,
+            )
+        }
         "prepare" => {
+            if opts.contains_key("--repository") {
+                return Err("unexpected repository for prepare".into());
+            }
             let projection = load_projection(&no_symlink_parents(&root, config)?)?;
+            if opts.contains_key("--unit") && !matches!(&projection, Projection::Units(_)) {
+                return Err("unit selection requires unit provider".into());
+            }
             let payload = chrono_harness::json(
                 &fs::read(opts.get("--payload").ok_or("--payload required")?)
                     .map_err(|e| e.to_string())?,
             )?;
             let c = match projection {
+                Projection::Units(c) => {
+                    let context = units::prepare(
+                        &root,
+                        config,
+                        &c,
+                        opts.get("--unit").copied(),
+                        opts.get("--event").ok_or("--event required")?,
+                        &payload,
+                        opts.get("--workflow-revision")
+                            .ok_or("--workflow-revision required")?,
+                    )?;
+                    let workflow = c.workflow(opts.get("--unit").copied())?;
+                    store_context(
+                        &root,
+                        &workflow.context_path,
+                        &context,
+                        opts.get("--github-output").copied(),
+                    )?;
+                    return Ok(serde_json::to_string(&context).map_err(|e| e.to_string())? + "\n");
+                }
                 Projection::Full(c) => {
                     return full::prepare_dispatch(
                         &root,
@@ -686,6 +802,9 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                     return Err("release projection has no check event preparation".into());
                 }
             };
+            if opts.contains_key("--unit") {
+                return Err("unit selection requires unit provider".into());
+            }
             let context = prepare(
                 &root,
                 &c,
@@ -694,27 +813,12 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 opts.get("--workflow-revision")
                     .ok_or("--workflow-revision required")?,
             )?;
-            write_file(
+            store_context(
                 &root,
                 &c.context_path,
-                &(serde_json::to_string_pretty(&context).map_err(|e| e.to_string())? + "\n")
-                    .into_bytes(),
+                &context,
+                opts.get("--github-output").copied(),
             )?;
-            if let Some(output) = opts.get("--github-output") {
-                use std::io::Write;
-                let mut f = fs::OpenOptions::new()
-                    .append(true)
-                    .open(output)
-                    .map_err(|e| e.to_string())?;
-                writeln!(
-                    f,
-                    "base={}\ncandidate={}\ninitial={}",
-                    context["base"].as_str().unwrap_or(""),
-                    context["candidate"].as_str().ok_or("candidate absent")?,
-                    context["initial"]
-                )
-                .map_err(|e| e.to_string())?;
-            }
             Ok(serde_json::to_string(&context).map_err(|e| e.to_string())? + "\n")
         }
         _ => Err("unknown command".into()),

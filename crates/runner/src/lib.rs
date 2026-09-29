@@ -5,6 +5,7 @@ mod facts_binding;
 pub mod full;
 pub mod initial;
 pub mod observation;
+pub mod units;
 pub mod wire;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -49,6 +50,8 @@ pub struct CheckConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<units::Scope>,
     #[serde(default)]
     pub observations: Value,
     pub protocol: String,
@@ -239,7 +242,7 @@ pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
     let c: CheckConfig = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
     if !matches!(
         c.schema.as_str(),
-        "chrono-ci-check/v1" | "chrono-ci-check/v2"
+        "chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3"
     ) {
         return Err("unsupported check profile; full governance remains not implemented".into());
     }
@@ -265,11 +268,13 @@ pub fn validate_command(s: &CommandSpec) -> Result<(), String> {
     }
     Ok(())
 }
-pub fn resolve_program(
+/// Ordered lexical candidates for live resolution and historical invocation verification.
+/// Passing a PATH override avoids consulting the collector's ambient PATH.
+pub fn program_candidates(
     root: &Path,
     program: &str,
     path_override: Option<&str>,
-) -> Result<PathBuf, String> {
+) -> Result<Vec<PathBuf>, String> {
     let root = if root.is_absolute() {
         root.to_path_buf()
     } else {
@@ -297,7 +302,14 @@ pub fn resolve_program(
             })
             .collect()
     };
-    for p in paths {
+    Ok(paths)
+}
+pub fn resolve_program(
+    root: &Path,
+    program: &str,
+    path_override: Option<&str>,
+) -> Result<PathBuf, String> {
+    for p in program_candidates(root, program, path_override)? {
         if p.is_file() {
             // Preserve the invocation basename: rustup/cargo and other multicall tools
             // select behavior from argv[0]. Reading p still hashes the target bytes.
@@ -477,7 +489,15 @@ fn run_process_inner(
     })
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
-    if r.protocol != PROTOCOL
+    validate_response_protocol(r, id, exit, PROTOCOL)
+}
+pub fn validate_response_protocol(
+    r: &Response,
+    id: &str,
+    exit: i32,
+    protocol: &str,
+) -> Result<(), String> {
+    if r.protocol != protocol
         || r.request_id != id
         || r.results.is_empty()
         || !r.evidence.is_object()
@@ -582,6 +602,7 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     let mut candidate = None;
     let mut initial = false;
     let mut context = None;
+    let mut scope = None;
     let mut i = 0;
     let mut seen = BTreeSet::new();
     while i < args.len() {
@@ -600,6 +621,18 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
             "--base" => base = Some(value.to_owned()),
             "--candidate" => candidate = Some(value.to_owned()),
             "--context" => context = Some(value),
+            "--unit" | "--collect" => {
+                if scope.is_some() {
+                    return Err("unit and collect are mutually exclusive".into());
+                }
+                scope = Some(if k == "--unit" {
+                    units::Scope::Unit { unit: value.into() }
+                } else {
+                    units::Scope::Collect {
+                        manifest: value.into(),
+                    }
+                });
+            }
             _ => return Err(format!("unknown argument {k}")),
         }
         i += 2;
@@ -610,6 +643,9 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     let candidate = candidate.ok_or("missing --candidate")?;
     let (root, config_path) = root_for_config(Path::new(config.ok_or("missing --config")?))?;
     let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
+    if scope.is_some() && profile["schema"] != units::PROFILE {
+        return Err("unit/collect selection requires chrono-ci-check/v3".into());
+    }
     if profile.get("schema").and_then(Value::as_str) == Some(initial::PROFILE) {
         if !initial || context.is_some() {
             return Err("initial inventory requires --initial without --base or --context".into());
@@ -618,7 +654,7 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     }
     if !matches!(
         profile.get("schema").and_then(Value::as_str),
-        Some("chrono-ci-check/v1" | "chrono-ci-check/v2")
+        Some("chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3")
     ) {
         return full::check_observed(
             &root,
@@ -634,6 +670,16 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         return Err("CI profile does not accept --context".into());
     }
     let c = load_config(&root.join(&config_path))?;
+    let output_path = scope
+        .as_ref()
+        .map(|s| s.report_path(&c))
+        .transpose()?
+        .unwrap_or(c.report_path.clone());
+    let protocol = if scope.is_some() {
+        units::PROTOCOL
+    } else {
+        PROTOCOL
+    };
     let bytes = fs::read(root.join(&config_path)).map_err(|e| e.to_string())?;
     let request_id = sha256(
         format!(
@@ -646,7 +692,8 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     );
     let req = Request {
         observations: serde_json::json!({"entry":entry}),
-        protocol: PROTOCOL.into(),
+        scope,
+        protocol: protocol.into(),
         request_id: request_id.clone(),
         host_root: root.clone(),
         config_path,
@@ -655,7 +702,7 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         candidate,
         initial,
     };
-    let report_path = no_symlink_parents(&root, &c.report_path)?;
+    let report_path = no_symlink_parents(&root, &output_path)?;
     let proc = run_process(
         &root,
         &c.judge,
@@ -667,7 +714,7 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         Ok(p) => {
             let response: Result<Response, String> = decode(&p.stdout_bytes);
             match response.and_then(|r| {
-                validate_response(&r, &request_id, p.exit_code)?;
+                validate_response_protocol(&r, &request_id, p.exit_code, protocol)?;
                 Ok(r)
             }) {
                 Ok(r) => {

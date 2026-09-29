@@ -284,6 +284,17 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 
 固定快照的干净检查须同时比较 candidate 树、索引 stage 和实际文件。现役源码按 Git 对象头与原始字节计算 SHA-1／SHA-256 blob 身份，逐项核常规文件类型及 Git 的 owner-executable 位、符号链接字面目标；目录祖先不得沿链接读取。它不通过工作区 diff、textconv、clean filter 或换行转换决定文件身份；配置隐藏的字节、类型与执行位差异仍须拒绝。索引的新增／删除／mode／OID／未合并 stage 独立比较，不能由相反工作区变化抵消；既有 index flag 和 untracked/artifact 检查继续适用。核验只消费固定树／索引清单，不登记依赖、不选测试，不因缓存或 Git status 干净而跳过读取。完整／initial／scoped 检查及 worktree 创建、重建、恢复、清理复用同一文件比较实现，各自通过已有 Git 绑定读取树和索引。Gitlink、特殊文件及非 UTF-8 登记路径尚不支持；时间戳、ACL、xattr 不是 Git 树身份的一部分，且不承诺并发原子快照。完整 Git 配置、委托程序、工具链／SDK 输入闭包仍须另行补齐。详见 [原始快照身份](docs/git-facts.md#literal-checkout-identity)。
 
+
+### 4.1 显式单元与独立 workflow
+
+默认并发组织为每个独立单元生成独立 workflow，各有独立检查名、checkout、启动命令、边界、报告及重跑。单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所有单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输工件或推断 workflow 间依赖。
+
+现役源码扩展 `chrono-ci-check/v3` 的 `policy.units` 与 `shared_operations`。判官先完成两端 DELTA、移除／替代义务及全局所选操作图验证，再按 `--unit ID` 过滤执行；不能借单元过滤隐藏全局操作环。单元报告分别列本单元所选、全局所选、交给其它单元、所需单元及真正不需要的义务。某单元成功只承担自身结果，其失败不取消不相关 workflow。本地及该 workflow 均追加完全相同的 `--unit ID` 到登记 check 指令；v1/v2 原调用行为保留。
+
+同一入口的 `--collect MANIFEST` 只重建当前义务并核所需原始单元报告，不能重跑业务测试。它检查完整报告集合、固定端点／配置／执行物 pin、原始判官输出、计划身份及候选操作／顺序／边界、工具观察、逐操作原始回执和成功状态；缺漏、重复、陈旧或失败报告不得全局通过。执行物 pin 由明确调用输入承担，不宣称据此证明构建产地、外部输入完整或跨环境同判。
+
+`chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；公开 beta.11 尚不包含它。
+
 ## 5. DELTA 与依赖图算法
 
 DELTA 选择充分的前提是：两状态所有实际语义输入及其直接/间接依赖均完整登记，且判官/测试

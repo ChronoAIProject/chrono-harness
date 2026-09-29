@@ -10,6 +10,8 @@ const CONFIG: &str = ".chrono-harness/ci/check.json";
 mod checkout;
 #[path = "git_facts.rs"]
 mod git_facts;
+#[path = "units.rs"]
+mod units;
 struct Host {
     dir: TempDir,
 }
@@ -86,6 +88,7 @@ impl Host {
     }
     fn request(&self, b: Option<&str>, c: &str) -> Request {
         Request {
+            scope: None,
             observations: Value::Null,
             protocol: PROTOCOL.into(),
             request_id: "fixture-request".into(),
