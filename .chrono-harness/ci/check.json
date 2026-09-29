@@ -1,5 +1,5 @@
 {
-  "schema": "chrono-ci-check/v1",
+  "schema": "chrono-ci-check/v3",
   "judge": {
     "program": ".chrono-harness/bin/chrono-judge-ci",
     "args": [],
@@ -52,10 +52,27 @@
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
-      ".chrono-harness/ci/github.json",
+      ".chrono-harness/ci/units.json",
       ".chrono-harness/ci/bootstrap.py",
       ".chrono-harness/ci/bootstrap.json",
-      ".github/workflows/chrono-ci.yml"
+      ".chrono-harness/ci/bootstrap-core.json",
+      ".github/workflows/chrono-ci.yml",
+      ".github/workflows/chrono-ci-runner.yml",
+      ".github/workflows/chrono-ci-instructions.yml",
+      ".github/workflows/chrono-ci-judge-ci.yml",
+      ".github/workflows/chrono-ci-ci.yml",
+      ".github/workflows/chrono-ci-judge-registration.yml",
+      ".github/workflows/chrono-ci-judge-filemap.yml",
+      ".github/workflows/chrono-ci-judge-routes.yml",
+      ".github/workflows/chrono-ci-judge-projects.yml",
+      ".github/workflows/chrono-ci-scoped-v1.yml",
+      ".github/workflows/chrono-ci-judge-cost.yml",
+      ".github/workflows/chrono-ci-judge-mixed.yml",
+      ".github/workflows/chrono-ci-judge-workflow.yml",
+      ".github/workflows/chrono-ci-inputs.yml",
+      ".github/workflows/chrono-ci-distribution.yml",
+      ".github/workflows/chrono-ci-judge-cargo.yml",
+      ".github/workflows/chrono-ci-worktree.yml"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
@@ -64,6 +81,184 @@
       "RUSTUP_TOOLCHAIN": "1.95.0",
       "CARGO_TERM_COLOR": "never"
     },
-    "registration_config": ".chrono-harness/config.json"
+    "registration_config": ".chrono-harness/config.json",
+    "units": {
+      "runner": {
+        "tests": [
+          "test:runner-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/runner/check.json"
+      },
+      "instructions": {
+        "tests": [
+          "test:instructions-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/instructions/check.json"
+      },
+      "judge-ci": {
+        "tests": [
+          "test:judge-ci-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-ci/check.json"
+      },
+      "ci": {
+        "tests": [
+          "test:ci-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/ci/check.json"
+      },
+      "judge-registration": {
+        "tests": [
+          "test:judge-registration-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-registration/check.json"
+      },
+      "judge-filemap": {
+        "tests": [
+          "test:judge-filemap-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-filemap/check.json"
+      },
+      "judge-routes": {
+        "tests": [
+          "test:judge-routes-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-routes/check.json"
+      },
+      "judge-projects": {
+        "tests": [
+          "test:judge-projects-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-projects/check.json"
+      },
+      "scoped-v1": {
+        "tests": [
+          "test:scoped-v1-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/scoped-v1/check.json"
+      },
+      "judge-cost": {
+        "tests": [
+          "test:judge-cost-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-cost/check.json"
+      },
+      "judge-mixed": {
+        "tests": [
+          "test:judge-mixed-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-mixed/check.json"
+      },
+      "judge-workflow": {
+        "tests": [
+          "test:judge-workflow-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-workflow/check.json"
+      },
+      "inputs": {
+        "tests": [
+          "test:inputs-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/inputs/check.json"
+      },
+      "distribution": {
+        "tests": [
+          "test:distribution-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/distribution/check.json"
+      },
+      "judge-cargo": {
+        "tests": [
+          "test:judge-cargo-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-cargo/check.json"
+      },
+      "worktree": {
+        "tests": [
+          "test:worktree-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/worktree/check.json"
+      }
+    },
+    "shared_operations": {
+      "build.ci": [
+        "ci",
+        "judge-projects",
+        "judge-workflow"
+      ],
+      "build.judge-ci": [
+        "judge-cargo",
+        "judge-ci",
+        "judge-projects"
+      ],
+      "build.judge-cost": [
+        "inputs",
+        "judge-cargo",
+        "judge-cost",
+        "judge-mixed",
+        "judge-workflow"
+      ],
+      "build.judge-filemap": [
+        "inputs",
+        "judge-cargo",
+        "judge-cost",
+        "judge-filemap",
+        "judge-mixed",
+        "judge-projects",
+        "judge-routes",
+        "judge-workflow"
+      ],
+      "build.judge-mixed": [
+        "inputs",
+        "judge-cargo",
+        "judge-mixed",
+        "judge-workflow"
+      ],
+      "build.judge-projects": [
+        "inputs",
+        "judge-cargo",
+        "judge-filemap",
+        "judge-projects",
+        "judge-workflow"
+      ],
+      "build.judge-registration": [
+        "ci",
+        "inputs",
+        "judge-cargo",
+        "judge-cost",
+        "judge-filemap",
+        "judge-mixed",
+        "judge-projects",
+        "judge-registration",
+        "judge-routes",
+        "judge-workflow"
+      ],
+      "build.judge-routes": [
+        "inputs",
+        "judge-cargo",
+        "judge-filemap",
+        "judge-projects",
+        "judge-routes",
+        "judge-workflow"
+      ],
+      "build.judge-workflow": [
+        "inputs",
+        "judge-cargo",
+        "judge-workflow"
+      ],
+      "build.runner": [
+        "ci",
+        "inputs",
+        "judge-cargo",
+        "judge-cost",
+        "judge-filemap",
+        "judge-mixed",
+        "judge-projects",
+        "judge-registration",
+        "judge-routes",
+        "judge-workflow",
+        "runner"
+      ]
+    }
   }
 }

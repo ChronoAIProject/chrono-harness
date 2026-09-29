@@ -180,8 +180,12 @@ responses. The public Go, TypeScript and mixed [example hosts](examples.md) use
 independent native workflows. Their local/integration/PR/dev reports were checked,
 as were actual cancellation with selective retry, business failure with another
 unit passing, and restoration with zero selected business operations. Initial
-inventory remains a separate contract. The product repository has not yet adopted
-independent native unit workflows; this evidence does not imply that adoption.
+inventory remains a separate contract. The product host registers sixteen units,
+one per complete test plan, and a collector in `.chrono-harness/ci/units.json`.
+Its core bootstrap explicitly builds runner, judge-ci and ci; each selected plan
+keeps its complete existing build/check/test operations. Shared operations are
+listed in the check profile and repeat only in isolated checkouts. The default
+full bootstrap remains available when its existing configuration is selected.
 
 ## Host customization and updates
 

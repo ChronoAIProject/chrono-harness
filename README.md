@@ -97,19 +97,19 @@ cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
 现役 CI 使用独立的 `judge-ci` 执行显式登记的 DELTA 检查；runner 只承担外部判官运输与报告。独立 `chrono-ci` 从宿主配置生成 GitHub Actions，提供 init/generate/verify 和事件输入准备。宿主可通过 `push_baselines` 显式登记分支前缀及远端基线；本仓的 integration 连续 push 均对照所观察的 dev 提交，使用相同的 check 指令。
 
 ```sh
-python3 .chrono-harness/ci/bootstrap.py .
-.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/github.json
+/usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
+.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/units.json
 # 候选须已提交且检出干净；本地和 CI 使用完全相同的入口
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID
+.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID --unit ci
 ```
 
-公开工具还支持[按显式单元生成独立 workflow、汇总原始报告及保留宿主自定义的迁移](docs/ci-units.md)。Go、TS、混合示例已采用独立 workflow；本仓自身仍使用上面的全局 scoped 入口。宿主维护自己的单元、SDK、启动参数、平台与超时；升级二进制不重置这些源，路径变化可用 `chrono-ci migrate` 核验并退休旧投影。
+公开工具还支持[按显式单元生成独立 workflow、汇总原始报告及保留宿主自定义的迁移](docs/ci-units.md)。Go、TS、混合示例及本仓都使用显式独立 workflow。本仓在 `check.json` 登记 16 个完整测试计划的单元归属，在 `units.json` 登记 16 个 workflow 与汇总入口。各单元只启动 `bootstrap-core.json` 指定的 runner、judge-ci、ci，其余构建由该单元的完整测试计划承担；共享操作在隔离 checkout 各自执行。省略 `--unit` 可在本地串行检查完整 DELTA；汇总使用同一入口的 `--collect MANIFEST`，执行零业务操作。宿主维护自己的单元、SDK、启动参数、平台与超时；升级二进制不重置这些源，路径变化可用 `chrono-ci migrate` 核验并退休旧投影。
 
 复制二进制初始化新仓、操作扩展、schema、首次采用和事件合同见 [docs/ci.md](docs/ci.md)；可复制完整实例见 [examples/ci-host](examples/ci-host/README.md)。`verify` 检测工作流漂移，不先修复输出。未知路径、缺对象、脏输入、无效登记或失败命令均非零；文档等闭包外变更明确报告未选项目检查。
 
 带 `--context .chrono-harness/state/context.json` 的 full check 调用登记的 v1 外部判官，绑定请求身份、候选二进制摘要、白名单环境与直接前驱 DAG。registration 验证五份结构、固定身份、工作树 dirt、保留输入及受影响引用，并提供唯一历史解释视图。FILEMAP 生成两端 impact v2，并按显式 stability 与 integration 登记选择测试；routes 合并显式执行计划并绑定实际工具；projects 核配对并执行、核对真实回执。现役 scoped CI 复用该规划和执行路径，保留其已注明的选择及输入边界。版本化输出见 [FILEMAP impact 合同](docs/filemap-impact.md) 和 [执行合同](docs/execution.md)。`.chrono-harness/config.json` 仍 proposed、缺完整输入闭包与绑定，完整宿主检查必须非零。完整 SPEC 的生产者、直接测试与缺口见 [覆盖矩阵](docs/spec-coverage.md)。完整 Cargo/SDK 输入闭包、裁决确定性、本地/CI 同判、完整宿主的分支与 integration 接线仍未认证。原生 GitHub 事件须以实际 run 的固定身份和结果验证；本地测试不能替代。
 
-配置 v3 可用 `facts_git` 显式绑定 Git 的工具、输入摘要、版本和环境，贯穿 full/initial 读取及下游判官；v1/v2 保持旧语义。调用方式与边界见 [Git 事实绑定](docs/git-facts.md)。CI provider v3 可通过 `facts_config` 显式选择同一绑定机制用于事件准备；仅明确缺失的对象触发 fetch，工具失败保留原始证据。scoped profile v2 也可通过 `policy.facts_config` 选择该绑定，两端快照及可选完整登记解释复用同一 Git，成功与失败均保留实际进程证据；选测和操作环境仍沿用 scoped 合同。这些扩展已包含在 beta.9；升级二进制不自动采用新版配置。本仓继续使用 scoped v1，完整输入闭包尚未完成。
+配置 v3 可用 `facts_git` 显式绑定 Git 的工具、输入摘要、版本和环境，贯穿 full/initial 读取及下游判官；v1/v2 保持旧语义。调用方式与边界见 [Git 事实绑定](docs/git-facts.md)。CI provider v3 可通过 `facts_config` 显式选择同一绑定机制用于事件准备；仅明确缺失的对象触发 fetch，工具失败保留原始证据。scoped profile v2 也可通过 `policy.facts_config` 选择该绑定，两端快照及可选完整登记解释复用同一 Git，成功与失败均保留实际进程证据；选测和操作环境仍沿用 scoped 合同。这些扩展已包含在 beta.9；升级二进制不自动采用新版配置。本仓使用 scoped v3 的独立单元扩展，没有自动采用上述 Git 绑定；完整输入闭包尚未完成。
 
 full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 为 unestablished，有界 registration/filemap pass 不表示完整治理成功。
 

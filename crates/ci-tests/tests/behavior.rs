@@ -764,15 +764,19 @@ else:
             .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
     )
     .unwrap();
-    let invoke = || {
-        Command::new("python3")
-            .arg(dir.join("bootstrap.py"))
-            .arg(root.path())
+    let invoke_with = |selected: Option<&str>| {
+        let mut command = Command::new("python3");
+        command.arg(dir.join("bootstrap.py")).arg(root.path());
+        if let Some(selected) = selected {
+            command.arg(selected);
+        }
+        command
             .current_dir(std::env::temp_dir())
             .env("PATH", &path)
             .output()
             .unwrap()
     };
+    let invoke = || invoke_with(None);
     let success = invoke();
     assert!(
         success.status.success(),
@@ -806,6 +810,66 @@ else:
         state["installed"][0]["sha256"],
         chrono_harness::sha256(b"binary")
     );
+    // Explicit host configuration selects only its own operations and installations.
+    // An unrelated registered operation fails if accidentally executed.
+    let mut selected = config.clone();
+    selected["operations"] = json!(["make.selected"]);
+    selected["install"] =
+        json!([{"source":"selected-tool","destination":".chrono-harness/bin/selected"}]);
+    fs::write(
+        dir.join("selected profile.json"),
+        serde_json::to_vec(&selected).unwrap(),
+    )
+    .unwrap();
+    let mut declarations = registry("exit 99");
+    declarations["projects"][0]["actions"]["selected"] = json!({
+        "operation":"make.selected","tool":"sh","argv":["-c","printf selected > selected-tool"]
+    });
+    fs::write(&pr, serde_json::to_vec(&declarations).unwrap()).unwrap();
+    fs::remove_file(root.path().join("built-tool")).unwrap();
+    let actual = invoke_with(Some(".chrono-harness/ci/selected profile.json"));
+    assert!(
+        actual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&actual.stderr)
+    );
+    assert!(!root.path().join("built-tool").exists());
+    assert_eq!(
+        fs::read(root.path().join(".chrono-harness/bin/selected")).unwrap(),
+        b"selected"
+    );
+    assert_eq!(
+        fs::read(root.path().join(".chrono-harness/bin/tool")).unwrap(),
+        b"binary"
+    );
+    assert_eq!(state["config"], ".chrono-harness/ci/bootstrap.json");
+    let selected_state =
+        fs::read(root.path().join(".chrono-harness/state/bootstrap.json")).unwrap();
+    let selected_result: Value = serde_json::from_slice(&selected_state).unwrap();
+    assert_eq!(
+        selected_result["config"],
+        ".chrono-harness/ci/selected profile.json"
+    );
+    assert_eq!(selected_result["installed"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        selected_result["installed"][0]["sha256"],
+        chrono_harness::sha256(b"selected")
+    );
+    let before_calls = calls();
+    for invalid in [
+        "/tmp/config.json",
+        ".chrono-harness/ci/../outside.json",
+        "outside.json",
+    ] {
+        let rejected = invoke_with(Some(invalid));
+        assert!(!rejected.status.success());
+        assert!(String::from_utf8_lossy(&rejected.stderr).contains("explicit host CI path"));
+        assert_eq!(calls(), before_calls, "invalid config launched a tool");
+        assert_eq!(
+            fs::read(root.path().join(".chrono-harness/state/bootstrap.json")).unwrap(),
+            selected_state
+        );
+    }
     fs::write(&pr, serde_json::to_vec(&registry("exit 9")).unwrap()).unwrap();
     assert!(!invoke().status.success());
     fs::write(
@@ -896,8 +960,9 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         read(".chrono-harness/ci/check.json")["policy"]["tools"]["python3"],
         tool["program"]
     );
-    assert_eq!(
-        read(".chrono-harness/ci/github.json")["bootstrap"][0],
-        tool["program"]
-    );
+    let provider = read(".chrono-harness/ci/units.json");
+    assert_eq!(provider["collection"]["bootstrap"][0], tool["program"]);
+    for unit in provider["units"].as_object().unwrap().values() {
+        assert_eq!(unit["bootstrap"][0], tool["program"]);
+    }
 }

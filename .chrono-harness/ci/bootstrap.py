@@ -10,10 +10,13 @@ import sys
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise ValueError("usage: bootstrap.py HOST_ROOT")
+    if len(sys.argv) not in (2, 3):
+        raise ValueError("usage: bootstrap.py HOST_ROOT [REGISTERED_CONFIG]")
     root = Path(sys.argv[1]).resolve()
-    config = json.loads((root / ".chrono-harness/ci/bootstrap.json").read_text())
+    config_path = Path(sys.argv[2]) if len(sys.argv) == 3 else Path(".chrono-harness/ci/bootstrap.json")
+    if config_path.is_absolute() or ".." in config_path.parts or config_path.parts[:2] != (".chrono-harness", "ci"):
+        raise ValueError("bootstrap config must be an explicit host CI path")
+    config = json.loads((root / config_path).read_text())
     if config["schema"] != "chrono-bootstrap/v1":
         raise ValueError("unsupported bootstrap schema")
     projects = json.loads((root / config["projects"]).read_text())
@@ -50,7 +53,7 @@ def main():
         installed.append({"path": item["destination"], "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
     state = root / ".chrono-harness/state"
     state.mkdir(parents=True, exist_ok=True)
-    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "versions": versions, "installed": installed}, indent=2) + "\n")
+    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "versions": versions, "installed": installed}, indent=2) + "\n")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,27 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {
+    "cargo": "cargo"
+  },
+  "operations": [
+    "build.runner",
+    "build.judge-ci",
+    "build.ci"
+  ],
+  "install": [
+    {
+      "source": "crates/runner/target/debug/chrono-harness",
+      "destination": ".chrono-harness/bin/chrono-harness"
+    },
+    {
+      "source": "crates/judge-ci/target/debug/chrono-judge-ci",
+      "destination": ".chrono-harness/bin/chrono-judge-ci"
+    },
+    {
+      "source": "crates/ci/target/debug/chrono-ci",
+      "destination": ".chrono-harness/bin/chrono-ci"
+    }
+  ]
+}

@@ -913,7 +913,7 @@
       ]
     },
     {
-      "path": ".chrono-harness/ci/github.json",
+      "path": ".chrono-harness/ci/units.json",
       "owner": "repository",
       "surface": "membership",
       "cost": "unmeasured",
@@ -977,7 +977,7 @@
       ],
       "projection": {
         "sources": [
-          ".chrono-harness/ci/github.json"
+          ".chrono-harness/ci/units.json"
         ],
         "producer": "project:ci",
         "scope": "whole-file"
@@ -3241,6 +3241,390 @@
         {
           "kind": "compile",
           "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/chrono-ci-runner.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-instructions.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-ci.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-ci.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-registration.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-filemap.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-routes.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-projects.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-scoped-v1.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-cost.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-mixed.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-workflow.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-inputs.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-distribution.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-judge-cargo.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".github/workflows/chrono-ci-worktree.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        }
+      ],
+      "projection": {
+        "sources": [
+          ".chrono-harness/ci/units.json"
+        ],
+        "producer": "project:ci",
+        "scope": "whole-file"
+      }
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-core.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
         }
       ]
     }

@@ -20,8 +20,10 @@ preparation. It does not select tests or judge outcomes. `instructions` remains
 independent and its catalogs, layouts and relative root alias are unchanged.
 
 The five full-governance registries remain **proposed**. The bounded
-`chrono-ci-check/v1` profile explicitly consumes the FILEMAP and projects data
-below using `chrono-ci-judge/v1`. Separately, `check` supports configured
+`chrono-ci-check/v3` host profile explicitly consumes FILEMAP and project data.
+Its independent unit/collection checks use `chrono-ci-judge/v2`; the unpartitioned
+local check and older profile versions retain their documented behavior. See
+[independent CI units](ci-units.md). Separately, `check` supports configured
 `chrono-judge/v1` transport and the registration/filemap/routes/projects judges through
 `.chrono-harness/config.json` with `--context`. This proposed host remains
 incomplete and returns nonzero; workflow has [bounded certification](workflow.md); automated lifecycle remains unimplemented. Mixed classification and warning behavior have a dedicated judge and real-chain tests; see [mixed](mixed.md). Cost reports have a dedicated judge and registered consumer tests. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
@@ -38,17 +40,24 @@ the global default toolchain. Bootstrap these tools before the dedicated CI test
 their copied-host regressions consume the installed candidate binaries.
 
 ```sh
-/usr/bin/python3 .chrono-harness/ci/bootstrap.py .
-.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/github.json
-.chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/github.json
+/usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
+.chrono-harness/bin/chrono-ci generate --host-root . --config .chrono-harness/ci/units.json
+.chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
 After changes have been committed and the candidate checkout is clean, the
 canonical judgment command is **identical locally and in generated CI**:
 
 ```sh
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID
+.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID --unit ci
 ```
+
+The final bootstrap argument selects an explicit host CI configuration. Omitting
+it preserves the full bootstrap default. Generated unit/collection workflows
+select only runner, judge-ci and ci; remaining builds come from the unchanged
+complete test plans. Run units concurrently in separate checkouts. A local check
+without `--unit` executes the whole selected DELTA serially; the same entry with
+`--collect MANIFEST` verifies unit evidence without running business operations.
 
 Always bootstrap from the candidate checkout before checking it. The runner
 reports the actual runner/judge/operation executable hashes; bootstrap records
@@ -72,8 +81,9 @@ registered inventory and reports each unselected binding as `not-required`.
 Reports reside in the ignored `.chrono-harness/state/` directory. `check.json`
 contains the request, runner and judge identities, actual selected operations,
 executions with exit/output/executable hashes, blocked and not-required entries,
-causes and scope. `context.json` records fixed event inputs and the workflow source
-revision separately from candidate/base. `bootstrap.json` records actual tools.
+causes and scope. Each registered unit/collection context records fixed event
+inputs and the workflow source revision separately from candidate/base.
+`bootstrap.json` records the selected configuration and actual tools.
 Costs remain unmeasured. The same command alone does not establish local/CI
 parity: ambient compiler backend, SDK, configuration, environment, external input
 and deterministic evaluation are not completely modeled. No cache is enabled.
@@ -89,7 +99,7 @@ validate every proposed field's semantics.
 
 | Field | Contract |
 | --- | --- |
-| schema | `chrono-ci-check/v1` or explicit Git-binding `chrono-ci-check/v2` |
+| schema | `chrono-ci-check/v1`, explicit Git-binding `chrono-ci-check/v2`, or independent-unit `chrono-ci-check/v3` (see [units](ci-units.md)) |
 | judge | `{program, args, env?, timeout_seconds, output_limit_bytes}`; explicit executable/interpreter plus argv; positive bounds, at most 64 MiB per captured stream |
 | report_path | Safe relative file beneath `.chrono-harness/state/`, also covered by a declared artifact directory |
 | policy.filemap / projects | Explicit relative paths; FILEMAP v1 historical/v2 current, projects v1; registry path migration across an enforced range is unsupported |
@@ -121,8 +131,9 @@ timeout/output-bound failures. Pre-binding validation cannot invent processes.
 initial inventory/explicit adoption; reading a v1 base never executes its Git.
 The canonical local/CI command and scoped judge protocol are unchanged. V1
 retains its prior acquisition behavior; existing hosts are not auto-upgraded.
-The product host still uses scoped v1. Scoped v2 is not included in beta.8 and
-does not establish complete input closure, full governance or deterministic parity.
+The product host uses independent-unit scoped v3 without adopting the optional
+Git-binding contract. That extension is available from beta.9; it does not
+establish complete input closure, full governance or deterministic parity.
 
 Both endpoint trees are read as NUL-delimited `git ls-tree -rz` records, preserving
 path, blob identity and mode. Comparing these inventories implements A/M/D and
@@ -362,8 +373,10 @@ Event mapping is preparation, not policy:
 | workflow_dispatch | Explicit full base/candidate, or explicit initial plus parentless candidate |
 | Branch deletion | Job has no candidate check and cannot produce a passing candidate report |
 
-The generated workflow checks dev and integration/** pushes, PRs targeting dev,
-and manual dispatch. It checks out the event candidate, bootstraps candidate
+The single-workflow provider described here checks dev and integration/** pushes,
+PRs targeting dev, and manual dispatch. The adopted independent-unit provider
+uses the same event preparation; its collector has no manual trigger (see
+[units](ci-units.md)). It checks out the event candidate, bootstraps candidate
 registered tools, calls `chrono-ci prepare`, invokes the canonical check, and
 uploads evidence even on failure. Checkout's temporary read credential remains
 available for fetching required objects; post-job checkout cleanup removes it.

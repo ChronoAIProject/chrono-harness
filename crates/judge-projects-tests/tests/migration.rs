@@ -163,7 +163,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
             "--host-root",
             root.to_str().unwrap(),
             "--config",
-            ".chrono-harness/ci/github.json",
+            ".chrono-harness/ci/units.json",
         ])
         .output()
         .unwrap();
