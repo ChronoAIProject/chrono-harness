@@ -1,3 +1,5 @@
+#[path = "units.rs"]
+mod units;
 use chrono_ci::{Config, generate, init, prepare};
 use serde_json::{Value, json};
 use std::fs;

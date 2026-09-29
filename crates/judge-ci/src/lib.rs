@@ -9,10 +9,16 @@ use serde_json::{Value, json as object};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+mod collect;
+mod units;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub units: Option<BTreeMap<String, chrono_harness::units::Unit>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shared_operations: Option<BTreeMap<String, Vec<String>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub facts_config: Option<String>,
     #[serde(default)]
@@ -125,7 +131,7 @@ fn tree(
 fn policy(c: &CheckConfig) -> Result<Policy, String> {
     if !matches!(
         c.schema.as_str(),
-        "chrono-ci-check/v1" | "chrono-ci-check/v2"
+        "chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3"
     ) {
         return Err("unsupported CI profile".into());
     }
@@ -175,6 +181,7 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
     {
         return Err("invalid operation bounds".into());
     }
+    units::validate(c, &p)?;
     Ok(p)
 }
 fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
@@ -406,7 +413,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     for e in array(&fm, "project_edges")? {
         add(text(e, "from")?, e)?
     }
-    Ok(Snapshot {
+    let snapshot = Snapshot {
         files,
         projects,
         operations: ops,
@@ -415,7 +422,9 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         policy: p,
         plans,
         execute,
-    })
+    };
+    units::assignments(&snapshot)?;
+    Ok(snapshot)
 }
 fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
     if utf8(reader.git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate {
@@ -504,6 +513,22 @@ fn ci_impact(
                 .or_default()
                 .insert("changed binding".into());
         }
+        let empty_units = BTreeMap::new();
+        let old_units = old.policy.units.as_ref().unwrap_or(&empty_units);
+        let new_units = new.policy.units.as_ref().unwrap_or(&empty_units);
+        for id in changed(old_units, new_units) {
+            for unit in [old_units.get(&id), new_units.get(&id)]
+                .into_iter()
+                .flatten()
+            {
+                for test in &unit.tests {
+                    extras
+                        .entry(test.clone())
+                        .or_default()
+                        .insert(format!("changed unit assignment: {id}"));
+                }
+            }
+        }
         let changed_tools = changed(&old.policy.tools, &new.policy.tools);
         if !changed_tools.is_empty()
             || old.policy.environment != new.policy.environment
@@ -582,7 +607,7 @@ pub fn judge(req: &Request) -> Response {
     let mut response = match result {
         Ok(r) => r,
         Err(e) => Response {
-            protocol: PROTOCOL.into(),
+            protocol: units::scope_protocol(req).into(),
             request_id: req.request_id.clone(),
             status: Status::Failed,
             results: vec![CheckResult {
@@ -607,7 +632,7 @@ fn evaluate(
     opening: &mut Value,
     scope: &mut String,
 ) -> Result<Response, String> {
-    if req.protocol != PROTOCOL || req.request_id.is_empty() {
+    if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
         return Err("invalid request protocol/identity".into());
     }
     relative_path(&req.config_path)?;
@@ -619,6 +644,9 @@ fn evaluate(
     let config: CheckConfig = decode(&bytes)?;
     *scope = config.schema.clone();
     let p = policy(&config)?;
+    if let Some(scope) = &req.scope {
+        scope.report_path(&config)?;
+    }
     full_oid(&req.candidate)?;
     if let Some(path) = &p.facts_config {
         *reader = Reader::for_config_observed(root, path).map_err(|failure| {
@@ -698,13 +726,17 @@ fn evaluate(
     let mut reused = BTreeMap::new();
     let mut environment: BTreeMap<String, String> = std::env::vars().collect();
     environment.extend(p.environment.clone());
+    let mut environment_policy = object!({"values":p.environment,"inherit":null});
     let mut declarations=object!(p.tools.iter().map(|(id,program)|object!({"id":id,"program":program,"version_argv":["--version"],"expected_version":null})).collect::<Vec<_>>());
     if let (Some(config_path), Some(base)) = (&p.registration_config, &req.base) {
         let a = reader.registry_values(root, base, config_path)?;
         let b = reader.registry_values(root, &req.candidate, config_path)?;
-        let template: Vec<String> =
+        let mut template: Vec<String> =
             serde_json::from_value(b[config_path]["canonical_check"]["argv"].clone())
                 .map_err(|e| e.to_string())?;
+        if let Some(scope) = &req.scope {
+            template.extend(scope.argv());
+        }
         chrono_judge_routes::validate_invocation(
             root,
             &req.observations["entry"],
@@ -731,6 +763,10 @@ fn evaluate(
             );
         }
         environment.extend(p.environment.clone());
+        environment_policy = b[config_path]["environment"].clone();
+        for (key, value) in &p.environment {
+            environment_policy["values"][key] = object!(value);
+        }
         let (_, r, view) = if reader.is_bound() {
             chrono_judge_registration::interpret_with_reader(
                 reader,
@@ -812,6 +848,38 @@ fn evaluate(
             )
         })
         .collect();
+    let global_selected = selected.clone();
+    if blocked.is_empty() && p.units.is_some() {
+        // Validate the complete obligation graph before selecting any unit.
+        chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
+    }
+    if let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope {
+        if !blocked.is_empty() {
+            return Err(format!("blocked global obligations: {blocked:?}"));
+        }
+        let mut response = collect::collect(
+            req,
+            manifest,
+            &config,
+            &new,
+            &global_selected,
+            &methods,
+            &declarations,
+            &environment_policy,
+        )?;
+        clean(reader, root, &req.candidate, &p)?;
+        response.evidence["changed_paths"] = object!(paths);
+        response.evidence["selection_explanation"] = selection_explanation;
+        response.evidence["removed"] = object!(removed);
+        return Ok(response);
+    }
+    if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
+        selected = units::selection(
+            p.units.as_ref().ok_or("unit profile missing assignments")?,
+            &global_selected,
+            unit,
+        )?;
+    }
     let plan = if blocked.is_empty() {
         Some(chrono_judge_routes::prepare_scoped(
             root,
@@ -868,7 +936,9 @@ fn evaluate(
             }
         }
         for (old, replacement) in &removed {
-            if outcome.tests.get(replacement).map(String::as_str) != Some("passed") {
+            if selected.contains(replacement)
+                && outcome.tests.get(replacement).map(String::as_str) != Some("passed")
+            {
                 results.push(CheckResult {
                     id: format!("replacement:{old}"),
                     status: Status::Failed,
@@ -882,7 +952,7 @@ fn evaluate(
         .policy
         .bindings
         .keys()
-        .filter(|t| !selected.contains(*t))
+        .filter(|t| !global_selected.contains(*t))
         .cloned()
         .collect();
     for t in &not_required {
@@ -904,8 +974,8 @@ fn evaluate(
     let failed = results
         .iter()
         .any(|r| matches!(r.status, Status::Failed | Status::Blocked));
-    Ok(Response {
-        protocol: PROTOCOL.into(),
+    let mut response = Response {
+        protocol: units::scope_protocol(req).into(),
         request_id: req.request_id.clone(),
         status: if failed {
             Status::Failed
@@ -914,5 +984,7 @@ fn evaluate(
         },
         results,
         evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
-    })
+    };
+    units::decorate(req, &new, &global_selected, &mut response.evidence);
+    Ok(response)
 }
