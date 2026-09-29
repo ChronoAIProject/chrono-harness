@@ -77,7 +77,7 @@ profile's explicit identity mapping. Duplicate, unchanged, stale, unused and
 unbound replacements fail. Omission retains strict tool/argv preservation for
 standalone consumers. Original legacy definitions, plans and costs stay intact;
 this declaration does not certify semantic equivalence or test success. Existing
-execution and workflow validation still own those verdicts. Public beta.14
+execution and workflow validation still own those verdicts. Public beta.15
 includes this extension; earlier readers reject the new field.
 
 Schema changes are compared using original versions before decoding. FILEMAP

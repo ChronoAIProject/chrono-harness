@@ -265,7 +265,7 @@ registers sixteen independent complete-plan workflows and a collector, with an
 explicit three-tool bootstrap configuration. The bootstrap regression exercises
 configured operation/install selection, unchanged default behavior and failure
 propagation. Historical repair and initial-profile consumers use the adopted
-provider without reinterpreting historical definitions. Public beta.14 historical
+provider without reinterpreting historical definitions. Public beta.15 historical
 method replacement support binds exact original/current methods and mapped
 owners, rejects missing/stale/duplicate/unbound declarations, retains the omitted
 field's strict contract and exercises actual drift detection and repair.
@@ -290,4 +290,4 @@ of continuation itself. Conflicting inputs, foreign ownership, index drift,
 completed results and ambiguous partial allocations reject without discarding
 work. Caller reconciliation of unknown temporary files/Git locks, concurrent
 writers and power-loss recovery remain outside this bounded contract. This source
-extension is newer than beta.14; see [continuation](worktree.md#continue-an-interrupted-or-failed-rebind).
+extension is included in beta.15; see [continuation](worktree.md#continue-an-interrupted-or-failed-rebind).
