@@ -114,12 +114,13 @@ selection observations. Direct policy files keep their prior report shape and
 semantics. Register the selector, policies and their actual FILEMAP dependencies
 explicitly; selection does not create dependency edges.
 
-This source extension keeps the canonical command and facts-config entry path
+This extension, distributed in public beta.17, keeps the canonical command and facts-config entry path
 identical across registered native platforms. Different selected policies are
 different inputs, so it does not establish cross-platform verdict parity. It
 does not select the full runner's root configuration or the initial profile's
 host configuration, certify complete effective-input closure, or by itself adopt
-provider v3 in a real host. The extension is not in public beta.16.
+provider v3 in a real host. The initial Go adoption has verified native policy
+selection but failed collection; see [native adoption](native-ci-adoption.md#native-git-policy-adoption).
 
 ## Guarding declared Git inputs
 
