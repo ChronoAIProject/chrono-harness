@@ -36,6 +36,163 @@ fn unit(h: &Host, base: &str, candidate: &str, unit: &str) -> Response {
     judge(&chrono_harness::decode(&serde_json::to_vec(&req).unwrap()).unwrap())
 }
 
+fn cli(h: &Host, base: &str, candidate: &str, selector: &[&str]) -> (i32, Value) {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output = Command::new(source.join("crates/runner/target/debug/chrono-harness"))
+        .current_dir(h.root())
+        .args([
+            "check",
+            "--config",
+            CONFIG,
+            "--base",
+            base,
+            "--candidate",
+            candidate,
+        ])
+        .args(selector)
+        .output()
+        .unwrap();
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
+        panic!(
+            "runner did not return JSON: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+    });
+    (output.status.code().unwrap(), report)
+}
+
+fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, body: &str, reason: &str) {
+    let h = host();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    h.change_registry(CONFIG, |v| {
+        v["judge"]["program"] = json!(source.join("crates/judge-ci/target/debug/chrono-judge-ci"));
+        v["judge"]["timeout_seconds"] = json!(120);
+        v["judge"]["output_limit_bytes"] = json!(4 * 1024 * 1024);
+    });
+    h.write("check.sh", &format!("mkdir -p .chrono-harness/state\nprintf 'called\\n' >> .chrono-harness/state/calls\n{body}\nprintf done > .chrono-harness/state/done\n"));
+    h.write(
+        "other.sh",
+        "mkdir -p .chrono-harness/state\nprintf failed > .chrono-harness/state/other\nexit 19\n",
+    );
+    explicit_plans(&h);
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:suite"][key] = json!(old);
+    });
+    let b = h.commit();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:suite"][key] = json!(candidate);
+    });
+    let c = h.commit();
+    let (exit, report) = cli(&h, &b, &c, &["--unit", "beta"]);
+    assert_eq!(exit, 0);
+    let e = &report["response"]["evidence"];
+    assert_eq!(e["global_selected"], json!(["test:suite"]));
+    assert_eq!(e["selected"], json!([]));
+    assert_eq!(e["assigned_elsewhere"], json!(["test:suite"]));
+    assert_eq!(e["required_units"], json!(["alpha"]));
+    assert_eq!(h.calls(), 0);
+
+    let (exit, report) = cli(&h, &b, &c, &["--unit", "alpha"]);
+    assert_eq!(exit, 0);
+    assert_eq!(report["response"]["status"], "passed");
+    let e = &report["response"]["evidence"];
+    assert_eq!(e["selected"], json!(["test:suite"]));
+    assert_eq!(e["not_required"], json!(["test:other"]));
+    assert_eq!(e["executed"].as_array().unwrap().len(), 1);
+    assert_eq!(e["executed"][0]["operation"], "test.suite");
+    assert_eq!(e["executed"][0]["process"]["exit_code"], 0);
+    assert_eq!(e["plan"]["operations"][0][key], json!(candidate));
+    assert_eq!(
+        e["selection_explanation"]["extra_selections"]["test:suite"],
+        json!([reason])
+    );
+    assert_eq!(h.calls(), 1);
+    assert_eq!(
+        fs::read_to_string(h.root().join(".chrono-harness/state/done")).unwrap(),
+        "done"
+    );
+    assert!(!h.root().join(".chrono-harness/state/other").exists());
+
+    let manifest = ".chrono-harness/state/collection.json";
+    h.json(
+        manifest,
+        &json!({"schema":"chrono-ci-collection/v1","reports":[]}),
+    );
+    let (exit, report) = cli(&h, &b, &c, &["--collect", manifest]);
+    assert_ne!(exit, 0);
+    assert_eq!(report["response"]["status"], "failed");
+    assert!(
+        serde_json::to_string(&report["response"])
+            .unwrap()
+            .contains("missing required CI unit report")
+    );
+
+    let path = ".chrono-harness/state/alpha/check.json";
+    let alpha = h.read(path);
+    let reference = json!({"unit":"alpha","path":path,
+        "sha256":sha256(&fs::read(h.root().join(path)).unwrap()),
+        "runner_sha256":alpha["runner"]["sha256"],"judge_sha256":alpha["judge"]["sha256"]});
+    h.json(
+        manifest,
+        &json!({"schema":"chrono-ci-collection/v1","reports":[reference]}),
+    );
+    let (exit, report) = cli(&h, &b, &c, &["--collect", manifest]);
+    assert_eq!(exit, 0);
+    assert_eq!(report["response"]["status"], "passed");
+    assert_eq!(
+        report["response"]["evidence"]["required_units"],
+        json!(["alpha"])
+    );
+    assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+    assert_eq!(h.calls(), 1);
+    assert!(!h.root().join(".chrono-harness/state/other").exists());
+}
+
+#[test]
+fn filemap_v2_timeout_only_delta_executes_candidate_plan() {
+    filemap_v2_bound_delta(
+        "timeout_seconds",
+        1,
+        3,
+        "sleep 2",
+        "changed operation timeout",
+    );
+}
+
+#[test]
+fn filemap_v2_output_limit_only_delta_executes_candidate_plan() {
+    filemap_v2_bound_delta(
+        "output_limit_bytes",
+        64,
+        4096,
+        "printf '%0128d' 0",
+        "changed operation output limit",
+    );
+}
+
+#[test]
+fn filemap_v2_bound_delta_validates_methods_before_unit_filtering() {
+    let h = host();
+    explicit_plans(&h);
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:other"]["operations"] = json!(["test.suite"]);
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["shared_operations"] = json!({"test.suite":["alpha","beta"]});
+    });
+    let b = h.commit();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:other"]["timeout_seconds"] = json!(4);
+    });
+    let c = h.commit();
+    fail(
+        &unit(&h, &b, &c, "alpha"),
+        "test:other omits its execute action",
+    );
+    assert_eq!(h.calls(), 0);
+    assert!(!h.root().join(".chrono-harness/state/other").exists());
+}
+
 #[test]
 fn registered_unit_runs_only_its_selected_plan() {
     let h = host();

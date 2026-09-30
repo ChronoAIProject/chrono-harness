@@ -163,6 +163,34 @@ fn scoped_v2_docs_delta_retains_both_snapshots_without_execution() {
     assert!(h.trace().contains(&h.base) && h.trace().contains(&candidate));
 }
 
+#[test]
+fn scoped_v2_filemap_plan_bounds_select_with_bound_git_facts() {
+    for (key, value, reason) in [
+        ("timeout_seconds", 31, "changed operation timeout"),
+        ("output_limit_bytes", 8192, "changed operation output limit"),
+    ] {
+        let h = BoundHost::new("");
+        explicit_plans(&h.host);
+        let base = h.host.commit();
+        h.host.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            v["execution_plans"]["test:suite"][key] = json!(value);
+        });
+        let candidate = h.host.commit();
+        let r = h.host.check(&base, &candidate);
+        assert_eq!(r.evidence["selected"], json!(["test:suite"]));
+        pass(&r);
+        assert_eq!(h.host.calls(), 1);
+        assert_eq!(r.evidence["executed"].as_array().unwrap().len(), 1);
+        assert_eq!(r.evidence["plan"]["operations"][0][key], json!(value));
+        assert_eq!(
+            r.evidence["selection_explanation"]["extra_selections"]["test:suite"],
+            json!([reason])
+        );
+        assert_process_bytes(&r.evidence["git_facts"]);
+        assert!(h.trace().contains(&base) && h.trace().contains(&candidate));
+    }
+}
+
 fn select_platform(h: &BoundHost) {
     let selected = ".chrono-harness/native scoped.json";
     fs::copy(h.host.root().join(FACTS), h.host.root().join(selected)).unwrap();
