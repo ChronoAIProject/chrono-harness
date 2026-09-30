@@ -2734,6 +2734,18 @@
       ]
     },
     {
+      "path": "crates/runner-tests/tests/git_inputs.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/ci-tests/tests/initial_projection.rs",
       "owner": "ci-tests",
       "surface": "test",
@@ -2957,7 +2969,43 @@
       ]
     },
     {
+      "path": "crates/runner/src/input_file.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/facts_inputs.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-registration-tests/tests/git_facts.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/git_inputs.rs",
       "owner": "judge-registration-tests",
       "surface": "test",
       "cost": "unmeasured",

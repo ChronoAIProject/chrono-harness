@@ -11,34 +11,6 @@ fn coverage() -> Value {
     ]})
 }
 
-// Retain each endpoint's own configuration. Adopting coverage must not rewrite
-// the old v3 config or require executing the previous judge binary.
-fn run(h: &BoundHost) -> (i32, Value) {
-    let snapshot = |oid: &str| {
-        let config: Value =
-            serde_json::from_slice(&facts::blob(h.host.root(), oid, CONFIG).unwrap()).unwrap();
-        let mut files = serde_json::Map::new();
-        for input in config["environment"]["inputs"].as_array().unwrap() {
-            let observed = match fs::read(h.host.root().join(input["location"].as_str().unwrap())) {
-                Ok(bytes) => json!({"bytes":bytes}),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({"absent":true}),
-                Err(e) => panic!("snapshot input: {e}"),
-            };
-            files.insert(input["id"].as_str().unwrap().to_owned(), observed);
-        }
-        json!({"schema":"chrono-input-snapshot/v2","commit":oid,"config_path":CONFIG,
-            "config_digest":chrono_harness::wire::digest(&config).unwrap(),"environment":{},"files":files})
-    };
-    write(
-        h.host.root(),
-        ".chrono-harness/state/coverage-inputs.json",
-        &json!({"base":snapshot(&h.host.base),"candidate":snapshot(&h.host.candidate)}),
-    );
-    let mut context = h.host.context();
-    context["retained_inputs"] = json!(".chrono-harness/state/coverage-inputs.json");
-    h.host.run_context(context)
-}
-
 #[test]
 fn optional_coverage_adopts_without_rewriting_legacy_v3_and_preserves_claim_boundary() {
     let mut h = BoundHost::new(false, "");
@@ -53,7 +25,7 @@ fn optional_coverage_adopts_without_rewriting_legacy_v3_and_preserves_claim_boun
     h.host.edit(CONFIG, |config| {
         config["input_closure"]["coverage"] = coverage()
     });
-    let (exit, report) = run(&h);
+    let (exit, report) = run_with_endpoint_inputs(&h);
     assert_eq!(exit, 0, "{}", report["findings"]);
     let result = &report["judges"][0]["response"]["outputs"]["input_coverage"];
     assert_eq!(result["scope"], "declared-domains");
@@ -127,7 +99,7 @@ fn incomplete_domain_accounting_cannot_claim_declared_complete() {
             }
             config["input_closure"]["coverage"] = c;
         });
-        let (exit, report) = run(&h);
+        let (exit, report) = run_with_endpoint_inputs(&h);
         assert_eq!(exit, 2, "{case}: {}", report["findings"]);
         assert!(
             finding(&report, "E_SCHEMA"),
@@ -146,7 +118,7 @@ fn unresolved_draft_is_readable_but_not_activated_and_legacy_schemas_reject_cove
         config["input_closure"]["status"] = json!("incomplete");
         config["input_closure"]["unresolved"] = json!(["remote-response"]);
     });
-    let (exit, report) = run(&h);
+    let (exit, report) = run_with_endpoint_inputs(&h);
     assert_eq!(exit, 2, "{}", report["findings"]);
     assert!(finding(&report, "E_EVIDENCE_UNRESOLVED"));
     assert!(!finding(&report, "E_SCHEMA"), "{}", report["findings"]);
@@ -186,7 +158,7 @@ fn coverage_never_admits_unknown_consumers_or_invents_absence() {
             }
             config["input_closure"]["coverage"] = c;
         });
-        let (exit, report) = run(&h);
+        let (exit, report) = run_with_endpoint_inputs(&h);
         assert_eq!(exit, 1, "{case}: {}", report["findings"]);
         let code = if case == "false-absence" {
             "E_INPUT_UNDECLARED"
@@ -220,10 +192,10 @@ fn absent_domain_uses_retained_file_absence_and_detects_new_bytes() {
             json!({"from":"input:credential","kind":"runtime-input","to":"judge:registration"}),
         )
     });
-    let (exit, report) = run(&h);
+    let (exit, report) = run_with_endpoint_inputs(&h);
     assert_eq!(exit, 0, "{}", report["findings"]);
     fs::write(&absent, b"not-secret-fixture").unwrap();
-    let (exit, report) = run(&h);
+    let (exit, report) = run_with_endpoint_inputs(&h);
     assert_eq!(exit, 2, "{}", report["findings"]);
     assert!(
         finding(&report, "E_EVIDENCE_UNRESOLVED"),

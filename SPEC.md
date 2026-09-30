@@ -113,7 +113,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | registries | judges/projects/filemap/workflow 四个唯一 JSON 路径 |
 | canonical_check | `{operation, argv: string[]}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
-| facts_git | config v3 必填 `{tool, input}`，分别引用唯一 tools 与 present 文件输入；v1/v2 不接纳此字段，包括 null |
+| facts_git | config v3 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
 | environment | `{inherit: string[], values: object, inputs: object[]}`；v1 输入 `{id, location, sha256}`，v2/v3 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
 | input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[], coverage?: object}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
@@ -124,6 +124,16 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次，报告绝对路径、
 文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。
 Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须指向同一执行物，present 摘要先于任何启动核验，expected_version 必须为非空字符串并匹配 version_argv 的实际 UTF-8 stdout（只去末尾空白）。相同 candidate 绑定读取 base 与 candidate，不启动 base 工具。每次进程使用清空后重建的登记环境及 protocol 的时间／输出上限；显式 GIT_DIR、GIT_WORK_TREE、GIT_INDEX_FILE 因重定向 checkout 而拒绝。进程前后核配置、绑定路径与执行物摘要，保留原始输出字节、摘要、退出和边界失败。完整请求及消费者报告通过 `git_facts` 运输观察；下游核对绑定和环境，缺失或不符不得回退 ambient Git。执行前的失败以 `E_GIT_FACTS` 携观察返回；尚未启动的进程不伪造回执。完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、旧 library facts API、scoped CI 与旧版事件准备保持各自旧合同。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
+
+Config v3 可在 facts_git 中采用 `guard: {schema: "chrono-git-inputs/v1", inputs: string[]}`。
+非空 inputs 逐项引用唯一 environment.inputs 文件 ID，拒绝重复、未知引用和未绑定摘要；
+present 必须匹配 SHA-256，absent 必须实际缺失，目录、符号链接、IO 错误不作缺失。
+读取器在第一次版本探测前及每次 Git 调用前后检查这些宿主指定输入；失败不得继续读取
+对象或 fetch，已运行的子进程保留原始输出与退出。下游请求须绑定相同的初始核验结果。
+Git 配置、include、解释器或库是否完整仍由宿主显式登记；不扫描或添加输入，不自动解析
+worktree 元数据位置。省略 guard 保持旧 v3 语义与报告形状，历史配置不补写。
+具名 inputs 观察使用 chrono-git-inputs-result/v1，保留实际文件身份／缺失与
+completeness_proven=false；前后观察不证明瞬时并发隔离、完整输入或确定性同判。
 
 当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备完整 Cargo/SDK 输入闭包。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。可选 `chrono-cargo-inputs/v5` 进一步登记 sysroot、backend、linker、SDK 与 build-script 输入，但仍只证明登记的有限边界。
 `argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。

@@ -2,8 +2,10 @@
 mod checkout;
 pub mod facts;
 mod facts_binding;
+mod facts_inputs;
 pub mod full;
 pub mod initial;
+pub mod input_file;
 pub mod observation;
 pub mod parity;
 pub mod units;
