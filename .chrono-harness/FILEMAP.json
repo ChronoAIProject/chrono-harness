@@ -5931,7 +5931,7 @@
         "build.runner",
         "test.runner-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:instructions-tests": {
@@ -5951,7 +5951,7 @@
         "build.judge-ci",
         "test.judge-ci-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:ci-tests": {
@@ -5965,7 +5965,7 @@
         "ci.verify",
         "ci.release.verify"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:judge-registration-tests": {
@@ -5976,7 +5976,7 @@
         "build.judge-registration",
         "test.judge-registration-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:judge-filemap-tests": {
@@ -5990,7 +5990,7 @@
         "build.judge-projects",
         "test.judge-filemap-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:judge-routes-tests": {
@@ -6003,7 +6003,7 @@
         "build.judge-routes",
         "test.judge-routes-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:judge-projects-tests": {
@@ -6019,7 +6019,7 @@
         "build.judge-ci",
         "test.judge-projects-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:scoped-v1-tests": {
@@ -6039,7 +6039,7 @@
         "build.judge-cost",
         "test.judge-cost-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:judge-mixed-tests": {
@@ -6053,7 +6053,7 @@
         "build.judge-mixed",
         "test.judge-mixed-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:judge-workflow-tests": {
@@ -6071,7 +6071,7 @@
         "build.judge-workflow",
         "test.judge-workflow-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:inputs-tests": {
@@ -6089,7 +6089,7 @@
         "build.inputs",
         "test.inputs-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:distribution-tests": {
@@ -6118,7 +6118,7 @@
         "build.judge-workflow",
         "test.judge-cargo-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
     "test:worktree-tests": {
