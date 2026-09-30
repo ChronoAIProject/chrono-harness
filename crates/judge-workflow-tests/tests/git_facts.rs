@@ -405,10 +405,15 @@ fn full_ci_consumer(selected: bool) {
             .output()
             .unwrap()
     };
-    for path in [
-        CONFIG,
-        linked_entry,
-        ".chrono-harness/linked directory/config.json",
+    // Pair direct-policy path kinds with distinct caller contexts to avoid
+    // redundant full judge chains. Selectors retain all nine combinations.
+    for (path, direct_cwd) in [
+        (CONFIG, root.clone()),
+        (linked_entry, std::path::PathBuf::from("/")),
+        (
+            ".chrono-harness/linked directory/config.json",
+            root.join("p"),
+        ),
     ] {
         for (cwd, argument) in [
             (root.clone(), path.to_owned()),
@@ -418,6 +423,9 @@ fn full_ci_consumer(selected: bool) {
             ),
             (root.join("p"), format!("../{path}")),
         ] {
+            if !selected && cwd != direct_cwd {
+                continue;
+            }
             let trace_path = root.join(".chrono-harness/state/git-trace");
             let order_path = root.join(".chrono-harness/state/order");
             let trace = fs::read(&trace_path).unwrap();
