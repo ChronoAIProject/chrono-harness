@@ -7,8 +7,8 @@ generated collection workflow and every declared unit on both a
 `pull_request` event and a `push` event. All runs in the Recorded runs table completed with
 `success` on 2026-09-29 UTC and used the listed candidate commit.
 
-The evidence is about generated unit workflows and their collection. It does
-not establish complete effective-input closure, `chrono-github-ci/v3` host
+The beta.14 evidence in the Recorded runs table is about generated unit workflows
+and their collection. It does not establish complete effective-input closure, `chrono-github-ci/v3` host
 adoption, universal local/CI parity, or full seven-judge host activation.
 
 ## Recorded runs
