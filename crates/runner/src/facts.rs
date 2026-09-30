@@ -190,6 +190,48 @@ pub struct RegistrySnapshot {
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
     Reader::legacy().registry_snapshot(root, oid, path)
 }
+/// Assemble one fixed registry snapshot through the caller's blob reader.
+/// The caller binds acquisition to its immutable endpoint and retains any
+/// process observations; this helper performs no disk or Git acquisition.
+pub fn registry_snapshot_with(
+    path: &str,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<RegistrySnapshot, String> {
+    let original = read(path)?;
+    let (effective_path, effective_bytes, effective_config, selection) =
+        crate::facts_configs::resolve(path, original.clone(), &mut read)?;
+    let config = json(&original)?;
+    let paths = registry_paths(&effective_config, &effective_path)?;
+    let mut snapshot = RegistrySnapshot {
+        bytes: BTreeMap::from([(path.into(), original)]),
+        values: BTreeMap::from([(path.into(), config)]),
+        entry_path: path.into(),
+        effective_path: effective_path.clone(),
+        selection: selection.map(|s| {
+            let mut observation = s.observation;
+            if let Some(object) = observation.as_object_mut() {
+                object.remove("sha256");
+                object.insert("schema".into(), value!("chrono-registry-selection/v1"));
+            }
+            observation
+        }),
+    };
+    if effective_path != path {
+        snapshot
+            .bytes
+            .insert(effective_path.clone(), effective_bytes.clone());
+        snapshot.values.insert(effective_path, effective_config);
+    }
+    for path in paths {
+        if !snapshot.bytes.contains_key(&path) {
+            let original = read(&path)?;
+            let value = json(&original)?;
+            snapshot.bytes.insert(path.clone(), original);
+            snapshot.values.insert(path, value);
+        }
+    }
+    Ok(snapshot)
+}
 pub fn registry_digest(
     base: &BTreeMap<String, Value>,
     candidate: &BTreeMap<String, Value>,
@@ -355,41 +397,6 @@ impl Reader {
         oid: &str,
         path: &str,
     ) -> Result<RegistrySnapshot, String> {
-        let original = self.blob(root, oid, path)?;
-        let (effective_path, effective_bytes, effective_config, selection) =
-            crate::facts_configs::resolve(path, original.clone(), |target| {
-                self.blob(root, oid, target)
-            })?;
-        let config = json(&original)?;
-        let paths = registry_paths(&effective_config, &effective_path)?;
-        let mut snapshot = RegistrySnapshot {
-            bytes: BTreeMap::from([(path.into(), original)]),
-            values: BTreeMap::from([(path.into(), config)]),
-            entry_path: path.into(),
-            effective_path: effective_path.clone(),
-            selection: selection.map(|s| {
-                let mut observation = s.observation;
-                if let Some(object) = observation.as_object_mut() {
-                    object.remove("sha256");
-                    object.insert("schema".into(), value!("chrono-registry-selection/v1"));
-                }
-                observation
-            }),
-        };
-        if effective_path != path {
-            snapshot
-                .bytes
-                .insert(effective_path.clone(), effective_bytes.clone());
-            snapshot.values.insert(effective_path, effective_config);
-        }
-        for path in paths {
-            if !snapshot.bytes.contains_key(&path) {
-                let original = self.blob(root, oid, &path)?;
-                let value = json(&original)?;
-                snapshot.bytes.insert(path.clone(), original);
-                snapshot.values.insert(path, value);
-            }
-        }
-        Ok(snapshot)
+        registry_snapshot_with(path, |path| self.blob(root, oid, path))
     }
 }

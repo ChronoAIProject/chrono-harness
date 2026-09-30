@@ -30,6 +30,15 @@ reuses their existing strict loader. A successful load or creation is not full
 reference admission, complete input certification, freshness certification or
 activation. Workflow's normal judge still evaluates delivery context and DELTA.
 
+`host_config` accepts the same stable registered `chrono-git-configs/v1` platform
+entry as other full consumers, as well as a direct configuration. The shared
+registry snapshot reader selects the direct full-v3 target separately from each
+fixed source and fetched commit. Their effective configuration and workflow paths
+may differ. Missing platform entries, missing targets and unsupported selected
+policies fail without a fallback. All acquisition still uses the worktree policy's
+bound Git runner, declared environment and process limits; host configurations
+remain data and never select historical executable judges.
+
 Install `chrono-worktree` from the pinned public beta.8 release through the host’s
 registered installer (the product repository can also bootstrap its candidate):
 
@@ -64,6 +73,13 @@ observed OID. It reads the fetched registries and requires the policy bytes and
 target branch to remain compatible before creating anything. Remote movement
 after the fetch is not claimed absent; the receipt identifies the observed tip.
 An advanced source checkout or unrelated dirty source files are not reset.
+The source registrations are acquired once before fetch and reused for policy
+checks and their digest. Both registry digests cover the complete parsed snapshot,
+including the stable selector entry and its effective target when selected;
+original bytes and failures remain in the fixed Git process observations.
+Receipt and intent `config_path`/`config_sha256` continue to identify the worktree
+policy itself. Reconstruction and maintenance, including recovery, rebind and
+cleanup, use the same snapshot acquisition helper.
 
 Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before

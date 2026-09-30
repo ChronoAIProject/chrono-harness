@@ -1,6 +1,6 @@
 use crate::{Config, Start};
 use chrono_harness::{
-    CommandSpec, ProcessResult, facts, json, no_symlink_parents, observation, run_process_observed,
+    CommandSpec, ProcessResult, facts, no_symlink_parents, observation, run_process_observed,
     sha256,
 };
 use chrono_judge_registration::Registrations;
@@ -246,14 +246,10 @@ pub(crate) fn execute(
     if r.blob(source, &source_head, &o.config_path)? != bytes {
         return Err("worktree configuration differs from source commit".into());
     }
-    let source_config = json(&r.blob(source, &source_head, &r.config.host_config.clone())?)?;
-    let source_workflow_path = source_config["registries"]["workflow"]
-        .as_str()
-        .ok_or("missing registered workflow path")?
-        .to_string();
-    chrono_harness::relative_path(&source_workflow_path)?;
-    let source_workflow = json(&r.blob(source, &source_head, &source_workflow_path)?)?;
-    let target_branch = source_workflow["target_branch"]
+    let source_config_path = r.config.host_config.clone();
+    let (source_registrations, source_digest) =
+        registrations(r, source, &source_head, &source_config_path)?;
+    let target_branch = source_registrations.workflow()["target_branch"]
         .as_str()
         .ok_or("missing registered target branch")?
         .to_string();
@@ -272,9 +268,6 @@ pub(crate) fn execute(
     report["fetch_ref"] = value!(fetch_ref);
     report["remote"] = value!(remote);
     report["target_ref"] = value!(target_ref);
-    let source_config_path = r.config.host_config.clone();
-    let (source_registrations, source_digest) =
-        registrations(r, source, &source_head, &source_config_path)?;
     registered_policy(
         &source_registrations,
         &o.config_path,
@@ -589,14 +582,10 @@ pub(crate) fn registrations(
     head: &str,
     config_path: &str,
 ) -> Result<(Registrations, String), String> {
-    let host = json(&r.blob(root, head, config_path)?)?;
-    let mut values = BTreeMap::new();
-    for path in facts::registry_paths(&host, config_path)? {
-        values.insert(path.clone(), json(&r.blob(root, head, &path)?)?);
-    }
-    let registrations = Registrations::load(&values, config_path)?;
+    let snapshot = facts::registry_snapshot_with(config_path, |path| r.blob(root, head, path))?;
+    let registrations = Registrations::load(&snapshot.values, config_path)?;
     Ok((
         registrations,
-        chrono_harness::wire::digest(&value!(values))?,
+        chrono_harness::wire::digest(&value!(snapshot.values))?,
     ))
 }

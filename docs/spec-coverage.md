@@ -74,7 +74,7 @@ Config v3 adds an explicit candidate Git binding before acquisition and through 
 
 The full-entry native selector increment reuses the same strict `chrono-git-configs/v1`
 parser and OS-ARCH mapping for full, initial, input capture, scoped optional
-registration and full-CI check configuration. `runner-tests::selector_snapshot_keeps_entry_and_independent_endpoint_targets`
+registration, full-CI check configuration and worktree registry acquisition. `runner-tests::selector_snapshot_keeps_entry_and_independent_endpoint_targets`
 checks fixed base/candidate targets, independent target paths, missing-target rejection
 and real-path byte retention. Registration tests execute selected initial inventory;
 workflow consumers execute selected seven-judge integration/delivery. Input consumers pass actual captured/paired
@@ -89,8 +89,16 @@ full-CI command. Full/initial/
 registration/mixed/workflow consumers now carry entry/effective identities and selector
 metadata through their existing request and view contracts; selected historical views
 use versioned view/decoder bindings and selected input captures use snapshot v3. This resolves the full
-configuration entry obstacle while full host activation, complete effective inputs,
-native full dispatch, parity and formal Rust refinement remain outstanding.
+configuration entry obstacle. Worktree's shared callback snapshot acquisition now
+resolves the source workflow before fetch and independently resolves the fetched
+endpoint, retaining complete selector/effective registry digests. Actual CLI tests
+cover different effective configuration/workflow paths with unchanged worktree
+policy, dirty source preservation, missing/unsupported endpoint rejection and a
+changed selected workflow target without checkout creation, selected reconstruction,
+and selected recovery/cleanup with original failed-process evidence. Direct controls
+remain. The next full-SPEC gaps remain full host activation, complete effective
+inputs, native full dispatch and lifecycle delivery; parity and formal Rust
+refinement are also unfinished.
 
 CI provider v3 binds event acquisition through an explicit full-v3 `facts_config`. Dedicated `ci-tests/tests/git_facts.rs` regressions use real Git objects/remotes and the actual CLI to check missing-history acquisition, exact probe interpretation, failed probe/fetch evidence, candidate policy/checkout binding, declared environment, generated initial-profile selection and legacy controls. Native generated-v3 host adoption, network/credential/configuration closure and parity are still outstanding.
 
