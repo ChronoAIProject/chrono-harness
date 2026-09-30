@@ -101,7 +101,7 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 ## 3. 登记格式与字段合同
 
-Config accepts explicit `schema_version: 1 | 2 | 3`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
+Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前由 AI 对宿主定义的治理／输入范围作负责的 declared-complete 工程声明，补齐该范围的实际输入、依赖、绑定、两端快照、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 判官核验声明引用、身份、快照和观察到的操作；普通 full check 不要求证明所有隐藏输入不存在，也不要求 VM 或 OS 隔离。
@@ -116,10 +116,10 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | --- | --- |
 | runner | `{path, version, sha256}`；path 为指定入口，sha256 为 64 位小写 hex 或 draft null |
 | registries | judges/projects/filemap/workflow 四个唯一 JSON 路径 |
-| canonical_check | `{operation, argv: string[]}`；唯一 `validate.delta` 路由 |
+| canonical_check | v1–v3 `{operation, argv: string[]}`；v4 adds `profile` and `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
-| facts_git | config v3 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
-| environment | `{inherit: string[], values: object, inputs: object[]}`；v1 输入 `{id, location, sha256}`，v2/v3 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
+| facts_git | config v3/v4 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
+| environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
 | input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[], coverage?: object}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
 | semantic_fields | `{path, pointers: string[], on}[]`；语义字段分类，见 §8 |
@@ -371,6 +371,8 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 ### 4.1 显式单元与独立 workflow
 
 无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 workflow。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各 workflow 具有独立检查名、checkout、启动命令、边界、报告及重跑。单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输工件或推断 workflow 间依赖。
+
+现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；bare check 保留全局 DELTA。固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。旧合同显式拼写仅留给旧登记。full 独立短单元／汇总及不可变 round 的刷新／expiry 仍待 corrected core/provider 集成，当前实现不宣称 native 完成或完整 SPEC 验收。
 
 现役源码扩展 `chrono-ci-check/v3` 的 `policy.units` 与 `shared_operations`。判官先完成两端 DELTA、移除／替代义务及全局所选操作图验证，再按 `--unit ID` 过滤执行；不能借单元过滤隐藏全局操作环。单元报告分别列本单元所选、全局所选、交给其它单元、所需单元及真正不需要的义务。某单元成功只承担自身结果，其失败不取消不相关 workflow。本地及该 workflow 均追加完全相同的 `--unit ID` 到登记 check 指令；v1/v2 原调用行为保留。
 

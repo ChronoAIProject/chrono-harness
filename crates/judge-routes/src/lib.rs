@@ -332,6 +332,19 @@ pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
         &expected,
         &json!({"base":req.base.commit,"candidate":req.candidate.commit}),
     )?;
+    if r.config()["schema_version"] == 4 {
+        chrono_harness::prepared::validate_binding(
+            &req.candidate.root,
+            r.config(),
+            &req.config_path,
+            Some(&req.base.commit),
+            &req.candidate.commit,
+            false,
+            &None,
+            Some(&req.context),
+            &req.observations["preparation"],
+        )?;
+    }
     if chrono_judge_registration::execution::methods(r.projects())?.contains_key("validate.delta") {
         return Err("E_ROUTE_AMBIGUOUS: validate.delta".into());
     }

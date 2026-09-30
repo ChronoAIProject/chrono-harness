@@ -9,6 +9,7 @@ pub mod initial;
 pub mod input_file;
 pub mod observation;
 pub mod parity;
+pub mod prepared;
 pub mod units;
 pub mod wire;
 use serde::{Deserialize, Serialize};
@@ -605,7 +606,7 @@ pub fn dispatch(args: &[&str]) -> CliOutput {
 }
 pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     match args{
-    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check --config P --base FULL_OID --candidate FULL_OID\nchrono-harness parity --host-root H --report P --compared-report P\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. The parity command adds fail-closed evidence to two completed full reports; it never changes the canonical check command. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
+    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check\nchrono-harness check --unit ID\nchrono-harness check --collect\nConfigured short checks read .chrono-harness/config.json and produce their inputs automatically. Legacy explicit spelling is accepted only by legacy registered contracts. Full independent short scopes remain unsupported.\nchrono-harness parity --host-root H --report P --compared-report P\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. The parity command adds fail-closed evidence to two completed full reports; it never changes the canonical check command. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest, entry){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
@@ -614,6 +615,34 @@ pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
 }
 }
 fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
+    if args.is_empty() || args == ["--collect"] || matches!(args, ["--unit", _]) {
+        let root = fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        let selection = match args {
+            [] => prepared::Selection::All,
+            ["--collect"] => prepared::Selection::Collect,
+            ["--unit", unit] => prepared::Selection::Unit {
+                unit: (*unit).into(),
+            },
+            _ => unreachable!(),
+        };
+        let (req, p, binding) = prepared::prepare(&root, selection)?;
+        return execute_check(
+            root,
+            req.profile,
+            p.base,
+            p.candidate,
+            p.initial,
+            p.context.map(|c| c.path),
+            p.scope,
+            entry,
+            Some(binding),
+        );
+    }
+    if !args.contains(&"--config") {
+        return Err("short check accepts only check, check --unit ID, or check --collect".into());
+    }
+
     let mut config = None;
     let mut base = None;
     let mut candidate = None;
@@ -668,6 +697,31 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     } else {
         (root, config_path)
     };
+    execute_check(
+        root,
+        config_path,
+        base,
+        candidate,
+        initial,
+        context.map(str::to_owned),
+        scope,
+        entry,
+        None,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn execute_check(
+    root: PathBuf,
+    config_path: String,
+    base: Option<String>,
+    candidate: String,
+    initial: bool,
+    context: Option<String>,
+    scope: Option<units::Scope>,
+    entry: Value,
+    preparation: Option<Value>,
+) -> Result<(u8, String), String> {
+    let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
     if scope.is_some() && profile["schema"] != units::PROFILE {
         return Err("unit/collect selection requires chrono-ci-check/v3".into());
     }
@@ -681,14 +735,15 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         profile.get("schema").and_then(Value::as_str),
         Some("chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3")
     ) {
-        return full::check_observed(
+        return full::check_prepared(
             &root,
             &config_path,
             base.as_deref()
                 .ok_or("full check requires --base; initial mode has no governance success")?,
             &candidate,
-            Path::new(context.ok_or("full check requires --context")?),
+            Path::new(&context.ok_or("full check requires --context")?),
             entry,
+            preparation,
         );
     }
     if context.is_some() {
@@ -716,7 +771,7 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         .as_bytes(),
     );
     let req = Request {
-        observations: serde_json::json!({"entry":entry}),
+        observations: serde_json::json!({"entry":entry,"preparation":preparation}),
         scope,
         protocol: protocol.into(),
         request_id: request_id.clone(),
@@ -728,11 +783,47 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         initial,
     };
     let report_path = no_symlink_parents(&root, &output_path)?;
-    let proc = run_process(
-        &root,
-        &c.judge,
-        &serde_json::to_vec(&req).map_err(|e| e.to_string())?,
-    );
+    let input = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
+    let proc = if req.observations["preparation"].is_object() {
+        let (_, _, policy, _) = facts_configs::load(&root, ".chrono-harness/config.json")?;
+        let credentials = prepared::credential_environment(&policy)?;
+        let mut judge = c.judge.clone();
+        let overrides = judge.env.clone();
+        judge.env.clear();
+        for key in policy["environment"]["inherit"]
+            .as_array()
+            .ok_or("environment inherit")?
+        {
+            let key = key.as_str().ok_or("environment key")?;
+            if !credentials.contains(key) {
+                if let Ok(value) = std::env::var(key) {
+                    judge.env.insert(key.into(), value);
+                }
+            }
+        }
+        for (key, value) in policy["environment"]["values"]
+            .as_object()
+            .ok_or("environment values")?
+        {
+            judge.env.insert(
+                key.clone(),
+                value.as_str().ok_or("environment value")?.into(),
+            );
+        }
+        if overrides.keys().any(|key| credentials.contains(key)) {
+            return Err("acquisition credentials cannot be forwarded to the check judge".into());
+        }
+        judge.env.extend(overrides);
+        let path = resolve_program(
+            &root,
+            &judge.program,
+            Some(judge.env.get("PATH").map(String::as_str).unwrap_or("")),
+        )?;
+        judge.program = path.to_str().ok_or("judge path UTF-8")?.into();
+        run_process_observed(&root, &judge, &input, &file_identity(&path)?.0)
+    } else {
+        run_process(&root, &c.judge, &input)
+    };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});
     let mut report = match proc {
@@ -765,6 +856,13 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     } else {
         1
     };
+    let retained_report = if report["request"]["observations"]["preparation"].is_object() {
+        let path = format!(".chrono-harness/state/preparation/check-{request_id}.json");
+        report["retained_report"] = serde_json::json!(path);
+        Some(no_symlink_parents(&root, &path)?)
+    } else {
+        None
+    };
     let text = if c.schema == units::PROFILE {
         serde_json::to_string(&report)
     } else {
@@ -774,6 +872,14 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         + "\n";
     fs::create_dir_all(report_path.parent().ok_or("report parent missing")?)
         .map_err(|e| e.to_string())?;
+    if let Some(path) = retained_report {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    }
     fs::write(report_path, &text).map_err(|e| e.to_string())?;
     Ok((code, text))
 }

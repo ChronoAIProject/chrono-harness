@@ -39,25 +39,13 @@ jobs:
         shell: bash
         run: |
           '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
-      - name: Prepare fixed event inputs
-        id: inputs
-        shell: bash
-        env:
-          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
-        run: |
-          '.chrono-harness/bin/chrono-ci' prepare --host-root . --config '.chrono-harness/ci/units.json' --event "$GITHUB_EVENT_NAME" --payload "$GITHUB_EVENT_PATH" --workflow-revision "$CHRONO_WORKFLOW_REVISION" --github-output "$GITHUB_OUTPUT" --unit 'judge-registration'
       - name: Canonical harness check
         shell: bash
         env:
-          CHRONO_BASE: ${{ steps.inputs.outputs.base }}
-          CHRONO_CANDIDATE: ${{ steps.inputs.outputs.candidate }}
-          CHRONO_INITIAL: ${{ steps.inputs.outputs.initial }}
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
-          if [ "$CHRONO_INITIAL" = true ]; then
-            '.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--candidate' "$CHRONO_CANDIDATE" '--initial' '--unit' 'judge-registration'
-          else
-            '.chrono-harness/bin/chrono-harness' 'check' '--config' '.chrono-harness/ci/check.json' '--base' "$CHRONO_BASE" '--candidate' "$CHRONO_CANDIDATE" '--unit' 'judge-registration'
-          fi
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-registration'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

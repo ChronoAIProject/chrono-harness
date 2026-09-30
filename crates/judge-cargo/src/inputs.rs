@@ -596,7 +596,7 @@ pub(crate) fn prepare(
             .filter(|_| row["presence"] != "absent")
             .ok_or_else(|| error(format!("input {id} requires bound present bytes")))?;
         let path = root.join(row["location"].as_str().unwrap());
-        if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3)) {
+        if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3 | 4)) {
             if chrono_judge_registration::inputs::observe_file(&path)
                 .map_err(error)?
                 .is_none()

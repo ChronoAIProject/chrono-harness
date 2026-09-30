@@ -25,8 +25,9 @@ Its independent unit/collection checks use `chrono-ci-judge/v2`; the unpartition
 local check and older profile versions retain their documented behavior. See
 [independent CI units](ci-units.md). Separately, `check` supports configured
 `chrono-judge/v1` transport and the registration/filemap/routes/projects judges through
-`.chrono-harness/config.json` with `--context`. This proposed host remains
-incomplete and returns nonzero; workflow has [bounded certification](workflow.md); automated lifecycle remains unimplemented. Mixed classification and warning behavior have a dedicated judge and real-chain tests; see [mixed](mixed.md). Cost reports have a dedicated judge and registered consumer tests. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
+a registered full profile. Schema4 produces its context automatically; legacy
+full profiles keep their explicit context contract. Proposed full governance remains
+incomplete and returns nonzero when evaluated; workflow has [bounded certification](workflow.md); automated lifecycle remains unimplemented. Mixed classification and warning behavior have a dedicated judge and real-chain tests; see [mixed](mixed.md). Cost reports have a dedicated judge and registered consumer tests. Routes/projects now supply the shared operation planner, executor and receipt comparison; see [execution](execution.md).
 
 ## This repository
 
@@ -49,15 +50,56 @@ After changes have been committed and the candidate checkout is clean, the
 canonical judgment command is **identical locally and in generated CI**:
 
 ```sh
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID --unit ci
+.chrono-harness/bin/chrono-harness check --unit ci
 ```
 
 The final bootstrap argument selects an explicit host CI configuration. Omitting
 it preserves the full bootstrap default. Generated unit/collection workflows
-select only runner, judge-ci and ci; remaining builds come from the unchanged
+select runner, judge-ci, ci and the local worktree input producer; remaining builds come from the unchanged
 complete test plans. Run units concurrently in separate checkouts. A local check
 without `--unit` executes the whole selected DELTA serially; the same entry with
-`--collect MANIFEST` verifies unit evidence without running business operations.
+value-less `--collect` prepares the declared manifest and verifies unit evidence without running business operations.
+
+The current host uses config schema4. `canonical_check` adds `profile` and
+`inputs.local` plus optional `inputs.ci`; each producer uses the existing
+`{operation,tool,argv}` action shape and tools/environment/protocol bounds.
+The runner observes the real short entry, invokes the bound producer, retains
+original process evidence, then executes a typed prepared check through the
+existing judge path. It never redispatches invented long arguments.
+Preparation records environment value hashes and the original environment digest.
+Schema4's optional `environment.credential_environment` names acquisition-only
+credentials from `inherit`; they reach the producer and its declared gathering
+transport, and are omitted from Git and judge environments. The product host
+declares `GH_TOKEN` there, matching its existing gather credential policy.
+Its acquisition timeout is 2400 seconds, covering the declared 1800-second
+native collection wait; a shorter conflicting acquisition bound fails explicitly.
+
+`CHRONO_CHECK_SOURCE` must be explicitly inherited, with no fixed value override.
+Unset or `local` selects local acquisition; `ci` selects native acquisition.
+Other values and missing native bindings/variables fail. The CI action explicitly
+names the event, payload, workflow revision and collection repository variables.
+Provider `chrono-github-ci/v4` projects the short check step, including this
+selector and workflow revision; checkout, bootstrap and upload remain native
+steps. The scoped profile explicitly binds both registration_config and facts_config
+to the fixed configuration entry; short acquisition never uses legacy unbound Git.
+Push, PR, branch creation and explicit manual endpoint semantics remain
+with the existing event producer. Preparation is unjudged input acquisition.
+
+Local endpoints use the declared worktree Git/remote and workflow target, fetching
+and freezing that target against clean committed HEAD on every invocation.
+Scoped checks do not require origin or branch-age context. Full unscoped checks
+require worktree v2's declared origin/context paths and creation-kind/run-role
+mapping. Start/reconstruct publish the finalized original birth report and exact
+destination association. The producer preserves birth time/fork and observes the
+current endpoints/time. Absent historical snapshots or a delivery evidence handoff
+fail explicitly. Full CI v1 retains its exact context transport; v2 projects short
+checks and preserves the same raw dispatch context bytes inside preparation.
+Full independent scopes, frozen rounds and expiry revalidation remain pending.
+
+The host's Git bytes/version bind the current macOS machine. Matching them on a
+hosted native runner remains unverified; no hosted success or parity is claimed.
+Legacy host contracts keep their explicit spelling. The current adopted host
+admits only its registered short spelling and rejects partial overrides.
 
 Always bootstrap from the candidate checkout before checking it. The runner
 reports the actual runner/judge/operation executable hashes; bootstrap records

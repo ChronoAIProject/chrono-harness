@@ -170,11 +170,11 @@ pub fn config(v: &Value) -> Result {
         "environment",
         "input_closure",
     ];
-    if v["schema_version"] == 3 {
+    if matches!(v["schema_version"].as_u64(), Some(3 | 4)) {
         fields.push("facts_git");
         chrono_harness::facts::git_declaration(v)?;
     }
-    common_versions(v, &fields, &[1, 2, 3])?;
+    common_versions(v, &fields, &[1, 2, 3, 4])?;
     choice(&v["enforcement"], &["enabled", "not-implemented"])?;
     object(&v["runner"], &["path", "version", "sha256"], &[])?;
     path(&v["runner"]["path"])?;
@@ -192,7 +192,11 @@ pub fn config(v: &Value) -> Result {
             return Err("duplicate registry path".into());
         }
     }
-    object(&v["canonical_check"], &["operation", "argv"], &[])?;
+    if v["schema_version"] == 4 {
+        chrono_harness::prepared::declaration(v)?;
+    } else {
+        object(&v["canonical_check"], &["operation", "argv"], &[])?;
+    }
     choice(&v["canonical_check"]["operation"], &["validate.delta"])?;
     strings(&v["canonical_check"]["argv"])?;
     unique(&v["tools"], Some("id"))?;
@@ -252,7 +256,15 @@ pub fn config(v: &Value) -> Result {
             return Err("artifact tracked must be false".into());
         }
     }
-    object(&v["environment"], &["inherit", "values", "inputs"], &[])?;
+    object(
+        &v["environment"],
+        &["inherit", "values", "inputs"],
+        if v["schema_version"] == 4 {
+            &["credential_environment"]
+        } else {
+            &[]
+        },
+    )?;
     unique(&v["environment"]["inherit"], None)?;
     for (k, val) in v["environment"]["values"]
         .as_object()
@@ -264,7 +276,7 @@ pub fn config(v: &Value) -> Result {
     }
     unique(&v["environment"]["inputs"], Some("id"))?;
     for i in array(&v["environment"]["inputs"])? {
-        if matches!(v["schema_version"].as_u64(), Some(2 | 3)) {
+        if matches!(v["schema_version"].as_u64(), Some(2 | 3 | 4)) {
             choice(&i["presence"], &["present", "absent"])?;
             if i["presence"] == "absent" {
                 object(i, &["id", "location", "presence"], &[])?;
@@ -281,7 +293,7 @@ pub fn config(v: &Value) -> Result {
             path(&i["location"])?;
         }
     }
-    let closure_optional = if v["schema_version"] == 3 {
+    let closure_optional = if matches!(v["schema_version"].as_u64(), Some(3 | 4)) {
         vec!["bindings", "coverage"]
     } else {
         vec![]
@@ -296,7 +308,7 @@ pub fn config(v: &Value) -> Result {
         &["incomplete", "declared-complete"],
     )?;
     strings(&v["input_closure"]["unresolved"])?;
-    if v["schema_version"] == 3
+    if matches!(v["schema_version"].as_u64(), Some(3 | 4))
         && v["input_closure"]["status"] == "declared-complete"
         && v["input_closure"].get("bindings").is_none()
     {

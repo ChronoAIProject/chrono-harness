@@ -81,20 +81,29 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
     }
     let values = reader.registry_values(root, commit, config)?;
     let r = Registrations::load(&values, config)?;
+    let credentials = if r.config()["schema_version"] == 4 {
+        chrono_harness::prepared::credential_environment(r.config())?
+    } else {
+        Default::default()
+    };
     let mut environment = serde_json::Map::new();
     for key in r.config()["environment"]["inherit"].as_array().unwrap() {
         let key = key.as_str().ok_or("invalid inherited variable")?;
-        let v = match std::env::var(key) {
-            Ok(v) => Value::String(v),
-            Err(std::env::VarError::NotPresent) => Value::Null,
-            Err(_) => return Err(format!("E_INPUT_ENVIRONMENT: non-UTF8 value for {key}")),
+        let v = if credentials.contains(key) {
+            Value::Null
+        } else {
+            match std::env::var(key) {
+                Ok(v) => Value::String(v),
+                Err(std::env::VarError::NotPresent) => Value::Null,
+                Err(_) => return Err(format!("E_INPUT_ENVIRONMENT: non-UTF8 value for {key}")),
+            }
         };
         environment.insert(key.into(), v);
     }
     let mut files = serde_json::Map::new();
     for input in r.config()["environment"]["inputs"].as_array().unwrap() {
         let path = root.join(input["location"].as_str().unwrap());
-        let retained = if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3)) {
+        let retained = if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3 | 4)) {
             match observe_file(&path)? {
                 None => value!({"absent":true}),
                 Some(identity) => {

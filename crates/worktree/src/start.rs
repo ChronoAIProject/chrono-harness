@@ -243,6 +243,7 @@ pub(crate) fn execute(
     }
     let source_head = r.oid(source, "HEAD")?;
     report["source_commit"] = value!(source_head);
+    report["creation_kind"] = value!(o.kind);
     if r.blob(source, &source_head, &o.config_path)? != bytes {
         return Err("worktree configuration differs from source commit".into());
     }
@@ -361,7 +362,7 @@ pub(crate) fn execute(
     }
     unlock(r, source, path, &branch_ref, &base)
 }
-fn registered_policy(
+pub(crate) fn registered_policy(
     registrations: &Registrations,
     policy: &str,
     report_directory: &str,
@@ -424,7 +425,8 @@ pub(super) fn create(
     } else {
         "created"
     };
-    with_report(
+    let origin = config.check_inputs.clone();
+    let report = with_report(
         &o.root,
         &o.config_path,
         config,
@@ -435,7 +437,13 @@ pub(super) fn create(
             Some(plan) => crate::reconstruct::execute(runner, &o, &bytes, token, report, plan),
             None => execute(runner, &o, &bytes, token, report, false),
         },
-    )
+    )?;
+    if report["status"] == success {
+        if let Some(p) = origin {
+            crate::check_inputs::publish_origin(&o.root, &report, &p)?;
+        }
+    }
+    Ok(report)
 }
 pub(crate) fn with_report(
     root: &Path,

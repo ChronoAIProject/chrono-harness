@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use std::{fs, io::Write, path::Path};
 
 pub const SCHEMA: &str = "chrono-github-full-ci/v1";
+pub const SHORT_SCHEMA: &str = "chrono-github-full-ci/v2";
 const MARKER: &str = "# chrono-ci: owned github-full-ci/v1\n";
 const ADOPTED: &str = ".chrono-harness/ci/full.json";
 
@@ -38,7 +39,7 @@ fn literal(value: &str) -> Result<(), String> {
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
-    if c.schema != SCHEMA
+    if !matches!(c.schema.as_str(), SCHEMA | SHORT_SCHEMA)
         || c.name.is_empty()
         || c.runs_on.is_empty()
         || c.timeout_minutes == 0
@@ -119,6 +120,9 @@ fn source_path(c: &Config, path: &str) -> Result<(), String> {
 }
 
 pub fn argv(c: &Config, base: &str, candidate: &str) -> Vec<String> {
+    if c.schema == SHORT_SCHEMA {
+        return vec![c.runner.clone(), "check".into()];
+    }
     let mut args = canonical_argv(&c.runner, &c.check_config, Some(base), candidate, false);
     args.extend(["--context".into(), c.context_path.clone()]);
     args
@@ -145,7 +149,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
         shell(&c.generator),
         shell(config_path)
     );
-    Ok(format!(
+    let rendered = format!(
         r#"{MARKER}name: {name}
 on:
   workflow_dispatch:
@@ -210,7 +214,27 @@ jobs:
         artifact_dir = shell(&c.artifact_directory),
         prepare_stdout = shell(&format!("{}prepare.stdout.json", c.artifact_directory)),
         prepare_stderr = shell(&format!("{}prepare.stderr", c.artifact_directory))
-    ))
+    );
+    if c.schema == SHORT_SCHEMA {
+        let start = rendered
+            .find("      - name: Preserve fixed full context")
+            .ok_or("full prepare section")?;
+        let end = rendered
+            .find("      - name: Preserve original full check evidence")
+            .ok_or("full artifact section")?;
+        let check = format!(
+            "      - name: Canonical full harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n        run: |\n          {} 'check'\n",
+            shell(&c.runner)
+        );
+        Ok(format!(
+            "{}{}{}",
+            &rendered[..start],
+            check,
+            &rendered[end..]
+        ))
+    } else {
+        Ok(rendered)
+    }
 }
 
 pub(crate) fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
@@ -251,9 +275,10 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     Ok(!existing || !same)
 }
 
-fn matching_output(root: &Path, path: &str, bytes: &[u8]) -> Result<bool, String> {
+fn matching_output(root: &Path, path: &str, bytes: &[u8], replace: bool) -> Result<bool, String> {
     match fs::read(no_symlink_parents(root, path)?) {
         Ok(current) if current == bytes => Ok(true),
+        Ok(_) if replace => Ok(false),
         Ok(_) => Err(format!("full CI output collision: {path}")),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(e) => Err(e.to_string()),
@@ -338,8 +363,9 @@ pub fn prepare(
     }
     let report_bytes =
         (serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n").into_bytes();
-    let context_same = matching_output(root, &c.context_path, context)?;
-    let report_same = matching_output(root, &c.preparation_path, &report_bytes)?;
+    let replace = c.schema == SHORT_SCHEMA;
+    let context_same = matching_output(root, &c.context_path, context, replace)?;
+    let report_same = matching_output(root, &c.preparation_path, &report_bytes, replace)?;
     if !context_same {
         write_file(root, &c.context_path, context)?;
     }

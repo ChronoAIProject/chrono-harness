@@ -1,7 +1,7 @@
 {
   "schema": "chrono-github-units/v1",
   "collection": {
-    "schema": "chrono-github-ci/v1",
+    "schema": "chrono-github-ci/v4",
     "workflow_path": ".github/workflows/chrono-ci.yml",
     "name": "chrono / collection",
     "runs_on": "macos-14",
@@ -32,7 +32,8 @@
         "ref_prefix": "refs/heads/integration/",
         "base_ref": "refs/heads/dev"
       }
-    ]
+    ],
+    "facts_config": ".chrono-harness/config.json"
   },
   "units": {
     "runner": {

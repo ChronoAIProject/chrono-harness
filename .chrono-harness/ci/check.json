@@ -259,6 +259,7 @@
         "judge-workflow",
         "runner"
       ]
-    }
+    },
+    "facts_config": ".chrono-harness/config.json"
   }
 }

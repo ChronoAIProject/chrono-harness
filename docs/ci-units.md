@@ -11,6 +11,18 @@ seven-judge profile, prove complete input closure or establish deterministic
 local/CI parity. Public beta.12 introduced these contracts; beta.13 adds the
 explicit customization-preserving migration below.
 
+The repository's schema4 contract uses fixed `check`, `check --unit ID`, and
+value-less `check --collect`. Bare check keeps global DELTA execution. The local
+worktree producer freezes registered remote target/HEAD endpoints; the existing
+CI owner creates the collection manifest from explicit unit report paths and
+independently observed runner/judge pins. Missing units are never executed by
+collection. Prior producer observations remain retained while declared current
+outputs are replaced; no crash/concurrent transaction guarantee is established.
+Provider v4 puts event preparation and native gathering inside the same short
+command. Older hosts/examples below retain their registered explicit v3 forms.
+Full independent short scopes await corrected full-core integration and round
+freshness tests.
+
 ## Assignment and execution
 
 Keep the existing scoped check fields and use `schema: chrono-ci-check/v3`.
@@ -216,7 +228,7 @@ as were actual cancellation with selective retry, business failure with another
 unit passing, and restoration with zero selected business operations. Initial
 inventory remains a separate contract. The product host registers sixteen units,
 one per complete test plan, and a collector in `.chrono-harness/ci/units.json`.
-Its core bootstrap explicitly builds runner, judge-ci and ci; each selected plan
+Its core bootstrap explicitly builds runner, judge-ci, ci and worktree; each selected plan
 keeps its complete existing build/check/test operations. Shared operations are
 listed in the check profile and repeat only in isolated checkouts. The default
 full bootstrap remains available when its existing configuration is selected.

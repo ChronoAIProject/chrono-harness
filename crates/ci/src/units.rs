@@ -296,7 +296,14 @@ pub fn prepare(
     let argv = context["canonical_argv"]
         .as_array_mut()
         .ok_or("missing canonical command")?;
-    argv.extend(scope.argv().into_iter().map(Value::String));
+    if w.schema == "chrono-github-ci/v4" {
+        match &scope {
+            Scope::Unit { unit } => argv.extend([json!("--unit"), json!(unit)]),
+            Scope::Collect { .. } => argv.push(json!("--collect")),
+        }
+    } else {
+        argv.extend(scope.argv().into_iter().map(Value::String));
+    }
     context["scope"] = serde_json::to_value(scope).map_err(|e| e.to_string())?;
     context["provider_sha256"] = json!(file_identity(&root.join(path))?.0);
     context["check_config_sha256"] = json!(file_identity(&root.join(&w.check_config))?.0);
