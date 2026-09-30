@@ -37,7 +37,7 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 8 required test removed | implemented bounded: W explicit successful replacement or validated joint retirement | full native activation |
 | 9 nonunique/missing test pair | implemented bounded: projects and real consumer negatives | full native activation |
 | 10 manifest undeclared dependency | implemented bounded: optional Cargo adapter: explicit policy, TOML path dependencies and missing-edge rejection; optional v4 binds Cargo/compiler file inputs and v5 adds explicit sysroot/backend/linker/SDK/build-script inventories with actual direct/full/scoped consumers | compiler-library/backend/linker/SDK semantic closure; guarded registry/Git resolution and full host activation remain |
-| 11 unknown input closure | implemented bounded: explicit external nodes, required project edges, declared-complete v3 regressions, v5 directory/toolchain inventories and `proposed_and_incomplete_never_receive_governance_success` | complete effective-input closure; no discovery guarantee, and delegated/OS/network/build-script reads remain outside the bounded inventory |
+| 11 unknown input closure | implemented bounded: explicit external nodes, required project edges, declared-complete v3 regressions, v5 directory/toolchain inventories, optional versioned input-domain coverage and `proposed_and_incomplete_never_receive_governance_success` | complete effective-input closure; no discovery guarantee, and delegated/OS/network/build-script reads remain outside the bounded inventory |
 | 12 README no all-tests | implemented bounded: F selection, C and projects consumer real nonexecution with unrelated historical defects | full native activation |
 | 13 independent script tests | implemented bounded: real full-chain script pair | full native activation |
 | 14 duplicate operation | implemented: routes preflight and full consumer | none in tested boundary |
@@ -296,3 +296,14 @@ completed results and ambiguous partial allocations reject without discarding
 work. Caller reconciliation of unknown temporary files/Git locks, concurrent
 writers and power-loss recovery remain outside this bounded contract. This source
 extension is included in beta.15; see [continuation](worktree.md#continue-an-interrupted-or-failed-rebind).
+
+Optional `chrono-input-coverage/v1` records explicit consumer/domain scopes and
+requires exactly one disposition per registered pair. Bound and absent rows
+reference the same consumer's nonempty bindings; absent rows require actual
+registered file absence. Declared-complete configurations cannot omit bindings
+or retain unresolved domains. Dedicated real-runner regressions cover historical
+v3 adoption without rewriting base bytes, missing/empty/misbound/duplicate rows,
+unknown consumers, declared absence contradicted by real bytes, and draft/legacy
+controls. Omission preserves the old v3 contract. This supplies a checked
+accounting surface for host-chosen input domains; undisclosed reads, complete
+input closure, native activation and deterministic parity remain outstanding.

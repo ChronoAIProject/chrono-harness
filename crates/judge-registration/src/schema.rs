@@ -282,7 +282,7 @@ pub fn config(v: &Value) -> Result {
         }
     }
     let closure_optional = if v["schema_version"] == 3 {
-        vec!["bindings"]
+        vec!["bindings", "coverage"]
     } else {
         vec![]
     };
@@ -311,6 +311,9 @@ pub fn config(v: &Value) -> Result {
             string(&binding["kind"])?;
             nonempty_strings(&binding["inputs"])?;
         }
+    }
+    if let Some(coverage) = v["input_closure"].get("coverage") {
+        crate::input_coverage::shape(coverage, &v["input_closure"])?;
     }
     Ok(())
 }

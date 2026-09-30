@@ -1,5 +1,6 @@
 //! Registration owns full-format schema, snapshot and affected-reference admissibility.
 pub mod execution;
+mod input_coverage;
 pub mod inputs;
 mod registrations;
 mod transition;
@@ -324,6 +325,16 @@ fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<(
         r,
     )?;
     if r.status == Status::Pass {
+        if let Some(coverage) = new.config["input_closure"].get("coverage") {
+            r.outputs.insert(
+                "input_coverage".into(),
+                value!({
+                    "schema": "chrono-input-coverage-result/v1",
+                    "scope": "declared-domains", "declaration": coverage,
+                    "completeness_proven": false
+                }),
+            );
+        }
         r.outputs.insert("registration_view".into(), view);
         r.outputs.insert("registration".into(),value!({"scope":"registration-only","base":req.base.commit,"candidate":req.candidate.commit,"registry_digest":req.registries.digest,"input_closure":"declared-complete","completeness_proven":false,"previous_enforcement":if old.config["status"]=="proposed"{"none"}else{"enabled"}}));
     }
@@ -427,6 +438,7 @@ fn readiness(
         ),
     }
     validate_input_closure_bindings(n, r);
+    input_coverage::validate(n, r);
     Ok(())
 }
 
