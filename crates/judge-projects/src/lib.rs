@@ -267,7 +267,8 @@ pub fn snapshot_with_reader(
     artifacts: &[String],
     reader: &facts::Reader,
 ) -> Result<(), String> {
-    let state = reader.checkout(root, candidate)?;
+    let artifacts: Vec<_> = artifacts.iter().map(String::as_str).collect();
+    let state = reader.checkout_excluding(root, candidate, &artifacts)?;
     if state.head != candidate
         || !state.tracked.is_empty()
         || state

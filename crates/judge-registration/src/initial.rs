@@ -93,7 +93,11 @@ fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> R
                 .into(),
         );
     }
-    let observed = reader.checkout(root, &req.candidate.commit)?;
+    let observed = reader.checkout_excluding(
+        root,
+        &req.candidate.commit,
+        &facts::artifact_directories(r.config())?,
+    )?;
     let nonartifact = |paths: &[String]| -> Vec<String> {
         paths
             .iter()

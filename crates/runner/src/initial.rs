@@ -218,7 +218,7 @@ pub fn check(
         profile_sha256: sha256(&bytes),
         config_path: profile.host_config.clone(),
         registry_digest: wire::digest(&registries)?,
-        checkout: reader.checkout(root, candidate)?,
+        checkout: reader.checkout_excluding(root, candidate, &facts::artifact_directories(cfg)?)?,
         runner: runner.clone(),
         observations: value!({"git_facts":reader.observation(),"entry":entry,"environment":{"inherited":inherited,"effective":environment}}),
         prior_results: vec![],

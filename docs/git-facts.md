@@ -206,6 +206,38 @@ These are measurements for that host and invocation, not a universal capacity
 recommendation. Declare a suitable bound from actual report sizes; per-Git-process
 bounds and complete-input obligations retain their existing meanings.
 
+## Registered artifact inventory
+
+Snapshot acquisition excludes explicitly registered artifact directories before
+Git enumerates their untracked contents. In the recorded beta.18 Go consumer,
+each of two untracked inventories emitted 1,007,609 bytes under a 1,048,576-byte
+per-process bound, mostly for allowed SDK/state outputs. Filtering only after
+enumeration made those outputs consume the input acquisition budget.
+
+Full, initial and scoped acquisition, registration rechecks, project execution
+guards and migration decoding now use the shared literal exclusion builder.
+Worktree inventories reuse it too. Each exclusion is a top-level, case-sensitive
+literal directory prefix from the caller's declarations; no artifact ownership,
+host layout or dependency is discovered. Noncanonical spellings such as repeated
+slashes or dot components contribute no exclusion and retain the caller's
+original path classification. A trailing slash keeps a file or symlink replacing
+the declared directory visible. Tracked bytes and index entries are checked
+separately; ignored neighbors and undeclared paths remain visible.
+
+Inventory commands override `GIT_LITERAL_PATHSPECS`, `GIT_GLOB_PATHSPECS`,
+`GIT_NOGLOB_PATHSPECS` and `GIT_ICASE_PATHSPECS` to `0`, so host settings cannot
+reinterpret explicit pathspec syntax. Bound readers record the effective
+per-process environment and original streams and retain their before/after
+configuration guards. Other Git calls keep their registered environment.
+The raw `Reader::checkout` and `facts::checkout` APIs still return full inventory;
+callers select exclusions explicitly.
+
+Migration decoding may create declared artifacts without changing candidate
+inputs. Its before/after comparison still rejects new undeclared files and
+tracked input mutations before business operations. This does not supply a
+concurrent-write sandbox, complete input closure or a larger output bound.
+The change is in source; public beta.18 retains the original enumeration.
+
 ## Literal checkout identity
 
 A configured Git diff can hide raw differences: `core.filemode=false` ignores

@@ -229,6 +229,71 @@ fn initial_inventory_uses_registered_git_and_keeps_initial_scope() {
 }
 
 #[test]
+fn full_and_initial_artifact_inventory_respects_git_bounds_without_listing_outputs() {
+    for initial in [false, true] {
+        let h = BoundHost::new(initial, "");
+        let outputs = h.host.root().join(".chrono-harness/state/generated");
+        fs::create_dir_all(&outputs).unwrap();
+        for i in 0..11000 {
+            fs::write(
+                outputs.join(format!("{i:05}-{}", "x".repeat(100))),
+                "output",
+            )
+            .unwrap();
+        }
+        let config: Value =
+            serde_json::from_slice(&fs::read(h.host.root().join(CONFIG)).unwrap()).unwrap();
+        // Establish the actual failure pressure independently of the filtered reader.
+        let raw = facts::git(h.host.root(), &["ls-files", "--others", "-z"]).unwrap();
+        assert!(raw.len() as u64 > config["protocol"]["stdout_limit_bytes"].as_u64().unwrap());
+        let (exit, report, error) = h.run(initial);
+        assert_eq!(exit, 0, "initial={initial}: {error} {}", report["findings"]);
+        if initial {
+            assert_eq!(report["governance"], "not-evaluated");
+            assert_eq!(report["status"], "complete");
+        } else {
+            assert_eq!(report["status"], "pass");
+        }
+        // Both actual CLI acquisition and the separate registration binary recheck.
+        for observed in [
+            &report["git_facts"],
+            &report["judges"][0]["response"]["outputs"]["git_facts"],
+        ] {
+            let inventories: Vec<_> = observed["processes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|p| p["argv"].as_array().unwrap().contains(&json!("--others")))
+                .collect();
+            assert!(!inventories.is_empty());
+            for inventory in inventories {
+                assert_eq!(inventory["stdout_bytes"], json!([]));
+                assert_eq!(inventory["stdout_sha256"], sha256(b""));
+                assert_eq!(inventory["exit_code"], 0);
+                for key in [
+                    "GIT_LITERAL_PATHSPECS",
+                    "GIT_GLOB_PATHSPECS",
+                    "GIT_NOGLOB_PATHSPECS",
+                    "GIT_ICASE_PATHSPECS",
+                ] {
+                    assert_eq!(inventory["environment"][key], "0");
+                }
+            }
+        }
+        fs::write(h.host.root().join(".git/info/exclude"), "foreign-input\n").unwrap();
+        fs::write(h.host.root().join("foreign-input"), "not an artifact").unwrap();
+        let (exit, report, error) = h.run(initial);
+        assert_ne!(exit, 0, "ignored foreign input accepted: initial={initial}");
+        let expected = if initial {
+            "initial candidate checkout is dirty or changed"
+        } else {
+            "E_SNAPSHOT_DIRTY"
+        };
+        assert!(format!("{report} {error}").contains(expected));
+    }
+}
+
+#[test]
 fn full_and_initial_bound_checks_reject_configuration_hidden_mode_changes() {
     for initial in [false, true] {
         let h = BoundHost::new(initial, "");

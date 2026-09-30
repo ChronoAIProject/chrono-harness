@@ -521,3 +521,99 @@ fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
         }
     }
 }
+
+#[test]
+fn scoped_artifact_inventory_does_not_spend_git_output_bound_on_declared_outputs() {
+    let h = BoundHost::new("");
+    h.host.change_registry(FACTS, |f| {
+        f["protocol"]["stdout_limit_bytes"] = json!(8192);
+        f["environment"]["values"]["GIT_LITERAL_PATHSPECS"] = json!("1");
+        f["environment"]["values"]["GIT_ICASE_PATHSPECS"] = json!("1");
+    });
+    h.host.change_registry(CONFIG, |c| {
+        c["policy"]["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("cache[1]/allowed/"));
+    });
+    h.host.write("src.txt", "changed");
+    let candidate = h.host.commit();
+    for i in 0..256 {
+        h.host.write(
+            &format!("cache[1]/allowed/{i:04}-{}", "x".repeat(80)),
+            "output",
+        );
+    }
+    let result = h.host.check(&h.base, &candidate);
+    pass(&result);
+    assert_eq!(h.host.calls(), 1);
+    let facts = &result.evidence["git_facts"];
+    assert_process_bytes(facts);
+    let inventories: Vec<_> = facts["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| {
+            p["argv"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|a| a == "--others")
+        })
+        .collect();
+    assert!(!inventories.is_empty());
+    for inventory in inventories {
+        assert!(inventory["stdout_bytes"].as_array().unwrap().is_empty());
+        for key in [
+            "GIT_LITERAL_PATHSPECS",
+            "GIT_GLOB_PATHSPECS",
+            "GIT_NOGLOB_PATHSPECS",
+            "GIT_ICASE_PATHSPECS",
+        ] {
+            assert_eq!(inventory["environment"][key], "0");
+        }
+    }
+}
+
+#[test]
+fn scoped_artifact_exclusion_keeps_literal_neighbors_ignored_files_and_root_types_visible() {
+    use std::os::unix::fs::symlink;
+    let h = BoundHost::new("");
+    h.host.change_registry(FACTS, |f| {
+        f["environment"]["values"]["GIT_LITERAL_PATHSPECS"] = json!("1");
+        f["environment"]["values"]["GIT_ICASE_PATHSPECS"] = json!("1");
+    });
+    h.host.change_registry(CONFIG, |c| {
+        c["policy"]["artifacts"].as_array_mut().unwrap().extend([
+            json!("cache[1]/allowed/"),
+            json!("CacheCase/allowed/"),
+            json!("declared-directory/"),
+        ]);
+    });
+    h.host.write(".git/info/exclude", "cache*/\nCacheCase/\n");
+    let candidate = h.host.commit();
+    h.host.write("cache[1]/allowed/output", "allowed");
+    for path in [
+        "cache[1]/outside",
+        "cache1/allowed/foreign",
+        "cachecase/allowed/foreign",
+        "unknown",
+    ] {
+        h.host.write(path, "not registered");
+        let result = h.host.check(&h.base, &candidate);
+        fail(&result, "untracked nonartifact");
+        assert_eq!(h.host.calls(), 0);
+        fs::remove_file(h.host.root().join(path)).unwrap();
+    }
+    for link in [false, true] {
+        let path = h.host.root().join("declared-directory");
+        if link {
+            symlink("cache[1]/allowed", &path).unwrap();
+        } else {
+            fs::write(&path, "not a directory").unwrap();
+        }
+        fail(&h.host.check(&h.base, &candidate), "untracked nonartifact");
+        fs::remove_file(path).unwrap();
+    }
+    pass(&h.host.check(&h.base, &candidate));
+}
