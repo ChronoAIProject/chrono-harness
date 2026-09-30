@@ -42,12 +42,7 @@ impl Runner {
         if literal_inventory {
             // Artifact ownership uses literal, case-sensitive registered prefixes.
             // Record these command-specific overrides in the actual process result.
-            for key in [
-                "GIT_LITERAL_PATHSPECS",
-                "GIT_GLOB_PATHSPECS",
-                "GIT_NOGLOB_PATHSPECS",
-                "GIT_ICASE_PATHSPECS",
-            ] {
+            for key in facts::LITERAL_PATHSPEC_CONTROLS {
                 environment.insert(key.into(), "0".into());
             }
         }
@@ -213,12 +208,8 @@ pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Resul
     Ok(())
 }
 pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
-    let exclusions: Vec<String> = config["artifacts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| format!(":(top,exclude,literal){}", a["path"].as_str().unwrap()))
-        .collect();
+    let artifacts = facts::artifact_directories(config)?;
+    let exclusions = facts::artifact_exclusions(&artifacts);
     for ignored in [false, true] {
         let mut args = vec!["ls-files", "--others", "--exclude-standard", "-z"];
         if ignored {

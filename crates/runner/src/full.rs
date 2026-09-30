@@ -169,7 +169,8 @@ pub fn check_observed(
     let a = reader.tree(root, base)?;
     let b = reader.tree(root, candidate)?;
     let delta = facts::delta(&a, &b);
-    let checkout = reader.checkout(root, candidate)?;
+    let checkout =
+        reader.checkout_excluding(root, candidate, &facts::artifact_directories(cfg)?)?;
     let state = no_symlink_parents(root, ".chrono-harness/state")?;
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
     let snapshot = tempfile::Builder::new()

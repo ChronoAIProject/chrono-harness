@@ -466,12 +466,8 @@ fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<()
     if !reader.tracked_changes(root, candidate)?.is_empty() {
         return Err("dirty tracked candidate inputs/index".into());
     }
-    for path in reader
-        .git(root, &["ls-files", "--others", "-z"])?
-        .split(|b| *b == 0)
-        .filter(|s| !s.is_empty())
-    {
-        let path = std::str::from_utf8(path).map_err(|_| "non UTF-8 untracked path")?;
+    let artifacts: Vec<_> = p.artifacts.iter().map(String::as_str).collect();
+    for path in reader.untracked_excluding(root, &artifacts)? {
         if !p.artifacts.iter().any(|a| path.starts_with(a)) {
             return Err(format!("untracked nonartifact input: {path}"));
         }

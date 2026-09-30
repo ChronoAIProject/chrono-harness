@@ -62,12 +62,7 @@ fn strings(v: &Value) -> BTreeSet<String> {
 }
 /// Classify observed untracked paths using an already schema-validated host configuration.
 pub fn nonartifact_paths(config: &Value, paths: &[String]) -> Vec<String> {
-    let artifacts: Vec<_> = config["artifacts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|a| a["path"].as_str().unwrap())
-        .collect();
+    let artifacts = facts::artifact_directories(config).expect("validated artifact declarations");
     paths
         .iter()
         .filter(|p| !artifacts.iter().any(|a| p.starts_with(a)))
@@ -129,12 +124,16 @@ fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<(
         );
         return Ok(());
     }
-    let observed = reader.checkout(root, &req.candidate.commit)?;
     // Newly written state artifacts may differ since acquisition; compare all governed dirt below.
     let bv = reader.registry_values(root, &req.base.commit, &req.config_path)?;
     let candidate_snapshot =
         reader.registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
     let cv = candidate_snapshot.values;
+    let observed = reader.checkout_excluding(
+        root,
+        &req.candidate.commit,
+        &facts::artifact_directories(&cv[&req.config_path])?,
+    )?;
     if facts::registry_digest(&bv, &cv)? != req.registries.digest
         || req.registries.base != req.base.root.join(".chrono-harness")
         || req.registries.candidate != root.join(".chrono-harness")

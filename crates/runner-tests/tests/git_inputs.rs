@@ -99,6 +99,49 @@ fn explicit_git_configuration_is_checked_before_each_real_read() {
 }
 
 #[test]
+fn artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs() {
+    let h = Host::new("");
+    fs::create_dir_all(h.root.join("cache[1]/allowed")).unwrap();
+    fs::write(h.root.join("cache[1]/allowed/output"), "generated").unwrap();
+    let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
+    let raw = reader
+        .git(&h.root, &["ls-files", "--others", "-z"])
+        .unwrap();
+    assert!(
+        raw.split(|b| *b == 0)
+            .any(|p| p == b"cache[1]/allowed/output")
+    );
+    let paths = reader
+        .untracked_excluding(&h.root, &["cache[1]/allowed/"])
+        .unwrap();
+    assert!(!paths.iter().any(|p| p == "cache[1]/allowed/output"));
+    for declaration in [
+        "cache[1]//allowed/",
+        "cache[1]/./allowed/",
+        "./cache[1]/allowed/",
+        "cache[1]/allowed",
+        "/",
+        "",
+    ] {
+        let paths = reader.untracked_excluding(&h.root, &[declaration]).unwrap();
+        assert!(
+            paths.iter().any(|p| p == "cache[1]/allowed/output"),
+            "normalized {declaration:?}"
+        );
+    }
+    let count = reader.observation()["processes"].as_array().unwrap().len();
+    fs::write(h.root.join(".git/config.worktree"), "changed").unwrap();
+    let error = reader
+        .untracked_excluding(&h.root, &["cache[1]/allowed/"])
+        .unwrap_err();
+    assert!(error.contains("no-extra-config"), "{error}");
+    assert_eq!(
+        reader.observation()["processes"].as_array().unwrap().len(),
+        count
+    );
+}
+
+#[test]
 fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
     for case in [
         "digest",

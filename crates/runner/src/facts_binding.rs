@@ -274,7 +274,7 @@ impl Reader {
             }
             let argv: Vec<String> =
                 serde_json::from_value(tool["version_argv"].clone()).map_err(|e| e.to_string())?;
-            let result = reader.invoke(root, argv, &[]);
+            let result = reader.invoke(root, argv, &[], false);
             if let Some(observation) = opening_observation {
                 *observation = reader.observation();
             }
@@ -356,16 +356,27 @@ impl Reader {
         }
         Ok(())
     }
-    fn invoke(&self, root: &Path, args: Vec<String>, input: &[u8]) -> Result<Vec<u8>, String> {
+    fn invoke(
+        &self,
+        root: &Path,
+        args: Vec<String>,
+        input: &[u8],
+        literal_inventory: bool,
+    ) -> Result<Vec<u8>, String> {
         let b = self.bound.as_ref().ok_or("missing binding")?;
         if fs::canonicalize(root).map_err(|e| self.error(&e.to_string()))? != b.root {
             return Err(self.error("Git facts root mismatch"));
         }
         self.unchanged().map_err(|e| self.error(&e))?;
-        let spec = CommandSpec {
+        let mut spec = CommandSpec {
             args,
             ..b.spec.clone()
         };
+        if literal_inventory {
+            for key in facts::LITERAL_PATHSPEC_CONTROLS {
+                spec.env.insert(key.into(), "0".into());
+            }
+        }
         let result = run_process_observed(root, &spec, input, text(&b.binding, "sha256")?)
             .map_err(|e| self.error(&e))?;
         let failure = result.failure.clone().or_else(|| {
@@ -397,7 +408,13 @@ impl Reader {
         if self.bound.is_none() {
             return facts::git(root, args);
         }
-        self.git_input(root, args, &[])
+        self.git_input(root, args, &[], false)
+    }
+    pub(crate) fn literal_inventory(&self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+        if self.bound.is_none() {
+            return facts::git_inventory(root, args, true);
+        }
+        self.git_input(root, args, &[], true)
     }
     /// Only an exact successful batch response proves absence. Process errors,
     /// wrong types and malformed responses are never converted to missing history.
@@ -407,6 +424,7 @@ impl Reader {
             root,
             &["cat-file", "--batch-check=%(objectname) %(objecttype)"],
             format!("{oid}\n").as_bytes(),
+            false,
         )?;
         if bytes == format!("{oid} commit\n").as_bytes() {
             Ok(true)
@@ -416,7 +434,13 @@ impl Reader {
             Err(self.error("expected exact commit or missing object response"))
         }
     }
-    fn git_input(&self, root: &Path, args: &[&str], input: &[u8]) -> Result<Vec<u8>, String> {
+    fn git_input(
+        &self,
+        root: &Path,
+        args: &[&str],
+        input: &[u8],
+        literal_inventory: bool,
+    ) -> Result<Vec<u8>, String> {
         let bound = self.bound.as_ref().ok_or("missing binding")?;
         let argv = [
             "--no-optional-locks",
@@ -428,6 +452,6 @@ impl Reader {
         .chain(args.iter().copied())
         .map(str::to_string)
         .collect();
-        self.invoke(root, argv, input)
+        self.invoke(root, argv, input, literal_inventory)
     }
 }

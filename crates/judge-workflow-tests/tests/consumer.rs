@@ -422,8 +422,7 @@ fn changed_base_rejects_old_integration_binding() {
     assert_eq!(e, 1);
     assert!(r["findings"].to_string().contains("different binding base"));
 }
-#[test]
-fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_transition() {
+fn migration_host() -> Host {
     let mut h = host();
     let decoder = fs::read(source().join(".chrono-harness/migrations/scoped-v1.py")).unwrap();
     let code = "import runpy,json,copy\nf=runpy.run_path('.chrono-harness/decoder.py')['convert']\nr=json.load(open('.chrono-harness/case.json'))\no=f(r)\nassert o['values']['.chrono-harness/FILEMAP.json']['schema_version']==2\nassert o['values']['.chrono-harness/FILEMAP.json']['execution_plans']['test:t']['operations']==['prepare.p','execute.t']\nbad=copy.deepcopy(r)\nbad['profile_value']['schema']='unsupported'\ntry:\n f(bad)\nexcept ValueError:\n pass\nelse:\n raise AssertionError('bad profile accepted')\n";
@@ -552,6 +551,12 @@ fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_tra
     h.values.get_mut(FM).unwrap()["schema_version"] = 2.into();
     h.values.get_mut(FM).unwrap()["execution_plans"] = plans;
     h.save();
+    h
+}
+
+#[test]
+fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_transition() {
+    let mut h = migration_host();
     let (e, r) = run(&h, "integration", None, |_| {});
     passed(e, &r);
     assert_eq!(r["tests"]["tests"]["test:decoder-tests"], "passed");
@@ -589,6 +594,49 @@ fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_tra
     let (e, r) = run(&h, "integration", None, |_| {});
     assert_eq!(e, 2);
     assert!(r["findings"].to_string().contains("E_MIGRATION_EVIDENCE"));
+}
+
+#[test]
+fn migration_artifacts_are_allowed_but_candidate_input_mutations_are_rejected() {
+    for path in [
+        ".chrono-harness/state/decoder-output",
+        "unknown-input",
+        "doc.txt",
+    ] {
+        let mut h = migration_host();
+        let decoder_path = h.root().join(".chrono-harness/decoder.py");
+        let decoder = fs::read_to_string(&decoder_path).unwrap();
+        fs::write(
+            &decoder_path,
+            format!(
+                "from pathlib import Path\nPath({path:?}).write_text('decoder output')\n{decoder}"
+            ),
+        )
+        .unwrap();
+        h.save();
+        let (exit, report) = run(&h, "integration", None, |_| {});
+        if path.starts_with(".chrono-harness/state/") {
+            passed(exit, &report);
+            assert_eq!(report["tests"]["tests"]["test:decoder-tests"], "passed");
+            assert_eq!(
+                fs::read_to_string(h.root().join(path)).unwrap(),
+                "decoder output"
+            );
+        } else {
+            assert_ne!(exit, 0, "decoder input mutation accepted: {path}");
+            assert!(
+                report["findings"]
+                    .to_string()
+                    .contains("migration changed candidate inputs"),
+                "{path}: {}",
+                report["findings"]
+            );
+            assert!(
+                !h.root().join(".chrono-harness/state/order").exists(),
+                "business operation ran after decoder mutation"
+            );
+        }
+    }
 }
 
 #[test]

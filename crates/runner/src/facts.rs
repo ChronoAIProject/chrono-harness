@@ -21,8 +21,52 @@ pub use crate::facts_binding::{OpenFailure, Reader, declaration as git_declarati
 
 pub type Tree = BTreeMap<String, Entry>;
 pub use crate::checkout::{changes as checkout_changes, tree as parse_tree};
+/// Inventory uses literal, case-sensitive registered directory prefixes.
+pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
+    "GIT_LITERAL_PATHSPECS",
+    "GIT_GLOB_PATHSPECS",
+    "GIT_NOGLOB_PATHSPECS",
+    "GIT_ICASE_PATHSPECS",
+];
+/// Do not normalize a declaration into a broader exclusion. Callers retain
+/// schema validation and classify any paths that the inventory returns.
+pub fn artifact_exclusions(artifacts: &[&str]) -> Vec<String> {
+    artifacts
+        .iter()
+        .filter(|path| {
+            path.strip_suffix('/').is_some_and(|directory| {
+                directory
+                    .split('/')
+                    .all(|part| !matches!(part, "" | "." | ".."))
+            })
+        })
+        .map(|path| format!(":(top,exclude,literal){path}"))
+        .collect()
+}
+/// Read explicit host declarations; ownership and schema admission stay with
+/// registration. This never discovers output directories or dependency edges.
+pub fn artifact_directories(config: &Value) -> Result<Vec<&str>, String> {
+    config["artifacts"]
+        .as_array()
+        .ok_or("missing artifact declarations")?
+        .iter()
+        .map(|artifact| {
+            artifact["path"]
+                .as_str()
+                .ok_or("invalid artifact path".into())
+        })
+        .collect()
+}
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let o = Command::new("git")
+    git_inventory(root, args, false)
+}
+pub(crate) fn git_inventory(
+    root: &Path,
+    args: &[&str],
+    literal_inventory: bool,
+) -> Result<Vec<u8>, String> {
+    let mut command = Command::new("git");
+    command
         .arg("--no-optional-locks")
         .arg("--no-replace-objects")
         .arg("-C")
@@ -30,9 +74,13 @@ pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
         .args(args)
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_INDEX_FILE")
-        .output()
-        .map_err(|e| e.to_string())?;
+        .env_remove("GIT_INDEX_FILE");
+    if literal_inventory {
+        for key in LITERAL_PATHSPEC_CONTROLS {
+            command.env(key, "0");
+        }
+    }
+    let o = command.output().map_err(|e| e.to_string())?;
     if !o.status.success() {
         return Err(format!(
             "E_HISTORY_MISSING: git {}: {}",
@@ -227,6 +275,32 @@ impl Reader {
             head,
             tracked,
             untracked,
+            index_flags: self.index_flags(root)?,
+        })
+    }
+    pub fn untracked_excluding(
+        &self,
+        root: &Path,
+        artifacts: &[&str],
+    ) -> Result<Vec<String>, String> {
+        let exclusions = artifact_exclusions(artifacts);
+        let mut args = vec!["ls-files", "--others", "-z", "--", "."];
+        args.extend(exclusions.iter().map(String::as_str));
+        let mut paths = paths(self.literal_inventory(root, &args)?)?;
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
+    }
+    pub fn checkout_excluding(
+        &self,
+        root: &Path,
+        candidate: &str,
+        artifacts: &[&str],
+    ) -> Result<Checkout, String> {
+        Ok(Checkout {
+            head: utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into(),
+            tracked: self.tracked_changes(root, candidate)?,
+            untracked: self.untracked_excluding(root, artifacts)?,
             index_flags: self.index_flags(root)?,
         })
     }

@@ -211,7 +211,8 @@ fn interpret_mode(
         .ok_or("migration tool missing")?;
     let argv: Vec<String> =
         serde_json::from_value(t["version_argv"].clone()).map_err(|e| e.to_string())?;
-    let before = reader.checkout(root, candidate_oid)?;
+    let artifacts = facts::artifact_directories(new.config())?;
+    let before = reader.checkout_excluding(root, candidate_oid, &artifacts)?;
     let tool = observation::tool(
         root,
         t["program"].as_str().unwrap(),
@@ -257,7 +258,7 @@ fn interpret_mode(
             receipt.exit_code, receipt.stderr
         ));
     }
-    let after = reader.checkout(root, candidate_oid)?;
+    let after = reader.checkout_excluding(root, candidate_oid, &artifacts)?;
     if before != after {
         return Err("E_SNAPSHOT_DIRTY: migration changed candidate inputs".into());
     }
