@@ -525,11 +525,22 @@ fn ci_impact(
                 seeds.insert(e.to.clone());
             }
         }
-        for t in changed(&old.policy.bindings, &new.policy.bindings) {
-            extras
-                .entry(t)
-                .or_default()
-                .insert("changed binding".into());
+        // Effective plans retain explicit v2 bounds and the projected legacy v1 bounds.
+        for test in changed(&old.plans, &new.plans) {
+            let before = old.plans.get(&test);
+            let after = new.plans.get(&test);
+            let reasons = extras.entry(test).or_default();
+            if before.map(|p| &p.operations) != after.map(|p| &p.operations) {
+                reasons.insert("changed binding".into());
+            }
+            if let (Some(before), Some(after)) = (before, after) {
+                if before.timeout_seconds != after.timeout_seconds {
+                    reasons.insert("changed operation timeout".into());
+                }
+                if before.output_limit_bytes != after.output_limit_bytes {
+                    reasons.insert("changed operation output limit".into());
+                }
+            }
         }
         let empty_units = BTreeMap::new();
         let old_units = old.policy.units.as_ref().unwrap_or(&empty_units);
@@ -548,18 +559,10 @@ fn ci_impact(
             }
         }
         let changed_tools = changed(&old.policy.tools, &new.policy.tools);
-        if !changed_tools.is_empty()
-            || old.policy.environment != new.policy.environment
-            || old.policy.operation_timeout_seconds != new.policy.operation_timeout_seconds
-            || old.policy.operation_output_limit_bytes != new.policy.operation_output_limit_bytes
-        {
+        if !changed_tools.is_empty() || old.policy.environment != new.policy.environment {
             for s in [old, new] {
                 for (test, ops) in &s.policy.bindings {
                     if old.policy.environment != new.policy.environment
-                        || old.policy.operation_timeout_seconds
-                            != new.policy.operation_timeout_seconds
-                        || old.policy.operation_output_limit_bytes
-                            != new.policy.operation_output_limit_bytes
                         || ops.iter().any(|op| {
                             s.operations
                                 .get(op)
@@ -569,16 +572,6 @@ fn ci_impact(
                         let reasons = extras.entry(test.clone()).or_default();
                         if old.policy.environment != new.policy.environment {
                             reasons.insert("changed environment".into());
-                        }
-                        if old.policy.operation_timeout_seconds
-                            != new.policy.operation_timeout_seconds
-                        {
-                            reasons.insert("changed operation timeout".into());
-                        }
-                        if old.policy.operation_output_limit_bytes
-                            != new.policy.operation_output_limit_bytes
-                        {
-                            reasons.insert("changed operation output limit".into());
                         }
                         for tool in &changed_tools {
                             if ops

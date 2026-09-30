@@ -122,6 +122,29 @@ fn fail(r: &Response, needle: &str) {
     assert_eq!(r.status, Status::Failed, "{r:#?}");
     assert!(serde_json::to_string(r).unwrap().contains(needle), "{r:#?}")
 }
+fn explicit_plans(h: &Host) {
+    let config = h.read(CONFIG);
+    let plans: serde_json::Map<String, Value> = config["policy"]["bindings"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(test, operations)| {
+            (
+                test.clone(),
+                json!({"operations":operations,
+                    "timeout_seconds":config["policy"]["operation_timeout_seconds"],
+                    "output_limit_bytes":config["policy"]["operation_output_limit_bytes"]}),
+            )
+        })
+        .collect();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["schema_version"] = json!(2);
+        v["execution_plans"] = json!(plans);
+    });
+    h.change_registry(CONFIG, |v| {
+        v["policy"].as_object_mut().unwrap().remove("bindings");
+    });
+}
 #[test]
 fn source_closure_executes_real_command() {
     let h = Host::new();
@@ -651,5 +674,84 @@ fn operation_bounds_changes_execute_registered_command() {
                 .unwrap()
                 .contains(&json!(reason))
         );
+    }
+}
+
+#[test]
+fn filemap_v2_unchanged_plans_ignore_legacy_bound_changes() {
+    let h = Host::new();
+    explicit_plans(&h);
+    let b = h.commit();
+    for key in ["operation_timeout_seconds", "operation_output_limit_bytes"] {
+        h.change_registry(CONFIG, |v| v["policy"][key] = json!(1));
+        let c = h.commit();
+        let r = h.check(&b, &c);
+        pass(&r);
+        assert_eq!(r.evidence["selected"], json!([]));
+        assert_eq!(r.evidence["executed"], json!([]));
+        assert_eq!(h.calls(), 0);
+    }
+}
+
+#[test]
+fn filemap_v2_plan_operations_additions_and_removals_keep_obligations() {
+    for change in ["operations", "shrink", "reorder", "add", "remove"] {
+        let h = Host::new();
+        h.change_registry(".chrono-harness/projects.json", |v| {
+            v["projects"][1]["actions"]["prepare"] =
+                json!({"operation":"prepare.suite","tool":"sh","argv":["check.sh"]});
+        });
+        explicit_plans(&h);
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            v["project_edges"] = json!([]);
+            for file in v["files"].as_array_mut().unwrap() {
+                file["edges"] = json!([]);
+            }
+            if change == "add" {
+                v["execution_plans"] = json!({});
+            } else if matches!(change, "shrink" | "reorder") {
+                v["execution_plans"]["test:suite"]["operations"] =
+                    json!(["prepare.suite", "test.suite"]);
+            }
+        });
+        let b = h.commit();
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| match change {
+            "operations" => {
+                v["execution_plans"]["test:suite"]["operations"] =
+                    json!(["prepare.suite", "test.suite"]);
+            }
+            "shrink" => {
+                v["execution_plans"]["test:suite"]["operations"] = json!(["test.suite"]);
+            }
+            "reorder" => {
+                v["execution_plans"]["test:suite"]["operations"] =
+                    json!(["test.suite", "prepare.suite"]);
+            }
+            "add" => {
+                v["execution_plans"]["test:suite"] = json!({"operations":["test.suite"],
+                    "timeout_seconds":3,"output_limit_bytes":4096});
+            }
+            "remove" => v["execution_plans"] = json!({}),
+            _ => unreachable!(),
+        });
+        let c = h.commit();
+        let r = h.check(&b, &c);
+        assert_eq!(r.evidence["selected"], json!(["test:suite"]));
+        assert_eq!(
+            r.evidence["selection_explanation"]["extra_selections"]["test:suite"],
+            json!(["changed binding"])
+        );
+        if change == "remove" {
+            fail(&r, "affected binding removed: test:suite");
+            assert_eq!(h.calls(), 0);
+        } else {
+            pass(&r);
+            let operations = if matches!(change, "operations" | "reorder") {
+                2
+            } else {
+                1
+            };
+            assert_eq!(h.calls(), operations);
+        }
     }
 }
