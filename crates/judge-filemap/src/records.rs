@@ -43,7 +43,7 @@ fn normalize(v: &Value, key: &str) -> Value {
 }
 pub fn inventory(
     r: &Registrations,
-    config_path: &str,
+    _config_path: &str,
     nodes: &BTreeMap<String, NodeView<'_>>,
     effective_environment: Option<&BTreeMap<String, String>>,
 ) -> BTreeMap<String, Record> {
@@ -64,7 +64,10 @@ pub fn inventory(
         );
     };
     for (scope, value, path) in [
-        ("config", r.config(), config_path),
+        // The policy record points at the effective target's real path.  The
+        // request/registration entry path remains available through the
+        // Registrations identity and is never substituted for this source.
+        ("config", r.config(), r.effective_config_path()),
         (
             "projects",
             r.projects(),

@@ -1,8 +1,13 @@
 //! Shared strict registration data; loading does not assert readiness or semantic validity.
 use crate::{Result, schema};
+use chrono_harness::facts;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 pub struct Registrations {
+    entry_path: String,
+    effective_path: String,
+    selection: Option<serde_json::Value>,
+    entry: Value,
     pub(crate) config: Value,
     pub(crate) judges: Value,
     pub(crate) projects: Value,
@@ -13,7 +18,12 @@ pub struct Registrations {
 }
 impl Registrations {
     pub fn load(v: &BTreeMap<String, Value>, config_path: &str) -> Result<Self> {
-        let config = v.get(config_path).ok_or("missing config")?.clone();
+        let identity = facts::registry_identity(v, config_path)
+            .map_err(|e| format!("configuration selection: {e}"))?;
+        let config = v
+            .get(&identity.effective_path)
+            .ok_or("missing effective config")?
+            .clone();
         schema::config(&config).map_err(|e| format!("config: {e}"))?;
         let get = |k: &str| -> Result<Value> {
             Ok(v.get(
@@ -25,6 +35,10 @@ impl Registrations {
             .clone())
         };
         let s = Self {
+            entry: v[config_path].clone(),
+            entry_path: identity.entry_path,
+            effective_path: identity.effective_path,
+            selection: identity.selection,
             judges: get("judges")?,
             projects: get("projects")?,
             filemap: get("filemap")?,
@@ -51,16 +65,33 @@ impl Registrations {
     pub fn config(&self) -> &Value {
         &self.config
     }
+    /// Stable CLI/profile entry identity supplied by the caller.
+    pub fn entry_path(&self) -> &str {
+        &self.entry_path
+    }
+    pub fn entry(&self) -> &Value {
+        &self.entry
+    }
+    /// Direct policy path selected for this endpoint.
+    pub fn effective_config_path(&self) -> &str {
+        &self.effective_path
+    }
+    /// Selector binding metadata, when the entry was a platform map.
+    pub fn selection(&self) -> Option<&Value> {
+        self.selection.as_ref()
+    }
     pub(crate) fn schemas(
         v: &BTreeMap<String, Value>,
         config_path: &str,
     ) -> Result<BTreeMap<String, (String, u64)>> {
+        let effective = facts::registry_identity(v, config_path)?.effective_path;
+        let config = v.get(&effective).ok_or("missing effective config")?;
         let mut out = BTreeMap::new();
         for key in ["config", "projects", "filemap", "judges", "workflow"] {
             let path = if key == "config" {
-                config_path
+                effective.as_str()
             } else {
-                v[config_path]["registries"][key]
+                config["registries"][key]
                     .as_str()
                     .ok_or("original registry path")?
             };

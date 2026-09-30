@@ -242,7 +242,11 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     let mut ops = BTreeMap::new();
     let mut nodes = BTreeSet::new();
     if let Some(config) = &p.registration_config {
-        let config = json(&at(reader, root, oid, config)?)?;
+        let snapshot = reader.registry_snapshot(root, oid, config)?;
+        let config = snapshot
+            .values
+            .get(&snapshot.effective_path)
+            .ok_or("missing effective registration config")?;
         for tool in config["tools"].as_array().ok_or("tools missing")? {
             nodes.insert(format!("tool:{}", text(tool, "id")?));
         }
@@ -745,8 +749,13 @@ fn evaluate(
     if let (Some(config_path), Some(base)) = (&p.registration_config, &req.base) {
         let a = reader.registry_values(root, base, config_path)?;
         let b = reader.registry_values(root, &req.candidate, config_path)?;
+        let _a_identity = chrono_harness::facts::registry_identity(&a, config_path)?;
+        let b_identity = chrono_harness::facts::registry_identity(&b, config_path)?;
+        let b_config = b
+            .get(&b_identity.effective_path)
+            .ok_or("missing effective candidate registration config")?;
         let mut template: Vec<String> =
-            serde_json::from_value(b[config_path]["canonical_check"]["argv"].clone())
+            serde_json::from_value(b_config["canonical_check"]["argv"].clone())
                 .map_err(|e| e.to_string())?;
         if let Some(scope) = &req.scope {
             template.extend(scope.argv());
@@ -758,7 +767,7 @@ fn evaluate(
             &object!({"base":req.base,"candidate":req.candidate}),
         )?;
         environment.clear();
-        for key in b[config_path]["environment"]["inherit"]
+        for key in b_config["environment"]["inherit"]
             .as_array()
             .ok_or("environment inherit missing")?
         {
@@ -767,7 +776,7 @@ fn evaluate(
                 environment.insert(key.into(), value);
             }
         }
-        for (key, value) in b[config_path]["environment"]["values"]
+        for (key, value) in b_config["environment"]["values"]
             .as_object()
             .ok_or("environment values missing")?
         {
@@ -777,7 +786,7 @@ fn evaluate(
             );
         }
         environment.extend(p.environment.clone());
-        environment_policy = b[config_path]["environment"].clone();
+        environment_policy = b_config["environment"].clone();
         for (key, value) in &p.environment {
             environment_policy["values"][key] = object!(value);
         }

@@ -710,6 +710,68 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
         sha256(&fs::read(&program).unwrap())
     );
     assert!(fs::read_to_string(trace).unwrap().contains("rev-parse"));
+
+    // The same bound v3 policy can be reached through the native selector
+    // entry. Capture publishes a versioned selection binding while retaining
+    // the caller's entry path for later registration validation.
+    let selector = ".chrono-harness/platforms.json";
+    fs::write(
+        root.join(selector),
+        serde_json::to_vec(&value!({
+            "schema": "chrono-git-configs/v1",
+            "platforms": {format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH): CONFIG}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let selected_base = commit(&root);
+    let (exit, selected, error) = invoke(
+        &root,
+        &[
+            "capture",
+            "--config",
+            selector,
+            "--commit",
+            &selected_base,
+            "--output",
+            ".chrono-harness/state/selected-base.json",
+        ],
+    );
+    assert_eq!(exit, 0, "{error}");
+    assert_eq!(selected["schema"], "chrono-input-snapshot/v3");
+    assert_eq!(selected["config_path"], selector);
+    assert_eq!(selected["effective_config_path"], CONFIG);
+    assert_eq!(selected["selection"]["config_path"], CONFIG);
+    fs::write(root.join("src.bin"), b"selected candidate").unwrap();
+    let selected_candidate = commit(&root);
+    let (exit, _, error) = invoke(
+        &root,
+        &[
+            "capture",
+            "--config",
+            selector,
+            "--commit",
+            &selected_candidate,
+            "--output",
+            ".chrono-harness/state/selected-candidate.json",
+        ],
+    );
+    assert_eq!(exit, 0, "{error}");
+    let (exit, paired, error) = invoke(
+        &root,
+        &[
+            "pair",
+            "--base-snapshot",
+            ".chrono-harness/state/selected-base.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/selected-candidate.json",
+            "--output",
+            ".chrono-harness/state/selected-paired.json",
+        ],
+    );
+    assert_eq!(exit, 0, "{error}");
+    assert_eq!(paired["base"]["schema"], "chrono-input-snapshot/v3");
+    assert_eq!(paired["candidate"]["effective_config_path"], CONFIG);
     fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
     let (exit, _, error) = invoke(
         &root,

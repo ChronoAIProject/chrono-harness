@@ -118,3 +118,140 @@ fn registry_snapshot_rejects_missing_objects_and_invalid_registered_json() {
         "later damage cannot replace the fixed valid snapshot"
     );
 }
+
+#[test]
+fn selector_snapshot_keeps_entry_and_independent_endpoint_targets() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join(".chrono-harness")).unwrap();
+    git(root, &["init", "-q"]);
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let selector = ".chrono-harness/platforms.json";
+    let base_target = ".chrono-harness/full base.json";
+    let candidate_target = ".chrono-harness/full candidate.json";
+    let base_judges = ".chrono-harness/base judges.json";
+    let candidate_judges = ".chrono-harness/candidate judges.json";
+    let policy = |judges: &str| {
+        json!({"schema_version":3,"status":"proposed","enforcement":"not-implemented",
+            "registries":{"judges":judges,"projects":".chrono-harness/projects.json","filemap":".chrono-harness/filemap.json","workflow":".chrono-harness/workflow.json"}})
+    };
+    fs::write(root.join(base_judges), b"{\"judges\":[]}\n").unwrap();
+    fs::write(
+        root.join(".chrono-harness/projects.json"),
+        b"{\"projects\":[],\"scripts\":[]}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join(".chrono-harness/filemap.json"),
+        b"{\"schema_version\":1,\"files\":[],\"test_costs\":[]}\n",
+    )
+    .unwrap();
+    fs::write(root.join(".chrono-harness/workflow.json"), b"{\"schema_version\":1,\"historical_profiles\":[],\"migrations\":[],\"retirements\":[],\"stability\":[]}\n").unwrap();
+    fs::write(
+        root.join(base_target),
+        serde_json::to_vec(&policy(base_judges)).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.join(selector),
+        serde_json::to_vec(
+            &json!({"schema":"chrono-git-configs/v1","platforms":{platform.clone():base_target}}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    git(root, &["add", "."]);
+    git(
+        root,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "base",
+        ],
+    );
+    let base = git(root, &["rev-parse", "HEAD"]);
+
+    fs::remove_file(root.join(base_target)).unwrap();
+    fs::remove_file(root.join(base_judges)).unwrap();
+    fs::write(
+        root.join(candidate_judges),
+        b"{\"judges\":[{\"id\":\"candidate\"}]}\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join(candidate_target),
+        serde_json::to_vec(&policy(candidate_judges)).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.join(selector),
+        serde_json::to_vec(
+            &json!({"schema":"chrono-git-configs/v1","platforms":{platform.clone():candidate_target}}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    git(root, &["add", "."]);
+    git(
+        root,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "candidate",
+        ],
+    );
+    let candidate = git(root, &["rev-parse", "HEAD"]);
+
+    let old = facts::registry_snapshot(root, &base, selector).unwrap();
+    assert_eq!(old.entry_path, selector);
+    assert_eq!(old.effective_path, base_target);
+    assert!(old.values.contains_key(selector));
+    assert!(old.values.contains_key(base_target));
+    assert!(!old.values.contains_key(candidate_target));
+    let new = facts::registry_snapshot(root, &candidate, selector).unwrap();
+    assert_eq!(new.entry_path, selector);
+    assert_eq!(new.effective_path, candidate_target);
+    assert!(new.values.contains_key(selector));
+    assert!(new.values.contains_key(candidate_target));
+    assert!(!new.values.contains_key(base_target));
+    assert_ne!(old.effective_path, new.effective_path);
+    assert_eq!(
+        old.bytes[base_target],
+        serde_json::to_vec(&policy(base_judges)).unwrap()
+    );
+    assert_eq!(
+        new.bytes[candidate_target],
+        serde_json::to_vec(&policy(candidate_judges)).unwrap()
+    );
+
+    // A missing selected target is an endpoint error; it cannot fall back to
+    // the old target or alias the selector value into a policy document.
+    fs::write(
+        root.join(selector),
+        serde_json::to_vec(&json!({"schema":"chrono-git-configs/v1","platforms":{platform.clone():".chrono-harness/missing.json"}})).unwrap(),
+    )
+    .unwrap();
+    git(root, &["add", selector]);
+    git(
+        root,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "missing target",
+        ],
+    );
+    let missing = git(root, &["rev-parse", "HEAD"]);
+    assert!(facts::registry_snapshot(root, &missing, selector).is_err());
+}

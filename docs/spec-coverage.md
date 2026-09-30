@@ -68,6 +68,26 @@ The registered execution increment adds routes/projects, FILEMAP v2, retained en
 
 Config v3 adds an explicit candidate Git binding before acquisition and through all seven full judges, initial inventory and input capture. Its optional `chrono-git-inputs/v1` guard checks explicitly referenced file identities or absence before the version probe and around every Git process, preserving the original child result on post-call drift. Real full/initial consumers and runner regressions cover adoption, no-launch failures, per-call mutation, request binding and legacy controls. Dedicated regressions preserve version 1/2 semantics and original process failures; the seven-judge integration/delivery consumer rejects ambient Git. This is bounded executable/environment and declared-file binding, not complete Git/OS/delegated input closure.
 
+The full-entry native selector increment reuses the same strict `chrono-git-configs/v1`
+parser and OS-ARCH mapping for full, initial, input capture, scoped optional
+registration and full-CI check configuration. `runner-tests::selector_snapshot_keeps_entry_and_independent_endpoint_targets`
+checks fixed base/candidate targets, independent target paths, missing-target rejection
+and real-path byte retention. Registration tests execute selected initial inventory;
+workflow consumers execute selected seven-judge integration/delivery. Input consumers pass actual captured/paired
+selected v3 snapshots through all seven judges, including direct/map transitions,
+independent target paths, historical target deletion, old-only dependency/test edges
+and docs nonexecution. They execute a selected workflow schema migration with a v3
+decoder and compatibility test, and reject missing/substituted bindings and rewritten
+historical bytes/config. Projects tests exercise scoped optional selected registration
+against a direct v3 control, including effective tools/environment, actual operations
+and canonical invocation rejection. Workflow tests prepare and consume a selected
+full-CI command. Full/initial/
+registration/mixed/workflow consumers now carry entry/effective identities and selector
+metadata through their existing request and view contracts; selected historical views
+use versioned view/decoder bindings and selected input captures use snapshot v3. This resolves the full
+configuration entry obstacle while full host activation, complete effective inputs,
+native full dispatch, parity and formal Rust refinement remain outstanding.
+
 CI provider v3 binds event acquisition through an explicit full-v3 `facts_config`. Dedicated `ci-tests/tests/git_facts.rs` regressions use real Git objects/remotes and the actual CLI to check missing-history acquisition, exact probe interpretation, failed probe/fetch evidence, candidate policy/checkout binding, declared environment, generated initial-profile selection and legacy controls. Native generated-v3 host adoption, network/credential/configuration closure and parity are still outstanding.
 
 The public beta.17 `chrono-git-configs/v1` selector lets scoped/provider facts entries

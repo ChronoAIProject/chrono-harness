@@ -133,11 +133,15 @@ fn run_bound(h: &Host, kind: &str, digest: Option<&str>) -> (i32, Value) {
     h.run_with_context(
         |retained| {
             for (endpoint, oid) in [("base", &h.base), ("candidate", &h.candidate)] {
-                let cfg: Value = serde_json::from_slice(
-                    &chrono_harness::facts::blob(&root, oid, CONFIG).unwrap(),
-                )
-                .unwrap();
+                let snapshot =
+                    chrono_harness::facts::registry_snapshot(&root, oid, CONFIG).unwrap();
+                let cfg = &snapshot.values[&snapshot.effective_path];
                 retained[endpoint]["schema"] = json!("chrono-input-snapshot/v2");
+                if let Some(selection) = snapshot.selection {
+                    retained[endpoint]["schema"] = json!("chrono-input-snapshot/v3");
+                    retained[endpoint]["effective_config_path"] = json!(snapshot.effective_path);
+                    retained[endpoint]["selection"] = selection;
+                }
                 retained[endpoint]["config_path"] = json!(CONFIG);
                 retained[endpoint]["config_digest"] =
                     json!(chrono_harness::wire::digest(&cfg).unwrap());
@@ -158,7 +162,24 @@ fn run_bound(h: &Host, kind: &str, digest: Option<&str>) -> (i32, Value) {
 
 #[test]
 fn all_full_judges_and_integration_delivery_use_candidate_bound_git() {
-    let h = bound_host();
+    all_full_judges_consumer(false);
+}
+
+#[test]
+fn selected_full_judges_and_integration_delivery_use_entry_bound_policy() {
+    all_full_judges_consumer(true);
+}
+
+fn all_full_judges_consumer(selected_mode: bool) {
+    let mut h = bound_host();
+    if selected_mode {
+        select(&mut h, NATIVE_CONFIG);
+        h.save();
+        h.base = h.candidate.clone();
+        fs::write(h.root().join("policy.json"), "{\"limit\":3}").unwrap();
+        fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+        h.save();
+    }
     let state = h.root().join(".chrono-harness/state");
     let selected = state.join("selected Git λ");
     let trace = state.join("git-trace");
@@ -204,8 +225,49 @@ fn all_full_judges_and_integration_delivery_use_candidate_bound_git() {
 
 #[test]
 fn full_ci_prepared_context_runs_actual_integration_and_delivery_without_policy_substitution() {
+    full_ci_consumer(false);
+}
+
+#[test]
+fn selected_full_ci_prepares_and_consumes_unchanged_canonical_command() {
+    full_ci_consumer(true);
+}
+
+const NATIVE_CONFIG: &str = ".chrono-harness/full native.json";
+fn select(h: &mut Host, target: &str) {
+    let config = h.values.remove(CONFIG).unwrap();
+    h.values.insert(target.into(), config);
+    h.values.insert(
+        CONFIG.into(),
+        json!({"schema":"chrono-git-configs/v1",
+        "platforms":{format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH):target}}),
+    );
+    let mut f = file(target, json!([]));
+    f["surface"] = json!("judge-policy");
+    h.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(f);
+}
+
+fn full_ci_consumer(selected: bool) {
     let mut h = bound_host();
+    if selected {
+        select(&mut h, NATIVE_CONFIG);
+    }
     let root = h.root();
+    let linked_entry = ".chrono-harness/linked entry.json";
+    let linked_directory = ".chrono-harness/linked directory";
+    std::os::unix::fs::symlink("config.json", root.join(linked_entry)).unwrap();
+    std::os::unix::fs::symlink(".", root.join(linked_directory)).unwrap();
+    for path in [linked_entry, linked_directory] {
+        let mut f = file(path, json!([]));
+        f["surface"] = json!("documentation");
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(f);
+    }
     let ci = source().join("crates/ci/target/debug/chrono-ci");
     let source_path = ".chrono-harness/ci/full.json";
     let workflow_path = ".github/workflows/full.yml";
@@ -281,6 +343,14 @@ fn full_ci_prepared_context_runs_actual_integration_and_delivery_without_policy_
         );
         let prepared: Value = serde_json::from_slice(&out.stdout).unwrap();
         assert_eq!(prepared["governance"], "not-evaluated");
+        assert_eq!(prepared["canonical_argv"][3], CONFIG);
+        if selected {
+            assert_eq!(prepared["git_facts"]["selection"]["path"], CONFIG);
+            assert_eq!(
+                prepared["git_facts"]["selection"]["config_path"],
+                NATIVE_CONFIG
+            );
+        }
         assert_eq!(
             fs::read(root.join(".chrono-harness/state/context.json")).unwrap(),
             context
@@ -312,6 +382,122 @@ fn full_ci_prepared_context_runs_actual_integration_and_delivery_without_policy_
     assert_eq!(workflow(&delivery)["mode"], "delivery");
     assert_eq!(delivery["tests"]["tests"], local["tests"]["tests"]);
     assert_eq!(delivery["parity"]["status"], "unestablished");
+    // Exercise the real CLI's root/config adaptation, including a caller cwd
+    // outside the host and a relative path from a nested cwd. A direct policy
+    // keeps its legacy alias behavior; a selector must reach the shared guard
+    // with its supplied entry still intact, before Git or business operations.
+    let invoke = |cwd: &std::path::Path, config: &str| {
+        Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(cwd)
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "check",
+                "--config",
+                config,
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--context",
+                ".chrono-harness/state/context.json",
+            ])
+            .output()
+            .unwrap()
+    };
+    for path in [
+        CONFIG,
+        linked_entry,
+        ".chrono-harness/linked directory/config.json",
+    ] {
+        for (cwd, argument) in [
+            (root.clone(), path.to_owned()),
+            (
+                std::path::PathBuf::from("/"),
+                root.join(path).to_str().unwrap().to_owned(),
+            ),
+            (root.join("p"), format!("../{path}")),
+        ] {
+            let trace_path = root.join(".chrono-harness/state/git-trace");
+            let order_path = root.join(".chrono-harness/state/order");
+            let trace = fs::read(&trace_path).unwrap();
+            let order = fs::read(&order_path).unwrap();
+            let out = invoke(&cwd, &argument);
+            if selected && path != CONFIG {
+                assert_eq!(
+                    out.status.code(),
+                    Some(2),
+                    "Q1: linked selector must fail before launch; Git launched={}, business launched={}; stderr={}",
+                    fs::read(&trace_path).unwrap() != trace,
+                    fs::read(&order_path).unwrap() != order,
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                assert!(
+                    String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:")
+                );
+                assert!(out.stdout.is_empty());
+                assert_eq!(fs::read(&trace_path).unwrap(), trace);
+                assert_eq!(fs::read(&order_path).unwrap(), order);
+            } else {
+                let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+                passed(out.status.code().unwrap(), &report);
+                assert_eq!(
+                    report["git_facts"]["config_path"],
+                    if selected { NATIVE_CONFIG } else { CONFIG }
+                );
+                assert_eq!(report["tests"]["tests"]["test:t"], "passed");
+                assert_ne!(fs::read(&trace_path).unwrap(), trace);
+                assert_eq!(
+                    fs::read(&order_path).unwrap(),
+                    [order, b"pt".to_vec()].concat()
+                );
+            }
+        }
+    }
+    if selected {
+        // Full-CI preparation must reject the same literal linked entries.
+        let original = fs::read(root.join(source_path)).unwrap();
+        for path in [linked_entry, ".chrono-harness/linked directory/config.json"] {
+            let mut linked_provider = provider.clone();
+            linked_provider["check_config"] = json!(path);
+            fs::write(
+                root.join(source_path),
+                serde_json::to_vec(&linked_provider).unwrap(),
+            )
+            .unwrap();
+            let trace = fs::read(root.join(".chrono-harness/state/git-trace")).unwrap();
+            let order = fs::read(root.join(".chrono-harness/state/order")).unwrap();
+            let out = Command::new(&ci)
+                .current_dir(&root)
+                .args([
+                    "prepare",
+                    "--host-root",
+                    ".",
+                    "--config",
+                    source_path,
+                    "--event",
+                    "workflow_dispatch",
+                    "--payload",
+                    ".chrono-harness/state/payload.json",
+                    "--workflow-revision",
+                    &h.candidate,
+                ])
+                .output()
+                .unwrap();
+            assert_eq!(out.status.code(), Some(1));
+            assert!(String::from_utf8_lossy(&out.stderr).contains("symlink path is not allowed:"));
+            assert_eq!(
+                fs::read(root.join(".chrono-harness/state/git-trace")).unwrap(),
+                trace
+            );
+            assert_eq!(
+                fs::read(root.join(".chrono-harness/state/order")).unwrap(),
+                order
+            );
+            assert!(!root.join(".chrono-harness/state/preparation.json").exists());
+        }
+        fs::write(root.join(source_path), original).unwrap();
+    }
     // Preparation transports an invalid freshness claim; only workflow judges it.
     let context_path = root.join(".chrono-harness/state/context.json");
     let mut stale: Value = serde_json::from_slice(&fs::read(&context_path).unwrap()).unwrap();

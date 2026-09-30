@@ -178,7 +178,10 @@ pub fn check(
         return Err("initial inventory requires parentless commit".into());
     }
     let registries = reader.registry_values(root, candidate, &profile.host_config)?;
-    let cfg = &registries[&profile.host_config];
+    let identity = facts::registry_identity(&registries, &profile.host_config)?;
+    let cfg = registries
+        .get(&identity.effective_path)
+        .ok_or("missing effective initial configuration")?;
     let mut environment = BTreeMap::<String, String>::new();
     let mut inherited = BTreeMap::<String, Option<String>>::new();
     for key in cfg["environment"]["inherit"]
@@ -220,7 +223,8 @@ pub fn check(
         registry_digest: wire::digest(&registries)?,
         checkout: reader.checkout_excluding(root, candidate, &facts::artifact_directories(cfg)?)?,
         runner: runner.clone(),
-        observations: value!({"git_facts":reader.observation(),"entry":entry,"environment":{"inherited":inherited,"effective":environment}}),
+        observations: value!({"git_facts":reader.observation(),"entry":entry,"environment":{"inherited":inherited,"effective":environment},
+            "registry_binding":{"entry_path":identity.entry_path,"effective_path":identity.effective_path,"selection":identity.selection}}),
         prior_results: vec![],
     };
     let mut responses = BTreeMap::<String, Response>::new();

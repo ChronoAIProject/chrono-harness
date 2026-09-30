@@ -9,6 +9,18 @@ pub(crate) struct Selection {
     pub observation: Value,
 }
 
+/// The identity of the configuration used by a fixed endpoint.  `entry_path`
+/// is always the path supplied by the caller; `effective_path` is the direct
+/// v3 target selected from that entry (or the entry itself for a direct
+/// configuration).  The two paths are deliberately kept separate so a
+/// selector document is never represented as the selected policy document.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Identity {
+    pub entry_path: String,
+    pub effective_path: String,
+    pub selection: Option<Value>,
+}
+
 /// A direct policy keeps its original semantics. A selector has one level only;
 /// all paths are host declarations, and unsupported platforms have no fallback.
 pub(crate) fn load(
@@ -16,6 +28,19 @@ pub(crate) fn load(
     path: &str,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
     let bytes = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
+    resolve(path, bytes, |target| {
+        fs::read(no_symlink_parents(root, target)?).map_err(|e| e.to_string())
+    })
+}
+
+/// Resolve a selector from bytes belonging to a fixed endpoint.  The reader
+/// supplied by the caller is the only way to acquire the selected target, so
+/// historical endpoints cannot accidentally use the candidate working tree.
+pub(crate) fn resolve(
+    path: &str,
+    bytes: Vec<u8>,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
     let config = json(&bytes)?;
     if config["schema"] != "chrono-git-configs/v1" {
         return Ok((path.into(), bytes, config, None));
@@ -46,8 +71,7 @@ pub(crate) fn load(
         .get(&platform)
         .and_then(Value::as_str)
         .ok_or_else(|| format!("Git config selector has no registered platform {platform}"))?;
-    let selected_bytes =
-        fs::read(no_symlink_parents(root, selected)?).map_err(|e| e.to_string())?;
+    let selected_bytes = read(selected)?;
     let selected_config = json(&selected_bytes)?;
     if selected_config["schema_version"] != 3 || selected_config.get("schema").is_some() {
         return Err(
@@ -66,6 +90,48 @@ pub(crate) fn load(
         selected_config,
         Some(selection),
     ))
+}
+
+/// Resolve a selector using an already captured registry value map.  This is
+/// used by registration consumers after the fixed snapshot has been built and
+/// verifies that the real selected target value is present under its own path.
+pub fn identity(
+    values: &std::collections::BTreeMap<String, Value>,
+    path: &str,
+) -> Result<Identity, String> {
+    let entry = values.get(path).ok_or("missing configuration entry")?;
+    if entry["schema"] != "chrono-git-configs/v1" {
+        return Ok(Identity {
+            entry_path: path.into(),
+            effective_path: path.into(),
+            selection: None,
+        });
+    }
+    // Reuse the same strict parser and platform key validation as file loading.
+    let bytes = serde_json::to_vec(entry).map_err(|e| e.to_string())?;
+    let (effective_path, _, _, selection) = resolve(path, bytes, |target| {
+        let value = values
+            .get(target)
+            .ok_or_else(|| format!("missing selected configuration target {target}"))?;
+        serde_json::to_vec(value).map_err(|e| e.to_string())
+    })?;
+    let selection = selection.map(|s| {
+        let mut observation = s.observation;
+        // The exact selector bytes are retained in the snapshot map.  The
+        // value-only identity intentionally carries structural binding fields
+        // so it can be reconstructed after JSON decoding without inventing a
+        // digest for reformatted bytes.
+        if let Some(object) = observation.as_object_mut() {
+            object.remove("sha256");
+            object.insert("schema".into(), value!("chrono-registry-selection/v1"));
+        }
+        observation
+    });
+    Ok(Identity {
+        entry_path: path.into(),
+        effective_path,
+        selection,
+    })
 }
 
 fn host_path(path: &str) -> Result<(), String> {
