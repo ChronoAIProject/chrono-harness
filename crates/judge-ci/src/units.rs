@@ -3,11 +3,26 @@ use chrono_harness::units::{Scope, Unit};
 
 pub(super) fn validate(config: &CheckConfig, policy: &Policy) -> Result<(), String> {
     if config.schema != chrono_harness::units::PROFILE {
-        if config.policy.get("units").is_some() || config.policy.get("shared_operations").is_some()
+        if config.policy.get("units").is_some()
+            || config.policy.get("shared_operations").is_some()
+            || config.policy.get("collection_limits").is_some()
         {
             return Err("CI units require chrono-ci-check/v3".into());
         }
         return Ok(());
+    }
+    if config.policy.get("collection_limits").is_some() && policy.collection_limits.is_none() {
+        return Err("collection_limits must be an object when supplied".into());
+    }
+    if let Some(limits) = &policy.collection_limits {
+        for (name, value) in [
+            ("manifest_bytes", limits.manifest_bytes),
+            ("report_bytes", limits.report_bytes),
+        ] {
+            if value == 0 || value >= usize::MAX as u64 {
+                return Err(format!("invalid collection limit {name}: {value}"));
+            }
+        }
     }
     let units = policy.units.as_ref().ok_or("v3 requires explicit units")?;
     policy

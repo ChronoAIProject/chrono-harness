@@ -110,6 +110,40 @@ Missing or duplicate evidence, stale bindings, edited output and unsuccessful
 units cannot pass. It executes no business test operations. An empty DELTA can
 be collected with an explicitly empty report list.
 
+Scoped v3 reports use compact JSON so retained byte arrays do not acquire one
+indented line per byte. The parsed report, original process bytes and their hashes
+are unchanged; the stored report and command stdout remain identical. Historical
+reports keep their original bytes and hashes, including pretty-printed reports.
+
+Hosts may declare independent collection read limits in their check policy:
+
+```json
+"collection_limits": {
+  "manifest_bytes": 1048576,
+  "report_bytes": 134217728
+}
+```
+
+Both values are positive byte counts below the platform's `usize::MAX`;
+an omitted object preserves the existing
+64 MiB limit for each file. A supplied object requires both fields and accepts no
+unknown fields or explicit `null`. It is a scoped-v3 extension; older binaries reject the new field,
+so install a release containing it before adopting the policy. Each original unit
+report is read and verified separately. The limit applies to its actual serialized
+bytes, not its compressed download or parsed payload; it is distinct from the
+judge process stdout limit. Equality is accepted; overflow fails with the path,
+limit name and observed byte count before parsing that input. A bounded reader
+also stops a file growing beyond its configured limit. Limits are host resource
+policy, not an assertion that the host has enough memory or that inputs are
+complete. Adjust them from measured original reports; do not rewrite old evidence
+to make its digest or size fit. Collection still verifies every required report
+and never reruns business operations.
+
+The reports must already match the candidate and configuration being collected.
+Changing limits changes that configuration's identity; it does not authorize
+reuse of reports bound to the previous configuration. Produce matching reports
+for the new candidate while retaining the original results separately.
+
 Executable pins are explicit caller inputs. Collection binds reports to those
 pins; it does not independently prove how the executables were built or certify
 their external input closure. Original tool observations can come from different

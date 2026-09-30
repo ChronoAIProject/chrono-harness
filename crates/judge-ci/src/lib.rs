@@ -14,7 +14,25 @@ mod units;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+pub struct CollectionLimits {
+    pub manifest_bytes: u64,
+    pub report_bytes: u64,
+}
+
+impl Default for CollectionLimits {
+    fn default() -> Self {
+        Self {
+            manifest_bytes: 64 * 1024 * 1024,
+            report_bytes: 64 * 1024 * 1024,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Policy {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection_limits: Option<CollectionLimits>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub units: Option<BTreeMap<String, chrono_harness::units::Unit>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -81,6 +81,59 @@ fn real_child_and_report_publish() {
             .is_file()
     );
 }
+
+#[test]
+fn unit_report_compacts_formatting_and_preserves_original_process_bytes() {
+    let script = RESPONSE
+        .replace("chrono-ci-judge/v1", "chrono-ci-judge/v2")
+        .replace("{'executed':True}", "{'bytes':list(range(256))*32}");
+    let (dir, p) = fixture(&script);
+    let mut config: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
+    config["schema"] = json!("chrono-ci-check/v3");
+    config["judge"]["output_limit_bytes"] = json!(1024 * 1024);
+    config["policy"]["units"] =
+        json!({"one":{"tests":["test:one"],"report_path":".chrono-harness/state/one/check.json"}});
+    fs::write(&p, serde_json::to_vec(&config).unwrap()).unwrap();
+    let r = dispatch(&[
+        "check",
+        "--config",
+        &p,
+        "--base",
+        &"a".repeat(40),
+        "--candidate",
+        &"b".repeat(40),
+        "--unit",
+        "one",
+    ]);
+    assert_eq!(r.exit_code, 0, "{}", r.stderr);
+    assert_eq!(
+        r.stdout.lines().count(),
+        1,
+        "byte arrays must not acquire per-byte indentation"
+    );
+    assert_eq!(
+        fs::read(dir.path().join(".chrono-harness/state/one/check.json")).unwrap(),
+        r.stdout.as_bytes()
+    );
+    let report: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
+    let original: Vec<u8> =
+        serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
+    assert_eq!(
+        report["judge"]["stdout_sha256"],
+        chrono_harness::sha256(&original)
+    );
+    assert_eq!(
+        report["judge"]["stdout"],
+        std::str::from_utf8(&original).unwrap()
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&original).unwrap(),
+        report["response"]
+    );
+    let preserved: Vec<u8> =
+        serde_json::from_value(report["response"]["evidence"]["bytes"].clone()).unwrap();
+    assert_eq!(preserved, (0..=255).cycle().take(8192).collect::<Vec<u8>>());
+}
 #[test]
 fn actual_failure_is_preserved() {
     let script = RESPONSE

@@ -222,6 +222,136 @@ fn collection_verifies_complete_reports_without_executing_tests() {
     assert_eq!(h.calls(), 1);
 }
 
+fn pad_report(h: &Host, mut report: Value, length: usize) -> Value {
+    let path = h.root().join(report["path"].as_str().unwrap());
+    let mut bytes = fs::read(&path).unwrap();
+    assert!(bytes.len() < length);
+    bytes.resize(length, b' ');
+    fs::write(path, &bytes).unwrap();
+    report["sha256"] = json!(sha256(&bytes));
+    report
+}
+
+#[test]
+fn collection_report_limit_accepts_exact_bytes_and_rejects_one_more() {
+    let h = report_host();
+    let limit = 2 * 1024 * 1024;
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["collection_limits"] = json!({"manifest_bytes":4096,"report_bytes":limit});
+    });
+    let b = h.commit();
+    h.write("src.txt", "two");
+    let c = h.commit();
+    let report = pad_report(&h, write_report(&h, &b, &c, "alpha"), limit);
+    pass(&collect(&h, &b, &c, json!([report.clone()])));
+    let too_large = pad_report(&h, report, limit + 1);
+    let r = collect(&h, &b, &c, json!([too_large]));
+    fail(&r, "collection input exceeds report_bytes");
+    fail(&r, "2097153 > 2097152");
+    fail(&r, ".chrono-harness/state/alpha/check.json");
+    assert_eq!(h.calls(), 1);
+}
+
+#[test]
+fn collection_can_adopt_large_original_reports_without_rewriting_evidence() {
+    let length = 64 * 1024 * 1024 + 1;
+    for explicit in [false, true] {
+        let h = report_host();
+        if explicit {
+            h.change_registry(CONFIG, |v| {
+                v["policy"]["collection_limits"] =
+                    json!({"manifest_bytes":4096,"report_bytes":length});
+            });
+        }
+        let b = h.commit();
+        h.write("src.txt", "two");
+        let c = h.commit();
+        let report = pad_report(&h, write_report(&h, &b, &c, "alpha"), length);
+        let original = report["sha256"].clone();
+        let path = h.root().join(report["path"].as_str().unwrap());
+        let r = collect(&h, &b, &c, json!([report]));
+        if explicit {
+            pass(&r);
+            assert_eq!(r.evidence["reports"][0]["sha256"], original);
+            assert_eq!(r.evidence["collection_limits"]["report_bytes"], length);
+        } else {
+            fail(&r, "collection input exceeds report_bytes");
+        }
+        assert_eq!(
+            json!(chrono_harness::file_identity(&path).unwrap().0),
+            original
+        );
+        assert_eq!(h.calls(), 1);
+    }
+}
+
+#[test]
+fn collection_manifest_limit_is_independent_and_checks_exact_bytes() {
+    let h = report_host();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["collection_limits"] = json!({"manifest_bytes":128,"report_bytes":1});
+    });
+    let c = h.commit();
+    let path = ".chrono-harness/state/collection.json";
+    let mut request = serde_json::to_value(h.request(Some(&c), &c)).unwrap();
+    request["protocol"] = json!("chrono-ci-judge/v2");
+    request["scope"] = json!({"kind":"collect","manifest":path});
+    let request: Request = serde_json::from_value(request).unwrap();
+    for length in [128, 129] {
+        let mut bytes = br#"{"schema":"chrono-ci-collection/v1","reports":[]}"#.to_vec();
+        bytes.resize(length, b' ');
+        h.write(path, std::str::from_utf8(&bytes).unwrap());
+        let r = judge(&request);
+        if length == 128 {
+            pass(&r);
+        } else {
+            fail(&r, "collection input exceeds manifest_bytes");
+            fail(&r, "129 > 128");
+        }
+    }
+    assert_eq!(h.calls(), 0);
+}
+
+#[test]
+fn collection_limits_reject_invalid_values_before_unit_operations() {
+    for limits in [
+        json!(null),
+        json!({"manifest_bytes":0,"report_bytes":1024}),
+        json!({"manifest_bytes":1024,"report_bytes":0}),
+        json!({"manifest_bytes":1024,"report_bytes":u64::MAX}),
+        json!({"manifest_bytes":1024,"report_bytes":-1}),
+        json!({"manifest_bytes":1024}),
+        json!({"manifest_bytes":1024,"report_bytes":1024,"unknown":1}),
+    ] {
+        let h = report_host();
+        let b = h.head();
+        h.change_registry(CONFIG, |v| v["policy"]["collection_limits"] = limits);
+        h.write("src.txt", "two");
+        let c = h.commit();
+        let r = unit(&h, &b, &c, "alpha");
+        assert_eq!(r.status, Status::Failed, "{r:?}");
+        assert_eq!(h.calls(), 0);
+    }
+    let h = report_host();
+    let b = h.head();
+    h.change_registry(CONFIG, |v| {
+        v["schema"] = json!("chrono-ci-check/v1");
+        v["policy"].as_object_mut().unwrap().remove("units");
+        v["policy"]
+            .as_object_mut()
+            .unwrap()
+            .remove("shared_operations");
+        v["policy"]["collection_limits"] = json!({"manifest_bytes":1024,"report_bytes":1024});
+    });
+    h.write("src.txt", "two");
+    let c = h.commit();
+    fail(
+        &judge(&h.request(Some(&b), &c)),
+        "CI units require chrono-ci-check/v3",
+    );
+    assert_eq!(h.calls(), 0);
+}
+
 #[test]
 fn collection_rejects_missing_duplicate_stale_and_corrupt_originals() {
     let h = report_host();
