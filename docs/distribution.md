@@ -45,6 +45,8 @@ chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output 
 
 [beta.18](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.18) 已公开发布，固定源码 `b9665d1fa5b465d57ab84d5042712f30b297e882`，源码树与 PR #91 的 dev 落地相同。它分发 scoped v3 的可配置收集上限及紧凑报告；原始过程字节和候选／配置绑定保留，调大上限不能授权复用旧绑定报告。[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36666465494)在全部 15 个专属测试项目中通过 macOS arm64 的 601 项、Linux x86_64 的 596 项测试；差异为 5 项已有 macOS 文件系统用例。每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察和 15 个工具资产。35 个公开资产的摘要与大小均匹配原始产物；合并清单 SHA-256 为 `5a59cb11fe857a31bbde87dde46828ecae072527b3cae3ed254b8fdc607ae74c`，6252 字节。匿名下载清单及两个平台的安装器也匹配。完整输入闭包、完整宿主治理及跨平台同判仍未认证。
 
+[beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 已公开发布，固定源码 `f8f28119096e9b50b2456024b473b252ea5f7cdd`、源码树 `0c51ad5c88c04a3e78be5f4edb1ed4b4f3c63e13`，与 PR #96 的 dev 落地相同。它分发显式生成目录的 Git 清单排除，覆盖 full／initial／scoped、registration、projects 和迁移消费者，并与 worktree 共用字面排除规则。[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36674223982)在全部 15 个专属测试项目中通过 macOS arm64 的 606 项、Linux x86_64 的 601 项测试；差异仍为 5 项已有 macOS 文件系统用例。每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察与 15 个工具资产。发布后核对全部 35 个资产的摘要与大小，并核对标签实际指向上述源提交；匿名下载的清单和两平台安装器也匹配原始产物。合并清单 SHA-256 为 `857caddfba0ebfe0ec5780c7a31217b30ef0c65bff1b2b6152c8587bf439c731`，6252 字节。完整输入闭包、完整宿主治理和确定性同判仍未认证。
+
 ## 宿主采用
 
 取得固定发布清单和对应平台的 `chrono-distribution` 后，显式选择要安装的工具：

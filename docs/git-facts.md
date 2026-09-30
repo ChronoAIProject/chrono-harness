@@ -236,7 +236,11 @@ Migration decoding may create declared artifacts without changing candidate
 inputs. Its before/after comparison still rejects new undeclared files and
 tracked input mutations before business operations. This does not supply a
 concurrent-write sandbox, complete input closure or a larger output bound.
-The change is in source; public beta.18 retains the original enumeration.
+Public [beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19)
+distributes this change; beta.18 retains the original enumeration. The fixed-source
+native recipe verifies the relevant full/initial/scoped and migration consumers
+on macOS arm64 and Linux x86_64; [release evidence](distribution.md) records the
+actual scope and original packages.
 
 ## Literal checkout identity
 

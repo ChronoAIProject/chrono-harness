@@ -94,3 +94,35 @@ serialization fixes this overflow while retaining original process bytes and
 report verification. The candidate/configuration change requires fresh reports;
 old failures and original report bytes are not rewritten. This adoption does not
 increase the 64 MiB report-read bound. Other example dev branches still pin beta.14.
+
+## Public artifact inventory adoption
+
+Go [PR #19](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/19)
+upgrades the six tools through the public beta.19 manifest and generated installer.
+Only the release lock and README change; SDK profiles, Git/check policies and
+generated workflow bytes match the base. Base is
+`6cf641fbd1e7828d922262884b2d735de3235ed0`, candidate is
+`65aa3342574cd827d8b1a43fd94f9b2f89623aae`, and merged dev
+`fb7fc9541ad5843285f58647bea7346aac6e079e` has the same candidate tree
+`c4da934b8a12d593ab0688856d449206962ee950`.
+
+The anonymously downloaded installer and manifest match the release, and all
+six installed macOS tools match their registered hashes and sizes. Local rates
+and harness checks execute four operations, including the Go build/test and ten
+bootstrap tests; collection verifies their original reports. Rates and harness
+reports measure 1,568,334 and 1,544,990 bytes. Each report's two untracked Git
+inventories return zero bytes while the declared SDK and state outputs exist.
+
+Native Linux [push collection](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36676291466)
+and [PR collection](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36676344969)
+each verify both units and four operations. Their original endpoint/configuration,
+binary identities and 184 process-stream hashes were checked against
+the downloaded artifacts. Rates reports measure 1,649,671 and 1,648,114 bytes;
+both inventory calls return zero bytes and select the registered Linux policy.
+The merged [dev collection](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36676560203)
+also passes with two original reports, four operations and 184 matching stream
+hashes bound to the actual landing commit. All four dev workflows, including
+CodeQL, succeeded.
+The original beta.18 reports above remain unchanged. These are separate scoped
+host observations, not a claim of equal effective inputs, full governance or
+deterministic local/CI parity.
