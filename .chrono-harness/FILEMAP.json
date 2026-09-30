@@ -6157,8 +6157,8 @@
         "build.judge-filemap",
         "build.judge-routes",
         "build.judge-projects",
-        "build.ci",
         "build.judge-ci",
+        "build.ci",
         "test.judge-projects-tests"
       ],
       "timeout_seconds": 900,
@@ -6267,11 +6267,11 @@
       "operations": [
         "fmt.worktree",
         "fmt.worktree-tests",
-        "build.worktree",
         "build.ci",
+        "build.worktree",
         "test.worktree-tests"
       ],
-      "timeout_seconds": 600,
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     }
   }
