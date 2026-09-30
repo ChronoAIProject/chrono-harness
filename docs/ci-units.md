@@ -124,9 +124,10 @@ Hosts may declare independent collection read limits in their check policy:
 }
 ```
 
-Both values are positive byte counts; an omitted object preserves the existing
+Both values are positive byte counts below the platform's `usize::MAX`;
+an omitted object preserves the existing
 64 MiB limit for each file. A supplied object requires both fields and accepts no
-unknown fields. It is a scoped-v3 extension; older binaries reject the new field,
+unknown fields or explicit `null`. It is a scoped-v3 extension; older binaries reject the new field,
 so install a release containing it before adopting the policy. Each original unit
 report is read and verified separately. The limit applies to its actual serialized
 bytes, not its compressed download or parsed payload; it is distinct from the
@@ -137,6 +138,11 @@ policy, not an assertion that the host has enough memory or that inputs are
 complete. Adjust them from measured original reports; do not rewrite old evidence
 to make its digest or size fit. Collection still verifies every required report
 and never reruns business operations.
+
+The reports must already match the candidate and configuration being collected.
+Changing limits changes that configuration's identity; it does not authorize
+reuse of reports bound to the previous configuration. Produce matching reports
+for the new candidate while retaining the original results separately.
 
 Executable pins are explicit caller inputs. Collection binds reports to those
 pins; it does not independently prove how the executables were built or certify

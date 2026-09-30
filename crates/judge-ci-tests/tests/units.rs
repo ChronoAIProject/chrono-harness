@@ -315,6 +315,7 @@ fn collection_manifest_limit_is_independent_and_checks_exact_bytes() {
 #[test]
 fn collection_limits_reject_invalid_values_before_unit_operations() {
     for limits in [
+        json!(null),
         json!({"manifest_bytes":0,"report_bytes":1024}),
         json!({"manifest_bytes":1024,"report_bytes":0}),
         json!({"manifest_bytes":1024,"report_bytes":u64::MAX}),
@@ -331,6 +332,24 @@ fn collection_limits_reject_invalid_values_before_unit_operations() {
         assert_eq!(r.status, Status::Failed, "{r:?}");
         assert_eq!(h.calls(), 0);
     }
+    let h = report_host();
+    let b = h.head();
+    h.change_registry(CONFIG, |v| {
+        v["schema"] = json!("chrono-ci-check/v1");
+        v["policy"].as_object_mut().unwrap().remove("units");
+        v["policy"]
+            .as_object_mut()
+            .unwrap()
+            .remove("shared_operations");
+        v["policy"]["collection_limits"] = json!({"manifest_bytes":1024,"report_bytes":1024});
+    });
+    h.write("src.txt", "two");
+    let c = h.commit();
+    fail(
+        &judge(&h.request(Some(&b), &c)),
+        "CI units require chrono-ci-check/v3",
+    );
+    assert_eq!(h.calls(), 0);
 }
 
 #[test]

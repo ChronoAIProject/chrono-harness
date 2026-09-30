@@ -11,6 +11,9 @@ pub(super) fn validate(config: &CheckConfig, policy: &Policy) -> Result<(), Stri
         }
         return Ok(());
     }
+    if config.policy.get("collection_limits").is_some() && policy.collection_limits.is_none() {
+        return Err("collection_limits must be an object when supplied".into());
+    }
     if let Some(limits) = &policy.collection_limits {
         for (name, value) in [
             ("manifest_bytes", limits.manifest_bytes),
