@@ -116,12 +116,12 @@ inventories return zero bytes while the declared SDK and state outputs exist.
 Native Linux [push collection](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36676291466)
 and [PR collection](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36676344969)
 each verify both units and four operations. Their original endpoint/configuration,
-binary identities and 184 process-stream hashes were checked against
+binary identities and 184 successful stream-digest checks were verified against
 the downloaded artifacts. Rates reports measure 1,649,671 and 1,648,114 bytes;
 both inventory calls return zero bytes and select the registered Linux policy.
 The merged [dev collection](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36676560203)
-also passes with two original reports, four operations and 184 matching stream
-hashes bound to the actual landing commit. All four dev workflows, including
+also passes with two original reports, four operations and 184 successful
+stream-digest checks bound to the actual landing commit. All four dev workflows, including
 CodeQL, succeeded.
 The original beta.18 reports above remain unchanged. These are separate scoped
 host observations, not a claim of equal effective inputs, full governance or
