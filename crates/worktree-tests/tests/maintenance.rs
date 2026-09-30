@@ -40,6 +40,68 @@ impl Host {
 }
 
 #[test]
+fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
+    let h = Host::new("payload");
+    select_config(&h.root, SOURCE_CONFIG);
+    let head = commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    h.hook("echo selected-hook-failure >&2\nexit 17");
+    let target = h.parent.join("selected recovery");
+    let (code, original, _) = h.invoke("feature", "selected-recovery", &target);
+    assert_eq!(code, 2);
+    let add = original["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["argv"][1] == "worktree" && row["argv"][2] == "add")
+        .unwrap();
+    assert_eq!(add["process"]["exit_code"], 17);
+    assert!(
+        add["process"]["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("selected-hook-failure")
+    );
+    let receipt = h.root.join(original["report_path"].as_str().unwrap());
+    let receipt_bytes = fs::read(&receipt).unwrap();
+    let expected = selected_values(&h.root, &head, SOURCE_CONFIG, WORKFLOW);
+    let digest = chrono_harness::wire::digest(&value!(expected)).unwrap();
+    let (code, recovered, error) = h.maintain("recover", h.recovery(&original, &target));
+    assert_eq!(code, 0, "{recovered} {error}");
+    assert_eq!(recovered["status"], "recovered");
+    assert_eq!(recovered["registry_digest"], digest);
+    assert_fixed_registry_reads(&recovered, &h.root, &head, &expected);
+    assert_fixed_registry_reads(&recovered, &target, &head, &expected);
+    assert_eq!(fs::read(&receipt).unwrap(), receipt_bytes);
+    let clean = fs::read(target.join("payload")).unwrap();
+    fs::write(target.join("payload"), "unsaved recovered work").unwrap();
+    let plan = h.cleanup(&target);
+    let (code, rejected, _) = h.maintain("cleanup", plan.clone());
+    assert_eq!(code, 2);
+    assert!(
+        rejected["error"]
+            .as_str()
+            .unwrap()
+            .contains("clean snapshot")
+    );
+    assert_eq!(
+        fs::read(target.join("payload")).unwrap(),
+        b"unsaved recovered work"
+    );
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    fs::write(target.join("payload"), clean).unwrap();
+    let (code, cleaned, error) = h.maintain("cleanup", plan);
+    assert_eq!(code, 0, "{cleaned} {error}");
+    assert_eq!(cleaned["status"], "cleaned");
+    assert_eq!(cleaned["registry_digest"], digest);
+    assert_fixed_registry_reads(&cleaned, &h.root, &head, &expected);
+    assert_fixed_registry_reads(&cleaned, &target, &head, &expected);
+    assert!(!target.exists());
+    assert_eq!(cleaned["branch_removal"], "verified-absent");
+    assert_eq!(fs::read(receipt).unwrap(), receipt_bytes);
+}
+
+#[test]
 fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
     let h = Host::new("arbitrary/input.go");
     h.hook("echo original-hook-failure >&2\nexit 17");

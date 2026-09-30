@@ -9,6 +9,9 @@ use std::{
 };
 use support::*;
 const POLICY: &str = ".chrono-harness/worktree.json";
+const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
+const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
+const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 mod maintenance;
 mod rebind;
 
@@ -156,6 +159,321 @@ impl Host {
         let p = self.root.join(".git/hooks/post-checkout");
         fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
         fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+fn platform() -> String {
+    format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+}
+
+/// Keep the worktree policy's stable host_config entry unchanged.
+fn select_config(root: &Path, target: &str) {
+    let entry = json(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    let old = entry["platforms"][platform()].as_str().unwrap_or(CONFIG);
+    let mut config = json(&fs::read(root.join(old)).unwrap()).unwrap();
+    if config["schema_version"] != 3 {
+        let git = chrono_harness::resolve_program(root, "git", None).unwrap();
+        let version = Command::new(&git).arg("--version").output().unwrap();
+        assert!(version.status.success());
+        config["schema_version"] = value!(3);
+        config["facts_git"] = value!({"tool":"git","input":"git-bytes"});
+        config["tools"] = value!([{"id":"git","program":git,"resolution":"PATH-once",
+            "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}]);
+        config["environment"]["inputs"] = value!([{"id":"git-bytes","location":git,
+            "presence":"present","sha256":sha256(&fs::read(&git).unwrap())}]);
+    }
+    fs::write(root.join(target), serde_json::to_vec(&config).unwrap()).unwrap();
+    fs::write(
+        root.join(CONFIG),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-git-configs/v1","platforms":{platform():target}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut fm = json(&fs::read(root.join(FM)).unwrap()).unwrap();
+    let files = fm["files"].as_array_mut().unwrap();
+    if old != CONFIG && old != target {
+        fs::remove_file(root.join(old)).unwrap();
+        files.retain(|f| f["path"] != old);
+    }
+    if !files.iter().any(|f| f["path"] == target) {
+        files.push(file(target, value!([])));
+    }
+    fs::write(root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+}
+
+fn selected_values(root: &Path, oid: &str, effective: &str, workflow: &str) -> Values {
+    [CONFIG, effective, JUDGES, PROJECTS, FM, workflow]
+        .into_iter()
+        .map(|path| {
+            (
+                path.into(),
+                json(git(root, &["show", &format!("{oid}:{path}")]).as_bytes()).unwrap(),
+            )
+        })
+        .collect()
+}
+
+fn assert_fixed_registry_reads(report: &Value, root: &Path, oid: &str, values: &Values) {
+    for (path, expected) in values {
+        let argv = value!(["--no-replace-objects", "show", format!("{oid}:{path}")]);
+        let rows: Vec<_> = report["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row["root"] == value!(root) && row["argv"] == argv)
+            .collect();
+        assert!(!rows.is_empty(), "missing fixed read {oid}:{path}");
+        for row in rows {
+            assert_eq!(row["process"]["exit_code"], 0);
+            let bytes: Vec<u8> =
+                serde_json::from_value(row["process"]["stdout_bytes"].clone()).unwrap();
+            assert_eq!(json(&bytes).unwrap(), *expected);
+            assert_eq!(row["process"]["stdout_sha256"], sha256(&bytes));
+            assert_eq!(
+                row["process"]["environment"],
+                report["environment"]["effective"]
+            );
+            assert_eq!(row["process"]["executable"], report["tool"]["path"]);
+            assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
+        }
+    }
+}
+
+#[test]
+fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
+    let h = Host::new("arbitrary/input.data");
+    let policy = fs::read(h.root.join(POLICY)).unwrap();
+    select_config(&h.root, SOURCE_CONFIG);
+    let source_head = commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let other = h.parent.join("other writer");
+    git(
+        &h.root,
+        &[
+            "clone",
+            "-q",
+            h.remote.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    select_config(&other, TARGET_CONFIG);
+    let mut config = json(&fs::read(other.join(TARGET_CONFIG)).unwrap()).unwrap();
+    config["registries"]["workflow"] = value!(TARGET_WORKFLOW);
+    fs::write(
+        other.join(TARGET_CONFIG),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    let mut workflow = json(&fs::read(other.join(WORKFLOW)).unwrap()).unwrap();
+    workflow["feature_prefix"] = value!("selected/");
+    fs::write(
+        other.join(TARGET_WORKFLOW),
+        serde_json::to_vec(&workflow).unwrap(),
+    )
+    .unwrap();
+    fs::remove_file(other.join(WORKFLOW)).unwrap();
+    let mut fm = json(&fs::read(other.join(FM)).unwrap()).unwrap();
+    let files = fm["files"].as_array_mut().unwrap();
+    files.retain(|f| f["path"] != WORKFLOW);
+    files.push(file(TARGET_WORKFLOW, value!([])));
+    fs::write(other.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    fs::write(other.join("arbitrary/input.data"), "fetched target\n").unwrap();
+    let latest = commit(&other);
+    git(&other, &["push", "-q", "origin", "dev"]);
+    let source_values = selected_values(&h.root, &source_head, SOURCE_CONFIG, WORKFLOW);
+    let target_values = selected_values(&other, &latest, TARGET_CONFIG, TARGET_WORKFLOW);
+    // Neither endpoint may use dirty source files to resolve the selector.
+    for path in [CONFIG, SOURCE_CONFIG, WORKFLOW, "arbitrary/input.data"] {
+        fs::write(h.root.join(path), "unsaved source work\n").unwrap();
+    }
+    let target = h.parent.join("selected λ");
+    let (code, report, error) = h.invoke("feature", "task", &target);
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["status"], "created");
+    assert_eq!(report["source_commit"], source_head);
+    assert_eq!(report["base"], latest);
+    assert_eq!(report["branch_ref"], "selected/task");
+    assert_eq!(
+        report["source_registry_digest"],
+        chrono_harness::wire::digest(&value!(source_values)).unwrap()
+    );
+    assert_eq!(
+        report["registry_digest"],
+        chrono_harness::wire::digest(&value!(target_values)).unwrap()
+    );
+    assert_fixed_registry_reads(&report, &h.root, &source_head, &source_values);
+    assert_fixed_registry_reads(&report, &h.root, &latest, &target_values);
+    assert_eq!(
+        report["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row["argv"]
+                == value!([
+                    "--no-replace-objects",
+                    "show",
+                    format!("{source_head}:{CONFIG}")
+                ]))
+            .count(),
+        1,
+        "source registrations must be reused before fetch"
+    );
+    assert_eq!(report["config_path"], POLICY);
+    assert_eq!(report["config_sha256"], sha256(&policy));
+    assert_eq!(fs::read(target.join(POLICY)).unwrap(), policy);
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), latest);
+    assert!(!target.join(SOURCE_CONFIG).exists());
+    for path in [CONFIG, SOURCE_CONFIG, WORKFLOW, "arbitrary/input.data"] {
+        assert_eq!(
+            fs::read(h.root.join(path)).unwrap(),
+            b"unsaved source work\n"
+        );
+    }
+}
+
+#[test]
+fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() {
+    for fault in [
+        "source-missing",
+        "source-platform",
+        "fetched-missing",
+        "fetched-platform",
+        "fetched-policy",
+        "fetched-workflow",
+    ] {
+        let h = Host::new("payload");
+        select_config(&h.root, SOURCE_CONFIG);
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let fetched = fault.starts_with("fetched-");
+        let other = h.parent.join("other writer");
+        let endpoint = if fetched {
+            git(
+                &h.root,
+                &[
+                    "clone",
+                    "-q",
+                    h.remote.to_str().unwrap(),
+                    other.to_str().unwrap(),
+                ],
+            );
+            &other
+        } else {
+            &h.root
+        };
+        match fault {
+            "source-missing" | "fetched-missing" => {
+                fs::remove_file(endpoint.join(SOURCE_CONFIG)).unwrap();
+            }
+            "source-platform" | "fetched-platform" => {
+                fs::write(endpoint.join(CONFIG), serde_json::to_vec(&value!({
+                    "schema":"chrono-git-configs/v1","platforms":{"unsupported-system":SOURCE_CONFIG}
+                })).unwrap()).unwrap();
+            }
+            "fetched-policy" => {
+                let mut config = json(&fs::read(endpoint.join(SOURCE_CONFIG)).unwrap()).unwrap();
+                config["schema_version"] = value!(1);
+                fs::write(
+                    endpoint.join(SOURCE_CONFIG),
+                    serde_json::to_vec(&config).unwrap(),
+                )
+                .unwrap();
+            }
+            "fetched-workflow" => {
+                let mut workflow = json(&fs::read(endpoint.join(WORKFLOW)).unwrap()).unwrap();
+                workflow["target_branch"] = value!("wrong-target");
+                fs::write(
+                    endpoint.join(WORKFLOW),
+                    serde_json::to_vec(&workflow).unwrap(),
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let fixed = commit(endpoint);
+        if fetched {
+            git(endpoint, &["push", "-q", "origin", "dev"]);
+        }
+        let source_head = git(&h.root, &["rev-parse", "HEAD"]);
+        let target = h.parent.join("must not exist");
+        let (code, report, error) = h.invoke("feature", "rejected", &target);
+        assert_eq!(code, 2, "{fault}: {report} {error}");
+        let expected = match fault {
+            "source-missing" | "fetched-missing" => "Git show exited",
+            "source-platform" | "fetched-platform" => "no registered platform",
+            "fetched-policy" => "requires a direct full-v3 policy",
+            _ => "fetched target changed target branch",
+        };
+        assert!(
+            report["error"].as_str().unwrap().contains(expected),
+            "{fault}: {report}"
+        );
+        assert_eq!(report["source_commit"], source_head);
+        assert!(!target.exists());
+        assert!(
+            !git(
+                &h.root,
+                &["for-each-ref", "--format=%(refname)", "refs/heads/"]
+            )
+            .contains("feature/rejected")
+        );
+        let processes = report["processes"].as_array().unwrap();
+        assert!(
+            !processes
+                .iter()
+                .any(|row| row["argv"][1] == "worktree" && row["argv"][2] == "add")
+        );
+        assert_eq!(
+            processes.iter().any(|row| row["argv"][1] == "fetch"),
+            fetched
+        );
+        if fetched {
+            assert_eq!(report["base"], fixed);
+            assert_eq!(report["fetch_ref_removed"], true);
+        }
+        let selected_path = if fault.ends_with("platform") {
+            CONFIG
+        } else if fault.ends_with("workflow") {
+            WORKFLOW
+        } else {
+            SOURCE_CONFIG
+        };
+        let row = processes
+            .iter()
+            .find(|row| {
+                row["argv"]
+                    == value!([
+                        "--no-replace-objects",
+                        "show",
+                        format!("{fixed}:{selected_path}")
+                    ])
+            })
+            .unwrap();
+        assert_eq!(row["process"]["executable"], report["tool"]["path"]);
+        assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
+        assert_eq!(
+            row["process"]["environment"],
+            report["environment"]["effective"]
+        );
+        if fault.ends_with("missing") {
+            assert_ne!(row["process"]["exit_code"], 0);
+            assert!(
+                !row["process"]["stderr_bytes"]
+                    .as_array()
+                    .unwrap()
+                    .is_empty()
+            );
+        } else {
+            assert_eq!(row["process"]["exit_code"], 0);
+            assert_eq!(
+                json(row["process"]["stdout"].as_str().unwrap().as_bytes()).unwrap(),
+                json(git(endpoint, &["show", &format!("{fixed}:{selected_path}")]).as_bytes())
+                    .unwrap()
+            );
+        }
+        assert_eq!(git(&h.root, &["rev-parse", "HEAD"]), source_head);
     }
 }
 
@@ -525,6 +843,51 @@ fn reconstruction(base: &str, candidate: &str, changes: Value) -> Value {
 }
 
 #[test]
+fn selected_reconstruction_carries_explicit_work_onto_fetched_target() {
+    let h = Host::new("payload");
+    select_config(&h.root, SOURCE_CONFIG);
+    let base = commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    fs::write(h.root.join("payload"), "carried work\n").unwrap();
+    let candidate = commit(&h.root);
+    let latest = h.upstream("remote-only", b"fetched work\n");
+    let (code, report, error) = h.reconstruct(
+        reconstruction(
+            &base,
+            &candidate,
+            value!([{"path":"payload","action":"carry"}]),
+        ),
+        "selected-reconstruction",
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["status"], "reconstructed");
+    assert_eq!(report["base"], latest);
+    let expected = selected_values(&h.root, &latest, SOURCE_CONFIG, WORKFLOW);
+    assert_eq!(
+        report["registry_digest"],
+        chrono_harness::wire::digest(&value!(expected)).unwrap()
+    );
+    assert_fixed_registry_reads(
+        &report,
+        &h.root,
+        &candidate,
+        &selected_values(&h.root, &candidate, SOURCE_CONFIG, WORKFLOW),
+    );
+    let target = h.parent.join("selected-reconstruction");
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), latest);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), b"carried work\n");
+    assert_eq!(
+        fs::read(target.join("remote-only")).unwrap(),
+        b"fetched work\n"
+    );
+    assert_eq!(
+        report["reconstruction"]["staged_paths"],
+        value!(["payload"])
+    );
+    assert_eq!(git(&h.root, &["rev-parse", "HEAD"]), candidate);
+}
+
+#[test]
 fn reconstructs_explicit_choices_on_advanced_target_without_merging_old_branch() {
     let h = Host::new("source.ts");
     fs::write(h.root.join("obsolete.data"), "original").unwrap();
@@ -627,13 +990,15 @@ fn reconstruction_preserves_binary_modes_symlinks_adds_deletes_and_literal_paths
         fs::read_link(target.join("alias")).unwrap(),
         Path::new("entry.go")
     );
+    // Git records executability, not group/other permission bits masked by umask.
+    assert!(git(&target, &["ls-files", "--stage", "--", "executable"]).starts_with("100755 "));
     assert_eq!(
         fs::metadata(target.join("executable"))
             .unwrap()
             .permissions()
             .mode()
-            & 0o111,
-        0o111
+            & 0o100,
+        0o100
     );
     assert!(!target.join("removed").exists());
     assert_eq!(fs::read(target.join("added λ")).unwrap(), b"new file");
