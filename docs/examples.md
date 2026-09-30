@@ -9,24 +9,24 @@
 | [chrono-harness-examples-mix](https://github.com/ChronoAIProject/chrono-harness-examples-mix) | `backend/calc/`、`client/view/`、`jobs/normalize.py` | `checks/go-contract/`、`checks/ui/`、`checks/scripts/normalize_test.py` | JSON 合同显式连接 Go 与 TS；独立脚本单独选测 |
 | [chrono-harness-examples-initial](https://github.com/ChronoAIProject/chrono-harness-examples-initial) | 无；文档宿主 | 无；明确登记空项目及脚本集合 | 生成 v2 CI，真实首次 push 库存检查及后续普通 DELTA；macOS arm64 |
 
-四者均采用宿主 `.chrono-harness/` 登记、生成的 `CLAUDE.md`、`AGENTS.md -> CLAUDE.md` 和生成的 GitHub Actions。产品当前公开测试版为 [v0.1.0-beta.17](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.17)，四个示例的 `dev` 仍分别锁定 beta.14。宿主只保留版本锁、摘要、安装声明与入口，按公开 HTTPS 下载选定工具，不保存产品源码包或二进制，也不编译 Rust。
+四者均采用宿主 `.chrono-harness/` 登记、生成的 `CLAUDE.md`、`AGENTS.md -> CLAUDE.md` 和生成的 GitHub Actions。产品当前公开测试版为 [v0.1.0-beta.18](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.18)，Go 的 `dev` 已锁定 beta.18，TS、mix、initial 仍锁定 beta.14。宿主只保留版本锁、摘要、安装声明与入口，按公开 HTTPS 下载选定工具，不保存产品源码包或二进制，也不编译 Rust。
 
-Go 的 [原生 Git 绑定接入 PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18) 尚未合入：公开 beta.17 在本地通过，Linux push／PR 的两个单元通过，但汇总器拒绝超过 64 MiB 的原始报告。[失败范围与读数](native-ci-adoption.md#native-git-policy-adoption)不计作接入完成，也不更改上述 dev 版本锁。
+Go 的 [原生 Git 绑定接入 PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18) 已合入，显式采用两平台注册的 Git facts 配置。beta.18 的紧凑报告解决了原候选的汇总溢出；新候选在本地 macOS 和原生 Linux push／PR 的单元与汇总中均通过，SDK、独立 workflow 和六个工具的选择保留。[实测范围](native-ci-adoption.md#native-git-policy-adoption)不代表完整输入闭包、完整治理或跨平台同判。
 
 Go、TS、混合示例使用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`。每个单元有独立 workflow、状态、SDK profile 和重跑；本地及 CI 使用相同的 `chrono-harness check --config .chrono-harness/ci/check.json --base BASE --candidate CANDIDATE --unit UNIT`。汇总使用同入口的 `--collect MANIFEST`，核验原始报告并执行零项业务操作。单元、完整测试计划、SDK 下载／探测与依赖均为显式登记；语言、目录、import 或自动扫描不产生选测权威。harness 和 collection 的 SDK profile 不安装语言工具链。
 
-| 宿主 | 已登记单元 | 当前版本采用 | dev 汇总／检查 |
-| --- | --- | --- | --- |
-| go | `harness`, `rates` | [PR #15](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/15) | [36605741047](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36605741047) |
-| ts | `harness`, `labels` | [PR #15](https://github.com/ChronoAIProject/chrono-harness-examples-ts/pull/15) | [36605774601](https://github.com/ChronoAIProject/chrono-harness-examples-ts/actions/runs/36605774601) |
-| mix | `harness`, `labels`, `normalize`, `rates` | [PR #15](https://github.com/ChronoAIProject/chrono-harness-examples-mix/pull/15) | [36605805486](https://github.com/ChronoAIProject/chrono-harness-examples-mix/actions/runs/36605805486) |
-| initial | 初始清单；空执行计划 | [PR #10](https://github.com/ChronoAIProject/chrono-harness-examples-initial/pull/10) | [36605583754](https://github.com/ChronoAIProject/chrono-harness-examples-initial/actions/runs/36605583754) |
+| 宿主 | 已登记单元 | dev 版本 | 当前版本采用 | dev 汇总／检查 |
+| --- | --- | --- | --- | --- |
+| go | `harness`, `rates` | beta.18 | [PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18) | [36669165186](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/36669165186) |
+| ts | `harness`, `labels` | beta.14 | [PR #15](https://github.com/ChronoAIProject/chrono-harness-examples-ts/pull/15) | [36605774601](https://github.com/ChronoAIProject/chrono-harness-examples-ts/actions/runs/36605774601) |
+| mix | `harness`, `labels`, `normalize`, `rates` | beta.14 | [PR #15](https://github.com/ChronoAIProject/chrono-harness-examples-mix/pull/15) | [36605805486](https://github.com/ChronoAIProject/chrono-harness-examples-mix/actions/runs/36605805486) |
+| initial | 初始清单；空执行计划 | beta.14 | [PR #10](https://github.com/ChronoAIProject/chrono-harness-examples-initial/pull/10) | [36605583754](https://github.com/ChronoAIProject/chrono-harness-examples-initial/actions/runs/36605583754) |
 
-上述升级已通过本地、integration、PR 和 dev 检查。三个业务宿主使用本地 macOS arm64 与原生 Linux x86_64；版本升级只改公开版本锁与说明，CI／SDK 源、生成 workflow、启动命令、指南与业务／测试源码保持原字节，原有测试身份保留。Go、TS、mix 分别执行 4、5、10 个登记操作。宿主配置与生成物的更新方式见[自定义和迁移合同](ci-units.md#host-customization-and-updates)；公开 beta.13 的 macOS `chrono-ci` 已用三个宿主的真实旧／新 provider 验证迁移、配置保留与逐字节生成结果。
+四个示例先前的 beta.14 版本升级已通过本地、integration、PR 和 dev 检查。三个业务宿主使用本地 macOS arm64 与原生 Linux x86_64；版本升级只改公开版本锁与说明，CI／SDK 源、生成 workflow、启动命令、指南与业务／测试源码保持原字节，原有测试身份保留。Go、TS、mix 分别执行 4、5、10 个登记操作。宿主配置与生成物的更新方式见[自定义和迁移合同](ci-units.md#host-customization-and-updates)；公开 beta.13 的 macOS `chrono-ci` 已用三个宿主的真实旧／新 provider 验证迁移、配置保留与逐字节生成结果。
 
 初始化示例保留 `chrono-github-ci/v2`，由生成器同时生成 workflow 和独立 `.chrono-harness/ci/initial.json`；没有执行计划或脚本，不添加空单元。历史无父根提交仍用自身 beta.5 锁和 `check --config .chrono-harness/ci/initial.json --candidate ROOT_OID --initial`，已完成[首次 push 库存检查](https://github.com/ChronoAIProject/chrono-harness-examples-initial/actions/runs/36366092276)。后续版本升级用真实 before/after 的普通 DELTA，执行零业务操作；不追溯更改根提交的版本。本例仅登记 macOS arm64 / `macos-14`，不宣称跨平台初始 profile 或完整治理启用。
 
-各宿主显式登记 integration 分支对比 `origin/dev`，每次检查完整分支差异；dev push 使用事件 before/after。三个业务宿主的 provider 位于 `.chrono-harness/ci/units.json`，初始宿主保留 `.chrono-harness/ci/github.json`。通用 projects 接受无 manifest 登记、自定义 action 和任意目录；这些示例未认证完整输入闭包、完整七判官治理或跨平台同判，也不自动采用 full Git 绑定扩展。
+各宿主显式登记 integration 分支对比 `origin/dev`，每次检查完整分支差异；dev push 使用事件 before/after。三个业务宿主的 provider 位于 `.chrono-harness/ci/units.json`，初始宿主保留 `.chrono-harness/ci/github.json`。通用 projects 接受无 manifest 登记、自定义 action 和任意目录；这些示例未认证完整输入闭包、完整七判官治理或跨平台同判，安装本身不自动采用 Git 绑定扩展；Go 通过上述 PR 显式采用 scoped／provider 绑定，其他三个示例尚未采用。
 
 beta.12 的独立原生验证覆盖两类故障：Go 的 rates 单元被取消时，harness 单元独立成功、汇总拒绝；只重跑 rates 和汇总即可恢复，harness 仍为 attempt 1。混合宿主的 Go 构建成功后，`TestContract` 与 `TestSharedInvoice` 命中预定失败，TS 的类型检查与业务测试独立成功，汇总保留失败并拒绝通过。恢复到基线相同的文件树后，本地／原生单元均执行零业务操作，汇总通过；故障未合入 dev，实验分支已用登记工具退休。这些结果不被后续二进制升级重新标为新版本实验。
 
