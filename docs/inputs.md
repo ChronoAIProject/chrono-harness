@@ -39,6 +39,49 @@ check; it still does not prove that the host has no unregistered external
 input, so reports retain `completeness_proven: false` until independent
 evidence establishes that boundary.
 
+Config v3 may explicitly adopt a versioned `input_closure.coverage` contract:
+
+```json
+{
+  "schema": "chrono-input-coverage/v1",
+  "required": [{"consumer": "judge:registration", "domains": ["git-facts", "remote-response"]}],
+  "rows": [
+    {"consumer": "judge:registration", "domain": "git-facts", "state": "bound",
+     "bindings": ["registration-git-facts"], "reason": "bound Git bytes and environment"},
+    {"consumer": "judge:registration", "domain": "remote-response", "state": "not-applicable",
+     "bindings": [], "reason": "this consumer reads local objects only"}
+  ]
+}
+```
+
+`required` lists a nonempty scope of executable consumers and their nonempty,
+unique domains. Every consumer/domain pair must have exactly one row; missing,
+extra or duplicate rows fail. The domain names are host-owned, such as compiler
+libraries, SDKs, delegated tools, configuration, network, clock, randomness or
+concurrency. They are never inferred from a language, directory or command.
+Every row needs a nonempty reason. `bound` and `absent` require nonempty binding
+references to the same consumer, with nonempty input lists. Bindings may serve
+more than one domain, but cannot repeat within a row. `absent` additionally
+requires that every referenced node be an explicitly absent file input; the
+existing retained/current input checks verify its actual absence. A credential
+file appearing at an explicitly absent path therefore fails even when the domain
+row has not changed. `not-applicable` and `unresolved` cannot list bindings.
+Not-applicable is an AI declaration of applicability, not an observed absence.
+
+When coverage is adopted and the closure is `declared-complete`, all declared
+bindings must occur in at least one row and no row may be unresolved. Incomplete
+configurations may retain unresolved rows but still cannot pass activation.
+A successful registration response emits `input_coverage` with schema
+`chrono-input-coverage-result/v1`, the original declaration, scope
+`declared-domains`, and `completeness_proven: false`. This is inventory consistency
+and declared-file state validation; it is not proof of undisclosed reads or
+complete OS/network/toolchain inputs.
+
+Omitting coverage preserves the existing v3 contract and report shape. V1/v2
+reject the extension. New consumers read historical v3 snapshots without adding
+coverage to them; older binaries reject the unknown field. AI adoption upgrades
+the selected binary and adds its explicitly chosen scopes and rows together.
+
 This is an explicit relationship table, not a dependency discoverer. The
 registration judge never scans directories, manifests, language files, commands,
 or toolchains to add bindings. A valid binding records what the AI registered;

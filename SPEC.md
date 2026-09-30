@@ -115,7 +115,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
 | facts_git | config v3 必填 `{tool, input}`，分别引用唯一 tools 与 present 文件输入；v1/v2 不接纳此字段，包括 null |
 | environment | `{inherit: string[], values: object, inputs: object[]}`；v1 输入 `{id, location, sha256}`，v2/v3 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
-| input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[]}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
+| input_closure | `{status: "incomplete"\|"declared-complete", unresolved: string[], bindings?: {id, consumer, kind, inputs: string[]}[], coverage?: object}`；`bindings` 仅为 config v3 的显式白名单，工程声明不是完备性证明 |
 | protocol | `{id, timeout_seconds, stdout_limit_bytes, encoding}`；正整数限制、UTF-8 |
 | semantic_fields | `{path, pointers: string[], on}[]`；语义字段分类，见 §8 |
 | artifacts | `{path, owner, kind, tracked: false}[]`；明确生成目录白名单 |
@@ -146,6 +146,21 @@ Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`�
 `E_REFERENCE`。v1/v2 拒绝该字段。bindings 只记录 AI 明确选择的关系，registration
 不扫描目录、语言、命令、manifest 或工具链来补齐依赖，也不把登记成功解释为现实中
 没有遗漏输入；完整性仍由 `status`、`unresolved` 和各消费者的实际证据共同决定。
+Config v3 可显式采用版本化 `input_closure.coverage`，合同为
+`{schema: "chrono-input-coverage/v1", required: [{consumer, domains: string[]}], rows: [{consumer, domain, state, bindings: string[], reason}]}`。
+`required` 非空，逐个列出可执行消费者及非空的宿主自定义输入域；rows 必须恰好覆盖
+这些消费者／域组合一次。缺行、多行、未知域、重复域、错误消费者、未知 binding 和
+空 reason 均报错。`bound` 和 `absent` 要求非空 bindings，每个 binding 同属该消费者
+且有非空 inputs；一个 binding 可以关联多个域。`absent` 只接受显式缺失文件输入，
+实际存在状态仍由两端快照及操作前后输入核验裁决。`not-applicable` 与 `unresolved`
+不携带 bindings，前者是 AI 的适用性声明，后者明确缺证。采用 coverage 且声明
+`declared-complete` 时，每个 binding 至少被一行覆盖且不能有 unresolved 域。
+域名由宿主登记，例如 compiler-library、SDK、network、clock 或 randomness；判官
+不猜项目语言、工具链或读取行为来补域。省略 coverage 保持既有 v3 含义；v1/v2
+拒绝此扩展，旧二进制拒绝未知扩展。候选判官读取未采用扩展的历史快照，无需重写历史。
+通过后产生 `chrono-input-coverage-result/v1`，保留完整声明与 `scope: declared-domains`、
+`completeness_proven: false`；它证明登记的对应关系和已核验输入状态，不证明没有未登记域
+或任意程序的读取闭包。完整有效输入、并发一致性和本地／CI 同判仍需实际消费者证据。
 未知或已知缺失项返回 E_INPUT_UNDECLARED / E_EVIDENCE_UNRESOLVED；登记有效不证明真实输入完整。
 
 | projects 字段 | 类型与约束 |

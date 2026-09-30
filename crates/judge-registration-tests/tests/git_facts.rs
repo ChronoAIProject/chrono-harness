@@ -1,5 +1,7 @@
 use super::*;
 use std::os::unix::fs::PermissionsExt;
+#[path = "input_coverage.rs"]
+mod input_coverage;
 
 const CONFIG: &str = ".chrono-harness/config.json";
 

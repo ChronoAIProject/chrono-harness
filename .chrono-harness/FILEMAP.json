@@ -1219,6 +1219,18 @@
       ]
     },
     {
+      "path": "crates/judge-registration/src/input_coverage.rs",
+      "owner": "judge-registration",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-registration/src/main.rs",
       "owner": "judge-registration",
       "surface": "product",
@@ -2946,6 +2958,18 @@
     },
     {
       "path": "crates/judge-registration-tests/tests/git_facts.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/input_coverage.rs",
       "owner": "judge-registration-tests",
       "surface": "test",
       "cost": "unmeasured",
