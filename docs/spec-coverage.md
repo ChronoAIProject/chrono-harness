@@ -106,8 +106,12 @@ volume above the Git output bound; ignored neighbors, literal lookalikes,
 noncanonical declarations and bound-input drift retain rejection. A real
 migration consumer allows declared decoder outputs while rejecting undeclared
 files and tracked input mutations. These checks concern inventory boundaries,
-not effective-input completeness or native full activation; public beta.18 does
-not yet contain the change. See [artifact inventory](git-facts.md#registered-artifact-inventory).
+not effective-input completeness or native full activation. Public beta.19
+distributes the change; its fixed-source native recipe passes 606 macOS and 601
+Linux tests across all fifteen dedicated projects. All 35 public asset digests
+and sizes match the original packages; anonymous manifest and both installer
+downloads were also verified. See [artifact inventory](git-facts.md#registered-artifact-inventory)
+and [release evidence](distribution.md).
 
 Public [beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) adds explicit metadata rebind and literal checkout identity, alongside the previously released Git binding, CI generation, remote retirement and recipe v3/report v4. Its [fixed-source native build](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36566708631) passed 391 tests across ten dedicated projects on each of macOS arm64 and Linux x86_64, including full/scoped Git-binding consumers. Both original reports retain 31 actual processes, 28 staged consumer destinations and 24 matching identity observations. This validates those native consumers; generated provider-v3 host adoption, full input closure and deterministic parity remain outstanding. The current host release workflow is generated from an explicit chrono-github-release/v1 source; see [release CI](release-ci.md). That generator extension is distributed in beta.10; the linked native release uses its generated workflow.
 
