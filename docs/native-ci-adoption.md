@@ -4,7 +4,7 @@ This document records live GitHub Actions evidence for the generated
 `chrono-github-units/v1` projection. It closes the bounded adoption question
 for the public Go, TypeScript and mixed example hosts: each host ran its
 generated collection workflow and every declared unit on both a
-`pull_request` event and a `push` event. All runs below completed with
+`pull_request` event and a `push` event. All runs in the Recorded runs table completed with
 `success` on 2026-09-29 UTC and used the listed candidate commit.
 
 The evidence is about generated unit workflows and their collection. It does
