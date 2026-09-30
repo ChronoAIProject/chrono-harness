@@ -2,6 +2,7 @@
 mod checkout;
 pub mod facts;
 mod facts_binding;
+mod facts_configs;
 mod facts_inputs;
 pub mod full;
 pub mod initial;

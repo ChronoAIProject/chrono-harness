@@ -163,6 +163,61 @@ fn scoped_v2_docs_delta_retains_both_snapshots_without_execution() {
     assert!(h.trace().contains(&h.base) && h.trace().contains(&candidate));
 }
 
+fn select_platform(h: &BoundHost) {
+    let selected = ".chrono-harness/native scoped.json";
+    fs::copy(h.host.root().join(FACTS), h.host.root().join(selected)).unwrap();
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    h.host.json(
+        FACTS,
+        &json!({"schema":"chrono-git-configs/v1","platforms":{platform:selected}}),
+    );
+    h.host.change_registry(".chrono-harness/FILEMAP.json", |m| {
+        m["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"path":selected,"owner":"host",
+            "surface":"judge-policy","cost":"unmeasured","edges":[]}));
+    });
+}
+
+#[test]
+fn scoped_cli_platform_selection_keeps_execution_and_docs_locality() {
+    for changed in ["src.txt", "doc.txt"] {
+        let mut h = BoundHost::new("");
+        select_platform(&h);
+        h.base = h.host.commit();
+        h.host.write(changed, "selected platform candidate");
+        let candidate = h.host.commit();
+        let (exit, report, error) = h.cli(&candidate);
+        assert_eq!(exit, 0, "{error} {report}");
+        let facts = &report["response"]["evidence"]["git_facts"];
+        assert_eq!(facts["selection"]["path"], FACTS);
+        assert_eq!(facts["config_path"], ".chrono-harness/native scoped.json");
+        assert_process_bytes(facts);
+        assert_eq!(h.host.calls(), usize::from(changed == "src.txt"));
+        assert_eq!(facts["input_closure_complete"], false);
+    }
+}
+
+#[test]
+fn scoped_platform_selector_drift_rejects_before_business_execution() {
+    let h = BoundHost::new("");
+    select_platform(&h);
+    h.host.write("src.txt", "candidate source");
+    let candidate = h.host.commit();
+    h.host.change_registry(FACTS, |selector| {
+        selector["platforms"]["another-system"] = json!(".chrono-harness/other.json");
+    });
+    let (exit, report, _) = h.cli(&candidate);
+    assert_ne!(exit, 0);
+    assert!(
+        report
+            .to_string()
+            .contains("selector differs from fixed candidate")
+    );
+    assert_eq!(h.host.calls(), 0);
+}
+
 #[test]
 fn scoped_v2_failed_read_keeps_original_bytes_and_exit() {
     let h = BoundHost::new(

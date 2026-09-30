@@ -80,6 +80,47 @@ references, request/environment substitutions, wrong digest/version, persistent
 byte drift, original binary output/exit, output bounds and timeout. These are
 bounded implementation checks, not a Lean refinement proof or independent review.
 
+## Explicit platform configurations
+
+A scoped check or provider-v3 `facts_config` may name a separate, registered
+selector instead of a direct full-v3 Git policy:
+
+```json
+{
+  "schema": "chrono-git-configs/v1",
+  "platforms": {
+    "macos-aarch64": ".chrono-harness/git/macos.json",
+    "linux-x86_64": ".chrono-harness/git/linux.json"
+  }
+}
+```
+
+Keys use the executing binary's Rust `OS-ARCH` constants. The host explicitly owns
+every mapping and policy, including each platform's executable path, digest,
+version, environment and guarded files. The reader does not discover installed
+tools, infer host language or layout, generate declarations, or fall back for an
+unregistered platform. Both selector and target paths must be literal relative
+paths under `.chrono-harness/`; symlinks and nested selectors are rejected. Only
+the selected policy is read on this machine; every map entry is syntax-checked.
+Selected policies must use full-v3 Git binding, with no legacy fallback.
+
+The reader binds both original files to the fixed candidate and rechecks their
+bytes before and after every Git invocation, including the version probe. A
+post-process mutation retains the original child output and exit. Reports add
+`git_facts.selection`, containing the selector path/digest, actual platform and
+selected policy path; `git_facts.config_path` and `config_sha256` continue to name
+the selected full-v3 policy. Request consumers reject substituted or missing
+selection observations. Direct policy files keep their prior report shape and
+semantics. Register the selector, policies and their actual FILEMAP dependencies
+explicitly; selection does not create dependency edges.
+
+This source extension keeps the canonical command and facts-config entry path
+identical across registered native platforms. Different selected policies are
+different inputs, so it does not establish cross-platform verdict parity. It
+does not select the full runner's root configuration or the initial profile's
+host configuration, certify complete effective-input closure, or by itself adopt
+provider v3 in a real host. The extension is not in public beta.16.
+
 ## Guarding declared Git inputs
 
 Config v3 can opt into a versioned guard without changing old snapshots:

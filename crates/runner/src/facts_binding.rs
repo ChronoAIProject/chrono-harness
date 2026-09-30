@@ -1,7 +1,7 @@
 //! Candidate-owned Git binding. Does not infer Git's delegated input closure.
 use crate::{
-    CommandSpec, ProcessResult, facts, json, no_symlink_parents, resolve_program,
-    run_process_observed, sha256, wire,
+    CommandSpec, ProcessResult, facts, no_symlink_parents, resolve_program, run_process_observed,
+    sha256, wire,
 };
 use serde_json::{Value, json as value};
 use std::{
@@ -29,6 +29,7 @@ struct Bound {
     spec: CommandSpec,
     environment: Value,
     guard: Option<crate::facts_inputs::Guard>,
+    selection: Option<crate::facts_configs::Selection>,
 }
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
     v[key]
@@ -141,8 +142,7 @@ impl Reader {
         opening_observation: Option<&mut Value>,
     ) -> Result<Self, String> {
         let result = (|| {
-            let bytes = fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())?;
-            let cfg = json(&bytes)?;
+            let (config_path, bytes, cfg, selection) = crate::facts_configs::load(root, config)?;
             if cfg["schema_version"] != 3 {
                 if cfg.get("facts_git").is_some() || prior.is_some_and(|v| !v.is_null()) {
                     return Err("legacy configuration cannot contain a Git facts binding".into());
@@ -241,7 +241,7 @@ impl Reader {
             let reader = Self {
                 bound: Some(Bound {
                     root: fs::canonicalize(root).map_err(|e| e.to_string())?,
-                    config_path: config.into(),
+                    config_path,
                     config_bytes: bytes,
                     binding,
                     spec,
@@ -250,6 +250,7 @@ impl Reader {
                         &fs::canonicalize(root).map_err(|e| e.to_string())?,
                         &cfg,
                     )?,
+                    selection,
                 }),
                 processes: RefCell::new(vec![]),
             };
@@ -262,6 +263,7 @@ impl Reader {
                     "binding",
                     "environment",
                     "inputs",
+                    "selection",
                 ] {
                     if prior.get(key) != current.get(key) {
                         return Err(
@@ -304,6 +306,9 @@ impl Reader {
                 if let Some(guard) = &b.guard {
                     observed["inputs"] = guard.observation.clone();
                 }
+                if let Some(selection) = &b.selection {
+                    observed["selection"] = selection.observation.clone();
+                }
                 observed
             }
         }
@@ -326,6 +331,9 @@ impl Reader {
     }
     fn unchanged(&self) -> Result<(), String> {
         let b = self.bound.as_ref().ok_or("missing binding")?;
+        if let Some(selection) = &b.selection {
+            selection.unchanged(&b.root)?;
+        }
         if fs::read(no_symlink_parents(&b.root, &b.config_path)?).map_err(|e| e.to_string())?
             != b.config_bytes
         {
@@ -374,6 +382,11 @@ impl Reader {
     pub fn verify_config(&self, root: &Path, candidate: &str) -> Result<(), String> {
         if let Some(b) = &self.bound {
             facts::full_oid(candidate)?;
+            if let Some(selection) = &b.selection {
+                if self.blob(root, candidate, &selection.path)? != selection.bytes {
+                    return Err(self.error("Git config selector differs from fixed candidate"));
+                }
+            }
             if self.blob(root, candidate, &b.config_path)? != b.config_bytes {
                 return Err(self.error("Git facts config differs from fixed candidate"));
             }

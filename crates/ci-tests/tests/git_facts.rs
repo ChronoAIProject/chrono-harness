@@ -219,38 +219,7 @@ fn event_binding_is_versioned_explicit_and_generation_preserves_customization() 
 fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
     let h = Host::new("");
     let payload = json!({"before":h.candidate,"after":h.candidate,"created":false});
-    write(&h.root, ".chrono-harness/state/payload.json", &payload);
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
-    let out = Command::new(binary)
-        .current_dir("/")
-        .env_clear()
-        .env("PATH", &h.shadow)
-        .env("CHRONO_EVENT_AMBIENT", "must-not-leak")
-        .args([
-            "prepare",
-            "--host-root",
-            h.root.to_str().unwrap(),
-            "--config",
-            SOURCE,
-            "--event",
-            "push",
-            "--payload",
-            h.root
-                .join(".chrono-harness/state/payload.json")
-                .to_str()
-                .unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(read(&h.root, &h.config().context_path), report);
+    let report = prepare_cli(&h, "push", &payload);
     let facts = &report["git_facts"];
     assert_eq!(facts["binding"]["path"], json!(h.program));
     assert_eq!(facts["input_closure_complete"], false);
@@ -275,6 +244,99 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
             false
         ))
     );
+}
+
+fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
+    write(&h.root, ".chrono-harness/state/payload.json", &payload);
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
+    let out = Command::new(binary)
+        .current_dir("/")
+        .env_clear()
+        .env("PATH", &h.shadow)
+        .env("CHRONO_EVENT_AMBIENT", "must-not-leak")
+        .args([
+            "prepare",
+            "--host-root",
+            h.root.to_str().unwrap(),
+            "--config",
+            SOURCE,
+            "--event",
+            event,
+            "--payload",
+            h.root
+                .join(".chrono-harness/state/payload.json")
+                .to_str()
+                .unwrap(),
+            "--workflow-revision",
+            &h.candidate,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(read(&h.root, &h.config().context_path), report);
+    report
+}
+
+#[test]
+fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
+    for event in ["push", "pull_request"] {
+        let mut h = Host::new("");
+        let chosen = ".chrono-harness/native event.json";
+        write(&h.root, chosen, &read(&h.root, FACTS));
+        let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+        write(
+            &h.root,
+            FACTS,
+            &json!({"schema":"chrono-git-configs/v1",
+            "platforms":{platform.clone():chosen}}),
+        );
+        generate(&h.root, SOURCE, false).unwrap();
+        h.revise();
+        let (_remote, base) = h.remote();
+        let payload = if event == "push" {
+            json!({"before":base,"after":h.candidate,"created":false})
+        } else {
+            json!({"pull_request":{"base":{"sha":base},"head":{"sha":h.candidate}}})
+        };
+        let report = prepare_cli(&h, event, &payload);
+        assert_eq!(report["base"], base);
+        assert_eq!(report["candidate"], h.candidate);
+        let facts = &report["git_facts"];
+        assert_eq!(facts["selection"]["platform"], platform);
+        assert_eq!(facts["selection"]["path"], FACTS);
+        assert_eq!(facts["config_path"], chosen);
+        assert_eq!(facts["binding"]["path"], json!(h.program));
+        assert!(
+            processes(facts)
+                .iter()
+                .any(|p| p["argv"].as_array().unwrap().contains(&json!("fetch")))
+        );
+        assert_eq!(
+            report["canonical_argv"],
+            json!(chrono_harness::canonical_argv(
+                &h.config().runner,
+                &h.config().check_config,
+                Some(&base),
+                &h.candidate,
+                false
+            ))
+        );
+        let trace = h.trace();
+        let mut drift = read(&h.root, FACTS);
+        drift["platforms"]["additional-system"] = json!(".chrono-harness/future.json");
+        write(&h.root, FACTS, &drift);
+        assert!(
+            h.push(&base)
+                .unwrap_err()
+                .contains("selector differs from fixed candidate")
+        );
+        assert!(!h.trace().strip_prefix(&trace).unwrap().contains(" fetch "));
+    }
 }
 
 #[test]
