@@ -11,10 +11,29 @@
       "format": "root-guide",
       "locale": "zh-CN",
       "roots": [
-        "core.general"
+        "goal.deliverable",
+        "action.autonomy",
+        "method.entry",
+        "method.host-tools",
+        "registry.explicit",
+        "judge.register",
+        "core.small-projects",
+        "candidate.isolation",
+        "reuse.search",
+        "owner.canonical",
+        "delta.selection",
+        "delta.candidate-judge",
+        "delta.local-ci",
+        "test.behavior",
+        "evidence.program-state",
+        "evidence.failure",
+        "policy.evolution",
+        "policy.mixed-warning",
+        "candidate.landing",
+        "artifact.results"
       ],
       "title": "通用工作方法",
-      "layout": "general"
+      "layout": "workflow"
     },
     {
       "id": "general-en",

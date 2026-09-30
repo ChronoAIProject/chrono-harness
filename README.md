@@ -72,11 +72,11 @@ chrono-instructions init --host-root "/path/to/existing-host"
 
 可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。逐条迁移后的 98 个内容叶子具有中文/英文 variant；16 个普通聚合保留原有 17 个稳定入口及 core.general，依赖显式；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
 
-默认产生含完整中文核心的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
+默认产生含 20 个叶子短流程的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。每项受治理操作只呈现一条当前登记路径，定制与演进通过登记及适用验证完成。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
 
-默认两种语言的完整新根均已实测落在 Codex 默认 32 KiB 项目指令上限内；字节数、有限余量及宿主定制边界见[实际消费者读数](docs/methodology-extraction.md#实际消费者边界)。
+默认两种语言的短流程新根字节数及宿主定制边界见[实际消费者读数](docs/methodology-extraction.md#实际消费者边界)；完整双语库仍可供显式组合。
 
-日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。不选布局时按依赖先行的 DFS；可选具名布局显式组织标题和内容，必须完整覆盖非空闭包一次。默认双语共用三部分、12 主题的 `general` 布局，阅读层次不代表权威或执行顺序；聚焦 skill 仍平铺。缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
+日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。不选布局时按依赖先行的 DFS；可选具名布局显式组织标题和内容，必须完整覆盖非空闭包一次。默认双语共用五节同级的 `workflow` 布局；完整 `core.general/general` 的三部分、12 主题仍供自定义输出，本仓英文指南继续选择它。阅读层次不代表权威或执行顺序；聚焦 skill 仍平铺。缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
 
 当前身份为 schema 2 / `atomic-rules/relative-alias/v3`。已知 read-both/v1 与 literal-core/relative-alias/v2 自动前向迁移，保留旧方法/上下文精确字节、路径与权限，不拆 prose 或改为默认。重复 init 省略选项保留采用数据，显式不同输入或 locale 拒绝；原子组合不能被 raw method 覆盖。
 
@@ -113,9 +113,11 @@ cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
 
 full 报告提供 §9 全部顶层字段与执行物列表，汇集实际 findings 和具名 outputs 并标来源。未配置或未取得的工具、有效输入、影响、测试、成本结果显式为 null，unresolved 给出原因；配置中的版本不冒充实测版本。scope 仍为 configured-judges，parity 默认是 unestablished；有界 registration/filemap pass 不表示完整治理成功。
 
+普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；AI 对宿主治理／输入范围作负责的 declared-complete 工程声明，现役 registration 仍可报告 completeness_proven:false。已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍失败，实际工具链／SDK／配置义务保留；普通验收不要求普遍隐藏输入证明或 VM。本宿主仍 proposed/incomplete，不能宣称完整启用。
+
 两次独立 full check 均取得完整有效输入证据后，可运行
 `.chrono-harness/bin/chrono-harness parity --host-root . --report .chrono-harness/state/report.json --compared-report .chrono-harness/state/ci-report.json`。
-该命令只比较已发布报告的裁决字段，成功时同步更新当前报告及其 retained `report_path`；输入不完整或裁决不同均保留 unresolved 并以非零退出。它提供成对 parity 证据，不改变本地和 CI 的 canonical check 指令，也不替代未登记外部输入闭包。
+该命令要求 completeness_proven:true 与完整观察，只比较已发布报告的裁决字段，成功时同步更新当前报告及其 retained `report_path`；更强前提缺失或裁决不同均保留 unresolved 并以非零退出。parity 不另加普通 full check 门；本地与 CI 必须同命令，普遍同判仍依赖完整相同输入与确定性求值，成对观察本身不证明这些条件。
 
 Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite historical decoder are documented in [docs/execution.md](docs/execution.md). ci.verify belongs to the real ci/ci-tests pair. The host remains proposed with incomplete Cargo/SDK closure; workflow has bounded certification; autonomous delivery remains future work. Mixed classification and warnings use the [explicit surface contract](docs/mixed.md). Declared costs and unknown warnings have their own [cost contract](docs/costs.md).
 

@@ -6,8 +6,11 @@
 
 ## 1. 目标、权限与边界
 
-Harness 的本质：对选定操作，只提供一种已登记的方法，并用可执行判官检查其结果。
+Harness 的本质：每项受治理操作只提供一条当前已登记的规范路径，并用可执行判官检查其结果。
+定制在执行前通过登记选定这条路径；日常指令只呈现当前路径，不并列提供替代配方。
 AI 先把路径、归属、依赖、成本、操作及判定方式登记为白名单，再通过该方式处理任务。
+改进方法先更新登记并完成适用验证，仍保留一个正式入口；AI 自由实现产品逻辑并自主更新判官。
+默认指令按目标与入口、登记与隔离、实施、检查与修复、演进与交付的短流程排列。
 缺少登记、重复入口、执行结果与登记不符必须有明确错误，不能靠“智能推断”补全。
 系统信任 AI 非恶意，处理的是遗漏、漂移、错误和演进成本；AI 自主登记、修复和推进。
 AI 拥有构建、测试、更新约束和分支重建所需权限，没有人工审批、签字或确认步骤。
@@ -80,7 +83,7 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 以后新增独立生产项目必须同时登记一个专属测试项目；不能以共享巨型测试项目替代。
 
 宿主的所有生效 harness 约束、脚本配置、安装绑定和指令 canonical 材料都在宿主 `.chrono-harness/` 内。
-根 CLAUDE.md 的受管块直接呈现完整方法，AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接；
+根 CLAUDE.md 的受管块直接呈现所选方法，默认是短流程；AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接；
 块外原有文字属于宿主；方法在 canonical 源编辑后生成，不独立维护副本。
 宿主可以使用其他仓库构建的二进制，但须在此显式绑定路径、版本与摘要。
 自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。
@@ -100,7 +103,9 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 Config accepts explicit `schema_version: 1 | 2 | 3`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
-启用前补齐实际输入闭包、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
+启用前由 AI 对宿主定义的治理／输入范围作负责的 declared-complete 工程声明，补齐该范围的实际输入、依赖、绑定、两端快照、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
+判官核验声明引用、身份、快照和观察到的操作；普通 full check 不要求证明所有隐藏输入不存在，也不要求 VM 或 OS 隔离。
+已知缺输入、未解决的必需依赖、缺绑定／快照及漂移仍须失败，不能以声明或手写成功清除。
 null 摘要只允许 draft；不能被解释为“任意二进制都已通过验证”。
 类型表按各登记的现役 schema 描述；registration 严格验证结构。明确支持的历史 scoped 遗留项先由候选解释器转换并保留原始事实（见 §14），不作为第二套当前登记。
 对象未列出的字段、重复 JSON key、重复 ID、悬空引用由 registration 判官报错。
@@ -170,14 +175,15 @@ PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声�
 包括 HOME/CARGO_HOME 下配置、rust-toolchain、间接依赖、fixture、外部数据及环境变量。
 会影响裁决的随机种子、时钟值、网络响应和超时/资源条件也须显式固定并登记为有效输入。
 文件输入用 FILEMAP 或 environment.inputs 登记；后者以 input:<id> 显式连接消费者，不推断边。
-当前 input_closure 为 incomplete，inputs 为空；补齐工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。
+当前 input_closure 为 incomplete，inputs 为空；补齐宿主声明范围内的工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。
+declared-complete 是可信 AI 对该范围承担责任的工程声明；真实工具链、SDK、配置及其它已知适用输入义务仍保留。判官不自动发现隐含依赖，声明通过不证明普遍输入完备。
 Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`、可执行消费者
 `project:<id>`、`script:<id>`、`test:<id>` 或 `judge:<id>`、非空 `kind` 以及非空
 `inputs`。`inputs` 只能逐项引用已登记的 `tool:<id>`、`input:<id>` 或
 `environment:<name>` 节点；未知节点、错误种类或悬空引用由 registration 报
 `E_REFERENCE`。v1/v2 拒绝该字段。bindings 只记录 AI 明确选择的关系，registration
 不扫描目录、语言、命令、manifest 或工具链来补齐依赖，也不把登记成功解释为现实中
-没有遗漏输入；完整性仍由 `status`、`unresolved` 和各消费者的实际证据共同决定。
+没有遗漏输入；声明范围的登记就绪由 `status`、`unresolved` 和各消费者的实际证据共同决定。
 Config v3 可显式采用版本化 `input_closure.coverage`，合同为
 `{schema: "chrono-input-coverage/v1", required: [{consumer, domains: string[]}], rows: [{consumer, domain, state, bindings: string[], reason}]}`。
 `required` 非空，逐个列出可执行消费者及非空的宿主自定义输入域；rows 必须恰好覆盖
@@ -308,7 +314,8 @@ DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candida
 本地/CI 必须运输相同 OID、context 与版本化配置；其报告绑定这些内容的摘要。
 同一指令保证调用和输入解释语义一致；相同裁决还要求完整有效输入、政策、执行物、工具链、
 配置和环境相同，并且判官/测试确定性求值。仅 Cargo 版本或环境摘要存在不足以证明这些前提。
-前提未建立时报告 parity:unestablished；输入/证据不足仍报错，不能承诺裁决相同。
+前提未建立时报告 parity:unestablished，不能承诺裁决相同；这不另加普通 full check 准入门。其已登记合同所需输入／证据不足仍报错。
+普通 full check 在登记要求及全部选中义务通过后表示该 DELTA 满足现役登记合同；现役 registration 的 effective_inputs 仍可为 completeness_proven:false。
 
 完成两次独立的 full check 后，可显式运行
 `chrono-harness parity --host-root H --report P --compared-report Q` 生成成对对等证据。
@@ -317,8 +324,9 @@ DELTA 比较二者的 tree，不自动改用 merge-base，base 不必是 candida
 `effective_inputs.completeness_proven = true` 且没有未解决的关键输入。它比较状态、快照身份、
 环境、工具、有效输入、DELTA、影响、测试、findings 及判官结果；绝对执行路径按已观察二进制摘要
 归一化，路径敏感性必须由有效输入显式登记。比较失败会保留当前报告并以非零错误退出，不能把
-相同的未知或不完整报告标成 `parity:established`。这是一份有边界的成对确定性证据，不能替代
-宿主尚未登记的 compiler、SDK、网络、凭据或其他外部输入闭包。
+相同的未知或不完整报告标成 `parity:established`。这是独立的成对观察证据；即使比较成功，也不单凭一对报告证明普遍确定性。
+其更强前提缺失时 parity 保持 unestablished，不阻止已满足现役登记合同的普通 full check；不得手填 completeness_proven:true 或清除已知未解决项。
+宿主尚未登记的 compiler、SDK、网络、凭据或其他已知适用外部输入仍须补齐。
 
 v1 明确选择干净、不可变 commit 快照这一工程边界；不另设 dirty-worktree 验证模式。
 工作树必须检出 candidate，索引和已跟踪文件必须等于 candidate，子模块不得隐式展开。
@@ -374,11 +382,12 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 
 ## 5. DELTA 与依赖图算法
 
-DELTA 选择充分的前提是：两状态所有实际语义输入及其直接/间接依赖均完整登记，且判官/测试
+在宿主定义的治理／输入范围内，DELTA 选择充分的前提是：两状态实际语义输入及其直接/间接依赖均完整登记，且判官/测试
 谓词具有局部性：仅由已登记的语义输入决定，未受变更输入及其闭包影响的谓词保持不变；外部输入也属于状态。
 图上闭包仅是相对于给定登记图的机械事实，真实依赖完整性与局部性是工程义务，不能由合法登记推出。
-未知或已知缺失的 fixture、环境、外部输入或非局部影响须报输入/证据不足，AI 显式补登记或调整检查单元；
+该范围内未解决的必需依赖、已知缺失的 fixture、环境、外部输入或非局部影响须报输入/证据不足，AI 显式补登记或调整检查单元；
 不推断补边，不声称能自动发现所有遗漏，也不声称已检查每个历史对象或证明未来 Rust 实现。
+AI 的 declared-complete 工程声明及登记核验支持普通合同验收；普遍隐藏输入不存在的证明不是该验收前提，也不能从一次通过推出。
 
 DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID 和 mode。
 按字节稳定排序路径，用 Git `--no-renames` 的含 NUL 输出或等价库接口读取事实。
@@ -430,15 +439,15 @@ schema 不可解析影响本轮输入时是错误；不能以“历史问题”�
 
 `State` 对应固定端点，`Artifact` 对应受检查对象及其输入，`bytes` 对应包含缺失态的输入值；`reads` 是两端实际读取，`dep` 是宿主声明的依赖上界，`property` 是要保留的判定属性。使用 `Option String` 的精确应用已编译，可区分不存在与空字节。实际读取集合、局部性和依赖包含关系仍由宿主履行，不能把 `Local` 假设当作自动取得的结论。不另造仅包装既有结论的定理。
 
-另一个已编译模型位于 trureturing 修订 `7b527cae31e23efde893f06987d5328eab10f4cf` 的 [SeededEdgeUpdateReachability.lean](https://github.com/the-omega-institute/trureturing/blob/7b527cae31e23efde893f06987d5328eab10f4cf/D5/S3/ConceptDynamics/DependencyTopology/SeededEdgeUpdateReachability.lean)。其独立交付为 [PR #10868](https://github.com/the-omega-institute/trureturing/pull/10868)，当前是尚未独立评审、冻结或合并的草稿；成功编译与入库冻结分别记账。
+已合并的 trureturing [PR #10868](https://github.com/the-omega-institute/trureturing/pull/10868) 在修订 `168e85c372e38d926a25892a5f752c3f9ad8a173` 的 [TYPED_GOVERNANCE_ADMISSION.md §Theorem 6](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/docs/develop/theory/TYPED_GOVERNANCE_ADMISSION.md#L190) 交付种子边更新的节点集合推论，并登记对应的 [atom](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/atoms/sha256/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e) 与[吸收映射](https://github.com/the-omega-institute/trureturing/blob/168e85c372e38d926a25892a5f752c3f9ad8a173/Meta/Digestion/backfill/typed-governance-admission/absorbed-closed/e041845285be68b9a306b63e427dfde5f58b09e7b8c977c1099c760f214c432e.yaml)。它复用修订 `64b78db1ad18a8a90b42e13a412dfc281d5c0922` 中已冻结的 [ConsequenceClosure.lean](https://github.com/the-omega-institute/trureturing/blob/64b78db1ad18a8a90b42e13a412dfc281d5c0922/D5/S3/ConceptDynamics/DagCompletion/ConsequenceClosure.lean) 的 `ConsequenceClosure.consequenceClosure_least`、`ConsequenceClosure.consequenceClosure_successorClosed`、`ConsequenceClosure.subset_consequenceClosure`；该 PR 未新增命名 Lean 定理或冻结条目。
 
-`seeded_edge_update_closure` 证明：给定任意顶点类型、两端有向关系及同一个种子集合，若每条新增或删除的关系边的终点都在种子中，则并集图、base 图、candidate 图从这些种子可达的节点集合相等。它允许环和无限顶点类型，路径仍是有限路径且允许零长度。证明遇到某端缺失的边时，从其已登记为种子的终点重新出发，因此不保留原来的起始种子。
+Theorem 6 的派生结论是：给定任意顶点类型、两端有向关系及同一个种子集合，若每条新增或删除的关系边的终点都在种子中，则并集图、base 图、candidate 图从这些种子可达的节点集合相等。它允许环和无限顶点类型，路径仍是有限路径且允许零长度。证明遇到某端缺失的边时，从其已登记为种子的终点重新出发，因此不保留原来的起始种子。
 
-与 FILEMAP 的对应是：顶点取显式节点 ID，关系取“存在某种 kind 的登记边”，种子取本轮变更种子的节点集合。第 5 节要求变更边两端进入种子，强于该定理仅要求变更关系边终点的前提；从 Rust 的有类型登记变化到该前提的实现对应仍须核验。此结果不授权删除旧边，也不授权把逐种子解释、路径、边类型、测试选择或成本替换为节点集合。模型的精确有类型边投影应用及下述删边反例已编译；没有以此声称 Rust 算法已获形式验证。
+与 FILEMAP 的对应是：顶点取显式节点 ID，关系取“存在某种 kind 的登记边”，种子取本轮变更种子的节点集合。第 5 节要求变更边两端进入种子，强于该推论仅要求变更关系边终点的前提；从 Rust 的有类型登记变化到该前提的实现对应仍须核验。此结果不授权删除旧边，也不授权把逐种子解释、路径、边类型、测试选择或成本替换为节点集合。精确有类型边投影应用及下述删边反例的既有编译证据不构成 Rust 算法的形式验证。
 
 第 5 节的删边例子也给出实现对应的边界：把有类型边投影为“存在某个 kind 的边”，或只保留可达节点，会丢掉测试选择需要的信息。`project:p` 和 `test:t` 同为种子、唯一测试执行边被删除时，两图的可达节点均为这两个节点；candidate 图没有执行边，并集图保留旧执行边。因此任何只证明节点集合相等的结果都不足以替代旧边、逐种子解释、路径、测试选择、成本或退休义务。
 
-当前对应限于上述参数映射、编译过的定理及精确应用、反例与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
+当前对应限于上述参数映射、冻结声明与派生推论、精确应用及反例的既有编译证据与现有行为回归。相关 Rust 消费者是 `crates/judge-filemap/src/{lib,graph}.rs`；`crates/judge-filemap-tests/tests/impact.rs` 的 `file_record_field_and_edge_add_delete_retarget_changes_seed_both_ends`、`base_only_test_edge_preserves_removed_requirement_owner_and_cost` 和 `pairing_and_test_record_seed_without_execution_edge_do_not_select` 分别约束变更种子、旧测试要求与仅到达测试节点不执行。没有机械证明 Rust 相对模型的精化，也没有证明真实输入登记完整或任意判官确定性。
 
 ## 6. 登记变化、移除与演进
 
@@ -579,8 +588,8 @@ AI 先尝试在现有规则下解决任务；确需改判官时自主变更并�
 `registry_digest, executables, tools, environment, effective_inputs, parity, delta, impact, judges, tests, findings, costs`。
 executables 为 `{path, sha256, version}` 列表；tools 另记录实际解析路径和工具版本。
 effective_inputs 记录两端完整有效输入的 ID、实际值摘要及来源证据；摘要存在本身不证明相等或完整。
-parity 为 `{status: "established"|"unestablished", compared_report: string|null}`；仅在与具名报告比较、
-确认 §4 全部条件及确定性证据时可 established，否则 unestablished；与性能测量差异分别报告。
+parity 为 `{status: "established"|"unestablished", compared_report: string|null}`；普通 full check 保持 unestablished。
+现役独立比较器仅在满足 §4 的更强输入／观察要求并与具名报告匹配时写 established；它记录成对证据，不证明普遍确定性，也不参与普通检查准入。性能测量差异分别报告。
 judges/tests 记录每项的 selected/executed/blocked/retired 状态、退出码和证据摘要。
 这里 selected 是执行计划状态，完整结果不能停留在 selected 就返回 pass。
 
@@ -674,7 +683,7 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 初始根提交不是一次通过的 DELTA，也不生成“所有历史已合规”的报告。
 随后修改都有真实 base；初次启用仍按 §6 由候选判官检查 activation DELTA 和迁移证据，并通过 integration。
 base.status 为 proposed 时记录 previous_enforcement:none，不能回填之前的成功；根提交之外不得伪造空 base。
-草案与 active 的迁移都不执行旧判官；启用必须填完 input_closure，声明完整仍不等于数学证明。
+草案与 active 的迁移都不执行旧判官；启用必须补齐宿主声明的治理／输入范围并满足 registration 要求，input_closure 为 declared-complete 且无 unresolved。此工程声明不要求普遍隐藏输入证明；现役判官仍可报告 completeness_proven:false。
 
 宿主可显式登记 `chrono-initial-check/v1` 初始化配置，包含完整登记的 `host_config`、具名 `judges` 及进程上限，使用同一 `chrono-harness check --config P --candidate OID --initial` 入口。本地和 CI 在初始化时仍须使用相同配置和指令。普通完整配置不自动降级到该模式；初始化配置拒绝 `--base` 与 `--context`，读取真实 commit header 排除非根提交，包括浅历史及 Git replace 覆盖造成的伪根。
 
@@ -711,7 +720,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 删除仍需测试、缺 replacement | E_REQUIRED_TEST_REMOVED |
 | 两个项目共用一个专属测试或缺配对 | E_TEST_PAIR |
 | 修改 manifest 且发现依赖未登记 | E_DANGLING_EDGE / E_INPUT_UNDECLARED；不自动补边 |
-| fixture/间接/环境/外部输入未知或已知缺登记 | 输入/证据不足；不因图闭合假称完整，不推断边 |
+| 声明范围内 fixture/间接/环境/外部输入已知缺登记或必需依赖未解决 | 输入/证据不足；不因图闭合假称完整，不推断边 |
 | 只改 README，未登记测试执行边 | 不启动所有项目测试；登记判官仍只判该 DELTA |
 | 增加脚本和独立测试完整登记 | 只执行显式测试边选择的操作；无自动发现 |
 | 同 operation 注册两种入口 | E_ROUTE_AMBIGUOUS |
@@ -724,7 +733,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 恰落后 3 提交、年龄 24 小时 | 不因阈值本身拒绝，其他要求仍适用 |
 | 本地与 CI 同一 check 指令 | 同调用/输入解释语义，不单凭命令保证裁决相等 |
 | 完整有效输入/政策/执行物/工具链/环境相同且确定性求值 | 相同选择和裁决；不要求非裁决性能测量值相同 |
-| 仅 OID/context/Cargo 相同，其他输入或确定性未证实 | parity:unestablished；输入/证据不足仍报错 |
+| 仅 OID/context/Cargo 相同，其他输入或确定性未证实 | parity:unestablished；普通检查只按现役登记合同裁决，所需输入/证据不足仍报错 |
 | 暂存/未暂存/未跟踪非生成物变化 | E_SNAPSHOT_DIRTY，不偷偷只判 committed 子集 |
 | 浅历史缺 base 或 fork_point | E_HISTORY_MISSING；补取后重跑 |
 | 判官退出成功但 stdout 为空/非法 JSON | E_PROTOCOL，exit 2 |
@@ -776,9 +785,9 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 
 `chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由 98 个双语内容叶子和 16 个普通空文本 aggregate 组成，原有 17 个 core 稳定入口及 core.general 全部保留；旧主题入口只组合原职责，新增便携方法由 core.general 显式选择。聚焦 skill 只选择修复产生处及其证据/复用前提（7 个内容叶子）。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
 
-`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的完整双语根已按实际 Codex 默认字节上限验证，读数与有限适用条件见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
+`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语短流程根及本仓完整英文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
 
-当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。默认和本仓完整双语指南采用同一 general 三部分/12 主题布局，聚焦 skill 保持原平铺。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
+当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。产品默认和本仓根 manifest 显式列出 20 个现有内容叶子，并选用 workflow 的五节同级短流程。完整 general 三部分/12 主题布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 仍选择全部 98 个叶子，聚焦 skill 保持原平铺。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
 
 根受管块保留宿主块外原文、sole donor 和预期整份比较语义。Markdown/skill 为带身份 envelope 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退休；不建立历史 ledger 或扫描删除器。
 
