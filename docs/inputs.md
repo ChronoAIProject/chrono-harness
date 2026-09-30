@@ -32,12 +32,30 @@ caller-defined `kind`. Registration reports `E_REFERENCE` for an unknown node,
 an invalid node kind, or a missing input-to-consumer edge. Config v1 and v2
 reject the field, preserving their historical schemas.
 
+`declared-complete` is the trusted AI's accountable engineering declaration of
+the host-defined governance and input scope. Judges check the declared references,
+identities, endpoint snapshots and observed operations. Known missing inputs,
+unresolved required dependencies, missing bindings or snapshots, and drift still
+fail; the declaration cannot clear them or replace a producer's result. Real
+toolchain, SDK and configuration obligations within that scope remain.
+
 When schema v3 declares the closure `declared-complete`, the `bindings` field
 is mandatory and every registered `tool`, `input`, and `environment` node
 must occur in at least one binding. This is a fail-closed inventory consistency
 check; it still does not prove that the host has no unregistered external
-input, so reports retain `completeness_proven: false` until independent
-evidence establishes that boundary.
+input. Current registration reports retain `completeness_proven: false`.
+Ordinary full check can pass with this value once its registration requirements
+and selected obligations pass: that DELTA satisfies the active registered
+contract. Ordinary acceptance requires neither a universal proof of hidden-input
+absence nor a VM. This host's declarations remain proposed/incomplete.
+
+Local and CI must use the same registered check command. Equal verdicts across
+environments additionally require equal complete effective inputs and deterministic
+evaluation. The separate runner parity comparator requires
+`completeness_proven: true` and complete verdict-bearing observations; registration
+does not produce that stronger evidence. Without it, parity remains unestablished
+without becoming an ordinary full-check gate. A matching pair of observations
+alone does not prove universal determinism; do not handwrite the stronger value.
 
 Config v3 may explicitly adopt a versioned `input_closure.coverage` contract:
 
@@ -86,8 +104,8 @@ This is an explicit relationship table, not a dependency discoverer. The
 registration judge never scans directories, manifests, language files, commands,
 or toolchains to add bindings. A valid binding records what the AI registered;
 it does not prove that the real host has no omitted input. `input_closure.status`
-and `unresolved` therefore remain independent completeness evidence, and the
-Cargo/compiler/SDK closure still requires its own registrations and tests.
+and `unresolved` describe the accountable declaration and its outstanding work;
+Cargo/compiler/SDK inputs still require their applicable registrations and tests.
 
 ```sh
 chrono-inputs capture --host-root /path/to/host \

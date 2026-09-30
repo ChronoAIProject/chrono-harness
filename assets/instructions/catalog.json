@@ -511,14 +511,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "一项活动一个登记入口。 构建、生成、检查、交付各用唯一登记方法，明确参数、前置、输入、环境、输出、退出码。层内委托已有实现，不复制配方；修实际产错层。"
+            "text": "一项活动一个当前登记入口。 每项受治理的构建、生成、检查、交付只走当前规范路径；定制先在登记中选定，日常指令只呈现该路径，不并列替代配方。明确参数、前置、输入、环境、输出、退出码；改方法先更新登记并完成适用验证，仍保留一个正式入口。层内委托已有实现，不复制配方；修实际产错层。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "One entry per activity. Build, generate, check and deliver by their sole registered methods; declare parameters, prerequisites, inputs, environment, outputs and exits. Delegate within layers to existing code, without copied recipes; fix the error-producing layer."
+            "text": "One current registered entry per activity. Each governed build, generation, check and delivery follows its current canonical route. Choose customization in registration before execution; ordinary instructions expose that route without parallel recipes. Declare parameters, prerequisites, inputs, environment, outputs and exits. Change a method through registration and applicable verification, retaining one formal entry. Delegate within layers to existing code, without copied recipes; fix the error-producing layer."
           }
         }
       ]
@@ -2756,6 +2756,106 @@
             "cache.compatibility",
             "cache.build-separate",
             "cache.query"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workflow",
+      "sections": [
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "目标与入口"
+            },
+            {
+              "locale": "en",
+              "text": "Goal and entry"
+            }
+          ],
+          "atoms": [
+            "goal.deliverable",
+            "action.autonomy",
+            "method.entry",
+            "method.host-tools"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "登记与隔离"
+            },
+            {
+              "locale": "en",
+              "text": "Registration and isolation"
+            }
+          ],
+          "atoms": [
+            "registry.explicit",
+            "judge.register",
+            "core.small-projects",
+            "candidate.isolation"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "实施"
+            },
+            {
+              "locale": "en",
+              "text": "Implementation"
+            }
+          ],
+          "atoms": [
+            "reuse.search",
+            "owner.canonical"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "检查与修复"
+            },
+            {
+              "locale": "en",
+              "text": "Checks and repair"
+            }
+          ],
+          "atoms": [
+            "delta.selection",
+            "delta.candidate-judge",
+            "delta.local-ci",
+            "test.behavior",
+            "evidence.program-state",
+            "evidence.failure"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "演进与交付"
+            },
+            {
+              "locale": "en",
+              "text": "Evolution and delivery"
+            }
+          ],
+          "atoms": [
+            "policy.evolution",
+            "policy.mixed-warning",
+            "candidate.landing",
+            "artifact.results"
           ]
         }
       ]
