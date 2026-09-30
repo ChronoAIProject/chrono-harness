@@ -563,6 +563,121 @@ pub fn compiler_binding(f: &mut Fixture) {
     f.save();
 }
 
+pub fn toolchain_binding(f: &mut Fixture) {
+    compiler_binding(f);
+    let root = f.root();
+    let sysroot = Command::new(
+        f.values[CONFIG]["environment"]["values"]["RUSTC"]
+            .as_str()
+            .unwrap(),
+    )
+    .args(["--print", "sysroot"])
+    .output()
+    .unwrap();
+    assert!(sysroot.status.success());
+    let sysroot = PathBuf::from(String::from_utf8(sysroot.stdout).unwrap().trim());
+    let sysroot = fs::canonicalize(sysroot).unwrap();
+    let sysroot_file = sysroot.join("bin/rustc");
+    assert!(sysroot_file.is_file(), "{}", sysroot_file.display());
+    let sysroot_manifest = ".chrono-harness/state/sysroot.json";
+    write(
+        &root,
+        sysroot_manifest,
+        &json!({
+            "schema":"chrono-input-directory/v1",
+            "root":sysroot,
+            "files":[{"path":"bin/rustc","sha256":sha256(&fs::read(&sysroot_file).unwrap())}]
+        })
+        .to_string(),
+    );
+
+    let sdk_root = ".chrono-harness/state/sdk";
+    let sdk_file = format!("{sdk_root}/SDKROOT.marker");
+    write(&root, &sdk_file, "declared sdk\n");
+    let sdk_manifest = ".chrono-harness/state/sdk.json";
+    write(
+        &root,
+        sdk_manifest,
+        &json!({
+            "schema":"chrono-input-directory/v1",
+            "root":sdk_root,
+            "files":[{"path":"SDKROOT.marker","sha256":sha256(b"declared sdk\n")}]
+        })
+        .to_string(),
+    );
+    let build_script = ".chrono-harness/state/build-script.input";
+    write(&root, build_script, "declared build script input\n");
+
+    let linker = fs::canonicalize("/usr/bin/cc").unwrap();
+    let linker_version = Command::new(&linker).arg("--version").output().unwrap();
+    assert!(linker_version.status.success());
+    let linker_key = format!(
+        "CARGO_TARGET_{}_LINKER",
+        f.contract["target"]
+            .as_str()
+            .unwrap()
+            .replace('-', "_")
+            .to_uppercase()
+    );
+    f.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id":"linker",
+            "program":linker,
+            "resolution":"PATH-once",
+            "version_argv":["--version"],
+            "expected_version":String::from_utf8(linker_version.stdout).unwrap().trim()
+        }));
+    let environment = f.values.get_mut(CONFIG).unwrap()["environment"]["values"]
+        .as_object_mut()
+        .unwrap();
+    environment.insert(
+        "RUSTFLAGS".into(),
+        json!(format!("--sysroot={}", sysroot.display())),
+    );
+    environment.insert(linker_key.clone(), json!(linker));
+    environment.insert("CHRONO_SDK_ROOT".into(), json!(root.join(sdk_root)));
+    let mut input_rows = Vec::new();
+    let mut input_edges = Vec::new();
+    for (id, location) in [
+        ("toolchain.sysroot.manifest", sysroot_manifest.to_string()),
+        (
+            "toolchain.backend",
+            sysroot_file.to_string_lossy().into_owned(),
+        ),
+        ("toolchain.linker", linker.to_string_lossy().into_owned()),
+        ("toolchain.sdk.manifest", sdk_manifest.to_string()),
+        ("toolchain.build-script", build_script.to_string()),
+    ] {
+        let path = PathBuf::from(&location);
+        let digest = if path.is_absolute() {
+            sha256(&fs::read(&path).unwrap())
+        } else {
+            sha256(&fs::read(root.join(&path)).unwrap())
+        };
+        input_rows.push(json!({"id":id,"location":location,"sha256":digest}));
+        input_edges.push(edge(&format!("input:{id}"), "runtime-input", "project:t"));
+    }
+    f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .extend(input_rows);
+    f.values.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend(input_edges);
+    f.contract["schema"] = json!("chrono-cargo-inputs/v5");
+    f.contract["toolchain"] = json!({
+        "sysroot":{"root":sysroot,"manifest":"toolchain.sysroot.manifest"},
+        "backend":["toolchain.backend"],
+        "linker":{"tool":"linker","input":"toolchain.linker","environment":linker_key},
+        "sdks":[{"root":sdk_root,"manifest":"toolchain.sdk.manifest","environment":"CHRONO_SDK_ROOT"}],
+        "build_script_inputs":["toolchain.build-script"]
+    });
+    f.save();
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Consumer {
     Full,

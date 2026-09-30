@@ -125,7 +125,7 @@ tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次
 文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。
 Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须指向同一执行物，present 摘要先于任何启动核验，expected_version 必须为非空字符串并匹配 version_argv 的实际 UTF-8 stdout（只去末尾空白）。相同 candidate 绑定读取 base 与 candidate，不启动 base 工具。每次进程使用清空后重建的登记环境及 protocol 的时间／输出上限；显式 GIT_DIR、GIT_WORK_TREE、GIT_INDEX_FILE 因重定向 checkout 而拒绝。进程前后核配置、绑定路径与执行物摘要，保留原始输出字节、摘要、退出和边界失败。完整请求及消费者报告通过 `git_facts` 运输观察；下游核对绑定和环境，缺失或不符不得回退 ambient Git。执行前的失败以 `E_GIT_FACTS` 携观察返回；尚未启动的进程不伪造回执。完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、旧 library facts API、scoped CI 与旧版事件准备保持各自旧合同。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
 
-当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备完整 Cargo/SDK 输入闭包。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。
+当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备完整 Cargo/SDK 输入闭包。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。可选 `chrono-cargo-inputs/v5` 进一步登记 sysroot、backend、linker、SDK 与 build-script 输入，但仍只证明登记的有限边界。
 `argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
 没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。
 只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。
@@ -166,6 +166,13 @@ operation 在全部 actions 与 canonical_check 中唯一；同名不同参数�
 要求宿主登记唯一编译器选择环境，拒绝另一套 Cargo 配置／wrapper 选择来源。
 这只绑定被传给 Cargo 的执行入口，不证明其委托程序、编译器库、链接器或 SDK 闭包。
 v2/v3 保持原解释；v4 的支持命令与边界见同文档，不由通用 projects 判官推断语言工具链。
+可选 guard v5 保留 v4 字段并增加显式 `toolchain`：sysroot 使用
+`chrono-input-directory/v1` 文件清单且只能由精确 `RUSTFLAGS=--sysroot=...` 选择；
+backend 与 build-script 输入逐项连接 FILEMAP；linker 以独立工具、输入 ID 和环境变量
+绑定；每个 SDK 以目录清单和精确环境根绑定。目录文件、选择路径和外部输入在 Cargo
+前后重核，递归配置不得提供第二套 linker/sysroot 来源。v5 报告使用
+`chrono-cargo-run/v3`，仍保持 `input_closure_complete: false`；它不推断未登记的
+编译器库、委托进程、SDK 元数据、构建脚本读取、OS 或网络输入。v2/v3/v4 的解释保持不变。
 
 v3 可显式选择逐项祖先清单，或断言宿主根的所有严格祖先都没有 Cargo 配置；后一种只核验具名范围的缺失，发现文件即失败，不推断登记或依赖。Cargo home 可显式相对同一宿主根解释，避免将 checkout 深度或个人绝对路径写死进可搬移政策。根、Cargo home、命令行与 include 输入仍逐项登记；v2 合同保留原义。适用迁移与观测边界见同文档，不能由配置可搬移推断整个宿主或完整输入已可移植。
 脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。

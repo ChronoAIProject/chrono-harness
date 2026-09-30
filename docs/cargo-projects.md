@@ -207,7 +207,8 @@ them requires an explicit adapter extension. Cargo still determines whether a
 particular accepted combination is legal and retains its real failure.
 
 The registered outer action must invoke this guard with the exact root, config,
-policy and operation arguments above. `chrono-cargo-run/v2` reports the observed
+policy and operation arguments above. `chrono-cargo-run/v2` (or `v3` for a v5
+toolchain policy) reports the observed
 tool and actual metadata/consumer processes, including original stdout/stderr
 bytes, hashes and exit status, plus the checked configuration inventory, input
 IDs, digests, absent paths and parsed files. A rejected resolution retains successful metadata
@@ -270,3 +271,34 @@ build-script reads or other external inputs. `input_closure_complete` remains
 false. The product host has not adopted v4. Dedicated direct and full/scoped tests
 exercise actual Cargo compilation, selected-tool traces, before/after mismatch,
 configuration rejection and documentation-only nonexecution.
+
+## Explicit toolchain inventory
+
+Hosts can opt into `chrono-cargo-inputs/v5` by retaining the v4 declarations and
+adding a `toolchain` object. V5 does not discover a compiler environment. Every
+toolchain item is an explicit input ID with a FILEMAP edge to the Cargo consumer.
+The object contains:
+
+| Field | Contract |
+| --- | --- |
+| `sysroot` | `{root, manifest}`; `root` is the exact selected directory, `manifest` is an input whose bytes use `chrono-input-directory/v1`, and `RUSTFLAGS` must be exactly `--sysroot=<canonical root>` |
+| `backend` | Nonempty or empty explicit input-ID list for backend files; IDs must be present and connected when listed |
+| `linker` | `{tool, input, environment}` with a distinct registered tool, a present input ID, and an environment variable selecting the canonical linker path |
+| `sdks` | Directory inventories with `{root, manifest, environment}`; each environment variable must select that exact canonical root |
+| `build_script_inputs` | Explicit present input-ID list for build-script external reads |
+
+Each directory manifest lists every retained regular file and its SHA-256 under
+`chrono-input-directory/v1`; empty inventories, duplicate paths, symlinks and
+identity mismatches fail before Cargo. The guard rechecks all directory files,
+declared inputs and selected paths after the consumer. Recursive Cargo
+configuration may not provide a second linker or sysroot selection source.
+V5 reports `chrono-cargo-run/v3` with toolchain evidence and the observed linker
+tool; v2/v3/v4 retain their original meanings and reject the v5 field.
+
+This is a bounded, opt-in inventory. It does not prove that backend libraries,
+linker delegates, SDK metadata, build scripts, Cargo credentials, OS state or
+network responses are complete, so `input_closure_complete` remains `false`.
+The full host remains proposed until the host registers and activates this
+policy. Dedicated tests cover a real Rust sysroot, linker, SDK inventory,
+build-script input, selection conflicts and directory/input drift through the
+ordinary Cargo operation.

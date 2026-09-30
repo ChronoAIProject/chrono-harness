@@ -141,35 +141,60 @@ struct Include {
     #[serde(default)]
     optional: bool,
 }
-fn includes(path: &Path, compiler_binding: bool) -> Result<Vec<Include>> {
+fn includes(
+    path: &Path,
+    compiler_binding: bool,
+    linker_environment: Option<&str>,
+    sysroot_binding: bool,
+) -> Result<Vec<Include>> {
     let config: toml::Value = fs::read_to_string(path)
         .map_err(error)?
         .parse()
         .map_err(error)?;
-    if compiler_binding {
-        for (table, keys) in [
-            (
-                "build",
-                &["rustc", "rustc-wrapper", "rustc-workspace-wrapper"][..],
-            ),
-            (
-                "env",
-                &[
-                    "RUSTC",
-                    "RUSTC_WRAPPER",
-                    "RUSTC_WORKSPACE_WRAPPER",
-                    "CARGO_BUILD_RUSTC",
-                    "CARGO_BUILD_RUSTC_WRAPPER",
-                    "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
-                ][..],
-            ),
-        ] {
+    if compiler_binding || linker_environment.is_some() || sysroot_binding {
+        let mut environment_keys = vec![
+            "RUSTC",
+            "RUSTC_WRAPPER",
+            "RUSTC_WORKSPACE_WRAPPER",
+            "CARGO_BUILD_RUSTC",
+            "CARGO_BUILD_RUSTC_WRAPPER",
+            "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
+        ];
+        if let Some(key) = linker_environment {
+            environment_keys.push(key);
+        }
+        if sysroot_binding {
+            environment_keys.push("RUSTFLAGS");
+        }
+        let mut build_keys = vec!["rustc", "rustc-wrapper", "rustc-workspace-wrapper"];
+        if sysroot_binding {
+            build_keys.push("rustflags");
+        }
+        for (table, keys) in [("build", &build_keys[..]), ("env", &environment_keys[..])] {
             for key in keys {
                 if config.get(table).and_then(|v| v.get(*key)).is_some() {
                     return Err(error(format!(
                         "compiler selection must use the bound host environment, not {table}.{key} in {}",
                         path.display()
                     )));
+                }
+            }
+            if let Some(targets) = config.get("target").and_then(toml::Value::as_table) {
+                for (target, value) in targets {
+                    if let Some(table) = value.as_table() {
+                        if linker_environment.is_some() && table.contains_key("linker") {
+                            return Err(error(format!(
+                                "linker selection must use the bound environment, not target.{target}.linker in {}",
+                                path.display()
+                            )));
+                        }
+                        if sysroot_binding && table.contains_key("rustflags") {
+                            return Err(error(format!(
+                                "sysroot selection must use RUSTFLAGS, not target.{target}.rustflags in {}",
+                                path.display()
+                            )));
+                        }
+                    }
                 }
             }
         }
@@ -212,6 +237,8 @@ pub(crate) fn check(
     ancestors: Option<Ancestors>,
     arguments: &[String],
     compiler_binding: bool,
+    linker_environment: Option<&str>,
+    sysroot_binding: bool,
     input: impl Fn(&str) -> Result<PathBuf>,
 ) -> Result<Checked> {
     let home = environment
@@ -344,7 +371,10 @@ pub(crate) fn check(
             )));
         }
         pending.push((path.clone(), true));
-        for include in includes(&path, compiler_binding)?.into_iter().rev() {
+        for include in includes(&path, compiler_binding, linker_environment, sysroot_binding)?
+            .into_iter()
+            .rev()
+        {
             let spelling = path.parent().unwrap().join(include.path);
             let target = normalized(&spelling)?;
             spellings.insert(spelling);

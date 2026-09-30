@@ -17,6 +17,8 @@ pub struct Report {
     operation_id: String,
     tool: Option<observation::Tool>,
     compiler: Option<observation::Tool>,
+    linker: Option<observation::Tool>,
+    toolchain: Option<crate::inputs::ToolchainEvidence>,
     metadata: Option<ProcessResult>,
     operation: Option<ProcessResult>,
     configuration: Option<crate::configuration::Evidence>,
@@ -38,6 +40,8 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         operation_id: operation.into(),
         tool: None,
         compiler: None,
+        linker: None,
+        toolchain: None,
         metadata: None,
         operation: None,
         configuration: None,
@@ -95,10 +99,21 @@ fn evaluate(
         &environment,
     )?;
     report.configuration = Some(check.configuration.evidence.clone());
+    report.toolchain = check.toolchain.clone();
+    if report.toolchain.is_some() {
+        report.schema = "chrono-cargo-run/v3";
+    }
     let contract = &check.contract;
     let mut tools = BTreeMap::new();
-    let ids = std::iter::once(contract.metadata.tool.as_str())
-        .chain(contract.compiler.iter().map(|c| c.tool.as_str()));
+    let mut ids = vec![contract.metadata.tool.as_str()];
+    if let Some(compiler) = &contract.compiler {
+        ids.push(compiler.tool.as_str());
+    }
+    if let Some(toolchain) = &contract.toolchain {
+        ids.push(toolchain.linker.tool.as_str());
+    }
+    ids.sort_unstable();
+    ids.dedup();
     for id in ids {
         let declarations: Vec<_> = registrations.config()["tools"]
             .as_array()
@@ -142,6 +157,15 @@ fn evaluate(
         )?;
         if id == contract.metadata.tool {
             report.tool = Some(tool.clone());
+        } else if contract
+            .toolchain
+            .as_ref()
+            .is_some_and(|toolchain| toolchain.linker.tool == id)
+        {
+            if let Some(toolchain) = report.toolchain.as_mut() {
+                toolchain.linker = Some(tool.clone());
+            }
+            report.linker = Some(tool.clone());
         } else {
             report.compiler = Some(tool.clone());
         }
