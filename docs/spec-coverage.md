@@ -98,8 +98,8 @@ The bounded parity increment adds `chrono-harness parity --host-root H --report 
 
 Full activation and all other remaining obligations stay active. Generic project fixtures validate declared method execution and ownership; independent Cargo fixtures validate explicitly adopted TOML consistency and the bounded v5 toolchain inventory. Neither proves complete Cargo/SDK input closure. Single-worker checks do not certify independent review, native CI or landing.
 
-Source snapshot acquisition now excludes explicit artifact directories before
-untracked enumeration across full/initial/scoped and registration/projects
+Source snapshot acquisition now omits explicit artifact directories from Git's
+untracked output across full/initial/scoped and registration/projects
 consumers, sharing literal exclusions with worktree checks. Raw inventory APIs
 remain available. Scoped and actual full/initial CLI regressions cover artifact
 volume above the Git output bound; ignored neighbors, literal lookalikes,

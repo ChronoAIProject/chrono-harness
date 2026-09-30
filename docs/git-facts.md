@@ -208,11 +208,11 @@ bounds and complete-input obligations retain their existing meanings.
 
 ## Registered artifact inventory
 
-Snapshot acquisition excludes explicitly registered artifact directories before
-Git enumerates their untracked contents. In the recorded beta.18 Go consumer,
+During snapshot acquisition, Git omits the untracked contents of explicitly
+registered artifact directories from inventory output. In the recorded beta.18 Go consumer,
 each of two untracked inventories emitted 1,007,609 bytes under a 1,048,576-byte
-per-process bound, mostly for allowed SDK/state outputs. Filtering only after
-enumeration made those outputs consume the input acquisition budget.
+per-process bound, mostly for allowed SDK/state outputs. Filtering that output
+in the caller made those paths consume the input acquisition budget.
 
 Full, initial and scoped acquisition, registration rechecks, project execution
 guards and migration decoding now use the shared literal exclusion builder.
