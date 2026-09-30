@@ -39,6 +39,10 @@ chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output 
 
 匿名下载的清单和 macOS 安装器已按公开摘要核对，并在公开 Go 示例的本地 clone 中安装原有 6 个具名工具，实际执行 rates 与 harness 两个单元。声明的 Git 文件变化／缺席变化导致业务操作前失败，恢复后通过；原始历史配置未改写。启用 Git 记录时测得的报告超出旧 8 MiB 上限，消费配置显式采用 16 MiB，读数与命令见 [Git 输入核验](git-facts.md#public-binary-consumption)。这次本地消费没有更新示例的远端配置，也不代表生成的 provider-v3 已在原生 CI 启用。完整输入闭包、完整宿主启用与本地／CI 完整对等仍未完成。
 
+[beta.17](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.17) 从固定源码 `47a18da29fb3aa92a147f0df8783dc49407175f5` 公开发布，新增 scoped／provider Git facts 的显式平台配置选择。[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36661720249)在 15 个专属测试项目中通过 macOS arm64 的 596 项测试、Linux x86_64 的 591 项测试；差异仍为 5 项 macOS 文件系统用例。每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察及 15 个资产。共 35 个公开资产的摘要与大小均匹配原始产物；合并清单 SHA-256 为 `34e7286111e2d38e4254c40683310ff915292ff1be0a0ac2193ab9c0dfea5034`。
+
+匿名安装的 macOS beta.17 已在 Go 接入候选上通过规范 DELTA 检查；global 配置变化及已登记缺席的 include 出现均在业务操作前失败。原生 Linux 的单元通过，汇总仍因报告读取上限失败，详见[原生接入边界](native-ci-adoption.md#native-git-policy-adoption)。发行产物通过验证不等于该宿主已完成接入、完整输入闭包或同判。
+
 ## 宿主采用
 
 取得固定发布清单和对应平台的 `chrono-distribution` 后，显式选择要安装的工具：
