@@ -745,7 +745,13 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     } else {
         1
     };
-    let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
+    let text = if c.schema == units::PROFILE {
+        serde_json::to_string(&report)
+    } else {
+        serde_json::to_string_pretty(&report)
+    }
+    .map_err(|e| e.to_string())?
+        + "\n";
     fs::create_dir_all(report_path.parent().ok_or("report parent missing")?)
         .map_err(|e| e.to_string())?;
     fs::write(report_path, &text).map_err(|e| e.to_string())?;

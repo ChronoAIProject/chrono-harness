@@ -6,18 +6,40 @@ use chrono_harness::{
 };
 use chrono_judge_registration::execution::Method;
 use chrono_judge_routes::{Execution, Receipt};
+use std::io::Read;
 
-fn read(root: &Path, path: &str, policy: &Policy) -> Result<Vec<u8>, String> {
+fn read(
+    root: &Path,
+    path: &str,
+    policy: &Policy,
+    limit_name: &str,
+    limit: u64,
+) -> Result<Vec<u8>, String> {
     chrono_harness::units::artifact_path(path)?;
     if !policy.artifacts.iter().any(|a| path.starts_with(a)) {
         return Err("collection input is not a declared artifact".into());
     }
-    let path = chrono_harness::no_symlink_parents(root, path)?;
-    let meta = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
-    if !meta.is_file() || meta.len() > 64 * 1024 * 1024 {
-        return Err("collection input must be a bounded regular file".into());
+    let resolved = chrono_harness::no_symlink_parents(root, path)?;
+    let meta = fs::symlink_metadata(&resolved).map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err(format!("collection input must be a regular file: {path}"));
     }
-    fs::read(path).map_err(|e| e.to_string())
+    let overflow = |observed| {
+        format!("collection input exceeds {limit_name}: {path} ({observed} > {limit} bytes)")
+    };
+    if meta.len() > limit {
+        return Err(overflow(meta.len()));
+    }
+    let mut bytes = Vec::new();
+    fs::File::open(resolved)
+        .map_err(|e| e.to_string())?
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > limit {
+        return Err(overflow(bytes.len() as u64));
+    }
+    Ok(bytes)
 }
 
 fn digest(s: &str) -> bool {
@@ -55,7 +77,14 @@ pub(super) fn collect(
         .as_ref()
         .ok_or("collection requires registered units")?;
     let required = units::required(units, selected);
-    let manifest_bytes = read(&req.host_root, manifest, p)?;
+    let limits = p.collection_limits.clone().unwrap_or_default();
+    let manifest_bytes = read(
+        &req.host_root,
+        manifest,
+        p,
+        "manifest_bytes",
+        limits.manifest_bytes,
+    )?;
     let inputs: Manifest = decode(&manifest_bytes)?;
     if inputs.schema != "chrono-ci-collection/v1" {
         return Err("unsupported collection manifest".into());
@@ -92,7 +121,13 @@ pub(super) fn collect(
     }];
     let mut verified = vec![];
     for input in &inputs.reports {
-        let bytes = read(&req.host_root, &input.path, p)?;
+        let bytes = read(
+            &req.host_root,
+            &input.path,
+            p,
+            "report_bytes",
+            limits.report_bytes,
+        )?;
         if sha256(&bytes) != input.sha256 {
             return Err(format!("unit report digest mismatch: {}", input.unit));
         }
@@ -331,6 +366,7 @@ pub(super) fn collect(
         results,
         evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
             "global_selected":selected,"required_units":required,"manifest_sha256":sha256(&manifest_bytes),"reports":verified,
+            "collection_limits":limits,
             "executed":[],"acceptance":"global collection; no business operations executed",
             "input_closure":"incomplete: report identity pins are caller supplied; build provenance and external input closure are not certified",
             "parity":"unestablished"}),
