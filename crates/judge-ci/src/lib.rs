@@ -637,12 +637,80 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(
+// Shared DELTA planning. Collection acquisition consumes requirements, never an admission result.
+struct Inventory {
+    config: CheckConfig,
+    p: Policy,
+    new: Snapshot,
+    previous: String,
+    paths: BTreeSet<String>,
+    selected: BTreeSet<String>,
+    global_selected: BTreeSet<String>,
+    selection_explanation: Value,
+    blocked: Vec<String>,
+    removed: BTreeMap<String, String>,
+    conversion: Value,
+    reused: BTreeMap<String, chrono_harness::observation::Tool>,
+    environment: BTreeMap<String, String>,
+    environment_policy: Value,
+    declarations: Value,
+    methods: BTreeMap<String, Vec<chrono_judge_registration::execution::Method>>,
+}
+
+/// Resolve only DELTA-required collection units through the adjudicator's current inventory/assignment owner.
+/// This does not validate a canonical entry, read reports, execute operations or grant admission.
+pub fn collection_requirements(
+    root: &Path,
+    profile: &str,
+    manifest: &str,
+    base: Option<String>,
+    candidate: String,
+    initial: bool,
+) -> Result<Value, String> {
+    let req = Request {
+        protocol: chrono_harness::units::PROTOCOL.into(),
+        request_id: "collection-requirements".into(),
+        host_root: root.into(),
+        config_path: profile.into(),
+        config_sha256: sha256(&fs::read(root.join(profile)).map_err(|e| e.to_string())?),
+        base,
+        candidate,
+        initial,
+        scope: Some(chrono_harness::units::Scope::Collect {
+            manifest: manifest.into(),
+        }),
+        observations: object!({}),
+    };
+    let mut reader = Reader::legacy();
+    let i = inventory(
+        &req,
+        &mut reader,
+        &mut Value::Null,
+        &mut String::new(),
+        false,
+    )?;
+    if !i.blocked.is_empty() {
+        return Err(format!("blocked global obligations: {:?}", i.blocked));
+    }
+    let required = units::required(
+        i.p.units
+            .as_ref()
+            .ok_or("collection requires registered units")?,
+        &i.global_selected,
+    );
+    clean(&reader, root, &req.candidate, &i.p)?;
+    Ok(
+        object!({"required_units":required,"global_selected":i.global_selected,"selection_explanation":i.selection_explanation,"git_facts":reader.observation()}),
+    )
+}
+
+fn inventory(
     req: &Request,
     reader: &mut Reader,
     opening: &mut Value,
     scope: &mut String,
-) -> Result<Response, String> {
+    admit_entry: bool,
+) -> Result<Inventory, String> {
     if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
         return Err("invalid request protocol/identity".into());
     }
@@ -758,23 +826,27 @@ fn evaluate(
                         }
                     }
                 }
-                chrono_judge_routes::validate_invocation(
-                    root,
-                    &req.observations["entry"],
-                    &argv,
-                    &object!({}),
-                )?;
-                chrono_harness::prepared::validate_binding(
-                    root,
-                    cfg,
-                    &req.config_path,
-                    None,
-                    &req.candidate,
-                    req.initial,
-                    &req.scope,
-                    None,
-                    &req.observations["preparation"],
-                )?;
+                if admit_entry {
+                    chrono_judge_routes::validate_invocation(
+                        root,
+                        &req.observations["entry"],
+                        &argv,
+                        &object!({}),
+                    )?;
+                }
+                if admit_entry {
+                    chrono_harness::prepared::validate_binding(
+                        root,
+                        cfg,
+                        &req.config_path,
+                        None,
+                        &req.candidate,
+                        req.initial,
+                        &req.scope,
+                        None,
+                        &req.observations["preparation"],
+                    )?;
+                }
                 declarations = cfg["tools"].clone();
                 environment.clear();
                 for key in cfg["environment"]["inherit"]
@@ -828,13 +900,15 @@ fn evaluate(
                 template.extend(scope.argv());
             }
         }
-        chrono_judge_routes::validate_invocation(
-            root,
-            &req.observations["entry"],
-            &template,
-            &object!({"base":req.base,"candidate":req.candidate}),
-        )?;
-        if b_config["schema_version"] == 4 {
+        if admit_entry {
+            chrono_judge_routes::validate_invocation(
+                root,
+                &req.observations["entry"],
+                &template,
+                &object!({"base":req.base,"candidate":req.candidate}),
+            )?;
+        }
+        if admit_entry && b_config["schema_version"] == 4 {
             chrono_harness::prepared::validate_binding(
                 root,
                 b_config,
@@ -957,6 +1031,50 @@ fn evaluate(
         // Validate the complete obligation graph before selecting any unit.
         chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
     }
+    Ok(Inventory {
+        config,
+        p,
+        new,
+        previous,
+        paths,
+        selected,
+        global_selected,
+        selection_explanation,
+        blocked,
+        removed,
+        conversion,
+        reused,
+        environment,
+        environment_policy,
+        declarations,
+        methods,
+    })
+}
+fn evaluate(
+    req: &Request,
+    reader: &mut Reader,
+    opening: &mut Value,
+    scope: &mut String,
+) -> Result<Response, String> {
+    let Inventory {
+        config,
+        p,
+        new,
+        previous,
+        paths,
+        mut selected,
+        global_selected,
+        selection_explanation,
+        blocked,
+        removed,
+        conversion,
+        reused,
+        environment,
+        environment_policy,
+        declarations,
+        methods,
+    } = inventory(req, reader, opening, scope, true)?;
+    let root = &req.host_root;
     if let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope {
         if !blocked.is_empty() {
             return Err(format!("blocked global obligations: {blocked:?}"));

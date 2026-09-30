@@ -352,7 +352,8 @@
       "GITHUB_EVENT_PATH",
       "CHRONO_WORKFLOW_REVISION",
       "GITHUB_REPOSITORY",
-      "GH_TOKEN"
+      "GH_TOKEN",
+      "SSH_AUTH_SOCK"
     ],
     "values": {
       "CARGO_TERM_COLOR": "never"

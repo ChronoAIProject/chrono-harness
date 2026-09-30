@@ -15,13 +15,34 @@ The repository's schema4 contract uses fixed `check`, `check --unit ID`, and
 value-less `check --collect`. Bare check keeps global DELTA execution. The local
 worktree producer freezes registered remote target/HEAD endpoints; the existing
 CI owner creates the collection manifest from explicit unit report paths and
-independently observed runner/judge pins. Missing units are never executed by
+independently observed runner/judge pins. Local collection asks the adjudicator's
+shared inventory/assignment owner for DELTA-required units and reads only those
+registered paths. An absent or stale unrelated report is not supplied; required
+missing, stale or failed reports still fail. Empty DELTA requires no reports.
+Missing units are never executed by
 collection. Prior producer observations remain retained while declared current
 outputs are replaced; no crash/concurrent transaction guarantee is established.
 Provider v4 puts event preparation and native gathering inside the same short
 command. Older hosts/examples below retain their registered explicit v3 forms.
 Full independent short scopes await corrected full-core integration and round
 freshness tests.
+
+Short preparation binds the selected native provider source bytes and its
+`artifact_directory`. Each unit retains context, payload, producer evidence,
+acquisition receipts and immutable check reports beneath its own selected root;
+collection also retains original gather/manifest evidence in its root. Originals
+are addressed by path and SHA-256 and reused, rather than copied inline into every
+receipt. Mutable current outputs remain projections. Provider/upload mismatches,
+missing originals and changed original bytes fail. The upload step keeps its
+selected directory; it need not upload unrelated units.
+
+Native gather adds an `artifacts` object to each short report manifest input:
+`source_directory` is the producing unit's selected upload root and `directory`
+is its explicit downloaded root. The collector resolves original relative paths
+through that binding, preserving the observed producing checkout/executable
+identities. No directory discovery or recursive evidence inference is used.
+Historical explicit reports retain their existing manifest contract.
+
 
 ## Assignment and execution
 

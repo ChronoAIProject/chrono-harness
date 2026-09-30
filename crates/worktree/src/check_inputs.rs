@@ -266,6 +266,19 @@ fn produce(
     if report["status"] != "prepared" {
         return Err(serde_json::to_string(&report).map_err(|e| e.to_string())?);
     }
+    let mut originals = vec![prepared::original(
+        &req.host_root,
+        report["report_path"].as_str().ok_or("report path")?,
+    )?];
+    if let Some(path) = report["check_context"]["path"].as_str() {
+        originals.push(prepared::original(&req.host_root, path)?);
+    }
+    if let Some(path) = report["origin"]["path"].as_str() {
+        originals.push(prepared::original(&req.host_root, path)?);
+    }
+    if let Some(path) = report["origin"]["birth_report"].as_str() {
+        originals.push(prepared::original(&req.host_root, path)?);
+    }
     Ok(PreparedCheck {
         schema: prepared::RESPONSE.into(),
         request_sha256: sha256(&serde_json::to_vec(req).map_err(|e| e.to_string())?),
@@ -280,6 +293,7 @@ fn produce(
         context: serde_json::from_value(report["check_context"].clone())
             .map_err(|e| e.to_string())?,
         scope: serde_json::from_value(report["scope"].clone()).map_err(|e| e.to_string())?,
+        originals,
         evidence: json!({"report_path":report["report_path"],"report_sha256":file_identity(&no_symlink_parents(&req.host_root,report["report_path"].as_str().ok_or("report path")?)?)?.0,"origin":report["origin"],"remote":report["remote"],"target_ref":report["target_ref"]}),
     })
 }

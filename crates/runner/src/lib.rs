@@ -857,7 +857,14 @@ fn execute_check(
         1
     };
     let retained_report = if report["request"]["observations"]["preparation"].is_object() {
-        let path = format!(".chrono-harness/state/preparation/check-{request_id}.json");
+        let prepared: prepared::InputRequest = serde_json::from_value(
+            report["request"]["observations"]["preparation"]["request"].clone(),
+        )
+        .map_err(|e| e.to_string())?;
+        let path = format!(
+            "{}check-{request_id}.json",
+            prepared::retention_directory(&prepared)
+        );
         report["retained_report"] = serde_json::json!(path);
         Some(no_symlink_parents(&root, &path)?)
     } else {

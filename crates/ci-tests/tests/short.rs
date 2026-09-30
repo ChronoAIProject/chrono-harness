@@ -101,6 +101,10 @@ impl ShortHost {
                 .unwrap();
         provider["collection"]["schema"] = json!("chrono-github-ci/v4");
         provider["collection"]["facts_config"] = json!(".chrono-harness/config.json");
+        for unit in ["alpha", "beta"] {
+            provider["units"][unit]["artifact_directory"] =
+                json!(format!(".chrono-harness/state/{unit}/"));
+        }
         json_file(&root, ".chrono-harness/ci/units.json", &provider);
         generate(&root, ".chrono-harness/ci/units.json", false).unwrap();
         git(&root, &["add", "."]);
@@ -176,9 +180,18 @@ fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
     let r = h.run(&["check"], 0);
     assert_eq!(r["request"]["base"], old);
     assert_eq!(r["request"]["candidate"], h.candidate);
-    let observed = r["request"]["observations"]["preparation"]["receipts"][0]["process"]["argv"]
-        .as_array()
-        .unwrap();
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(
+            h.root.join(
+                r["request"]["observations"]["preparation"]["receipts"][0]["path"]
+                    .as_str()
+                    .unwrap(),
+            ),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let observed = receipt["process"]["argv"].as_array().unwrap();
     assert!(observed.iter().any(|a| a == "check-inputs"));
     assert_ne!(h.remote, h.root);
 }
@@ -678,17 +691,14 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
-        let target = h.root.join(format!(
-            ".chrono-harness/state/mock-artifacts/{unit}/{unit}"
-        ));
+        let target = h
+            .root
+            .join(format!(".chrono-harness/state/mock-artifacts/{unit}"));
         fs::create_dir_all(&target).unwrap();
-        for name in ["context.json", "check.json"] {
-            fs::copy(
-                h.root.join(format!(".chrono-harness/state/{unit}/{name}")),
-                target.join(name),
-            )
-            .unwrap();
-        }
+        copy_artifacts(
+            &h.root.join(format!(".chrono-harness/state/{unit}")),
+            &target,
+        );
     }
     let a = fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap();
     let b = fs::read(h.root.join(".chrono-harness/state/calls-b")).unwrap();
@@ -757,4 +767,379 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         "{}",
         String::from_utf8_lossy(&rejected.stderr)
     );
+}
+
+#[test]
+fn local_collection_only_requires_delta_units_and_ignores_unrelated_absent_or_stale_reports() {
+    let mut h = ShortHost::new();
+    h.run(&["check", "--unit", "beta"], 0);
+    let base_b = git(&h.root, &["show", &format!("{}:b.txt", h.base)]);
+    fs::write(h.root.join("b.txt"), base_b).unwrap();
+    h.revise();
+    h.run(&["check", "--unit", "alpha"], 0);
+    let calls = fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap();
+    for absent in [false, true] {
+        if absent {
+            fs::remove_file(h.root.join(".chrono-harness/state/beta/check.json")).unwrap();
+        }
+        let r = h.run(&["check", "--collect"], 0);
+        assert_eq!(
+            r["response"]["evidence"]["required_units"],
+            json!(["alpha"])
+        );
+        assert_eq!(
+            r["response"]["evidence"]["reports"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(r["response"]["evidence"]["executed"], json!([]));
+    }
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(),
+        calls
+    );
+    fs::remove_file(h.root.join(".chrono-harness/state/alpha/check.json")).unwrap();
+    h.run(&["check", "--collect"], 2);
+}
+
+#[test]
+fn local_collection_empty_delta_needs_no_reports_or_business() {
+    let h = ShortHost::new();
+    git(&h.root, &["push", "-q", "origin", "dev"]);
+    let r = h.run(&["check", "--collect"], 0);
+    assert_eq!(r["response"]["evidence"]["required_units"], json!([]));
+    assert_eq!(r["response"]["evidence"]["reports"], json!([]));
+    assert_eq!(r["response"]["evidence"]["executed"], json!([]));
+    assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+    assert!(!h.root.join(".chrono-harness/state/calls-b").exists());
+}
+
+#[test]
+fn local_collection_shared_obligations_require_each_assigned_unit() {
+    let mut h = ShortHost::new();
+    h.modify(".chrono-harness/FILEMAP.json", |fm| {
+        fm["execution_plans"]["test:b"]["operations"] = json!(["test.a", "test.b"]);
+        for f in fm["files"].as_array_mut().unwrap() {
+            if f["path"] == "a.txt" {
+                f["edges"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({"kind":"test-execution","to":"test:b"}));
+            }
+        }
+    });
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["shared_operations"] = json!({"test.a":["alpha","beta"]})
+    });
+    git(&h.root, &["push", "-q", "origin", "dev"]);
+    fs::write(h.root.join("a.txt"), "shared delta").unwrap();
+    h.revise();
+    h.run(&["check", "--unit", "alpha"], 0);
+    h.run(&["check", "--collect"], 2);
+    h.run(&["check", "--unit", "beta"], 0);
+    let calls = fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap();
+    let r = h.run(&["check", "--collect"], 0);
+    assert_eq!(
+        r["response"]["evidence"]["required_units"],
+        json!(["alpha", "beta"])
+    );
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(),
+        calls
+    );
+}
+
+fn copy_artifacts(source: &Path, target: &Path) {
+    fs::create_dir_all(target).unwrap();
+    for item in fs::read_dir(source).unwrap() {
+        let item = item.unwrap();
+        if item.file_type().unwrap().is_dir() {
+            copy_artifacts(&item.path(), &target.join(item.file_name()));
+        } else {
+            fs::copy(item.path(), target.join(item.file_name())).unwrap();
+        }
+    }
+}
+
+#[test]
+fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity() {
+    use std::os::unix::fs::PermissionsExt;
+    let adopted: Value = serde_json::from_slice(
+        &fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/config.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        adopted["environment"]["inherit"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("SSH_AUTH_SOCK"))
+    );
+    let mut h = ShortHost::new();
+    let real_git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let wrapper = h.root.join("declared-git.sh");
+    fs::write(&wrapper,format!("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = fetch ]; then\n  [ -z \"${{UNREGISTERED_TRANSPORT_INPUT+x}}\" ] || exit 71\n  printf '%s' \"${{SSH_AUTH_SOCK-ABSENT}}\" > .chrono-harness/state/git-agent-observed\nfi\ndone\nexec '{}' \"$@\"\n", real_git.display())).unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    let hash = sha256(&fs::read(&wrapper).unwrap());
+    h.modify(".chrono-harness/FILEMAP.json",|fm|fm["files"].as_array_mut().unwrap().push(json!({"path":"declared-git.sh","owner":"host","surface":"product","cost":"unmeasured","edges":[]})));
+    h.modify(".chrono-harness/config.json", |c| {
+        c["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("SSH_AUTH_SOCK"));
+        c["tools"][0]["program"] = json!(wrapper);
+        c["environment"]["inputs"][0]["location"] = json!(wrapper);
+        c["environment"]["inputs"][0]["sha256"] = json!(hash);
+    });
+    h.modify(".chrono-harness/worktree.json", |c| {
+        c["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("SSH_AUTH_SOCK"));
+        c["git"]["program"] = json!(wrapper);
+        c["git"]["sha256"] = json!(hash);
+    });
+    for value in [None, Some("/declared fixture agent/socket λ")] {
+        let mut command = h.command(&["check"]);
+        command
+            .env_remove("SSH_AUTH_SOCK")
+            .env("UNREGISTERED_TRANSPORT_INPUT", "must be cleared");
+        if let Some(v) = value {
+            command.env("SSH_AUTH_SOCK", v);
+        }
+        let out = command.output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let r: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(
+            r["request"]["observations"]["preparation"]["environment"]["inherited"]["SSH_AUTH_SOCK"],
+            value
+                .map(|v| json!(sha256(v.as_bytes())))
+                .unwrap_or(Value::Null)
+        );
+        assert_eq!(
+            fs::read_to_string(h.root.join(".chrono-harness/state/git-agent-observed")).unwrap(),
+            value.unwrap_or("ABSENT")
+        );
+        let path = r["request"]["observations"]["preparation"]["result"]["evidence"]["report_path"]
+            .as_str()
+            .unwrap();
+        let report: Value = serde_json::from_slice(&fs::read(h.root.join(path)).unwrap()).unwrap();
+        let fetch = report["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["argv"].as_array().unwrap().contains(&json!("fetch")))
+            .unwrap();
+        assert_eq!(
+            fetch["process"]["environment"]["SSH_AUTH_SOCK"],
+            value.map(|v| json!(v)).unwrap_or(Value::Null)
+        );
+    }
+}
+
+#[test]
+fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer() {
+    let mut h = ShortHost::new();
+    let prefix = ".chrono-harness/state/custom evidence λ/";
+    h.modify(".chrono-harness/ci/units.json", |c| {
+        c["collection"]["artifact_directory"] = json!(format!("{prefix}collection/"));
+        c["collection"]["context_path"] = json!(format!("{prefix}collection/context.json"));
+        for unit in ["alpha", "beta"] {
+            c["units"][unit]["artifact_directory"] = json!(format!("{prefix}{unit}/"));
+            c["units"][unit]["context_path"] = json!(format!("{prefix}{unit}/context.json"));
+        }
+        c["gather"]["manifest_path"] = json!(format!("{prefix}collection/manifest.json"));
+        c["gather"]["report_path"] = json!(format!("{prefix}collection/gather.json"));
+        c["gather"]["download_directory"] = json!(format!("{prefix}collection/downloads/"));
+        c["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+        c["gather"]["wait_seconds"] = json!(1);
+        c["gather"]["poll_seconds"] = json!(1);
+    });
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["report_path"] = json!(format!("{prefix}collection/check.json"));
+        for unit in ["alpha", "beta"] {
+            c["policy"]["units"][unit]["report_path"] = json!(format!("{prefix}{unit}/check.json"));
+        }
+    });
+    h.modify(".chrono-harness/worktree.json", |c| {
+        c["check_inputs"]["collection_manifest"] =
+            json!(format!("{prefix}collection/manifest.json"))
+    });
+    generate(&h.root, ".chrono-harness/ci/units.json", false).unwrap();
+    h.revise();
+    git(&h.root, &["push", "-q", "origin", "dev"]);
+    h.base = h.candidate.clone();
+    fs::write(h.root.join("a.txt"), "portable a").unwrap();
+    fs::write(h.root.join("b.txt"), "portable b").unwrap();
+    h.revise();
+    let payload = json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false});
+    json_file(&h.root, ".chrono-harness/state/event.json", &payload);
+    for unit in ["alpha", "beta"] {
+        let out = h
+            .command(&["check", "--unit", unit])
+            .env(prepared::SOURCE, "ci")
+            .env("GITHUB_EVENT_NAME", "push")
+            .env(
+                "GITHUB_EVENT_PATH",
+                h.root.join(".chrono-harness/state/event.json"),
+            )
+            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert!(
+            report["retained_report"]
+                .as_str()
+                .unwrap()
+                .starts_with(&format!("{prefix}{unit}/"))
+        );
+        let binding = &report["request"]["observations"]["preparation"];
+        prepared::validate_portable_binding(&h.root, binding, None).unwrap();
+        assert!(binding["receipts"][0].get("process").is_none());
+        println!(
+            "MEASURE native-{unit} stdout_bytes={} report_bytes={} receipts_bytes={}",
+            out.stdout.len(),
+            fs::metadata(h.root.join(report["retained_report"].as_str().unwrap()))
+                .unwrap()
+                .len(),
+            fs::metadata(
+                h.root
+                    .join(binding["receipts"][0]["path"].as_str().unwrap())
+            )
+            .unwrap()
+            .len()
+        );
+    }
+    let consumer = h._dir.path().join("separate artifact consumer λ");
+    fs::create_dir(&consumer).unwrap();
+    git(&consumer, &["clone", "-q", h.root.to_str().unwrap(), "."]);
+    install(&consumer);
+    git(&consumer, &["config", "user.name", "Fixture"]);
+    git(
+        &consumer,
+        &["config", "user.email", "fixture@example.invalid"],
+    );
+    for unit in ["alpha", "beta"] {
+        copy_artifacts(
+            &h.root.join(format!("{prefix}{unit}")),
+            &consumer.join(format!(".chrono-harness/state/mock-artifacts/{unit}")),
+        );
+    }
+    // Original absolute paths are unavailable. Only the selected uploaded roots are delivered.
+    fs::rename(&h.root, h._dir.path().join("unavailable original checkout")).unwrap();
+    install_mock_transport(&consumer, "success", &h.candidate);
+    json_file(&consumer, ".chrono-harness/state/event.json", &payload);
+    let command = || {
+        let mut c = Command::new(consumer.join(".chrono-harness/bin/chrono-harness"));
+        c.current_dir(&consumer)
+            .args(["check", "--collect"])
+            .env(prepared::SOURCE, "ci")
+            .env("GITHUB_EVENT_NAME", "push")
+            .env(
+                "GITHUB_EVENT_PATH",
+                consumer.join(".chrono-harness/state/event.json"),
+            )
+            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .env("GITHUB_REPOSITORY", "owner/host");
+        c
+    };
+    let out = command().output().unwrap();
+    assert!(
+        out.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&out.stderr),
+        String::from_utf8_lossy(&out.stdout)
+            .chars()
+            .take(300)
+            .collect::<String>()
+    );
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+    prepared::validate_portable_binding(
+        &consumer,
+        &report["request"]["observations"]["preparation"],
+        None,
+    )
+    .unwrap();
+    println!(
+        "MEASURE native-collect stdout_bytes={} report_bytes={}",
+        out.stdout.len(),
+        fs::metadata(consumer.join(report["retained_report"].as_str().unwrap()))
+            .unwrap()
+            .len()
+    );
+    // Admission consumes the exact manifest produced for this invocation.
+    let manifest = consumer.join(report["request"]["scope"]["manifest"].as_str().unwrap());
+    let manifest_bytes = fs::read(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        br#"{"schema":"chrono-ci-collection/v1","reports":[]}"#,
+    )
+    .unwrap();
+    {
+        use std::io::Write;
+        let mut judge = Command::new(consumer.join(".chrono-harness/bin/chrono-judge-ci"))
+            .current_dir(&consumer)
+            .env(prepared::SOURCE, "ci")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        judge
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&report["request"]).unwrap())
+            .unwrap();
+        let bad = judge.wait_with_output().unwrap();
+        assert_eq!(bad.status.code(), Some(1));
+        assert!(
+            String::from_utf8_lossy(&bad.stdout)
+                .contains("prepared collection manifest differs from original producer")
+        );
+    }
+    fs::write(manifest, manifest_bytes).unwrap();
+    // Missing original payload and altered acquisition must fail the real collector, even with the check/context reports present.
+    let path = format!(".chrono-harness/state/mock-artifacts/alpha/check.json");
+    let original: Value = serde_json::from_slice(&fs::read(consumer.join(path)).unwrap()).unwrap();
+    let binding = &original["request"]["observations"]["preparation"];
+    let receipt = binding["receipts"][0]["path"]
+        .as_str()
+        .unwrap()
+        .strip_prefix(&format!("{prefix}alpha/"))
+        .unwrap();
+    let receipt = consumer.join(format!(
+        ".chrono-harness/state/mock-artifacts/alpha/{receipt}"
+    ));
+    let bytes = fs::read(&receipt).unwrap();
+    fs::write(&receipt, b"{}").unwrap();
+    let bad = command().output().unwrap();
+    assert_eq!(bad.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&bad.stdout).contains("original evidence digest mismatch"));
+    fs::write(&receipt, bytes).unwrap();
+    let payload = binding["result"]["evidence"]["payload"]["path"]
+        .as_str()
+        .unwrap()
+        .strip_prefix(&format!("{prefix}alpha/"))
+        .unwrap();
+    fs::remove_file(consumer.join(format!(
+        ".chrono-harness/state/mock-artifacts/alpha/{payload}"
+    )))
+    .unwrap();
+    let bad = command().output().unwrap();
+    assert_eq!(bad.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&bad.stdout).contains("missing original evidence"));
+    assert!(!consumer.join(".chrono-harness/state/calls-a").exists());
+    assert!(!consumer.join(".chrono-harness/state/calls-b").exists());
 }

@@ -357,6 +357,17 @@ pub fn prepare(
             json!({"message":message,"git_facts":facts.observation()})
         )
     })?;
+    if c.schema == SHORT_SCHEMA {
+        let original = chrono_harness::prepared::retain_original(
+            root,
+            &format!("{}preparation/", c.artifact_directory),
+            "native-context",
+            context,
+        )?;
+        report["context"]["current_path"] = json!(c.context_path);
+        report["context"]["path"] = json!(original.path);
+        report["originals"] = json!([original]);
+    }
     report["git_facts"] = facts.observation();
     if fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())? != source {
         return Err("full CI source changed during preparation".into());

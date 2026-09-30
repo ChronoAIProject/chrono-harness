@@ -71,6 +71,9 @@ Schema4's optional `environment.credential_environment` names acquisition-only
 credentials from `inherit`; they reach the producer and its declared gathering
 transport, and are omitted from Git and judge environments. The product host
 declares `GH_TOKEN` there, matching its existing gather credential policy.
+The outer acquisition inheritance also carries the already-declared
+`SSH_AUTH_SOCK` to the worktree Git owner. Its absence remains an observed absence;
+environment clearing and each owner's explicit whitelist still apply.
 Its acquisition timeout is 2400 seconds, covering the declared 1800-second
 native collection wait; a shorter conflicting acquisition bound fails explicitly.
 
@@ -93,7 +96,11 @@ mapping. Start/reconstruct publish the finalized original birth report and exact
 destination association. The producer preserves birth time/fork and observes the
 current endpoints/time. Absent historical snapshots or a delivery evidence handoff
 fail explicitly. Full CI v1 retains its exact context transport; v2 projects short
-checks and preserves the same raw dispatch context bytes inside preparation.
+checks and preserves the same raw dispatch context bytes inside its selected
+native upload root. Native original payload/context/producer/receipt artifacts
+are addressed and validated there, including narrowed custom roots; full v1
+keeps its existing exact-context transport. Full v2 current context/report files
+remain replaceable projections, while their original short evidence is immutable.
 Full independent scopes, frozen rounds and expiry revalidation remain pending.
 
 The host's Git bytes/version bind the current macOS machine. Matching them on a

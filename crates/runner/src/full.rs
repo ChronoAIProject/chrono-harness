@@ -231,7 +231,11 @@ pub fn check_prepared(
         version: env!("CARGO_PKG_VERSION").into(),
     };
     let run = format!("{}:{:?}", std::process::id(), std::time::SystemTime::now());
-    let report_path = format!(".chrono-harness/state/run-{}.json", wire::digest(&run)?);
+    let report_directory = preparation
+        .as_ref()
+        .and_then(|b| b["request"]["native_artifacts"]["directory"].as_str())
+        .unwrap_or(".chrono-harness/state/");
+    let report_path = format!("{report_directory}run-{}.json", wire::digest(&run)?);
     let retained_report = no_symlink_parents(root, &report_path)?;
     fs::OpenOptions::new()
         .write(true)
@@ -376,7 +380,7 @@ pub fn check_prepared(
     report["unresolved"] = value!(unresolved);
     report["sources"] = value!(sources);
     let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
-    let path = no_symlink_parents(root, ".chrono-harness/state/report.json")?;
+    let path = no_symlink_parents(root, &format!("{report_directory}report.json"))?;
     fs::write(retained_report, &text).map_err(|e| e.to_string())?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
     Ok((status.exit_code() as u8, text))

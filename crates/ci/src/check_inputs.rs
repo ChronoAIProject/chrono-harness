@@ -29,7 +29,20 @@ fn local_manifest(
     let judge_hash = file_identity(&judge)?.0;
     let mut reports = vec![];
     // Only explicit paths; never discover directories, choose latest, or execute missing units.
-    for (unit, input) in registered {
+    let requirements = chrono_judge_ci::collection_requirements(
+        &req.host_root,
+        &req.profile,
+        &c.gather.manifest_path,
+        p.base.clone(),
+        p.candidate.clone(),
+        p.initial,
+    )?;
+    let required: Vec<String> = serde_json::from_value(requirements["required_units"].clone())
+        .map_err(|e| e.to_string())?;
+    for unit in required {
+        let input = registered
+            .get(&unit)
+            .ok_or("required unit missing provider registration")?;
         let raw =
             fs::read(no_symlink_parents(&req.host_root, &input.report_path)?).map_err(|e| {
                 format!(
@@ -39,10 +52,11 @@ fn local_manifest(
             })?;
         reports.push(ReportInput {
             unit,
-            path: input.report_path,
+            path: input.report_path.clone(),
             sha256: sha256(&raw),
             runner_sha256: runner.clone(),
             judge_sha256: judge_hash.clone(),
+            artifacts: None,
         });
     }
     let manifest = Manifest {
@@ -59,7 +73,7 @@ fn local_manifest(
     }
     publish(&req.host_root, &c.gather.manifest_path, &raw)?;
     Ok(
-        json!({"schema":"chrono-local-collection-inputs/v1","manifest_path":c.gather.manifest_path,"manifest_sha256":sha256(&raw),"manifest":manifest,"expected_executables":{"runner":runner,"judge":{"path":judge,"sha256":judge_hash}},"endpoint_evidence":p.evidence}),
+        json!({"schema":"chrono-local-collection-inputs/v1","manifest_path":c.gather.manifest_path,"manifest_sha256":sha256(&raw),"manifest":manifest,"expected_executables":{"runner":runner,"judge":{"path":judge,"sha256":judge_hash}},"endpoint_evidence":p.evidence,"requirements":requirements}),
     )
 }
 fn named_env(opts: &BTreeMap<&str, &str>, flag: &str) -> Result<String, String> {
@@ -106,6 +120,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let root = &req.host_root;
     let config_bytes = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
     let config: Value = decode(&config_bytes)?;
+    let mut originals = vec![];
+    let dir = prepared::retention_directory(&req);
     let p = if req.source == "local" {
         if req.selection != Selection::Collect {
             return Err("local CI producer only collects declared unit reports".into());
@@ -131,6 +147,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             scope: previous.scope.clone(),
             context: None,
             evidence,
+            originals: previous.originals.clone(),
         }
     } else {
         if req.prepared.is_some() {
@@ -160,9 +177,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 .as_str()
                 .ok_or("full native exact context missing")?
                 .as_bytes();
-            let evidence = full::prepare(root, path, &c, bytes, &revision)?;
+            full::validate(&c)?;
+            if req.native_artifacts.as_ref().is_none_or(|a| {
+                a.config_path != path
+                    || a.config_sha256 != sha256(&config_bytes)
+                    || a.directory != c.artifact_directory
+            }) {
+                return Err("full producer/upload contract mismatch".into());
+            }
+            let mut evidence = full::prepare(root, path, &c, bytes, &revision)?;
+            let report_raw = fs::read(no_symlink_parents(root, &c.preparation_path)?)
+                .map_err(|e| e.to_string())?;
+            let original = prepared::retain_original(root, &dir, "full-inputs", &report_raw)?;
+            evidence["preparation_original"] = json!(original);
+            originals.push(original);
             let ctx = Context {
-                path: prepared::retain_bytes(root, "native-context", bytes)?,
+                path: prepared::retain_original(root, &dir, "native-context", bytes)?.path,
                 raw: bytes.to_vec(),
                 sha256: sha256(bytes),
                 semantic_digest: wire::digest(&decode::<Value>(bytes)?)?,
@@ -181,7 +211,15 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 Selection::Unit { unit } => Some(unit.as_str()),
                 _ => None,
             };
+            units::profile(root, &c)?;
             let w = c.workflow(unit)?;
+            if req.native_artifacts.as_ref().is_none_or(|a| {
+                a.config_path != path
+                    || a.config_sha256 != sha256(&config_bytes)
+                    || a.directory != w.artifact_directory
+            }) {
+                return Err("unit producer/upload contract mismatch".into());
+            }
             let mut evidence = if req.selection == Selection::All {
                 super::prepare(root, &w, &event, &payload, &revision)?
             } else {
@@ -217,8 +255,25 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 }
                 let repository = named_env(&opts, "--repository-env")?;
                 let gathered = super::gather::gather(root, path, &c, &repository)?;
-                evidence["gather"] = decode(gathered.as_bytes())?;
+                let gathered: Value = decode(gathered.as_bytes())?;
+                let retained = gathered["retained_report"]
+                    .as_str()
+                    .ok_or("gather original report missing")?;
+                let o = prepared::original(root, retained)?;
+                evidence["gather"] = json!(o);
+                originals.push(o);
+                let o: prepared::Original =
+                    serde_json::from_value(gathered["result"]["manifest_original"].clone())
+                        .map_err(|e| e.to_string())?;
+                prepared::read_original(root, &o, None)?;
+                evidence["manifest"] = json!(o);
+                originals.push(o);
             }
+            let context_raw =
+                fs::read(no_symlink_parents(root, &w.context_path)?).map_err(|e| e.to_string())?;
+            let o = prepared::retain_original(root, &dir, "native-context", &context_raw)?;
+            evidence["context_original"] = json!(o);
+            originals.push(o);
             (evidence, None, scope)
         } else {
             let c: Config = decode(&config_bytes)?;
@@ -229,6 +284,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             {
                 return Err("native short profile/facts/scope binding mismatch".into());
             }
+            if req.native_artifacts.as_ref().is_none_or(|a| {
+                a.config_path != path
+                    || a.config_sha256 != sha256(&config_bytes)
+                    || a.directory != c.artifact_directory
+            }) {
+                return Err("native producer/upload contract mismatch".into());
+            }
             generate(root, path, true)?;
             let evidence = super::prepare(root, &c, &event, &payload, &revision)?;
             publish(
@@ -236,10 +298,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 &c.context_path,
                 &serde_json::to_vec_pretty(&evidence).map_err(|e| e.to_string())?,
             )?;
+            let mut evidence = evidence;
+            let context_raw =
+                fs::read(no_symlink_parents(root, &c.context_path)?).map_err(|e| e.to_string())?;
+            let o = prepared::retain_original(root, &dir, "native-context", &context_raw)?;
+            evidence["context_original"] = json!(o);
+            originals.push(o);
             (evidence, None, None)
         };
-        evidence["payload"] =
-            json!({"path":payload_path,"sha256":sha256(&payload_raw),"raw":payload_raw});
+        let payload = prepared::retain_original(root, &dir, "native-payload", &payload_raw)?;
+        evidence["payload"] = json!(payload);
+        evidence["payload_input_path"] = json!(payload_path);
+        originals.push(payload);
+        if let Some(ctx) = &context {
+            originals.push(prepared::original(root, &ctx.path)?);
+        }
+        evidence["originals"] = json!(originals);
         PreparedCheck {
             schema: prepared::RESPONSE.into(),
             request_sha256: sha256(&serde_json::to_vec(&req).map_err(|e| e.to_string())?),
@@ -254,6 +328,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             scope,
             context,
             evidence,
+            originals,
         }
     };
     let facts = chrono_harness::facts::Reader::for_config(root, &req.host_config)?;
@@ -262,7 +337,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("input producer configuration differs from candidate".into());
     }
     let mut p = p;
-    let report_path = prepared::retain(root, "ci-inputs", &p.evidence)?;
+    let report = prepared::retain_original(
+        root,
+        &dir,
+        "ci-inputs",
+        &serde_json::to_vec(&p.evidence).map_err(|e| e.to_string())?,
+    )?;
+    let report_path = report.path.clone();
+    p.originals.push(report);
     p.evidence = json!({"report_path":report_path,"report_sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,"event":p.evidence["event"],"source":p.evidence["source"],"payload":{ "sha256":p.evidence["payload"]["sha256"],"path":p.evidence["payload"]["path"] }});
     req.validate()?;
     prepared::validate_result(&req, &p)?;

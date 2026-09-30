@@ -140,6 +140,35 @@ pub(super) fn collect(
             serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
         let response: Response =
             serde_json::from_value(report["response"].clone()).map_err(|e| e.to_string())?;
+        if input
+            .artifacts
+            .as_ref()
+            .is_some_and(|t| !p.artifacts.iter().any(|a| t.directory.starts_with(a)))
+        {
+            return Err("original evidence transport is not a declared artifact".into());
+        }
+        if let Some(binding) = original
+            .observations
+            .get("preparation")
+            .filter(|b| b.is_object())
+        {
+            chrono_harness::prepared::validate_portable_binding(
+                &req.host_root,
+                binding,
+                input.artifacts.as_ref(),
+            )?;
+            let prepared: chrono_harness::prepared::PreparedCheck =
+                serde_json::from_value(binding["result"].clone()).map_err(|e| e.to_string())?;
+            if prepared.base != req.base
+                || prepared.candidate != req.candidate
+                || prepared.profile != req.config_path
+                || prepared.scope != original.scope
+            {
+                return Err("original preparation differs from collected unit".into());
+            }
+        } else if input.artifacts.is_some() {
+            return Err("native short report missing original preparation".into());
+        }
         let producer: ProcessResult =
             serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?;
         process(&producer)?;

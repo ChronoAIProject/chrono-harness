@@ -3891,6 +3891,18 @@
           "to": "project:runner"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/prepared_artifacts.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -5973,6 +5985,16 @@
       "from": "project:ci",
       "kind": "runtime-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "from": "project:judge-ci",
+      "kind": "compile",
+      "to": "project:ci"
+    },
+    {
+      "from": "environment:SSH_AUTH_SOCK",
+      "kind": "runtime-input",
+      "to": "project:worktree"
     }
   ],
   "test_costs": [
@@ -6078,6 +6100,7 @@
         "fmt.ci-tests",
         "build.runner",
         "build.judge-registration",
+        "build.judge-ci",
         "build.ci",
         "build.worktree",
         "test.ci-tests",

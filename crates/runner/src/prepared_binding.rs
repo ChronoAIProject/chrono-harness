@@ -20,6 +20,33 @@ pub fn validate_binding(
         .map_err(|_| "missing short preparation result")?;
     req.validate()?;
     validate_result(&req, &p)?;
+    if let Some(units::Scope::Collect { manifest }) = &p.scope {
+        if req.source == "ci" || req.prepared.is_some() {
+            let report = crate::json(&read_original(
+                root,
+                &Original {
+                    path: p.evidence["report_path"]
+                        .as_str()
+                        .ok_or("producer report missing")?
+                        .into(),
+                    sha256: p.evidence["report_sha256"]
+                        .as_str()
+                        .ok_or("producer report hash missing")?
+                        .into(),
+                },
+                None,
+            )?)?;
+            let hash = if req.source == "ci" {
+                report["manifest"]["sha256"].as_str()
+            } else {
+                report["manifest_sha256"].as_str()
+            }
+            .ok_or("collection producer manifest identity missing")?;
+            if file_identity(&no_symlink_parents(root, manifest)?)?.0 != hash {
+                return Err("prepared collection manifest differs from original producer".into());
+            }
+        }
+    }
     match (&p.context, context) {
         (None, None) => {}
         (Some(prepared), Some(actual))
@@ -53,10 +80,13 @@ pub fn validate_binding(
     {
         return Err("check source selector disagreement".into());
     }
-    let receipts = binding["receipts"]
-        .as_array()
-        .filter(|r| !r.is_empty())
-        .ok_or("missing original producer receipts")?;
+    validate_portable_binding(root, binding, None)?;
+    let refs: Vec<Original> =
+        serde_json::from_value(binding["receipts"].clone()).map_err(|e| e.to_string())?;
+    let receipts: Vec<Value> = refs
+        .iter()
+        .map(|r| crate::json(&read_original(root, r, None)?))
+        .collect::<Result<_, String>>()?;
     let collecting = req.source == "local" && matches!(req.selection, Selection::Collect);
     if receipts.len() != if collecting { 2 } else { 1 } {
         return Err("short producer receipt count mismatch".into());

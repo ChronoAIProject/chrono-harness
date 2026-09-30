@@ -14,6 +14,9 @@ use std::{
 #[path = "prepared_binding.rs"]
 mod binding;
 pub use binding::validate_binding;
+#[path = "prepared_artifacts.rs"]
+mod artifacts;
+pub use artifacts::*;
 
 pub const SOURCE: &str = "CHRONO_CHECK_SOURCE";
 pub const REQUEST: &str = "chrono-check-input-request/v1";
@@ -76,6 +79,7 @@ pub struct InputRequest {
     pub profile: String,
     pub profile_sha256: String,
     pub selection: Selection,
+    pub native_artifacts: Option<NativeArtifacts>,
     // Local collection uses the CI collection owner after local endpoints were observed.
     pub prepared: Option<PreparedCheck>,
 }
@@ -100,6 +104,7 @@ pub struct PreparedCheck {
     pub context: Option<Context>,
     pub scope: Option<units::Scope>,
     pub evidence: Value,
+    pub originals: Vec<Original>,
 }
 impl InputRequest {
     pub fn validate(&self) -> Result<(), String> {
@@ -136,6 +141,22 @@ impl InputRequest {
         let c = declaration(&cfg)?;
         if c.profile != self.profile {
             return Err("check input profile disagrees with binding".into());
+        }
+        let dir = retention_directory(self);
+        if !cfg["artifacts"]
+            .as_array()
+            .ok_or("artifacts missing")?
+            .iter()
+            .any(|a| {
+                a["tracked"] == false && a["path"].as_str().is_some_and(|p| dir.starts_with(p))
+            })
+        {
+            return Err("short retention directory lacks declared artifact ownership".into());
+        }
+        if native_artifacts(&self.host_root, &cfg, &self.source, &self.selection)?
+            != self.native_artifacts
+        {
+            return Err("check input producer/upload contract mismatch".into());
         }
         if let Selection::Unit { unit } = &self.selection {
             units::id(unit)?;
@@ -179,9 +200,10 @@ pub fn declaration(config: &Value) -> Result<Canonical, String> {
         .iter()
         .any(|a| {
             a["tracked"] == false
-                && a["path"]
-                    .as_str()
-                    .is_some_and(|p| ".chrono-harness/state/preparation/".starts_with(p))
+                && a["path"].as_str().is_some_and(|p| {
+                    ".chrono-harness/state/preparation/".starts_with(p)
+                        || p.starts_with(".chrono-harness/state/")
+                })
         })
     {
         return Err("short preparation lacks declared artifact ownership".into());
@@ -276,7 +298,7 @@ fn invoke(
     a: &Action,
     env: &BTreeMap<String, String>,
     req: &InputRequest,
-) -> Result<(PreparedCheck, Value), String> {
+) -> Result<(PreparedCheck, Original), String> {
     let t = cfg["tools"]
         .as_array()
         .ok_or("missing tools")?
@@ -322,7 +344,12 @@ fn invoke(
     let process = process_identities(run_process_observed(root, &spec, &input, &tool.sha256)?);
     let receipt = json!({"action":a,"tool":tool,"request":req,"process":process,"environment_representation":"sha256"});
     // Preserve failed original transport before interpreting output.
-    retain(root, "prepare", &receipt)?;
+    let original = retain_original(
+        root,
+        &retention_directory(req),
+        "acquisition",
+        &serde_json::to_vec(&receipt).map_err(|e| e.to_string())?,
+    )?;
     if process.failure.is_some() || process.exit_code != 0 {
         return Err(format!(
             "input producer failed: {}",
@@ -331,7 +358,7 @@ fn invoke(
     }
     let p: PreparedCheck = decode(&process.stdout_bytes)?;
     validate_result(req, &p)?;
-    Ok((p, receipt))
+    Ok((p, original))
 }
 pub fn retain(root: &Path, prefix: &str, v: &Value) -> Result<String, String> {
     retain_bytes(
@@ -367,7 +394,7 @@ pub fn retain_bytes(root: &Path, prefix: &str, bytes: &[u8]) -> Result<String, S
         .ok_or("evidence path UTF-8")?
         .into())
 }
-pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), String> {
+pub fn validate_result_identity(req: &InputRequest, p: &PreparedCheck) -> Result<(), String> {
     if p.schema != RESPONSE
         || p.request_sha256 != sha256(&serde_json::to_vec(req).map_err(|e| e.to_string())?)
         || p.source != req.source
@@ -379,28 +406,26 @@ pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), Stri
     {
         return Err("prepared check identity/scope mismatch".into());
     }
-    if let (Some(path), Some(hash)) = (
-        p.evidence["report_path"].as_str(),
-        p.evidence["report_sha256"].as_str(),
-    ) {
-        units::artifact_path(path)?;
-        if file_identity(&no_symlink_parents(&req.host_root, path)?)?.0 != hash {
-            return Err("original producer evidence drift".into());
+    facts::full_oid(&p.candidate)?;
+    if let Some(base) = &p.base {
+        facts::full_oid(base)?;
+    }
+    Ok(())
+}
+pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), String> {
+    validate_result_identity(req, p)?;
+    validate_originals(&req.host_root, p, None)?;
+    if let Some(a) = &req.native_artifacts {
+        if p.originals
+            .iter()
+            .any(|o| !o.path.starts_with(&a.directory))
+        {
+            return Err("original evidence outside selected native upload root".into());
         }
     }
     facts::full_oid(&p.candidate)?;
     if let Some(b) = &p.base {
         facts::full_oid(b)?;
-    }
-    if let Some(c) = &p.context {
-        units::artifact_path(&c.path)?;
-        if c.sha256 != sha256(&c.raw)
-            || c.semantic_digest != wire::digest(&crate::json(&c.raw)?)?
-            || fs::read(no_symlink_parents(&req.host_root, &c.path)?).map_err(|e| e.to_string())?
-                != c.raw
-        {
-            return Err("prepared context raw/semantic identity mismatch".into());
-        }
     }
     Ok(())
 }
@@ -431,6 +456,7 @@ pub fn prepare(
         effective_config_sha256: sha256(&bytes),
         profile: c.profile.clone(),
         profile_sha256: file_identity(&no_symlink_parents(root, &c.profile)?)?.0,
+        native_artifacts: native_artifacts(root, &cfg, source, &selection)?,
         selection,
         prepared: None,
     };

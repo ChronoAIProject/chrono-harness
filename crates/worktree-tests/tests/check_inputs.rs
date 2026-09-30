@@ -78,6 +78,7 @@ fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
         profile: CONFIG.into(),
         profile_sha256: sha256(&fs::read(root.join(CONFIG)).unwrap()),
         selection: Selection::All,
+        native_artifacts: None,
         prepared: None,
     };
     let mut c = Command::new(root.join(".chrono-harness/bin/chrono-worktree"));
@@ -269,7 +270,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
             value!("CHRONO_WORKFLOW_REVISION"),
         ]);
     fs::write(h.root.join(CONFIG), serde_json::to_vec(&cfg).unwrap()).unwrap();
-    let provider = value!({"schema":"chrono-github-full-ci/v2","workflow_path":".github/workflows/full.yml","name":"native full fixture","runs_on":"macos-14","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":10,"bootstrap":["/bin/sh","explicit.sh"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"context_path":".chrono-harness/state/native/context.json","preparation_path":".chrono-harness/state/native/preparation.json","artifact_directory":".chrono-harness/state/native/"});
+    let provider = value!({"schema":"chrono-github-full-ci/v2","workflow_path":".github/workflows/full.yml","name":"native full fixture","runs_on":"macos-14","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":10,"bootstrap":["/bin/sh","explicit.sh"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"context_path":".chrono-harness/state/native evidence λ/context.json","preparation_path":".chrono-harness/state/native evidence λ/preparation.json","artifact_directory":".chrono-harness/state/native evidence λ/"});
     fs::create_dir_all(h.root.join(".chrono-harness/ci")).unwrap();
     fs::write(
         h.root.join(".chrono-harness/ci/full.json"),
@@ -366,7 +367,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         serde_json::from_value(r["preparation"]["result"]["context"]["raw"].clone()).unwrap();
     assert_eq!(observed, raw);
     assert_eq!(
-        fs::read(dest.join(".chrono-harness/state/native/context.json")).unwrap(),
+        fs::read(dest.join(".chrono-harness/state/native evidence λ/context.json")).unwrap(),
         raw
     );
     let original_path = dest.join(
@@ -405,6 +406,62 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
             .unwrap(),
     );
     assert_eq!(fs::read(retained).unwrap(), next_raw);
+    prepared::validate_portable_binding(&dest, &r["preparation"], None).unwrap();
+    prepared::validate_portable_binding(&dest, &next["preparation"], None).unwrap();
+    assert!(
+        r["report_path"]
+            .as_str()
+            .unwrap()
+            .starts_with(".chrono-harness/state/native evidence λ/")
+    );
+    let consumer = h.parent.join("separate full evidence consumer");
+    fs::create_dir(&consumer).unwrap();
+    git(&consumer, &["clone", "-q", dest.to_str().unwrap(), "."]);
+    fn copy(source: &Path, target: &Path) {
+        fs::create_dir_all(target).unwrap();
+        for e in fs::read_dir(source).unwrap() {
+            let e = e.unwrap();
+            if e.file_type().unwrap().is_dir() {
+                copy(&e.path(), &target.join(e.file_name()));
+            } else {
+                fs::copy(e.path(), target.join(e.file_name())).unwrap();
+            }
+        }
+    }
+    copy(
+        &dest.join(".chrono-harness/state/native evidence λ"),
+        &consumer.join(".chrono-harness/state/native evidence λ"),
+    );
+    fs::rename(&dest, h.parent.join("original full paths unavailable")).unwrap();
+    prepared::validate_portable_binding(&consumer, &r["preparation"], None).unwrap();
+    prepared::validate_portable_binding(&consumer, &next["preparation"], None).unwrap();
+    println!(
+        "MEASURE full-v2 stdout_bytes={} repeated_stdout_bytes={} context_bytes={} original_receipt_bytes={}",
+        o.stdout.len(),
+        repeated.stdout.len(),
+        raw.len(),
+        fs::metadata(consumer.join(r["preparation"]["receipts"][0]["path"].as_str().unwrap()))
+            .unwrap()
+            .len()
+    );
+    let mut mismatch = r["preparation"].clone();
+    mismatch["request"]["native_artifacts"]["directory"] = value!(".chrono-harness/state/wrong/");
+    assert!(
+        prepared::validate_portable_binding(&consumer, &mismatch, None)
+            .unwrap_err()
+            .contains("contract mismatch")
+    );
+    let context_path = consumer.join(
+        r["preparation"]["result"]["context"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    fs::remove_file(context_path).unwrap();
+    assert!(
+        prepared::validate_portable_binding(&consumer, &r["preparation"], None)
+            .unwrap_err()
+            .contains("missing original evidence")
+    );
 }
 #[test]
 fn reconstructed_destination_publishes_its_real_new_birth_association() {
