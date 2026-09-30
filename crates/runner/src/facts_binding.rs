@@ -28,6 +28,7 @@ struct Bound {
     binding: Value,
     spec: CommandSpec,
     environment: Value,
+    guard: Option<crate::facts_inputs::Guard>,
 }
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
     v[key]
@@ -43,8 +44,13 @@ pub fn declaration(config: &Value) -> Result<(&Value, &Value), String> {
     let link = config["facts_git"]
         .as_object()
         .ok_or("missing facts_git object")?;
-    if link.len() != 2 || !link.contains_key("tool") || !link.contains_key("input") {
-        return Err("facts_git requires only tool and input".into());
+    if !link.contains_key("tool")
+        || !link.contains_key("input")
+        || link
+            .keys()
+            .any(|key| !matches!(key.as_str(), "tool" | "input" | "guard"))
+    {
+        return Err("facts_git requires tool and input, with optional guard".into());
     }
     let unique = |collection: &Value, id: &str| -> Result<usize, String> {
         let items = collection
@@ -79,6 +85,7 @@ pub fn declaration(config: &Value) -> Result<(&Value, &Value), String> {
     if args.is_empty() {
         return Err("facts_git requires version_argv".into());
     }
+    crate::facts_inputs::declaration(config)?;
     Ok((tool, input))
 }
 
@@ -239,6 +246,10 @@ impl Reader {
                     binding,
                     spec,
                     environment,
+                    guard: crate::facts_inputs::Guard::open(
+                        &fs::canonicalize(root).map_err(|e| e.to_string())?,
+                        &cfg,
+                    )?,
                 }),
                 processes: RefCell::new(vec![]),
             };
@@ -250,6 +261,7 @@ impl Reader {
                     "config_sha256",
                     "binding",
                     "environment",
+                    "inputs",
                 ] {
                     if prior.get(key) != current.get(key) {
                         return Err(
@@ -285,9 +297,15 @@ impl Reader {
     pub fn observation(&self) -> Value {
         match &self.bound {
             None => Value::Null,
-            Some(b) => value!({"schema":"chrono-git-facts/v1","config_path":b.config_path,
+            Some(b) => {
+                let mut observed = value!({"schema":"chrono-git-facts/v1","config_path":b.config_path,
                 "config_sha256":sha256(&b.config_bytes),"binding":b.binding,"environment":b.environment,
-                "processes":*self.processes.borrow(),"input_closure_complete":false}),
+                "processes":*self.processes.borrow(),"input_closure_complete":false});
+                if let Some(guard) = &b.guard {
+                    observed["inputs"] = guard.observation.clone();
+                }
+                observed
+            }
         }
     }
     pub fn is_bound(&self) -> bool {
@@ -324,6 +342,9 @@ impl Reader {
                 != fs::canonicalize(&path).map_err(|e| e.to_string())?
         {
             return Err("Git facts executable/input changed".into());
+        }
+        if let Some(guard) = &b.guard {
+            guard.unchanged(&b.root)?;
         }
         Ok(())
     }

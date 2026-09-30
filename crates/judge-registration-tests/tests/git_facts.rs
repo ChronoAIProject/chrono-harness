@@ -1,5 +1,7 @@
 use super::*;
 use std::os::unix::fs::PermissionsExt;
+#[path = "git_inputs.rs"]
+mod git_inputs;
 #[path = "input_coverage.rs"]
 mod input_coverage;
 
@@ -148,6 +150,34 @@ impl BoundHost {
     fn trace(&self) -> String {
         fs::read_to_string(&self.trace).unwrap_or_default()
     }
+}
+
+// Retain each endpoint's own configuration. Adopting coverage must not rewrite
+// the old v3 config or require executing the previous judge binary.
+fn run_with_endpoint_inputs(h: &BoundHost) -> (i32, Value) {
+    let snapshot = |oid: &str| {
+        let config: Value =
+            serde_json::from_slice(&facts::blob(h.host.root(), oid, CONFIG).unwrap()).unwrap();
+        let mut files = serde_json::Map::new();
+        for input in config["environment"]["inputs"].as_array().unwrap() {
+            let observed = match fs::read(h.host.root().join(input["location"].as_str().unwrap())) {
+                Ok(bytes) => json!({"bytes":bytes}),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({"absent":true}),
+                Err(e) => panic!("snapshot input: {e}"),
+            };
+            files.insert(input["id"].as_str().unwrap().to_owned(), observed);
+        }
+        json!({"schema":"chrono-input-snapshot/v2","commit":oid,"config_path":CONFIG,
+            "config_digest":chrono_harness::wire::digest(&config).unwrap(),"environment":{},"files":files})
+    };
+    write(
+        h.host.root(),
+        ".chrono-harness/state/coverage-inputs.json",
+        &json!({"base":snapshot(&h.host.base),"candidate":snapshot(&h.host.candidate)}),
+    );
+    let mut context = h.host.context();
+    context["retained_inputs"] = json!(".chrono-harness/state/coverage-inputs.json");
+    h.host.run_context(context)
 }
 
 #[test]

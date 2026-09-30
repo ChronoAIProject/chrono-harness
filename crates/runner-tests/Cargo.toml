@@ -26,5 +26,9 @@ path = "tests/registry_snapshot.rs"
 name = "parity"
 path = "tests/parity.rs"
 
+[[test]]
+name = "git_inputs"
+path = "tests/git_inputs.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3

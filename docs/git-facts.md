@@ -79,6 +79,50 @@ references, request/environment substitutions, wrong digest/version, persistent
 byte drift, original binary output/exit, output bounds and timeout. These are
 bounded implementation checks, not a Lean refinement proof or independent review.
 
+## Guarding declared Git inputs
+
+Config v3 can opt into a versioned guard without changing old snapshots:
+
+```json
+"facts_git": {
+  "tool": "git",
+  "input": "git-executable",
+  "guard": {
+    "schema": "chrono-git-inputs/v1",
+    "inputs": ["repository-config", "global-config", "absent-worktree-config"]
+  }
+}
+```
+
+Each nonempty, unique ID must name exactly one `environment.inputs` file. Present
+files need a SHA-256; absent files must explicitly declare absence without a
+digest. The host chooses configuration, includes, interpreters, libraries or
+other files that must remain bound during Git acquisition. Declare their actual
+locations and FILEMAP consumers. In a worktree, `.git` may be a pointer file;
+this guard does not infer the administrative directory or expand include paths.
+
+The reader checks these files before the first version probe and before and after
+every subsequent Git process, including reads and provider fetches through the
+same reader. A mismatch prevents the next process from starting. A mismatch after
+execution fails the call while preserving the process's original bytes, exit and
+bounds. Directories, symlinks and IO errors are not absence. The regular-file and
+absence observer is shared with snapshot capture and registration validation.
+
+`git_facts.inputs` retains the initial verified states under
+`chrono-git-inputs-result/v1`. Downstream request consumers require the identical
+observation. Omitting `guard` preserves the prior v3 behavior and report shape;
+older binaries reject the unknown extension. Full/initial real consumers cover
+adoption with unchanged historical config bytes and rejection before Git starts.
+Runner tests additionally cover missing/duplicate references, absence, unsupported
+file types, per-call drift and a mutating child whose failed receipt is retained.
+
+These checks enforce the specified file boundary. They do not enumerate all Git
+configuration, delegated programs, OS or network inputs, establish complete input
+closure, or detect a concurrent change restored between observations. Reports
+therefore retain `completeness_proven: false` and `input_closure_complete: false`.
+Input snapshots and the unchanged canonical check command keep their existing
+contracts. This source extension has not yet been distributed in a public beta.
+
 ## Literal checkout identity
 
 A configured Git diff can hide raw differences: `core.filemode=false` ignores
