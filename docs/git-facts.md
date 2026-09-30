@@ -40,7 +40,11 @@ Process bounds apply per invocation; accumulated report storage is not a total
 run memory/disk quota.
 
 Config v3 preserves v2 external-input presence and snapshot semantics:
-`chrono-input-snapshot/v2` and the existing effective-input schema stay unchanged.
+`chrono-input-snapshot/v2` and the existing effective-input schema stay unchanged for
+direct policies. A strict one-level platform-map entry uses versioned
+`chrono-input-snapshot/v3`, adding the original entry path, effective target path and
+`chrono-registry-selection/v1` structural selector binding while retaining selector
+and target bytes separately.
 Capture publishes an input snapshot, not a Git-process report or a governance
 verdict. Config v1/v2 reject `facts_git`, including null, and keep their prior Git
 behavior. Cross-version full governance still needs the explicit workflow
@@ -54,6 +58,12 @@ chrono-harness check --config .chrono-harness/config.json \
   --base FULL_BASE_OID --candidate FULL_CANDIDATE_OID \
   --context .chrono-harness/state/context.json
 ```
+
+The entry path in this command is also the stable path for a native selector.
+Full and initial loaders retain that entry identity while using the selected direct
+policy, and reject an argv that names the target directly. Fixed base and candidate
+snapshots resolve their own selector targets and preserve the original files under
+their real paths.
 
 Scoped `chrono-ci-check/v2` explicitly selects this reader through
 `policy.facts_config`, independently of optional full `registration_config`.
@@ -103,6 +113,9 @@ unregistered platform. Both selector and target paths must be literal relative
 paths under `.chrono-harness/`; symlinks and nested selectors are rejected. Only
 the selected policy is read on this machine; every map entry is syntax-checked.
 Selected policies must use full-v3 Git binding, with no legacy fallback.
+The full CLI accepts absolute selector paths and paths relative to another caller
+cwd, but preserves the supplied host-relative entry for the shared no-symlink
+check before launching Git. Direct configuration path normalization is unchanged.
 
 The reader binds both original files to the fixed candidate and rechecks their
 bytes before and after every Git invocation, including the version probe. A
@@ -114,12 +127,13 @@ selection observations. Direct policy files keep their prior report shape and
 semantics. Register the selector, policies and their actual FILEMAP dependencies
 explicitly; selection does not create dependency edges.
 
-This extension, distributed in public beta.17, keeps the canonical command and facts-config entry path
-identical across registered native platforms. Different selected policies are
-different inputs, so it does not establish cross-platform verdict parity. It
-does not select the full runner's root configuration or the initial profile's
-host configuration, certify complete effective-input closure, or by itself adopt
-provider v3 in a real host. Go PR #18 adopts public beta.18 with successful local
+This extension keeps the canonical command and entry path identical across
+registered native platforms. The same selector contract is now consumed by the
+full runner root, initial host profile, input capture, scoped optional registration
+and full-CI check configuration. Different selected policies are different inputs,
+so it does not establish cross-platform verdict parity. It does not certify complete
+effective-input closure, adopt native full dispatch in this host, or claim full host
+activation. Go PR #18 adopts public beta.18 with successful local
 macOS checks and native Linux push/PR units and collection, preserving independent
 workflows and explicit SDK configuration; see [native adoption](native-ci-adoption.md#native-git-policy-adoption)
 for exact candidates, events and limits.

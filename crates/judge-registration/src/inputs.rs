@@ -9,12 +9,20 @@ use std::{collections::BTreeMap, path::Path};
 
 pub const SNAPSHOT_SCHEMA: &str = "chrono-input-snapshot/v1";
 pub const SNAPSHOT_SCHEMA_V2: &str = "chrono-input-snapshot/v2";
+pub const SNAPSHOT_SCHEMA_V3: &str = "chrono-input-snapshot/v3";
 
 pub fn snapshot_schema(config: &Value) -> &'static str {
     if matches!(config["schema_version"].as_u64(), Some(2 | 3)) {
         SNAPSHOT_SCHEMA_V2
     } else {
         SNAPSHOT_SCHEMA
+    }
+}
+pub fn snapshot_schema_for(r: &Registrations) -> &'static str {
+    if r.selection().is_some() {
+        SNAPSHOT_SCHEMA_V3
+    } else {
+        snapshot_schema(r.config())
     }
 }
 
@@ -81,11 +89,44 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
             "environment",
             "files",
         ],
-        &[],
+        &["effective_config_path", "selection"],
     )
     .map_err(|e| format!("E_INPUT_SNAPSHOT: {e}"))?;
-    if value["schema"] != SNAPSHOT_SCHEMA && value["schema"] != SNAPSHOT_SCHEMA_V2 {
+    if value["schema"] != SNAPSHOT_SCHEMA
+        && value["schema"] != SNAPSHOT_SCHEMA_V2
+        && value["schema"] != SNAPSHOT_SCHEMA_V3
+    {
         return Err("E_INPUT_SNAPSHOT: unsupported snapshot schema".into());
+    }
+    if value["schema"] == SNAPSHOT_SCHEMA_V3 {
+        let effective = value["effective_config_path"]
+            .as_str()
+            .ok_or("E_INPUT_SNAPSHOT: missing effective config path")?;
+        relative_path(effective)?;
+        let selection = crate::schema::object(
+            &value["selection"],
+            &["schema", "path", "platform", "config_path"],
+            &[],
+        )
+        .map_err(|e| format!("E_INPUT_SNAPSHOT: invalid selector binding: {e}"))?;
+        if selection["schema"] != "chrono-registry-selection/v1"
+            || !selection["platform"]
+                .as_str()
+                .is_some_and(|s| !s.is_empty() && s.trim() == s)
+            || selection["path"] != value["config_path"]
+            || selection["config_path"] != value["effective_config_path"]
+            || selection["path"] == selection["config_path"]
+        {
+            return Err("E_INPUT_SNAPSHOT: invalid selector binding schema".into());
+        }
+        for key in ["path", "config_path"] {
+            let path = selection[key]
+                .as_str()
+                .ok_or("E_INPUT_SNAPSHOT: selector path must be a string")?;
+            relative_path(path)?;
+        }
+    } else if value.get("effective_config_path").is_some() || value.get("selection").is_some() {
+        return Err("E_INPUT_SNAPSHOT: selection binding requires snapshot v3".into());
     }
     facts::full_oid(
         value["commit"]
@@ -118,6 +159,7 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         }
         if matches!(retained_shape(file)?, Retained::Absent)
             && value["schema"] != SNAPSHOT_SCHEMA_V2
+            && value["schema"] != SNAPSHOT_SCHEMA_V3
         {
             return Err("E_INPUT_SNAPSHOT: absence requires snapshot v2".into());
         }
@@ -210,17 +252,27 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
         let cfg = r.config();
         let retained = &req.observations["retained"][name];
         if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
-            && retained["schema"] != SNAPSHOT_SCHEMA_V2
+            && retained["schema"] != snapshot_schema_for(r)
         {
-            return Err(format!("{name}: config v2 requires snapshot v2"));
+            return Err(if r.selection().is_some() {
+                format!("{name}: selected config requires snapshot v3")
+            } else {
+                format!("{name}: config v2 requires snapshot v2")
+            });
         }
         if retained.get("schema").is_some() {
             snapshot_shape(retained)?;
-            if retained["schema"] != snapshot_schema(cfg)
+            if retained["schema"] != snapshot_schema_for(r)
                 || retained["config_path"] != req.config_path
                 || retained["config_digest"] != wire::digest(cfg)?
             {
                 return Err(format!("{name}: snapshot configuration binding mismatch"));
+            }
+            if retained["schema"] == SNAPSHOT_SCHEMA_V3
+                && (retained["effective_config_path"] != r.effective_config_path()
+                    || retained["selection"] != r.selection().cloned().unwrap_or(Value::Null))
+            {
+                return Err(format!("{name}: snapshot selection binding mismatch"));
             }
         }
         let files = cfg["environment"]["inputs"]

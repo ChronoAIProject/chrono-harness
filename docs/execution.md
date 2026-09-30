@@ -193,6 +193,18 @@ does not generate a host's conversion algorithm. Its dedicated registered test
 must actually execute and pass; an unrelated passing pair cannot certify it.
 Unchanged v3 hosts do not repeat a version transition on documentation-only DELTAs.
 
+For a native selector entry, the registration view is
+`chrono-registration-view/v2` and carries `config_bindings` for the base and
+candidate entry/effective paths. Its decoder input is
+`chrono-historical-decode/v3`, which adds the same binding and retains selector
+and target values under their original paths. A selected view is rejected if
+those identities or original bytes are missing or substituted. The downstream view
+reader also checks the retained decoder input’s schema, canonical entry and
+endpoint bindings against the view. The inputs consumer executes a selected
+workflow v1→v3 decoder and its dedicated compatibility test; the historical
+selector/target remain original even when the old target is absent from the
+candidate. Direct v1/v2 decoder contracts retain their existing semantics.
+
 The registered `.chrono-harness/migrations/scoped-v1.py` receives original JSON and
 exact bytes, the fixed historical profile bytes and candidate mapping declaration.
 It copies ordered bindings into FILEMAP plans and retains the malformed pseudo-script

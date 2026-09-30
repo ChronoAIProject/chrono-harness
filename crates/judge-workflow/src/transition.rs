@@ -163,16 +163,20 @@ pub fn evaluate(
     let now =
         reader.registry_values(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
     let mut changes = BTreeSet::new();
+    let raw_config =
+        chrono_harness::facts::registry_identity(&raw, &req.config_path)?.effective_path;
+    let now_config =
+        chrono_harness::facts::registry_identity(&now, &req.config_path)?.effective_path;
     for key in ["config", "filemap", "projects", "judges", "workflow"] {
         let op = if key == "config" {
-            req.config_path.as_str()
+            raw_config.as_str()
         } else {
-            raw[&req.config_path]["registries"][key].as_str().unwrap()
+            raw[&raw_config]["registries"][key].as_str().unwrap()
         };
         let np = if key == "config" {
-            req.config_path.as_str()
+            now_config.as_str()
         } else {
-            now[&req.config_path]["registries"][key].as_str().unwrap()
+            now[&now_config]["registries"][key].as_str().unwrap()
         };
         let ov = raw[op]["schema_version"].as_u64().unwrap();
         let nv = now[np]["schema_version"].as_u64().unwrap();

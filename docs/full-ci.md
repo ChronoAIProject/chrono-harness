@@ -105,6 +105,10 @@ discard old evidence to pretend that the first invocation never happened.
 Publication uses the existing per-file writer. It is not a multi-file crash or
 concurrent-writer transaction: an IO failure can leave one output published.
 Successful preparation is neither full governance nor a parity certificate.
+`check_config` may use the same strict one-level native selector as the full local
+entry. Preparation retains the entry path and records the selected target binding;
+the generated workflow invokes the stable entry argv unchanged.
+
 Native consumers, generated workflow execution, host activation, complete input
 closure and local/CI comparison are separate evidence obligations. This manual
 dispatch projection does not orchestrate PR creation, merging, required-check

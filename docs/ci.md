@@ -308,6 +308,11 @@ judge digest). The remaining provider fields retain their v1 meanings:
 }
 ```
 
+`host_config` may be a strict one-level native selector. Initial inventory keeps
+that entry path in its request and resolves each fixed endpoint's direct target
+through the shared registry snapshot contract; the selector and target remain
+separate registered files.
+
 `init` and `generate` assemble this declaration into the registered JSON profile
 and generate the workflow. `verify` checks both outputs without modifying either.
 The source declaration owns its profile output: edit the source, then generate;

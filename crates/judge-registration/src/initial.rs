@@ -6,7 +6,7 @@ use chrono_harness::{
     no_symlink_parents, sha256,
     wire::{self, Response, Status},
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use std::fs;
 
 pub fn judge(req: &Request) -> Response {
@@ -84,8 +84,28 @@ fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> R
             return Err(format!("checkout registry differs from candidate: {path}"));
         }
     }
+    let binding = &req.observations["registry_binding"];
+    if snapshot.selection.is_some()
+        && (binding["entry_path"] != snapshot.entry_path
+            || binding["effective_path"] != snapshot.effective_path
+            || binding["selection"] != snapshot.selection.clone().unwrap_or(Value::Null))
+    {
+        return Err("initial registry selection binding mismatch".into());
+    }
     let r = Registrations::load(&values, &req.config_path)?;
-    if values.values().any(|v| v["status"] != "proposed")
+    // The selector entry is metadata, not one of the five status-bearing
+    // registry documents.  Check the documents owned by the loaded view so a
+    // selected initial profile is judged by the same proposed-state contract
+    // as a direct profile.
+    if [
+        r.config(),
+        r.judges(),
+        r.projects(),
+        r.filemap(),
+        r.workflow(),
+    ]
+    .iter()
+    .any(|v| v["status"] != "proposed")
         || r.config()["enforcement"] != "not-implemented"
     {
         return Err(

@@ -1,9 +1,11 @@
 //! Snapshot transport, not dependency discovery or a governance verdict.
 use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, wire};
-pub use chrono_judge_registration::inputs::SNAPSHOT_SCHEMA;
+pub use chrono_judge_registration::inputs::{
+    SNAPSHOT_SCHEMA, SNAPSHOT_SCHEMA_V2, SNAPSHOT_SCHEMA_V3,
+};
 use chrono_judge_registration::{
     Registrations,
-    inputs::{Retained, observe_file, retained_shape, snapshot_schema, snapshot_shape},
+    inputs::{Retained, observe_file, retained_shape, snapshot_schema_for, snapshot_shape},
 };
 use serde_json::{Value, json as value};
 use std::{
@@ -108,7 +110,11 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
         };
         files.insert(input["id"].as_str().unwrap().into(), retained);
     }
-    let snapshot = value!({"schema":snapshot_schema(r.config()),"commit":commit,"config_path":config,"config_digest":wire::digest(r.config())?,"environment":environment,"files":files});
+    let mut snapshot = value!({"schema":snapshot_schema_for(&r),"commit":commit,"config_path":config,"config_digest":wire::digest(r.config())?,"environment":environment,"files":files});
+    if let Some(selection) = r.selection() {
+        snapshot["effective_config_path"] = value!(r.effective_config_path());
+        snapshot["selection"] = selection.clone();
+    }
     publish(root, output, &snapshot)?;
     Ok(snapshot)
 }

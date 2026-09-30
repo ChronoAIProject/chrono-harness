@@ -126,7 +126,11 @@ pub fn check_observed(
     let candidate_tree = reader.verify_oid(root, candidate)?;
     let base_values = reader.registry_values(root, base, config_path)?;
     let candidate_values = reader.registry_values(root, candidate, config_path)?;
-    let cfg = &candidate_values[config_path];
+    let base_identity = facts::registry_identity(&base_values, config_path)?;
+    let candidate_identity = facts::registry_identity(&candidate_values, config_path)?;
+    let cfg = candidate_values
+        .get(&candidate_identity.effective_path)
+        .ok_or("missing effective candidate configuration")?;
     let judges_path = cfg["registries"]["judges"]
         .as_str()
         .ok_or("missing judges path")?;
@@ -206,7 +210,8 @@ pub fn check_observed(
         .open(&retained_report)
         .map_err(|e| e.to_string())?;
     let req = Request {
-        observations: value!({"git_facts":reader.observation(),"entry":entry,"run":run,"report_path":report_path,"environment":{"inherited":observed,"effective":env},"retained":retained}),
+        observations: value!({"git_facts":reader.observation(),"entry":entry,"run":run,"report_path":report_path,"environment":{"inherited":observed,"effective":env},"retained":retained,
+            "registry_bindings":{"base":{"entry_path":base_identity.entry_path,"effective_path":base_identity.effective_path,"selection":base_identity.selection},"candidate":{"entry_path":candidate_identity.entry_path,"effective_path":candidate_identity.effective_path,"selection":candidate_identity.selection}}}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
         judge_id: String::new(),

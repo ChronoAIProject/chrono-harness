@@ -562,6 +562,62 @@ fn explicit_initial_inventory_runs_candidate_judge_without_a_delta_or_activation
     assert_eq!(cfg["status"], "proposed");
     assert_eq!(cfg["input_closure"]["status"], "incomplete");
 }
+
+#[test]
+fn selected_initial_inventory_keeps_entry_identity_and_runs_the_effective_policy() {
+    let mut h = initial_host();
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let selector = ".chrono-harness/platforms.json";
+    let git_path = "/usr/bin/git";
+    let git_version = String::from_utf8(
+        Command::new(git_path)
+            .arg("--version")
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim_end()
+    .to_string();
+    let mut config: Value =
+        serde_json::from_slice(&fs::read(h.root().join(".chrono-harness/config.json")).unwrap())
+            .unwrap();
+    config["schema_version"] = 3.into();
+    config["facts_git"] = json!({"tool":"git","input":"git-binary"});
+    config["tools"] = json!([{"id":"git","program":git_path,"resolution":"PATH-once","version_argv":["--version"],"expected_version":git_version}]);
+    config["environment"]["inputs"] = json!([{"id":"git-binary","location":git_path,"presence":"present","sha256":sha256(&fs::read(git_path).unwrap())}]);
+    config["canonical_check"]["argv"][3] = selector.into();
+    write(h.root(), ".chrono-harness/config.json", &config);
+    write(
+        h.root(),
+        selector,
+        &json!({"schema":"chrono-git-configs/v1","platforms":{platform: ".chrono-harness/config.json"}}),
+    );
+    let profile_path = ".chrono-harness/initial.json";
+    let mut profile: Value =
+        serde_json::from_slice(&fs::read(h.root().join(profile_path)).unwrap()).unwrap();
+    profile["host_config"] = selector.into();
+    write(h.root(), profile_path, &profile);
+    let filemap_path = ".chrono-harness/FILEMAP.json";
+    let mut filemap: Value =
+        serde_json::from_slice(&fs::read(h.root().join(filemap_path)).unwrap()).unwrap();
+    filemap["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(selector));
+    write(h.root(), filemap_path, &filemap);
+    amend_initial(&mut h);
+
+    let (exit, report) = initial_run(&h);
+    assert_eq!(exit, 0, "{report}");
+    assert_eq!(report["status"], "complete");
+    assert_eq!(report["git_facts"]["selection"]["path"], selector);
+    assert_eq!(
+        report["git_facts"]["selection"]["config_path"],
+        ".chrono-harness/config.json"
+    );
+    assert_eq!(report["judges"][0]["response"]["status"], "pass");
+}
 fn assert_report_contract(h: &Host, report: &Value) {
     // Required consumer fields come from SPEC §9, independently of serialization.
     let missing: Vec<_> = [

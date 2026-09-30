@@ -1,4 +1,5 @@
 //! Immutable Git facts. Admissibility belongs to the consuming judge.
+pub use crate::facts_configs::Identity as ConfigIdentity;
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
@@ -181,6 +182,10 @@ pub fn registry_values(
 pub struct RegistrySnapshot {
     pub bytes: BTreeMap<String, Vec<u8>>,
     pub values: BTreeMap<String, Value>,
+    /// The caller's stable entry and the direct endpoint used for policy.
+    pub entry_path: String,
+    pub effective_path: String,
+    pub selection: Option<Value>,
 }
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
     Reader::legacy().registry_snapshot(root, oid, path)
@@ -190,6 +195,16 @@ pub fn registry_digest(
     candidate: &BTreeMap<String, Value>,
 ) -> Result<String, String> {
     crate::wire::digest(&value!({"base":base,"candidate":candidate}))
+}
+
+/// Resolve the effective policy identity from a fixed registry map while
+/// retaining the caller's entry path.  Consumers use this after snapshot
+/// acquisition to bind views and provenance to the same selector decision.
+pub fn registry_identity(
+    values: &BTreeMap<String, Value>,
+    path: &str,
+) -> Result<ConfigIdentity, String> {
+    crate::facts_configs::identity(values, path)
 }
 
 impl Reader {
@@ -341,12 +356,32 @@ impl Reader {
         path: &str,
     ) -> Result<RegistrySnapshot, String> {
         let original = self.blob(root, oid, path)?;
+        let (effective_path, effective_bytes, effective_config, selection) =
+            crate::facts_configs::resolve(path, original.clone(), |target| {
+                self.blob(root, oid, target)
+            })?;
         let config = json(&original)?;
-        let paths = registry_paths(&config, path)?;
+        let paths = registry_paths(&effective_config, &effective_path)?;
         let mut snapshot = RegistrySnapshot {
             bytes: BTreeMap::from([(path.into(), original)]),
             values: BTreeMap::from([(path.into(), config)]),
+            entry_path: path.into(),
+            effective_path: effective_path.clone(),
+            selection: selection.map(|s| {
+                let mut observation = s.observation;
+                if let Some(object) = observation.as_object_mut() {
+                    object.remove("sha256");
+                    object.insert("schema".into(), value!("chrono-registry-selection/v1"));
+                }
+                observation
+            }),
         };
+        if effective_path != path {
+            snapshot
+                .bytes
+                .insert(effective_path.clone(), effective_bytes.clone());
+            snapshot.values.insert(effective_path, effective_config);
+        }
         for path in paths {
             if !snapshot.bytes.contains_key(&path) {
                 let original = self.blob(root, oid, &path)?;

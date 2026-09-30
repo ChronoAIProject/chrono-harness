@@ -13,9 +13,31 @@ use std::{
     path::Path,
 };
 type Values = BTreeMap<String, Value>;
+fn config_binding(base: &Values, candidate: &Values, entry: &str) -> Result<Value, String> {
+    Ok(value!({"base":facts::registry_identity(base, entry)?,
+        "candidate":facts::registry_identity(candidate, entry)?}))
+}
 fn load_view(view: &Value, config: &str) -> Result<(Registrations, Registrations), String> {
     let a: Values = serde_json::from_value(view["base"].clone()).map_err(|e| e.to_string())?;
     let b: Values = serde_json::from_value(view["candidate"].clone()).map_err(|e| e.to_string())?;
+    let identities = config_binding(&a, &b, config)?;
+    if identities["base"]["selection"].is_object()
+        || identities["candidate"]["selection"].is_object()
+    {
+        if view["schema"] != "chrono-registration-view/v2" || view["config_bindings"] != identities
+        {
+            return Err("registration view selection binding mismatch".into());
+        }
+        if !view["conversion"].is_null() {
+            let input = &view["conversion"]["input"];
+            if input["schema"] != "chrono-historical-decode/v3"
+                || input["config_path"] != config
+                || input["config_bindings"] != identities
+            {
+                return Err("historical decoder selection binding mismatch".into());
+            }
+        }
+    }
     let mut old = Registrations::load(&a, config)?;
     old.historical =
         serde_json::from_value(view["historical"].clone()).map_err(|e| e.to_string())?;
@@ -24,7 +46,11 @@ fn load_view(view: &Value, config: &str) -> Result<(Registrations, Registrations
         old.original_schemas = Registrations::schemas(&raw, config)?;
         // Supported config versions already have readers. Historical snapshots
         // bind their original config, never a decoder's replacement semantics.
-        if a.get(config) != raw.get(config) {
+        let original = facts::registry_identity(&raw, config)?;
+        if facts::registry_identity(&a, config)? != original
+            || a.get(config) != raw.get(config)
+            || a.get(&original.effective_path) != raw.get(&original.effective_path)
+        {
             return Err(
                 "E_MIGRATION_INPUT_SEMANTICS: historical config must remain original".into(),
             );
@@ -40,7 +66,18 @@ pub fn views_with_reader(
     req: &Request,
     reader: &facts::Reader,
 ) -> Result<(Registrations, Registrations, Value), String> {
-    let binding = value!({"base":req.base.commit,"candidate":req.candidate.commit,"registry":req.registries.digest,"context":req.context.sha256});
+    let base_snapshot =
+        reader.registry_snapshot(&req.candidate.root, &req.base.commit, &req.config_path)?;
+    let candidate_snapshot =
+        reader.registry_snapshot(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
+    let selector_required =
+        base_snapshot.selection.is_some() || candidate_snapshot.selection.is_some();
+    let mut binding = value!({"base":req.base.commit,"candidate":req.candidate.commit,"registry":req.registries.digest,"context":req.context.sha256});
+    if selector_required {
+        binding["entry_path"] = value!(req.config_path);
+        binding["base_config"] = value!({"entry_path":base_snapshot.entry_path,"effective_path":base_snapshot.effective_path,"selection":base_snapshot.selection});
+        binding["candidate_config"] = value!({"entry_path":candidate_snapshot.entry_path,"effective_path":candidate_snapshot.effective_path,"selection":candidate_snapshot.selection});
+    }
     let prior: Vec<_> = req
         .prior_results
         .iter()
@@ -50,11 +87,35 @@ pub fn views_with_reader(
         if prior.iter().any(|p| *p != *v) || v["binding"] != binding {
             return Err("registration view binding mismatch".into());
         }
+        if selector_required {
+            let expected = config_binding(
+                &base_snapshot.values,
+                &candidate_snapshot.values,
+                &req.config_path,
+            )?;
+            if v["schema"] != "chrono-registration-view/v2"
+                || v["config_bindings"] != expected
+                || v["candidate"] != value!(candidate_snapshot.values)
+            {
+                return Err("registration view selection binding mismatch".into());
+            }
+            let original = if v["conversion"].is_null() {
+                &v["base"]
+            } else {
+                &v["conversion"]["input"]["original"]
+            };
+            if *original != value!(base_snapshot.values)
+                || (!v["conversion"].is_null()
+                    && v["conversion"]["input"]["original_bytes"] != value!(base_snapshot.bytes))
+            {
+                return Err("registration view original endpoint mismatch".into());
+            }
+        }
         let (a, b) = load_view(v, &req.config_path)?;
         return Ok((a, b, (*v).clone()));
     }
-    let a = reader.registry_values(&req.candidate.root, &req.base.commit, &req.config_path)?;
-    let b = reader.registry_values(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
+    let a = base_snapshot.values;
+    let b = candidate_snapshot.values;
     if facts::registry_digest(&a, &b)? != req.registries.digest {
         return Err("registry digest mismatch".into());
     }
@@ -132,10 +193,18 @@ fn interpret_mode(
 ) -> Result<(Registrations, Registrations, Value), String> {
     let new = Registrations::load(&candidate, config).map_err(|e| format!("candidate: {e}"))?;
     let deferred = consumer.is_some_and(|id| downstream_validator(&new, id));
-    let filemap = raw[config]["registries"]["filemap"]
+    let raw_config = facts::registry_identity(&raw, config)?.effective_path;
+    let filemap = raw[&raw_config]["registries"]["filemap"]
         .as_str()
         .ok_or("historical filemap path")?;
     let mut view = value!({"base":raw,"candidate":candidate,"historical":{},"conversion":null});
+    let bindings = config_binding(&raw, &candidate, config)?;
+    let selected =
+        bindings["base"]["selection"].is_object() || bindings["candidate"]["selection"].is_object();
+    if selected {
+        view["schema"] = value!("chrono-registration-view/v2");
+        view["config_bindings"] = bindings.clone();
+    }
     let versions = |values: &Values| -> Result<Value, String> {
         Ok(value!(
             Registrations::schemas(values, config)?
@@ -234,11 +303,16 @@ fn interpret_mode(
         .keys()
         .map(|p| Ok((p.clone(), reader.blob(root, base, p)?)))
         .collect::<Result<_, String>>()?;
-    let input = if profile.get("from_versions").is_some() {
+    let mut input = if profile.get("from_versions").is_some() {
         value!({"schema":"chrono-historical-decode/v2","config_path":config,"original":raw,"original_bytes":raw_bytes,"candidate":candidate,"profile":profile})
     } else {
         value!({"schema":"chrono-historical-decode/v1","config_path":config,"original":raw,"original_bytes":raw_bytes,"profile":profile,"profile_bytes":profile_bytes,"profile_value":profile_value})
     };
+    if selected {
+        input["schema"] = value!("chrono-historical-decode/v3");
+        input["config_bindings"] = bindings;
+        input["candidate"] = value!(candidate);
+    }
     let script_path = script["path"].as_str().unwrap();
     let script_bytes = fs::read(root.join(script_path)).map_err(|e| e.to_string())?;
     if script_bytes != reader.blob(root, candidate_oid, script_path)? {
@@ -272,7 +346,8 @@ fn interpret_mode(
     let (old, _) = load_view(&view, config)?;
     // Every explicitly removed malformed definition must survive as its original bytes/value.
     for record in profile["legacy_records"].as_array().unwrap() {
-        let original = raw[raw[config]["registries"]["projects"].as_str().unwrap()]
+        let raw_config = facts::registry_identity(&raw, config)?.effective_path;
+        let original = raw[raw[&raw_config]["registries"]["projects"].as_str().unwrap()]
             [record["collection"].as_str().unwrap()]
         .as_array()
         .unwrap()

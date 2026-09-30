@@ -169,15 +169,25 @@ fn resource_failure_is_infrastructure_error_with_observed_output() {
 
 #[test]
 fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
-    scoped_adapter(false);
+    scoped_adapter(false, None);
 }
 
 #[test]
 fn scoped_v2_git_binding_reuses_reader_through_full_registration_and_execution() {
-    scoped_adapter(true);
+    scoped_adapter(true, None);
 }
 
-fn scoped_adapter(bound: bool) {
+#[test]
+fn scoped_optional_direct_v3_registration_consumes_effective_policy() {
+    scoped_adapter(true, Some(false));
+}
+
+#[test]
+fn scoped_optional_selected_registration_consumes_effective_policy() {
+    scoped_adapter(true, Some(true));
+}
+
+fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let mut h = Host::new(true);
     let root = h.root();
     let profile = ".chrono-harness/scoped.json";
@@ -238,6 +248,40 @@ fn scoped_adapter(bound: bool) {
         config["judge"]["timeout_seconds"] = json!(120);
         config["judge"]["output_limit_bytes"] = json!(8 * 1024 * 1024);
     }
+    let target = ".chrono-harness/full scoped target.json";
+    if let Some(selected) = selected {
+        let facts = h.values[".chrono-harness/scoped-facts.json"].clone();
+        let cfg = h.values.get_mut(CONFIG).unwrap();
+        cfg["schema_version"] = json!(3);
+        cfg["facts_git"] = facts["facts_git"].clone();
+        cfg["input_closure"]["bindings"] = json!([]);
+        cfg["tools"]
+            .as_array_mut()
+            .unwrap()
+            .extend(facts["tools"].as_array().unwrap().iter().cloned());
+        cfg["environment"]["inputs"].as_array_mut().unwrap().extend(
+            facts["environment"]["inputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .cloned(),
+        );
+        cfg["environment"]["values"]["ONLY_FROM_TARGET"] = json!("selected environment");
+        for input in cfg["environment"]["inputs"].as_array_mut().unwrap() {
+            input["presence"] = json!("present");
+        }
+        // The full registration owns tool binding and environment for operations.
+        config["policy"]["tools"]["python"] = json!("/missing/scoped-fallback");
+        if selected {
+            let cfg = h.values.remove(CONFIG).unwrap();
+            h.values.insert(target.into(), cfg);
+            h.values.insert(CONFIG.into(), json!({"schema":"chrono-git-configs/v1","platforms":{format!("{}-{}",std::env::consts::OS,std::env::consts::ARCH):target}}));
+            h.values.get_mut(FM).unwrap()["files"]
+                .as_array_mut()
+                .unwrap()
+                .push(file(target, json!([])));
+        }
+    }
     fs::write(root.join(profile), serde_json::to_vec(&config).unwrap()).unwrap();
     h.values.get_mut(FM).unwrap()["files"]
         .as_array_mut()
@@ -248,7 +292,7 @@ fn scoped_adapter(bound: bool) {
     fs::write(root.join("p/product.py"), "def double(n): return 2*n\n").unwrap();
     h.candidate = commit(&root);
     fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
-    let call = |reordered: bool| {
+    let call = |h: &Host, reordered: bool| {
         let config = root.join(profile);
         let args = if reordered {
             vec![
@@ -279,8 +323,8 @@ fn scoped_adapter(bound: bool) {
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         (output.status.code().unwrap(), report)
     };
-    let (code, report) = call(false);
-    assert_eq!(code, 0, "{}", report["response"]);
+    let (code, report) = call(&h, false);
+    assert_eq!(code, 0, "{}", report["response"]["results"]);
     assert_eq!(
         report["response"]["evidence"]["selected"],
         json!(["test:t"])
@@ -296,6 +340,14 @@ fn scoped_adapter(bound: bool) {
         fs::read_to_string(root.join(".chrono-harness/state/order")).unwrap(),
         "pt"
     );
+    if selected.is_some() {
+        let process = &report["response"]["evidence"]["executed"][1]["receipt"]["process"];
+        assert_eq!(
+            process["environment"]["ONLY_FROM_TARGET"],
+            "selected environment"
+        );
+        assert_eq!(process["environment"]["EMPTY"], "");
+    }
     if bound {
         let facts = &report["response"]["evidence"]["git_facts"];
         let processes = facts["processes"].as_array().unwrap();
@@ -321,7 +373,7 @@ fn scoped_adapter(bound: bool) {
         }
         fs::write(&trace, "").unwrap();
     }
-    let (code, report) = call(true);
+    let (code, report) = call(&h, true);
     assert_ne!(code, 0);
     assert!(
         report["response"]
@@ -339,8 +391,33 @@ fn scoped_adapter(bound: bool) {
                 .as_array()
                 .unwrap()
                 .len(),
-            fs::read_to_string(trace).unwrap().lines().count()
+            fs::read_to_string(&trace).unwrap().lines().count()
         );
+    }
+    if let Some(selected) = selected {
+        fs::remove_file(root.join(".chrono-harness/state/order")).unwrap();
+        h.base = h.candidate.clone();
+        fs::write(root.join("doc.txt"), "unrelated documentation\n").unwrap();
+        h.candidate = commit(&root);
+        let (code, report) = call(&h, false);
+        assert_eq!(code, 0, "{}", report["response"]["results"]);
+        assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+        assert!(!root.join(".chrono-harness/state/order").exists());
+        // Substituting the effective full target for the registered scoped entry
+        // cannot authorize the same observed invocation.
+        let effective = if selected { target } else { CONFIG };
+        h.values.get_mut(effective).unwrap()["canonical_check"]["argv"][3] = json!(effective);
+        h.save();
+        let (code, report) = call(&h, false);
+        assert_ne!(code, 0);
+        assert!(
+            report["response"]["results"]
+                .to_string()
+                .contains("canonical path differs"),
+            "{}",
+            report["response"]["results"]
+        );
+        assert!(!root.join(".chrono-harness/state/order").exists());
     }
 }
 

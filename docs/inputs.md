@@ -175,6 +175,16 @@ when it contradicts the declaration; registration rejects that contradiction.
 V2 requires the versioned snapshot, exact config binding and explicit state for
 every ID. V1 snapshots and unversioned legacy observations cannot carry absence.
 
+When the capture entry is a native platform selector, it publishes
+`chrono-input-snapshot/v3`. The existing `config_path` remains the caller's entry
+identity; `effective_config_path` and `selection` bind the selected direct policy.
+The structural selection binding is `chrono-registry-selection/v1` and carries the
+entry path, selected target path and host platform; the selector digest remains in
+the fixed registry bytes. Registration checks this binding against the fixed endpoint
+snapshot and keeps the selector and target registry bytes under their real paths.
+Direct v1/v2/v3 configs
+retain their previous snapshot schemas.
+
 Pair transports absence unchanged without opening its historical location.
 Registration, routes and projects consume the same validation, including a final
 candidate check after operations. Effective reports use `chrono-effective-inputs/v2`

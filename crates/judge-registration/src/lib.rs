@@ -125,14 +125,41 @@ fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<(
         return Ok(());
     }
     // Newly written state artifacts may differ since acquisition; compare all governed dirt below.
-    let bv = reader.registry_values(root, &req.base.commit, &req.config_path)?;
+    let base_snapshot = reader.registry_snapshot(root, &req.base.commit, &req.config_path)?;
+    let bv = base_snapshot.values;
     let candidate_snapshot =
         reader.registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
     let cv = candidate_snapshot.values;
+    let candidate_identity = facts::registry_identity(&cv, &req.config_path)?;
+    let selector_required =
+        base_snapshot.selection.is_some() || candidate_snapshot.selection.is_some();
+    let binding = req.observations["registry_bindings"].clone();
+    if selector_required
+        && (binding["base"]["entry_path"] != base_snapshot.entry_path
+            || binding["base"]["effective_path"] != base_snapshot.effective_path
+            || binding["base"]["selection"]
+                != base_snapshot.selection.clone().unwrap_or(Value::Null)
+            || binding["candidate"]["entry_path"] != candidate_snapshot.entry_path
+            || binding["candidate"]["effective_path"] != candidate_snapshot.effective_path
+            || binding["candidate"]["selection"]
+                != candidate_snapshot.selection.clone().unwrap_or(Value::Null))
+    {
+        issue(
+            r,
+            "E_IDENTITY",
+            "registry endpoint selection binding mismatch",
+            "/observations/registry_bindings",
+            true,
+        );
+        return Ok(());
+    }
     let observed = reader.checkout_excluding(
         root,
         &req.candidate.commit,
-        &facts::artifact_directories(&cv[&req.config_path])?,
+        &facts::artifact_directories(
+            cv.get(&candidate_identity.effective_path)
+                .ok_or("missing effective candidate config")?,
+        )?,
     )?;
     if facts::registry_digest(&bv, &cv)? != req.registries.digest
         || req.registries.base != req.base.root.join(".chrono-harness")
@@ -147,9 +174,9 @@ fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<(
         );
         return Ok(());
     }
-    for (p, v) in &bv {
+    for (p, original) in &base_snapshot.bytes {
         let p = no_symlink_parents(&req.base.root, p)?;
-        if read(&p)? != *v {
+        if fs::read(&p).map_err(|e| e.to_string())? != *original {
             issue(
                 r,
                 "E_IDENTITY",

@@ -560,7 +560,7 @@ pub fn canonical_argv(
     }
     v
 }
-fn root_for_config(path: &Path) -> Result<(PathBuf, String), String> {
+fn root_for_config(path: &Path, preserve_entry: bool) -> Result<(PathBuf, String), String> {
     let full = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -568,7 +568,11 @@ fn root_for_config(path: &Path) -> Result<(PathBuf, String), String> {
             .map_err(|e| e.to_string())?
             .join(path)
     };
-    let full = fs::canonicalize(full).map_err(|e| e.to_string())?;
+    let full = if preserve_entry {
+        full
+    } else {
+        fs::canonicalize(full).map_err(|e| e.to_string())?
+    };
     for p in full.ancestors().skip(1) {
         if p.file_name().is_some_and(|n| n == ".chrono-harness") {
             let root = p.parent().ok_or("no host root")?.to_path_buf();
@@ -578,6 +582,14 @@ fn root_for_config(path: &Path) -> Result<(PathBuf, String), String> {
                 .to_str()
                 .ok_or("non UTF-8 config path")?
                 .to_owned();
+            // Host-root aliases (including the caller cwd) may be resolved,
+            // but a selector's path below that root must reach the shared
+            // resolver without losing linked entry or parent components.
+            let root = if preserve_entry {
+                fs::canonicalize(root).map_err(|e| e.to_string())?
+            } else {
+                root
+            };
             return Ok((root, rel));
         }
     }
@@ -646,8 +658,16 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
         return Err("supply either --base or --initial".into());
     }
     let candidate = candidate.ok_or("missing --candidate")?;
-    let (root, config_path) = root_for_config(Path::new(config.ok_or("missing --config")?))?;
+    let config = Path::new(config.ok_or("missing --config")?);
+    let (root, config_path) = root_for_config(config, false)?;
     let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
+    // Only selectors adopt the literal-entry contract. Direct and scoped
+    // profiles retain their existing canonical path and error behavior.
+    let (root, config_path) = if profile["schema"] == "chrono-git-configs/v1" {
+        root_for_config(config, true)?
+    } else {
+        (root, config_path)
+    };
     if scope.is_some() && profile["schema"] != units::PROFILE {
         return Err("unit/collect selection requires chrono-ci-check/v3".into());
     }
