@@ -70,7 +70,7 @@ Config v3 adds an explicit candidate Git binding before acquisition and through 
 
 CI provider v3 binds event acquisition through an explicit full-v3 `facts_config`. Dedicated `ci-tests/tests/git_facts.rs` regressions use real Git objects/remotes and the actual CLI to check missing-history acquisition, exact probe interpretation, failed probe/fetch evidence, candidate policy/checkout binding, declared environment, generated initial-profile selection and legacy controls. Native generated-v3 host adoption, network/credential/configuration closure and parity are still outstanding.
 
-The source `chrono-git-configs/v1` selector lets scoped/provider facts entries
+The public beta.17 `chrono-git-configs/v1` selector lets scoped/provider facts entries
 choose an explicitly registered native-platform policy while preserving one
 canonical entry path. Reader regressions cover real Git selection, both fixed
 candidate blobs, invalid maps/targets, request substitution, pre/post-call drift
@@ -79,7 +79,7 @@ exercise source/docs locality and push/PR acquisition through the selected polic
 Direct policies retain their contract. This is a prerequisite for native host
 adoption, not activation, complete input closure or cross-platform parity; the
 full root/initial host configuration is not selected by this extension. It is
-not distributed in beta.16; see [Git facts](git-facts.md#explicit-platform-configurations).
+distributed in beta.17; see [Git facts](git-facts.md#explicit-platform-configurations).
 
 Scoped profile v2 independently opts into Git binding with policy.facts_config. Dedicated judge-ci tests exercise actual CLI selection with ambient Git shadowed, documentation nonexecution, both endpoints, v1 migration and old-only deletion, initial root/child/shallow behavior, fixed-policy/digest/version errors, dirty/index/checkout/post-execution guards and retained binary output/exit/timeout/overflow. The actual projects consumer checks optional full-registration interpretation and ordered execution through the same reader, with process-count/byte-hash checks and rejected canonical argv. V1 controls remain; the host has not adopted scoped v2.
 
@@ -109,6 +109,17 @@ original historical bytes. The observed Git report required an explicitly increa
 host transport bound; see [public consumption](git-facts.md#public-binary-consumption).
 This does not adopt the local facts configuration in remote/native CI, establish
 complete input closure, activate full governance or certify full local/CI parity.
+
+Public [beta.17](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.17)
+distributes explicit native-platform Git facts selection. Its
+[fixed-source release](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36661720249)
+passed 596 macOS arm64 and 591 Linux x86_64 tests across all fifteen dedicated
+projects, with 36 successful processes, 30 consumer destinations and 34 matching
+identity observations per platform. All 35 public assets match their original
+hashes/sizes. The Go adoption verifies native Linux policy selection and passing
+units, but both native collections reject oversized original reports; see the
+[precise adoption boundary](native-ci-adoption.md#native-git-policy-adoption).
+Full host activation, effective-input closure and parity are still outstanding.
 
 This increment adds mixed classification and adopted registrations together. **Mixed policy/product change warning:** the project pair, semantic comparisons, bootstrap binding and execution plan expand the validation surface. Costs remain unmeasured. Dedicated tests validate the mixed report and shared cost consumer; host activation still requires the outstanding governance and input obligations.
 
