@@ -100,7 +100,9 @@ pub fn execute(
         match wire::invoke_detailed(&req, &b, env, timeout, limit) {
             Ok((r, p)) => {
                 status = status.max(r.status.clone());
-                records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request_id,"request_digest":sha256(&wire::canonical(&req)?),"exit_code":p.exit_code,"response":r,"process":p}));
+                // The process already digested the canonical request bytes it consumed.
+                // Reuse that observation instead of serializing the same request again.
+                records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request_id,"request_digest":p.stdin_sha256,"exit_code":p.exit_code,"response":r,"process":p}));
                 responses.insert(b.id, r);
             }
             Err(e) => {
