@@ -66,8 +66,9 @@ scoped semantics; the binding does not silently activate full governance.
 See [the scoped contract](ci.md#configuration-and-selection-contract).
 
 CI provider v3 explicitly selects this reader through `facts_config`
-for event acquisition; see [the event contract](ci.md#registered-event-git). The product repository still uses its registered scoped v1 CI and
-proposed full registries. Version 3 binding does not establish full governance,
+for event acquisition; see [the event contract](ci.md#registered-event-git). The
+product repository uses independent-unit scoped v3 CI without opting into Git
+binding, and retains proposed full registries. Version 3 binding does not establish full governance,
 Git configuration or delegated dependency closure, deterministic-input parity,
 or freedom from transient concurrent replacement. Hosts must explicitly register
 Git configuration, executable interpreters/libraries, OS and other actual inputs
@@ -121,7 +122,45 @@ configuration, delegated programs, OS or network inputs, establish complete inpu
 closure, or detect a concurrent change restored between observations. Reports
 therefore retain `completeness_proven: false` and `input_closure_complete: false`.
 Input snapshots and the unchanged canonical check command keep their existing
-contracts. This source extension has not yet been distributed in a public beta.
+contracts. This extension is distributed in public beta.16.
+
+## Public binary consumption
+
+Public beta.16 was installed anonymously on macOS arm64 into a local clone of the
+[Go host](https://github.com/ChronoAIProject/chrono-harness-examples-go) at base
+`2d3bfb3d8cea0d9c0add957cca20ad4335d6601c`. The consumer explicitly adopted a separate
+full-v3 facts configuration, the actual local Git executable digest/version,
+`.git/config` content identity and `.git/config.worktree` absence. The existing
+scoped-v3 profile selected that facts configuration; all declarations stayed under
+`.chrono-harness/`, and the original historical configuration bytes were retained.
+
+The installed public binaries ran the host's unchanged canonical command shape:
+
+```sh
+.chrono-harness/bin/chrono-harness check --config .chrono-harness/ci/check.json \
+  --base BASE_OID --candidate CANDIDATE_OID --unit rates
+```
+
+The `rates` unit executed `build.rates` and `test.rates`; the `harness` unit
+executed `ci.verify` and `test.bootstrap`, including the installed instruction
+producer. Changing the registered Git config or creating the declared-absent
+worktree config failed with no business operations executed. Restoring the inputs
+restored acceptance. All six installed tools retained their public manifest
+identities. This is local public-binary consumption with a locally declared Git;
+it does not adopt that machine-specific configuration in the remote example or
+establish native provider-v3 adoption, complete input closure or parity.
+
+Git process observations can materially increase the transport size. This real
+consumer's original 8,388,608-byte judge output limit failed with
+`process output limit exceeded`. A direct `chrono-judge-ci` invocation using that
+failed report's exact `request` exited 0 and produced a 9,735,075-byte response;
+9,685,756 bytes of that response were Git observations from 25
+processes, retaining 2,056,371 original stdout bytes plus the protocol's text and
+byte representations. The host then explicitly registered a 16,777,216-byte
+judge output limit and passed the canonical checks and drift/recovery cases.
+These are measurements for that host and invocation, not a universal capacity
+recommendation. Declare a suitable bound from actual report sizes; per-Git-process
+bounds and complete-input obligations retain their existing meanings.
 
 ## Literal checkout identity
 

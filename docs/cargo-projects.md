@@ -6,6 +6,10 @@ adapter by registering its binary, arguments, policy input and FILEMAP edges. A
 Go/TS/script host has no Cargo policy obligation merely because Cargo-like files
 or directory names exist.
 
+Public beta.16 distributes the v5 toolchain inventory described below. Its native
+release executes this adapter's dedicated tests on macOS arm64 and Linux x86_64;
+this does not certify complete compiler/SDK/delegated inputs or activate the product host.
+
 The policy must be below the host `.chrono-harness/` and registered in FILEMAP:
 
 ```json
