@@ -35,7 +35,12 @@
     "test.judge-registration-tests",
     "test.judge-projects-tests",
     "test.judge-workflow-tests",
-    "test.judge-cargo-tests"
+    "test.judge-cargo-tests",
+    "test.instructions-tests",
+    "test.judge-filemap-tests",
+    "test.judge-routes-tests",
+    "test.judge-cost-tests",
+    "test.judge-mixed-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -46,6 +51,13 @@
         "destinations": [
           "crates/runner/target/debug/chrono-harness",
           ".chrono-harness/bin/chrono-harness"
+        ]
+      },
+      {
+        "asset": "chrono-instructions",
+        "destinations": [
+          "crates/instructions/target/debug/chrono-instructions",
+          ".chrono-harness/bin/chrono-instructions"
         ]
       },
       {

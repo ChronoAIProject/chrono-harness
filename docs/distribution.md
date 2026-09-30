@@ -8,7 +8,7 @@
 
 v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以运行迁移消费者内登记的 format 操作。v3 必须声明 `consumer_staging.release_plan`、`host_config` 和非空 `bindings`。每项显式选择 release plan 的资产名与测试消费者目的路径；目的必须属于宿主唯一的 `tracked: false` artifact，不能重复、互相嵌套或与任何发布源路径重叠。拒绝路径越界及路径组件中的 symlink。源码身份读取后、构建前，实际 `git ls-files` 拒绝已跟踪的目的路径；这项读数属于运行证据，失败会产生失败报告。其它结构预检失败不启动子进程。
 
-构建后把发布可执行文件的原始字节和 mode 暂存到显式目的路径。当前登记 14 个工具各自的构建消费路径与宿主安装消费路径，并选择 distribution、worktree、runner、inputs、ci、judge-ci、registration、projects、workflow 和 Cargo adapter 的专属测试。它们包含 Git 绑定、保留输入、七判官与 integration/delivery 的实际 CLI 消费者。instructions 未作为该新增消费链的测试对象；仍是显式构建及打包成员。 产品消费者的合成宿主在 fixture 中显式采用本平台的解释器版本；历史快照不变，错误版本的反例仍执行。本仓 macOS 的固定版本登记由独立登记的宿主 migration script 测试验证，不把该宿主实例当作 Linux 产品测试的环境。
+构建后把发布可执行文件的原始字节和 mode 暂存到显式目的路径。当前配方为 15 个发布工具逐项登记构建消费路径与宿主安装消费路径，并显式选择全部 15 个生产项目各自的专属测试项目，包括 instructions、FILEMAP、routes、cost 和 mixed。它们包含 Git 绑定、声明文件核验、保留输入、七判官与 integration/delivery 的实际 CLI 消费者；库调用测试仍只验证各自的实际调用范围。测试选择来自配方中的操作白名单，不按目录或发布资产推断。 产品消费者的合成宿主在 fixture 中显式采用本平台的解释器版本；历史快照不变，错误版本的反例仍执行。本仓 macOS 的固定版本登记由独立登记的宿主 migration script 测试验证，不把该宿主实例当作 Linux 产品测试的环境。
 
 新配方发射 `chrono-native-build/v4`，保留 v3 的状态和原始过程证据，并增加 `consumer_staging`：资产/源/目的绑定、暂存时源身份，以及暂存后、每项验证前后、打包前后的文件摘要、大小、mode、读取错误和匹配结论。任一身份变化或缺失阻止成功发布；失败子进程后仍观察身份，保留原退出码，后置观察不能掩盖它。复制失败也保留实际可读状态。此处验证有界时点的字节身份；不认证两个观察之间无临时替换、完整输入闭包或每个库测试都调用 CLI。
 
@@ -34,6 +34,8 @@ chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output 
 `pack` 拒绝脏源码，固定实际 Git commit/tree；只复制明确列出的可执行文件，不扫描 crates。`assemble` 显式接收平台包，验证每个成员，拒绝源提交、树、版本或成员集不一致及重复平台。最终 `release.json` 使用 `chrono-release/v1`，包含 `version/source_commit/source_tree/platforms`。平台映射中每个具名工具有 `file/sha256/size`；文件名为 `NAME-OS-ARCH`，每个平台须提供 `chrono-distribution`。没有 archive extraction。
 
 原生平台目前登记 `macos-aarch64`、`linux-x86_64`；实际产物以构建结果为准。其它平台需要显式增加构建与运行验证。构建证据、声明的源码身份及摘要不构成完整工具链/SDK 来源认证，也不保证不同平台结果相同。
+
+当前发布计划选择 `v0.1.0-beta.16`，纳入 beta.15 之后的成对报告比较、显式输入绑定与覆盖登记、Cargo v5 工具链清单，以及 Git 声明文件核验。计划和源码不代表已公开发布；公开资产与原生验证结果以具名 release 为准。完整输入闭包、完整宿主启用与本地／CI 完整对等仍未完成。
 
 ## 宿主采用
 
