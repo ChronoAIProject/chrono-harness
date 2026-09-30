@@ -117,7 +117,7 @@ Use explicit allowlists. In host .chrono-harness/ FILEMAP or registry, list file
 
 Consumption grants no authority. Integrity checks, indexing, compiler increments and tests consume declared material, never expand/discover ownership, inputs or impact. Only a complete scope explicitly needing no resources is not-required. Unknown registration is not no work; hits are not passes.
 
-One entry per activity. Build, generate, check and deliver by their sole registered methods; declare parameters, prerequisites, inputs, environment, outputs and exits. Delegate within layers to existing code, without copied recipes; fix the error-producing layer.
+One current registered entry per activity. Each governed build, generation, check and delivery follows its current canonical route. Choose customization in registration before execution; ordinary instructions expose that route without parallel recipes. Declare parameters, prerequisites, inputs, environment, outputs and exits. Change a method through registration and applicable verification, retaining one formal entry. Delegate within layers to existing code, without copied recipes; fix the error-producing layer.
 
 Configure host tools explicitly. Register scripts, plugins, judges and config under host .chrono-harness/, replaceable and evolvable; no hardcoded host in general runtimes. Use supplied tools; no duplicate platforms or global config edits.
 
