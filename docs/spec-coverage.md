@@ -87,9 +87,12 @@ Scoped-v3 collection has explicit optional manifest/report byte limits, retainin
 64 MiB defaults and all original evidence verification. Boundary consumers cover
 exact limits, overflow, invalid policies and original reports larger than 64 MiB.
 Scoped-v3 report serialization removes indentation amplification while retaining
-original process bytes and identical stored/stdout reports. These source changes
-address native Go collection failure on a 149,386,115-byte unit report; public
-release consumption and repaired native adoption are not yet verified.
+original process bytes and identical stored/stdout reports. Public beta.18 distributes
+these changes. Its fixed-source native release passes 601 macOS and 596 Linux
+tests across all fifteen dedicated projects; all 35 public assets match their
+original hashes/sizes. Anonymous manifest and both platform installers were
+verified. Native Go adoption evidence is scoped separately below; this does not
+certify full effective-input closure or deterministic parity.
 
 The bounded parity increment adds `chrono-harness parity --host-root H --report P --compared-report Q`. It compares two independently published full reports only after both producers state `effective_inputs.completeness_proven: true`, requires all verdict-bearing fields and executed judge responses, normalizes absolute executable paths by observed digest/version, and preserves a failed comparison as an unresolved nonzero result. It updates both the named report and its retained `report_path`. This establishes pairwise deterministic evidence for a declared input boundary; it does not certify undisclosed host inputs, native adoption or universal determinism.
 
@@ -116,9 +119,10 @@ distributes explicit native-platform Git facts selection. Its
 passed 596 macOS arm64 and 591 Linux x86_64 tests across all fifteen dedicated
 projects, with 36 successful processes, 30 consumer destinations and 34 matching
 identity observations per platform. All 35 public assets match their original
-hashes/sizes. The Go adoption verifies native Linux policy selection and passing
-units, but both native collections reject oversized original reports; see the
-[precise adoption boundary](native-ci-adoption.md#native-git-policy-adoption).
+hashes/sizes. Go's original beta.17 candidate verified native Linux policy selection
+but failed collection on oversized reports. Public beta.18 repairs collection;
+Go PR #18 adopts that release with matching local and native push/PR evidence.
+See the [precise adoption boundary](native-ci-adoption.md#native-git-policy-adoption).
 Full host activation, effective-input closure and parity are still outstanding.
 
 This increment adds mixed classification and adopted registrations together. **Mixed policy/product change warning:** the project pair, semantic comparisons, bootstrap binding and execution plan expand the validation surface. Costs remain unmeasured. Dedicated tests validate the mixed report and shared cost consumer; host activation still requires the outstanding governance and input obligations.

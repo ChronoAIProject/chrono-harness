@@ -119,8 +119,10 @@ identical across registered native platforms. Different selected policies are
 different inputs, so it does not establish cross-platform verdict parity. It
 does not select the full runner's root configuration or the initial profile's
 host configuration, certify complete effective-input closure, or by itself adopt
-provider v3 in a real host. The initial Go adoption has verified native policy
-selection but failed collection; see [native adoption](native-ci-adoption.md#native-git-policy-adoption).
+provider v3 in a real host. Go PR #18 adopts public beta.18 with successful local
+macOS checks and native Linux push/PR units and collection, preserving independent
+workflows and explicit SDK configuration; see [native adoption](native-ci-adoption.md#native-git-policy-adoption)
+for exact candidates, events and limits.
 
 ## Guarding declared Git inputs
 
