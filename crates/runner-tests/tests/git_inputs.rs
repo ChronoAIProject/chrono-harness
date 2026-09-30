@@ -192,3 +192,225 @@ fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
     };
     assert!(error.contains("request Git facts inputs"), "{error}");
 }
+
+const SELECTOR: &str = ".chrono-harness/git-platforms.json";
+const CONFIG: &str = ".chrono-harness/config.json";
+
+fn platform() -> String {
+    format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+}
+fn select(h: &Host, selector: &Value) {
+    h.save();
+    fs::write(h.root.join(SELECTOR), serde_json::to_vec(selector).unwrap()).unwrap();
+}
+fn selection() -> Value {
+    json!({"schema":"chrono-git-configs/v1","platforms":{platform():CONFIG}})
+}
+fn commit(h: &Host) -> String {
+    let git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    for args in [
+        vec!["add", "."],
+        vec![
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--no-gpg-sign",
+            "-qm",
+            "registered platform facts",
+        ],
+    ] {
+        assert!(
+            Command::new(&git)
+                .current_dir(&h.root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    let output = Command::new(git)
+        .current_dir(&h.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8(output.stdout).unwrap().trim().into()
+}
+
+#[test]
+fn selected_platform_binds_both_candidate_files_and_request_observation() {
+    let h = Host::new("");
+    let mut selector = selection();
+    // Another registered platform need not exist on this machine.
+    selector["platforms"]["other-system"] = json!(".chrono-harness/elsewhere.json");
+    select(&h, &selector);
+    let candidate = commit(&h);
+    let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+    assert!(reader.is_bound());
+    reader.verify_config(&h.root, &candidate).unwrap();
+    let observed = reader.observation();
+    assert_eq!(observed["config_path"], CONFIG);
+    assert_eq!(observed["selection"]["path"], SELECTOR);
+    assert_eq!(observed["selection"]["platform"], platform());
+    assert_eq!(
+        observed["selection"]["sha256"],
+        sha256(&fs::read(h.root.join(SELECTOR)).unwrap())
+    );
+    assert_eq!(observed["input_closure_complete"], false);
+    let environment = observed["environment"].clone();
+    Reader::from_observations(
+        &h.root,
+        SELECTOR,
+        &candidate,
+        &json!({"git_facts":observed,"environment":environment}),
+    )
+    .unwrap();
+    for key in ["platform", "sha256", "path"] {
+        let mut substituted = observed.clone();
+        substituted["selection"][key] = json!("unbound");
+        let result = Reader::from_observations(
+            &h.root,
+            SELECTOR,
+            &candidate,
+            &json!({"git_facts":substituted,"environment":environment}),
+        );
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .contains("request Git facts selection")
+        );
+    }
+    let mut missing = observed;
+    missing.as_object_mut().unwrap().remove("selection");
+    assert!(
+        Reader::from_observations(
+            &h.root,
+            SELECTOR,
+            &candidate,
+            &json!({"git_facts":missing,"environment":environment})
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
+    for case in [
+        "empty",
+        "unregistered",
+        "outside",
+        "self",
+        "nested",
+        "legacy",
+        "missing",
+        "unknown",
+        "empty-key",
+        "duplicate",
+        "symlink",
+    ] {
+        let mut h = Host::new("");
+        let mut selector = selection();
+        match case {
+            "empty" => selector["platforms"] = json!({}),
+            "unregistered" => selector["platforms"] = json!({"another-system":CONFIG}),
+            "outside" => selector["platforms"][platform()] = json!("../outside.json"),
+            "self" => selector["platforms"][platform()] = json!(SELECTOR),
+            "nested" => h.config = selection(),
+            "legacy" => h.config["schema_version"] = json!(2),
+            "missing" => selector["platforms"][platform()] = json!(".chrono-harness/missing.json"),
+            "unknown" => selector["fallback"] = json!(CONFIG),
+            "empty-key" => selector["platforms"][""] = json!(CONFIG),
+            "duplicate" | "symlink" => {}
+            _ => unreachable!(),
+        }
+        select(&h, &selector);
+        if case == "duplicate" {
+            fs::write(h.root.join(SELECTOR), format!(
+                "{{\"schema\":\"chrono-git-configs/v1\",\"platforms\":{{\"{0}\":\"{1}\",\"{0}\":\"{1}\"}}}}",
+                platform(), CONFIG)).unwrap();
+        }
+        if case == "symlink" {
+            fs::rename(
+                h.root.join(CONFIG),
+                h.root.join(".chrono-harness/real.json"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink("real.json", h.root.join(CONFIG)).unwrap();
+        }
+        assert!(
+            Reader::for_config(&h.root, SELECTOR).is_err(),
+            "{case} accepted"
+        );
+        assert!(!h.root.join("trace").exists(), "{case} launched Git");
+    }
+}
+
+#[test]
+fn platform_selector_and_selected_policy_drift_block_the_next_process() {
+    for path in [SELECTOR, CONFIG] {
+        let h = Host::new("");
+        select(&h, &selection());
+        let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+        assert!(reader.is_bound());
+        let before = h.root.join(path);
+        let bytes = fs::read(&before).unwrap();
+        let count = reader.observation()["processes"].as_array().unwrap().len();
+        fs::write(&before, b"{}").unwrap();
+        assert!(
+            reader
+                .git(&h.root, &["rev-parse", "--show-toplevel"])
+                .is_err()
+        );
+        assert_eq!(
+            reader.observation()["processes"].as_array().unwrap().len(),
+            count
+        );
+        fs::write(&before, bytes).unwrap();
+        reader
+            .git(&h.root, &["rev-parse", "--show-toplevel"])
+            .unwrap();
+    }
+}
+
+#[test]
+fn selector_mutation_during_git_retains_the_original_failed_process() {
+    let h = Host::new(
+        "case \"$*\" in *rev-parse*) printf changed > .chrono-harness/git-platforms.json; printf original; exit 17;; esac",
+    );
+    select(&h, &selection());
+    let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+    assert!(reader.is_bound());
+    let error = reader
+        .git(&h.root, &["rev-parse", "--show-toplevel"])
+        .unwrap_err();
+    assert!(error.contains("selector changed"), "{error}");
+    let observation = reader.observation();
+    let process = observation["processes"].as_array().unwrap().last().unwrap();
+    assert_eq!(process["exit_code"], 17);
+    assert_eq!(process["stdout_sha256"], sha256(b"original"));
+}
+
+#[test]
+fn platform_selection_must_match_both_fixed_candidate_blobs() {
+    for path in [SELECTOR, CONFIG] {
+        let mut h = Host::new("");
+        let selector = selection();
+        select(&h, &selector);
+        let candidate = commit(&h);
+        if path == SELECTOR {
+            let mut changed = selector;
+            changed["platforms"]["future-system"] = json!(".chrono-harness/future.json");
+            select(&h, &changed);
+        } else {
+            h.config["environment"]["values"]["DECLARED_VALUE"] = json!("changed");
+            h.save();
+        }
+        let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+        assert!(reader.is_bound());
+        let error = reader.verify_config(&h.root, &candidate).unwrap_err();
+        assert!(error.contains("fixed candidate"), "{path}: {error}");
+    }
+}

@@ -2981,6 +2981,18 @@
       ]
     },
     {
+      "path": "crates/runner/src/facts_configs.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
       "path": "crates/runner/src/facts_inputs.rs",
       "owner": "runner",
       "surface": "product",

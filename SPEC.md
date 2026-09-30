@@ -125,6 +125,17 @@ tools 的 `resolution` v1 仅有 `PATH-once`：只解析登记的 program 一次
 文件摘要和版本输出；不搜索其他同类工具作为替代，不自动纠正版本不匹配。
 Config v3 在读取 Git 对象前，从显式 candidate 配置绑定 `facts_git`；该配置的原始字节随后必须与固定 candidate 中的 blob 相同。tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须指向同一执行物，present 摘要先于任何启动核验，expected_version 必须为非空字符串并匹配 version_argv 的实际 UTF-8 stdout（只去末尾空白）。相同 candidate 绑定读取 base 与 candidate，不启动 base 工具。每次进程使用清空后重建的登记环境及 protocol 的时间／输出上限；显式 GIT_DIR、GIT_WORK_TREE、GIT_INDEX_FILE 因重定向 checkout 而拒绝。进程前后核配置、绑定路径与执行物摘要，保留原始输出字节、摘要、退出和边界失败。完整请求及消费者报告通过 `git_facts` 运输观察；下游核对绑定和环境，缺失或不符不得回退 ambient Git。执行前的失败以 `E_GIT_FACTS` 携观察返回；尚未启动的进程不伪造回执。完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、旧 library facts API、scoped CI 与旧版事件准备保持各自旧合同。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
 
+独立 `facts_config` 可显式指向 `chrono-git-configs/v1`，其唯一数据字段 `platforms`
+逐项登记执行二进制的 Rust `OS-ARCH` 到完整 v3 Git 配置路径的映射。无匹配平台即拒绝，
+不探测可用工具、不推断语言或目录；各平台文件仍由宿主明确登记。选择器及目标均为
+`.chrono-harness/` 下的字面相对路径，拒绝链接、自引用、嵌套选择器和旧版目标。
+读取器核选择器与选中配置的固定 candidate 原字节，并在每次 Git 调用前后重验；
+报告附 `git_facts.selection` 的路径、摘要、实际平台与目标，下游拒绝替换或遗漏。
+非当前平台只校映射格式，不在本机读取其工具或配置。该合同仅扩展 scoped/provider 的
+独立 Git 事实入口，不替代完整检查或 initial 的宿主根配置；不自动登记 FILEMAP 边。
+本地与 CI 可以保持同一命令及入口路径，不同平台选中不同政策仍是不同有效输入，
+不能据此声明 parity。旧直接配置保留原义。见同文档的显式平台配置节。
+
 Config v3 可在 facts_git 中采用 `guard: {schema: "chrono-git-inputs/v1", inputs: string[]}`。
 非空 inputs 逐项引用唯一 environment.inputs 文件 ID，拒绝重复、未知引用和未绑定摘要；
 present 必须匹配 SHA-256，absent 必须实际缺失，目录、符号链接、IO 错误不作缺失。

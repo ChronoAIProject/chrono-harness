@@ -70,6 +70,17 @@ Config v3 adds an explicit candidate Git binding before acquisition and through 
 
 CI provider v3 binds event acquisition through an explicit full-v3 `facts_config`. Dedicated `ci-tests/tests/git_facts.rs` regressions use real Git objects/remotes and the actual CLI to check missing-history acquisition, exact probe interpretation, failed probe/fetch evidence, candidate policy/checkout binding, declared environment, generated initial-profile selection and legacy controls. Native generated-v3 host adoption, network/credential/configuration closure and parity are still outstanding.
 
+The source `chrono-git-configs/v1` selector lets scoped/provider facts entries
+choose an explicitly registered native-platform policy while preserving one
+canonical entry path. Reader regressions cover real Git selection, both fixed
+candidate blobs, invalid maps/targets, request substitution, pre/post-call drift
+and original failed-process evidence. Actual scoped and provider CLI consumers
+exercise source/docs locality and push/PR acquisition through the selected policy.
+Direct policies retain their contract. This is a prerequisite for native host
+adoption, not activation, complete input closure or cross-platform parity; the
+full root/initial host configuration is not selected by this extension. It is
+not distributed in beta.16; see [Git facts](git-facts.md#explicit-platform-configurations).
+
 Scoped profile v2 independently opts into Git binding with policy.facts_config. Dedicated judge-ci tests exercise actual CLI selection with ambient Git shadowed, documentation nonexecution, both endpoints, v1 migration and old-only deletion, initial root/child/shallow behavior, fixed-policy/digest/version errors, dirty/index/checkout/post-execution guards and retained binary output/exit/timeout/overflow. The actual projects consumer checks optional full-registration interpretation and ordered execution through the same reader, with process-count/byte-hash checks and rejected canonical argv. V1 controls remain; the host has not adopted scoped v2.
 
 The bounded parity increment adds `chrono-harness parity --host-root H --report P --compared-report Q`. It compares two independently published full reports only after both producers state `effective_inputs.completeness_proven: true`, requires all verdict-bearing fields and executed judge responses, normalizes absolute executable paths by observed digest/version, and preserves a failed comparison as an unresolved nonzero result. It updates both the named report and its retained `report_path`. This establishes pairwise deterministic evidence for a declared input boundary; it does not certify undisclosed host inputs, native adoption or universal determinism.
