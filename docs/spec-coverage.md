@@ -78,6 +78,19 @@ Full activation and all other remaining obligations stay active. Generic project
 
 Public [beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) adds explicit metadata rebind and literal checkout identity, alongside the previously released Git binding, CI generation, remote retirement and recipe v3/report v4. Its [fixed-source native build](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36566708631) passed 391 tests across ten dedicated projects on each of macOS arm64 and Linux x86_64, including full/scoped Git-binding consumers. Both original reports retain 31 actual processes, 28 staged consumer destinations and 24 matching identity observations. This validates those native consumers; generated provider-v3 host adoption, full input closure and deterministic parity remain outstanding. The current host release workflow is generated from an explicit chrono-github-release/v1 source; see [release CI](release-ci.md). That generator extension is distributed in beta.10; the linked native release uses its generated workflow.
 
+Public [beta.16](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.16)
+distributes report comparison, explicit input bindings/coverage, Cargo v5 inventories
+and declared Git file guards. Its [fixed-source native release](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36655069168)
+passed 588 tests on macOS arm64 and 583 on Linux x86_64 across all fifteen dedicated
+test projects; five existing macOS filesystem-alias tests explain the difference.
+Both reports retain 36 successful processes, 30 consumer destinations and 34 matching
+identity observations. Anonymous macOS installation into a local Go-host clone
+verified both existing units, config/absence drift rejection, restoration and
+original historical bytes. The observed Git report required an explicitly increased
+host transport bound; see [public consumption](git-facts.md#public-binary-consumption).
+This does not adopt the local facts configuration in remote/native CI, establish
+complete input closure, activate full governance or certify full local/CI parity.
+
 This increment adds mixed classification and adopted registrations together. **Mixed policy/product change warning:** the project pair, semantic comparisons, bootstrap binding and execution plan expand the validation surface. Costs remain unmeasured. Dedicated tests validate the mixed report and shared cost consumer; host activation still requires the outstanding governance and input obligations.
 
 The cost judge and its dedicated tests implement the [declared cost contract](costs.md): distinct endpoint values and source pointers, old-only costs, known/unknown coordinates, identity deduplication, affected-project members, declaration-only changes and docs locality. Real subprocess consumers verify pass/warn exits, missing impact failure, source fidelity and retained-environment impact with empty Git DELTA. Measurements are explicitly absent; no additive resource total or full-governance claim is made.
