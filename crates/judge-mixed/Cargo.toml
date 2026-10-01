@@ -19,5 +19,11 @@ chrono-harness = { path = "../runner" }
 chrono-judge-registration = { path = "../judge-registration" }
 serde_json = "1"
 
+# Independent judge roots also compile the shared evidence consumers.
+[profile.dev]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
 [profile.dev.package.sha2]
 opt-level = 3
