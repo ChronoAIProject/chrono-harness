@@ -4,7 +4,7 @@
     "schema": "chrono-github-ci/v4",
     "workflow_path": ".github/workflows/chrono-ci.yml",
     "name": "chrono / collection",
-    "runs_on": "macos-14",
+    "runs_on": "macos-26",
     "push_branches": [
       "dev",
       "integration/**"
@@ -39,7 +39,7 @@
     "runner": {
       "workflow_path": ".github/workflows/chrono-ci-runner.yml",
       "name": "chrono / runner",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -53,7 +53,7 @@
     "instructions": {
       "workflow_path": ".github/workflows/chrono-ci-instructions.yml",
       "name": "chrono / instructions",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -67,7 +67,7 @@
     "judge-ci": {
       "workflow_path": ".github/workflows/chrono-ci-judge-ci.yml",
       "name": "chrono / judge-ci",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -81,7 +81,7 @@
     "ci": {
       "workflow_path": ".github/workflows/chrono-ci-ci.yml",
       "name": "chrono / ci",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -95,7 +95,7 @@
     "judge-registration": {
       "workflow_path": ".github/workflows/chrono-ci-judge-registration.yml",
       "name": "chrono / judge-registration",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -109,7 +109,7 @@
     "judge-filemap": {
       "workflow_path": ".github/workflows/chrono-ci-judge-filemap.yml",
       "name": "chrono / judge-filemap",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -123,7 +123,7 @@
     "judge-routes": {
       "workflow_path": ".github/workflows/chrono-ci-judge-routes.yml",
       "name": "chrono / judge-routes",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -137,7 +137,7 @@
     "judge-projects": {
       "workflow_path": ".github/workflows/chrono-ci-judge-projects.yml",
       "name": "chrono / judge-projects",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -151,7 +151,7 @@
     "scoped-v1": {
       "workflow_path": ".github/workflows/chrono-ci-scoped-v1.yml",
       "name": "chrono / scoped-v1",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -165,7 +165,7 @@
     "judge-cost": {
       "workflow_path": ".github/workflows/chrono-ci-judge-cost.yml",
       "name": "chrono / judge-cost",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -179,7 +179,7 @@
     "judge-mixed": {
       "workflow_path": ".github/workflows/chrono-ci-judge-mixed.yml",
       "name": "chrono / judge-mixed",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -193,7 +193,7 @@
     "judge-workflow": {
       "workflow_path": ".github/workflows/chrono-ci-judge-workflow.yml",
       "name": "chrono / judge-workflow",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -207,7 +207,7 @@
     "inputs": {
       "workflow_path": ".github/workflows/chrono-ci-inputs.yml",
       "name": "chrono / inputs",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -221,7 +221,7 @@
     "distribution": {
       "workflow_path": ".github/workflows/chrono-ci-distribution.yml",
       "name": "chrono / distribution",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -235,7 +235,7 @@
     "judge-cargo": {
       "workflow_path": ".github/workflows/chrono-ci-judge-cargo.yml",
       "name": "chrono / judge-cargo",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
@@ -249,7 +249,7 @@
     "worktree": {
       "workflow_path": ".github/workflows/chrono-ci-worktree.yml",
       "name": "chrono / worktree",
-      "runs_on": "macos-14",
+      "runs_on": "macos-26",
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",

@@ -103,8 +103,10 @@ keeps its existing exact-context transport. Full v2 current context/report files
 remain replaceable projections, while their original short evidence is immutable.
 Full independent scopes, frozen rounds and expiry revalidation remain pending.
 
-The host's Git bytes/version bind the current macOS machine. Matching them on a
-hosted native runner remains unverified; no hosted success or parity is claimed.
+The host's unit and collection workflows register `macos-26`. Its Git bytes/version
+bind the current macOS machine. The developer-tool directory is not explicitly
+selected; matching the declared inputs on a hosted native runner remains unverified.
+No hosted success or parity is claimed.
 Legacy host contracts keep their explicit spelling. The current adopted host
 admits only its registered short spelling and rejects partial overrides.
 

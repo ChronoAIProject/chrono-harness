@@ -26,7 +26,7 @@ jobs:
   check:
     name: "chrono / ci"
     if: ${{ github.event.deleted != true }}
-    runs-on: "macos-14"
+    runs-on: "macos-26"
     timeout-minutes: 45
     steps:
       - name: Check out exact candidate
