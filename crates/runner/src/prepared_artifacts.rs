@@ -54,13 +54,18 @@ pub fn native_artifacts(
     let raw = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
     let provider = crate::json(&raw)?;
     let settings = match provider["schema"].as_str() {
-        Some("chrono-github-units/v1") => match selection {
+        Some("chrono-github-units/v1" | "chrono-github-units/v2") => match selection {
             Selection::Unit { unit } => &provider["units"][unit],
             _ => &provider["collection"],
         },
-        Some("chrono-github-ci/v4" | "chrono-github-full-ci/v2")
-            if *selection == Selection::All =>
-        {
+        Some("chrono-github-ci/v4") if *selection == Selection::All => &provider,
+        Some("chrono-github-full-ci/v2") => {
+            let scope: Option<crate::units::Scope> =
+                serde_json::from_value(provider.get("scope").cloned().unwrap_or(Value::Null))
+                    .map_err(|e| e.to_string())?;
+            if !selection.matches(&scope) {
+                return Err("full provider scope differs from short selection".into());
+            }
             &provider
         }
         _ => return Err("unsupported native short provider/scope".into()),
@@ -123,11 +128,10 @@ pub fn retain_original(
     }
     original(root, &path)
 }
-pub fn read_original(
-    root: &Path,
+pub fn original_path(
     o: &Original,
     transport: Option<&ArtifactTransport>,
-) -> Result<Vec<u8>, String> {
+) -> Result<String, String> {
     units::artifact_path(&o.path)?;
     let path = if let Some(t) = transport {
         directory(&t.source_directory)?;
@@ -141,6 +145,14 @@ pub fn read_original(
     } else {
         o.path.clone()
     };
+    Ok(path)
+}
+pub fn read_original(
+    root: &Path,
+    o: &Original,
+    transport: Option<&ArtifactTransport>,
+) -> Result<Vec<u8>, String> {
+    let path = original_path(o, transport)?;
     let target = no_symlink_parents(root, &path)?;
     let meta = fs::symlink_metadata(&target)
         .map_err(|e| format!("missing original evidence {path}: {e}"))?;
@@ -158,17 +170,42 @@ pub fn read_original(
     }
     Ok(raw)
 }
+fn read_binding_original(
+    root: &Path,
+    original: &Original,
+    transport: Option<&ArtifactTransport>,
+    artifacts: Option<&Value>,
+) -> Result<Vec<u8>, String> {
+    if let Some(artifacts) = artifacts {
+        units::artifact_path(&original.path)?;
+        let raw = crate::full::artifact_bytes(artifacts, &original.path)?;
+        if sha256(&raw) != original.sha256 {
+            return Err("retained preparation original digest mismatch".into());
+        }
+        Ok(raw)
+    } else {
+        read_original(root, original, transport)
+    }
+}
 pub fn validate_originals(
     root: &Path,
     p: &PreparedCheck,
     transport: Option<&ArtifactTransport>,
+) -> Result<(), String> {
+    validate_originals_with_artifacts(root, p, transport, None)
+}
+fn validate_originals_with_artifacts(
+    root: &Path,
+    p: &PreparedCheck,
+    transport: Option<&ArtifactTransport>,
+    artifacts: Option<&Value>,
 ) -> Result<(), String> {
     let mut paths = BTreeSet::new();
     for o in &p.originals {
         if !paths.insert(&o.path) {
             return Err("duplicate original evidence path".into());
         }
-        read_original(root, o, transport)?;
+        read_binding_original(root, o, transport, artifacts)?;
     }
     let report = Original {
         path: p.evidence["report_path"]
@@ -189,7 +226,7 @@ pub fn validate_originals(
             sha256: c.sha256.clone(),
         };
         if !p.originals.contains(&o)
-            || read_original(root, &o, transport)? != c.raw
+            || read_binding_original(root, &o, transport, artifacts)? != c.raw
             || sha256(&c.raw) != c.sha256
             || wire::digest(&crate::json(&c.raw)?)? != c.semantic_digest
         {
@@ -197,7 +234,7 @@ pub fn validate_originals(
         }
     }
     // The retained producer explicitly addresses its other originals; omissions cannot be hidden in a report.
-    let evidence = crate::json(&read_original(root, &report, transport)?)?;
+    let evidence = crate::json(&read_binding_original(root, &report, transport, artifacts)?)?;
     if let Some(refs) = evidence.get("originals") {
         let refs: Vec<Original> =
             serde_json::from_value(refs.clone()).map_err(|e| e.to_string())?;
@@ -212,6 +249,14 @@ pub fn validate_portable_binding(
     root: &Path,
     binding: &Value,
     transport: Option<&ArtifactTransport>,
+) -> Result<(), String> {
+    validate_retained_binding(root, binding, transport, None)
+}
+pub fn validate_retained_binding(
+    root: &Path,
+    binding: &Value,
+    transport: Option<&ArtifactTransport>,
+    artifacts: Option<&Value>,
 ) -> Result<(), String> {
     let req: InputRequest =
         serde_json::from_value(binding["request"].clone()).map_err(|e| e.to_string())?;
@@ -248,7 +293,7 @@ pub fn validate_portable_binding(
             return Err("original evidence outside selected native upload root".into());
         }
     }
-    validate_originals(root, &p, transport)?;
+    validate_originals_with_artifacts(root, &p, transport, artifacts)?;
     let refs: Vec<Original> =
         serde_json::from_value(binding["receipts"].clone()).map_err(|e| e.to_string())?;
     if refs.len()
@@ -268,7 +313,7 @@ pub fn validate_portable_binding(
         {
             return Err("acquisition outside selected native upload root".into());
         }
-        let r = crate::json(&read_original(root, o, transport)?)?;
+        let r = crate::json(&read_binding_original(root, o, transport, artifacts)?)?;
         let request: InputRequest =
             serde_json::from_value(r["request"].clone()).map_err(|e| e.to_string())?;
         let process: ProcessResult =
@@ -297,7 +342,7 @@ pub fn validate_portable_binding(
         {
             return Err("original acquisition transport mismatch".into());
         }
-        validate_originals(root, &result, transport)?;
+        validate_originals_with_artifacts(root, &result, transport, artifacts)?;
         if index + 1 == refs.len()
             && (r["request"] != binding["request"]
                 || crate::json(&process.stdout_bytes)? != binding["result"])

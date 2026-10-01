@@ -117,7 +117,7 @@ fn inner(
             "collection context does not bind current provider and collection scope".into(),
         );
     }
-    let profile = chrono_harness::load_config(&root.join(&c.collection.check_config))?;
+    let (_profile, registered) = units::profile(root, c)?;
     if context["check_config_sha256"] != file_identity(&root.join(&c.collection.check_config))?.0 {
         return Err("collection check profile changed".into());
     }
@@ -198,8 +198,6 @@ fn inner(
                 .min(deadline.saturating_duration_since(Instant::now())),
         );
     }
-    let registered: BTreeMap<String, chrono_harness::units::Unit> =
-        serde_json::from_value(profile.policy["units"].clone()).map_err(|e| e.to_string())?;
     let mut reports = vec![];
     let mut identities = vec![];
     let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
@@ -306,9 +304,21 @@ fn inner(
             return Err(format!("unit {unit} executed a different workflow source"));
         }
         let report_path = downloaded(&registered[&unit].report_path)?;
-        reports.push(json!({"unit":unit,"path":report_path,"sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,
+        let mut input = json!({"unit":unit,"path":report_path,"sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,
             "runner_sha256":unit_context["executables"]["runner_sha256"],"judge_sha256":unit_context["executables"]["judge_sha256"],
-            "artifacts":if c.collection.schema=="chrono-github-ci/v4" {json!({"source_directory":w.artifact_directory,"directory":format!("{destination}/")})} else {Value::Null}}));
+            "artifacts":if c.collection.schema=="chrono-github-ci/v4" {json!({"source_directory":w.artifact_directory,"directory":format!("{destination}/")})} else {Value::Null}});
+        if c.schema == units::FULL_SCHEMA {
+            if unit_context["full_context"]["semantic_digest"]
+                != context["full_context"]["semantic_digest"]
+                || unit_context["executables"]["judges"] != context["executables"]["judges"]
+            {
+                return Err("full unit context/seven-judge binding differs from collection".into());
+            }
+        }
+        if input["artifacts"].is_null() {
+            input.as_object_mut().unwrap().remove("artifacts");
+        }
+        reports.push(input);
         let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
         if fresh["run_attempt"] != attempt
             || fresh["status"] != "completed"
@@ -326,7 +336,7 @@ fn inner(
             json!(identities)
         ));
     }
-    let manifest = json!({"schema":"chrono-ci-collection/v1","reports":reports});
+    let manifest = json!({"schema":if c.schema==units::FULL_SCHEMA {"chrono-full-collection/v1"}else{"chrono-ci-collection/v1"},"reports":reports});
     let manifest_path = no_symlink_parents(root, &c.gather.manifest_path)?;
     if manifest_path.exists() && c.collection.schema != "chrono-github-ci/v4" {
         return Err("collection manifest already exists; previous evidence retained".into());

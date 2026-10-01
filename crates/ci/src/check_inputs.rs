@@ -4,7 +4,7 @@ use chrono_harness::{
     file_identity,
     prepared::{self, Context, InputRequest, PreparedCheck, Selection},
     sha256,
-    units::{Manifest, ReportInput, Scope},
+    units::{FullManifest, FullReportInput, Manifest, ReportInput, Scope},
     wire,
 };
 use std::{collections::BTreeMap, io::Read};
@@ -19,49 +19,109 @@ fn local_manifest(
     p: &PreparedCheck,
 ) -> Result<Value, String> {
     let (_, registered) = units::profile(&req.host_root, c)?;
-    let runner = file_identity(&no_symlink_parents(&req.host_root, &c.collection.runner)?)?.0;
-    let profile = chrono_harness::load_config(&req.host_root.join(&req.profile))?;
-    let judge = chrono_harness::resolve_program(
-        &req.host_root,
-        &profile.judge.program,
-        profile.judge.env.get("PATH").map(String::as_str),
-    )?;
-    let judge_hash = file_identity(&judge)?.0;
-    let mut reports = vec![];
-    // Only explicit paths; never discover directories, choose latest, or execute missing units.
-    let requirements = chrono_judge_ci::collection_requirements(
-        &req.host_root,
-        &req.profile,
-        &c.gather.manifest_path,
-        p.base.clone(),
-        p.candidate.clone(),
-        p.initial,
-    )?;
+    let full = c.schema == units::FULL_SCHEMA;
+    let pins = if full {
+        super::full::executable_pins(&req.host_root, &req.profile, &c.collection.runner)?
+    } else {
+        let profile = chrono_harness::load_config(&req.host_root.join(&req.profile))?;
+        let judge = chrono_harness::resolve_program(
+            &req.host_root,
+            &profile.judge.program,
+            profile.judge.env.get("PATH").map(String::as_str),
+        )?;
+        json!({"runner_sha256":file_identity(&no_symlink_parents(&req.host_root,&c.collection.runner)?)?.0,"judge_sha256":file_identity(&judge)?.0})
+    };
+    let requirements = if full {
+        let cfg = chrono_harness::load_selected_config(&req.host_root, &req.profile)?;
+        let limit = cfg["execution_units"]["collection_limits"]["report_bytes"]
+            .as_u64()
+            .ok_or("full report bound")?;
+        let mut originals = FullManifest {
+            schema: "chrono-full-collection/v1".into(),
+            reports: vec![],
+        };
+        for (unit, input) in &registered {
+            let path = no_symlink_parents(&req.host_root, &input.report_path)?;
+            match fs::symlink_metadata(path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e.to_string()),
+                Ok(_) => {}
+            }
+            let raw =
+                chrono_harness::units::read_bounded(&req.host_root, &input.report_path, limit)?;
+            originals.reports.push(FullReportInput {
+                unit: unit.clone(),
+                path: input.report_path.clone(),
+                sha256: sha256(&raw),
+                runner_sha256: None,
+                judge_sha256: None,
+                artifacts: None,
+            });
+        }
+        chrono_judge_ci::full_collection_requirements(&req.host_root, &req.profile, p, &originals)?
+    } else {
+        chrono_judge_ci::collection_requirements(
+            &req.host_root,
+            &req.profile,
+            &c.gather.manifest_path,
+            p.base.clone(),
+            p.candidate.clone(),
+            p.initial,
+        )?
+    };
     let required: Vec<String> = serde_json::from_value(requirements["required_units"].clone())
         .map_err(|e| e.to_string())?;
+    let mut reports = vec![];
     for unit in required {
         let input = registered
             .get(&unit)
             .ok_or("required unit missing provider registration")?;
-        let raw =
-            fs::read(no_symlink_parents(&req.host_root, &input.report_path)?).map_err(|e| {
+        let limit = if full {
+            let cfg = chrono_harness::load_selected_config(&req.host_root, &req.profile)?;
+            cfg["execution_units"]["collection_limits"]["report_bytes"]
+                .as_u64()
+                .ok_or("full report bound")?
+        } else {
+            64 * 1024 * 1024
+        };
+        let raw = chrono_harness::units::read_bounded(&req.host_root, &input.report_path, limit)
+            .map_err(|e| {
                 format!(
-                    "missing registered unit report {unit} at {}: {e}",
+                    "missing/invalid registered unit report {unit} at {}: {e}",
                     input.report_path
                 )
             })?;
-        reports.push(ReportInput {
+        reports.push(FullReportInput {
             unit,
             path: input.report_path.clone(),
             sha256: sha256(&raw),
-            runner_sha256: runner.clone(),
-            judge_sha256: judge_hash.clone(),
+            runner_sha256: Some(pins["runner_sha256"].as_str().ok_or("runner pin")?.into()),
+            judge_sha256: Some(pins["judge_sha256"].as_str().ok_or("judge pin")?.into()),
             artifacts: None,
         });
     }
-    let manifest = Manifest {
-        schema: "chrono-ci-collection/v1".into(),
-        reports,
+    let manifest = if full {
+        serde_json::to_value(FullManifest {
+            schema: "chrono-full-collection/v1".into(),
+            reports,
+        })
+        .map_err(|e| e.to_string())?
+    } else {
+        serde_json::to_value(Manifest {
+            schema: "chrono-ci-collection/v1".into(),
+            reports: reports
+                .into_iter()
+                .map(|r| ReportInput {
+                    unit: r.unit,
+                    path: r.path,
+                    sha256: r.sha256,
+                    runner_sha256: r.runner_sha256.unwrap(),
+                    judge_sha256: r.judge_sha256.unwrap(),
+                    artifacts: None,
+                })
+                .collect(),
+        })
+        .map_err(|e| e.to_string())?
     };
     let raw = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     if p.scope
@@ -71,9 +131,19 @@ fn local_manifest(
     {
         return Err("local endpoint/CI collection manifest bindings disagree".into());
     }
+    let unit_paths = registered
+        .values()
+        .map(|u| u.report_path.clone())
+        .collect::<Vec<_>>();
+    let (profile, _) = units::profile(&req.host_root, c)?;
+    chrono_harness::units::validate_collection_paths(
+        &c.gather.manifest_path,
+        &profile.report_path,
+        &unit_paths,
+    )?;
     publish(&req.host_root, &c.gather.manifest_path, &raw)?;
     Ok(
-        json!({"schema":"chrono-local-collection-inputs/v1","manifest_path":c.gather.manifest_path,"manifest_sha256":sha256(&raw),"manifest":manifest,"expected_executables":{"runner":runner,"judge":{"path":judge,"sha256":judge_hash}},"endpoint_evidence":p.evidence,"requirements":requirements}),
+        json!({"schema":"chrono-local-collection-inputs/v1","manifest_path":c.gather.manifest_path,"manifest_sha256":sha256(&raw),"manifest":manifest,"expected_executables":pins,"endpoint_evidence":p.evidence,"requirements":requirements}),
     )
 }
 fn named_env(opts: &BTreeMap<&str, &str>, flag: &str) -> Result<String, String> {
@@ -145,7 +215,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             candidate: previous.candidate.clone(),
             initial: previous.initial,
             scope: previous.scope.clone(),
-            context: None,
+            context: previous.context.clone(),
             evidence,
             originals: previous.originals.clone(),
         }
@@ -163,11 +233,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             config["schema"].as_str(),
             Some(full::SCHEMA | full::SHORT_SCHEMA)
         ) {
-            if req.selection != Selection::All {
-                return Err("full independent native scopes remain unsupported".into());
-            }
             let c: full::Config = decode(&config_bytes)?;
-            if c.check_config != req.profile {
+            if c.check_config != req.profile || !req.selection.matches(&c.scope) {
                 return Err("full native profile binding mismatch".into());
             }
             if event != "workflow_dispatch" {
@@ -197,8 +264,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 sha256: sha256(bytes),
                 semantic_digest: wire::digest(&decode::<Value>(bytes)?)?,
             };
-            (evidence, Some(ctx), None)
-        } else if config["schema"] == units::SCHEMA {
+            (evidence, Some(ctx), c.scope.clone())
+        } else if matches!(
+            config["schema"].as_str(),
+            Some(units::SCHEMA | units::FULL_SCHEMA)
+        ) {
             let c: units::Config = decode(&config_bytes)?;
             units::validate(&c)?;
             if c.collection.schema != "chrono-github-ci/v4"
@@ -221,7 +291,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 return Err("unit producer/upload contract mismatch".into());
             }
             let mut evidence = if req.selection == Selection::All {
-                super::prepare(root, &w, &event, &payload, &revision)?
+                units::prepare_all(root, path, &c, &event, &payload, &revision)?
             } else {
                 units::prepare(root, path, &c, unit, &event, &payload, &revision)?
             };
@@ -274,7 +344,24 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             let o = prepared::retain_original(root, &dir, "native-context", &context_raw)?;
             evidence["context_original"] = json!(o);
             originals.push(o);
-            (evidence, None, scope)
+            let context = if let Some(contexts) = &c.full_contexts {
+                let path = match unit {
+                    Some(id) => &contexts.units[id],
+                    None => &contexts.collection,
+                };
+                let raw = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
+                let ctx = full::context_input(&raw)?;
+                let original = prepared::retain_original(root, &dir, "full-context", &raw)?;
+                Some(Context {
+                    path: original.path,
+                    sha256: sha256(&raw),
+                    semantic_digest: wire::digest(&ctx)?,
+                    raw,
+                })
+            } else {
+                None
+            };
+            (evidence, context, scope)
         } else {
             let c: Config = decode(&config_bytes)?;
             if req.selection != Selection::All

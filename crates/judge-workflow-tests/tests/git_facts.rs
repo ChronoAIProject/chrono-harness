@@ -1,8 +1,10 @@
 use super::*;
 use std::{os::unix::fs::PermissionsExt, process::Command};
 
-fn bound_host() -> Host {
-    let mut h = host();
+pub(super) fn bound_host() -> Host {
+    bind_host(host())
+}
+pub(super) fn bind_host(mut h: Host) -> Host {
     let root = h.root();
     let state = root.join(".chrono-harness/state");
     fs::create_dir_all(&state).unwrap();
@@ -127,37 +129,114 @@ fn bound_host() -> Host {
     h.save();
     h
 }
-fn run_bound(h: &Host, kind: &str, digest: Option<&str>) -> (i32, Value) {
+pub(super) fn run_bound(h: &Host, kind: &str, digest: Option<&str>) -> (i32, Value) {
+    bound_context(h, kind, digest, true)
+}
+pub(super) fn prepare_bound(h: &Host, kind: &str, digest: Option<&str>) {
+    bound_context(h, kind, digest, false);
+}
+fn bound_context(h: &Host, kind: &str, digest: Option<&str>, execute: bool) -> (i32, Value) {
     let root = h.root();
-    let selected = root.join(".chrono-harness/state/selected Git λ");
-    h.run_with_context(
-        |retained| {
-            for (endpoint, oid) in [("base", &h.base), ("candidate", &h.candidate)] {
-                let snapshot =
-                    chrono_harness::facts::registry_snapshot(&root, oid, CONFIG).unwrap();
-                let cfg = &snapshot.values[&snapshot.effective_path];
-                retained[endpoint]["schema"] = json!("chrono-input-snapshot/v2");
-                if let Some(selection) = snapshot.selection {
-                    retained[endpoint]["schema"] = json!("chrono-input-snapshot/v3");
-                    retained[endpoint]["effective_config_path"] = json!(snapshot.effective_path);
-                    retained[endpoint]["selection"] = selection;
+    let started = std::time::Instant::now();
+    let snapshot = chrono_harness::facts::registry_snapshot(&root, &h.candidate, CONFIG).unwrap();
+    let selected = std::path::PathBuf::from(
+        snapshot.values[&snapshot.effective_path]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == "facts-git")
+            .unwrap()["program"]
+            .as_str()
+            .unwrap(),
+    );
+    let edit = |retained: &mut Value| {
+        for (endpoint, oid) in [("base", &h.base), ("candidate", &h.candidate)] {
+            let snapshot = chrono_harness::facts::registry_snapshot(&root, oid, CONFIG).unwrap();
+            let cfg = &snapshot.values[&snapshot.effective_path];
+            retained[endpoint]["schema"] =
+                json!(chrono_judge_registration::inputs::snapshot_schema(cfg));
+            if let Some(selection) = snapshot.selection {
+                retained[endpoint]["schema"] = json!("chrono-input-snapshot/v3");
+                retained[endpoint]["effective_config_path"] = json!(snapshot.effective_path);
+                retained[endpoint]["selection"] = selection;
+            }
+            retained[endpoint]["config_path"] = json!(CONFIG);
+            retained[endpoint]["config_digest"] =
+                json!(chrono_harness::wire::digest(&cfg).unwrap());
+            for key in cfg["environment"]["inherit"].as_array().unwrap() {
+                if retained[endpoint]["environment"]
+                    .get(key.as_str().unwrap())
+                    .is_none()
+                {
+                    retained[endpoint]["environment"][key.as_str().unwrap()] = Value::Null;
                 }
-                retained[endpoint]["config_path"] = json!(CONFIG);
-                retained[endpoint]["config_digest"] =
-                    json!(chrono_harness::wire::digest(&cfg).unwrap());
+            }
+            if let Some(input) = cfg["environment"]["inputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|i| i["id"] == "interpreter")
+            {
+                let location = root.join(input["location"].as_str().unwrap());
+                let bytes = fs::read(location).unwrap();
+                let digest = sha256(&bytes);
+                let blob = format!(".chrono-harness/state/fixture-{digest}");
+                fs::write(root.join(&blob), &bytes).unwrap();
+                retained[endpoint]["files"]["interpreter"] =
+                    json!({"blob":blob,"sha256":digest,"length":bytes.len()});
+            }
+            if cfg["environment"]["inputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|i| i["id"] == "git-bytes")
+            {
                 retained[endpoint]["files"]["git-bytes"] =
                     json!({"bytes":fs::read(&selected).unwrap()});
             }
-        },
-        |ctx| {
-            ctx["schema_version"] = json!(2);
-            ctx["run_kind"] = json!(kind);
-            ctx["integration_evidence"] = json!(digest);
-            if kind == "delivery" {
-                ctx["branch_ref"] = json!("feature/bound-git");
-            }
-        },
-    )
+        }
+    };
+    let context_edit = |ctx: &mut Value| {
+        ctx["schema_version"] = json!(2);
+        ctx["run_kind"] = json!(kind);
+        ctx["integration_evidence"] = json!(digest);
+        if kind == "delivery" {
+            ctx["branch_ref"] = json!("feature/bound-git");
+        }
+    };
+    if !execute {
+        h.prepare_with_context(edit, context_edit);
+        return (0, Value::Null);
+    }
+    let outcome = h.run_with_context(edit, context_edit);
+    let bytes = if outcome.1["scope"] == "configured-judges" {
+        fs::metadata(root.join(".chrono-harness/state/report.json"))
+            .map(|m| m.len())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    println!(
+        "COMMAND {} argv={} exit={} seconds={:.3} report_bytes={}",
+        root.join(".chrono-harness/bin/chrono-harness").display(),
+        json!([
+            "check",
+            "--config",
+            root.join(CONFIG).to_str().unwrap(),
+            "--base",
+            h.base,
+            "--candidate",
+            h.candidate,
+            "--context",
+            root.join(".chrono-harness/state/context.json")
+                .to_str()
+                .unwrap()
+        ]),
+        outcome.0,
+        started.elapsed().as_secs_f64(),
+        bytes
+    );
+    outcome
 }
 
 #[test]
@@ -516,5 +595,160 @@ fn full_ci_consumer(selected: bool) {
         rejected["findings"].to_string().contains("E_BRANCH_STALE"),
         "{}",
         rejected["findings"]
+    );
+}
+
+#[test]
+fn full_unit_real_seven_judge_contribution() {
+    let mut h = bound_host();
+    h.values.get_mut(CONFIG).unwrap()["schema_version"] = json!(3);
+    h.values.get_mut(CONFIG).unwrap()["protocol"]["timeout_seconds"] = json!(180);
+    h.values.get_mut(CONFIG).unwrap()["execution_units"] = json!({
+      "units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/unit-one.json"}},
+      "shared_operations":{},
+      "collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864},
+      "report_path":".chrono-harness/state/collected.json"
+    });
+    h.save();
+    h.base = h.candidate.clone();
+    fs::write(h.root().join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    h.save();
+    let (control_exit, control) = run_bound(&h, "integration", None);
+    fs::write(
+        h.root().join(".chrono-harness/state/control.json"),
+        serde_json::to_vec(&control).unwrap(),
+    )
+    .unwrap();
+    println!(
+        "DIRECT_CONTROL exit={control_exit} status={} findings={} effects={:?}",
+        control["status"],
+        control["findings"],
+        fs::read_to_string(h.root().join(".chrono-harness/state/order"))
+    );
+    assert_eq!(control_exit, 0, "direct control failed");
+    let certificate = h.root().join(".chrono-harness/state/integration.json");
+    fs::remove_file(&certificate).unwrap();
+    let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+        .current_dir("/")
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .args([
+            "check",
+            "--config",
+            h.root().join(CONFIG).to_str().unwrap(),
+            "--base",
+            &h.base,
+            "--candidate",
+            &h.candidate,
+            "--context",
+            h.root()
+                .join(".chrono-harness/state/context.json")
+                .to_str()
+                .unwrap(),
+            "--unit",
+            "one",
+        ])
+        .output()
+        .unwrap();
+    fs::write(
+        h.root().join(".chrono-harness/state/unit-probe.json"),
+        &out.stdout,
+    )
+    .unwrap();
+    let unit: Value = serde_json::from_slice(&out.stdout)
+        .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
+    println!(
+        "FULL_UNIT exit={:?} status={} findings={} results_scope={} effects={:?} certificate={}",
+        out.status.code(),
+        unit["status"],
+        unit["findings"],
+        unit["tests"]["scope"],
+        fs::read_to_string(h.root().join(".chrono-harness/state/order")),
+        certificate.exists()
+    );
+    for row in unit["judges"].as_array().unwrap() {
+        println!(
+            "JUDGE {} state={} status={} findings={}",
+            row["id"], row["state"], row["response"]["status"], row["response"]["findings"]
+        );
+    }
+
+    let manifest_path = ".chrono-harness/state/full-manifest.json";
+    let unit_bytes = fs::read(h.root().join(".chrono-harness/state/unit-one.json")).unwrap();
+    println!("REPORT_SIZE unit_bytes={}", unit_bytes.len());
+    fs::write(h.root().join(manifest_path),serde_json::to_vec(&json!({"schema":"chrono-full-collection/v1","reports":[{"unit":"one","path":".chrono-harness/state/unit-one.json","sha256":sha256(&unit_bytes)}]})).unwrap()).unwrap();
+    let before = fs::read(h.root().join(".chrono-harness/state/order")).unwrap();
+    let collected = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+        .current_dir("/")
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .args([
+            "check",
+            "--config",
+            h.root().join(CONFIG).to_str().unwrap(),
+            "--base",
+            &h.base,
+            "--candidate",
+            &h.candidate,
+            "--context",
+            h.root()
+                .join(".chrono-harness/state/context.json")
+                .to_str()
+                .unwrap(),
+            "--collect",
+            manifest_path,
+        ])
+        .output()
+        .unwrap();
+    fs::write(
+        h.root().join(".chrono-harness/state/collect-probe.json"),
+        &collected.stdout,
+    )
+    .unwrap();
+    let collection: Value = serde_json::from_slice(&collected.stdout)
+        .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&collected.stderr)}));
+    let after = fs::read(h.root().join(".chrono-harness/state/order")).unwrap();
+    println!(
+        "COLLECT_FAILED_UNIT exit={:?} status={} findings={} additional_business_bytes={}",
+        collected.status.code(),
+        collection["status"],
+        collection["findings"],
+        after.len() - before.len()
+    );
+    assert_eq!(
+        before, after,
+        "collector must not rerun business operations"
+    );
+    assert_eq!(
+        collected.status.code(),
+        Some(0),
+        "valid collected evidence must pass: {}",
+        collection["findings"]
+    );
+    assert_eq!(workflow(&collection)["mode"], "integration_run");
+    let (_, digest) = super::certificate(&h);
+    let (exit, delivery) = run_bound(&h, "delivery", Some(&digest));
+    passed(exit, &delivery);
+    println!("DELIVERY exit={exit} mode={}", workflow(&delivery)["mode"]);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "valid unit contribution must pass"
+    );
+}
+
+#[test]
+fn unit_report_must_not_target_canonical_full_report() {
+    let profile = json!({"schema_version":3,"execution_units":{
+        "units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/report.json"}},
+        "shared_operations":{},
+        "collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864},
+        "report_path":".chrono-harness/state/collected.json"
+    }});
+    let actual = chrono_harness::units::full_execution_units(&profile);
+    println!("CANONICAL_UNIT_REPORT_VALIDATION {actual:?}");
+    assert!(
+        actual.is_err(),
+        "unit report must not overwrite canonical full report"
     );
 }

@@ -129,18 +129,15 @@ impl BoundHost {
                 "check",
                 "--config",
                 h.root().join(profile).to_str().unwrap(),
-                "--candidate",
-                &h.candidate,
             ]);
+        if !initial {
+            command.args(["--base", &h.base]);
+        }
+        command.args(["--candidate", &h.candidate]);
         if initial {
             command.arg("--initial");
         } else {
-            command.args([
-                "--base",
-                &h.base,
-                "--context",
-                ".chrono-harness/state/context.json",
-            ]);
+            command.args(["--context", ".chrono-harness/state/context.json"]);
         }
         let output = command.output().unwrap();
         let diagnostic = String::from_utf8(output.stderr).unwrap();

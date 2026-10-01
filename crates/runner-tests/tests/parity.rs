@@ -40,6 +40,20 @@ fn report(complete: bool) -> Value {
 }
 
 #[test]
+fn matching_contributions_cannot_be_completed_parity_evidence() {
+    for marker in ["request-scope", "results-scope"] {
+        let mut unit = report(true);
+        if marker == "request-scope" {
+            unit["execution_scope"] = json!({"kind":"unit","unit":"one"});
+        } else {
+            unit["tests"]["scope"] = json!("unit:one");
+        }
+        let error = parity::establish(&unit, &unit, "other.json").unwrap_err();
+        assert!(error.contains("contribution-only"), "{error}");
+    }
+}
+
+#[test]
 fn equal_complete_reports_establish_pairwise_parity() {
     let mut other = report(true);
     other["executables"][0]["path"] = "/ci/chrono-harness".into();

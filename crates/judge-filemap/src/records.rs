@@ -23,6 +23,36 @@ pub struct Change {
 pub fn escape(s: &str) -> String {
     s.replace('~', "~0").replace('/', "~1")
 }
+fn plan_targets(
+    test: &str,
+    plan: Option<&Value>,
+    nodes: &BTreeMap<String, NodeView<'_>>,
+) -> BTreeSet<String> {
+    let mut targets = BTreeSet::new();
+    if let Some(view) = nodes.get(test) {
+        targets.extend(view.definitions.iter().map(|d| d.identity.clone()));
+    }
+    for operation in plan
+        .into_iter()
+        .flat_map(|p| p["operations"].as_array())
+        .flatten()
+    {
+        for (node, view) in nodes {
+            if matches!(
+                view.kind,
+                chrono_judge_registration::NodeKind::Project
+                    | chrono_judge_registration::NodeKind::Script
+            ) && view.definitions.iter().any(|d| {
+                d.value["actions"]
+                    .as_object()
+                    .is_some_and(|a| a.values().any(|a| a["operation"] == *operation))
+            }) {
+                targets.insert(node.clone());
+            }
+        }
+    }
+    targets
+}
 /// All schema arrays are identity sets except argv/version_argv, whose order is semantic.
 fn normalize(v: &Value, key: &str) -> Value {
     match v {
@@ -133,27 +163,64 @@ pub fn inventory(
                     }
                     add(scope, key, id, path, row, targets);
                 }
-            } else if scope == "filemap" && key == "execution_plans" {
-                for (test, plan) in v.as_object().unwrap() {
+            } else if scope == "config" && key == "execution_units" {
+                // Ownership and shared-operation changes seed only explicitly
+                // named plans at both endpoints.  A test alias alone is not an
+                // execution edge, so retain its registered producer identities.
+                for (unit, definition) in v["units"].as_object().into_iter().flatten() {
+                    let tests: Vec<_> = definition["tests"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Value::as_str)
+                        .collect();
                     let mut targets = BTreeSet::new();
-                    if let Some(view) = nodes.get(test) {
-                        targets.extend(view.definitions.iter().map(|d| d.identity.clone()));
+                    for test in tests {
+                        targets.extend(plan_targets(
+                            test,
+                            r.filemap()["execution_plans"].get(test),
+                            nodes,
+                        ));
                     }
-                    for operation in plan["operations"].as_array().unwrap() {
-                        for (node, view) in nodes {
-                            if matches!(
-                                view.kind,
-                                chrono_judge_registration::NodeKind::Project
-                                    | chrono_judge_registration::NodeKind::Script
-                            ) && view.definitions.iter().any(|d| {
-                                d.value["actions"].as_object().is_some_and(|a| {
-                                    a.values().any(|a| a["operation"] == *operation)
-                                })
-                            }) {
-                                targets.insert(node.clone());
-                            }
+                    add(scope, "units", unit, path, definition, targets);
+                }
+                for (operation, owners) in v["shared_operations"].as_object().into_iter().flatten()
+                {
+                    let mut targets = BTreeSet::new();
+                    for owner in owners
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(Value::as_str)
+                    {
+                        for test in v["units"][owner]["tests"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(Value::as_str)
+                        {
+                            targets.extend(plan_targets(
+                                test,
+                                r.filemap()["execution_plans"].get(test),
+                                nodes,
+                            ));
                         }
                     }
+                    add(scope, "shared_operations", operation, path, owners, targets);
+                }
+                for field in ["collection_limits", "report_path"] {
+                    add(
+                        scope,
+                        "execution_units",
+                        field,
+                        path,
+                        &v[field],
+                        BTreeSet::from([format!("file:{path}")]),
+                    );
+                }
+            } else if scope == "filemap" && key == "execution_plans" {
+                for (test, plan) in v.as_object().unwrap() {
+                    let targets = plan_targets(test, Some(plan), nodes);
                     add(scope, key, test, path, plan, targets);
                 }
             } else if scope == "filemap" && key == "project_edges" {

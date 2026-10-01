@@ -27,6 +27,76 @@ fn fixture() -> tempfile::TempDir {
 }
 
 #[test]
+fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
+    let mut valid = config_value();
+    valid["schema"] = json!("chrono-github-units/v2");
+    valid["collection"]["schema"] = json!("chrono-github-ci/v4");
+    valid["collection"]["check_config"] = json!(".chrono-harness/config.json");
+    valid["collection"]["facts_config"] = json!(".chrono-harness/config.json");
+    valid["collection"]["artifact_directory"] = json!(".chrono-harness/state/collection/");
+    valid["collection"]["context_path"] = json!(".chrono-harness/state/collection/event.json");
+    for id in ["alpha", "beta"] {
+        valid["units"][id]["artifact_directory"] = json!(format!(".chrono-harness/state/{id}/"));
+    }
+    valid["full_contexts"] = json!({"collection":".chrono-harness/state/collection/full.json","units":{"alpha":".chrono-harness/state/alpha/full.json","beta":".chrono-harness/state/beta/full.json"}});
+    let config: chrono_ci::units::Config = serde_json::from_value(valid.clone()).unwrap();
+    chrono_ci::units::validate(&config).unwrap();
+    for case in [
+        "legacy",
+        "missing",
+        "null",
+        "extra",
+        "wrong-upload",
+        "event-alias",
+        "manifest-alias",
+        "overlap-upload",
+    ] {
+        let mut value = valid.clone();
+        match case {
+            "legacy" => value["schema"] = json!("chrono-github-units/v1"),
+            "missing" => {
+                value.as_object_mut().unwrap().remove("full_contexts");
+            }
+            "null" => value["full_contexts"] = Value::Null,
+            "extra" => {
+                value["full_contexts"]["units"]["undeclared"] =
+                    json!(".chrono-harness/state/extra/full.json")
+            }
+            "wrong-upload" => {
+                value["full_contexts"]["units"]["alpha"] =
+                    json!(".chrono-harness/state/beta/full.json")
+            }
+            "event-alias" => {
+                value["full_contexts"]["units"]["alpha"] =
+                    json!(".chrono-harness/state/alpha//context.json")
+            }
+            "manifest-alias" => {
+                value["full_contexts"]["collection"] =
+                    json!(".chrono-harness/state/collection//manifest.json")
+            }
+            _ => {
+                value["units"]["beta"]["artifact_directory"] =
+                    json!(".chrono-harness/state/alpha//nested/")
+            }
+        }
+        let d = tempfile::tempdir().unwrap();
+        json_file(d.path(), ".chrono-harness/ci/units.json", &value);
+        assert!(
+            generate(d.path(), ".chrono-harness/ci/units.json", false).is_err(),
+            "accepted {case}"
+        );
+        assert!(
+            !d.path().join(".github").exists(),
+            "wrote output for {case}"
+        );
+        assert!(
+            !d.path().join(".chrono-harness/state").exists(),
+            "wrote state for {case}"
+        );
+    }
+}
+
+#[test]
 fn generator_projects_independent_workflows_with_exact_scoped_commands() {
     let d = fixture();
     assert!(generate(d.path(), ".chrono-harness/ci/units.json", false).unwrap());

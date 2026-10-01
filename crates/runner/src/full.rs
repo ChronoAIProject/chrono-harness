@@ -53,6 +53,298 @@ pub(crate) fn schedule_mode(
     }
     Ok(ordered)
 }
+/// The single original stdin construction rule. History never contains requests.
+pub fn predecessor(record: &Value) -> Value {
+    let mut value = record.clone();
+    if let Some(object) = value.as_object_mut() {
+        object.remove("request");
+        object.remove("executable_index");
+    }
+    value
+}
+pub fn judge_request(
+    template: &Request,
+    binding: &Binding,
+    history: &[Value],
+) -> Result<Request, String> {
+    let mut req = template.clone();
+    req.judge_id = binding.id.clone();
+    req.prior_results = binding
+        .after
+        .iter()
+        .map(|id| {
+            let row = history
+                .iter()
+                .find(|row| row["id"] == *id)
+                .ok_or_else(|| format!("missing predecessor {id}"))?;
+            let response: Response =
+                serde_json::from_value(row["response"].clone()).map_err(|e| e.to_string())?;
+            if response.status >= Status::Fail {
+                return Err(format!("failed predecessor {id}"));
+            }
+            Ok(response)
+        })
+        .collect::<Result<_, String>>()?;
+    req.observations["judges"] = value!(history.iter().map(predecessor).collect::<Vec<_>>());
+    let impacts: Vec<_> = req
+        .prior_results
+        .iter()
+        .filter_map(|r| r.outputs.get("impact"))
+        .collect();
+    if impacts.windows(2).any(|p| p[0] != p[1]) {
+        return Err("conflicting predecessor impact outputs".into());
+    }
+    req.impact = impacts.first().map(|v| (*v).clone()).unwrap_or(Value::Null);
+    req.seal()?;
+    Ok(req)
+}
+/// Lossless retained process encoding for selected reports. Live stdin and
+/// direct legacy reports retain their original shape and bytes.
+pub fn expand_process(value: &Value) -> Result<Value, String> {
+    if value.get("encoding").is_none() {
+        return Ok(value.clone());
+    }
+    if value["encoding"] != "chrono-retained-process/v1" {
+        return Err("unsupported retained process encoding".into());
+    }
+    let mut value = value.clone();
+    for field in ["stdout", "stderr"] {
+        let key = format!("{field}_hex");
+        let bytes = artifact_bytes(
+            &value!({"bytes": {"hex":value[&key],"sha256":value[format!("{field}_sha256")],"length":value[&key].as_str().ok_or("process encoding")?.len()/2}}),
+            "bytes",
+        )?;
+        value[format!("{field}_bytes")] = value!(&bytes);
+        value[field] = value!(String::from_utf8_lossy(&bytes));
+        value.as_object_mut().unwrap().remove(&key);
+    }
+    value.as_object_mut().unwrap().remove("encoding");
+    Ok(value)
+}
+pub fn expand_record(record: &Value) -> Result<Value, String> {
+    let mut record = record.clone();
+    record["process"] = expand_process(&record["process"])?;
+    Ok(record)
+}
+/// Pure original DAG/process validation, shared by unit admission and collected proof consumption.
+pub fn retained_judges(
+    template: &Request,
+    bindings: &[Binding],
+    records: &[Value],
+) -> Result<BTreeMap<String, (Request, Binding, Response, crate::ProcessResult)>, String> {
+    let ordered = schedule(bindings)?;
+    if records.len() != ordered.len()
+        || records
+            .iter()
+            .zip(&ordered)
+            .any(|(row, b)| row["id"] != b.id)
+    {
+        return Err("E_RETAINED_JUDGES: original scheduling/coverage".into());
+    }
+    let first = judge_request(template, &ordered[0], &[])?;
+    if serde_json::to_value(&first).map_err(|e| e.to_string())?
+        != serde_json::to_value(template).map_err(|e| e.to_string())?
+    {
+        return Err("E_RETAINED_JUDGES: template is not original first stdin".into());
+    }
+    let environment: BTreeMap<String, String> =
+        serde_json::from_value(template.observations["environment"]["effective"].clone())
+            .map_err(|e| e.to_string())?;
+    let mut history = vec![];
+    let mut parsed = BTreeMap::new();
+    for (compact, binding) in records.iter().zip(ordered) {
+        let record = expand_record(compact)?;
+        let request = judge_request(template, &binding, &history)?;
+        let digest = wire::digest(&request)?;
+        let response: Response =
+            serde_json::from_value(record["response"].clone()).map_err(|e| e.to_string())?;
+        let warnings = response.findings.iter().any(|f| f.level == "warning");
+        if response.findings.iter().any(|f| f.level == "error")
+            || response.status == Status::Pass && warnings
+            || response.status == Status::Warn && !warnings
+        {
+            return Err("E_RETAINED_JUDGES: response status/findings differ".into());
+        }
+        let process: crate::ProcessResult =
+            serde_json::from_value(record["process"].clone()).map_err(|e| e.to_string())?;
+        crate::observation::process_success(&process)?;
+        let executable = template.candidate.root.join(&binding.executable);
+        let argv: Vec<String> = std::iter::once(
+            executable
+                .to_str()
+                .ok_or("judge executable path")?
+                .to_owned(),
+        )
+        .chain(binding.argv.iter().map(|arg| match arg.as_str() {
+            "{base}" => template.base.commit.clone(),
+            "{candidate}" => template.candidate.commit.clone(),
+            _ => arg.clone(),
+        }))
+        .collect();
+        if record["binding"] != serde_json::to_value(&binding).map_err(|e| e.to_string())?
+            || record["state"] != "executed"
+            || record.get("transport_failure").is_some()
+            || record["request_id"] != request.request_id
+            || record["request_digest"] != digest
+            || record["exit_code"] != process.exit_code
+            || process.stdin_sha256 != digest
+            || process.cwd != template.candidate.root
+            || process.executable != executable
+            || binding.sha256.as_deref() != Some(process.sha256.as_str())
+            || process.argv != argv
+            || process.environment != environment
+            || response.protocol != wire::PROTOCOL
+            || response.judge_id != binding.id
+            || response.request_id != request.request_id
+            || response.status >= Status::Fail
+            || response.status.exit_code() != process.exit_code
+            || json(&process.stdout_bytes)?
+                != serde_json::to_value(&response).map_err(|e| e.to_string())?
+            || record
+                .get("request")
+                .is_some_and(|v| *v != serde_json::to_value(&request).unwrap())
+        {
+            return Err(format!(
+                "E_RETAINED_JUDGES: original request/process/response differs: {}",
+                binding.id
+            ));
+        }
+        history.push(predecessor(&record));
+        parsed.insert(binding.id.clone(), (request, binding, response, process));
+    }
+    Ok(parsed)
+}
+fn compact_record(record: &mut Value) -> Result<(), String> {
+    if !record["process"].is_object() {
+        return Ok(());
+    }
+    let process = record["process"].as_object_mut().unwrap();
+    for field in ["stdout", "stderr"] {
+        let bytes: Vec<u8> = serde_json::from_value(
+            process
+                .remove(&format!("{field}_bytes"))
+                .ok_or("process bytes")?,
+        )
+        .map_err(|e| e.to_string())?;
+        process.remove(field);
+        process.insert(
+            format!("{field}_hex"),
+            value!(bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()),
+        );
+    }
+    process.insert("encoding".into(), value!("chrono-retained-process/v1"));
+    Ok(())
+}
+/// Bounded addressed bytes. Original addresses remain intact during transport.
+pub fn artifact(bytes: &[u8]) -> Value {
+    value!({"sha256":sha256(bytes),"length":bytes.len(),"hex":bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()})
+}
+pub fn artifact_bytes(artifacts: &Value, address: &str) -> Result<Vec<u8>, String> {
+    let a = artifacts
+        .get(address)
+        .ok_or_else(|| format!("missing original artifact {address}"))?;
+    let hex = a["hex"].as_str().ok_or("artifact encoding")?;
+    if hex.len() > 128 * 1024 * 1024 || hex.len() % 2 != 0 {
+        return Err("artifact bound/encoding".into());
+    }
+    let bytes = hex
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|p| {
+            let p = std::str::from_utf8(p).map_err(|e| e.to_string())?;
+            u8::from_str_radix(p, 16).map_err(|e| e.to_string())
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if a["sha256"] != sha256(&bytes) || a["length"] != bytes.len() {
+        return Err("original artifact digest/length".into());
+    }
+    Ok(bytes)
+}
+fn retain_artifacts(req: &Request, judges: &[Value]) -> Result<Value, String> {
+    let mut out = serde_json::Map::new();
+    // Only unit contributions and collection need a portable original closure.
+    // Ordinary full checks keep local blob references, validated by registration
+    // through streaming identities, without imposing the unit transport bound.
+    if req.scope.is_none() {
+        return Ok(Value::Object(out));
+    }
+    let mut retained_bytes = 0u64;
+    let bound = req.observations["execution_units"]["collection_limits"]["report_bytes"]
+        .as_u64()
+        .unwrap_or(64 * 1024 * 1024);
+    let mut retain = |address: &str, path: &Path| -> Result<(), String> {
+        if out.contains_key(address) {
+            return Ok(());
+        }
+        let length = fs::metadata(path).map_err(|e| e.to_string())?.len();
+        retained_bytes = retained_bytes
+            .checked_add(length.saturating_mul(2))
+            .ok_or("artifact length overflow")?;
+        if length > 64 * 1024 * 1024 || retained_bytes > bound {
+            return Err("original artifact closure exceeds registered report bound".into());
+        }
+        out.insert(
+            address.into(),
+            artifact(&fs::read(path).map_err(|e| e.to_string())?),
+        );
+        Ok(())
+    };
+    retain(
+        req.context.path.to_str().ok_or("context path")?,
+        &req.context.path,
+    )?;
+    let ctx = json(&fs::read(&req.context.path).map_err(|e| e.to_string())?)?;
+    if let Some(p) = ctx["retained_inputs"].as_str() {
+        retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+    }
+    if req.observations["preparation"].is_object() {
+        let binding = &req.observations["preparation"];
+        let mut originals: Vec<crate::prepared::Original> =
+            serde_json::from_value(binding["result"]["originals"].clone())
+                .map_err(|e| e.to_string())?;
+        originals.extend(
+            serde_json::from_value::<Vec<crate::prepared::Original>>(binding["receipts"].clone())
+                .map_err(|e| e.to_string())?,
+        );
+        for original in originals {
+            retain(
+                &original.path,
+                &no_symlink_parents(&req.candidate.root, &original.path)?,
+            )?;
+        }
+    }
+    for name in ["base", "candidate"] {
+        for file in req.observations["retained"][name]["files"]
+            .as_object()
+            .into_iter()
+            .flat_map(|m| m.values())
+        {
+            if let Some(p) = file["blob"].as_str() {
+                retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+            }
+        }
+    }
+    for row in judges {
+        if let Some(evidence) = row["response"]["evidence"].as_array() {
+            for e in evidence {
+                if let Some(p) = e["path"].as_str() {
+                    retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+                }
+            }
+        }
+        if let Some(reports) =
+            row["response"]["outputs"]["tests"]["completion"]["reports"].as_array()
+        {
+            for report in reports {
+                let p = report["retained_path"]
+                    .as_str()
+                    .ok_or("retained unit path")?;
+                retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+            }
+        }
+    }
+    Ok(Value::Object(out))
+}
 pub fn execute(
     template: &Request,
     bindings: &[Binding],
@@ -76,27 +368,14 @@ pub fn execute(
             status = status.max(Status::Error);
             continue;
         }
-        let mut req = template.clone();
-        req.judge_id = b.id.clone();
-        req.prior_results = b.after.iter().map(|id| responses[id].clone()).collect();
-        if !req.observations.is_object() {
-            req.observations = value!({});
-        }
-        req.observations["judges"] = value!(records);
-        let impacts: Vec<_> = req
-            .prior_results
-            .iter()
-            .filter_map(|r| r.outputs.get("impact"))
-            .collect();
-        if impacts.windows(2).any(|p| p[0] != p[1]) {
-            records.push(value!({"id":b.id,"binding":b,"state":"blocked","exit_code":null,"transport_failure":"conflicting predecessor impact outputs"}));
-            status = Status::Error;
-            continue;
-        }
-        if let Some(impact) = impacts.first() {
-            req.impact = (*impact).clone();
-        }
-        req.seal()?;
+        let req = match judge_request(template, &b, &records) {
+            Ok(req) => req,
+            Err(message) => {
+                records.push(value!({"id":b.id,"binding":b,"state":"blocked","exit_code":null,"transport_failure":message}));
+                status = Status::Error;
+                continue;
+            }
+        };
         match wire::invoke_detailed(&req, &b, env, timeout, limit) {
             Ok((r, p)) => {
                 status = status.max(r.status.clone());
@@ -114,26 +393,35 @@ pub fn execute(
     }
     Ok((status, records))
 }
-pub fn check_observed(
-    root: &Path,
-    config_path: &str,
-    base: &str,
-    candidate: &str,
-    context: &Path,
-    entry: Value,
-) -> Result<(u8, String), String> {
-    check_prepared(root, config_path, base, candidate, context, entry, None)
-}
+/// Build fixed full inputs without executing judges or business tools.
 #[allow(clippy::too_many_arguments)]
-pub fn check_prepared(
+pub fn prepare_request(
     root: &Path,
     config_path: &str,
     base: &str,
     candidate: &str,
     context: &Path,
     entry: Value,
+    scope: Option<crate::units::Scope>,
     preparation: Option<Value>,
-) -> Result<(u8, String), String> {
+) -> Result<(Request, Vec<Binding>, facts::Reader, Value), String> {
+    let profile = crate::load_selected_config(root, config_path)?;
+    if let Some(crate::units::Scope::Collect { manifest }) = &scope {
+        let block =
+            crate::units::full_execution_units(&profile)?.ok_or("full collection units missing")?;
+        let units: BTreeMap<String, crate::units::Unit> =
+            serde_json::from_value(block["units"].clone()).map_err(|e| e.to_string())?;
+        crate::units::validate_collection_paths(
+            manifest,
+            block["report_path"]
+                .as_str()
+                .ok_or("collection output missing")?,
+            &units
+                .values()
+                .map(|u| u.report_path.clone())
+                .collect::<Vec<_>>(),
+        )?;
+    }
     let reader = facts::Reader::for_config(root, config_path)?;
     reader.verify_config(root, candidate)?;
     let base_tree = reader.verify_oid(root, base)?;
@@ -145,6 +433,14 @@ pub fn check_prepared(
     let cfg = candidate_values
         .get(&candidate_identity.effective_path)
         .ok_or("missing effective candidate configuration")?;
+    crate::units::full_execution_units(cfg)?;
+    let workflow_path = cfg["registries"]["workflow"]
+        .as_str()
+        .ok_or("workflow registry path")?;
+    crate::units::report_paths(
+        cfg,
+        candidate_values[workflow_path]["integration"]["evidence"].as_str(),
+    )?;
     let judges_path = cfg["registries"]["judges"]
         .as_str()
         .ok_or("missing judges path")?;
@@ -191,11 +487,11 @@ pub fn check_prepared(
     if cfg["protocol"]["id"] != wire::PROTOCOL || cfg["protocol"]["encoding"] != "UTF-8" {
         return Err("unsupported protocol/encoding".into());
     }
-    let timeout = cfg["protocol"]["timeout_seconds"]
+    let _timeout = cfg["protocol"]["timeout_seconds"]
         .as_u64()
         .filter(|n| *n > 0)
         .ok_or("invalid protocol timeout")?;
-    let limit = cfg["protocol"]["stdout_limit_bytes"]
+    let _limit = cfg["protocol"]["stdout_limit_bytes"]
         .as_u64()
         .filter(|n| *n > 0 && *n <= 64 * 1024 * 1024)
         .ok_or("invalid protocol output bound")? as usize;
@@ -236,19 +532,14 @@ pub fn check_prepared(
         .and_then(|b| b["request"]["native_artifacts"]["directory"].as_str())
         .unwrap_or(".chrono-harness/state/");
     let report_path = format!("{report_directory}run-{}.json", wire::digest(&run)?);
-    let retained_report = no_symlink_parents(root, &report_path)?;
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&retained_report)
-        .map_err(|e| e.to_string())?;
     let mut environment = value!({"inherited":observed,"effective":env});
     if cfg["schema_version"] == 4 {
         environment["omitted_credentials"] = value!(credentials);
     }
     let req = Request {
+        scope: scope.clone(),
         observations: value!({"git_facts":reader.observation(),"entry":entry,"preparation":preparation,"run":run,"report_path":report_path,"environment":environment,"retained":retained,
-            "registry_bindings":{"base":{"entry_path":base_identity.entry_path,"effective_path":base_identity.effective_path,"selection":base_identity.selection},"candidate":{"entry_path":candidate_identity.entry_path,"effective_path":candidate_identity.effective_path,"selection":candidate_identity.selection}}}),
+            "execution_units":cfg.get("execution_units"),"registry_bindings":{"base":{"entry_path":base_identity.entry_path,"effective_path":base_identity.effective_path,"selection":base_identity.selection},"candidate":{"entry_path":candidate_identity.entry_path,"effective_path":candidate_identity.effective_path,"selection":candidate_identity.selection}}}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
         judge_id: String::new(),
@@ -279,7 +570,179 @@ pub fn check_prepared(
         checkout,
         runner: runner.clone(),
     };
+    Ok((req, bindings, reader, cfg.clone()))
+}
+pub fn check_observed(
+    root: &Path,
+    config_path: &str,
+    base: &str,
+    candidate: &str,
+    context: &Path,
+    entry: Value,
+) -> Result<(u8, String), String> {
+    check_observed_scoped(root, config_path, base, candidate, context, entry, None)
+}
+pub fn check_observed_scoped(
+    root: &Path,
+    config_path: &str,
+    base: &str,
+    candidate: &str,
+    context: &Path,
+    entry: Value,
+    scope: Option<crate::units::Scope>,
+) -> Result<(u8, String), String> {
+    check_prepared(
+        root,
+        config_path,
+        base,
+        candidate,
+        context,
+        entry,
+        scope,
+        None,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub fn check_prepared(
+    root: &Path,
+    config_path: &str,
+    base: &str,
+    candidate: &str,
+    context: &Path,
+    entry: Value,
+    scope: Option<crate::units::Scope>,
+    preparation: Option<Value>,
+) -> Result<(u8, String), String> {
+    let (mut req, bindings, reader, cfg) = prepare_request(
+        root,
+        config_path,
+        base,
+        candidate,
+        context,
+        entry,
+        scope.clone(),
+        preparation,
+    )?;
+    let env: BTreeMap<String, String> =
+        serde_json::from_value(req.observations["environment"]["effective"].clone())
+            .map_err(|e| e.to_string())?;
+    let environment = req.observations["environment"].clone();
+    let snapshot = req.base.root.clone();
+    let delta = req.delta.clone();
+    let candidate_tree = req.candidate.tree.clone();
+    let context_digest = req.context.sha256.clone();
+    let runner = req.runner.clone();
+    let context_value = json(&fs::read(&req.context.path).map_err(|e| e.to_string())?)?;
+    let report_path = req.observations["report_path"]
+        .as_str()
+        .ok_or("full report path")?
+        .to_owned();
+    let report_directory = report_path
+        .rsplit_once('/')
+        .ok_or("full report directory")?
+        .0
+        .to_owned()
+        + "/";
+    let retained_report = crate::prepare_publication(root, &report_path)?;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&retained_report)
+        .map_err(|e| e.to_string())?;
+    let timeout = cfg["protocol"]["timeout_seconds"]
+        .as_u64()
+        .ok_or("full timeout")?;
+    let limit = cfg["protocol"]["stdout_limit_bytes"]
+        .as_u64()
+        .ok_or("full limit")? as usize;
+    if let Some(units) = cfg.get("execution_units").cloned() {
+        req.observations
+            .as_object_mut()
+            .ok_or("full observations object")?
+            .insert("execution_units".into(), units);
+    }
+    if cfg.get("execution_units").is_some() {
+        let mut protected = vec![report_path.clone()];
+        if let Some(p) = req
+            .context
+            .path
+            .strip_prefix(root)
+            .ok()
+            .and_then(|p| p.to_str())
+        {
+            protected.push(p.into());
+        }
+        if let Some(p) = context_value["retained_inputs"].as_str() {
+            protected.push(p.into());
+        }
+        for name in ["base", "candidate"] {
+            for file in req.observations["retained"][name]["files"]
+                .as_object()
+                .into_iter()
+                .flat_map(|m| m.values())
+            {
+                if let Some(p) = file["blob"].as_str() {
+                    protected.push(p.into());
+                }
+            }
+        }
+        let mut paths = vec![
+            cfg["execution_units"]["report_path"]
+                .as_str()
+                .ok_or("collection report")?,
+        ];
+        let unit_paths: Vec<String> = cfg["execution_units"]["units"]
+            .as_object()
+            .ok_or("units")?
+            .values()
+            .map(|unit| {
+                unit["report_path"]
+                    .as_str()
+                    .ok_or("unit report")
+                    .map(str::to_owned)
+            })
+            .collect::<Result<_, _>>()?;
+        if let Some(crate::units::Scope::Collect { manifest }) = &scope {
+            crate::units::validate_collection_paths(manifest, paths[0], &unit_paths)?;
+            paths.push(manifest.as_str());
+        }
+        paths.extend(unit_paths.iter().map(String::as_str));
+        if paths
+            .iter()
+            .any(|p| protected.iter().any(|a| crate::units::overlap(p, a)))
+        {
+            return Err("execution report overlaps original retained evidence".into());
+        }
+    }
+    let publication_path = match &scope {
+        Some(crate::units::Scope::Unit { unit }) => {
+            let units = req.observations["execution_units"]["units"]
+                .as_object()
+                .ok_or("unit selection requires registered execution_units")?;
+            units
+                .get(unit)
+                .and_then(|definition| definition["report_path"].as_str())
+                .ok_or("unregistered CI unit")?
+        }
+        Some(crate::units::Scope::Collect { .. }) => {
+            req.observations["execution_units"]["report_path"]
+                .as_str()
+                .ok_or("execution unit collection report path missing")?
+        }
+        None => "",
+    };
+    let publication_path = if publication_path.is_empty() {
+        format!("{report_directory}report.json")
+    } else {
+        publication_path.into()
+    };
+    crate::prepare_publication(root, &publication_path)?;
     let (status, mut judges) = execute(&req, &bindings, &env, timeout, limit)?;
+    let judge_pins: Vec<_> = bindings
+        .iter()
+        .map(|binding| value!({"id": binding.id, "sha256": binding.sha256}))
+        .collect();
+    let judge_sha256 = wire::digest(&judge_pins)?;
     let mut unresolved = BTreeMap::<String, String>::new();
     let mut sources = BTreeMap::<String, Vec<String>>::new();
     let mut executables = vec![value!(runner)];
@@ -331,11 +794,61 @@ pub fn check_prepared(
     } else {
         value!(findings)
     };
-    let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"executables":executables,"environment":environment,"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
+    let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"runner":{"path":req.runner.path,"sha256":req.runner.sha256,"version":req.runner.version},"judge_sha256":judge_sha256,"executables":executables,"environment":environment,"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
+    let first = schedule(&bindings)?.remove(0);
+    let original = judge_request(&req, &first, &[])?;
+    report["request"] = value!(original);
+    report["request_digest"] = wire::digest(&original)?.into();
+    report["artifacts"] = retain_artifacts(&req, &judges)?;
     report["git_facts"] = reader.observation();
     report["entry"] = req.observations["entry"].clone();
     report["preparation"] = req.observations["preparation"].clone();
     report["report_path"] = value!(report_path);
+    if let Some(scope) = &scope {
+        let global_selected = judges
+            .iter()
+            .find_map(|judge| judge["response"]["outputs"]["global_selected"].as_array())
+            .or_else(|| {
+                judges
+                    .iter()
+                    .find_map(|judge| judge["response"]["outputs"]["impact"]["tests"].as_array())
+            })
+            .cloned()
+            .unwrap_or_default();
+        let own = judges
+            .iter()
+            .find_map(|judge| {
+                judge["response"]["outputs"]["execution_plan"]["selected"].as_object()
+            })
+            .map(|selected| selected.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let all_tests: BTreeSet<String> = req.observations["execution_units"]["units"]
+            .as_object()
+            .into_iter()
+            .flat_map(|units| units.values())
+            .flat_map(|unit| unit["tests"].as_array().into_iter().flatten())
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+        let global_set: BTreeSet<_> = global_selected
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
+        let units: BTreeMap<String, crate::units::Unit> =
+            serde_json::from_value(req.observations["execution_units"]["units"].clone())
+                .map_err(|e| format!("invalid execution units: {e}"))?;
+        let required_units = crate::units::required(&units, &global_set);
+        report["execution_scope"] = value!(scope);
+        report["unit_evidence"] = value!({
+            "global_selected":global_selected,
+            "own":own,
+            "assigned_elsewhere":global_set.difference(&own.iter().cloned().collect()).cloned().collect::<Vec<_>>(),
+            "required_units":required_units,
+            "not_required":all_tests.difference(&global_set).cloned().collect::<Vec<_>>(),
+            "acceptance":if matches!(scope, crate::units::Scope::Unit { .. }) {"contribution-only"} else {"global collection"}
+        });
+    }
     // Only validated named outputs supply these fields. Configuration and absent
     // producers cannot stand in for observations; conflicting results remain visible.
     for field in ["tools", "effective_inputs", "impact", "tests", "costs"] {
@@ -379,8 +892,41 @@ pub fn check_prepared(
     }
     report["unresolved"] = value!(unresolved);
     report["sources"] = value!(sources);
-    let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
-    let path = no_symlink_parents(root, &format!("{report_directory}report.json"))?;
+    if scope.is_some() {
+        for record in report["judges"].as_array_mut().ok_or("report judges")? {
+            compact_record(record)?;
+        }
+    }
+    let text = serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n";
+    if scope.is_some()
+        && text.len() as u64
+            > req.observations["execution_units"]["collection_limits"]["report_bytes"]
+                .as_u64()
+                .ok_or("full report bound")?
+    {
+        return Err("full execution evidence exceeds registered report bound".into());
+    }
+    let path = match &scope {
+        Some(crate::units::Scope::Unit { unit }) => {
+            let units = req.observations["execution_units"]["units"]
+                .as_object()
+                .ok_or("unit selection requires registered execution_units")?;
+            let definition = units.get(unit).ok_or("unregistered CI unit")?;
+            let path = definition["report_path"]
+                .as_str()
+                .ok_or("unit report path missing")?;
+            crate::units::artifact_path(path)?;
+            no_symlink_parents(root, path)?
+        }
+        Some(crate::units::Scope::Collect { .. }) => {
+            let path = req.observations["execution_units"]["report_path"]
+                .as_str()
+                .ok_or("execution unit collection report path missing")?;
+            crate::units::artifact_path(path)?;
+            no_symlink_parents(root, path)?
+        }
+        None => no_symlink_parents(root, &format!("{report_directory}report.json"))?,
+    };
     fs::write(retained_report, &text).map_err(|e| e.to_string())?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
     Ok((status.exit_code() as u8, text))

@@ -26,6 +26,94 @@ facts fail. The direct `produce` API remains declaration-only;
 `produce_with_inputs` additionally consumes validated retained facts. Both use the
 same record comparison and graph closure over the same interpreted history.
 
+## Full-v3 execution units and collection
+
+Full registrations may opt into an `execution_units` block. It assigns every
+candidate execution plan exactly once, names repeated shared operations, sets
+bounded manifest/report byte limits, and gives each unit and the collected full
+report a distinct state path. Registration rejects empty or unknown assignments,
+overlapping paths, a canonical-report collision, and invalid bounds before a
+judge can launch a business operation. Assignment and operation-selection
+helpers are shared with the scoped route; v1/v2 and unsliced full requests keep
+their original wire shape and behavior.
+
+`--unit ID` still runs the full seven-judge DAG. Routes validates the global
+DELTA selection, replacements, prerequisites, and operation order first, then
+passes only the selected unit's complete plans to the existing projects
+executor. A unit validates its local receipts and applicable context/freshness in
+both integration and delivery runs. Completion-dependent migration, replacement,
+retirement and certificate decisions remain pending collection. Reports record
+`global_selected`, `own`, `assigned_elsewhere`, `required_units`, `not_required`,
+and the declaration-derived global graph. Complete-report and certificate
+consumers reject contribution-only results.
+
+Selected reports retain one sealed first-judge request template. The runner's
+shared `judge_request` rule reconstructs every original stdin from that template,
+the configured DAG and the exact preceding records; each actual stdin digest is
+checked. Predecessor observations never embed requests. The lossless
+`chrono-retained-process/v1` encoding stores original stdout/stderr bytes as hex
+and reconstructs their text fields without changing argv, cwd, roots, run IDs,
+receipt identities or exits. Direct legacy reports retain their ordinary process
+encoding. Addressed context, retained snapshots/blobs and referenced evidence
+carry bytes, SHA-256 and length inside the bounded report. Immutable run records
+preserve earlier attempts while the registered unit path identifies a new attempt.
+This portable closure applies only to unit and collection scopes. Ordinary full
+check keeps local retained blob references and registration streams their original
+and candidate identities, including inputs larger than the portable report bound.
+Malformed, missing or changed blobs still fail through the input owner before
+business execution; unscoped reports do not embed those files as portable bytes.
+
+`--collect MANIFEST` uses the same seven-judge entry and consumes a bounded
+`chrono-full-collection/v1` manifest with `unit`, `path`, and `sha256` rows. Runner
+and seven-judge pins come from the current bound invocation and candidate
+registry. Routes plans the complete declaration graph without observing any
+business tool, including its version command. Projects validates every required
+unit once and every supplied nonrequired unit. It derives success and warnings
+from the retained judge responses and successful processes, checks DAG/stdin
+consistency, and rebuilds the declared inputs, entry, tool/version contracts,
+plan/order/prerequisites/bounds, obligation partitions and receipts. A retained
+receipt must also fit each declared output stream bound. A retained observation's
+self-digest alone cannot satisfy these comparisons. Original roots
+may be unavailable; only explicit declarations and transported bytes supply the
+original evidence. External input locations and environment semantics remain
+exact, and original process coordinates remain unchanged.
+Runner host-root aliases are checked against the retained raw invocation and its
+existing live path resolution; collection does not reopen or rewrite old roots.
+
+Historical conversion also consumes retained original decoder observations during
+collection. The current registration producer compares the fixed original bytes,
+candidate decoder, declared tool/version/input and successful original process;
+collection never launches the decoder. Every supplied unit's conversion is checked.
+Explicit runtime-input and judge-trigger edges from declared tools, inputs and
+environment nodes can reach their registered judge consumers. Unit assignment and
+shared-operation changes reuse the same declared plan targets as plan changes.
+
+Projects produces a typed `chrono-collected-completion/v1` with source-linked
+coverage and no collector-owned business execution rows. It retains each original
+report under its content digest. The finalized collector report includes those
+original reports and their complete addressed evidence, plus the manifest and
+actual collector processes. Workflow applies the ordinary full transition and
+integration policy to direct or verified collected completion. Delivery checks
+the real finalized pass/warn report, actual workflow output and original source
+closure; provisional, truncated, failed or contribution-only evidence rejects.
+Unit/collection report paths cannot overlap canonical reports, configured
+certificate/context destinations, retained input artifacts or immutable evidence.
+Reports and manifests remain subject to their registered byte bounds (at most
+64 MiB); an oversized evidence set fails rather than silently truncating it.
+
+The core supplies explicit unit execution and offline collection. The existing
+CI owner supplies workflow generation and automatic artifact transport through
+explicit full-context/upload mappings. Full native host activation,
+bootstrap/input closure, actual provider adoption and public release remain pending.
+These checks do not establish universal local/CI parity or a runtime speedup.
+
+The dedicated workflow consumer exercises two real independent Rust production/test
+pairs, shared prerequisites, failed units and selective retry, offline collection
+with unavailable original roots and business executables, semantic mutations,
+cross-unit replacement/migration and joint retirement, empty collection, and
+collected integration followed by delivery. The FILEMAP and runner consumers also
+check assignment DELTA and contribution rejection at completed-report boundaries.
+
 The full process DAG is registration → filemap → routes → projects. Registration
 publishes one immutable interpreted view bound to the fixed endpoints, registry
 digest and context. Filemap and routes forward it; they do not reload an
@@ -86,9 +174,14 @@ snapshots map each inherited variable to a string (including empty) or null
 (absent). Each `files[ID]` contains either `bytes`, an array of bytes, or exactly
 `{blob, sha256, length}` referencing retained state content. The [input snapshot
 producer](inputs.md) can capture and transport these without inline large bytes.
-Runner transports the supplied snapshot metadata. Registration checks every declared external file's
-retained digest at both endpoints and current candidate disk bytes, and compares
-the candidate environment with the runner observation. It never reconstructs old
+Runner transports the supplied snapshot metadata. Unscoped checks validate every
+declared external file's retained digest at both endpoints and current candidate
+disk bytes. Full unit checks use registration/input's explicit prerequisite
+projection, including shared and governance inputs; unrelated live SDK files are
+not required. Collection validates original blobs and each original unit's input
+projection without live business input reads. Structural and reference validation
+remains global, and supplied unknown or malformed inputs still fail. Registration
+compares the candidate environment with the runner observation. It never reconstructs old
 bytes from current disk. Reports publish input identities and lengths; supplied
 snapshots remain evidence. Interpreter/delegated toolchain/config/fixture bytes
 must be declared as effective inputs. A declaration and hashes do not prove no

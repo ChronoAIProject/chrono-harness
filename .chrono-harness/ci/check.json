@@ -187,6 +187,10 @@
         "judge-workflow",
         "worktree"
       ],
+      "build.inputs": [
+        "inputs",
+        "judge-workflow"
+      ],
       "build.judge-ci": [
         "ci",
         "judge-cargo",
@@ -263,6 +267,7 @@
       ],
       "build.worktree": [
         "ci",
+        "judge-workflow",
         "worktree"
       ]
     },

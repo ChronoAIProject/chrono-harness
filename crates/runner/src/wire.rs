@@ -113,6 +113,11 @@ pub struct Executable {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
+    /// Optional full execution selector.  It is omitted from legacy requests so
+    /// v1/v2 consumers retain their original wire shape; a selector is carried
+    /// in the sealed request and therefore cannot silently become a full run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<crate::units::Scope>,
     #[serde(default)]
     pub observations: Value,
     pub protocol: String,

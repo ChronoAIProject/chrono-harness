@@ -558,7 +558,8 @@ pub fn prepare(
         );
     }
     if req.selection != Selection::All && profile["schema"] != units::PROFILE {
-        return Err("full independent scopes are not supported by short check".into());
+        units::full_execution_units(&profile)?
+            .ok_or("full independent scopes require registered execution units")?;
     }
     req.validate()?;
     let action = if source == "local" {

@@ -659,6 +659,56 @@ struct Inventory {
 
 /// Resolve only DELTA-required collection units through the adjudicator's current inventory/assignment owner.
 /// This does not validate a canonical entry, read reports, execute operations or grant admission.
+/// Full preparation shares FILEMAP impact and routes' global obligation owner.
+/// No judge or business/version process is launched here.
+pub fn full_collection_requirements(
+    root: &Path,
+    profile: &str,
+    prepared: &chrono_harness::prepared::PreparedCheck,
+    originals: &chrono_harness::units::FullManifest,
+) -> Result<Value, String> {
+    let context = prepared
+        .context
+        .as_ref()
+        .ok_or("full collection context missing")?;
+    let (mut req, _, reader, _) = chrono_harness::full::prepare_request(
+        root,
+        profile,
+        prepared.base.as_deref().ok_or("full base missing")?,
+        &prepared.candidate,
+        Path::new(&context.path),
+        Value::Null,
+        prepared.scope.clone(),
+        None,
+    )?;
+    req.judge_id = "routes".into();
+    let result = (|| {
+        let (old, r, _) =
+            chrono_judge_registration::views_for_collection_inputs(&req, &reader, originals)?;
+        let inputs = chrono_judge_registration::inputs::validate(&req, &old, &r)?;
+        let (impact, findings) =
+            chrono_judge_filemap::produce_for_request(&req, &old, &r, &reader, &inputs)?;
+        if findings.iter().any(|f| f.level == "error") {
+            return Err(format!(
+                "blocked full obligations: {}",
+                serde_json::to_string(&findings).map_err(|e| e.to_string())?
+            ));
+        }
+        let selected = chrono_judge_routes::global_selection(
+            &old,
+            &r,
+            &impact,
+            chrono_judge_registration::downstream_validator(&r, "routes"),
+        )?;
+        let units = serde_json::from_value(r.config()["execution_units"]["units"].clone())
+            .map_err(|e| e.to_string())?;
+        Ok(
+            object!({"required_units":chrono_harness::units::required(&units,&selected),"global_selected":selected,"git_facts":reader.observation()}),
+        )
+    })();
+    fs::remove_dir_all(&req.base.root).map_err(|e| e.to_string())?;
+    result
+}
 pub fn collection_requirements(
     root: &Path,
     profile: &str,

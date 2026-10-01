@@ -15,6 +15,22 @@ fn moment(v: &Value, k: &str) -> Result<OffsetDateTime, String> {
     }
     Ok(d)
 }
+/// Registered observation freshness, shared with the local round producer.
+/// The caller supplies the observation; this predicate never reads a clock.
+pub fn observation_age(ctx: &Value, w: &Value) -> Result<time::Duration, String> {
+    let age = moment(ctx, "observed_at")? - moment(ctx, "branch_started_at")?;
+    if age.is_negative() {
+        return Err("E_BRANCH_CONTEXT: negative age".into());
+    }
+    let hours = w["staleness"]["max_age_hours"]
+        .as_f64()
+        .filter(|v| v.is_finite() && *v >= 0.0)
+        .ok_or("E_BRANCH_CONTEXT: invalid age threshold")?;
+    if age.whole_nanoseconds() > (hours * 3_600_000_000_000.0) as i128 {
+        return Err(format!("E_BRANCH_STALE: age_ns={}", age.whole_nanoseconds()));
+    }
+    Ok(age)
+}
 fn commits(reader: &facts::Reader, root: &Path, oid: &str) -> Result<BTreeSet<String>, String> {
     Ok(facts::utf8(reader.git(root, &["rev-list", oid])?)?
         .lines()
@@ -62,12 +78,7 @@ pub fn with_reader(
     if kinds.len() != 1 || source == text(w, "target_branch")? {
         return Err("E_BRANCH_CONTEXT: missing or ambiguous registered source branch".into());
     }
-    let started = moment(ctx, "branch_started_at")?;
-    let observed = moment(ctx, "observed_at")?;
-    let age = observed - started;
-    if age.is_negative() {
-        return Err("E_BRANCH_CONTEXT: negative age".into());
-    }
+    let age = observation_age(ctx, w)?;
     let dev_ancestors = commits(reader, root, dev)?;
     let branch_ancestors = commits(reader, root, candidate)?;
     // Shallow boundaries are acceptable only at/before the proven fork. Any other
@@ -94,12 +105,7 @@ pub fn with_reader(
         .as_f64()
         .filter(|v| v.is_finite() && *v >= 0.0)
         .ok_or("E_BRANCH_CONTEXT: invalid count threshold")?;
-    let hours = w["staleness"]["max_age_hours"]
-        .as_f64()
-        .filter(|v| v.is_finite() && *v >= 0.0)
-        .ok_or("E_BRANCH_CONTEXT: invalid age threshold")?;
-    // Preserve nanosecond precision at equality rather than rounding age to hours.
-    if behind as f64 > count || age.whole_nanoseconds() > (hours * 3_600_000_000_000.0) as i128 {
+    if behind as f64 > count {
         return Err(format!(
             "E_BRANCH_STALE: behind={behind}; age_ns={}",
             age.whole_nanoseconds()

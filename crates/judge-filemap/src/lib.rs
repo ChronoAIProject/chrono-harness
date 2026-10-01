@@ -99,14 +99,20 @@ fn valid_types(kind: EdgeKind, from: NodeKind, to: NodeKind) -> bool {
     use NodeKind::*;
     match kind {
         EdgeKind::Compile => matches!(from, File | Project) && to == Project,
-        EdgeKind::BuildInput | EdgeKind::RuntimeInput => {
+        EdgeKind::BuildInput => {
             matches!(from, File | Project | Script | Input | Tool | Environment)
                 && matches!(to, Project | Script)
+        }
+        EdgeKind::RuntimeInput => {
+            matches!(from, File | Project | Script | Input | Tool | Environment)
+                && matches!(to, Project | Script | Judge)
         }
         EdgeKind::TestExecution => {
             matches!(from, File | Project | Script | Input | Tool | Environment) && to == Test
         }
-        EdgeKind::JudgeTrigger => matches!(from, File | Project) && to == Judge,
+        EdgeKind::JudgeTrigger => {
+            matches!(from, File | Project | Input | Tool | Environment) && to == Judge
+        }
     }
 }
 fn cost(r: &Registrations, test: &str) -> Option<Value> {
@@ -528,6 +534,24 @@ fn produce_environment(
             ],
         },
         findings,
+    )
+}
+/// Fixed semantic documents are consumed through the same full impact producer.
+pub fn produce_for_request(
+    req: &Request,
+    old: &Registrations,
+    current: &Registrations,
+    reader: &facts::Reader,
+    inputs: &Value,
+) -> Result<(Impact, Vec<Finding>), String> {
+    let documents = chrono_judge_mixed::load_documents_with_reader(req, old, current, reader)?;
+    produce_with_inputs_and_documents(
+        old,
+        current,
+        &req.config_path,
+        &req.delta,
+        inputs,
+        &documents,
     )
 }
 pub fn judge(req: &Request) -> Response {
