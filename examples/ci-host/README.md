@@ -1,4 +1,7 @@
-# Explicit installed-tools host
+# Explicit installed-tools host (legacy provider)
+
+This bundle retains the original v1 behavior and historical initial-inventory
+tests. New short-command hosts can adopt the [conditional-job example](../ci-host-job-gating/README.md); migrate explicitly rather than reinterpreting prior reports.
 
 Copy this directory to a fresh Git repository. Install or copy `chrono-harness`,
 `chrono-judge-ci`, and `chrono-ci` together into an explicit tools directory.

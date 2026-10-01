@@ -1,4 +1,4 @@
-//! One workflow per explicitly registered CI unit, plus a collection workflow.
+//! Explicit independent units, with opt-in single-parent job scheduling.
 use super::*;
 use chrono_harness::{
     file_identity,
@@ -15,6 +15,11 @@ pub struct FullContexts {
     pub units: BTreeMap<String, String>,
 }
 
+fn gating_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<super::gating::Config>, D::Error> {
+    super::gating::Config::deserialize(d).map(Some)
+}
 fn full_contexts_present<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<Option<FullContexts>, D::Error> {
@@ -25,6 +30,12 @@ pub(super) const MARKER: &str = "# chrono-ci: owned github-units/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "gating_present"
+    )]
+    pub job_gating: Option<super::gating::Config>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -77,6 +88,9 @@ impl Config {
             c.bootstrap = u.bootstrap.clone();
             c.context_path = u.context_path.clone();
             c.artifact_directory = u.artifact_directory.clone();
+        }
+        if self.job_gating.is_some() {
+            c.workflow_path = self.collection.workflow_path.clone();
         }
         Ok(c)
     }
@@ -153,13 +167,18 @@ pub fn validate(c: &Config) -> Result<(), String> {
             roots.push(&unit.artifact_directory);
         }
     }
+    if let Some(gating) = &c.job_gating {
+        super::gating::validate(c, gating)?;
+    }
     super::validate_policy(&c.collection, c.schema == FULL_SCHEMA)?;
     let mut paths = BTreeSet::from([c.collection.workflow_path.clone()]);
     let mut names = BTreeSet::from([c.collection.name.clone()]);
     let mut contexts = BTreeSet::from([c.collection.context_path.clone()]);
     for (id, unit) in &c.units {
         chrono_harness::units::id(id)?;
-        super::validate_policy(&c.workflow(Some(id))?, c.schema == FULL_SCHEMA)?;
+        let mut legacy_address = c.workflow(Some(id))?;
+        legacy_address.workflow_path = unit.workflow_path.clone();
+        super::validate_policy(&legacy_address, c.schema == FULL_SCHEMA)?;
         if !paths.insert(unit.workflow_path.clone())
             || !names.insert(unit.name.clone())
             || !contexts.insert(unit.context_path.clone())
@@ -303,6 +322,9 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     if !config_path.starts_with(".chrono-harness/ci/") {
         return Err("unit source must belong to host CI configuration".into());
     }
+    if c.job_gating.is_some() {
+        return super::gating::render(c, config_path);
+    }
     let mut outputs = BTreeMap::new();
     for unit in c
         .units
@@ -345,23 +367,80 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     Ok(outputs)
 }
 
-pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
-    profile(root, c)?;
+type ProjectionChanges = (Vec<(String, String)>, Vec<(String, String)>);
+fn projection_changes(
+    root: &Path,
+    path: &str,
+    c: &Config,
+    verify: bool,
+) -> Result<ProjectionChanges, String> {
     let outputs = render(c, path)?;
     let mut writes = vec![];
+    let legacy_outputs = if c.job_gating.is_some() {
+        let mut legacy = c.clone();
+        legacy.job_gating = None;
+        render(&legacy, path)?
+    } else {
+        BTreeMap::new()
+    };
     for (path, bytes) in &outputs {
-        if !output_preflight(root, path, bytes, MARKER)? {
+        let marker = if c.job_gating.is_some() {
+            super::gating::MARKER
+        } else {
+            MARKER
+        };
+        let target = no_symlink_parents(root, path)?;
+        let legacy_match = legacy_outputs
+            .get(path)
+            .is_some_and(|old| fs::read(&target).ok().as_deref() == Some(old.as_bytes()));
+        if legacy_match || !output_preflight(root, path, bytes, marker)? {
             if verify {
                 return Err(format!("generated unit workflow drift: {path}"));
             }
-            writes.push((path, bytes));
+            writes.push((path.clone(), bytes.clone()));
         }
     }
+    let mut retire = vec![];
+    if c.job_gating.is_some() {
+        let mut legacy = c.clone();
+        legacy.job_gating = None;
+        for (path, bytes) in render(&legacy, path)? {
+            if outputs.contains_key(&path) {
+                continue;
+            }
+            let target = no_symlink_parents(root, &path)?;
+            if target.exists() {
+                if fs::read(&target).map_err(|e| e.to_string())? != bytes.as_bytes() {
+                    return Err(format!(
+                        "obsolete workflow differs; use explicit migrate and preserve host edits: {path}"
+                    ));
+                }
+                if verify {
+                    return Err(format!("obsolete owned unit workflow: {path}"));
+                }
+                retire.push((path, bytes));
+            }
+        }
+    }
+    Ok((writes, retire))
+}
+pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
+    profile(root, c)?;
+    let (writes, retire) = projection_changes(root, path, c, verify)?;
     // Preflight every output before modifying any of them; I/O failure is reported, never atomicity claimed.
     for (path, bytes) in &writes {
         write_file(root, path, bytes.as_bytes())?;
     }
-    Ok(!writes.is_empty())
+    for (path, bytes) in &retire {
+        let target = no_symlink_parents(root, path)?;
+        if fs::read(&target).map_err(|e| e.to_string())? != bytes.as_bytes() {
+            return Err(format!(
+                "obsolete workflow changed before retirement: {path}"
+            ));
+        }
+        fs::remove_file(target).map_err(|e| e.to_string())?;
+    }
+    Ok(!writes.is_empty() || !retire.is_empty())
 }
 
 pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
@@ -373,10 +452,7 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
         incoming
     };
     profile(root, &c)?;
-    let outputs = render(&c, path)?;
-    for (path, bytes) in &outputs {
-        output_preflight(root, path, bytes, MARKER)?;
-    }
+    projection_changes(root, path, &c, false)?;
     if !existing {
         write_file(
             root,
@@ -431,8 +507,27 @@ fn prepare_scope(
     generate(root, path, c, true)?;
     let (profile, _) = profile(root, c)?;
     let w = c.workflow(unit)?;
-    let mut context =
-        super::prepare_policy(root, &w, event, payload, revision, c.schema == FULL_SCHEMA)?;
+    let detection = if c.job_gating.is_some() {
+        Some(super::gating::native_detection(
+            root, path, c, event, payload, revision,
+        )?)
+    } else {
+        None
+    };
+    let mut context = super::prepare_policy_fixed(
+        root,
+        &w,
+        event,
+        payload,
+        revision,
+        c.schema == FULL_SCHEMA,
+        detection.as_ref(),
+    )?;
+    if let Some(detection) = detection {
+        context["detection"] = detection;
+        context["native_run"] =
+            serde_json::to_value(super::gating::native_run(unit)?).map_err(|e| e.to_string())?;
+    }
     let argv = context["canonical_argv"]
         .as_array_mut()
         .ok_or("missing canonical command")?;

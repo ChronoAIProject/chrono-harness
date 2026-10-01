@@ -290,6 +290,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             }) {
                 return Err("unit producer/upload contract mismatch".into());
             }
+            if c.job_gating.is_some() && req.selection == Selection::Collect {
+                let needs: Value = decode(
+                    std::env::var(super::gating::NEEDS_ENV)
+                        .map_err(|_| "aggregate needs missing")?
+                        .as_bytes(),
+                )?;
+                if needs["detect"]["result"] != "success" {
+                    return Err("change detection did not succeed".into());
+                }
+            }
             let mut evidence = if req.selection == Selection::All {
                 units::prepare_all(root, path, &c, &event, &payload, &revision)?
             } else {
@@ -316,8 +326,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     &fs::read(no_symlink_parents(root, &req.effective_config)?)
                         .map_err(|e| e.to_string())?,
                 )?;
-                if policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
-                    <= c.gather.wait_seconds
+                if c.job_gating.is_none()
+                    && policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
+                        <= c.gather.wait_seconds
                 {
                     return Err(
                         "native gathering wait must fit the registered acquisition timeout".into(),

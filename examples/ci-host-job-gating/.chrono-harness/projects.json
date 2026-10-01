@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "owners": [
+    "host",
+    "message",
+    "example",
+    "installer",
+    "harness"
+  ],
+  "projects": [],
+  "scripts": [
+    {
+      "id": "message",
+      "path": "message.py",
+      "test_script": "example",
+      "actions": {
+        "execute": {
+          "operation": "example.program",
+          "tool": "python3",
+          "argv": [
+            "message.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "example",
+      "path": "check.py",
+      "tests_for": "message",
+      "actions": {
+        "execute": {
+          "operation": "example.check",
+          "tool": "python3",
+          "argv": [
+            "check.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "installer",
+      "path": ".chrono-harness/ci/install.py",
+      "test_script": "harness",
+      "actions": {
+        "execute": {
+          "operation": "tools.install",
+          "tool": "python3",
+          "argv": [
+            ".chrono-harness/ci/install.py",
+            ".",
+            "/opt/chrono-tools"
+          ]
+        }
+      }
+    },
+    {
+      "id": "harness",
+      "path": ".chrono-harness/ci/verify.py",
+      "tests_for": "installer",
+      "actions": {
+        "execute": {
+          "operation": "ci.verify",
+          "tool": "python3",
+          "argv": [
+            ".chrono-harness/ci/verify.py"
+          ]
+        }
+      }
+    }
+  ]
+}

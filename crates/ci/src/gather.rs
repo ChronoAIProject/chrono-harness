@@ -88,6 +88,142 @@ impl<'a> Transport<'a> {
     }
 }
 
+fn parent_run(
+    run: &Value,
+    repository: &str,
+    d: &super::gating::Detection,
+    c: &units::Config,
+    attempt: u64,
+) -> Result<(), String> {
+    if run["id"] != d.run_id
+        || run["run_attempt"] != attempt
+        || run["head_sha"] != d.candidate
+        || run["event"] != d.event
+        || run["path"] != c.collection.workflow_path
+        || run["repository"]["full_name"] != repository
+    {
+        return Err("parent run/repository/event/source/attempt mismatch".into());
+    }
+    // The aggregate is currently running. Waiting for parent completion would wait on itself.
+    Ok(())
+}
+fn parent_units(
+    root: &Path,
+    c: &units::Config,
+    repository: &str,
+    context: &Value,
+    transport: &mut Transport<'_>,
+) -> Result<BTreeMap<String, Value>, String> {
+    let d: super::gating::Detection = serde_json::from_value(context["detection"].clone())
+        .map_err(|e| format!("fixed detection missing: {e}"))?;
+    let needs: Value = decode(
+        std::env::var(super::gating::NEEDS_ENV)
+            .map_err(|_| "aggregate needs missing")?
+            .as_bytes(),
+    )?;
+    super::gating::validate_statuses(c, &d, &needs)?;
+    if d.repository != repository {
+        return Err("detection repository mismatch".into());
+    }
+    let requirements =
+        super::gating::requirements(root, c, d.base.clone(), d.candidate.clone(), d.initial)?;
+    if requirements["required_units"] != json!(d.required_units)
+        || chrono_harness::wire::digest(&requirements["global_selected"])? != d.selection_sha256
+        || requirements["changed_paths"]
+            .as_array()
+            .ok_or("complete delta missing")?
+            .len()
+            != d.changed_paths_count
+    {
+        return Err("aggregate obligations disagree with fixed detection".into());
+    }
+    let native: super::gating::NativeRun = serde_json::from_value(context["native_run"].clone())
+        .map_err(|e| format!("native parent binding missing: {e}"))?;
+    if native != super::gating::native_run(None)?
+        || native.run_id != d.run_id
+        || native.repository != d.repository
+        || native.run_attempt < d.run_attempt
+    {
+        return Err("aggregate parent run/attempt binding mismatch".into());
+    }
+    let run = transport.api(
+        &format!("repos/{repository}/actions/runs/{}", d.run_id),
+        false,
+    )?;
+    parent_run(&run, repository, &d, c, native.run_attempt)?;
+    let pages = transport.api(
+        &format!(
+            "repos/{repository}/actions/runs/{}/jobs?filter=all&per_page=100",
+            d.run_id
+        ),
+        true,
+    )?;
+    let jobs: Vec<_> = pages
+        .as_array()
+        .ok_or("job pages missing")?
+        .iter()
+        .map(|page| page["jobs"].as_array().ok_or("job list missing"))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+    let mut completed = BTreeMap::new();
+    for (unit, workflow) in &c.units {
+        // needs already binds every nonrequired skip. Only selected jobs need
+        // execution metadata and artifacts; skipped jobs need no API row.
+        if !d.required_units.contains(unit) {
+            continue;
+        }
+        // Independent job retries keep successful prerequisites' original attempts.
+        // Choose the last actual execution inside this exact parent run, never another run.
+        let relevant: Vec<_> = jobs
+            .iter()
+            .filter(|job| job["name"] == workflow.name)
+            .collect();
+        if relevant.iter().any(|job| {
+            job["run_id"] != d.run_id
+                || job["run_attempt"]
+                    .as_u64()
+                    .is_none_or(|a| a == 0 || a > native.run_attempt)
+                || job["id"].as_u64().is_none_or(|id| id == 0)
+        }) {
+            return Err(format!("unit {unit} job run/attempt identity malformed"));
+        }
+        let attempt = relevant
+            .iter()
+            .filter_map(|job| job["run_attempt"].as_u64())
+            .max()
+            .filter(|a| *a >= d.run_attempt && *a <= native.run_attempt)
+            .ok_or_else(|| format!("unit {unit} job missing/invalid in parent attempt history"))?;
+        let matches: Vec<_> = relevant
+            .into_iter()
+            .filter(|job| job["run_attempt"] == attempt)
+            .collect();
+        if matches.len() != 1 {
+            return Err(format!(
+                "unit {unit} job ambiguous in exact executed attempt"
+            ));
+        }
+        let job = matches[0];
+        if job["run_id"] != d.run_id || job["status"] != "completed" {
+            return Err(format!("unit {unit} job run/attempt/completion mismatch"));
+        }
+        if job["conclusion"] != "success" {
+            return Err(format!(
+                "unit {unit} native conclusion rejected: {}",
+                job["conclusion"]
+            ));
+        }
+        let mut binding = run.clone();
+        binding["conclusion"] = job["conclusion"].clone();
+        binding["unit_job_id"] = job["id"].clone();
+        binding["run_attempt"] = json!(attempt);
+        binding["parent_attempt"] = json!(native.run_attempt);
+        completed.insert(unit.clone(), binding);
+    }
+    Ok(completed)
+}
+
 fn inner(
     root: &Path,
     path: &str,
@@ -140,64 +276,69 @@ fn inner(
     if context["canonical_argv"] != json!(canonical) {
         return Err("collection command context mismatch".into());
     }
-    let deadline = Instant::now() + Duration::from_secs(c.gather.wait_seconds);
-    let mut pending: BTreeMap<_, _> = c.units.iter().collect();
-    let mut completed = BTreeMap::new();
-    while !pending.is_empty() {
-        let mut ready = vec![];
-        for (unit, workflow) in &pending {
-            let filename = workflow
-                .workflow_path
-                .strip_prefix(".github/workflows/")
-                .ok_or("workflow path")?;
-            let endpoint = format!(
-                "repos/{repository}/actions/workflows/{}/runs?head_sha={candidate}&event={event}&per_page=100",
-                encode(filename)
-            );
-            let pages = transport.api(&endpoint, true)?;
-            let mut matches = vec![];
-            for page in pages.as_array().ok_or("paginated run pages missing")? {
-                for run in page["workflow_runs"]
-                    .as_array()
-                    .ok_or("workflow run list missing")?
-                {
-                    if run["head_sha"] == candidate
-                        && run["event"] == event
-                        && run["path"] == workflow.workflow_path
+    let completed = if c.job_gating.is_some() {
+        parent_units(root, c, repository, &context, transport)?
+    } else {
+        let deadline = Instant::now() + Duration::from_secs(c.gather.wait_seconds);
+        let mut pending: BTreeMap<_, _> = c.units.iter().collect();
+        let mut completed = BTreeMap::new();
+        while !pending.is_empty() {
+            let mut ready = vec![];
+            for (unit, workflow) in &pending {
+                let filename = workflow
+                    .workflow_path
+                    .strip_prefix(".github/workflows/")
+                    .ok_or("workflow path")?;
+                let endpoint = format!(
+                    "repos/{repository}/actions/workflows/{}/runs?head_sha={candidate}&event={event}&per_page=100",
+                    encode(filename)
+                );
+                let pages = transport.api(&endpoint, true)?;
+                let mut matches = vec![];
+                for page in pages.as_array().ok_or("paginated run pages missing")? {
+                    for run in page["workflow_runs"]
+                        .as_array()
+                        .ok_or("workflow run list missing")?
                     {
-                        matches.push(run.clone());
+                        if run["head_sha"] == candidate
+                            && run["event"] == event
+                            && run["path"] == workflow.workflow_path
+                        {
+                            matches.push(run.clone());
+                        }
+                    }
+                }
+                if matches.len() > 1 {
+                    return Err(format!(
+                        "ambiguous runs for unit {unit}; use an explicit local collection manifest"
+                    ));
+                }
+                if let Some(run) = matches.first() {
+                    if run["status"] == "completed" {
+                        ready.push(((*unit).clone(), run.clone()));
                     }
                 }
             }
-            if matches.len() > 1 {
+            for (unit, run) in ready {
+                pending.remove(&unit);
+                completed.insert(unit, run);
+            }
+            if pending.is_empty() {
+                break;
+            }
+            if Instant::now() >= deadline {
                 return Err(format!(
-                    "ambiguous runs for unit {unit}; use an explicit local collection manifest"
+                    "unit collection wait expired; unresolved units: {:?}",
+                    pending.keys()
                 ));
             }
-            if let Some(run) = matches.first() {
-                if run["status"] == "completed" {
-                    ready.push(((*unit).clone(), run.clone()));
-                }
-            }
+            std::thread::sleep(
+                Duration::from_secs(c.gather.poll_seconds)
+                    .min(deadline.saturating_duration_since(Instant::now())),
+            );
         }
-        for (unit, run) in ready {
-            pending.remove(&unit);
-            completed.insert(unit, run);
-        }
-        if pending.is_empty() {
-            break;
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "unit collection wait expired; unresolved units: {:?}",
-                pending.keys()
-            ));
-        }
-        std::thread::sleep(
-            Duration::from_secs(c.gather.poll_seconds)
-                .min(deadline.saturating_duration_since(Instant::now())),
-        );
-    }
+        completed
+    };
     let mut reports = vec![];
     let mut identities = vec![];
     let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
@@ -287,6 +428,31 @@ fn inner(
                 "unit {unit} context disagrees with fixed collection inputs"
             ));
         }
+        if c.job_gating.is_some()
+            && (unit_context["detection"] != context["detection"]
+                || unit_context["workflow_source_revision"] != context["workflow_source_revision"])
+        {
+            return Err(format!(
+                "unit {unit} parent run/attempt/source detection mismatch"
+            ));
+        }
+        if c.job_gating.is_some() {
+            let native: super::gating::NativeRun =
+                serde_json::from_value(unit_context["native_run"].clone())
+                    .map_err(|e| format!("unit native run missing: {e}"))?;
+            if native.repository != repository
+                || native.run_id != id
+                || native.run_attempt != attempt
+                || native.job != super::gating::job_id(&unit)
+            {
+                return Err(format!("unit {unit} artifact run/attempt/job mismatch"));
+            }
+        }
+        let workflow_path = if c.job_gating.is_some() {
+            &c.collection.workflow_path
+        } else {
+            &w.workflow_path
+        };
         let revision = unit_context["workflow_source_revision"]
             .as_str()
             .filter(|v| full_oid(v))
@@ -295,12 +461,12 @@ fn inner(
             "api".into(),
             format!(
                 "repos/{repository}/contents/{}?ref={revision}",
-                w.workflow_path
+                workflow_path
             ),
             "--header".into(),
             "Accept: application/vnd.github.raw".into(),
         ])?;
-        if source != fs::read(root.join(&w.workflow_path)).map_err(|e| e.to_string())? {
+        if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
             return Err(format!("unit {unit} executed a different workflow source"));
         }
         let report_path = downloaded(&registered[&unit].report_path)?;
@@ -320,15 +486,29 @@ fn inner(
         }
         reports.push(input);
         let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
-        if fresh["run_attempt"] != attempt
-            || fresh["status"] != "completed"
-            || fresh["head_sha"] != candidate
-            || fresh["event"] != event
-            || fresh["path"] != w.workflow_path
-        {
-            return Err("unit run changed while collecting original evidence".into());
+        if c.job_gating.is_some() {
+            let d =
+                serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
+            parent_run(
+                &fresh,
+                repository,
+                &d,
+                c,
+                run["parent_attempt"]
+                    .as_u64()
+                    .ok_or("parent attempt missing")?,
+            )?;
+        } else {
+            if fresh["run_attempt"] != attempt
+                || fresh["status"] != "completed"
+                || fresh["head_sha"] != candidate
+                || fresh["event"] != event
+                || fresh["path"] != w.workflow_path
+            {
+                return Err("unit run changed while collecting original evidence".into());
+            }
         }
-        identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
+        identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
     }
     if identities.iter().any(|i| i["conclusion"] != "success") {
         return Err(format!(

@@ -1,3 +1,5 @@
+#[path = "gating.rs"]
+mod gating;
 use super::*;
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;

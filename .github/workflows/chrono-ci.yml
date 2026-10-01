@@ -1,4 +1,4 @@
-# chrono-ci: owned github-units/v1
+# chrono-ci: owned github-job-gating/v1
 name: "chrono / collection"
 on:
   push:
@@ -9,9 +9,58 @@ permissions:
   contents: read
   actions: read
 jobs:
-  check:
-    name: "chrono / collection"
-    if: ${{ github.event.deleted != true }}
+  detect:
+    name: Detect registered DELTA
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    outputs:
+      detection: ${{ steps.detect.outputs.detection }}
+      unit_ci: ${{ steps.detect.outputs.unit_ci }}
+      unit_distribution: ${{ steps.detect.outputs.unit_distribution }}
+      unit_inputs: ${{ steps.detect.outputs.unit_inputs }}
+      unit_instructions: ${{ steps.detect.outputs.unit_instructions }}
+      unit_judge-cargo: ${{ steps.detect.outputs.unit_judge-cargo }}
+      unit_judge-ci: ${{ steps.detect.outputs.unit_judge-ci }}
+      unit_judge-cost: ${{ steps.detect.outputs.unit_judge-cost }}
+      unit_judge-filemap: ${{ steps.detect.outputs.unit_judge-filemap }}
+      unit_judge-mixed: ${{ steps.detect.outputs.unit_judge-mixed }}
+      unit_judge-projects: ${{ steps.detect.outputs.unit_judge-projects }}
+      unit_judge-registration: ${{ steps.detect.outputs.unit_judge-registration }}
+      unit_judge-routes: ${{ steps.detect.outputs.unit_judge-routes }}
+      unit_judge-workflow: ${{ steps.detect.outputs.unit_judge-workflow }}
+      unit_runner: ${{ steps.detect.outputs.unit_runner }}
+      unit_scoped-v1: ${{ steps.detect.outputs.unit_scoped-v1 }}
+      unit_worktree: ${{ steps.detect.outputs.unit_worktree }}
+    steps:
+      - name: Acquire declared detector source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .chrono-harness/
+            crates/
+            assets/
+            .github/workflows/chrono-ci.yml
+            .gitignore
+          persist-credentials: true
+      - name: Bootstrap registered detector tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Detect required units from fixed Git endpoints
+        id: detect
+        shell: bash
+        env:
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-ci' detect --host-root . --config '.chrono-harness/ci/units.json' --github-output "$GITHUB_OUTPUT"
+  unit_ci:
+    name: "chrono / ci"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_ci == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
     steps:
@@ -19,7 +68,8 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
-          fetch-depth: 0
+          fetch-depth: 2
+          filter: blob:none
           persist-credentials: true
       - name: Bootstrap registered tools
         shell: bash
@@ -29,6 +79,536 @@ jobs:
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'ci'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_distribution:
+    name: "chrono / distribution"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_distribution == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'distribution'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-distribution-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_inputs:
+    name: "chrono / inputs"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_inputs == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'inputs'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_instructions:
+    name: "chrono / instructions"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_instructions == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'instructions'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-instructions-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-cargo:
+    name: "chrono / judge-cargo"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-cargo == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-cargo'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-cargo-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-ci:
+    name: "chrono / judge-ci"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-ci == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-ci'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-cost:
+    name: "chrono / judge-cost"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-cost == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-cost'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-cost-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-filemap:
+    name: "chrono / judge-filemap"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-filemap == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-filemap'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-filemap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-mixed:
+    name: "chrono / judge-mixed"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-mixed == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-mixed'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-mixed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-projects:
+    name: "chrono / judge-projects"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-projects == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-projects'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-registration:
+    name: "chrono / judge-registration"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-registration == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-registration'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-registration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-routes:
+    name: "chrono / judge-routes"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-routes == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-routes'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-routes-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_judge-workflow:
+    name: "chrono / judge-workflow"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-workflow == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-workflow'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-workflow-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_runner:
+    name: "chrono / runner"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_runner == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'runner'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-runner-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_scoped-v1:
+    name: "chrono / scoped-v1"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_scoped-v1 == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'scoped-v1'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-scoped-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  unit_worktree:
+    name: "chrono / worktree"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_worktree == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'worktree'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-worktree-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+  aggregate:
+    name: "chrono / collection"
+    needs: ["detect","unit_ci","unit_distribution","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_runner","unit_scoped-v1","unit_worktree"]
+    if: ${{ always() }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_CI_NEEDS: ${{ toJSON(needs) }}
           CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |

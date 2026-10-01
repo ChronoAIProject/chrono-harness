@@ -438,3 +438,34 @@ units, global DELTA bare check, original-evidence full collection and the existi
 automatic units provider via explicit v2 full-context/upload mappings. Source
 fixtures do not activate this host or publish new public binaries. Clean-candidate
 admission, native full workflows and complete SPEC acceptance remain outstanding.
+
+## User-directed conditional-job generator correction
+
+Implemented source and scoped host projection: opt-in `chrono-job-gating/v1` on
+units v1/v2 produces one detector, explicit job-level conditional unit jobs and
+an `always()` aggregate needing all jobs. The sole required check is the aggregate;
+actual checks still use the fixed short entries and final original-report judge.
+The product host now generates one parent with 16 units and retires the exact
+16 owned obsolete projections. Host policy adopts a customizable/disableable
+3000-path threshold; Git supplies complete trees and registered blobs. Legacy
+providers and previously published native evidence retain their meanings.
+
+Dedicated real-Git/actual-command coverage is in
+`crates/ci-tests/tests/gating.rs`: isolated/multiple/empty DELTA, two-endpoint
+edge/assignment changes, deletion/rename, complete >3000 counts and policy states,
+multi-commit push, PR base/head, explicit frozen integration baseline, shallow
+missing endpoint acquisition without business source checkout, creation/deletion
+and structural failures; actual selected-unit reports and zero-operation collection;
+failed/cancelled/skipped/missing jobs and detection; artifact/source/run/attempt
+mismatches; independent job retries with original prerequisite attempts;
+customization/owned retirement/init/migration conflicts; and the copied
+installed-tools example's actual passing/failing short commands. Full declaration
+scheduling uses FILEMAP/routes without context/SDK snapshots; final effective-input
+admission and original seven-judge evidence remain required. Both scoped and full
+scheduling reject decoder-dependent history before interpreter acquisition.
+
+No native Actions/rerun/branch-protection activation or public release is claimed.
+Full native context, original birth/input provisioning, large streamed artifact
+composition and decoder-required historical scheduling remain separate boundaries.
+This correction changes product behavior and host policy/projections together;
+`W_MIXED_JUDGE_PRODUCT` applies, with no approval or consensus claim.
