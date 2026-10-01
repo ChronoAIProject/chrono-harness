@@ -790,7 +790,11 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let root = PathBuf::from(*opts.get("--host-root").ok_or("--host-root required")?);
     let config = *opts.get("--config").ok_or("--config required")?;
-    if !matches!(command.as_str(), "prepare" | "gather" | "migrate") && opts.len() != 2 {
+    if !matches!(
+        command.as_str(),
+        "prepare" | "prepare-endpoints" | "acquire-seed" | "gather" | "migrate"
+    ) && opts.len() != 2
+    {
         return Err("extra arguments".into());
     }
     match command.as_str() {
@@ -820,6 +824,28 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             command,
             generate(&root, config, command == "verify")?
         )),
+        "acquire-seed" => {
+            if opts.len() != 7 {
+                return Err("acquire-seed requires host-root/config/unit/repository/event/payload/workflow-revision".into());
+            }
+            let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
+                return Err("seed requires full units".into());
+            };
+            let payload = chrono_harness::json(
+                &fs::read(opts.get("--payload").ok_or("payload required")?)
+                    .map_err(|e| e.to_string())?,
+            )?;
+            gather::acquire_seed(
+                &root,
+                config,
+                &c,
+                opts.get("--unit").ok_or("unit required")?,
+                opts.get("--repository").ok_or("repository required")?,
+                opts.get("--event").ok_or("event required")?,
+                &payload,
+                opts.get("--workflow-revision").ok_or("revision required")?,
+            )
+        }
         "gather" => {
             if opts.len() != 3 {
                 return Err("gather requires only host-root, config, repository".into());
@@ -834,7 +860,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 opts.get("--repository").ok_or("--repository required")?,
             )
         }
-        "prepare" => {
+        "prepare" | "prepare-endpoints" => {
             if ["--repository", "--from", "--previous-config"]
                 .iter()
                 .any(|k| opts.contains_key(k))
@@ -842,6 +868,9 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 return Err("unexpected transport or migration option for prepare".into());
             }
             let projection = load_projection(&no_symlink_parents(&root, config)?)?;
+            if command == "prepare-endpoints" && !matches!(&projection, Projection::Units(_)) {
+                return Err("early endpoints require full units".into());
+            }
             if opts.contains_key("--unit") && !matches!(&projection, Projection::Units(_)) {
                 return Err("unit selection requires unit provider".into());
             }
@@ -851,7 +880,12 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             )?;
             let c = match projection {
                 Projection::Units(c) => {
-                    let context = units::prepare(
+                    let producer = if command == "prepare-endpoints" {
+                        units::prepare_endpoints
+                    } else {
+                        units::prepare
+                    };
+                    let context = producer(
                         &root,
                         config,
                         &c,

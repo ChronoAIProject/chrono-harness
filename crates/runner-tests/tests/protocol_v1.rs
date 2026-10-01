@@ -597,6 +597,17 @@ fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
             chrono_harness::full::artifact_bytes(&originals, "original").unwrap(),
             bytes
         );
+        let root = tempfile::tempdir().unwrap();
+        assert_eq!(
+            chrono_harness::retained_artifacts::bytes(root.path(), &originals, "original", None)
+                .unwrap(),
+            bytes
+        );
+        assert_eq!(
+            chrono_harness::retained_artifacts::identity(root.path(), &originals, "original", None)
+                .unwrap(),
+            (sha256(bytes), bytes.len() as u64)
+        );
         for field in ["hex", "length", "sha256"] {
             let mut corrupt = originals.clone();
             corrupt["original"][field] = match field {
@@ -605,6 +616,15 @@ fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
                 _ => "0".repeat(64).into(),
             };
             assert!(chrono_harness::full::artifact_bytes(&corrupt, "original").is_err());
+            assert!(
+                chrono_harness::retained_artifacts::identity(
+                    root.path(),
+                    &corrupt,
+                    "original",
+                    None
+                )
+                .is_err()
+            );
         }
     }
 }

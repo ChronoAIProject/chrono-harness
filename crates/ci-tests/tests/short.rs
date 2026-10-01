@@ -2,6 +2,65 @@ use super::*;
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
+#[test]
+fn native_forwarding_resolves_declared_path_once_and_retains_real_bounded_outcomes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(dir.path()).unwrap();
+    fs::write(
+        root.join("native.py"),
+        include_str!("../../../assets/ci/native.py"),
+    )
+    .unwrap();
+    let python = chrono_harness::resolve_program(&root, "python3", None).unwrap();
+    let driver = r#"
+import hashlib,json,pathlib,runpy,sys
+root=pathlib.Path.cwd(); native=runpy.run_path('native.py')
+for text,nanoseconds in [('0',0),('1',100000000),('12345',123450000),('123456',123456000),('123456789',123456789)]:
+ assert native['moment']('2026-01-01T00:00:00.'+text+'Z')==1767225600000000000+nanoseconds
+try:native['moment']('2026-01-01T00:00:00+08:00')
+except ValueError:pass
+else:raise AssertionError('accepted non-UTC observation')
+env={'PATH':str(pathlib.Path(sys.executable).parent),'BUSINESS_VALUE':'actual value','SECRET':'actual credential'}
+program=pathlib.Path(sys.executable).name
+code="import sys;sys.stdout.buffer.write(b'\\x00\\xff'+sys.stdin.buffer.read());sys.stderr.buffer.write(b'original stderr')"
+raw,refs=native['process'](root,[program,'-c',code],b'original input',env,'.chrono-harness/state/forward/','good',5,1024,['SECRET'])
+assert raw==b'\x00\xfforiginal input'
+receipt=json.loads((root/refs[-1]['path']).read_bytes())
+assert pathlib.Path(receipt['argv'][0]).is_absolute()
+assert receipt['configured_argv'][0]==program
+assert receipt['executable']['sha256']==hashlib.sha256(pathlib.Path(receipt['argv'][0]).read_bytes()).hexdigest()
+assert receipt['environment']['BUSINESS_VALUE']==hashlib.sha256(b'actual value').hexdigest()
+assert 'SECRET' not in receipt['environment'] and receipt['omitted_credentials']==['SECRET']
+assert (root/receipt['stdin']['path']).read_bytes()==b'original input'
+assert (root/receipt['stdout']['path']).read_bytes()==raw
+assert (root/receipt['stderr']['path']).read_bytes()==b'original stderr'
+for prefix,code,timeout,expected in [
+ ('exit','import sys;sys.stderr.buffer.write(b"real failure");sys.exit(7)',5,None),
+ ('overflow','import sys;sys.stdout.buffer.write(b"x"*1000)',5,'output bound exceeded'),
+ ('timeout','import time;time.sleep(10)',0.1,'timeout')]:
+ try:native['process'](root,[program,'-c',code],b'',env,'.chrono-harness/state/forward/',prefix,timeout,32,['SECRET'])
+ except ValueError as error:
+  original=str(error).split('retained at ')[1]
+  failed=json.loads((root/original).read_bytes())
+  assert failed['failure']==expected
+  assert len((root/failed['stdout']['path']).read_bytes())<=32
+  if prefix=='exit':
+   assert failed['exit_code']==7
+   assert (root/failed['stderr']['path']).read_bytes()==b'real failure'
+ else:raise AssertionError('accepted original child failure: '+prefix)
+"#;
+    let output = Command::new(&python)
+        .current_dir(&root)
+        .args(["-c", driver])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 struct ShortHost {
     _dir: tempfile::TempDir,
     root: PathBuf,

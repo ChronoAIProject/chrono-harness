@@ -194,6 +194,33 @@ snapshot and keeps the selector and target registry bytes under their real paths
 Direct v1/v2/v3 configs
 retain their previous snapshot schemas.
 
+For a new or renamed candidate unit, capture both endpoints with optional
+`--base BASE_OID --candidate CANDIDATE_OID` alongside `--commit` and `--unit`.
+The commit must be one of those exact endpoints. This uses registration's
+existing two-endpoint projection, including historical requirements when the
+candidate unit ID was absent at the base. It still observes only the checked-out
+endpoint; it never substitutes current input bytes for historical observations.
+
+`chrono-inputs compose --host-root H --config P --base BASE_OID --candidate
+CANDIDATE_OID --manifest M --output O --receipt R` joins explicitly addressed
+original pairs offline. Its bounded manifest has schema
+`chrono-input-composition/v1` and `sources`, each with a `pair: {path, sha256}`,
+optional `transport: {source_directory, directory}`, and optional original
+report `artifacts` map. Sources are never discovered. At most 4096 sources are
+accepted; JSON inputs retain the 64 MiB bound. Blob copying and identity checks
+stream bytes through the original descriptor/transport contract.
+
+Composition checks each snapshot's exact endpoint, config, selector and
+environment binding. Compatible overlapping observations merge; contradictory
+presence, digest, environment or config rejects. Both endpoints must cover every
+globally required declared input, including governance requirements outside the
+selected business tests. Missing coverage names the endpoint and input. No live
+business input, version probe or SDK install is used. Original pair bytes remain
+addressed in `.chrono-harness/state/inputs/originals/`; a separate
+`chrono-input-composition-result/v1` receipt names the manifest, constituents
+and output. Snapshot v2/v3 shape stays unchanged and the receipt reports
+`completeness_proven: false`.
+
 Pair transports absence unchanged without opening its historical location.
 Registration, routes and projects consume the same validation, including a final
 candidate check after operations. Effective reports use `chrono-effective-inputs/v2`

@@ -84,7 +84,7 @@ fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, tempf
             "runtime-input",
             "judge:registration",
         ));
-    let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["HOME"],"values":{"PATH":h.values[CONFIG]["environment"]["values"]["PATH"],"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}}});
+    let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["HOME"],"values":{"PATH":h.values[CONFIG]["environment"]["values"]["PATH"],"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"delivery"}}});
     let common = json!({"schema":"chrono-github-ci/v4","workflow_path":".github/workflows/collection.yml","name":"Full collection","runs_on":"fixture-native","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["/bin/true"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"facts_config":CONFIG,"context_path":".chrono-harness/state/collection/event.json","artifact_directory":".chrono-harness/state/collection/"});
     let mut provider = json!({"schema":"chrono-github-units/v2","collection":common,"units":{},"full_contexts":{"collection":".chrono-harness/state/collection/full.json","units":{}},"gather":{"program":tools.path().join("mock-gh"),"inherit_environment":[],"credential_environment":[],"environment":{},"timeout_seconds":30,"output_limit_bytes":1048576,"wait_seconds":1,"poll_seconds":1,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}});
     for id in ["one", "two"] {
@@ -162,7 +162,12 @@ fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, tempf
 }
 // Read the registered publication and verify its immutable original. Short
 // stdout is the landed human projection, not a JSON report protocol.
-fn short_report(root: &Path, args: &[&str], output: &std::process::Output) -> Value {
+fn short_report(
+    root: &Path,
+    args: &[&str],
+    output: &std::process::Output,
+    source: Option<&str>,
+) -> Value {
     if output.stdout.is_empty() {
         assert!(!output.status.success());
         return json!({"stderr":String::from_utf8_lossy(&output.stderr)});
@@ -172,9 +177,22 @@ fn short_report(root: &Path, args: &[&str], output: &std::process::Output) -> Va
     let path = match args {
         ["check", "--unit", unit] => config["execution_units"]["units"][*unit]["report_path"]
             .as_str()
-            .unwrap(),
-        ["check", "--collect"] => config["execution_units"]["report_path"].as_str().unwrap(),
-        ["check"] => ".chrono-harness/state/report.json",
+            .unwrap()
+            .to_owned(),
+        ["check", "--collect"] => config["execution_units"]["report_path"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+        ["check"] if source == Some("ci") => {
+            let provider = chrono_harness::json(&fs::read(root.join(PROVIDER)).unwrap()).unwrap();
+            format!(
+                "{}report.json",
+                provider["collection"]["artifact_directory"]
+                    .as_str()
+                    .unwrap()
+            )
+        }
+        ["check"] => ".chrono-harness/state/report.json".to_owned(),
         _ => panic!("unexpected short fixture arguments: {args:?}"),
     };
     let bytes = fs::read(root.join(path)).unwrap();
@@ -198,9 +216,10 @@ fn short_report(root: &Path, args: &[&str], output: &std::process::Output) -> Va
     report
 }
 fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
+    let root = fs::canonicalize(root).unwrap();
     let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
     command
-        .current_dir(root)
+        .current_dir(&root)
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT")
         .env_remove("CHRONO_CHECK_SOURCE")
@@ -212,7 +231,7 @@ fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     if !output.status.success() {
         println!("SHORT_FAILURE {}", String::from_utf8_lossy(&output.stderr));
     }
-    let report = short_report(root, args, &output);
+    let report = short_report(&root, args, &output, source);
     println!(
         "SHORT {:?} source={:?} exit={} bytes={}",
         args,
@@ -268,6 +287,13 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
 }
 fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::path::PathBuf) {
     let (h, tools) = configured_short_host(false, age_seconds);
+    make_local_lane(h, tools, "integration")
+}
+fn make_local_lane(
+    h: Host,
+    tools: tempfile::TempDir,
+    kind: &str,
+) -> (Host, tempfile::TempDir, std::path::PathBuf) {
     let root = h.root();
     // Produce the fixed endpoint snapshots before starting the real branch
     // clock. Its short freshness window measures producer behavior, not fixture
@@ -294,7 +320,7 @@ fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::
             "--config",
             WORKTREE,
             "--kind",
-            "integration",
+            kind,
             "--name",
             "short-full",
             "--path",
@@ -413,9 +439,9 @@ fn native_command(root: &Path, id: &str, candidate: &str, payload: &Path) -> (i3
         out.stdout.len()
     );
     let report = if id == "collection" {
-        short_report(root, &["check", "--collect"], &out)
+        short_report(root, &["check", "--collect"], &out, Some("ci"))
     } else {
-        short_report(root, &["check", "--unit", id], &out)
+        short_report(root, &["check", "--unit", id], &out, Some("ci"))
     };
     (out.status.code().unwrap(), report)
 }
@@ -615,4 +641,623 @@ fn malformed_cached_local_contexts_return_producer_errors() {
         assert!(!text.contains("panicked"), "{text}");
         assert_eq!(marker(tools.path()), before);
     }
+}
+
+#[test]
+fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_it() {
+    let (mut h, tools) = configured_short_host(false, None);
+    git(
+        &h.root(),
+        &["checkout", &h.base, "--", "p/src/lib.rs", "p2/src/lib.rs"],
+    );
+    fs::write(h.root().join("doc.txt"), "ordinary documentation delta\n").unwrap();
+    h.save();
+    let (_h, tools, lane) = make_local_lane(h, tools, "feature");
+    let (exit, report) = short(&lane, &["check"], None);
+    passed(exit, &report);
+    assert_eq!(workflow(&report)["mode"], "ordinary_delta");
+    let raw: Vec<u8> =
+        serde_json::from_value(report["preparation"]["result"]["context"]["raw"].clone()).unwrap();
+    assert!(chrono_harness::json(&raw).unwrap()["integration_evidence"].is_null());
+    assert!(!lane.join(".chrono-harness/state/integration.json").exists());
+    let before = marker(tools.path());
+    fs::write(
+        lane.join("p/src/lib.rs"),
+        "pub fn double(n:i32)->i32 {n+n}\n",
+    )
+    .unwrap();
+    commit(&lane);
+    let origin_path = lane.join(".chrono-harness/state/origin.json");
+    let mut origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
+    // Obtain genuine current captures while retaining the original historical base snapshot.
+    let inputs_path = lane.join(".chrono-harness/state/inputs.json");
+    let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
+    let captured = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(&lane)
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .env_remove("CHRONO_CHECK_SOURCE")
+        .args([
+            "capture",
+            "--host-root",
+            ".",
+            "--config",
+            CONFIG,
+            "--commit",
+            &git(&lane, &["rev-parse", "HEAD"]),
+            "--output",
+            ".chrono-harness/state/feature-current.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        captured.status.success(),
+        "{}",
+        String::from_utf8_lossy(&captured.stderr)
+    );
+    inputs["candidate"] = chrono_harness::json(&captured.stdout).unwrap();
+    fs::write(&inputs_path, serde_json::to_vec(&inputs).unwrap()).unwrap();
+    origin["integration_evidence"] = Value::Null;
+    fs::write(origin_path, serde_json::to_vec(&origin).unwrap()).unwrap();
+    let (exit, rejected) = short(&lane, &["check"], None);
+    assert_ne!(exit, 0);
+    assert!(
+        rejected["findings"]
+            .to_string()
+            .contains("E_INTEGRATION_REQUIRED"),
+        "{rejected}"
+    );
+    assert!(marker(tools.path()).len() >= before.len());
+}
+
+#[test]
+fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
+    let (mut h, tools, lane) = local_short_lane(None);
+    let origin: Value =
+        chrono_harness::json(&fs::read(lane.join(".chrono-harness/state/origin.json")).unwrap())
+            .unwrap();
+    let lineage_bytes = fs::read(lane.join(origin["birth_report"].as_str().unwrap())).unwrap();
+    let lineage_path = ".chrono-harness/ci/lineage.json";
+    fs::write(lane.join(lineage_path), &lineage_bytes).unwrap();
+    let python = chrono_harness::resolve_program(&lane, "python3", Some("/usr/bin:/bin")).unwrap();
+    let version = Command::new(&python).arg("--version").output().unwrap();
+    let cfg = h.values.get_mut(CONFIG).unwrap();
+    cfg["canonical_check"]["inputs"]["ci"] = json!({"operation":"prepare.ci","tool":"native-python","argv":[".chrono-harness/ci/native.py","forward","--config",PROVIDER]});
+    cfg["tools"].as_array_mut().unwrap().push(json!({"id":"native-python","program":python,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}));
+    cfg["environment"]["inputs"].as_array_mut().unwrap().push(json!({"id":"native-python","location":python,"presence":"present","sha256":sha256(&fs::read(&python).unwrap())}));
+    cfg["input_closure"]["bindings"][0]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .extend([json!("tool:native-python"), json!("input:native-python")]);
+    h.values.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("tool:native-python", "runtime-input", "judge:registration"),
+            edge("input:native-python", "runtime-input", "judge:registration"),
+        ]);
+    for path in [lineage_path, ".chrono-harness/ci/native.py"] {
+        let mut f = file(path, json!([]));
+        f["surface"] = json!("documentation");
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(f);
+    }
+    write_values(&lane, &h.values);
+    let mut provider: Value =
+        chrono_harness::json(&fs::read(lane.join(PROVIDER)).unwrap()).unwrap();
+    let seed_directory = ".chrono-harness/state/shared-seed/";
+    provider["native_adoption"] = json!({"schema":"chrono-native-adoption/v1","lineage":{"path":lineage_path,"sha256":sha256(&lineage_bytes)},"adapter_path":".chrono-harness/ci/native.py","interpreter":python,"inputs_program":source().join("crates/inputs/target/debug/chrono-inputs"),"seed_directory":seed_directory,"seed_artifact":"chrono-context","retained_inputs":".chrono-harness/state/inputs.json","composition_sources":[],"push_roles":{"refs/heads/integration/":"integration","refs/heads/dev":"delivery"},"pull_request_role":"delivery","integration_evidence":null,"integration_evidence_path":".chrono-harness/state/integration.json","integration_transport":{"source_directory":".chrono-harness/state/collection/","directory":".chrono-harness/state/cert-download/"}});
+    let mock = tools.path().join("mock-gh");
+    let metadata = tools.path().join("seed-api.json");
+    let uploads = tools.path().join("shared-upload");
+    fs::write(&mock,format!(r#"#!/usr/bin/python3
+import json,pathlib,sys,shutil
+args=sys.argv[1:]; data=json.loads(pathlib.Path({metadata:?}).read_text()); run=dict(id=data.get('seed_run',900),run_attempt=1,status='in_progress',head_sha=data['candidate'],event=data.get('event','push'),path='.github/workflows/collection.yml')
+case=data.get('case','valid')
+if case=='run-race' and args[:1]==['api'] and args[1].endswith('/runs/900'):run['run_attempt']=2
+unit=None
+if len(args)>1:
+ for key,item in data.get('units',{{}}).items():
+  if ('/workflows/'+key+'.yml/') in args[1] or args[1].endswith('/runs/'+str(item['run'])) or (args[:2]==['run','download'] and args[2]==str(item['run'])):
+   unit=key;run=dict(id=item['run'],run_attempt=1,status='completed',conclusion='success',head_sha=data['candidate'],event='push',path='.github/workflows/'+key+'.yml')
+if args[:2]==['run','download']:
+ dest=pathlib.Path(args[args.index('--dir')+1]);shutil.copytree(pathlib.Path(data['units'][unit]['upload'] if unit else data['upload']),dest,dirs_exist_ok=True)
+ if case in ['wrong-base','wrong-attempt','wrong-workflow','wrong-digest','wrong-fork','stale','nested-loss','wrong-lineage','wrong-branch','wrong-repository','wrong-candidate']:
+  binding=json.loads((dest/'binding.json').read_bytes()); context=json.loads((dest/'context.json').read_bytes())
+  if case=='wrong-base':binding['base']='f'*40
+  if case=='wrong-attempt':binding['attempt']=2
+  if case=='wrong-workflow':binding['workflow_revision']='e'*40
+  if case=='wrong-digest':binding['context_sha256']='0'*64
+  if case=='wrong-repository':binding['repository']='other/repository'
+  if case=='wrong-candidate':binding['candidate']='e'*40
+  if case=='wrong-lineage':(dest/'lineage.json').write_bytes(b'original byte drift')
+  if case=='wrong-branch':context['branch_ref']='feature/wrong'
+  if case=='wrong-fork':context['fork_point']='d'*40
+  if case=='stale':context['observed_at']='2020-01-01T00:00:00Z'
+  if case=='nested-loss':
+   first=next(iter(binding['originals'].values()));(dest/first['file']).unlink()
+  if case in ['wrong-fork','stale','wrong-branch']:
+   import hashlib
+   raw=json.dumps(context,separators=(',',':')).encode();(dest/'context.json').write_bytes(raw);binding['context_sha256']=hashlib.sha256(raw).hexdigest()
+  (dest/'binding.json').write_text(json.dumps(binding))
+elif '/contents/' in args[1]:
+ filename=args[1].split('/contents/')[1].split('?')[0]
+ sys.stdout.buffer.write((pathlib.Path(data['workflow']).parents[2]/filename).read_bytes())
+elif '/artifacts?' in args[1]:print(json.dumps([dict(artifacts=[] if case=='missing' else [dict(name='chrono-context-'+str(run['id'])+'-1',expired=False)])]))
+elif '/workflows/' in args[1]:print(json.dumps([dict(workflow_runs=[run,run] if case=='ambiguous' else [run])]))
+else:print(json.dumps(run))
+"#,metadata=metadata.to_str().unwrap())).unwrap();
+    fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
+    provider["gather"]["program"] = json!(mock);
+    fs::write(lane.join(PROVIDER), serde_json::to_vec(&provider).unwrap()).unwrap();
+    let generated = Command::new(lane.join(".chrono-harness/bin/chrono-ci"))
+        .current_dir(&lane)
+        .args(["generate", "--host-root", ".", "--config", PROVIDER])
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    h.candidate = commit(&lane);
+    let payload = tools.path().join("authentic-event.json");
+    fs::write(&payload,serde_json::to_vec(&json!({"before":h.base,"after":h.candidate,"ref":"refs/heads/integration/short-full","created":false,"deleted":false})).unwrap()).unwrap();
+    let native = |root: &Path, operation: &str, unit: Option<&str>, run: &str| {
+        let mut c = Command::new(&python);
+        c.current_dir(root)
+            .env(
+                "GITHUB_EVENT_NAME",
+                if chrono_harness::json(&fs::read(&payload).unwrap())
+                    .unwrap()
+                    .get("pull_request")
+                    .is_some()
+                {
+                    "pull_request"
+                } else {
+                    "push"
+                },
+            )
+            .env("GITHUB_EVENT_PATH", &payload)
+            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .env("GITHUB_REPOSITORY", "fixture/native")
+            .env("GITHUB_RUN_ID", run)
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .args([
+                ".chrono-harness/ci/native.py",
+                operation,
+                "--config",
+                PROVIDER,
+            ]);
+        if let Some(unit) = unit {
+            c.args(["--unit", unit]);
+        }
+        c.output().unwrap()
+    };
+    let published = native(&lane, "publish", None, "900");
+    assert!(
+        published.status.success(),
+        "{}",
+        String::from_utf8_lossy(&published.stderr)
+    );
+    let seed = fs::read(lane.join(format!("{seed_directory}context.json"))).unwrap();
+    let ctx = chrono_harness::json(&seed).unwrap();
+    let birth = chrono_harness::json(&lineage_bytes).unwrap();
+    assert_eq!(ctx["branch_started_at"], birth["branch_started_at"]);
+    assert_eq!(ctx["fork_point"], birth["base"]);
+    assert_eq!(
+        fs::read(lane.join(format!("{seed_directory}lineage.json"))).unwrap(),
+        lineage_bytes
+    );
+    let generated_workflow =
+        fs::read_to_string(lane.join(".github/workflows/collection.yml")).unwrap();
+    assert!(
+        generated_workflow
+            .find("Publish shared native context")
+            .unwrap()
+            < generated_workflow.find("Canonical harness check").unwrap()
+    );
+    assert!(
+        !generated_workflow.contains("Gather independent unit reports"),
+        "gather remains inside short check"
+    );
+    assert!(
+        fs::read_to_string(lane.join(".github/workflows/one.yml"))
+            .unwrap()
+            .contains("actions: read")
+    );
+    copy_tree(&lane.join(seed_directory), &uploads);
+    fs::write(&metadata,serde_json::to_vec(&json!({"candidate":h.candidate,"upload":uploads,"workflow":lane.join(".github/workflows/collection.yml")})).unwrap()).unwrap();
+    let unit_root = tempfile::tempdir().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["clone", "--quiet", "--no-hardlinks"])
+            .arg(&lane)
+            .arg(unit_root.path())
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    copy_tree(
+        &lane.join(".chrono-harness/bin"),
+        &unit_root.path().join(".chrono-harness/bin"),
+    );
+    let before = marker(tools.path());
+    for case in [
+        "missing",
+        "ambiguous",
+        "wrong-base",
+        "wrong-attempt",
+        "wrong-workflow",
+        "wrong-digest",
+        "wrong-fork",
+        "stale",
+        "nested-loss",
+        "wrong-lineage",
+        "wrong-branch",
+        "wrong-repository",
+        "wrong-candidate",
+        "run-race",
+    ] {
+        let value = json!({"candidate":h.candidate,"upload":uploads,"workflow":lane.join(".github/workflows/collection.yml"),"case":case});
+        fs::write(&metadata, serde_json::to_vec(&value).unwrap()).unwrap();
+        let path = unit_root.path().join(".chrono-harness/state/one/seed");
+        if path.exists() {
+            fs::remove_dir_all(&path).unwrap();
+        }
+        let rejected = native(unit_root.path(), "acquire", Some("one"), "910");
+        assert!(!rejected.status.success(), "accepted acquisition {case}");
+        assert_eq!(
+            marker(tools.path()),
+            before,
+            "acquisition launches no business/SDK processes"
+        );
+    }
+    fs::write(&metadata,serde_json::to_vec(&json!({"candidate":h.candidate,"upload":uploads,"workflow":lane.join(".github/workflows/collection.yml")})).unwrap()).unwrap();
+    fs::remove_dir_all(unit_root.path().join(".chrono-harness/state/one/seed")).unwrap();
+    let acquired = native(unit_root.path(), "acquire", Some("one"), "910");
+    assert!(
+        acquired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&acquired.stderr)
+    );
+    assert_eq!(
+        fs::read(unit_root.path().join(".chrono-harness/state/one/full.json")).unwrap(),
+        seed
+    );
+    // Capture the current endpoint in the real business environment with acquisition fields absent.
+    let capture = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(unit_root.path())
+        .env("CHRONO_CHECK_SOURCE", "ci")
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .args([
+            "capture",
+            "--host-root",
+            ".",
+            "--config",
+            CONFIG,
+            "--commit",
+            &h.candidate,
+            "--unit",
+            "one",
+            "--output",
+            ".chrono-harness/state/candidate-real.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        capture.status.success(),
+        "{}",
+        String::from_utf8_lossy(&capture.stderr)
+    );
+    // The historical original was captured at its explicit checked-out endpoint.
+    git(&lane, &["checkout", "--detach", &h.base]);
+    let base = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(&lane)
+        .env("CHRONO_CHECK_SOURCE", "ci")
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .args([
+            "capture",
+            "--host-root",
+            ".",
+            "--config",
+            CONFIG,
+            "--commit",
+            &h.base,
+            "--unit",
+            "one",
+            "--output",
+            ".chrono-harness/state/base-real.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        base.status.success(),
+        "{}",
+        String::from_utf8_lossy(&base.stderr)
+    );
+    git(&lane, &["checkout", "--detach", &h.candidate]);
+    let paired = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(unit_root.path())
+        .args([
+            "pair",
+            "--host-root",
+            ".",
+            "--base-root",
+            lane.to_str().unwrap(),
+            "--base-snapshot",
+            ".chrono-harness/state/base-real.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/candidate-real.json",
+            "--output",
+            ".chrono-harness/state/inputs.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        paired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&paired.stderr)
+    );
+    let (exit, report) = short(unit_root.path(), &["check", "--unit", "one"], Some("ci"));
+    passed(exit, &report);
+    let request: chrono_harness::prepared::InputRequest =
+        serde_json::from_value(report["preparation"]["request"].clone()).unwrap();
+    assert_eq!(request.native_artifacts.unwrap().config_path, PROVIDER);
+    assert_eq!(
+        h.values[CONFIG]["canonical_check"]["inputs"]["ci"]["argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|v| *v == "--config")
+            .count(),
+        1
+    );
+    let original = report["preparation"]["result"]["evidence"]["report_path"]
+        .as_str()
+        .unwrap();
+    let receipt =
+        chrono_harness::json(&fs::read(unit_root.path().join(original)).unwrap()).unwrap();
+    let process = receipt["forwarding"]["process"]["path"].as_str().unwrap();
+    let process = chrono_harness::json(&fs::read(unit_root.path().join(process)).unwrap()).unwrap();
+    let outer_ref = &report["preparation"]["receipts"][0];
+    let outer = chrono_harness::json(
+        &fs::read(unit_root.path().join(outer_ref["path"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        outer["process"]["environment"]
+            .get("GITHUB_EVENT_NAME")
+            .is_none()
+    );
+    assert_eq!(process["environment"]["GITHUB_EVENT_NAME"], sha256(b"push"));
+    let original_input = fs::read(
+        unit_root
+            .path()
+            .join(process["stdin"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(sha256(&original_input), outer["process"]["stdin_sha256"]);
+    let stdout = fs::read(
+        unit_root
+            .path()
+            .join(process["stdout"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    let child: chrono_harness::prepared::PreparedCheck = chrono_harness::decode(&stdout).unwrap();
+    chrono_harness::prepared::validate_result(
+        &serde_json::from_slice(&original_input).unwrap(),
+        &child,
+    )
+    .unwrap();
+    // A second independent checkout contributes its own genuine endpoint pair and unit run.
+    let second = tempfile::tempdir().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["clone", "--quiet", "--no-hardlinks"])
+            .arg(&lane)
+            .arg(second.path())
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    copy_tree(
+        &lane.join(".chrono-harness/bin"),
+        &second.path().join(".chrono-harness/bin"),
+    );
+    let acquired = native(second.path(), "acquire", Some("two"), "920");
+    assert!(
+        acquired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&acquired.stderr)
+    );
+    assert_eq!(
+        fs::read(second.path().join(".chrono-harness/state/two/full.json")).unwrap(),
+        seed
+    );
+    let capture_two = |root: &Path, endpoint: &str, output: &str| {
+        let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .current_dir(root)
+            .env("CHRONO_CHECK_SOURCE", "ci")
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                endpoint,
+                "--unit",
+                "two",
+                "--output",
+                output,
+            ])
+            .output()
+            .unwrap();
+        assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
+    };
+    capture_two(
+        second.path(),
+        &h.candidate,
+        ".chrono-harness/state/candidate-two.json",
+    );
+    git(&lane, &["checkout", "--detach", &h.base]);
+    capture_two(&lane, &h.base, ".chrono-harness/state/base-two.json");
+    git(&lane, &["checkout", "--detach", &h.candidate]);
+    let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(second.path())
+        .args([
+            "pair",
+            "--host-root",
+            ".",
+            "--base-root",
+            lane.to_str().unwrap(),
+            "--base-snapshot",
+            ".chrono-harness/state/base-two.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/candidate-two.json",
+            "--output",
+            ".chrono-harness/state/inputs.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
+    let (exit, two) = short(second.path(), &["check", "--unit", "two"], Some("ci"));
+    passed(exit, &two);
+    fs::write(
+        &metadata,
+        serde_json::to_vec(&json!({"candidate":h.candidate,"upload":uploads,
+        "workflow":lane.join(".github/workflows/collection.yml"),"units":{
+            "one":{"run":910,"upload":unit_root.path().join(".chrono-harness/state/one")},
+            "two":{"run":920,"upload":second.path().join(".chrono-harness/state/two")}}}))
+        .unwrap(),
+    )
+    .unwrap();
+    // Collection delegates real gather and composition through the adapter, with the SDK gone.
+    let before_collection = marker(tools.path());
+    let sdk_original = fs::read(tools.path().join("cargo-fixture")).unwrap();
+    fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
+    let (exit, collected) = short(&lane, &["check", "--collect"], Some("ci"));
+    passed(exit, &collected);
+    assert_eq!(collected["tests"]["executed"], json!([]));
+    assert_eq!(marker(tools.path()), before_collection);
+    assert_eq!(workflow(&collected)["mode"], "integration_run");
+    let result_report = collected["preparation"]["result"]["evidence"]["report_path"]
+        .as_str()
+        .unwrap();
+    let result = chrono_harness::json(&fs::read(lane.join(result_report)).unwrap()).unwrap();
+    assert!(
+        result["originals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|o| o["path"].as_str().unwrap().contains("composition-process"))
+    );
+    // A PR seed binds the actual original certificate bytes and consumes its relocated closure.
+    let delivery_root = tempfile::tempdir().unwrap();
+    assert!(
+        Command::new("git")
+            .args(["clone", "--quiet", "--no-hardlinks"])
+            .arg(&lane)
+            .arg(delivery_root.path())
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    copy_tree(
+        &lane.join(".chrono-harness/bin"),
+        &delivery_root.path().join(".chrono-harness/bin"),
+    );
+    copy_tree(
+        &lane.join(".chrono-harness/state/collection"),
+        &delivery_root
+            .path()
+            .join(".chrono-harness/state/cert-download"),
+    );
+    copy_tree(
+        &lane.join(".chrono-harness/state/inputs"),
+        &delivery_root.path().join(".chrono-harness/state/inputs"),
+    );
+    for path in [
+        ".chrono-harness/state/inputs.json",
+        ".chrono-harness/state/integration.json",
+    ] {
+        fs::copy(lane.join(path), delivery_root.path().join(path)).unwrap();
+    }
+    fs::remove_dir_all(lane.join(".chrono-harness/state/collection")).unwrap();
+    fs::write(tools.path().join("cargo-fixture"), &sdk_original).unwrap();
+    fs::set_permissions(
+        tools.path().join("cargo-fixture"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    fs::write(&payload, serde_json::to_vec(&json!({"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate,"ref":"integration/short-full"}}})).unwrap()).unwrap();
+    let published = native(delivery_root.path(), "publish", None, "930");
+    assert!(
+        published.status.success(),
+        "{}",
+        String::from_utf8_lossy(&published.stderr)
+    );
+    let delivered_seed = chrono_harness::json(
+        &fs::read(
+            delivery_root
+                .path()
+                .join(format!("{seed_directory}context.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        delivered_seed["integration_evidence"],
+        sha256(
+            &fs::read(
+                delivery_root
+                    .path()
+                    .join(".chrono-harness/state/integration.json")
+            )
+            .unwrap()
+        )
+    );
+    let delivery_upload = tools.path().join("delivery-seed-upload");
+    copy_tree(&delivery_root.path().join(seed_directory), &delivery_upload);
+    fs::write(&metadata, serde_json::to_vec(&json!({"candidate":h.candidate,"seed_run":930,"event":"pull_request",
+        "upload":delivery_upload,"workflow":delivery_root.path().join(".github/workflows/collection.yml")})).unwrap()).unwrap();
+    fs::remove_file(
+        delivery_root
+            .path()
+            .join(".chrono-harness/state/integration.json"),
+    )
+    .unwrap();
+    let acquired = native(delivery_root.path(), "acquire", Some("one"), "940");
+    assert!(
+        acquired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&acquired.stderr)
+    );
+    assert_eq!(
+        delivered_seed["integration_evidence"],
+        sha256(
+            &fs::read(
+                delivery_root
+                    .path()
+                    .join(".chrono-harness/state/integration.json")
+            )
+            .unwrap()
+        )
+    );
+    let (exit, delivered) = short(delivery_root.path(), &["check"], Some("ci"));
+    passed(exit, &delivered);
+    assert_eq!(workflow(&delivered)["mode"], "delivery");
+    println!(
+        "NATIVE_PROVISION genuine_birth=true early_publish=true shared_raw=true acquisition_negatives=14 real_forwarded_prepared_consumer=pass provider_config_pairs=1 real_collection_composition=pass collector_effects=0 original_certificate_handoff=pass relocated_delivery=pass"
+    );
 }

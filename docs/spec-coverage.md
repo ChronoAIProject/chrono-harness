@@ -438,3 +438,19 @@ units, global DELTA bare check, original-evidence full collection and the existi
 automatic units provider via explicit v2 full-context/upload mappings. Source
 fixtures do not activate this host or publish new public binaries. Clean-candidate
 admission, native full workflows and complete SPEC acceptance remain outstanding.
+
+The native provisioning source increment adds versioned streamed retained blobs,
+offline composition of genuine endpoint pairs using the existing historical unit
+projection, and the optional units/v2 native-adoption extension. The generated
+adapter delegates existing event endpoints, publishes one original schema2 seed
+before gather, acquires its fixed run/attempt binding and forwards authentic
+acquisition fields through the real short producer. Collection composes explicit
+originals and performs no business/SDK operations. Delivery preparation carries
+nullable evidence; workflow alone selects whether the finalized certificate is
+required, retaining all nine bindings. See [input composition](inputs.md),
+[external closure](execution.md) and [host declarations](ci-units.md).
+
+**Mixed policy/product change warning:** reusable code/templates and host FILEMAP
+and verification-operation registrations change together. Costs remain unmeasured.
+The existing host selections remain scoped; release, main/example activation,
+actual native push/PR/dev evidence and parity are caller-owned outstanding work.

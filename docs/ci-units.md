@@ -55,8 +55,10 @@ executables may be unavailable. The completed collector report retains the
 original evidence closure for subsequent integration certificate consumption.
 Both integration and delivery contexts support contribution-only units without
 requiring a prior completed certificate; only collection resolves global
-completion. Full-v3 report bounds apply to these portable bytes as well as the
-manifest. Missing, replaced, failed, stale or contradictory evidence rejects.
+completion. Full-v3 report bounds apply to report JSON and the manifest;
+external retained blobs stream under their declared upload roots, including the
+full nested collector closure. Legacy inline originals remain supported.
+Missing, replaced, failed, stale or contradictory evidence rejects.
 Ordinary unscoped full check retains local blob references and validates their
 identities by streaming; the portable unit/report bounds do not limit those input
 files. Provider generation and artifact gathering remain owned by `chrono-ci`;
@@ -118,6 +120,79 @@ invocations. No role, birth time, certificate or layout is inferred.
 The product host still uses its scoped V1 registration. Clean-candidate admission,
 actual native full adoption, public binary publication and full SPEC acceptance
 remain separate obligations.
+
+## Optional native provisioning extension
+
+Full units/v2 can explicitly select `native_adoption` with schema
+`chrono-native-adoption/v1`. Omitting it preserves existing generation and
+projection behavior. A compatible released generator is required before adoption.
+The product owns the embedded `assets/ci/native.py` template and owned output
+updates. The host owns these extension values and its registered operations:
+
+```json
+"native_adoption": {
+  "schema": "chrono-native-adoption/v1",
+  "lineage": {"path": ".chrono-harness/ci/lineage.json", "sha256": "ORIGINAL_BIRTH_SHA256"},
+  "adapter_path": ".chrono-harness/ci/native.py",
+  "interpreter": "/usr/bin/python3",
+  "inputs_program": ".chrono-harness/bin/chrono-inputs",
+  "seed_directory": ".chrono-harness/state/shared-seed/",
+  "seed_artifact": "chrono-context",
+  "retained_inputs": ".chrono-harness/state/inputs.json",
+  "composition_sources": [],
+  "push_roles": {"refs/heads/integration/": "integration", "refs/heads/dev": "delivery"},
+  "pull_request_role": "delivery",
+  "integration_evidence": null
+}
+```
+
+Before the candidate commit the caller tracks and registers unchanged original
+successful `start`/`reconstruct` report bytes as `lineage`. The native consumer
+checks their digest, original branch/fork/time and event association; it does not
+read destination origin or manufacture historical birth. `prepare-endpoints`
+exposes the existing full-policy event preparation before full-context loading.
+Collection bootstrap delegates it, observes one actual UTC time, retains the
+authentic event/payload/revision/repository records and publishes schema2 context.
+Generation places the pinned seed upload immediately after bootstrap/publication
+and before `check --collect` can gather. Unit bootstraps acquire the unique
+event/repository/endpoints/workflow/run/attempt/digest-bound seed, retaining its
+original bytes and producer closure. Missing, ambiguous, stale or misbound
+acquisition fails. Acquisition jobs have `actions: read`; bootstrap receives the
+actual `CHRONO_WORKFLOW_REVISION`.
+
+Register the adapter as the sole `canonical_check.inputs.ci` action using an
+existing interpreter tool, with argv `[adapter_path, "forward", "--config",
+PROVIDER_PATH]`. Exactly one provider `--config` pair binds the selected upload
+contract. Remove acquisition-only `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`,
+`CHRONO_WORKFLOW_REVISION` and `GITHUB_REPOSITORY` from business inherit; retain
+`CHRONO_CHECK_SOURCE`, actual business variables and the existing credential
+contract. Forwarding reads authentic retained acquisition records, passes their
+actual named-env values to `chrono-ci check-inputs`, and retains child stdin,
+stdout, stderr, executable identity and process result. The outer producer
+receipt continues to describe its actual environment. Collection forwards gather
+then invokes the inputs owner's composition before returning to full execution.
+`composition_sources` supplies explicit original global/governance pairs when
+unit contributions do not cover global inputs. No SDK installation or business
+probe is performed by collection.
+
+Optional `integration_evidence_path` selects original transported certificate
+bytes for delivery publication; their actual SHA-256 becomes the context binding.
+Missing bytes leave the original null value for the workflow's impact decision.
+An optional declared `integration_evidence` digest must match supplied bytes.
+Optional `integration_transport: {source_directory, directory}` binds the
+producer's original upload root to its delivery download root, including the
+finalized report and nested blobs. The host bootstrap acquires that explicit
+completed certificate/report closure; this extension does not add a scheduler.
+Workflow retains all nine certificate bindings and requires the matching
+finalized producer when impact selects integration. Ordinary feature preparation
+can carry null evidence; only the existing workflow decides whether it suffices.
+
+Register lineage, adapter, interpreter, inputs binary, bootstrap inputs, provider
+and composition originals in the host FILEMAP/input/dependency declarations, and
+use disjoint seed/unit/collector/download roots. Existing owned output preflight
+preserves customized host source and refuses unowned overwrites. Main and examples
+are not activated by these source contracts; public release and real native
+push/PR/dev adoption remain caller-owned.
 
 ## Assignment and execution
 

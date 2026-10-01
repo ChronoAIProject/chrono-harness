@@ -3951,6 +3951,42 @@
           "to": "project:judge-workflow-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/retained_artifacts.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs/src/composition.rs",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "assets/ci/native.py",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:ci"
+        }
+      ]
     }
   ],
   "project_edges": [

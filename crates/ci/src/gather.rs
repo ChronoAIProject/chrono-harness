@@ -405,3 +405,251 @@ pub(super) fn gather(
     result?;
     Ok(serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n")
 }
+
+/// Acquire the early collection artifact through the existing registered transport.
+/// A running collector is eligible once its unique seed is published; no business work is awaited.
+pub(super) fn acquire_seed(
+    root: &Path,
+    path: &str,
+    c: &units::Config,
+    unit: &str,
+    repository: &str,
+    event: &str,
+    payload: &Value,
+    revision: &str,
+) -> Result<String, String> {
+    units::validate(c)?;
+    let a = c
+        .native_adoption
+        .as_ref()
+        .ok_or("native seed extension absent")?;
+    let endpoints = units::prepare_endpoints(root, path, c, Some(unit), event, payload, revision)?;
+    let candidate = endpoints["candidate"].as_str().ok_or("seed candidate")?;
+    if repository.split('/').count() != 2
+        || repository
+            .bytes()
+            .any(|b| !b.is_ascii_alphanumeric() && !b"/-_.".contains(&b))
+    {
+        return Err("repository must be explicit owner/name".into());
+    }
+    let w = c.workflow(Some(unit))?;
+    let directory = format!("{}seed/", w.artifact_directory);
+    let mut transport = Transport::new(root, &c.gather)?;
+    let result: Result<Value, String> = (|| {
+        let deadline = Instant::now() + Duration::from_secs(c.gather.wait_seconds);
+        let filename = c
+            .collection
+            .workflow_path
+            .strip_prefix(".github/workflows/")
+            .ok_or("collection workflow path")?;
+        let run = loop {
+            let pages=transport.api(&format!("repos/{repository}/actions/workflows/{}/runs?head_sha={candidate}&event={event}&per_page=100",encode(filename)),true)?;
+            let mut runs = Vec::new();
+            for page in pages.as_array().ok_or("paginated seed run pages")? {
+                for run in page["workflow_runs"].as_array().ok_or("seed run list")? {
+                    if run["head_sha"] == candidate
+                        && run["event"] == event
+                        && run["path"] == c.collection.workflow_path
+                    {
+                        runs.push(run.clone());
+                    }
+                }
+            }
+            if runs.len() > 1 {
+                return Err("ambiguous shared seed runs".into());
+            }
+            if let Some(run) = runs.first() {
+                let id = run["id"].as_u64().ok_or("seed run ID")?;
+                let attempt = run["run_attempt"]
+                    .as_u64()
+                    .filter(|v| *v > 0)
+                    .ok_or("seed run attempt")?;
+                let name = format!("{}-{id}-{attempt}", a.seed_artifact);
+                let pages = transport.api(
+                    &format!("repos/{repository}/actions/runs/{id}/artifacts?per_page=100"),
+                    true,
+                )?;
+                let mut matches = Vec::new();
+                for page in pages.as_array().ok_or("seed artifact pages")? {
+                    for artifact in page["artifacts"].as_array().ok_or("seed artifact list")? {
+                        if artifact["name"] == name {
+                            matches.push(artifact.clone());
+                        }
+                    }
+                }
+                if matches.len() > 1 {
+                    return Err("ambiguous shared seed artifacts".into());
+                }
+                if let Some(artifact) = matches.first() {
+                    if artifact["expired"] != false {
+                        return Err("shared seed artifact expired".into());
+                    }
+                    break (run.clone(), name, artifact.clone());
+                }
+            }
+            if Instant::now() >= deadline {
+                return Err("shared seed acquisition wait expired".into());
+            }
+            std::thread::sleep(
+                Duration::from_secs(c.gather.poll_seconds)
+                    .min(deadline.saturating_duration_since(Instant::now())),
+            );
+        };
+        let (run, name, artifact) = run;
+        let id = run["id"].as_u64().ok_or("seed run ID")?;
+        let attempt = run["run_attempt"].as_u64().ok_or("seed attempt")?;
+        let absolute = no_symlink_parents(root, &directory)?;
+        if absolute.exists() {
+            return Err("seed download exists; retain original acquisition".into());
+        }
+        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
+        transport.run(&[
+            "run".into(),
+            "download".into(),
+            id.to_string(),
+            "--repo".into(),
+            repository.into(),
+            "--name".into(),
+            name,
+            "--dir".into(),
+            absolute.to_str().ok_or("seed directory UTF8")?.into(),
+        ])?;
+        let read = |file: &str| {
+            chrono_harness::units::read_bounded(
+                root,
+                &format!("{directory}{file}"),
+                64 * 1024 * 1024,
+            )
+        };
+        let binding: Value = decode(&read("binding.json")?)?;
+        let raw = read("context.json")?;
+        let ctx = super::full::context_input(&raw)?;
+        let lineage = read("lineage.json")?;
+        let original_endpoints = read("endpoints.json")?;
+        let original_payload = read("payload.json")?;
+        let seed_endpoints: Value = decode(&original_endpoints)?;
+        if binding["schema"] != "chrono-native-seed/v1"
+            || binding["repository"] != repository
+            || binding["event"] != event
+            || binding["base"] != endpoints["base"]
+            || binding["candidate"] != candidate
+            || binding["workflow"] != c.collection.workflow_path
+            || binding["workflow_revision"] != revision
+            || binding["run"] != id
+            || binding["attempt"] != attempt
+            || binding["context_sha256"] != sha256(&raw)
+            || binding["lineage_sha256"] != sha256(&lineage)
+            || binding["lineage_sha256"] != a.lineage.sha256
+            || binding["endpoints_sha256"] != sha256(&original_endpoints)
+            || binding["payload_sha256"] != sha256(&original_payload)
+            || ctx["base"] != endpoints["base"]
+            || ctx["candidate"] != candidate
+            || seed_endpoints["base"] != endpoints["base"]
+            || seed_endpoints["candidate"] != candidate
+            || seed_endpoints["workflow_source_revision"] != revision
+            || seed_endpoints["lineage"] != endpoints["lineage"]
+            || seed_endpoints["workflow_policy"] != endpoints["workflow_policy"]
+        {
+            return Err("shared seed event/repository/endpoints/workflow/run/attempt/digest binding mismatch".into());
+        }
+        for original in binding["originals"]
+            .as_object()
+            .ok_or("seed original publication closure missing")?
+            .values()
+        {
+            let file = original["file"].as_str().ok_or("seed original file")?;
+            let raw = read(file)?;
+            if original["sha256"] != sha256(&raw) {
+                return Err("seed original publication closure differs".into());
+            }
+        }
+        let expected_role = if event == "pull_request" {
+            a.pull_request_role.as_str()
+        } else {
+            let reference = payload["ref"].as_str().ok_or("seed event ref missing")?;
+            let roles: Vec<_> = a
+                .push_roles
+                .iter()
+                .filter(|(prefix, _)| reference.starts_with(prefix.as_str()))
+                .map(|(_, role)| role.as_str())
+                .collect();
+            if roles.len() != 1 {
+                return Err("seed event role missing/ambiguous".into());
+            }
+            roles[0]
+        };
+        let birth: Value = decode(&lineage)?;
+        if ctx["run_kind"] != expected_role
+            || a.integration_evidence
+                .as_ref()
+                .is_some_and(|digest| ctx["integration_evidence"] != *digest)
+            || ctx["dev_tip"] != endpoints["base"]
+            || ctx["operation"] != "validate.delta"
+            || ctx["fork_point"] != birth["base"]
+            || ctx["branch_ref"] != birth["branch_ref"]
+            || ctx["branch_started_at"] != birth["branch_started_at"]
+            || ctx["retained_inputs"] != a.retained_inputs
+        {
+            return Err("shared seed birth/input binding mismatch".into());
+        }
+        if a.integration_evidence_path.is_some() && !ctx["integration_evidence"].is_null() {
+            let raw = read("integration.json")?;
+            if ctx["integration_evidence"] != sha256(&raw)
+                || binding["integration_sha256"] != ctx["integration_evidence"]
+            {
+                return Err("seed integration original digest differs".into());
+            }
+            write_file(
+                root,
+                a.integration_evidence_path
+                    .as_ref()
+                    .ok_or("integration path")?,
+                &raw,
+            )?;
+        }
+        let source = transport.run(&[
+            "api".into(),
+            format!(
+                "repos/{repository}/contents/{}?ref={revision}",
+                c.collection.workflow_path
+            ),
+            "--header".into(),
+            "Accept: application/vnd.github.raw".into(),
+        ])?;
+        if source != fs::read(root.join(&c.collection.workflow_path)).map_err(|e| e.to_string())? {
+            return Err("shared seed workflow source differs".into());
+        }
+        let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
+        if fresh["run_attempt"] != attempt
+            || fresh["head_sha"] != candidate
+            || fresh["event"] != event
+            || fresh["path"] != c.collection.workflow_path
+        {
+            return Err("shared seed run changed during acquisition".into());
+        }
+        write_file(
+            root,
+            &c.full_contexts
+                .as_ref()
+                .ok_or("full contexts missing")?
+                .units[unit],
+            &raw,
+        )?;
+        Ok(
+            json!({"schema":"chrono-native-seed-acquisition/v1","binding":binding,"artifact":artifact,"workflow_sha256":sha256(&source),"endpoints":endpoints}),
+        )
+    })();
+    let report = json!({"schema":"chrono-native-seed-transport/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    let original = chrono_harness::prepared::retain_original(
+        root,
+        &format!("{}preparation/", w.artifact_directory),
+        "seed-transport",
+        &serde_json::to_vec(&report).map_err(|e| e.to_string())?,
+    )?;
+    result?;
+    Ok(
+        serde_json::to_string(&json!({"report":original,"result":report["result"]}))
+            .map_err(|e| e.to_string())?
+            + "\n",
+    )
+}

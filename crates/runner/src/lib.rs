@@ -14,6 +14,7 @@ pub mod input_file;
 pub mod observation;
 pub mod parity;
 pub mod prepared;
+pub mod retained_artifacts;
 mod short_console;
 pub mod units;
 pub mod wire;

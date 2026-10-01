@@ -178,7 +178,7 @@ fn read_binding_original(
 ) -> Result<Vec<u8>, String> {
     if let Some(artifacts) = artifacts {
         units::artifact_path(&original.path)?;
-        let raw = crate::full::artifact_bytes(artifacts, &original.path)?;
+        let raw = crate::retained_artifacts::bytes(root, artifacts, &original.path, transport)?;
         if sha256(&raw) != original.sha256 {
             return Err("retained preparation original digest mismatch".into());
         }

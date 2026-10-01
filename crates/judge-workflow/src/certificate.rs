@@ -64,6 +64,11 @@ pub fn produce(
         binding[k] = ctx[k].clone();
     }
     binding["producer"] = value!({"judge":req.judge_id,"request_id":req.request_id,"candidate":req.candidate.commit,"root":req.candidate.root,"report_path":report,"context_digest":req.context.sha256});
+    if let Some(directory) =
+        req.observations["preparation"]["request"]["native_artifacts"]["directory"].as_str()
+    {
+        binding["producer"]["artifact_directory"] = value!(directory);
+    }
     binding["proof"] = value!({"context":ctx,"plan":plan,"results":results,"effective_inputs":effective,"judges":req.observations["judges"]});
     let path = location(req, r)?;
     if let Some(parent) = path.parent() {
@@ -185,7 +190,21 @@ pub fn consume(
             .filter(|p| p.starts_with(".chrono-harness/state/"))
             .ok_or("retained report path")?;
         // The producer transports its retained report together with the certificate.
-        let report_file = no_symlink_parents(&req.candidate.root, report_path)?;
+        let transport = artifact_transport(req)?;
+        if transport
+            .as_ref()
+            .is_some_and(|t| producer["artifact_directory"] != t.source_directory)
+        {
+            return Err("producer report transport root differs".into());
+        }
+        let physical = chrono_harness::prepared::original_path(
+            &chrono_harness::prepared::Original {
+                path: report_path.into(),
+                sha256: String::new(),
+            },
+            transport.as_ref(),
+        )?;
+        let report_file = no_symlink_parents(&req.candidate.root, &physical)?;
         if results.completion.is_some()
             && fs::metadata(&report_file).map_err(|e| e.to_string())?.len()
                 > r.config()["execution_units"]["collection_limits"]["report_bytes"]
@@ -279,11 +298,13 @@ pub fn consume(
                 return Err("collected global declaration plan differs".into());
             }
             let (old, _, _) = chrono_judge_registration::views_with_reader(req, reader)?;
-            if chrono_judge_projects::validate_retained_request(
+            if chrono_judge_projects::validate_retained_request_at(
                 original,
                 &old,
                 r,
                 &report["artifacts"],
+                &req.candidate.root,
+                transport.as_ref(),
             )? != proof["effective_inputs"]
             {
                 return Err("collected producer retained inputs differ".into());
@@ -295,7 +316,10 @@ pub fn consume(
                 &proof["effective_inputs"],
                 &plan,
                 &results,
-                Some(&report["artifacts"]),
+                Some(&chrono_harness::retained_artifacts::transport_map(
+                    &report["artifacts"],
+                    transport.as_ref(),
+                )?),
                 &req.candidate.root,
             )?;
         }
@@ -353,4 +377,28 @@ pub fn consume(
         )
     };
     check().map_err(|e| format!("E_INTEGRATION_MISMATCH: {e}"))
+}
+
+/// Host selection comes from the bound native provider; no destination-origin inference.
+fn artifact_transport(
+    req: &Request,
+) -> Result<Option<chrono_harness::prepared::ArtifactTransport>, String> {
+    let native = &req.observations["preparation"]["request"]["native_artifacts"];
+    let Some(path) = native["config_path"].as_str() else {
+        return Ok(None);
+    };
+    let bytes =
+        fs::read(no_symlink_parents(&req.candidate.root, path)?).map_err(|e| e.to_string())?;
+    if native["config_sha256"] != sha256(&bytes) {
+        return Err("certificate transport provider drift".into());
+    }
+    let provider = json(&bytes)?;
+    if provider["native_adoption"].is_null() {
+        return Ok(None);
+    }
+    if provider["native_adoption"]["schema"] != "chrono-native-adoption/v1" {
+        return Err("certificate transport extension schema".into());
+    }
+    serde_json::from_value(provider["native_adoption"]["integration_transport"].clone())
+        .map_err(|e| e.to_string())
 }

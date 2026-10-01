@@ -849,6 +849,57 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     assert_eq!(exit, 0, "{error}");
     assert_eq!(paired["base"]["schema"], "chrono-input-snapshot/v3");
     assert_eq!(paired["candidate"]["effective_config_path"], CONFIG);
+    let manifest = ".chrono-harness/state/selected-compose.json";
+    let original = fs::read(root.join(".chrono-harness/state/selected-paired.json")).unwrap();
+    fs::write(root.join(manifest), serde_json::to_vec(&value!({"schema":"chrono-input-composition/v1",
+        "sources":[{"pair":{"path":".chrono-harness/state/selected-paired.json","sha256":sha256(&original)}}]})).unwrap()).unwrap();
+    assert_eq!(
+        chrono_inputs::compose(
+            &root,
+            selector,
+            &selected_base,
+            &selected_candidate,
+            manifest,
+            ".chrono-harness/state/selected-composed.json",
+            ".chrono-harness/state/selected-receipt.json"
+        )
+        .unwrap(),
+        paired
+    );
+    for field in ["effective_config_path", "selection"] {
+        let mut wrong = paired.clone();
+        wrong["candidate"][field] = if field == "selection" {
+            let mut v = wrong["candidate"][field].clone();
+            v["platform"] = value!("wrong-platform");
+            v
+        } else {
+            value!("wrong-config.json")
+        };
+        if field == "effective_config_path" {
+            wrong["candidate"]["selection"]["config_path"] = value!("wrong-config.json");
+        }
+        let path = format!(".chrono-harness/state/wrong-{field}.json");
+        let raw = serde_json::to_vec(&wrong).unwrap();
+        fs::write(root.join(&path), &raw).unwrap();
+        fs::write(
+            root.join(manifest),
+            serde_json::to_vec(&value!({"schema":"chrono-input-composition/v1",
+            "sources":[{"pair":{"path":path,"sha256":sha256(&raw)}}]}))
+            .unwrap(),
+        )
+        .unwrap();
+        let error = chrono_inputs::compose(
+            &root,
+            selector,
+            &selected_base,
+            &selected_candidate,
+            manifest,
+            &format!(".chrono-harness/state/reject-{field}.json"),
+            &format!(".chrono-harness/state/reject-{field}.receipt.json"),
+        )
+        .unwrap_err();
+        assert!(error.contains("E_COMPOSE_HEADER"), "{error}");
+    }
     fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
     let (exit, _, error) = invoke(
         &root,
@@ -866,4 +917,138 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     assert!(error.contains("E_GIT_FACTS"));
     assert!(!state.join("rejected.json").exists());
     assert!(state.join("v3.json").exists());
+}
+
+#[test]
+fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_coverage() {
+    let (d, input, mut v, base) = fixture();
+    let captured = chrono_inputs::capture(
+        d.path(),
+        CONFIG,
+        &base,
+        ".chrono-harness/state/base-capture.json",
+    )
+    .unwrap();
+    // Historical input bytes remain genuine after the live input and declaration change.
+    fs::write(input.path(), b"new actual endpoint bytes").unwrap();
+    for i in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        i["sha256"] = value!(sha256(b"new actual endpoint bytes"));
+    }
+    write_values(d.path(), &v);
+    let candidate = commit(d.path());
+    let current = chrono_inputs::capture(
+        d.path(),
+        CONFIG,
+        &candidate,
+        ".chrono-harness/state/candidate-capture.json",
+    )
+    .unwrap();
+    let pair = chrono_inputs::pair(
+        d.path(),
+        d.path(),
+        ".chrono-harness/state/base-capture.json",
+        d.path(),
+        ".chrono-harness/state/candidate-capture.json",
+        ".chrono-harness/state/constituent.json",
+    )
+    .unwrap();
+    assert_eq!(pair, value!({"base":captured,"candidate":current}));
+    let original = fs::read(d.path().join(".chrono-harness/state/constituent.json")).unwrap();
+    let source = value!({"pair":{"path":".chrono-harness/state/constituent.json","sha256":sha256(&original)}});
+    let manifest = ".chrono-harness/state/composition.json";
+    fs::write(
+        d.path().join(manifest),
+        serde_json::to_vec(&value!({"schema":"chrono-input-composition/v1","sources":[source]}))
+            .unwrap(),
+    )
+    .unwrap();
+    fs::remove_file(input.path()).unwrap();
+    let (code, result, err) = invoke(
+        d.path(),
+        &[
+            "compose",
+            "--config",
+            CONFIG,
+            "--base",
+            &base,
+            "--candidate",
+            &candidate,
+            "--manifest",
+            manifest,
+            "--output",
+            ".chrono-harness/state/composed.json",
+            "--receipt",
+            ".chrono-harness/state/composed-receipt.json",
+        ],
+    );
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(result, pair);
+    assert_eq!(
+        fs::read(d.path().join(".chrono-harness/state/constituent.json")).unwrap(),
+        original
+    );
+    let receipt =
+        json(&fs::read(d.path().join(".chrono-harness/state/composed-receipt.json")).unwrap())
+            .unwrap();
+    assert_eq!(receipt["completeness_proven"], false);
+    let retained = receipt["originals"][0]["retained"]["path"]
+        .as_str()
+        .unwrap();
+    assert_eq!(fs::read(d.path().join(retained)).unwrap(), original);
+    for (case, expected) in [
+        ("coverage", "E_COMPOSE_COVERAGE"),
+        ("environment", "E_COMPOSE_ENVIRONMENT"),
+        ("config", "E_COMPOSE_HEADER"),
+        ("absence", "E_INPUT_SNAPSHOT"),
+        ("endpoint", "E_COMPOSE_HEADER"),
+        ("blob", "E_COMPOSE_BLOB"),
+    ] {
+        let mut bad = pair.clone();
+        match case {
+            "coverage" => {
+                bad["base"]["files"].as_object_mut().unwrap().remove("data");
+            }
+            "environment" => {
+                bad["base"]["environment"]["DECLARED_EMPTY"] = value!("different actual capture")
+            }
+            "config" => bad["base"]["config_digest"] = value!("0".repeat(64)),
+            "absence" => bad["base"]["files"]["data"] = value!({"absent":true}),
+            "endpoint" => bad["base"]["commit"] = value!(candidate),
+            _ => bad["base"]["files"]["data"]["length"] = value!(1),
+        }
+        let path = format!(".chrono-harness/state/{case}.json");
+        let raw = serde_json::to_vec(&bad).unwrap();
+        fs::write(d.path().join(&path), &raw).unwrap();
+        let source = value!({"pair":{"path":path,"sha256":sha256(&raw)}});
+        let sources = if case == "environment" {
+            value!([{"pair":{"path":".chrono-harness/state/constituent.json","sha256":sha256(&original)}},source])
+        } else {
+            value!([source])
+        };
+        fs::write(
+            d.path().join(manifest),
+            serde_json::to_vec(&value!({"schema":"chrono-input-composition/v1","sources":sources}))
+                .unwrap(),
+        )
+        .unwrap();
+        let error = chrono_inputs::compose(
+            d.path(),
+            CONFIG,
+            &base,
+            &candidate,
+            manifest,
+            &format!(".chrono-harness/state/out-{case}.json"),
+            &format!(".chrono-harness/state/receipt-{case}.json"),
+        )
+        .unwrap_err();
+        assert!(error.contains(expected), "{case}: {error}");
+        assert!(
+            !d.path()
+                .join(format!(".chrono-harness/state/out-{case}.json"))
+                .exists()
+        );
+    }
 }

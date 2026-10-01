@@ -231,9 +231,6 @@ fn produce(
                     file_identity(&no_symlink_parents(root, retained)?)?;
                     ctx["retained_inputs"] = json!(retained);
                 }
-                if origin["run_kind"] == "delivery" && origin["integration_evidence"].is_null() {
-                    return Err("delivery origin requires explicit caller-produced integration evidence handoff".into());
-                }
                 // Independent contributions and collection bind the same exact context.
                 // Reuse only a matching current projection; endpoints/origin still come from this producer.
                 if scope.is_some() {

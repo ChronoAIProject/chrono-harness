@@ -306,26 +306,18 @@ fn retain_artifacts(
     if req.scope.is_none() {
         return Ok((Value::Object(out), Value::Object(unavailable)));
     }
-    let mut retained_bytes = 0u64;
-    let bound = req.observations["execution_units"]["collection_limits"]["report_bytes"]
-        .as_u64()
-        .unwrap_or(64 * 1024 * 1024);
+    let directory = req.observations["preparation"]["request"]["native_artifacts"]["directory"]
+        .as_str()
+        .unwrap_or(".chrono-harness/state/retained/");
     let mut retain = |address: &str, path: Result<PathBuf, String>| -> Result<(), String> {
         if out.contains_key(address) {
             return Ok(());
         }
         let result = (|| {
             let path = path?;
-            let length = fs::metadata(&path).map_err(|e| e.to_string())?.len();
-            let total = retained_bytes
-                .checked_add(length.saturating_mul(2))
-                .ok_or("artifact length overflow")?;
-            if length > 64 * 1024 * 1024 || total > bound {
-                return Err("original artifact closure exceeds registered report bound".into());
-            }
-            let bytes = fs::read(path).map_err(|e| e.to_string())?;
-            out.insert(address.into(), artifact(&bytes));
-            retained_bytes = total;
+            let descriptor =
+                crate::retained_artifacts::stage(&req.candidate.root, &path, directory)?;
+            out.insert(address.into(), descriptor);
             Ok(())
         })();
         match result {
@@ -389,6 +381,52 @@ fn retain_artifacts(
                     .as_str()
                     .ok_or("retained unit path")?;
                 retain(p, no_symlink_parents(&req.candidate.root, p))?;
+            }
+        }
+    }
+    // Imported reports retain unchanged bytes plus their full external storage closure.
+    drop(retain);
+    for row in judges {
+        for report in row["response"]["outputs"]["tests"]["completion"]["reports"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let Some(map) = report.get("retained_artifacts") else {
+                continue;
+            };
+            let nested = (|| {
+                let staged =
+                    crate::retained_artifacts::restage(&req.candidate.root, map, None, directory)?;
+                let resolved = crate::retained_artifacts::resolve_map(map, Some(&staged))?;
+                Ok::<_, String>((staged, resolved))
+            })();
+            let (staged, resolved) = match nested {
+                Ok(v) => v,
+                Err(error) if failed => {
+                    unavailable.insert(
+                        format!(
+                            "nested:{}",
+                            report["retained_path"].as_str().unwrap_or("unknown")
+                        ),
+                        Value::String(error),
+                    );
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            for (address, descriptor) in staged
+                .as_object()
+                .ok_or("nested stage map")?
+                .iter()
+                .chain(resolved.as_object().ok_or("nested closure map")?)
+            {
+                if out
+                    .insert(address.clone(), descriptor.clone())
+                    .is_some_and(|v| v != *descriptor)
+                {
+                    return Err("nested artifact address conflict".into());
+                }
             }
         }
     }

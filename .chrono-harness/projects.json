@@ -1099,6 +1099,54 @@
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
+        },
+        "streamed-originals": {
+          "operation": "test.workflow-streamed-originals",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::streamed_large_originals_survive_relocated_collection_finalization_and_delivery",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "native-provision": {
+          "operation": "test.workflow-native-provision",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::full_short::genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "ordinary-certificate": {
+          "operation": "test.workflow-ordinary-certificate",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::full_short::ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_it",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
         }
       },
       "tests_for": "judge-workflow"

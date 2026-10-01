@@ -371,7 +371,7 @@ fn required_plan_files(
         .collect())
 }
 
-fn endpoint_required_files(
+pub fn endpoint_required_files(
     endpoint: &str,
     old: &Registrations,
     new: &Registrations,
@@ -446,13 +446,27 @@ pub fn validate_retained(
     new: &Registrations,
     artifacts: &Value,
 ) -> Result<Value, String> {
-    validate_inner(req, old, new, Some(artifacts), false)
+    validate_retained_at(req, old, new, artifacts, &req.candidate.root, None)
+}
+pub fn validate_retained_at(
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    artifacts: &Value,
+    root: &Path,
+    transport: Option<&chrono_harness::prepared::ArtifactTransport>,
+) -> Result<Value, String> {
+    validate_inner(req, old, new, Some((artifacts, root, transport)), false)
 }
 fn validate_inner(
     req: &Request,
     old: &Registrations,
     new: &Registrations,
-    artifacts: Option<&Value>,
+    artifacts: Option<(
+        &Value,
+        &Path,
+        Option<&chrono_harness::prepared::ArtifactTransport>,
+    )>,
     live: bool,
 ) -> Result<Value, String> {
     if new.filemap()["schema_version"] == 1
@@ -547,23 +561,25 @@ fn validate_inner(
             let value = retained["files"]
                 .get(id)
                 .ok_or_else(|| format!("{name}: missing retained input {id}"))?;
-            let identity = match (artifacts, retained_shape(value)?) {
+            let identity = (|| match (artifacts, retained_shape(value)?) {
                 (
-                    Some(artifacts),
+                    Some((artifacts, root, transport)),
                     Retained::Blob {
                         path,
                         digest,
                         length,
                     },
                 ) => {
-                    let bytes = chrono_harness::full::artifact_bytes(artifacts, path)?;
-                    if sha256(&bytes) != digest || bytes.len() as u64 != length {
+                    let identity = chrono_harness::retained_artifacts::identity(
+                        root, artifacts, path, transport,
+                    )?;
+                    if identity != (digest.to_owned(), length) {
                         return Err("E_INPUT_BLOB: original input differs".into());
                     }
                     Ok(Some((digest.to_owned(), length)))
                 }
                 _ => retained_identity(&req.candidate.root, value),
-            }
+            })()
             .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
             match &identity {
                 None if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
