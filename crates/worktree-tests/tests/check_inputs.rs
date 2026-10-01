@@ -83,6 +83,7 @@ fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     };
     let mut c = Command::new(root.join(".chrono-harness/bin/chrono-worktree"));
     c.current_dir(root)
+        .env(prepared::SOURCE, "local")
         .args(["check-inputs", "--config", POLICY])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -104,6 +105,23 @@ fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
 }
 #[test]
 fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
+    // Native workflows inherit the CI selector, while this fixture exercises
+    // the local producer and validator contract. Run the whole fixture in a
+    // child with an explicit local selector so no test-global environment is
+    // mutated while other tests execute.
+    if std::env::var(prepared::SOURCE).as_deref() == Ok("ci") {
+        let status = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "check_inputs::creation_publishes_exact_birth_and_full_short_check_uses_original_fork",
+                "--nocapture",
+            ])
+            .env(prepared::SOURCE, "local")
+            .status()
+            .unwrap();
+        assert!(status.success(), "isolated local fixture failed: {status}");
+        return;
+    }
     let h = Host::new("anything/data.txt");
     bind(&h);
     let dest = h.parent.join("new independent layout");
@@ -118,7 +136,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     commit(&dest);
     let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&dest)
-        .env_remove(prepared::SOURCE)
+        .env(prepared::SOURCE, "local")
         .arg("check")
         .output()
         .unwrap();
@@ -171,7 +189,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     for scope in [vec!["check", "--unit", "any"], vec!["check", "--collect"]] {
         let rejected = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&dest)
-            .env_remove(prepared::SOURCE)
+            .env(prepared::SOURCE, "local")
             .args(scope)
             .output()
             .unwrap();
@@ -189,7 +207,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     );
     let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&dest)
-        .env_remove(prepared::SOURCE)
+        .env(prepared::SOURCE, "local")
         .arg("check")
         .output()
         .unwrap();

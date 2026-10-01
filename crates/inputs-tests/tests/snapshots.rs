@@ -36,7 +36,19 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
 #[test]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     let (d, _f, mut v, _) = fixture();
-    let git = chrono_harness::resolve_program(d.path(), "git", None).unwrap();
+    let path_dir = tempfile::tempdir().unwrap();
+    let ambient_git = chrono_harness::resolve_program(d.path(), "git", None).unwrap();
+    let git_link = path_dir.path().join("git");
+    std::os::unix::fs::symlink(&ambient_git, &git_link).unwrap();
+    let path = format!(
+        "{}:{}",
+        path_dir.path().display(),
+        std::env::var("PATH").unwrap()
+    );
+    let git =
+        fs::canonicalize(chrono_harness::resolve_program(d.path(), "git", Some(&path)).unwrap())
+            .unwrap();
+    assert!(fs::metadata(&git).unwrap().is_file());
     let version = Command::new(&git).arg("--version").output().unwrap();
     let c = v.get_mut(CONFIG).unwrap();
     c["schema_version"] = value!(4);
@@ -70,6 +82,7 @@ fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_str
             "--output",
             ".chrono-harness/state/credential-snapshot.json",
         ])
+        .env("PATH", &path)
         .output()
         .unwrap();
     assert!(
