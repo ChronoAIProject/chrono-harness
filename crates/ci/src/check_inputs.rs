@@ -9,6 +9,124 @@ use chrono_harness::{
 };
 use std::{collections::BTreeMap, io::Read};
 
+/// The native adapter needs the genuine acquisition environment outside business
+/// inheritance. Reuse the runner's bounded transport rather than a Python runner.
+pub(crate) fn native_process(args: &[String]) -> Result<String, String> {
+    if args.len() != 5 || args[1] != "--host-root" || args[3] != "--config" {
+        return Err("native-process requires fixed host-root and config".into());
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Child {
+        argv: Vec<String>,
+        stdin: Vec<u8>,
+        directory: String,
+        prefix: String,
+        timeout_seconds: f64,
+        output_limit_bytes: usize,
+    }
+    let root = Path::new(&args[2]);
+    let Projection::Units(c) = load_projection(&no_symlink_parents(root, &args[4])?)? else {
+        return Err("native-process requires unit provider".into());
+    };
+    units::validate(&c)?;
+    let a = c.native_adoption.as_ref().ok_or("native adoption absent")?;
+    let mut raw = Vec::new();
+    std::io::stdin()
+        .take(64 * 1024 * 1024 + 1)
+        .read_to_end(&mut raw)
+        .map_err(|e| e.to_string())?;
+    if raw.len() > 64 * 1024 * 1024 {
+        return Err("native-process input bound".into());
+    }
+    let child: Child = decode(&raw)?;
+    let allowed = child.argv.first() == Some(&c.collection.generator)
+        || child.argv.first() == Some(&a.inputs_program);
+    if !allowed
+        || !std::iter::once(&c.collection.artifact_directory)
+            .chain(c.units.values().map(|u| &u.artifact_directory))
+            .any(|d| child.directory == format!("{d}preparation/"))
+        || !child.timeout_seconds.is_finite()
+        || child.timeout_seconds <= 0.0
+        || child.timeout_seconds > 900.0
+        || child.output_limit_bytes == 0
+        || child.output_limit_bytes > 64 * 1024 * 1024
+    {
+        return Err("native-process differs from registered acquisition operations/bounds".into());
+    }
+    let environment: BTreeMap<String, String> = std::env::vars().collect();
+    let executable = chrono_harness::resolve_program(
+        root,
+        &child.argv[0],
+        environment.get("PATH").map(String::as_str),
+    )?;
+    let spec = chrono_harness::CommandSpec {
+        program: executable.to_str().ok_or("native executable UTF8")?.into(),
+        args: child.argv[1..].to_vec(),
+        env: environment,
+        timeout_seconds: child.timeout_seconds.ceil() as u64,
+        output_limit_bytes: child.output_limit_bytes,
+    };
+    let process = chrono_harness::run_process_observed_for(
+        root,
+        &spec,
+        &child.stdin,
+        &file_identity(&executable)?.0,
+        std::time::Duration::from_secs_f64(child.timeout_seconds),
+    )?;
+    let retain = |suffix: &str, bytes: &[u8]| {
+        prepared::retain_original(
+            root,
+            &child.directory,
+            &format!("{}-{suffix}", child.prefix),
+            bytes,
+        )
+    };
+    let stdin = retain("stdin", &child.stdin)?;
+    let stdout = retain("stdout", &process.stdout_bytes)?;
+    let stderr = retain("stderr", &process.stderr_bytes)?;
+    let policy = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
+    let mut credentials: std::collections::BTreeSet<_> =
+        c.gather.credential_environment.iter().cloned().collect();
+    credentials.extend(
+        policy["environment"]["credential_environment"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_owned),
+    );
+    let observed: BTreeMap<_, _> = process
+        .environment
+        .iter()
+        .filter(|(k, _)| !credentials.contains(*k))
+        .map(|(k, v)| (k.clone(), sha256(v.as_bytes())))
+        .collect();
+    let receipt = json!({"schema":"chrono-native-forwarding/v1","argv":process.argv,"configured_argv":child.argv,
+    "cwd":process.cwd,"executable":{"path":process.executable,"sha256":process.sha256},
+    "environment":observed,"environment_representation":"sha256","omitted_credentials":credentials,
+    "original_environment_sha256":process.environment_digest,"stdin":stdin,"stdout":stdout,"stderr":stderr,
+    "exit_code":process.exit_code,"timeout_seconds":child.timeout_seconds,"transport_failure":process.failure,
+    "failure":process.failure.as_deref().map(|failure| match failure {
+        "process timed out"=>"timeout", "process output limit exceeded"=>"output bound exceeded", other=>other
+    })});
+    let receipt_ref = retain(
+        "process",
+        &serde_json::to_vec(&receipt).map_err(|e| e.to_string())?,
+    )?;
+    if process.exit_code != 0 || process.failure.is_some() {
+        return Err(format!(
+            "child failed; original receipt retained at {}",
+            receipt_ref.path
+        ));
+    }
+    Ok(serde_json::to_string(
+        &json!({"stdout":stdout,"originals":[stdin,stdout,stderr,receipt_ref]}),
+    )
+    .map_err(|e| e.to_string())?
+        + "\n")
+}
+
 pub(crate) fn publish(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     super::write_file(root, path, bytes)
 }
@@ -290,6 +408,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             }) {
                 return Err("unit producer/upload contract mismatch".into());
             }
+            if c.job_gating.is_some() && req.selection == Selection::Collect {
+                let needs: Value = decode(
+                    std::env::var(super::gating::NEEDS_ENV)
+                        .map_err(|_| "aggregate needs missing")?
+                        .as_bytes(),
+                )?;
+                if needs["detect"]["result"] != "success" {
+                    return Err("change detection did not succeed".into());
+                }
+            }
             let mut evidence = if req.selection == Selection::All {
                 units::prepare_all(root, path, &c, &event, &payload, &revision)?
             } else {
@@ -316,8 +444,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     &fs::read(no_symlink_parents(root, &req.effective_config)?)
                         .map_err(|e| e.to_string())?,
                 )?;
-                if policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
-                    <= c.gather.wait_seconds
+                if c.job_gating.is_none()
+                    && policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
+                        <= c.gather.wait_seconds
                 {
                     return Err(
                         "native gathering wait must fit the registered acquisition timeout".into(),
@@ -424,6 +553,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("input producer configuration differs from candidate".into());
     }
     let mut p = p;
+    if p.source == "ci" {
+        let provider: Value = decode(&config_bytes)?;
+        if provider.get("native_adoption").is_some() {
+            let context = p
+                .context
+                .as_ref()
+                .ok_or("native adoption full context missing")?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| e.to_string())?;
+            p.evidence["current_observation"] = json!({"context_digest":context.semantic_digest,"unix_timestamp_nanos":now.as_nanos().to_string()});
+        }
+    }
     let report = prepared::retain_original(
         root,
         &dir,
@@ -432,7 +574,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     )?;
     let report_path = report.path.clone();
     p.originals.push(report);
+    let current = p.evidence.get("current_observation").cloned();
     p.evidence = json!({"report_path":report_path,"report_sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,"event":p.evidence["event"],"source":p.evidence["source"],"payload":{ "sha256":p.evidence["payload"]["sha256"],"path":p.evidence["payload"]["path"] }});
+    if let Some(current) = current {
+        p.evidence["current_observation"] = current;
+    }
     req.validate()?;
     prepared::validate_result(&req, &p)?;
     Ok(serde_json::to_string(&p).map_err(|e| e.to_string())? + "\n")

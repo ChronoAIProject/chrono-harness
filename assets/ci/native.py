@@ -10,11 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-import selectors
-import signal
-import time
 import re
-import shutil
 
 BOUND = 64 * 1024 * 1024
 
@@ -75,81 +71,20 @@ def retain(root, directory, prefix, raw):
     return {'path': path, 'sha256': digest(raw)}
 
 
-def file_digest(path):
-    hash = hashlib.sha256()
-    with Path(path).open('rb') as f:
-        for block in iter(lambda: f.read(65536), b''):
-            hash.update(block)
-    return hash.hexdigest()
-
-
 def process(root, argv, stdin, env, directory, prefix, timeout, limit, credential_environment=()):
-    # Actual child environment is distinct from the runner's outer producer environment.
-    configured_argv = list(argv)
-    chosen = argv[0] if '/' in argv[0] else shutil.which(argv[0], path=env.get('PATH', ''))
-    if chosen is None:
-        raise ValueError('declared child executable not found in actual PATH')
-    executable = (root / chosen).resolve()
-    executable_sha256 = file_digest(executable)
-    argv = [str(executable), *argv[1:]]
-    # Drain bounded original bytes while enforcing the registered process deadline.
-    with tempfile.TemporaryFile() as original_stdin:
-        original_stdin.write(stdin)
-        original_stdin.seek(0)
-        p = subprocess.Popen(argv, cwd=root, stdin=original_stdin, env=env,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
-        def stop_group():
-            if p.poll() is not None:
-                return
-            try:
-                os.killpg(p.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                # macOS can deny signalling a group after its leader has exited.
-                if p.poll() is None:
-                    p.kill()
-        selector = selectors.DefaultSelector()
-        selector.register(p.stdout, selectors.EVENT_READ, 'stdout')
-        selector.register(p.stderr, selectors.EVENT_READ, 'stderr')
-        buffers = {'stdout': bytearray(), 'stderr': bytearray()}
-        deadline, failure = time.monotonic() + timeout, None
-        while selector.get_map():
-            if time.monotonic() >= deadline and failure is None:
-                failure = 'timeout'
-                stop_group()
-            for key, _ in selector.select(0.1):
-                chunk = os.read(key.fileobj.fileno(), 65536)
-                if not chunk:
-                    selector.unregister(key.fileobj)
-                    key.fileobj.close()
-                    continue
-                buffer = buffers[key.data]
-                remaining = limit - len(buffer)
-                buffer.extend(chunk[:remaining])
-                if len(chunk) > remaining and failure is None:
-                    failure = 'output bound exceeded'
-                    stop_group()
-        selector.close()
-        code = p.wait()
-        stdout, stderr = bytes(buffers['stdout']), bytes(buffers['stderr'])
-    input_ref = retain(root, directory, prefix + '-stdin', stdin)
-    out_ref = retain(root, directory, prefix + '-stdout', stdout)
-    err_ref = retain(root, directory, prefix + '-stderr', stderr)
-    # Credential values are never republished; their actual omission is explicit.
-    if file_digest(executable) != executable_sha256:
-        failure = 'child executable changed during execution'
-    receipt = {'schema': 'chrono-native-forwarding/v1', 'argv': argv, 'configured_argv': configured_argv, 'cwd': str(root),
-               'executable': {'path': str(executable), 'sha256': executable_sha256},
-               'environment': {k: digest(v.encode()) for k, v in env.items() if k not in credential_environment},
-               'omitted_credentials': list(credential_environment),
-               'original_environment_sha256': digest(encoded(env)),
-               'environment_representation': 'sha256', 'stdin': input_ref, 'stdout': out_ref,
-               'stderr': err_ref, 'exit_code': code, 'failure': failure}
-    receipt_ref = retain(root, directory, prefix + '-process', encoded(receipt))
-    if failure or code:
-        raise ValueError('child failed; original receipt retained at ' + receipt_ref['path'])
-    return stdout, [input_ref, out_ref, err_ref, receipt_ref]
+    # The child needs retained native event fields outside business inheritance.
+    # Rust owns executable binding, bounded draining, timeout and original receipts.
+    request = {'argv': argv, 'stdin': list(stdin), 'directory': directory, 'prefix': prefix,
+               'timeout_seconds': timeout, 'output_limit_bytes': limit}
+    bridge = [NATIVE_PROVIDER['collection']['generator'], 'native-process', '--host-root', str(root), '--config', NATIVE_CONFIG]
+    result = subprocess.run(bridge, cwd=root, input=encoded(request), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode:
+        raise ValueError(result.stderr.decode(errors='replace').strip())
+    output = json.loads(result.stdout)
+    original = raw_file(root, output['stdout']['path'])
+    if digest(original) != output['stdout']['sha256']:
+        raise ValueError('native transport stdout original drift')
+    return original, output['originals']
 
 
 def selection(provider, unit):
@@ -162,6 +97,10 @@ def observations(root, provider, unit):
     workflow, _, directory = selection(provider, unit)
     keys = ['GITHUB_EVENT_NAME', 'GITHUB_EVENT_PATH', 'CHRONO_WORKFLOW_REVISION',
             'GITHUB_REPOSITORY', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT']
+    if provider.get('job_gating'):
+        keys += ['CHRONO_CI_DETECTION', 'GITHUB_JOB']
+        if 'CHRONO_CI_NEEDS' in os.environ:
+            keys += ['CHRONO_CI_NEEDS']
     actual = {key: os.environ[key] for key in keys}
     with Path(actual['GITHUB_EVENT_PATH']).open('rb') as f:
         payload_raw = f.read(BOUND + 1)
@@ -192,16 +131,12 @@ def moment(value):
     return calendar.timegm(date.timetuple()) * 1000000000 + int((match[2] or '').ljust(9, '0'))
 
 
-def freshness(root, provider, ctx, now, endpoints):
-    identity = endpoints['workflow_policy']
-    raw = raw_file(root, identity['path'])
-    if digest(raw) != identity['sha256']:
-        raise ValueError('observed workflow policy drift')
-    workflow = json.loads(raw)
+def valid_observation(ctx, now):
+    # Transport ordering only. The registered workflow judge owns the age bound
+    # and receives the CI producer's genuine current observation separately.
     started, observed = moment(ctx['branch_started_at']), moment(ctx['observed_at'])
-    current = moment(now.isoformat())
-    if observed < started or current < observed or current - started > workflow['staleness']['max_age_hours'] * 3600000000000:
-        raise ValueError('stale/future shared context observation')
+    if observed < started or moment(now.isoformat()) < observed:
+        raise ValueError('invalid original context observation order')
 
 
 def publish(root, config, provider, extension):
@@ -242,7 +177,7 @@ def publish(root, config, provider, extension):
            'branch_started_at': birth['branch_started_at'], 'observed_at': observed.isoformat().replace('+00:00', 'Z'),
            'operation': 'validate.delta', 'run_kind': role, 'integration_evidence': evidence,
            'retained_inputs': extension['retained_inputs']}
-    freshness(root, provider, ctx, observed, endpoints)
+    valid_observation(ctx, observed)
     seed = encoded(ctx)
     write(root, context_path, seed, True)
     seed_dir = extension['seed_directory']
@@ -252,13 +187,21 @@ def publish(root, config, provider, extension):
     write(root, seed_dir + 'payload.json', raw_file(root, report['payload']['path']))
     if integration_raw is not None:
         write(root, seed_dir + 'integration.json', integration_raw)
+    governance_path = seed_dir + 'inputs.json'
+    governance_env = dict(os.environ, CHRONO_CHECK_SOURCE='ci')
+    _, governance_processes = process(root, [extension['inputs_program'], 'capture-governance', '--host-root', str(root),
+        '--config', provider['collection']['check_config'], '--base', endpoints['base'], '--candidate', endpoints['candidate'],
+        '--output', governance_path], b'', governance_env, directory, 'governance-capture', 900, BOUND,
+        provider['gather']['credential_environment'])
+    governance_raw = raw_file(root, governance_path)
+    processes += governance_processes
     binding = {'schema': 'chrono-native-seed/v1', 'event': actual['GITHUB_EVENT_NAME'],
                'repository': actual['GITHUB_REPOSITORY'], 'base': endpoints['base'], 'candidate': endpoints['candidate'],
                'workflow': provider['collection']['workflow_path'], 'workflow_revision': actual['CHRONO_WORKFLOW_REVISION'],
                'run': int(actual['GITHUB_RUN_ID']), 'attempt': int(actual['GITHUB_RUN_ATTEMPT']),
                'context_sha256': digest(seed), 'lineage_sha256': digest(lineage_raw), 'integration_sha256': evidence,
                'payload_sha256': report['payload']['sha256'], 'endpoints_sha256': digest(raw),
-               'acquisition': acquisition, 'processes': processes}
+               'acquisition': acquisition, 'processes': processes, 'governance_sha256': digest(governance_raw)}
     original_map = {}
     for original in [acquisition, report['payload'], *processes]:
         raw_original = raw_file(root, original['path'])
@@ -275,15 +218,18 @@ def acquire(root, config, provider, extension, unit):
     args = endpoint_args(root, config, provider, report['observed'], unit, 'acquire-seed')
     args += ['--repository', report['observed']['GITHUB_REPOSITORY']]
     process(root, args, b'', dict(os.environ), directory, 'seed-acquisition',
-            provider['gather']['wait_seconds'] + provider['gather']['timeout_seconds'], BOUND, provider['gather']['credential_environment'])
+            900, BOUND, provider['gather']['credential_environment'])
     _, context_path, _ = selection(provider, unit)
-    freshness(root, provider, json.loads(raw_file(root, context_path)), datetime.datetime.now(datetime.timezone.utc),
-              json.loads(raw_file(root, provider['units'][unit]['artifact_directory'] + 'seed/endpoints.json')))
+    valid_observation(json.loads(raw_file(root, context_path)), datetime.datetime.now(datetime.timezone.utc))
 
 
 def composition(root, provider, extension, p, directory, env):
     manifest = json.loads(raw_file(root, provider['gather']['manifest_path']))
-    sources = [{'pair': pair} for pair in extension['composition_sources']]
+    seed_directory = provider['collection']['artifact_directory'] + 'seed/'
+    seed_binding = json.loads(raw_file(root, seed_directory + 'binding.json'))
+    shared = {'path': extension['seed_directory'] + 'inputs.json', 'sha256': seed_binding['governance_sha256']}
+    sources = [{'pair': shared, 'transport': {'source_directory': extension['seed_directory'], 'directory': seed_directory}}]
+    sources += [{'pair': pair} for pair in extension['composition_sources']]
     for item in manifest['reports']:
         raw = raw_file(root, item['path'])
         if digest(raw) != item['sha256']:
@@ -354,9 +300,8 @@ def forward(root, config, provider, extension):
     # Supply the actual retained records to the child's existing named-env interface.
     env.update({key: actual[key] for key in ['GITHUB_EVENT_NAME', 'CHRONO_WORKFLOW_REVISION', 'GITHUB_REPOSITORY']})
     env['GITHUB_EVENT_PATH'] = str(root / payload['path'])
-    endpoints_path = workflow['artifact_directory'] + 'seed/endpoints.json' if unit else extension['seed_directory'] + 'endpoints.json'
-    freshness(root, provider, json.loads(raw_file(root, context_path)), datetime.datetime.now(datetime.timezone.utc),
-              json.loads(raw_file(root, endpoints_path)))
+    env.update({key: actual[key] for key in ['GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_JOB', 'CHRONO_CI_DETECTION', 'CHRONO_CI_NEEDS'] if key in actual})
+    valid_observation(json.loads(raw_file(root, context_path)), datetime.datetime.now(datetime.timezone.utc))
     args = [provider['collection']['generator'], 'check-inputs', '--config', config,
             '--event-env', 'GITHUB_EVENT_NAME', '--payload-env', 'GITHUB_EVENT_PATH',
             '--revision-env', 'CHRONO_WORKFLOW_REVISION', '--repository-env', 'GITHUB_REPOSITORY']
@@ -368,7 +313,7 @@ def forward(root, config, provider, extension):
     # Preserve the child report's manifest identity used by PreparedCheck's actual consumer.
     report = dict(original_report)
     originals = list(p['originals']) + refs + [acquisition_ref, payload]
-    seed_directory = workflow['artifact_directory'] + 'seed/' if unit else extension['seed_directory']
+    seed_directory = workflow['artifact_directory'] + 'seed/'
     for name in ['context.json', 'binding.json', 'lineage.json', 'payload.json', 'endpoints.json']:
         originals.append(retain(root, directory, 'seed-original', raw_file(root, seed_directory + name)))
     seed_binding = json.loads(raw_file(root, seed_directory + 'binding.json'))
@@ -406,14 +351,14 @@ def main():
     args = parser.parse_args()
     root = Path.cwd().resolve()
     provider = json.loads(raw_file(root, args.config))
+    global NATIVE_PROVIDER, NATIVE_CONFIG
+    NATIVE_PROVIDER, NATIVE_CONFIG = provider, args.config
     extension = provider['native_adoption']
     if extension['schema'] != 'chrono-native-adoption/v1':
         raise ValueError('native adoption extension schema')
     if args.operation == 'publish':
         publish(root, args.config, provider, extension)
     elif args.operation == 'acquire':
-        if not args.unit:
-            raise ValueError('seed acquisition needs registered unit')
         acquire(root, args.config, provider, extension, args.unit)
     else:
         forward(root, args.config, provider, extension)

@@ -39,7 +39,10 @@ fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
     Ok(())
 }
 fn store(root: &Path, input: &Path) -> Result<Value, String> {
-    let dir = state(root, ".chrono-harness/state/inputs/blobs")?;
+    store_at(root, input, ".chrono-harness/state/inputs/blobs")
+}
+fn store_at(root: &Path, input: &Path, directory: &str) -> Result<Value, String> {
+    let dir = state(root, directory)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !fs::metadata(input)
         .map_err(|e| format!("E_INPUT_READ: {}: {e}", input.display()))?
@@ -54,7 +57,7 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
     }
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
     let (sha256, length) = copy_hashed(file, &mut tmp)?;
-    let path = format!(".chrono-harness/state/inputs/blobs/{sha256}");
+    let path = format!("{directory}/{sha256}");
     let target = state(root, &path)?;
     if target.exists() {
         if file_identity(&target)? != (sha256.clone(), length) {
@@ -129,6 +132,25 @@ pub fn capture_projected(
     } else {
         chrono_judge_registration::inputs::required_files(&r, scope.as_ref())?
     };
+    capture_declared(
+        root,
+        config,
+        commit,
+        output,
+        &r,
+        &required,
+        ".chrono-harness/state/inputs/blobs",
+    )
+}
+fn capture_declared(
+    root: &Path,
+    config: &str,
+    commit: &str,
+    output: &str,
+    r: &Registrations,
+    required: &std::collections::BTreeSet<String>,
+    directory: &str,
+) -> Result<Value, String> {
     let credentials = if r.config()["schema_version"] == 4 {
         chrono_harness::prepared::credential_environment(r.config())?
     } else {
@@ -158,7 +180,7 @@ pub fn capture_projected(
             match observe_file(&path)? {
                 None => value!({"absent":true}),
                 Some(identity) => {
-                    let observed = store(root, &path)?;
+                    let observed = store_at(root, &path, directory)?;
                     if observed["sha256"] != identity.0 || observed["length"] != identity.1 {
                         return Err("E_INPUT_READ: input changed during capture".into());
                     }
@@ -166,7 +188,7 @@ pub fn capture_projected(
                 }
             }
         } else {
-            store(root, &path)?
+            store_at(root, &path, directory)?
         };
         files.insert(input["id"].as_str().unwrap().into(), retained);
     }
@@ -177,6 +199,55 @@ pub fn capture_projected(
     }
     publish(root, output, &snapshot)?;
     Ok(snapshot)
+}
+
+/// Capture genuine current governance observations against both fixed endpoint
+/// declarations. It never claims a past execution or probes a business tool.
+pub fn capture_governance(
+    root: &Path,
+    config: &str,
+    base: &str,
+    candidate: &str,
+    output: &str,
+) -> Result<Value, String> {
+    state(root, output)?;
+    let reader = facts::Reader::for_config(root, config)?;
+    reader.verify_config(root, candidate)?;
+    let parent = output.rsplit_once('/').ok_or("governance output parent")?.0;
+    let mut pair = value!({});
+    for (name, commit) in [("base", base), ("candidate", candidate)] {
+        reader.verify_oid(root, commit)?;
+        let r = Registrations::load(&reader.registry_values(root, commit, config)?, config)?;
+        let required =
+            chrono_judge_registration::inputs::required_plan_files(&r, Some(&Default::default()))?;
+        let snapshot = capture_declared(
+            root,
+            config,
+            commit,
+            &format!("{parent}/{name}-inputs.json"),
+            &r,
+            &required,
+            &format!("{parent}/blobs"),
+        )?;
+        for input in r.config()["environment"]["inputs"].as_array().unwrap() {
+            let id = input["id"].as_str().unwrap();
+            if !required.contains(id) {
+                continue;
+            }
+            let f = &snapshot["files"][id];
+            if (f["absent"] == true && input["presence"] != "absent")
+                || (f["absent"] != true
+                    && (input["presence"] == "absent" || f["sha256"] != input["sha256"]))
+            {
+                return Err(format!(
+                    "E_GOVERNANCE_INPUT: {name} missing/drifted input {id}; original endpoint evidence required"
+                ));
+            }
+        }
+        pair[name] = snapshot;
+    }
+    publish(root, output, &pair)?;
+    Ok(pair)
 }
 
 fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
@@ -236,6 +307,13 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
             "--base",
             "--candidate",
         ],
+        "capture-governance" => vec![
+            "--host-root",
+            "--config",
+            "--base",
+            "--candidate",
+            "--output",
+        ],
         "compose" => vec![
             "--host-root",
             "--config",
@@ -294,6 +372,14 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
                 (Some(a), Some(b)) => Some((*a, *b)),
                 _ => return Err("E_USAGE: both endpoint OIDs required".into()),
             },
+        )?
+    } else if command == "capture-governance" {
+        capture_governance(
+            &root,
+            required("--config")?,
+            required("--base")?,
+            required("--candidate")?,
+            required("--output")?,
         )?
     } else if command == "compose" {
         compose(

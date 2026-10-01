@@ -8,6 +8,7 @@ mod check_inputs;
 mod event_git;
 pub mod full;
 mod gather;
+pub mod gating;
 pub mod migrate;
 pub mod release;
 pub mod units;
@@ -598,6 +599,26 @@ fn prepare_policy(
     workflow_revision: &str,
     full_policy: bool,
 ) -> Result<Value, String> {
+    prepare_policy_fixed(
+        root,
+        c,
+        event,
+        payload,
+        workflow_revision,
+        full_policy,
+        None,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn prepare_policy_fixed(
+    root: &Path,
+    c: &Config,
+    event: &str,
+    payload: &Value,
+    workflow_revision: &str,
+    full_policy: bool,
+    detection: Option<&Value>,
+) -> Result<Value, String> {
     validate_policy(c, full_policy)?;
     if !full_oid(workflow_revision) {
         return Err("workflow source revision must be full OID".into());
@@ -615,87 +636,97 @@ fn prepare_policy(
                 .map(str::to_string)
                 .ok_or_else(|| "event missing string input".to_string())
         };
-        let (initial, base, candidate, source) = match event {
-            "push" => {
-                if payload["deleted"].as_bool() == Some(true) {
-                    return Err("branch deletion has no candidate".into());
-                }
-                let candidate = string(&payload["after"])?;
-                let before = string(&payload["before"])?;
-                if !full_oid(&candidate) {
-                    return Err(format!("invalid full OID: {candidate}"));
-                }
-                let creation = before.bytes().all(|b| b == b'0') && matches!(before.len(), 40 | 64);
-                if creation && payload["created"].as_bool() != Some(true) {
-                    return Err("zero before without branch-creation event".into());
-                }
-                if !creation && !full_oid(&before) {
-                    return Err(format!("invalid full OID: {before}"));
-                }
-                let event_ref = if creation || !c.push_baselines.is_empty() {
-                    let reference = payload["ref"]
-                        .as_str()
-                        .filter(|r| r.starts_with("refs/heads/"))
-                        .ok_or(if creation {
-                            "branch-creation event requires refs/heads/... ref"
-                        } else {
-                            "configured push baseline requires refs/heads/... ref"
-                        })?;
-                    facts.git(&["check-ref-format", reference])?;
-                    Some(reference)
-                } else {
-                    None
-                };
-                if let Some(rule) = c.push_baselines.iter().find(|rule| {
-                    event_ref.is_some_and(|reference| reference.starts_with(&rule.ref_prefix))
-                }) {
-                    (
-                        false,
-                        Some(facts.remote_baseline(&rule.base_ref)?),
-                        candidate,
-                        "push-configured-baseline-ref",
-                    )
-                } else if creation {
-                    let event_ref = event_ref.unwrap();
-                    if event_ref == c.branch_creation_base_ref {
-                        (true, None, candidate, "baseline-creation-initial-inventory")
-                    } else {
-                        let base = facts.remote_baseline(&c.branch_creation_base_ref)?;
-                        (false, Some(base), candidate, "branch-creation-baseline-ref")
+        let (initial, base, candidate, source) = if let Some(d) = detection {
+            (
+                d["initial"].as_bool().ok_or("detector initial missing")?,
+                d["base"].as_str().map(str::to_owned),
+                string(&d["candidate"])?,
+                d["source"].as_str().ok_or("detector source missing")?,
+            )
+        } else {
+            match event {
+                "push" => {
+                    if payload["deleted"].as_bool() == Some(true) {
+                        return Err("branch deletion has no candidate".into());
                     }
-                } else {
-                    (false, Some(before), candidate, "push-before-after")
-                }
-            }
-            "pull_request" => (
-                false,
-                Some(string(&payload["pull_request"]["base"]["sha"])?),
-                string(&payload["pull_request"]["head"]["sha"])?,
-                "pr-base-head",
-            ),
-            "workflow_dispatch" => {
-                let initial = match &payload["inputs"]["initial"] {
-                    Value::Bool(v) => *v,
-                    Value::String(v) if v == "true" => true,
-                    Value::String(v) if v == "false" => false,
-                    _ => return Err("manual initial must be explicit boolean".into()),
-                };
-                let base = payload["inputs"]["base"].as_str().unwrap_or("");
-                if initial && !base.is_empty() {
-                    return Err("manual initial cannot include base".into());
-                }
-                (
-                    initial,
-                    if base.is_empty() {
-                        None
+                    let candidate = string(&payload["after"])?;
+                    let before = string(&payload["before"])?;
+                    if !full_oid(&candidate) {
+                        return Err(format!("invalid full OID: {candidate}"));
+                    }
+                    let creation =
+                        before.bytes().all(|b| b == b'0') && matches!(before.len(), 40 | 64);
+                    if creation && payload["created"].as_bool() != Some(true) {
+                        return Err("zero before without branch-creation event".into());
+                    }
+                    if !creation && !full_oid(&before) {
+                        return Err(format!("invalid full OID: {before}"));
+                    }
+                    let event_ref = if creation || !c.push_baselines.is_empty() {
+                        let reference = payload["ref"]
+                            .as_str()
+                            .filter(|r| r.starts_with("refs/heads/"))
+                            .ok_or(if creation {
+                                "branch-creation event requires refs/heads/... ref"
+                            } else {
+                                "configured push baseline requires refs/heads/... ref"
+                            })?;
+                        facts.git(&["check-ref-format", reference])?;
+                        Some(reference)
                     } else {
-                        Some(base.to_string())
-                    },
-                    string(&payload["inputs"]["candidate"])?,
-                    "manual-explicit",
-                )
+                        None
+                    };
+                    if let Some(rule) = c.push_baselines.iter().find(|rule| {
+                        event_ref.is_some_and(|reference| reference.starts_with(&rule.ref_prefix))
+                    }) {
+                        (
+                            false,
+                            Some(facts.remote_baseline(&rule.base_ref)?),
+                            candidate,
+                            "push-configured-baseline-ref",
+                        )
+                    } else if creation {
+                        let event_ref = event_ref.unwrap();
+                        if event_ref == c.branch_creation_base_ref {
+                            (true, None, candidate, "baseline-creation-initial-inventory")
+                        } else {
+                            let base = facts.remote_baseline(&c.branch_creation_base_ref)?;
+                            (false, Some(base), candidate, "branch-creation-baseline-ref")
+                        }
+                    } else {
+                        (false, Some(before), candidate, "push-before-after")
+                    }
+                }
+                "pull_request" => (
+                    false,
+                    Some(string(&payload["pull_request"]["base"]["sha"])?),
+                    string(&payload["pull_request"]["head"]["sha"])?,
+                    "pr-base-head",
+                ),
+                "workflow_dispatch" => {
+                    let initial = match &payload["inputs"]["initial"] {
+                        Value::Bool(v) => *v,
+                        Value::String(v) if v == "true" => true,
+                        Value::String(v) if v == "false" => false,
+                        _ => return Err("manual initial must be explicit boolean".into()),
+                    };
+                    let base = payload["inputs"]["base"].as_str().unwrap_or("");
+                    if initial && !base.is_empty() {
+                        return Err("manual initial cannot include base".into());
+                    }
+                    (
+                        initial,
+                        if base.is_empty() {
+                            None
+                        } else {
+                            Some(base.to_string())
+                        },
+                        string(&payload["inputs"]["candidate"])?,
+                        "manual-explicit",
+                    )
+                }
+                _ => return Err(format!("unsupported event: {event}")),
             }
-            _ => return Err(format!("unsupported event: {event}")),
         };
         if !initial && base.is_none() {
             return Err("base required".into());
@@ -755,6 +786,15 @@ fn store_context(
     Ok(())
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) == Some("native-process") {
+        return check_inputs::native_process(args);
+    }
+    if args.first().map(String::as_str) == Some("production") {
+        return gating::production(args);
+    }
+    if args.first().map(String::as_str) == Some("detect") {
+        return gating::dispatch(args);
+    }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return check_inputs::dispatch(args);
     }
@@ -825,7 +865,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             generate(&root, config, command == "verify")?
         )),
         "acquire-seed" => {
-            if opts.len() != 7 {
+            if ![6, 7].contains(&opts.len()) {
                 return Err("acquire-seed requires host-root/config/unit/repository/event/payload/workflow-revision".into());
             }
             let Projection::Units(c) = load_projection(&no_symlink_parents(&root, config)?)? else {
@@ -839,7 +879,7 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 &root,
                 config,
                 &c,
-                opts.get("--unit").ok_or("unit required")?,
+                opts.get("--unit").copied(),
                 opts.get("--repository").ok_or("repository required")?,
                 opts.get("--event").ok_or("event required")?,
                 &payload,

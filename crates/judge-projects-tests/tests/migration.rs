@@ -23,6 +23,24 @@ fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     git(&root, &["init", "-q"]);
     let base = commit(&root);
     let map: Value = serde_json::from_slice(&fs::read(source.join(FM)).unwrap()).unwrap();
+    let historical: Value = serde_json::from_slice(&fs::read(root.join(FM)).unwrap()).unwrap();
+    let current_paths: BTreeSet<_> = map["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["path"].as_str().unwrap())
+        .collect();
+    // Overlaying the current candidate must include its declared retirements.
+    // The fixed historical snapshot remains untouched at base.
+    for file in historical["files"].as_array().unwrap() {
+        let path = file["path"].as_str().unwrap();
+        if !current_paths.contains(path) && path != "AGENTS.md" {
+            let target = root.join(path);
+            if target.exists() {
+                fs::remove_file(target).unwrap();
+            }
+        }
+    }
     for file in map["files"].as_array().unwrap() {
         let path = file["path"].as_str().unwrap();
         if path == "AGENTS.md" {

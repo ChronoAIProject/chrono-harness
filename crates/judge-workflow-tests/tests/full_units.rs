@@ -2221,3 +2221,121 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
         "STREAMED sizes=68157440,203876200 unit->relocated-offline-collector->finalized->delivery collector_effects=0 missing=reject corrupt=reject wrong_map=reject nested_loss=reject"
     );
 }
+
+#[test]
+fn docs_and_empty_collection_require_governance_but_no_business_sdk_snapshots() {
+    let (mut h, tools) = rust_host();
+    for (id, consumer) in [
+        ("one-sdk", "project:t"),
+        ("two-sdk", "project:t2"),
+        ("governance-data", "judge:registration"),
+    ] {
+        let path = fs::canonicalize(tools.path()).unwrap().join(id);
+        fs::write(&path, id).unwrap();
+        h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"].as_array_mut().unwrap().push(json!({"id":id,"location":path,"presence":"present","sha256":sha256(id.as_bytes())}));
+        h.values.get_mut(CONFIG).unwrap()["input_closure"]["bindings"].as_array_mut().unwrap().push(json!({"id":id,"consumer":consumer,"kind":"fixture","inputs":[format!("input:{id}")]}));
+        h.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(&format!("input:{id}"), "runtime-input", consumer));
+    }
+    h.save();
+    h.base = h.candidate.clone();
+    let test_source = h.root().join("t/src/lib.rs");
+    let mut bytes = fs::read(&test_source).unwrap();
+    bytes.extend_from_slice(b"\n// One explicitly assigned test changes.\n");
+    fs::write(test_source, bytes).unwrap();
+    h.save();
+    git_facts::prepare_bound(&h, "integration", None);
+    let path = h.root().join(".chrono-harness/state/inputs.json");
+    let mut selected_pair: Value = chrono_harness::json(&fs::read(&path).unwrap()).unwrap();
+    for endpoint in ["base", "candidate"] {
+        selected_pair[endpoint]["files"]
+            .as_object_mut()
+            .unwrap()
+            .remove("two-sdk");
+        for id in ["one-sdk", "governance-data"] {
+            selected_pair[endpoint]["files"][id] = json!({"bytes":id.as_bytes()});
+        }
+    }
+    fs::write(&path, serde_json::to_vec(&selected_pair).unwrap()).unwrap();
+    fs::remove_file(tools.path().join("two-sdk")).unwrap();
+    let (exit, unit) = launch(&h.root(), &h, &["--unit", "one"]);
+    passed(exit, &unit);
+    let unit_path = ".chrono-harness/state/unit-one.json";
+    fs::write(h.root().join(".chrono-harness/state/manifest.json"), serde_json::to_vec(&json!({"schema":"chrono-full-collection/v1","reports":[{"unit":"one","path":unit_path,"sha256":sha256(&fs::read(h.root().join(unit_path)).unwrap())}]})).unwrap()).unwrap();
+    fs::remove_file(tools.path().join("one-sdk")).unwrap();
+    let before = marker(tools.path());
+    let (exit, report) = collected(&h.root(), &h);
+    passed(exit, &report);
+    assert_eq!(report["tests"]["selected"], json!(["test:t"]));
+    assert_eq!(report["tests"]["executed"], json!([]));
+    assert_eq!(marker(tools.path()), before);
+    for endpoint in ["base", "candidate"] {
+        let mut broken = selected_pair.clone();
+        broken[endpoint]["files"]
+            .as_object_mut()
+            .unwrap()
+            .remove("one-sdk");
+        fs::write(&path, serde_json::to_vec(&broken).unwrap()).unwrap();
+        let (exit, report) = collected(&h.root(), &h);
+        assert_ne!(exit, 0);
+        assert!(report["findings"].to_string().contains("one-sdk"));
+        assert_eq!(marker(tools.path()), before);
+    }
+    h.base = h.candidate.clone();
+    fs::write(h.root().join("doc.txt"), "documentation only").unwrap();
+    h.save();
+    git_facts::prepare_bound(&h, "integration", None);
+    let path = h.root().join(".chrono-harness/state/inputs.json");
+    let mut pair: Value = chrono_harness::json(&fs::read(&path).unwrap()).unwrap();
+    for endpoint in ["base", "candidate"] {
+        for id in ["one-sdk", "two-sdk", "cargo-fixture"] {
+            pair[endpoint]["files"].as_object_mut().unwrap().remove(id);
+        }
+        pair[endpoint]["files"]["governance-data"] = json!({"bytes":b"governance-data"});
+    }
+    for id in ["one-sdk", "two-sdk", "cargo-fixture"] {
+        let p = tools.path().join(id);
+        if p.exists() {
+            fs::remove_file(p).unwrap();
+        }
+    }
+    fs::write(&path, serde_json::to_vec(&pair).unwrap()).unwrap();
+    fs::write(
+        h.root().join(".chrono-harness/state/manifest.json"),
+        serde_json::to_vec(&json!({"schema":"chrono-full-collection/v1","reports":[]})).unwrap(),
+    )
+    .unwrap();
+    let before = marker(tools.path());
+    let (exit, report) = collected(&h.root(), &h);
+    passed(exit, &report);
+    assert_eq!(report["tests"]["executed"], json!([]));
+    assert_eq!(marker(tools.path()), before);
+    // The same genuine governance originals also cover an empty Git DELTA.
+    h.base = h.candidate.clone();
+    pair["base"] = pair["candidate"].clone();
+    fs::write(&path, serde_json::to_vec(&pair).unwrap()).unwrap();
+    let context_path = h.root().join(".chrono-harness/state/context.json");
+    let mut context: Value = chrono_harness::json(&fs::read(&context_path).unwrap()).unwrap();
+    context["base"] = json!(h.base);
+    context["dev_tip"] = json!(h.base);
+    fs::write(&context_path, serde_json::to_vec(&context).unwrap()).unwrap();
+    let (exit, report) = collected(&h.root(), &h);
+    passed(exit, &report);
+    assert_eq!(report["request"]["delta"], json!([]));
+    assert_eq!(report["tests"]["executed"], json!([]));
+    assert_eq!(marker(tools.path()), before);
+    for endpoint in ["base", "candidate"] {
+        let mut broken = pair.clone();
+        broken[endpoint]["files"]
+            .as_object_mut()
+            .unwrap()
+            .remove("governance-data");
+        fs::write(&path, serde_json::to_vec(&broken).unwrap()).unwrap();
+        let (exit, report) = collected(&h.root(), &h);
+        assert_ne!(exit, 0);
+        assert!(report["findings"].to_string().contains("governance-data"));
+        assert_eq!(marker(tools.path()), before);
+    }
+}

@@ -51,10 +51,32 @@ name = "chrono-inputs"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-judge-filemap",
  "chrono-judge-registration",
+ "chrono-judge-routes",
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "chrono-judge-filemap"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-mixed",
+ "chrono-judge-registration",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-mixed"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
+ "serde_json",
 ]
 
 [[package]]
@@ -65,6 +87,17 @@ dependencies = [
  "serde",
  "serde_json",
  "time",
+]
+
+[[package]]
+name = "chrono-judge-routes"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

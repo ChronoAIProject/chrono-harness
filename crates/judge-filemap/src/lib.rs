@@ -537,6 +537,30 @@ fn produce_environment(
     )
 }
 /// Fixed semantic documents are consumed through the same full impact producer.
+/// Declaration-level scheduling impact, before external SDK snapshots exist.
+/// Final admission continues to use produce_for_request with actual validated inputs.
+#[allow(clippy::too_many_arguments)]
+pub fn produce_for_endpoints(
+    root: &std::path::Path,
+    base: &str,
+    candidate: &str,
+    config_path: &str,
+    delta: &[Delta],
+    old: &Registrations,
+    current: &Registrations,
+    reader: &facts::Reader,
+) -> Result<(Impact, Vec<Finding>), String> {
+    let documents = chrono_judge_mixed::load_documents_for_endpoints(
+        root, base, candidate, delta, old, current, reader,
+    )?;
+    Ok(produce_with_documents(
+        old,
+        current,
+        config_path,
+        delta,
+        &documents,
+    ))
+}
 pub fn produce_for_request(
     req: &Request,
     old: &Registrations,

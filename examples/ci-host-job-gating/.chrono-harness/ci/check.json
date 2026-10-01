@@ -1,0 +1,50 @@
+{
+  "schema": "chrono-ci-check/v3",
+  "judge": {
+    "program": ".chrono-harness/bin/chrono-judge-ci",
+    "args": [],
+    "timeout_seconds": 2400,
+    "output_limit_bytes": 8388608
+  },
+  "report_path": ".chrono-harness/state/collection/check.json",
+  "policy": {
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "projects": ".chrono-harness/projects.json",
+    "tools": {
+      "python3": "/usr/bin/python3",
+      "chrono-ci": ".chrono-harness/bin/chrono-ci"
+    },
+    "artifacts": [
+      ".chrono-harness/bin/",
+      ".chrono-harness/state/",
+      "__pycache__/"
+    ],
+    "required_inputs": [
+      ".chrono-harness/ci/check.json",
+      ".chrono-harness/ci/units.json",
+      ".chrono-harness/ci/install.py",
+      ".github/workflows/chrono-ci.yml"
+    ],
+    "adoption_base": null,
+    "operation_timeout_seconds": 600,
+    "operation_output_limit_bytes": 1048576,
+    "environment": {},
+    "registration_config": ".chrono-harness/config.json",
+    "facts_config": ".chrono-harness/config.json",
+    "units": {
+      "example": {
+        "tests": [
+          "test:example"
+        ],
+        "report_path": ".chrono-harness/state/example/check.json"
+      },
+      "harness": {
+        "tests": [
+          "test:harness"
+        ],
+        "report_path": ".chrono-harness/state/harness/check.json"
+      }
+    },
+    "shared_operations": {}
+  }
+}

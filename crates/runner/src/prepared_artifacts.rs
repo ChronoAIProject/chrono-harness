@@ -235,6 +235,9 @@ fn validate_originals_with_artifacts(
     }
     // The retained producer explicitly addresses its other originals; omissions cannot be hidden in a report.
     let evidence = crate::json(&read_binding_original(root, &report, transport, artifacts)?)?;
+    if evidence.get("current_observation") != p.evidence.get("current_observation") {
+        return Err("current observation differs from original producer report".into());
+    }
     if let Some(refs) = evidence.get("originals") {
         let refs: Vec<Original> =
             serde_json::from_value(refs.clone()).map_err(|e| e.to_string())?;

@@ -279,5 +279,25 @@
     "manifest_path": ".chrono-harness/state/collection/manifest.json",
     "download_directory": ".chrono-harness/state/collection/downloads/",
     "report_path": ".chrono-harness/state/collection/gather.json"
+  },
+  "job_gating": {
+    "schema": "chrono-job-gating/v1",
+    "detector": {
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "sparse_checkout": [
+        ".chrono-harness/",
+        "crates/",
+        "assets/",
+        ".github/workflows/chrono-ci.yml",
+        ".gitignore"
+      ]
+    }
   }
 }

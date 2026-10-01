@@ -107,6 +107,7 @@ pub fn validate_retained_view(
         &env,
         Some("registration"),
         Some(conversion),
+        true,
     )?;
     expected["binding"] = binding;
     if *supplied != expected {
@@ -202,6 +203,7 @@ fn views_using_reports(
         &env,
         Some(&req.judge_id),
         retained.as_ref(),
+        true,
     )?;
     view["binding"] = binding;
     Ok((a, b, view))
@@ -250,6 +252,33 @@ pub fn interpret_with_reader(
         env,
         None,
         None,
+        true,
+    )
+}
+/// Declaration scheduling shares profile matching but never launches a decoder
+/// or acquires its interpreter. Actual checks retain conversion admission.
+pub fn interpret_scheduling_with_reader(
+    reader: &facts::Reader,
+    root: &Path,
+    base: &str,
+    candidate_oid: &str,
+    config: &str,
+    raw: Values,
+    candidate: Values,
+) -> Result<(Registrations, Registrations, Value), String> {
+    reader.verify_config(root, candidate_oid)?;
+    interpret_mode(
+        reader,
+        root,
+        base,
+        candidate_oid,
+        config,
+        raw,
+        candidate,
+        &BTreeMap::new(),
+        None,
+        None,
+        false,
     )
 }
 fn retained_conversion(
@@ -375,6 +404,7 @@ fn interpret_mode(
     env: &BTreeMap<String, String>,
     consumer: Option<&str>,
     retained: Option<&Value>,
+    allow_conversion: bool,
 ) -> Result<(Registrations, Registrations, Value), String> {
     let new = Registrations::load(&candidate, config).map_err(|e| format!("candidate: {e}"))?;
     let deferred = consumer.is_some_and(|id| downstream_validator(&new, id));
@@ -434,6 +464,9 @@ fn interpret_mode(
     }
     if matching.len() != 1 {
         return Err("E_MIGRATION_PROFILE: missing/ambiguous historical profile".into());
+    }
+    if !allow_conversion {
+        return Err("E_SCHEDULING_CONVERSION: historical registries require a decoder; scheduling cannot acquire its interpreter or execute conversion".into());
     }
     let (profile, path, profile_bytes, profile_value) = matching.remove(0);
     if retained.is_some_and(Value::is_null) {

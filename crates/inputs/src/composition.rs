@@ -100,6 +100,26 @@ pub fn compose(
     let reader = facts::Reader::for_config(root, config)?;
     let old = Registrations::load(&reader.registry_values(root, base, config)?, config)?;
     let new = Registrations::load(&reader.registry_values(root, candidate, config)?, config)?;
+    let selected = if chrono_harness::units::full_execution_units(new.config())?.is_some() {
+        let delta = facts::delta(&reader.tree(root, base)?, &reader.tree(root, candidate)?);
+        let (impact, findings) = chrono_judge_filemap::produce_for_endpoints(
+            root, base, candidate, config, &delta, &old, &new, &reader,
+        )?;
+        if findings.iter().any(|f| f.level == "error") {
+            return Err(format!(
+                "E_COMPOSE_SELECTION: {}",
+                serde_json::to_string(&findings).map_err(|e| e.to_string())?
+            ));
+        }
+        Some(chrono_judge_routes::global_selection(
+            &old,
+            &new,
+            &impact,
+            chrono_judge_registration::downstream_validator(&new, "routes"),
+        )?)
+    } else {
+        None
+    };
     let mut pair = value!({});
     let mut originals = Vec::new();
     let mut seen = BTreeSet::new();
@@ -179,7 +199,14 @@ pub fn compose(
         }
     }
     for (name, r) in [("base", &old), ("candidate", &new)] {
-        for id in chrono_judge_registration::inputs::required_files(r, None)? {
+        let required = if let Some(selected) = &selected {
+            chrono_judge_registration::inputs::collection_required_files(
+                name, &old, &new, selected,
+            )?
+        } else {
+            chrono_judge_registration::inputs::required_files(r, None)?
+        };
+        for id in required {
             if pair[name]["files"].get(&id).is_none() {
                 return Err(format!("E_COMPOSE_COVERAGE: {name} missing input {id}"));
             }

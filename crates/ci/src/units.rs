@@ -1,4 +1,4 @@
-//! One workflow per explicitly registered CI unit, plus a collection workflow.
+//! Explicit independent units, with opt-in single-parent job scheduling.
 use super::*;
 use chrono_harness::{
     file_identity,
@@ -41,6 +41,11 @@ fn native_adoption_present<'de, D: serde::Deserializer<'de>>(
 ) -> Result<Option<NativeAdoption>, D::Error> {
     NativeAdoption::deserialize(d).map(Some)
 }
+fn gating_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<super::gating::Config>, D::Error> {
+    super::gating::Config::deserialize(d).map(Some)
+}
 fn full_contexts_present<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<Option<FullContexts>, D::Error> {
@@ -51,6 +56,12 @@ pub(super) const MARKER: &str = "# chrono-ci: owned github-units/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "gating_present"
+    )]
+    pub job_gating: Option<super::gating::Config>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -109,6 +120,9 @@ impl Config {
             c.bootstrap = u.bootstrap.clone();
             c.context_path = u.context_path.clone();
             c.artifact_directory = u.artifact_directory.clone();
+        }
+        if self.job_gating.is_some() {
+            c.workflow_path = self.collection.workflow_path.clone();
         }
         Ok(c)
     }
@@ -187,6 +201,7 @@ pub fn validate(c: &Config) -> Result<(), String> {
     }
     if let Some(a) = &c.native_adoption {
         if c.schema != FULL_SCHEMA
+            || c.job_gating.is_none()
             || a.schema != "chrono-native-adoption/v1"
             || a.interpreter.is_empty()
             || a.inputs_program.is_empty()
@@ -249,13 +264,18 @@ pub fn validate(c: &Config) -> Result<(), String> {
             }
         }
     }
+    if let Some(gating) = &c.job_gating {
+        super::gating::validate(c, gating)?;
+    }
     super::validate_policy(&c.collection, c.schema == FULL_SCHEMA)?;
     let mut paths = BTreeSet::from([c.collection.workflow_path.clone()]);
     let mut names = BTreeSet::from([c.collection.name.clone()]);
     let mut contexts = BTreeSet::from([c.collection.context_path.clone()]);
     for (id, unit) in &c.units {
         chrono_harness::units::id(id)?;
-        super::validate_policy(&c.workflow(Some(id))?, c.schema == FULL_SCHEMA)?;
+        let mut legacy_address = c.workflow(Some(id))?;
+        legacy_address.workflow_path = unit.workflow_path.clone();
+        super::validate_policy(&legacy_address, c.schema == FULL_SCHEMA)?;
         if !paths.insert(unit.workflow_path.clone())
             || !names.insert(unit.name.clone())
             || !contexts.insert(unit.context_path.clone())
@@ -399,6 +419,9 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     if !config_path.starts_with(".chrono-harness/ci/") {
         return Err("unit source must belong to host CI configuration".into());
     }
+    if c.job_gating.is_some() {
+        return super::gating::render(c, config_path);
+    }
     let mut outputs = BTreeMap::new();
     for unit in c
         .units
@@ -423,7 +446,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
         let artifact = unit
             .map(|u| format!("chrono-unit-{u}"))
             .unwrap_or("chrono-collection".into());
-        let mut rendered = super::render_extended(
+        let rendered = super::render_extended(
             &w,
             config_path,
             Some(&scope),
@@ -434,104 +457,119 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             c.schema == FULL_SCHEMA,
         )?
         .replacen(super::MARKER, MARKER, 1);
-        if let Some(a) = &c.native_adoption {
-            let command = format!(
-                "{} {} {} --config {}{}",
-                shell(&a.interpreter),
-                shell(&a.adapter_path),
-                if unit.is_none() { "publish" } else { "acquire" },
-                shell(config_path),
-                unit.map(|id| format!(" --unit {}", shell(id)))
-                    .unwrap_or_default()
-            );
-            let hook = format!(
-                "      - name: Prepare shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n"
-            );
-            let upload = if unit.is_none() {
-                format!(
-                    "      - name: Publish shared native context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n",
-                    w.upload_artifact_action,
-                    a.seed_artifact,
-                    scalar(&a.seed_directory)
-                )
-            } else {
-                String::new()
-            };
-            rendered = rendered.replacen(
-                "      - name: Canonical harness check",
-                &format!("{hook}{upload}      - name: Canonical harness check"),
-                1,
-            );
-            // Authentic acquisition fields are observed by the hook, outside business inheritance.
-            rendered = rendered.replacen("      - name: Bootstrap registered tools\n        shell: bash\n", "      - name: Bootstrap registered tools\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}\n",1);
-        }
         outputs.insert(w.workflow_path.clone(), rendered);
-    }
-    if let Some(a) = &c.native_adoption {
-        outputs.insert(
-            a.adapter_path.clone(),
-            include_str!("../../../assets/ci/native.py").into(),
-        );
     }
     Ok(outputs)
 }
 
-pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
-    profile(root, c)?;
+type ProjectionChanges = (Vec<(String, String)>, Vec<(String, String)>);
+fn projection_changes(
+    root: &Path,
+    path: &str,
+    c: &Config,
+    verify: bool,
+) -> Result<ProjectionChanges, String> {
     let outputs = render(c, path)?;
     let mut writes = vec![];
+    let legacy_outputs = if c.job_gating.is_some() {
+        let mut legacy = c.clone();
+        legacy.job_gating = None;
+        legacy.native_adoption = None;
+        render(&legacy, path)?
+    } else {
+        BTreeMap::new()
+    };
     for (path, bytes) in &outputs {
-        if !output_preflight(
-            root,
-            path,
-            bytes,
-            if c.native_adoption
-                .as_ref()
-                .is_some_and(|a| a.adapter_path == *path)
-            {
-                "# chrono-ci: owned native-adoption/v1\n"
-            } else {
-                MARKER
-            },
-        )? {
+        let marker = if c
+            .native_adoption
+            .as_ref()
+            .is_some_and(|a| a.adapter_path == *path)
+        {
+            "# chrono-ci: owned native-adoption/v1\n"
+        } else if c.job_gating.is_some() {
+            super::gating::MARKER
+        } else {
+            MARKER
+        };
+        let target = no_symlink_parents(root, path)?;
+        let legacy_match = legacy_outputs
+            .get(path)
+            .is_some_and(|old| fs::read(&target).ok().as_deref() == Some(old.as_bytes()));
+        if legacy_match || !output_preflight(root, path, bytes, marker)? {
             if verify {
                 return Err(format!("generated unit workflow drift: {path}"));
             }
-            writes.push((path, bytes));
+            writes.push((path.clone(), bytes.clone()));
         }
     }
+    let mut retire = vec![];
+    if c.job_gating.is_some() {
+        let mut legacy = c.clone();
+        legacy.job_gating = None;
+        legacy.native_adoption = None;
+        for (path, bytes) in render(&legacy, path)? {
+            if outputs.contains_key(&path) {
+                continue;
+            }
+            let target = no_symlink_parents(root, &path)?;
+            if target.exists() {
+                if fs::read(&target).map_err(|e| e.to_string())? != bytes.as_bytes() {
+                    return Err(format!(
+                        "obsolete workflow differs; use explicit migrate and preserve host edits: {path}"
+                    ));
+                }
+                if verify {
+                    return Err(format!("obsolete owned unit workflow: {path}"));
+                }
+                retire.push((path, bytes));
+            }
+        }
+    }
+    Ok((writes, retire))
+}
+pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
+    profile(root, c)?;
+    let (writes, retire) = projection_changes(root, path, c, verify)?;
     // Preflight every output before modifying any of them; I/O failure is reported, never atomicity claimed.
     for (path, bytes) in &writes {
         write_file(root, path, bytes.as_bytes())?;
     }
-    Ok(!writes.is_empty())
+    for (path, bytes) in &retire {
+        let target = no_symlink_parents(root, path)?;
+        if fs::read(&target).map_err(|e| e.to_string())? != bytes.as_bytes() {
+            return Err(format!(
+                "obsolete workflow changed before retirement: {path}"
+            ));
+        }
+        fs::remove_file(target).map_err(|e| e.to_string())?;
+    }
+    Ok(!writes.is_empty() || !retire.is_empty())
 }
 
 pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     let path = ".chrono-harness/ci/units.json";
     let existing = no_symlink_parents(root, path)?.exists();
-    let c: Config = if existing {
+    let mut c: Config = if existing {
         decode(&fs::read(root.join(path)).map_err(|e| e.to_string())?)?
     } else {
         incoming
     };
-    profile(root, &c)?;
-    let outputs = render(&c, path)?;
-    for (path, bytes) in &outputs {
-        output_preflight(
-            root,
-            path,
-            bytes,
-            if c.native_adoption
-                .as_ref()
-                .is_some_and(|a| a.adapter_path == *path)
-            {
-                "# chrono-ci: owned native-adoption/v1\n"
-            } else {
-                MARKER
+    if !existing && c.job_gating.is_none() && c.collection.schema == "chrono-github-ci/v4" {
+        c.job_gating = Some(super::gating::Config {
+            schema: super::gating::SCHEMA.into(),
+            detector: super::gating::Detector {
+                runs_on: c.collection.runs_on.clone(),
+                timeout_minutes: c.collection.timeout_minutes,
+                bootstrap: c.collection.bootstrap.clone(),
+                sparse_checkout: vec![
+                    ".chrono-harness/".into(),
+                    c.collection.workflow_path.clone(),
+                ],
             },
-        )?;
+        });
     }
+    profile(root, &c)?;
+    projection_changes(root, path, &c, false)?;
     if !existing {
         write_file(
             root,
@@ -625,8 +663,29 @@ fn prepare_scope_inner(
     generate(root, path, c, true)?;
     let (profile, _) = profile(root, c)?;
     let w = c.workflow(unit)?;
-    let mut context =
-        super::prepare_policy(root, &w, event, payload, revision, c.schema == FULL_SCHEMA)?;
+    let detection = if c.job_gating.is_some() {
+        Some(super::gating::native_detection(
+            root, path, c, event, payload, revision,
+        )?)
+    } else {
+        None
+    };
+    let mut context = super::prepare_policy_fixed(
+        root,
+        &w,
+        event,
+        payload,
+        revision,
+        c.schema == FULL_SCHEMA,
+        detection.as_ref(),
+    )?;
+    if let Some(detection) = detection {
+        context["detection"] = detection;
+        if load_full_context || std::env::var("GITHUB_JOB").as_deref() != Ok("detect") {
+            context["native_run"] = serde_json::to_value(super::gating::native_run(unit)?)
+                .map_err(|e| e.to_string())?;
+        }
+    }
     let argv = context["canonical_argv"]
         .as_array_mut()
         .ok_or("missing canonical command")?;
