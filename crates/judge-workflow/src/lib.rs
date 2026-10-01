@@ -102,11 +102,12 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
             .find_map(|result| result.outputs.get("global_selected"))
             .cloned()
             .unwrap_or_else(|| impact["tests"].clone());
-        let selected: std::collections::BTreeSet<String> = serde_json::from_value(global_selected.clone())
-            .map_err(|e| format!("E_WORKFLOW_INPUT: global selection: {e}"))?;
-        let units: std::collections::BTreeMap<String, chrono_harness::units::Unit> = serde_json::from_value(
-            req.observations["execution_units"]["units"].clone(),
-        ).map_err(|e| format!("E_WORKFLOW_INPUT: execution units: {e}"))?;
+        let selected: std::collections::BTreeSet<String> =
+            serde_json::from_value(global_selected.clone())
+                .map_err(|e| format!("E_WORKFLOW_INPUT: global selection: {e}"))?;
+        let units: std::collections::BTreeMap<String, chrono_harness::units::Unit> =
+            serde_json::from_value(req.observations["execution_units"]["units"].clone())
+                .map_err(|e| format!("E_WORKFLOW_INPUT: execution units: {e}"))?;
         let required_units = chrono_harness::units::required(&units, &selected);
         return Ok(value!({
             "schema":"chrono-workflow-verdict/v1",

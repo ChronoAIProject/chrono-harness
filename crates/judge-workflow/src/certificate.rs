@@ -304,6 +304,8 @@ pub fn consume(
             return Err("producer judge set differs".into());
         }
         for old in observations {
+            let expanded = chrono_harness::full::expand_record(old)?;
+            let old = &expanded;
             let matches: Vec<_> = records.iter().filter(|v| v["id"] == old["id"]).collect();
             if matches.len() != 1 {
                 return Err("producer judge observation missing/duplicate".into());

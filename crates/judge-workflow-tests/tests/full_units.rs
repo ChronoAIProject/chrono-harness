@@ -43,7 +43,12 @@ fn rust_host() -> (Host, tempfile::TempDir) {
     let version = Command::new(&cargo).arg("--version").output().unwrap();
     cfg["tools"][0]["expected_version"] =
         json!(String::from_utf8(version.stdout).unwrap().trim_end());
-    cfg["environment"]["values"]["PATH"] = json!(std::env::var("PATH").unwrap());
+    // The fixture needs Cargo and system tools, not the caller's editor/agent
+    // directories repeated in every retained Git process observation.
+    cfg["environment"]["values"]["PATH"] = json!(format!(
+        "{}:/usr/bin:/bin",
+        cargo.parent().unwrap().display()
+    ));
     cfg["environment"]["values"]["HOME"] = json!(std::env::var("HOME").unwrap());
     cfg["input_closure"]["bindings"][1]["inputs"]
         .as_array_mut()
@@ -629,8 +634,7 @@ fn collection_rejects_consistently_resealed_environment() {
 #[test]
 fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
     let (h, tools) = rust_host();
-    let (e, r) = git_facts::run_bound(&h, "integration", None);
-    passed(e, &r);
+    git_facts::prepare_bound(&h, "integration", None);
     for unit in ["one", "two"] {
         let (e, r) = launch(&h.root(), &h, &["--unit", unit]);
         passed(e, &r);
@@ -1349,6 +1353,188 @@ fn collection_rejects_raw_entry_mismatch_without_business_effects() {
 mod full_short;
 
 #[test]
+fn candidate_unit_projection_preserves_historical_plan_inputs() {
+    use chrono_harness::units::Scope;
+    use chrono_judge_registration::{Registrations, inputs::project_effective};
+    let (h, _tools) = rust_host();
+    let mut old_values = h.values.clone();
+    for (id, consumer) in [
+        ("historical-sdk", "project:t"),
+        ("selected-sdk", "project:t2"),
+    ] {
+        let cfg = old_values.get_mut(CONFIG).unwrap();
+        cfg["environment"]["inputs"].as_array_mut().unwrap().push(json!({
+            "id":id,"location":format!("/declared/{id}"),"presence":"present","sha256":sha256(id.as_bytes())
+        }));
+        cfg["input_closure"]["bindings"].as_array_mut().unwrap().push(json!({
+            "id":id,"consumer":consumer,"kind":"explicit-fixture","inputs":[format!("input:{id}")]
+        }));
+        old_values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(&format!("input:{id}"), "runtime-input", consumer));
+    }
+    let old = Registrations::load(&old_values, CONFIG).unwrap();
+    for case in ["rename", "introduction", "reassignment"] {
+        let mut new_values = old_values.clone();
+        let units = new_values.get_mut(CONFIG).unwrap()["execution_units"]["units"]
+            .as_object_mut()
+            .unwrap();
+        let unit = if case == "reassignment" {
+            units.get_mut("one").unwrap()["tests"] = json!(["test:t2"]);
+            units.get_mut("two").unwrap()["tests"] = json!(["test:t"]);
+            "one"
+        } else {
+            let mut definition = units.remove("one").unwrap();
+            definition["report_path"] = json!(".chrono-harness/state/unit-new.json");
+            units.insert("new".into(), definition);
+            if case == "introduction" {
+                units.insert(
+                    "one".into(),
+                    json!({"tests":[],"report_path":".chrono-harness/state/unit-one.json"}),
+                );
+            }
+            "new"
+        };
+        if case != "reassignment" {
+            new_values.get_mut(CONFIG).unwrap()["execution_units"]["shared_operations"]["shared.prepare"] =
+                json!(["new", "two"]);
+        }
+        let new = Registrations::load(&new_values, CONFIG).unwrap();
+        let mut evidence = json!({"endpoints":{"base":{"files":{}},"candidate":{"files":{}}}});
+        for endpoint in ["base", "candidate"] {
+            for input in old.config()["environment"]["inputs"].as_array().unwrap() {
+                evidence["endpoints"][endpoint]["files"][input["id"].as_str().unwrap()] =
+                    json!({"sha256":input["sha256"]});
+            }
+        }
+        let scope = Some(Scope::Unit { unit: unit.into() });
+        // Missing unrelated inputs are independent at both endpoints.
+        if case != "reassignment" {
+            for endpoint in ["base", "candidate"] {
+                evidence["endpoints"][endpoint]["files"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("selected-sdk");
+            }
+        }
+        evidence["identity"] = json!(wire::digest(&evidence["endpoints"]).unwrap());
+        let projected = project_effective(&evidence, &old, &new, scope.as_ref())
+            .unwrap_or_else(|e| panic!("{case}: {e}"));
+        if case == "reassignment" {
+            assert!(
+                projected["endpoints"]["base"]["files"]
+                    .get("selected-sdk")
+                    .is_some()
+            );
+            assert!(
+                projected["endpoints"]["candidate"]["files"]
+                    .get("historical-sdk")
+                    .is_none()
+            );
+            let mut missing = evidence.clone();
+            missing["endpoints"]["base"]["files"]
+                .as_object_mut()
+                .unwrap()
+                .remove("selected-sdk");
+            missing["identity"] = json!(wire::digest(&missing["endpoints"]).unwrap());
+            assert!(
+                project_effective(&missing, &old, &new, scope.as_ref())
+                    .unwrap_err()
+                    .contains("missing effective input base: selected-sdk")
+            );
+        }
+        assert!(
+            projected["endpoints"]["base"]["files"]
+                .get("historical-sdk")
+                .is_some()
+        );
+        let selected = if case == "reassignment" {
+            "selected-sdk"
+        } else {
+            "historical-sdk"
+        };
+        assert!(
+            projected["endpoints"]["candidate"]["files"]
+                .get(selected)
+                .is_some()
+        );
+        for (endpoint, id) in [("base", "historical-sdk"), ("candidate", selected)] {
+            let mut missing = evidence.clone();
+            missing["endpoints"][endpoint]["files"]
+                .as_object_mut()
+                .unwrap()
+                .remove(id);
+            missing["identity"] = json!(wire::digest(&missing["endpoints"]).unwrap());
+            let error = project_effective(&missing, &old, &new, scope.as_ref()).unwrap_err();
+            assert!(
+                error.contains(&format!("missing effective input {endpoint}: {id}")),
+                "{case}: {error}"
+            );
+        }
+    }
+}
+
+#[test]
+fn collection_binds_canonical_runner_resolution_to_original_declaration() {
+    let (h, tools) = rust_host();
+    git_facts::prepare_bound(&h, "integration", None);
+    for unit in ["one", "two"] {
+        let (e, r) = launch(&h.root(), &h, &["--unit", unit]);
+        passed(e, &r);
+    }
+    let collector = clone_host(&h);
+    fs::remove_dir_all(h.root()).unwrap();
+    fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
+    let before = marker(tools.path());
+    manifest(collector.path(), &["one", "two"]);
+    let (e, r) = collected(collector.path(), &h);
+    passed(e, &r);
+    let path = collector.path().join(".chrono-harness/state/unit-one.json");
+    let original = fs::read(&path).unwrap();
+    let mut report: Value = serde_json::from_slice(&original).unwrap();
+    for record in report["judges"].as_array_mut().unwrap() {
+        *record = chrono_harness::full::expand_record(record).unwrap();
+    }
+    assert_eq!(
+        report["request"]["runner"]["path"],
+        json!(
+            Path::new(report["request"]["candidate"]["root"].as_str().unwrap())
+                .join(".chrono-harness/bin/chrono-harness")
+        )
+    );
+    report["request"]["observations"]["entry"]["resolved_paths"]["paths"][0] = json!({
+        "actual":"/outside/chrono-harness","expected":"/outside/chrono-harness"
+    });
+    let ri = row(&mut report, "routes");
+    report["judges"][ri]["response"]["outputs"]["execution_plan"]["binding"]["entry"] =
+        report["request"]["observations"]["entry"].clone();
+    reseal_plan(&mut report);
+    reseal(&mut report);
+    let request: Request = serde_json::from_value(report["request"].clone()).unwrap();
+    let bindings: Vec<Binding> =
+        serde_json::from_value(h.values[JUDGES]["judges"].clone()).unwrap();
+    chrono_harness::full::retained_judges(
+        &request,
+        &bindings,
+        report["judges"].as_array().unwrap(),
+    )
+    .unwrap();
+    fs::write(&path, serde_json::to_vec(&report).unwrap()).unwrap();
+    manifest(collector.path(), &["one", "two"]);
+    let (e, rejected) = collected(collector.path(), &h);
+    assert_ne!(e, 0, "accepted canonical contradictory resolution");
+    assert!(
+        rejected["findings"]
+            .to_string()
+            .contains("E_COLLECTION_INPUT: original runner invocation differs"),
+        "{rejected}"
+    );
+    assert_eq!(marker(tools.path()), before);
+    fs::write(path, original).unwrap();
+}
+
+#[test]
 fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
     let (mut h, tools) = rust_host();
     let root = h.root();
@@ -1358,7 +1544,7 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
         ("shared-sdk", "project:p2"),
         ("governance-data", "judge:registration"),
     ] {
-        let path = tools.path().join(id);
+        let path = fs::canonicalize(tools.path()).unwrap().join(id);
         fs::write(&path, id.as_bytes()).unwrap();
         let cfg = h.values.get_mut(CONFIG).unwrap();
         cfg["environment"]["inputs"].as_array_mut().unwrap().push(
@@ -1372,6 +1558,16 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
     }
     h.save();
     h.base = h.candidate.clone();
+    // Candidate introduction/rename must project the old plans, although the
+    // base already has units and has never declared this candidate unit ID.
+    let cfg = h.values.get_mut(CONFIG).unwrap();
+    let definition = cfg["execution_units"]["units"]
+        .as_object_mut()
+        .unwrap()
+        .remove("one")
+        .unwrap();
+    cfg["execution_units"]["units"]["renamed"] = definition;
+    cfg["execution_units"]["shared_operations"]["shared.prepare"][0] = json!("renamed");
     fs::write(
         root.join("p/src/lib.rs"),
         "pub fn double(n:i32)->i32 {2*n}\n",
@@ -1411,7 +1607,7 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
             "--output",
             ".chrono-harness/state/one-captured.json",
             "--unit",
-            "one",
+            "renamed",
         ])
         .output()
         .unwrap();
@@ -1433,9 +1629,28 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
             .remove("two-sdk");
     }
     fs::write(&path, serde_json::to_vec(&snapshots).unwrap()).unwrap();
-    let (e, one) = launch(&root, &h, &["--unit", "one"]);
+    let (e, one) = launch(&root, &h, &["--unit", "renamed"]);
     passed(e, &one);
     let original_one_report = fs::read(root.join(".chrono-harness/state/unit-one.json")).unwrap();
+    for endpoint in ["base", "candidate"] {
+        let mut missing = snapshots.clone();
+        missing[endpoint]["files"]
+            .as_object_mut()
+            .unwrap()
+            .remove("one-sdk");
+        fs::write(&path, serde_json::to_vec(&missing).unwrap()).unwrap();
+        let before = marker(tools.path());
+        let (e, rejected) = launch(&root, &h, &["--unit", "renamed"]);
+        assert_ne!(e, 0, "accepted missing {endpoint} input");
+        assert!(
+            rejected["findings"]
+                .to_string()
+                .contains(&format!("{endpoint}: missing retained input one-sdk")),
+            "{rejected}"
+        );
+        assert_eq!(marker(tools.path()), before);
+    }
+    fs::write(&path, serde_json::to_vec(&snapshots).unwrap()).unwrap();
     assert!(
         one["effective_inputs"]["endpoints"]["candidate"]["files"]
             .get("two-sdk")
@@ -1445,7 +1660,7 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
         let bytes = fs::read(tools.path().join(id)).unwrap();
         fs::remove_file(tools.path().join(id)).unwrap();
         let before = marker(tools.path());
-        let (e, r) = launch(&root, &h, &["--unit", "one"]);
+        let (e, r) = launch(&root, &h, &["--unit", "renamed"]);
         assert_ne!(e, 0, "missing required {id}");
         assert!(r["findings"].to_string().contains(id), "{r:#}");
         assert_eq!(marker(tools.path()), before);
@@ -1476,7 +1691,19 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
         original_one_report,
     )
     .unwrap();
-    manifest(&root, &["one", "two"]);
+    let reports: Vec<_> = [("renamed", "one"), ("two", "two")]
+        .into_iter()
+        .map(|(unit, coordinate)| {
+            let path = format!(".chrono-harness/state/unit-{coordinate}.json");
+            json!({"unit":unit,"path":path,"sha256":sha256(&fs::read(root.join(&path)).unwrap())})
+        })
+        .collect();
+    fs::write(
+        root.join(".chrono-harness/state/manifest.json"),
+        serde_json::to_vec(&json!({"schema":"chrono-full-collection/v1","reports":reports}))
+            .unwrap(),
+    )
+    .unwrap();
     fs::remove_file(tools.path().join("two-sdk")).unwrap();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     let before = marker(tools.path());

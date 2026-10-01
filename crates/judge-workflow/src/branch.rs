@@ -27,7 +27,10 @@ pub fn observation_age(ctx: &Value, w: &Value) -> Result<time::Duration, String>
         .filter(|v| v.is_finite() && *v >= 0.0)
         .ok_or("E_BRANCH_CONTEXT: invalid age threshold")?;
     if age.whole_nanoseconds() > (hours * 3_600_000_000_000.0) as i128 {
-        return Err(format!("E_BRANCH_STALE: age_ns={}", age.whole_nanoseconds()));
+        return Err(format!(
+            "E_BRANCH_STALE: age_ns={}",
+            age.whole_nanoseconds()
+        ));
     }
     Ok(age)
 }

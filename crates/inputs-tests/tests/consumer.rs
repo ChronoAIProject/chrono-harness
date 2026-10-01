@@ -244,10 +244,7 @@ fn malformed_misbound_missing_and_changed_retained_inputs_fail_before_execution(
     let reject = |v: &Value, expected: &str| {
         let (exit, r) = check(&h, v);
         assert_ne!(exit, 0, "{r:#}");
-        assert!(
-            r.to_string().contains(expected),
-            "expected {expected}: {r}"
-        );
+        assert!(r.to_string().contains(expected), "expected {expected}: {r}");
         assert!(r["tests"].is_null());
         assert!(!h.root().join(".chrono-harness/state/order").exists());
     };

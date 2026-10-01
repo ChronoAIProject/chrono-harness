@@ -247,8 +247,30 @@ pub fn required_files(
     r: &Registrations,
     scope: Option<&chrono_harness::units::Scope>,
 ) -> Result<std::collections::BTreeSet<String>, String> {
+    let selected = match scope {
+        Some(chrono_harness::units::Scope::Unit { unit }) => Some(assigned_plans(r, unit)?),
+        _ => None,
+    };
+    required_plan_files(r, selected.as_ref())
+}
+
+fn assigned_plans(
+    r: &Registrations,
+    unit: &str,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    use chrono_harness::units::{self, Unit};
+    let units: BTreeMap<String, Unit> =
+        serde_json::from_value(r.config()["execution_units"]["units"].clone())
+            .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
+    let plans = crate::execution::plans(r.filemap())?;
+    units::select(&units, &plans.keys().cloned().collect(), unit)
+}
+
+fn required_plan_files(
+    r: &Registrations,
+    selected: Option<&std::collections::BTreeSet<String>>,
+) -> Result<std::collections::BTreeSet<String>, String> {
     use crate::NodeKind;
-    use chrono_harness::units::{self, Scope, Unit};
     use std::collections::BTreeSet;
     let all: BTreeSet<String> = r.config()["environment"]["inputs"]
         .as_array()
@@ -256,21 +278,17 @@ pub fn required_files(
         .iter()
         .map(|i| i["id"].as_str().unwrap().to_owned())
         .collect();
-    let Some(Scope::Unit { unit }) = scope else {
+    let Some(selected) = selected else {
         return Ok(all);
     };
     if let Some(finding) = crate::input_closure_findings(r).first() {
         return Err(format!("{}: {}", finding.code, finding.message));
     }
-    let units: BTreeMap<String, Unit> =
-        serde_json::from_value(r.config()["execution_units"]["units"].clone())
-            .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
     let plans = crate::execution::plans(r.filemap())?;
-    let selected = units::select(&units, &plans.keys().cloned().collect(), unit)?;
     let methods = crate::execution::methods(r.projects())?;
     let nodes = r.node_data();
     let mut needed = selected.clone();
-    for test in &selected {
+    for test in selected {
         let definition = nodes
             .get(test)
             .and_then(|n| n.unique())
@@ -355,18 +373,28 @@ pub fn required_files(
 
 fn endpoint_required_files(
     endpoint: &str,
-    r: &Registrations,
+    old: &Registrations,
+    new: &Registrations,
     scope: Option<&chrono_harness::units::Scope>,
 ) -> Result<std::collections::BTreeSet<String>, String> {
-    // A unit migration may compare against a base predating unit assignment.
-    // Keep that base's original global obligations; only the candidate supplies
-    // the unit map. Capture still requires its own declared unit assignment.
-    let scope = if endpoint == "base" && r.config().get("execution_units").is_none() {
-        None
-    } else {
-        scope
+    if endpoint != "base" {
+        return required_files(new, scope);
+    }
+    let Some(chrono_harness::units::Scope::Unit { unit }) = scope else {
+        return required_files(old, scope);
     };
-    required_files(r, scope)
+    // Candidate IDs need not exist historically. Project their declared plans
+    // onto the base, retaining also any plans assigned to this ID at the base.
+    // Both projections use the same input closure; no global-input fallback.
+    let plans = crate::execution::plans(old.filemap())?;
+    let mut selected = assigned_plans(new, unit)?
+        .into_iter()
+        .filter(|test| plans.contains_key(test))
+        .collect::<std::collections::BTreeSet<_>>();
+    if old.config()["execution_units"]["units"].get(unit).is_some() {
+        selected.extend(assigned_plans(old, unit)?);
+    }
+    required_plan_files(old, Some(&selected))
 }
 
 /// Compare original per-unit evidence with the same projection of the current
@@ -384,8 +412,8 @@ pub fn project_effective(
         return Err("effective input identity mismatch".into());
     }
     let mut projected = evidence.clone();
-    for (endpoint, r) in [("base", old), ("candidate", new)] {
-        let required = endpoint_required_files(endpoint, r, scope)?;
+    for endpoint in ["base", "candidate"] {
+        let required = endpoint_required_files(endpoint, old, new, scope)?;
         let files = projected["endpoints"][endpoint]["files"]
             .as_object_mut()
             .ok_or("effective input files missing")?;
@@ -446,7 +474,7 @@ fn validate_inner(
     let mut endpoints = serde_json::Map::new();
     for (name, endpoint, r) in [("base", &req.base, old), ("candidate", &req.candidate, new)] {
         let cfg = r.config();
-        let required = endpoint_required_files(name, r, req.scope.as_ref())?;
+        let required = endpoint_required_files(name, old, new, req.scope.as_ref())?;
         let retained = &req.observations["retained"][name];
         if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
             && retained["schema"] != snapshot_schema_for(r)

@@ -159,6 +159,11 @@ by that filter. Each unit executes its selected complete plans through the
 existing routes/projects engine. Replacement success belongs to the unit owning
 the replacement plan; collection requires that unit's successful evidence.
 
+Input projection follows the candidate unit's declared plans even when that
+unit ID is new or renamed. At the base endpoint it also retains any historical
+plans assigned to that ID, using the same declared input closure for both
+assignments. An unrelated unit's business inputs are not a fallback requirement.
+
 Use the same command locally and in the generated unit workflow:
 
 ```sh

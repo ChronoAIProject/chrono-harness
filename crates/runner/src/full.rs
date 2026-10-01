@@ -85,7 +85,20 @@ pub fn judge_request(
             Ok(response)
         })
         .collect::<Result<_, String>>()?;
-    req.observations["judges"] = value!(history.iter().map(predecessor).collect::<Vec<_>>());
+    let observations = history
+        .iter()
+        .map(|record| {
+            let mut record = predecessor(record);
+            // Scoped originals already have a lossless process encoding. Use it
+            // at the stdin boundary too, avoiding repeated byte-array expansion in
+            // every later judge's seal. Unscoped requests retain their wire shape.
+            if template.scope.is_some() {
+                compact_record(&mut record)?;
+            }
+            Ok(record)
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    req.observations["judges"] = value!(observations);
     let impacts: Vec<_> = req
         .prior_results
         .iter()
@@ -98,8 +111,8 @@ pub fn judge_request(
     req.seal()?;
     Ok(req)
 }
-/// Lossless retained process encoding for selected reports. Live stdin and
-/// direct legacy reports retain their original shape and bytes.
+/// Lossless process encoding for scoped reports and predecessor observations.
+/// Unscoped stdin and direct legacy reports retain their original shape and bytes.
 pub fn expand_process(value: &Value) -> Result<Value, String> {
     if value.get("encoding").is_none() {
         return Ok(value.clone());

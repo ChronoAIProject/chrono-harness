@@ -84,7 +84,7 @@ fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, tempf
             "runtime-input",
             "judge:registration",
         ));
-    let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["PATH","HOME"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}}});
+    let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["HOME"],"values":{"PATH":h.values[CONFIG]["environment"]["values"]["PATH"],"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}}});
     let common = json!({"schema":"chrono-github-ci/v4","workflow_path":".github/workflows/collection.yml","name":"Full collection","runs_on":"fixture-native","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["/bin/true"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"facts_config":CONFIG,"context_path":".chrono-harness/state/collection/event.json","artifact_directory":".chrono-harness/state/collection/"});
     let mut provider = json!({"schema":"chrono-github-units/v2","collection":common,"units":{},"full_contexts":{"collection":".chrono-harness/state/collection/full.json","units":{}},"gather":{"program":tools.path().join("mock-gh"),"inherit_environment":[],"credential_environment":[],"environment":{},"timeout_seconds":30,"output_limit_bytes":1048576,"wait_seconds":1,"poll_seconds":1,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}});
     for id in ["one", "two"] {
@@ -267,8 +267,12 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
     }
 }
 fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::path::PathBuf) {
-    let (mut h, tools) = configured_short_host(false, age_seconds);
+    let (h, tools) = configured_short_host(false, age_seconds);
     let root = h.root();
+    // Produce the fixed endpoint snapshots before starting the real branch
+    // clock. Its short freshness window measures producer behavior, not fixture
+    // snapshot setup competing with the other registered tests.
+    git_facts::prepare_bound(&h, "integration", None);
     // Real birth producer in an isolated fixture; no hand-filled successful birth.
     git(&root, &["checkout", "-q", "dev"]);
     let lane = tools.path().join("local-lane");
@@ -295,19 +299,28 @@ fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    copy_tree(
-        &root.join(".chrono-harness/bin"),
-        &lane.join(".chrono-harness/bin"),
+    // These declared fixture executables are immutable. Link their bytes into
+    // the new lane instead of copying every binary after the branch clock starts.
+    let mut programs = vec![
+        h.values[CONFIG]["runner"]["path"].as_str().unwrap(),
+        ".chrono-harness/bin/chrono-ci",
+        ".chrono-harness/bin/chrono-worktree",
+    ];
+    programs.extend(
+        h.values[JUDGES]["judges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|j| j["executable"].as_str().unwrap()),
     );
-    for prod in ["p", "p2"] {
-        fs::write(
-            lane.join(format!("{prod}/src/lib.rs")),
-            "pub fn double(n:i32)->i32 {n+n}\n",
-        )
-        .unwrap();
+    for path in programs {
+        let target = lane.join(path);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::hard_link(root.join(path), target).unwrap();
     }
-    h.candidate = commit(&lane);
-    git_facts::prepare_bound(&h, "integration", None);
+    // The candidate is already a real descendant of the declared fork. Reuse
+    // its fixed commit and snapshots instead of rebuilding them after birth.
+    git(&lane, &["reset", "--hard", &h.candidate]);
     copy_tree(
         &root.join(".chrono-harness/state"),
         &lane.join(".chrono-harness/state"),

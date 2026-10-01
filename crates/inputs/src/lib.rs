@@ -239,8 +239,13 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
             required("--config")?,
             required("--commit")?,
             required("--output")?,
-            &options.get("--unit").map_or(chrono_harness::prepared::Selection::All,
-                |unit| chrono_harness::prepared::Selection::Unit { unit: (*unit).into() }),
+            &options
+                .get("--unit")
+                .map_or(chrono_harness::prepared::Selection::All, |unit| {
+                    chrono_harness::prepared::Selection::Unit {
+                        unit: (*unit).into(),
+                    }
+                }),
         )?
     } else {
         let location = |key: &str| -> Result<PathBuf, String> {
