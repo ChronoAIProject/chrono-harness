@@ -3,6 +3,7 @@ use crate::{
     facts, json, no_symlink_parents, sha256,
     wire::{self, Binding, Context, Endpoint, Executable, Registries, Request, Response, Status},
 };
+use serde::Deserialize;
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -67,38 +68,53 @@ pub fn judge_request(
     binding: &Binding,
     history: &[Value],
 ) -> Result<Request, String> {
+    let observations = history
+        .iter()
+        .map(|record| predecessor_observation(record, template.scope.is_some()))
+        .collect::<Result<Vec<_>, String>>()?;
+    judge_request_from_observations(template, binding, &observations)
+}
+fn predecessor_observation(record: &Value, scoped: bool) -> Result<Value, String> {
+    let mut record = predecessor(record);
+    // Preserve the existing lossless scoped stdin encoding. Prepare it once
+    // per original process in an invocation, then reuse it for later judges.
+    if scoped {
+        compact_record(&mut record)?;
+    }
+    Ok(record)
+}
+fn judge_request_from_observations(
+    template: &Request,
+    binding: &Binding,
+    observations: &[Value],
+) -> Result<Request, String> {
+    let mut req = request_from_observations(template, binding, observations)?;
+    req.seal()?;
+    Ok(req)
+}
+fn request_from_observations(
+    template: &Request,
+    binding: &Binding,
+    observations: &[Value],
+) -> Result<Request, String> {
     let mut req = template.clone();
     req.judge_id = binding.id.clone();
     req.prior_results = binding
         .after
         .iter()
         .map(|id| {
-            let row = history
+            let row = observations
                 .iter()
                 .find(|row| row["id"] == *id)
                 .ok_or_else(|| format!("missing predecessor {id}"))?;
-            let response: Response =
-                serde_json::from_value(row["response"].clone()).map_err(|e| e.to_string())?;
+            let response = Response::deserialize(&row["response"]).map_err(|e| e.to_string())?;
             if response.status >= Status::Fail {
                 return Err(format!("failed predecessor {id}"));
             }
             Ok(response)
         })
         .collect::<Result<_, String>>()?;
-    let observations = history
-        .iter()
-        .map(|record| {
-            let mut record = predecessor(record);
-            // Scoped originals already have a lossless process encoding. Use it
-            // at the stdin boundary too, avoiding repeated byte-array expansion in
-            // every later judge's seal. Unscoped requests retain their wire shape.
-            if template.scope.is_some() {
-                compact_record(&mut record)?;
-            }
-            Ok(record)
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    req.observations["judges"] = value!(observations);
+    req.observations["judges"] = Value::Array(observations.to_vec());
     let impacts: Vec<_> = req
         .prior_results
         .iter()
@@ -108,7 +124,6 @@ pub fn judge_request(
         return Err("conflicting predecessor impact outputs".into());
     }
     req.impact = impacts.first().map(|v| (*v).clone()).unwrap_or(Value::Null);
-    req.seal()?;
     Ok(req)
 }
 /// Lossless process encoding for scoped reports and predecessor observations.
@@ -167,10 +182,9 @@ pub fn retained_judges(
     let mut parsed = BTreeMap::new();
     for (compact, binding) in records.iter().zip(ordered) {
         let record = expand_record(compact)?;
-        let request = judge_request(template, &binding, &history)?;
+        let request = judge_request_from_observations(template, &binding, &history)?;
         let digest = wire::digest(&request)?;
-        let response: Response =
-            serde_json::from_value(record["response"].clone()).map_err(|e| e.to_string())?;
+        let response = Response::deserialize(&record["response"]).map_err(|e| e.to_string())?;
         let warnings = response.findings.iter().any(|f| f.level == "warning");
         if response.findings.iter().any(|f| f.level == "error")
             || response.status == Status::Pass && warnings
@@ -178,8 +192,8 @@ pub fn retained_judges(
         {
             return Err("E_RETAINED_JUDGES: response status/findings differ".into());
         }
-        let process: crate::ProcessResult =
-            serde_json::from_value(record["process"].clone()).map_err(|e| e.to_string())?;
+        let process =
+            crate::ProcessResult::deserialize(&record["process"]).map_err(|e| e.to_string())?;
         crate::observation::process_success(&process)?;
         let executable = template.candidate.root.join(&binding.executable);
         let argv: Vec<String> = std::iter::once(
@@ -222,7 +236,7 @@ pub fn retained_judges(
                 binding.id
             ));
         }
-        history.push(predecessor(&record));
+        history.push(predecessor_observation(&record, template.scope.is_some())?);
         parsed.insert(binding.id.clone(), (request, binding, response, process));
     }
     Ok(parsed)
@@ -240,17 +254,23 @@ fn compact_record(record: &mut Value) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
         process.remove(field);
-        process.insert(
-            format!("{field}_hex"),
-            value!(bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()),
-        );
+        process.insert(format!("{field}_hex"), value!(hex_bytes(&bytes)));
     }
     process.insert("encoding".into(), value!("chrono-retained-process/v1"));
     Ok(())
 }
+fn hex_bytes(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        hex.push(DIGITS[(byte >> 4) as usize] as char);
+        hex.push(DIGITS[(byte & 15) as usize] as char);
+    }
+    hex
+}
 /// Bounded addressed bytes. Original addresses remain intact during transport.
 pub fn artifact(bytes: &[u8]) -> Value {
-    value!({"sha256":sha256(bytes),"length":bytes.len(),"hex":bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()})
+    value!({"sha256":sha256(bytes),"length":bytes.len(),"hex":hex_bytes(bytes)})
 }
 pub fn artifact_bytes(artifacts: &Value, address: &str) -> Result<Vec<u8>, String> {
     let a = artifacts
@@ -384,6 +404,7 @@ pub fn execute(
     let ordered = schedule(bindings)?;
     let mut responses: BTreeMap<String, Response> = BTreeMap::new();
     let mut records = vec![];
+    let mut observations = vec![];
     let mut status = Status::Pass;
     for b in ordered {
         let blocked: Vec<_> = b
@@ -397,7 +418,12 @@ pub fn execute(
             status = status.max(Status::Error);
             continue;
         }
-        let req = match judge_request(template, &b, &records) {
+        let req = match (|| {
+            for record in &records[observations.len()..] {
+                observations.push(predecessor_observation(record, template.scope.is_some())?);
+            }
+            wire::PreparedRequest::new(request_from_observations(template, &b, &observations)?)
+        })() {
             Ok(req) => req,
             Err(message) => {
                 records.push(value!({"id":b.id,"binding":b,"state":"blocked","exit_code":null,"transport_failure":message}));
@@ -405,18 +431,18 @@ pub fn execute(
                 continue;
             }
         };
-        match wire::invoke_detailed(&req, &b, env, timeout, limit) {
+        match wire::invoke_prepared(&req, &b, env, timeout, limit) {
             Ok((r, p)) => {
                 status = status.max(r.status.clone());
                 // The process already digested the canonical request bytes it consumed.
                 // Reuse that observation instead of serializing the same request again.
-                records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request_id,"request_digest":p.stdin_sha256,"exit_code":p.exit_code,"response":r,"process":p}));
+                records.push(value!({"id":b.id,"binding":b,"state":"executed","request_id":req.request().request_id,"request_digest":p.stdin_sha256,"exit_code":p.exit_code,"response":r,"process":p}));
                 responses.insert(b.id, r);
             }
             Err(e) => {
                 status = Status::Error;
                 let exit = e.process.as_ref().map(|p| p.exit_code);
-                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request_id,"transport_failure":e.message,"exit_code":exit,"process":e.process}));
+                records.push(value!({"id":b.id,"binding":b,"state":if e.process.is_some(){"executed"}else{"error"},"request_id":req.request().request_id,"transport_failure":e.message,"exit_code":exit,"process":e.process}));
             }
         }
     }

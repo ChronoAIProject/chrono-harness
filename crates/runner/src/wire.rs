@@ -137,22 +137,77 @@ pub struct Request {
 }
 impl Request {
     fn identity(&self) -> Result<String, String> {
-        let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
-        v.as_object_mut()
-            .ok_or("request object")?
-            .remove("request_id");
-        digest(&v)
+        // Borrow the identity projection instead of cloning all accumulated
+        // evidence into a second JSON tree. The exhaustive destructuring keeps
+        // a new request field from silently escaping the identity contract.
+        #[derive(Serialize)]
+        struct Identity<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            scope: Option<&'a crate::units::Scope>,
+            observations: &'a Value,
+            protocol: &'a str,
+            judge_id: &'a str,
+            mode: &'a str,
+            base: &'a Endpoint,
+            candidate: &'a Endpoint,
+            delta: &'a [Delta],
+            registries: &'a Registries,
+            context: &'a Context,
+            impact: &'a Value,
+            prior_results: &'a [Response],
+            config_path: &'a str,
+            checkout: &'a Checkout,
+            runner: &'a Executable,
+        }
+        let Self {
+            scope,
+            observations,
+            protocol,
+            request_id: _,
+            judge_id,
+            mode,
+            base,
+            candidate,
+            delta,
+            registries,
+            context,
+            impact,
+            prior_results,
+            config_path,
+            checkout,
+            runner,
+        } = self;
+        digest(&Identity {
+            scope: scope.as_ref(),
+            observations,
+            protocol,
+            judge_id,
+            mode,
+            base,
+            candidate,
+            delta,
+            registries,
+            context,
+            impact,
+            prior_results,
+            config_path,
+            checkout,
+            runner,
+        })
     }
     pub fn seal(&mut self) -> Result<(), String> {
         self.request_id = self.identity()?;
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.protocol != PROTOCOL
-            || self.mode != "evaluate"
-            || self.judge_id.is_empty()
-            || self.request_id != self.identity()?
-        {
+        self.validate_header()?;
+        if self.request_id != self.identity()? {
+            return Err("E_PROTOCOL: request identity/mode".into());
+        }
+        Ok(())
+    }
+    fn validate_header(&self) -> Result<(), String> {
+        if self.protocol != PROTOCOL || self.mode != "evaluate" || self.judge_id.is_empty() {
             return Err("E_PROTOCOL: request identity/mode".into());
         }
         Ok(())
@@ -167,6 +222,22 @@ impl Request {
             evidence: vec![],
             outputs: BTreeMap::new(),
         }
+    }
+}
+/// An invocation-owned request whose seal and original stdin were produced
+/// together. Neither its request nor its bytes can be mutated by the caller.
+pub(crate) struct PreparedRequest {
+    request: Request,
+    stdin: Vec<u8>,
+}
+impl PreparedRequest {
+    pub(crate) fn new(mut request: Request) -> Result<Self, String> {
+        request.seal()?;
+        let stdin = canonical(&request)?;
+        Ok(Self { request, stdin })
+    }
+    pub(crate) fn request(&self) -> &Request {
+        &self.request
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -279,6 +350,26 @@ pub fn invoke_detailed(
     limit: usize,
 ) -> Result<(Response, ProcessResult), TransportFailure> {
     req.validate()?;
+    invoke_bytes(req, b, env, timeout, limit, &canonical(req)?)
+}
+pub(crate) fn invoke_prepared(
+    req: &PreparedRequest,
+    b: &Binding,
+    env: &BTreeMap<String, String>,
+    timeout: u64,
+    limit: usize,
+) -> Result<(Response, ProcessResult), TransportFailure> {
+    req.request.validate_header()?;
+    invoke_bytes(&req.request, b, env, timeout, limit, &req.stdin)
+}
+fn invoke_bytes(
+    req: &Request,
+    b: &Binding,
+    env: &BTreeMap<String, String>,
+    timeout: u64,
+    limit: usize,
+    stdin: &[u8],
+) -> Result<(Response, ProcessResult), TransportFailure> {
     if b.id != req.judge_id {
         return Err("E_PROTOCOL: binding identity".into());
     }
@@ -303,7 +394,7 @@ pub fn invoke_detailed(
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let p = run_process_observed(&req.candidate.root, &spec, &canonical(req)?, hash)?;
+    let p = run_process_observed(&req.candidate.root, &spec, stdin, hash)?;
     if let Some(message) = p.failure.clone() {
         return Err(TransportFailure {
             message,
