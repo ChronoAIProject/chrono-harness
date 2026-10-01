@@ -551,7 +551,8 @@ else:
 
 #[test]
 fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
-    let (_h, tools, lane) = local_short_lane(Some(5.0));
+    let freshness_seconds = 30.0;
+    let (h, tools, lane) = local_short_lane(Some(freshness_seconds));
     let (e, one) = short(&lane, &["check", "--unit", "one"], None);
     passed(e, &one);
     let old_context = one["request"]["context"]["path"].as_str().unwrap();
@@ -560,9 +561,19 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
         .as_str()
         .unwrap();
     let birth_bytes = fs::read(lane.join(birth)).unwrap();
-    let observed = chrono_harness::json(&original).unwrap()["observed_at"].clone();
-    // Independent process invocations cross the actual registered deadline.
-    std::thread::sleep(std::time::Duration::from_secs(7));
+    let first_context = chrono_harness::json(&original).unwrap();
+    let observed = first_context["observed_at"].clone();
+    // Allow real setup work, then cross the registered deadline from the first
+    // successful observation's measured age, with a margin for strict excess.
+    let age_seconds = chrono_judge_workflow::observation_age(&first_context, &h.values[WORKFLOW])
+        .unwrap()
+        .as_seconds_f64();
+    let wait = std::time::Duration::from_secs_f64(freshness_seconds - age_seconds + 1.0);
+    println!(
+        "EXPIRY initial_age_seconds={age_seconds} freshness_seconds={freshness_seconds} wait_seconds={}",
+        wait.as_secs_f64()
+    );
+    std::thread::sleep(wait);
     let (e, two) = short(&lane, &["check", "--unit", "two"], None);
     assert_ne!(e, 0, "accepted an expired round");
     assert!(
