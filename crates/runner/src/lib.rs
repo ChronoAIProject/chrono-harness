@@ -10,6 +10,7 @@ pub mod input_file;
 pub mod observation;
 pub mod parity;
 pub mod prepared;
+mod short_console;
 pub mod units;
 pub mod wire;
 use serde::{Deserialize, Serialize};
@@ -627,8 +628,9 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
             _ => unreachable!(),
         };
         let (req, p, binding) = prepared::prepare(&root, selection)?;
-        return execute_check(
-            root,
+        let retention = prepared::retention_directory(&req);
+        let result = execute_check(
+            root.clone(),
             req.profile,
             p.base,
             p.candidate,
@@ -637,7 +639,31 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
             p.scope,
             entry,
             Some(binding),
-        );
+        )
+        .map(|(code, report)| {
+            let console = match short_console::completed(code, &report) {
+                Ok(console) => console,
+                Err(projection_error) => {
+                    short_console::projection_fallback(code, &report, &projection_error)
+                }
+            };
+            (code, console)
+        });
+        return result.map_err(|error| {
+            match prepared::retain_original(&root, &retention, "check-error", error.as_bytes()) {
+                Ok(original) => format!(
+                    "{}\nOriginal check error: {} (sha256 {})",
+                    short_console::error_cause(&error),
+                    original.path,
+                    original.sha256
+                ),
+                // Retention failure cannot justify discarding the original error
+                // or advertising a completed report or a nonexistent artifact.
+                Err(retention_error) => {
+                    format!("{error}\nOriginal check error retention failed: {retention_error}")
+                }
+            }
+        });
     }
     if !args.contains(&"--config") {
         return Err("short check accepts only check, check --unit ID, or check --collect".into());

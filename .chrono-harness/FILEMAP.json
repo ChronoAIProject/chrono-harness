@@ -256,6 +256,18 @@
       ]
     },
     {
+      "path": "crates/runner/src/short_console.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
       "path": "crates/runner/src/main.rs",
       "owner": "runner",
       "surface": "product",

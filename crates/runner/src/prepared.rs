@@ -1,7 +1,7 @@
 //! Fixed check acquisition using registered producer actions and the existing transport.
 use crate::{
     CommandSpec, ProcessResult, decode, facts, file_identity, no_symlink_parents, observation,
-    relative_path, run_process_observed, sha256, units, wire,
+    relative_path, run_process_observed, sha256, short_console, units, wire,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -292,6 +292,28 @@ fn environment(cfg: &Value) -> Result<(BTreeMap<String, String>, Value), String>
     }
     Ok((env, Value::Object(observed)))
 }
+fn prelaunch_error(
+    root: &Path,
+    req: &InputRequest,
+    prefix: &str,
+    phase: &str,
+    tool: &str,
+    error: &str,
+) -> String {
+    let cause = short_console::brief(error);
+    match retain_original(root, &retention_directory(req), prefix, error.as_bytes()) {
+        Ok(original) => format!(
+            "input producer {phase} failed: {} | {cause}\nOriginal {phase}: {} (sha256 {})",
+            short_console::brief(tool),
+            original.path,
+            original.sha256
+        ),
+        Err(retention_error) => format!(
+            "input producer {phase} failed: {} | {error}; original {phase} retention failed: {retention_error}",
+            short_console::brief(tool)
+        ),
+    }
+}
 fn invoke(
     root: &Path,
     cfg: &Value,
@@ -313,14 +335,26 @@ fn invoke(
         .ok_or("producer bound missing")? as usize;
     let version: Vec<String> =
         serde_json::from_value(t["version_argv"].clone()).map_err(|e| e.to_string())?;
-    let mut tool = observation::tool(
+    let mut tool = match observation::tool(
         root,
         t["program"].as_str().ok_or("producer program missing")?,
         &version,
         env,
         timeout,
         limit,
-    )?;
+    ) {
+        Ok(tool) => tool,
+        Err(error) => {
+            return Err(prelaunch_error(
+                root,
+                req,
+                "producer-version",
+                "version probe",
+                &a.tool,
+                &error,
+            ));
+        }
+    };
     tool.version = process_identities(tool.version);
     if tool.version.failure.is_some()
         || tool.version.exit_code != 0
@@ -328,9 +362,26 @@ fn invoke(
             .as_str()
             .is_some_and(|v| tool.version.stdout.trim() != v)
     {
+        let bytes = serde_json::to_vec(&tool).map_err(|e| e.to_string())?;
+        let original = retain_original(root, &retention_directory(req), "producer-version", &bytes)
+            .map_err(|e| format!(
+                "input producer version mismatch; original version probe retention failed: {e}; original probe: {}",
+                String::from_utf8_lossy(&bytes)
+            ))?;
         return Err(format!(
-            "input producer version mismatch: {}",
-            serde_json::to_string(&tool).map_err(|e| e.to_string())?
+            "input producer version mismatch: {} | expected {} | observed {} | exit {} | {} | {}\nOriginal version probe: {}",
+            short_console::brief(&a.tool),
+            short_console::brief(t["expected_version"].as_str().unwrap_or("unavailable")),
+            short_console::brief(&tool.version.stdout),
+            tool.version.exit_code,
+            short_console::brief(
+                tool.version
+                    .failure
+                    .as_deref()
+                    .unwrap_or("no transport failure")
+            ),
+            short_console::brief(&tool.version.stderr),
+            original.path
         ));
     }
     let input = serde_json::to_vec(req).map_err(|e| e.to_string())?;
@@ -341,23 +392,55 @@ fn invoke(
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let process = process_identities(run_process_observed(root, &spec, &input, &tool.sha256)?);
+    let process = match run_process_observed(root, &spec, &input, &tool.sha256) {
+        Ok(process) => process_identities(process),
+        Err(error) => {
+            return Err(prelaunch_error(
+                root,
+                req,
+                "acquisition",
+                "acquisition",
+                &a.tool,
+                &error,
+            ));
+        }
+    };
     let receipt = json!({"action":a,"tool":tool,"request":req,"process":process,"environment_representation":"sha256"});
     // Preserve failed original transport before interpreting output.
-    let original = retain_original(
-        root,
-        &retention_directory(req),
-        "acquisition",
-        &serde_json::to_vec(&receipt).map_err(|e| e.to_string())?,
-    )?;
+    let bytes = serde_json::to_vec(&receipt).map_err(|e| e.to_string())?;
+    let original = retain_original(root, &retention_directory(req), "acquisition", &bytes)
+        .map_err(|e| {
+            format!(
+                "original acquisition retention failed: {e}; original acquisition: {}",
+                String::from_utf8_lossy(&bytes)
+            )
+        })?;
     if process.failure.is_some() || process.exit_code != 0 {
         return Err(format!(
-            "input producer failed: {}",
-            json!({"exit":process.exit_code,"failure":process.failure,"stdout":process.stdout,"stderr":process.stderr})
+            "input producer failed: {} (exit {}, {}) | {}\nOriginal acquisition: {}",
+            short_console::brief(&a.tool),
+            process.exit_code,
+            short_console::brief(process.failure.as_deref().unwrap_or("no transport failure")),
+            short_console::producer_cause(&process.stderr, &process.stdout),
+            original.path
         ));
     }
-    let p: PreparedCheck = decode(&process.stdout_bytes)?;
-    validate_result(req, &p)?;
+    let p: PreparedCheck = decode(&process.stdout_bytes).map_err(|e| {
+        format!(
+            "input producer decode failed: {} | {}\nOriginal acquisition: {}",
+            short_console::brief(&a.tool),
+            short_console::brief(&e),
+            original.path
+        )
+    })?;
+    validate_result(req, &p).map_err(|e| {
+        format!(
+            "input producer validation failed: {} | {}\nOriginal acquisition: {}",
+            short_console::brief(&a.tool),
+            short_console::brief(&e),
+            original.path
+        )
+    })?;
     Ok((p, original))
 }
 pub fn retain(root: &Path, prefix: &str, v: &Value) -> Result<String, String> {
