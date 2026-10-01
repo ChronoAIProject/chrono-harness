@@ -810,6 +810,80 @@ else:
         state["installed"][0]["sha256"],
         chrono_harness::sha256(b"binary")
     );
+    assert_eq!(state["schema"], "chrono-bootstrap-result/v1");
+    assert_eq!(state["versions"]["cargo"], "cargo 1.95.0 (fixture)");
+    assert_eq!(state["versions"]["rustc"], "rustc 1.95.0 (fixture)");
+    let evidence = || -> Value {
+        serde_json::from_slice(
+            &fs::read(root.path().join(".chrono-harness/state/bootstrap.json")).unwrap(),
+        )
+        .unwrap()
+    };
+    // A host without its own source repository must not inherit an enclosing repo.
+    assert_eq!(state["source"]["state"], "unavailable");
+    assert!(state["source"]["commit"].is_null());
+    assert!(state["source"]["tree"].is_null());
+    for phase in ["before", "after"] {
+        assert!(state["source"][phase]["commit"].is_null());
+        assert!(state["source"][phase]["tree"].is_null());
+        assert!(state["source"][phase]["dirty"].is_null());
+        assert!(!state["source"][phase]["error"].as_str().unwrap().is_empty());
+    }
+    // Build/install outputs and mock SDK state are not product source changes.
+    fs::write(
+        root.path().join(".gitignore"),
+        "/built-tool\n/selected-tool\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/mock-tools/\n",
+    )
+    .unwrap();
+    fs::write(root.path().join("product-source"), "source").unwrap();
+    git(root.path(), &["init", "-q"]);
+    git(
+        root.path(),
+        &["config", "user.email", "fixture@example.invalid"],
+    );
+    git(root.path(), &["config", "user.name", "Fixture"]);
+    git(root.path(), &["add", "."]);
+    git(root.path(), &["commit", "-qm", "bootstrap source"]);
+    let commit = git(root.path(), &["rev-parse", "HEAD"]);
+    let tree = git(root.path(), &["rev-parse", "HEAD^{tree}"]);
+    let clean = invoke();
+    assert!(
+        clean.status.success(),
+        "{}",
+        String::from_utf8_lossy(&clean.stderr)
+    );
+    let observation = json!({"commit":commit,"tree":tree,"dirty":false,"error":null});
+    assert_eq!(
+        evidence()["source"],
+        json!({"state":"clean","commit":commit,"tree":tree,"before":observation,"after":observation})
+    );
+    // Unstaged, staged and untracked source remain usable without clean attribution.
+    for (file, staged) in [
+        ("product-source", false),
+        ("product-source", true),
+        ("untracked-source", false),
+    ] {
+        fs::write(root.path().join(file), "dirty source").unwrap();
+        if staged {
+            git(root.path(), &["add", file]);
+        }
+        let dirty = invoke();
+        assert!(
+            dirty.status.success(),
+            "{}",
+            String::from_utf8_lossy(&dirty.stderr)
+        );
+        let observation = json!({"commit":commit,"tree":tree,"dirty":true,"error":null});
+        assert_eq!(
+            evidence()["source"],
+            json!({"state":"dirty","commit":null,"tree":null,"before":observation,"after":observation})
+        );
+        if file == "product-source" {
+            git(root.path(), &["restore", "--staged", "--worktree", file]);
+        } else {
+            fs::remove_file(root.path().join(file)).unwrap();
+        }
+    }
     // Explicit host configuration selects only its own operations and installations.
     // An unrelated registered operation fails if accidentally executed.
     let mut selected = config.clone();
@@ -870,8 +944,73 @@ else:
             selected_state
         );
     }
+    // A selected operation that moves HEAD cannot bind its result to either commit.
+    fs::write(
+        &pr,
+        serde_json::to_vec(&registry(
+            "printf moved > product-source; git add product-source; git commit -qm moved; printf binary > built-tool",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    git(root.path(), &["add", "."]);
+    git(root.path(), &["commit", "-qm", "moving operation"]);
+    let before_commit = git(root.path(), &["rev-parse", "HEAD"]);
+    let before_tree = git(root.path(), &["rev-parse", "HEAD^{tree}"]);
+    let moved = invoke();
+    assert!(
+        moved.status.success(),
+        "{}",
+        String::from_utf8_lossy(&moved.stderr)
+    );
+    let after_commit = git(root.path(), &["rev-parse", "HEAD"]);
+    let after_tree = git(root.path(), &["rev-parse", "HEAD^{tree}"]);
+    assert_ne!(before_commit, after_commit);
+    assert_ne!(before_tree, after_tree);
+    assert_eq!(
+        evidence()["source"],
+        json!({"state":"changed","commit":null,"tree":null,
+            "before":{"commit":before_commit,"tree":before_tree,"dirty":false,"error":null},
+            "after":{"commit":after_commit,"tree":after_tree,"dirty":false,"error":null}})
+    );
+    // Losing source identity during real work preserves the known initial observation.
+    fs::write(
+        &pr,
+        serde_json::to_vec(&registry("mv .git .saved-git; printf binary > built-tool")).unwrap(),
+    )
+    .unwrap();
+    git(root.path(), &["add", "."]);
+    git(root.path(), &["commit", "-qm", "unavailable operation"]);
+    let before_commit = git(root.path(), &["rev-parse", "HEAD"]);
+    let before_tree = git(root.path(), &["rev-parse", "HEAD^{tree}"]);
+    let unavailable = invoke();
+    assert!(
+        unavailable.status.success(),
+        "{}",
+        String::from_utf8_lossy(&unavailable.stderr)
+    );
+    let unavailable_state = evidence();
+    assert_eq!(unavailable_state["source"]["state"], "unavailable");
+    assert!(unavailable_state["source"]["commit"].is_null());
+    assert!(unavailable_state["source"]["tree"].is_null());
+    assert_eq!(
+        unavailable_state["source"]["before"],
+        json!({"commit":before_commit,"tree":before_tree,"dirty":false,"error":null})
+    );
+    assert!(unavailable_state["source"]["after"]["commit"].is_null());
+    assert!(unavailable_state["source"]["after"]["tree"].is_null());
+    assert!(unavailable_state["source"]["after"]["dirty"].is_null());
+    assert!(unavailable_state["source"]["after"]["error"].is_string());
+    fs::rename(root.path().join(".saved-git"), root.path().join(".git")).unwrap();
+    let last_success = fs::read(root.path().join(".chrono-harness/state/bootstrap.json")).unwrap();
     fs::write(&pr, serde_json::to_vec(&registry("exit 9")).unwrap()).unwrap();
-    assert!(!invoke().status.success());
+    let failed = invoke();
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("exit status 9"));
+    assert_eq!(
+        fs::read(root.path().join(".chrono-harness/state/bootstrap.json")).unwrap(),
+        last_success
+    );
     fs::write(
         &pr,
         serde_json::to_vec(&registry("printf binary > built-tool")).unwrap(),

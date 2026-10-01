@@ -9,6 +9,33 @@ import subprocess
 import sys
 
 
+def observe_source(root):
+    """Observe this host's source repository without requiring one for development."""
+    observed = {"commit": None, "tree": None, "dirty": None, "error": None}
+
+    def git(*args):
+        return subprocess.check_output(
+            ["git", "--no-optional-locks", "-C", str(root), *args],
+            stderr=subprocess.PIPE,
+        ).decode("utf-8", "surrogateescape").strip()
+
+    try:
+        if Path(git("rev-parse", "--show-toplevel")).resolve() != root:
+            raise ValueError("host root is not the Git source root")
+        observed["commit"] = git("rev-parse", "--verify", "HEAD")
+        observed["tree"] = git("rev-parse", "--verify", observed["commit"] + "^{tree}")
+        observed["dirty"] = bool(git(
+            "status", "--porcelain=v1", "--untracked-files=normal", "--ignore-submodules=none",
+        ))
+        if git("rev-parse", "--verify", "HEAD") != observed["commit"]:
+            raise ValueError("source HEAD changed during observation")
+    except subprocess.CalledProcessError as error:
+        observed["error"] = error.stderr.decode("utf-8", "replace").strip() or str(error)
+    except (OSError, ValueError) as error:
+        observed["error"] = str(error)
+    return observed
+
+
 def main():
     if len(sys.argv) not in (2, 3):
         raise ValueError("usage: bootstrap.py HOST_ROOT [REGISTERED_CONFIG]")
@@ -16,6 +43,7 @@ def main():
     config_path = Path(sys.argv[2]) if len(sys.argv) == 3 else Path(".chrono-harness/ci/bootstrap.json")
     if config_path.is_absolute() or ".." in config_path.parts or config_path.parts[:2] != (".chrono-harness", "ci"):
         raise ValueError("bootstrap config must be an explicit host CI path")
+    source_before = observe_source(root)
     config = json.loads((root / config_path).read_text())
     if config["schema"] != "chrono-bootstrap/v1":
         raise ValueError("unsupported bootstrap schema")
@@ -51,9 +79,26 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         installed.append({"path": item["destination"], "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
+    source_after = observe_source(root)
+    if source_before["error"] or source_after["error"]:
+        source_state = "unavailable"
+    elif source_before != source_after:
+        source_state = "changed"
+    elif source_before["dirty"]:
+        source_state = "dirty"
+    else:
+        source_state = "clean"
+    # Only clean, agreeing observations bind the installed result to a source commit.
+    source_identity = {
+        "state": source_state,
+        "commit": source_before["commit"] if source_state == "clean" else None,
+        "tree": source_before["tree"] if source_state == "clean" else None,
+        "before": source_before,
+        "after": source_after,
+    }
     state = root / ".chrono-harness/state"
     state.mkdir(parents=True, exist_ok=True)
-    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "versions": versions, "installed": installed}, indent=2) + "\n")
+    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "installed": installed}, indent=2) + "\n")
 
 
 if __name__ == "__main__":
