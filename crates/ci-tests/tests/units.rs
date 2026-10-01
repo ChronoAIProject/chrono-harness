@@ -1,3 +1,5 @@
+#[path = "short.rs"]
+mod short;
 use super::*;
 
 fn config_value() -> Value {
@@ -361,17 +363,8 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     assert!(!host.path().join(".chrono-harness/state/calls-b").exists());
 }
 
-fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
+fn install_mock_transport(root: &Path, mode: &str, c: &str) {
     use std::os::unix::fs::PermissionsExt;
-    let (host, b, _) = consumer();
-    let root = host.path();
-    let mut cfg = config_value();
-    cfg["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
-    json_file(root, ".chrono-harness/ci/units.json", &cfg);
-    generate(root, ".chrono-harness/ci/units.json", false).unwrap();
-    git(root, &["add", "."]);
-    git(root, &["commit", "-qm", "transport fixture"]);
-    let c = git(root, &["rev-parse", "HEAD"]);
     let code = r#"#!/usr/bin/env python3
 import json,pathlib,sys,shutil
 root=pathlib.Path.cwd();data=json.loads((root/'.chrono-harness/state/mock.json').read_text());args=sys.argv[1:]
@@ -400,6 +393,19 @@ else:sys.exit(7)
         ".chrono-harness/state/mock.json",
         &json!({"candidate":c,"mode":mode}),
     );
+}
+
+fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
+    let (host, b, _) = consumer();
+    let root = host.path();
+    let mut cfg = config_value();
+    cfg["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+    json_file(root, ".chrono-harness/ci/units.json", &cfg);
+    generate(root, ".chrono-harness/ci/units.json", false).unwrap();
+    git(root, &["add", "."]);
+    git(root, &["commit", "-qm", "transport fixture"]);
+    let c = git(root, &["rev-parse", "HEAD"]);
+    install_mock_transport(root, mode, &c);
     for unit in ["alpha", "beta"] {
         let mut context = unit_context(root, &b, &c, Some(unit));
         let report = execute_context(root, &context, 0);

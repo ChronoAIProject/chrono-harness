@@ -401,3 +401,13 @@ unknown consumers, declared absence contradicted by real bytes, and draft/legacy
 controls. Omission preserves the old v3 contract. This supplies a checked
 accounting surface for host-chosen input domains; undisclosed reads, complete
 input closure, native activation and deterministic parity remain outstanding.
+
+The simple-fixed increment supports schema4 short global/scoped check and
+value-less scoped collection through existing runner/worktree/CI owners. Real CLI
+tests cover remote/HEAD advancement, dirty and missing inputs, true short entry,
+independent units, zero-business collection, pins/stale/failure rejection and
+local execution of generated native steps. Full unscoped context preserves the
+original worktree birth/fork and exact native context bytes. Full independent
+scopes, immutable-round freshness/expiry, corrected core integration, native
+hosted execution, release/example adoption and complete SPEC acceptance remain
+pending; full transport fixture success does not activate proposed host governance.

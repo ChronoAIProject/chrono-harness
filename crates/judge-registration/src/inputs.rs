@@ -12,7 +12,7 @@ pub const SNAPSHOT_SCHEMA_V2: &str = "chrono-input-snapshot/v2";
 pub const SNAPSHOT_SCHEMA_V3: &str = "chrono-input-snapshot/v3";
 
 pub fn snapshot_schema(config: &Value) -> &'static str {
-    if matches!(config["schema_version"].as_u64(), Some(2 | 3)) {
+    if matches!(config["schema_version"].as_u64(), Some(2 | 3 | 4)) {
         SNAPSHOT_SCHEMA_V2
     } else {
         SNAPSHOT_SCHEMA
@@ -187,6 +187,11 @@ fn retained_identity(root: &Path, value: &Value) -> Result<Option<(String, u64)>
 }
 pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, String>, String> {
     let mut out = BTreeMap::new();
+    let credentials = if config["schema_version"] == 4 {
+        chrono_harness::prepared::credential_environment(config)?
+    } else {
+        Default::default()
+    };
     if let Some(values) = snapshot.as_object() {
         for key in values.keys() {
             if !config["environment"]["inherit"]
@@ -204,6 +209,11 @@ pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, 
         .ok_or("inherit missing")?
     {
         let key = key.as_str().ok_or("inherit key")?;
+        if credentials.contains(key) && snapshot.get(key) != Some(&Value::Null) {
+            return Err(
+                "acquisition credentials cannot be retained as business environment inputs".into(),
+            );
+        }
         match snapshot
             .get(key)
             .ok_or_else(|| format!("missing retained environment variable {key}"))?
@@ -251,7 +261,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
     for (name, endpoint, r) in [("base", &req.base, old), ("candidate", &req.candidate, new)] {
         let cfg = r.config();
         let retained = &req.observations["retained"][name];
-        if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
+        if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
             && retained["schema"] != snapshot_schema_for(r)
         {
             return Err(if r.selection().is_some() {
@@ -322,7 +332,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
             let identity = retained_identity(&req.candidate.root, value)
                 .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
             match &identity {
-                None if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
+                None if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
                     && input["presence"] == "absent" => {}
                 Some((digest, _))
                     if input["presence"] != "absent"
@@ -340,7 +350,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                 } else {
                     req.candidate.root.join(path)
                 };
-                let actual = if matches!(cfg["schema_version"].as_u64(), Some(2 | 3)) {
+                let actual = if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4)) {
                     observe_file(&path)
                 } else {
                     file_identity(&path).map(Some)
@@ -355,7 +365,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                     json!({"sha256":digest,"length":length,"location":input["location"]})
                 }
             };
-            if matches!(cfg["schema_version"].as_u64(), Some(2 | 3))
+            if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
                 && fact.get("presence").is_none()
             {
                 fact["presence"] = json!("present");
@@ -371,8 +381,8 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
 }
 
 fn effective_schema(old: &Registrations, new: &Registrations) -> &'static str {
-    if matches!(old.config()["schema_version"].as_u64(), Some(2 | 3))
-        || matches!(new.config()["schema_version"].as_u64(), Some(2 | 3))
+    if matches!(old.config()["schema_version"].as_u64(), Some(2 | 3 | 4))
+        || matches!(new.config()["schema_version"].as_u64(), Some(2 | 3 | 4))
     {
         "chrono-effective-inputs/v2"
     } else {

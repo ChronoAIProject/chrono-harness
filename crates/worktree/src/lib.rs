@@ -1,4 +1,5 @@
 //! Produce real Git worktrees and observations; governance remains with the judges.
+mod check_inputs;
 mod maintenance;
 mod rebind;
 mod rebind_inputs;
@@ -34,6 +35,8 @@ pub struct Environment {
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub schema: String,
+    #[serde(default)]
+    pub check_inputs: Option<check_inputs::Policy>,
     pub host_config: String,
     pub remote: String,
     pub git: Git,
@@ -90,6 +93,20 @@ pub fn run(args: &[String]) -> CliOutput {
     if args == ["--help"] {
         return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
     }
+    if args.first().map(String::as_str) == Some("check-inputs") {
+        return match check_inputs::dispatch(args) {
+            Ok(stdout) => CliOutput {
+                exit_code: 0,
+                stdout,
+                stderr: String::new(),
+            },
+            Err(e) => CliOutput {
+                exit_code: 2,
+                stdout: String::new(),
+                stderr: format!("E_WORKTREE_INPUTS: {e}\n"),
+            },
+        };
+    }
     let result = if matches!(
         args.first().map(String::as_str),
         Some(
@@ -140,8 +157,19 @@ fn configuration(root: &Path, config_path: &str) -> Result<(Config, Vec<u8>), St
     }
     let bytes = fs::read(no_symlink_parents(root, config_path)?).map_err(|e| e.to_string())?;
     let config: Config = decode(&bytes)?;
-    if config.schema != "chrono-worktree-config/v1"
-        || config.remote.is_empty()
+    if let Some(p) = &config.check_inputs {
+        check_inputs::validate(p)?;
+    }
+    if (config.schema == "chrono-worktree-config/v1"
+        && chrono_harness::json(&bytes)?.get("check_inputs").is_some())
+        || (config.schema == "chrono-worktree-config/v2" && config.check_inputs.is_none())
+    {
+        return Err("worktree v2 requires check_inputs; v1 does not accept it".into());
+    }
+    if !matches!(
+        config.schema.as_str(),
+        "chrono-worktree-config/v1" | "chrono-worktree-config/v2"
+    ) || config.remote.is_empty()
         || config.remote.starts_with('-')
         || config.remote.contains(['\0', '\n', '\r'])
         || !config.host_config.starts_with(".chrono-harness/")

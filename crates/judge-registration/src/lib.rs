@@ -557,7 +557,8 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
             }
         }
     }
-    if n.config["schema_version"] == 3 && n.config["input_closure"]["status"] == "declared-complete"
+    if matches!(n.config["schema_version"].as_u64(), Some(3 | 4))
+        && n.config["input_closure"]["status"] == "declared-complete"
     {
         for (identity, view) in &nodes {
             if !matches!(

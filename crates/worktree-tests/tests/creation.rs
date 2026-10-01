@@ -12,6 +12,7 @@ const POLICY: &str = ".chrono-harness/worktree.json";
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
+mod check_inputs;
 mod maintenance;
 mod rebind;
 

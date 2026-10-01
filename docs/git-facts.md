@@ -3,7 +3,7 @@
 Public beta.11 includes the previously released full-v3/scoped-v2/provider-v3 Git binding. The literal
 checkout identity change below is included in beta.11.
 
-Full config v3 requires `facts_git: {"tool": "git", "input": "git-executable"}`.
+Full config v3 (and short-command config v4) requires `facts_git: {"tool": "git", "input": "git-executable"}`.
 Both IDs are explicit: `tools` supplies `program`, `resolution: "PATH-once"`,
 `version_argv` and a nonempty `expected_version`; `environment.inputs` supplies
 `location`, `presence: "present"` and the expected SHA-256. The two paths must
@@ -77,8 +77,8 @@ See [the scoped contract](ci.md#configuration-and-selection-contract).
 
 CI provider v3 explicitly selects this reader through `facts_config`
 for event acquisition; see [the event contract](ci.md#registered-event-git). The
-product repository uses independent-unit scoped v3 CI without opting into Git
-binding, and retains proposed full registries. Version 3 binding does not establish full governance,
+product repository uses independent-unit scoped v3 CI with schema4-bound Git
+facts, and retains proposed full registries. Version 3/4 binding does not establish full governance,
 Git configuration or delegated dependency closure, deterministic-input parity,
 or freedom from transient concurrent replacement. Hosts must explicitly register
 Git configuration, executable interpreters/libraries, OS and other actual inputs
@@ -93,7 +93,7 @@ bounded implementation checks, not a Lean refinement proof or independent review
 ## Explicit platform configurations
 
 A scoped check or provider-v3 `facts_config` may name a separate, registered
-selector instead of a direct full-v3 Git policy:
+selector instead of a direct full-v3 or schema4 Git policy:
 
 ```json
 {

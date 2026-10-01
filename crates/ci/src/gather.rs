@@ -128,7 +128,15 @@ fn inner(
         candidate,
         context["initial"] == true,
     );
-    canonical.extend(c.scope(None).argv());
+    if c.collection.schema == "chrono-github-ci/v4" {
+        canonical = vec![
+            c.collection.runner.clone(),
+            "check".into(),
+            "--collect".into(),
+        ];
+    } else {
+        canonical.extend(c.scope(None).argv());
+    }
     if context["canonical_argv"] != json!(canonical) {
         return Err("collection command context mismatch".into());
     }
@@ -194,6 +202,23 @@ fn inner(
         serde_json::from_value(profile.policy["units"].clone()).map_err(|e| e.to_string())?;
     let mut reports = vec![];
     let mut identities = vec![];
+    let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
+        let retained = chrono_harness::prepared::retain_directory(
+            root,
+            &c.gather.download_directory,
+            "gather-",
+        )?;
+        format!(
+            "{}/",
+            retained
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("download path UTF-8")?
+        )
+    } else {
+        c.gather.download_directory.clone()
+    };
     for (unit, run) in completed {
         let id = run["id"].as_u64().ok_or("unit run ID missing")?;
         let attempt = run["run_attempt"]
@@ -201,7 +226,7 @@ fn inner(
             .filter(|n| *n > 0)
             .ok_or("unit run attempt missing")?;
         let w = &c.units[&unit];
-        let destination = format!("{}{unit}/{id}/{attempt}", c.gather.download_directory);
+        let destination = format!("{download_prefix}{unit}/{id}/{attempt}");
         let absolute = no_symlink_parents(root, &destination)?;
         if absolute.exists() {
             return Err("unit download destination exists; retain original results and select a fresh collection output".into());
@@ -237,7 +262,16 @@ fn inner(
             candidate,
             context["initial"] == true,
         );
-        expected.extend(scope.argv());
+        if c.collection.schema == "chrono-github-ci/v4" {
+            expected = vec![
+                c.collection.runner.clone(),
+                "check".into(),
+                "--unit".into(),
+                unit.clone(),
+            ];
+        } else {
+            expected.extend(scope.argv());
+        }
         if [
             "event",
             "base",
@@ -273,7 +307,8 @@ fn inner(
         }
         let report_path = downloaded(&registered[&unit].report_path)?;
         reports.push(json!({"unit":unit,"path":report_path,"sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,
-            "runner_sha256":unit_context["executables"]["runner_sha256"],"judge_sha256":unit_context["executables"]["judge_sha256"]}));
+            "runner_sha256":unit_context["executables"]["runner_sha256"],"judge_sha256":unit_context["executables"]["judge_sha256"],
+            "artifacts":if c.collection.schema=="chrono-github-ci/v4" {json!({"source_directory":w.artifact_directory,"directory":format!("{destination}/")})} else {Value::Null}}));
         let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
         if fresh["run_attempt"] != attempt
             || fresh["status"] != "completed"
@@ -293,7 +328,7 @@ fn inner(
     }
     let manifest = json!({"schema":"chrono-ci-collection/v1","reports":reports});
     let manifest_path = no_symlink_parents(root, &c.gather.manifest_path)?;
-    if manifest_path.exists() {
+    if manifest_path.exists() && c.collection.schema != "chrono-github-ci/v4" {
         return Err("collection manifest already exists; previous evidence retained".into());
     }
     write_file(
@@ -301,8 +336,18 @@ fn inner(
         &c.gather.manifest_path,
         &serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?,
     )?;
+    let manifest_original = if c.collection.schema == "chrono-github-ci/v4" {
+        json!(chrono_harness::prepared::retain_original(
+            root,
+            &format!("{}preparation/", c.collection.artifact_directory),
+            "manifest",
+            &fs::read(&manifest_path).map_err(|e| e.to_string())?
+        )?)
+    } else {
+        Value::Null
+    };
     Ok(
-        json!({"status":"gathered-unjudged","base":context["base"],"candidate":candidate,"units":identities,"manifest_path":c.gather.manifest_path,"manifest_sha256":file_identity(&manifest_path)?.0}),
+        json!({"status":"gathered-unjudged","base":context["base"],"candidate":candidate,"units":identities,"manifest_path":c.gather.manifest_path,"manifest_sha256":file_identity(&manifest_path)?.0,"manifest_original":manifest_original}),
     )
 }
 
@@ -325,12 +370,23 @@ pub(super) fn gather(
         return Err("repository must be explicit owner/name".into());
     }
     let target = no_symlink_parents(root, &c.gather.report_path)?;
-    if target.exists() {
+    if target.exists() && c.collection.schema != "chrono-github-ci/v4" {
         return Err("gather report exists; original evidence retained".into());
     }
     let mut transport = Transport::new(root, &c.gather)?;
     let result = inner(root, path, c, repository, &mut transport);
-    let report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    if c.collection.schema == "chrono-github-ci/v4" {
+        report["retained_report"] = json!(
+            chrono_harness::prepared::retain_original(
+                root,
+                &format!("{}preparation/", c.collection.artifact_directory),
+                "native-gather",
+                &serde_json::to_vec(&report).map_err(|e| e.to_string())?
+            )?
+            .path
+        );
+    }
     write_file(
         root,
         &c.gather.report_path,

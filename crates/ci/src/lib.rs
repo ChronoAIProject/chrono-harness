@@ -4,6 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
+mod check_inputs;
 mod event_git;
 pub mod full;
 mod gather;
@@ -113,7 +114,10 @@ fn load_projection(path: &Path) -> Result<Projection, String> {
         let c = decode(&bytes)?;
         release::validate(&c)?;
         Ok(Projection::Release(c))
-    } else if value["schema"] == full::SCHEMA {
+    } else if matches!(
+        value["schema"].as_str(),
+        Some(full::SCHEMA | full::SHORT_SCHEMA)
+    ) {
         let c = decode(&bytes)?;
         full::validate(&c)?;
         Ok(Projection::Full(c))
@@ -129,6 +133,7 @@ fn validate(c: &Config) -> Result<(), String> {
         ("chrono-github-ci/v1", None, None)
             | ("chrono-github-ci/v2", Some(_), None)
             | ("chrono-github-ci/v3", _, Some(_))
+            | ("chrono-github-ci/v4", None, Some(_))
     ) {
         return Err("unsupported CI provider/schema".into());
     }
@@ -334,7 +339,7 @@ fn render_extended(
         ""
     };
 
-    Ok(format!(
+    let rendered = format!(
         r#"{MARKER}name: {name}
 on:
   push:
@@ -396,7 +401,39 @@ on:
         initial = invoke(c, true) + &suffix,
         normal = invoke(c, false) + &suffix,
         artifacts = scalar(&c.artifact_directory)
-    ))
+    );
+    if c.schema == "chrono-github-ci/v4" {
+        let start = rendered
+            .find("      - name: Prepare fixed event inputs")
+            .ok_or("native prepare section")?;
+        let end = rendered
+            .find("      - name: Preserve actual check evidence")
+            .ok_or("native artifact section")?;
+        let suffix = match scope {
+            None => String::new(),
+            Some(chrono_harness::units::Scope::Unit { unit }) => {
+                format!(" '--unit' {}", shell(unit))
+            }
+            Some(chrono_harness::units::Scope::Collect { .. }) => " '--collect'".into(),
+        };
+        let credentials = if matches!(scope, Some(chrono_harness::units::Scope::Collect { .. })) {
+            "          GH_TOKEN: ${{ github.token }}\n"
+        } else {
+            ""
+        };
+        let check = format!(
+            "      - name: Canonical harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n{credentials}        run: |\n          {} 'check'{suffix}\n",
+            shell(&c.runner)
+        );
+        Ok(format!(
+            "{}{}{}",
+            &rendered[..start],
+            check,
+            &rendered[end..]
+        ))
+    } else {
+        Ok(rendered)
+    }
 }
 fn output_preflight(root: &Path, path: &str, expected: &str, marker: &str) -> Result<bool, String> {
     let target = no_symlink_parents(root, path)?;
@@ -656,7 +693,7 @@ pub fn prepare(
         }.into());
         }
         Ok(
-            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":canonical_argv(&c.runner,check_profile(c,initial),base.as_deref(),&candidate,initial)}),
+            json!({"schema":"chrono-ci-inputs/v1","event":event,"source":source,"mode":if initial {"initial-inventory"} else {"delta"},"workflow_source_revision":workflow_revision,"base":base,"candidate":candidate,"initial":initial,"canonical_argv":if c.schema=="chrono-github-ci/v4" {vec![c.runner.clone(),"check".into()]}else{canonical_argv(&c.runner,check_profile(c,initial),base.as_deref(),&candidate,initial)}}),
         )
     })();
     match result {
@@ -696,6 +733,9 @@ fn store_context(
     Ok(())
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) == Some("check-inputs") {
+        return check_inputs::dispatch(args);
+    }
     if args == ["--version"] {
         return Ok(format!("chrono-ci {}\n", env!("CARGO_PKG_VERSION")));
     }

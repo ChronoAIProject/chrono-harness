@@ -184,9 +184,11 @@
       "build.ci": [
         "ci",
         "judge-projects",
-        "judge-workflow"
+        "judge-workflow",
+        "worktree"
       ],
       "build.judge-ci": [
+        "ci",
         "judge-cargo",
         "judge-ci",
         "judge-projects"
@@ -258,7 +260,12 @@
         "judge-routes",
         "judge-workflow",
         "runner"
+      ],
+      "build.worktree": [
+        "ci",
+        "worktree"
       ]
-    }
+    },
+    "facts_config": ".chrono-harness/config.json"
   }
 }

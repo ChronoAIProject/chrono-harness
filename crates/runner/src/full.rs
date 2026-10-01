@@ -122,6 +122,18 @@ pub fn check_observed(
     context: &Path,
     entry: Value,
 ) -> Result<(u8, String), String> {
+    check_prepared(root, config_path, base, candidate, context, entry, None)
+}
+#[allow(clippy::too_many_arguments)]
+pub fn check_prepared(
+    root: &Path,
+    config_path: &str,
+    base: &str,
+    candidate: &str,
+    context: &Path,
+    entry: Value,
+    preparation: Option<Value>,
+) -> Result<(u8, String), String> {
     let reader = facts::Reader::for_config(root, config_path)?;
     reader.verify_config(root, candidate)?;
     let base_tree = reader.verify_oid(root, base)?;
@@ -141,13 +153,28 @@ pub fn check_observed(
             .map_err(|e| e.to_string())?;
     let mut env = BTreeMap::new();
     let mut observed = BTreeMap::new();
+    let credentials = if cfg["schema_version"] == 4 {
+        crate::prepared::credential_environment(cfg)?
+    } else {
+        BTreeSet::new()
+    };
     for k in cfg["environment"]["inherit"]
         .as_array()
         .ok_or("missing environment.inherit")?
     {
         let k = k.as_str().ok_or("environment key must be string")?;
         let v = std::env::var(k).ok();
-        observed.insert(k.to_string(), v.clone());
+        observed.insert(
+            k.to_string(),
+            if credentials.contains(k) {
+                None
+            } else {
+                v.clone()
+            },
+        );
+        if credentials.contains(k) {
+            continue;
+        }
         if let Some(v) = v {
             env.insert(k.into(), v);
         }
@@ -204,15 +231,23 @@ pub fn check_observed(
         version: env!("CARGO_PKG_VERSION").into(),
     };
     let run = format!("{}:{:?}", std::process::id(), std::time::SystemTime::now());
-    let report_path = format!(".chrono-harness/state/run-{}.json", wire::digest(&run)?);
+    let report_directory = preparation
+        .as_ref()
+        .and_then(|b| b["request"]["native_artifacts"]["directory"].as_str())
+        .unwrap_or(".chrono-harness/state/");
+    let report_path = format!("{report_directory}run-{}.json", wire::digest(&run)?);
     let retained_report = no_symlink_parents(root, &report_path)?;
     fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&retained_report)
         .map_err(|e| e.to_string())?;
+    let mut environment = value!({"inherited":observed,"effective":env});
+    if cfg["schema_version"] == 4 {
+        environment["omitted_credentials"] = value!(credentials);
+    }
     let req = Request {
-        observations: value!({"git_facts":reader.observation(),"entry":entry,"run":run,"report_path":report_path,"environment":{"inherited":observed,"effective":env},"retained":retained,
+        observations: value!({"git_facts":reader.observation(),"entry":entry,"preparation":preparation,"run":run,"report_path":report_path,"environment":environment,"retained":retained,
             "registry_bindings":{"base":{"entry_path":base_identity.entry_path,"effective_path":base_identity.effective_path,"selection":base_identity.selection},"candidate":{"entry_path":candidate_identity.entry_path,"effective_path":candidate_identity.effective_path,"selection":candidate_identity.selection}}}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
@@ -296,8 +331,10 @@ pub fn check_observed(
     } else {
         value!(findings)
     };
-    let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"executables":executables,"environment":{"inherited":observed,"effective":env},"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
+    let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"executables":executables,"environment":environment,"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
     report["git_facts"] = reader.observation();
+    report["entry"] = req.observations["entry"].clone();
+    report["preparation"] = req.observations["preparation"].clone();
     report["report_path"] = value!(report_path);
     // Only validated named outputs supply these fields. Configuration and absent
     // producers cannot stand in for observations; conflicting results remain visible.
@@ -343,7 +380,7 @@ pub fn check_observed(
     report["unresolved"] = value!(unresolved);
     report["sources"] = value!(sources);
     let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
-    let path = no_symlink_parents(root, ".chrono-harness/state/report.json")?;
+    let path = no_symlink_parents(root, &format!("{report_directory}report.json"))?;
     fs::write(retained_report, &text).map_err(|e| e.to_string())?;
     fs::write(path, &text).map_err(|e| e.to_string())?;
     Ok((status.exit_code() as u8, text))

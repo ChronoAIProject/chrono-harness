@@ -35,6 +35,8 @@ pub struct ReportInput {
     pub sha256: String,
     pub runner_sha256: String,
     pub judge_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifacts: Option<crate::prepared::ArtifactTransport>,
 }
 
 pub fn id(s: &str) -> Result<(), String> {

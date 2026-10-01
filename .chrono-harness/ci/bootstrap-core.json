@@ -8,7 +8,8 @@
   "operations": [
     "build.runner",
     "build.judge-ci",
-    "build.ci"
+    "build.ci",
+    "build.worktree"
   ],
   "install": [
     {
@@ -22,6 +23,10 @@
     {
       "source": "crates/ci/target/debug/chrono-ci",
       "destination": ".chrono-harness/bin/chrono-ci"
+    },
+    {
+      "source": "crates/worktree/target/debug/chrono-worktree",
+      "destination": ".chrono-harness/bin/chrono-worktree"
     }
   ]
 }

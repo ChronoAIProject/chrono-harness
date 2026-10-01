@@ -39,8 +39,8 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
 }
 /// Validate the new link without interpreting any historical config as v3.
 pub fn declaration(config: &Value) -> Result<(&Value, &Value), String> {
-    if config["schema_version"] != 3 {
-        return Err("facts_git requires config schema_version 3".into());
+    if !matches!(config["schema_version"].as_u64(), Some(3 | 4)) {
+        return Err("facts_git requires config schema_version 3 or 4".into());
     }
     let link = config["facts_git"]
         .as_object()
@@ -143,13 +143,18 @@ impl Reader {
     ) -> Result<Self, String> {
         let result = (|| {
             let (config_path, bytes, cfg, selection) = crate::facts_configs::load(root, config)?;
-            if cfg["schema_version"] != 3 {
+            if !matches!(cfg["schema_version"].as_u64(), Some(3 | 4)) {
                 if cfg.get("facts_git").is_some() || prior.is_some_and(|v| !v.is_null()) {
                     return Err("legacy configuration cannot contain a Git facts binding".into());
                 }
                 return Ok(Self::legacy());
             }
             let (tool, input) = declaration(&cfg)?;
+            let credentials = if cfg["schema_version"] == 4 {
+                crate::prepared::credential_environment(&cfg)?
+            } else {
+                Default::default()
+            };
             let mut inherited = BTreeMap::<String, Option<String>>::new();
             let mut effective = BTreeMap::<String, String>::new();
             for key in cfg["environment"]["inherit"]
@@ -157,7 +162,9 @@ impl Reader {
                 .ok_or("environment.inherit")?
             {
                 let key = key.as_str().ok_or("environment key")?;
-                let val = if let Some(env) = observed_env {
+                let val = if credentials.contains(key) {
+                    None
+                } else if let Some(env) = observed_env {
                     serde_json::from_value(
                         env["inherited"]
                             .get(key)
@@ -185,7 +192,10 @@ impl Reader {
             {
                 effective.insert(k.clone(), v.as_str().ok_or("environment value")?.into());
             }
-            let environment = value!({"inherited":inherited,"effective":effective});
+            let mut environment = value!({"inherited":inherited,"effective":effective});
+            if cfg["schema_version"] == 4 {
+                environment["omitted_credentials"] = value!(credentials);
+            }
             if observed_env.is_some_and(|v| *v != environment) {
                 return Err("Git facts environment observation mismatch".into());
             }

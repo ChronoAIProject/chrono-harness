@@ -73,9 +73,11 @@ pub(crate) fn resolve(
         .ok_or_else(|| format!("Git config selector has no registered platform {platform}"))?;
     let selected_bytes = read(selected)?;
     let selected_config = json(&selected_bytes)?;
-    if selected_config["schema_version"] != 3 || selected_config.get("schema").is_some() {
+    if !matches!(selected_config["schema_version"].as_u64(), Some(3 | 4))
+        || selected_config.get("schema").is_some()
+    {
         return Err(
-            "Git config selector requires a direct full-v3 policy, never another selector".into(),
+            "Git config selector requires a direct full-v3 policy or v4 policy, never another selector".into(),
         );
     }
     let selection = Selection {

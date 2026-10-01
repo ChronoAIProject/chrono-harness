@@ -7,6 +7,8 @@ fn source() -> Value {
     let provider: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     let mut c = provider["collection"].clone();
     c["schema"] = "chrono-github-ci/v2".into();
+    // This fixture exercises the historical v2 contract, without the host's newly adopted facts binding.
+    c.as_object_mut().unwrap().remove("facts_config");
     c["initial_inventory"] = json!({
         "path":".chrono-harness/ci/root inventory.json",
         "profile": {
@@ -297,6 +299,9 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             .unwrap()
         };
         let mut config = read_host("config");
+        config["schema_version"] = json!(1);
+        config.as_object_mut().unwrap().remove("facts_git");
+        config["canonical_check"] = json!({"operation":"validate.delta", "argv":[]});
         config["tools"] = json!([]);
         config["semantic_fields"] = json!([]);
         config["environment"] = json!({"inherit":["PATH"], "values":{}, "inputs":[]});

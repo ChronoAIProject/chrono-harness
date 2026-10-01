@@ -34,6 +34,83 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     (d, f, v, commit)
 }
 #[test]
+fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
+    let (d, _f, mut v, _) = fixture();
+    let path_dir = tempfile::tempdir().unwrap();
+    let ambient_git = chrono_harness::resolve_program(d.path(), "git", None).unwrap();
+    let git_link = path_dir.path().join("git");
+    std::os::unix::fs::symlink(&ambient_git, &git_link).unwrap();
+    let path = format!(
+        "{}:{}",
+        path_dir.path().display(),
+        std::env::var("PATH").unwrap()
+    );
+    let git =
+        fs::canonicalize(chrono_harness::resolve_program(d.path(), "git", Some(&path)).unwrap())
+            .unwrap();
+    assert!(fs::metadata(&git).unwrap().is_file());
+    let version = Command::new(&git).arg("--version").output().unwrap();
+    let c = v.get_mut(CONFIG).unwrap();
+    c["schema_version"] = value!(4);
+    c["canonical_check"] = value!({"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":CONFIG,"inputs":{"local":{"operation":"fixture.input","tool":"git","argv":["--version"]}}});
+    c["facts_git"] = value!({"tool":"git","input":"git-bytes"});
+    c["tools"].as_array_mut().unwrap().push(value!({"id":"git","program":git,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}));
+    for i in c["environment"]["inputs"].as_array_mut().unwrap() {
+        i["presence"] = value!("present");
+        i["location"] = value!(fs::canonicalize(i["location"].as_str().unwrap()).unwrap());
+    }
+    c["environment"]["inputs"].as_array_mut().unwrap().push(value!({"id":"git-bytes","location":git,"presence":"present","sha256":sha256(&fs::read(&git).unwrap())}));
+    c["environment"]["inherit"]
+        .as_array_mut()
+        .unwrap()
+        .extend([value!("CHRONO_CHECK_SOURCE"), value!("GH_TOKEN")]);
+    c["environment"]["credential_environment"] = value!(["GH_TOKEN"]);
+    c["input_closure"] = value!({"status":"incomplete","unresolved":["fixture"]});
+    write_values(d.path(), &v);
+    let oid = commit(d.path());
+    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .env("GH_TOKEN", "fixture-secret-not-a-business-input")
+        .env_remove("CHRONO_CHECK_SOURCE")
+        .args([
+            "capture",
+            "--host-root",
+            d.path().to_str().unwrap(),
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/credential-snapshot.json",
+        ])
+        .env("PATH", &path)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("fixture-secret-not-a-business-input"));
+    let snapshot = json(&out.stdout).unwrap();
+    assert_eq!(snapshot["environment"]["GH_TOKEN"], Value::Null);
+    chrono_judge_registration::inputs::environment(&v[CONFIG], &snapshot["environment"]).unwrap();
+    let mut wrong = snapshot["environment"].clone();
+    wrong["GH_TOKEN"] = value!("retained-by-mistake");
+    assert!(
+        chrono_judge_registration::inputs::environment(&v[CONFIG], &wrong)
+            .unwrap_err()
+            .contains("acquisition credentials")
+    );
+    let mut old = values();
+    old.get_mut(CONFIG).unwrap()["environment"]["credential_environment"] = value!([]);
+    assert!(
+        chrono_judge_registration::Registrations::load(&old, CONFIG)
+            .err()
+            .unwrap()
+            .contains("unknown field credential_environment")
+    );
+}
+#[test]
 fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
     let (d, f, _, oid) = fixture();
     let args = [

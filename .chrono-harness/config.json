@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 4,
   "status": "proposed",
   "enforcement": "not-implemented",
   "runner": {
@@ -17,14 +17,37 @@
     "operation": "validate.delta",
     "argv": [
       ".chrono-harness/bin/chrono-harness",
-      "check",
-      "--config",
-      ".chrono-harness/ci/check.json",
-      "--base",
-      "{base}",
-      "--candidate",
-      "{candidate}"
-    ]
+      "check"
+    ],
+    "profile": ".chrono-harness/ci/check.json",
+    "inputs": {
+      "local": {
+        "operation": "prepare.check.local",
+        "tool": "chrono-worktree",
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/worktree.json"
+        ]
+      },
+      "ci": {
+        "operation": "prepare.check.ci",
+        "tool": "chrono-ci",
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/ci/units.json",
+          "--event-env",
+          "GITHUB_EVENT_NAME",
+          "--payload-env",
+          "GITHUB_EVENT_PATH",
+          "--revision-env",
+          "CHRONO_WORKFLOW_REVISION",
+          "--repository-env",
+          "GITHUB_REPOSITORY"
+        ]
+      }
+    }
   },
   "tools": [
     {
@@ -53,12 +76,30 @@
         "--version"
       ],
       "expected_version": "chrono-ci 0.1.0"
+    },
+    {
+      "id": "git",
+      "program": "/usr/bin/git",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "git version 2.50.1 (Apple Git-155)"
+    },
+    {
+      "id": "chrono-worktree",
+      "program": ".chrono-harness/bin/chrono-worktree",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-worktree 0.1.0"
     }
   ],
   "protocol": {
     "id": "chrono-judge/v1",
-    "timeout_seconds": 120,
-    "stdout_limit_bytes": 1048576,
+    "timeout_seconds": 2400,
+    "stdout_limit_bytes": 67108864,
     "encoding": "UTF-8"
   },
   "semantic_fields": [
@@ -298,18 +339,33 @@
     }
   ],
   "environment": {
+    "credential_environment": ["GH_TOKEN"],
     "inherit": [
       "PATH",
       "HOME",
       "CARGO_HOME",
       "RUSTUP_HOME",
       "TMPDIR",
-      "SDKROOT"
+      "SDKROOT",
+      "CHRONO_CHECK_SOURCE",
+      "GITHUB_EVENT_NAME",
+      "GITHUB_EVENT_PATH",
+      "CHRONO_WORKFLOW_REVISION",
+      "GITHUB_REPOSITORY",
+      "GH_TOKEN",
+      "SSH_AUTH_SOCK"
     ],
     "values": {
       "CARGO_TERM_COLOR": "never"
     },
-    "inputs": []
+    "inputs": [
+      {
+        "id": "git-executable",
+        "location": "/usr/bin/git",
+        "presence": "present",
+        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+      }
+    ]
   },
   "input_closure": {
     "status": "incomplete",
@@ -319,5 +375,9 @@
       "Complete direct/indirect, fixture, environment and external inputs and their explicit dependency edges need evidence.",
       "Verdict-relevant randomness, time, external responses, timeout/resource conditions and deterministic evaluation are not established."
     ]
+  },
+  "facts_git": {
+    "tool": "git",
+    "input": "git-executable"
   }
 }
