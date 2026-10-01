@@ -392,9 +392,73 @@ fn request_identity_matches_original_projection_for_scopes_and_opaque_evidence()
         let expected = wire::digest(&original).unwrap();
         request.seal().unwrap();
         assert_eq!(request.request_id, expected);
+        assert_eq!(
+            request.canonical().unwrap(),
+            wire::canonical(&request).unwrap()
+        );
         request.validate().unwrap();
         let mut changed = request.clone();
         changed.observations["bytes"][255] = value!(254);
+        assert!(changed.validate().is_err());
+    }
+}
+
+#[test]
+fn canonical_request_preserves_number_boundaries_unicode_and_original_streams() {
+    let (_dir, mut request, _binding) = fixture("");
+    // Independent RFC vectors and the fixed generic JCS implementation remain
+    // the oracle, including values outside the exact-integer fast path.
+    let mut numbers = vec![
+        value!(i64::MIN),
+        value!(i64::MAX),
+        value!(u64::MAX),
+        value!(-9007199254740993_i64),
+        value!(-9007199254740992_i64),
+        value!(9007199254740992_u64),
+        value!(9007199254740993_u64),
+        value!(-0.0),
+        value!(1e-6),
+        value!(1e21),
+        value!(1e-27),
+    ];
+    let mut bits = 0x123456789abcdef0_u64;
+    for _ in 0..1024 {
+        bits = bits.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let number = f64::from_bits(bits);
+        if number.is_finite() {
+            numbers.push(value!(number));
+        }
+    }
+    request.observations = value!({
+        "numbers": numbers,
+        "object": {"\u{ffff}": [], "😀": {}, "\r": null, "€": true},
+        "strings": ["\u{0000}\u{0001}\u{0008}\u{000c}\n\r\t\\\"/", "中文 λ 😀"],
+        "stdout_bytes": (0..=255).cycle().take(65536).collect::<Vec<u8>>()
+    });
+    let mut prior = request.response(wire::Status::Pass);
+    prior
+        .outputs
+        .insert("original".into(), request.observations.clone());
+    request.prior_results.push(prior);
+    for scope in [
+        None,
+        Some(chrono_harness::units::Scope::Unit { unit: "one".into() }),
+    ] {
+        request.scope = scope;
+        let mut identity = serde_json::to_value(&request).unwrap();
+        identity.as_object_mut().unwrap().remove("request_id");
+        request.seal().unwrap();
+        assert_eq!(request.request_id, wire::digest(&identity).unwrap());
+        assert_eq!(
+            request.canonical().unwrap(),
+            wire::canonical(&request).unwrap()
+        );
+        request.validate().unwrap();
+        let mut changed = request.clone();
+        changed.prior_results[0]
+            .outputs
+            .get_mut("original")
+            .unwrap()["stdout_bytes"][65535] = value!(0);
         assert!(changed.validate().is_err());
     }
 }

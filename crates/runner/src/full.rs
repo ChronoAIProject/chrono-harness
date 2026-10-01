@@ -183,7 +183,7 @@ pub fn retained_judges(
     for (compact, binding) in records.iter().zip(ordered) {
         let record = expand_record(compact)?;
         let request = judge_request_from_observations(template, &binding, &history)?;
-        let digest = wire::digest(&request)?;
+        let digest = sha256(&request.canonical()?);
         let response = Response::deserialize(&record["response"]).map_err(|e| e.to_string())?;
         let warnings = response.findings.iter().any(|f| f.level == "warning");
         if response.findings.iter().any(|f| f.level == "error")
@@ -891,7 +891,7 @@ pub fn check_prepared(
     let first = schedule(&bindings)?.remove(0);
     let original = judge_request(&req, &first, &[])?;
     report["request"] = value!(original);
-    report["request_digest"] = wire::digest(&original)?.into();
+    report["request_digest"] = sha256(&original.canonical()?).into();
     let (artifacts, unavailable) = retain_artifacts(&req, &judges, status.exit_code() != 0)?;
     report["artifacts"] = artifacts;
     if !unavailable
