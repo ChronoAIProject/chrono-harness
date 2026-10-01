@@ -3227,6 +3227,18 @@
       ]
     },
     {
+      "path": "crates/ci-tests/tests/full_scope.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
       "path": "docs/full-ci.md",
       "owner": "repository",
       "surface": "documentation",
@@ -3913,6 +3925,30 @@
         {
           "kind": "compile",
           "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-workflow-tests/tests/full_units.rs",
+      "owner": "judge-workflow-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-workflow-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-workflow-tests/tests/full_short.rs",
+      "owner": "judge-workflow-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-workflow-tests"
         }
       ]
     }
@@ -6007,6 +6043,21 @@
       "from": "environment:SSH_AUTH_SOCK",
       "kind": "runtime-input",
       "to": "project:worktree"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "runtime-input",
+      "to": "project:judge-workflow-tests"
+    },
+    {
+      "from": "project:judge-workflow",
+      "kind": "compile",
+      "to": "project:worktree"
+    },
+    {
+      "from": "project:inputs",
+      "kind": "build-input",
+      "to": "project:judge-workflow-tests"
     }
   ],
   "test_costs": [
@@ -6223,6 +6274,8 @@
         "build.judge-projects",
         "build.ci",
         "build.judge-workflow",
+        "build.worktree",
+        "build.inputs",
         "test.judge-workflow-tests"
       ],
       "timeout_seconds": 900,

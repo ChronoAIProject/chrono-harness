@@ -166,11 +166,11 @@ impl Host {
     pub fn run(&self, edit: impl FnOnce(&mut Value)) -> (i32, Value) {
         self.run_with_context(edit, |_| {})
     }
-    pub fn run_with_context(
+    pub fn prepare_with_context(
         &self,
         edit: impl FnOnce(&mut Value),
         context_edit: impl FnOnce(&mut Value),
-    ) -> (i32, Value) {
+    ) {
         let root = self.root();
         fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
         let interpreter = fs::read(&self.tool).unwrap();
@@ -192,6 +192,14 @@ impl Host {
             serde_json::to_vec(&ctx).unwrap(),
         )
         .unwrap();
+    }
+    pub fn run_with_context(
+        &self,
+        edit: impl FnOnce(&mut Value),
+        context_edit: impl FnOnce(&mut Value),
+    ) -> (i32, Value) {
+        self.prepare_with_context(edit, context_edit);
+        let root = self.root();
         let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
             .current_dir("/")
             .env("DECLARED_EMPTY", "")

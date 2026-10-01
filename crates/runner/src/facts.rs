@@ -261,15 +261,17 @@ impl Reader {
         {
             return Err("OID is not a commit".into());
         }
-        Ok(
-            utf8(self.git(root, &["rev-parse", &format!("{oid}^{{tree}}")])?)?
-                .trim()
-                .into(),
-        )
+        let tree = utf8(self.git(root, &["rev-parse", &format!("{oid}^{{tree}}")])?)?
+            .trim()
+            .to_string();
+        if full_oid(&tree).is_ok() {
+            self.record_verified_oid(oid);
+        }
+        Ok(tree)
     }
     pub fn blob(&self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         relative_path(path)?;
-        self.git(root, &["show", &format!("{oid}:{path}")])
+        self.blob_with_reuse(root, oid, path)
     }
     pub fn parents(&self, root: &Path, oid: &str) -> Result<Vec<String>, String> {
         full_oid(oid)?;

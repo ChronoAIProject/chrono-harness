@@ -26,19 +26,11 @@ pub fn output<'a>(req: &'a Request, key: &str) -> Result<&'a Value, String> {
     Ok(values[0])
 }
 pub fn process(p: &ProcessResult) -> Result<(), String> {
-    if p.exit_code != 0
-        || p.failure.is_some()
-        || p.stdout_sha256 != sha256(&p.stdout_bytes)
-        || p.stderr_sha256 != sha256(&p.stderr_bytes)
-        || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
-        || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
-        || p.environment_digest != wire::digest(&p.environment)?
-    {
-        return Err("E_WORKFLOW_EVIDENCE: invalid process result".into());
-    }
-    Ok(())
+    chrono_judge_routes::process_success(p)
 }
 pub fn record(v: &Value) -> Result<(Response, ProcessResult), String> {
+    let expanded = chrono_harness::full::expand_record(v)?;
+    let v = &expanded;
     let r: Response = serde_json::from_value(v["response"].clone())
         .map_err(|e| format!("E_WORKFLOW_EVIDENCE: {e}"))?;
     let p: ProcessResult = serde_json::from_value(v["process"].clone())
@@ -57,9 +49,52 @@ pub fn record(v: &Value) -> Result<(Response, ProcessResult), String> {
     Ok((r, p))
 }
 pub fn execution(plan: &Execution, results: &Results) -> Result<(), String> {
+    execution_inner(plan, results, false)
+}
+pub fn contribution(plan: &Execution, results: &Results) -> Result<(), String> {
+    execution_inner(plan, results, true)
+}
+fn execution_inner(plan: &Execution, results: &Results, contribution: bool) -> Result<(), String> {
     plan.validate()?;
     let selected: Vec<_> = plan.selected.keys().cloned().collect();
+    if let Some(completion) = &results.completion {
+        if completion.schema != "chrono-collected-completion/v1"
+            || completion.status != "passed"
+            || results.scope.as_deref() != Some("collect")
+            || completion.global_selected != selected
+            || !results.executed.is_empty()
+            || !results.blocked.is_empty()
+            || results.plan != plan.identity
+            || results.selected != selected
+            || results.tests.keys().cloned().collect::<Vec<_>>() != selected
+            || results.tests.values().any(|status| status != "passed")
+        {
+            return Err("E_WORKFLOW_EVIDENCE: invalid collected completion".into());
+        }
+        let required: BTreeSet<_> = completion.required_units.iter().cloned().collect();
+        let mut report_units = BTreeSet::new();
+        let unique_reports = completion.reports.iter().all(|report| {
+            report["unit"]
+                .as_str()
+                .is_some_and(|unit| report_units.insert(unit.to_owned()))
+        });
+        if required.len() != completion.required_units.len()
+            || !unique_reports
+            || completion.reports.len() < required.len()
+            || completion
+                .reports
+                .iter()
+                .filter_map(|report| report["unit"].as_str())
+                .filter(|unit| required.contains(*unit))
+                .collect::<BTreeSet<_>>()
+                != required.iter().map(String::as_str).collect::<BTreeSet<_>>()
+        {
+            return Err("E_WORKFLOW_EVIDENCE: collected unit coverage is incomplete".into());
+        }
+        return Ok(());
+    }
     if results.plan != plan.identity
+        || (results.scope.is_some() && !contribution)
         || results.selected != selected
         || results.tests.keys().cloned().collect::<Vec<_>>() != selected
         || !results.passed()
@@ -155,7 +190,29 @@ pub fn binding(
     impact: &Value,
     effective: &Value,
 ) -> Result<Value, String> {
-    execution(plan, results)?;
+    if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
+        if results.scope.as_deref() != Some(&format!("unit:{unit}")) || results.completion.is_some()
+        {
+            return Err("E_WORKFLOW_EVIDENCE: contribution identity".into());
+        }
+        contribution(plan, results)?;
+    } else {
+        execution(plan, results)?;
+        if results.completion.is_some() {
+            let reader = chrono_harness::facts::Reader::for_request(req)?;
+            let (old, _, _) = chrono_judge_registration::views_with_reader(req, &reader)?;
+            chrono_judge_projects::verify_completion(
+                req,
+                r,
+                &old,
+                effective,
+                plan,
+                results,
+                None,
+                &req.candidate.root,
+            )?;
+        }
+    }
     if plan.binding != chrono_judge_routes::binding(req, effective)
         || plan.root != req.candidate.root
     {
@@ -243,6 +300,6 @@ pub fn binding(
         contract.push(json!({"method":d[0],"predecessors":op.predecessors,"timeout_seconds":op.timeout_seconds,"output_limit_bytes":op.output_limit_bytes}));
     }
     Ok(
-        json!({"base":req.base.commit,"candidate_tree":req.candidate.tree,"registry_digest":req.registries.digest,"executables":executables,"tools":tools(plan)?,"environment":plan.environment,"effective_inputs":inputs(effective,&req.base.commit,&req.candidate.commit,&req.candidate.tree,&req.candidate.root)?,"required_tests":{"obligations":impact["required_tests"],"selected":plan.selected,"methods":contract}}),
+        json!({"base":req.base.commit,"candidate_tree":req.candidate.tree,"registry_digest":req.registries.digest,"executables":executables,"tools":if let Some(c)=&results.completion {c.tools.clone()} else {tools(plan)?},"environment":plan.environment,"effective_inputs":inputs(effective,&req.base.commit,&req.candidate.commit,&req.candidate.tree,&req.candidate.root)?,"required_tests":{"obligations":impact["required_tests"],"selected":plan.selected,"methods":contract}}),
     )
 }

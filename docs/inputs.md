@@ -1,7 +1,10 @@
 # Explicit retained input snapshots
 
 `chrono-inputs` captures only the file IDs in a fixed config's
-`environment.inputs` and the variable names in `environment.inherit`. It does not
+`environment.inputs` and the variable names in `environment.inherit`. Optional
+`capture --unit ID` uses registration/input's shared prerequisite projection for
+that registered full unit, including shared operations and governance consumers.
+It does not
 discover dependencies, rewrite expected hashes, add tests or declare input closure
 complete. It is an independent Rust production/test pair. Git must be available
 to read the explicit fixed commit. Config v3 uses the explicit
@@ -154,6 +157,12 @@ Set context `retained_inputs` to the produced pair path. Registration accepts
 either the existing inline `{bytes: [...]}` representation or exactly one
 `{blob, sha256, length}` reference. It checks the snapshot's endpoint/config binding,
 declared file IDs, original blob digest/length and current candidate disk identity.
+Full unit capture and live validation use the same explicit unit input projection;
+unrelated retained entries may be omitted, while supplied entries still undergo
+validation. Unscoped checks and collection retain global input obligations.
+Collection validates original blobs and compares original per-unit evidence with
+the corresponding projection, without reading live business inputs or launching
+business/version tools. Structural and reference checks remain global.
 Unknown file IDs, conflicting representations, missing/corrupt blobs and changed
 candidate inputs fail. Blob bytes are streamed and stay outside judge JSON; the
 effective-input result is the same for matching inline and blob representations.

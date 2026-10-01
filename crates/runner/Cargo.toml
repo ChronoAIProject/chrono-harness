@@ -28,5 +28,10 @@ tempfile = "3"
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 sha2 = { version = "0.10", features = ["asm"] }
 
+# Full unit/collection checks repeatedly serialize the original judge evidence.
+# Keep that work optimized in the registered development build too.
+[profile.dev]
+opt-level = 1
+
 [profile.dev.package.sha2]
 opt-level = 3

@@ -68,6 +68,27 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
     Ok(value!({"blob":path,"sha256":sha256,"length":length}))
 }
 pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<Value, String> {
+    capture_selected(
+        root,
+        config,
+        commit,
+        output,
+        &chrono_harness::prepared::Selection::All,
+    )
+}
+pub fn capture_selected(
+    root: &Path,
+    config: &str,
+    commit: &str,
+    output: &str,
+    selection: &chrono_harness::prepared::Selection,
+) -> Result<Value, String> {
+    use chrono_harness::{prepared::Selection, units::Scope};
+    let scope = match selection {
+        Selection::All => None,
+        Selection::Unit { unit } => Some(Scope::Unit { unit: unit.clone() }),
+        Selection::Collect => return Err("E_INPUT_SCOPE: collection consumes original snapshots; it does not capture live inputs".into()),
+    };
     state(root, output)?;
     let reader = facts::Reader::for_config(root, config)?;
     reader.verify_config(root, commit)?;
@@ -81,6 +102,7 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
     }
     let values = reader.registry_values(root, commit, config)?;
     let r = Registrations::load(&values, config)?;
+    let required = chrono_judge_registration::inputs::required_files(&r, scope.as_ref())?;
     let credentials = if r.config()["schema_version"] == 4 {
         chrono_harness::prepared::credential_environment(r.config())?
     } else {
@@ -102,6 +124,9 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
     }
     let mut files = serde_json::Map::new();
     for input in r.config()["environment"]["inputs"].as_array().unwrap() {
+        if !required.contains(input["id"].as_str().unwrap()) {
+            continue;
+        }
         let path = root.join(input["location"].as_str().unwrap());
         let retained = if matches!(r.config()["schema_version"].as_u64(), Some(2 | 3 | 4)) {
             match observe_file(&path)? {
@@ -127,6 +152,7 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
     publish(root, output, &snapshot)?;
     Ok(snapshot)
 }
+
 fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
     let bytes = fs::read(state(from, snapshot)?).map_err(|e| e.to_string())?;
     let mut v = json(&bytes)?;
@@ -171,11 +197,11 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
         return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION")));
     }
     if args == ["--help"] {
-        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
+        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
     }
     let command = args.first().ok_or("E_USAGE: capture or pair required")?;
     let allowed = match command.as_str() {
-        "capture" => vec!["--host-root", "--config", "--commit", "--output"],
+        "capture" => vec!["--host-root", "--config", "--commit", "--output", "--unit"],
         "pair" => vec![
             "--host-root",
             "--base-snapshot",
@@ -208,11 +234,18 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
     };
     let root = fs::canonicalize(cwd.join(required("--host-root")?)).map_err(|e| e.to_string())?;
     let result = if command == "capture" {
-        capture(
+        capture_selected(
             &root,
             required("--config")?,
             required("--commit")?,
             required("--output")?,
+            &options
+                .get("--unit")
+                .map_or(chrono_harness::prepared::Selection::All, |unit| {
+                    chrono_harness::prepared::Selection::Unit {
+                        unit: (*unit).into(),
+                    }
+                }),
         )?
     } else {
         let location = |key: &str| -> Result<PathBuf, String> {

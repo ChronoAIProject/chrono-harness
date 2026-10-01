@@ -379,6 +379,23 @@ the resulting workflow bytes. Initial/full/release migrations, multi-file atomic
 complete input closure, full activation, deterministic parity and formal refinement
 are not certified by this mechanism. See [CI customization](ci-units.md#host-customization-and-updates).
 
+The full-v3 unit core reuses the runner's pure assignment/selection helpers in
+both scoped CI and the seven-judge full entry. It validates global obligations
+and the operation DAG before partitioning. Integration and delivery slices
+validate local actual evidence, produce contributions, and defer completion.
+One sealed original request template reconstructs each judge stdin; selected
+reports retain exact process bytes in a lossless compact encoding and addressed
+context/input/evidence closure within the registered bound. Collection launches
+no business executable (including version commands), checks actual retained
+success/warnings and declaration-derived contracts, and produces source-linked
+coverage without invented aggregate execution rows. The ordinary full workflow
+policy and delivery certificate consumer validate the finalized collector report
+and all original source evidence. Ordinary unscoped full check preserves local
+streaming blob validation without the portable unit/report bound. Provider
+generation and automatic transport use the existing CI owner and explicit
+full-context/upload mappings. Actual full native host activation, Go adoption and
+public release remain pending; parity and runtime speedup are unestablished.
+
 
 Source `resume-rebind` consumes an original v1 rebind intent, its exact plan and
 explicit missing/partial/failed result identity. Initial and resumed execution
@@ -407,7 +424,17 @@ value-less scoped collection through existing runner/worktree/CI owners. Real CL
 tests cover remote/HEAD advancement, dirty and missing inputs, true short entry,
 independent units, zero-business collection, pins/stale/failure rejection and
 local execution of generated native steps. Full unscoped context preserves the
-original worktree birth/fork and exact native context bytes. Full independent
-scopes, immutable-round freshness/expiry, corrected core integration, native
-hosted execution, release/example adoption and complete SPEC acceptance remain
-pending; full transport fixture success does not activate proposed host governance.
+original worktree birth/fork and exact native context bytes. Local immutable
+round reuse now checks a fresh observation through the workflow age predicate,
+renews expired contexts and retains original bytes. Unit file capture/validation
+and per-unit collection comparison share registration/input's explicit projection;
+shared and governance obligations remain required. Focused source fixtures do not
+establish native Go/TS execution. Native hosted execution, release/example adoption
+and complete SPEC acceptance remain pending; full transport fixture success does
+not activate proposed host governance.
+
+Full core/provider/short source integration supports declared full-v3/v4 independent
+units, global DELTA bare check, original-evidence full collection and the existing
+automatic units provider via explicit v2 full-context/upload mappings. Source
+fixtures do not activate this host or publish new public binaries. Clean-candidate
+admission, native full workflows and complete SPEC acceptance remain outstanding.

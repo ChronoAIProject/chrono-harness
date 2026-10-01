@@ -1,3 +1,5 @@
+#[path = "full_units.rs"]
+mod full_units;
 #[path = "git_facts.rs"]
 mod git_facts;
 #[path = "../../judge-projects-tests/tests/support/host.rs"]

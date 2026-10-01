@@ -1,15 +1,19 @@
 //! Fixed full-governance context transport; the configured judges own admission.
-use super::{action, full_oid, output_preflight, overlap, scalar, shell, write_file};
+use super::{action, full_oid, output_preflight, scalar, shell, write_file};
 use chrono_harness::{
-    canonical_argv, decode, facts::Reader, no_symlink_parents, relative_path, sha256,
+    canonical_argv, decode,
+    facts::Reader,
+    file_identity, no_symlink_parents, relative_path, sha256,
+    units::{self, Scope},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::{fs, io::Write, path::Path};
 
 pub const SCHEMA: &str = "chrono-github-full-ci/v1";
 pub const SHORT_SCHEMA: &str = "chrono-github-full-ci/v2";
 const MARKER: &str = "# chrono-ci: owned github-full-ci/v1\n";
+const SOURCE_MARKER: &str = "# chrono-ci: full source ";
 const ADOPTED: &str = ".chrono-harness/ci/full.json";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -26,9 +30,19 @@ pub struct Config {
     pub runner: String,
     pub generator: String,
     pub check_config: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "scope_present"
+    )]
+    pub scope: Option<Scope>,
     pub context_path: String,
     pub preparation_path: String,
     pub artifact_directory: String,
+}
+
+fn scope_present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Scope>, D::Error> {
+    Scope::deserialize(d).map(Some)
 }
 
 fn literal(value: &str) -> Result<(), String> {
@@ -36,6 +50,13 @@ fn literal(value: &str) -> Result<(), String> {
         return Err("full CI settings must be literal single-line values".into());
     }
     Ok(())
+}
+
+fn overlap(a: &str, b: &str) -> bool {
+    // Match the filesystem components consumed by no_symlink_parents/write_file
+    // without changing any declared path bytes used in the source or argv.
+    let (a, b) = (Path::new(a), Path::new(b));
+    a.starts_with(b) || b.starts_with(a)
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
@@ -68,18 +89,25 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             return Err("full CI paths must have distinct ownership".into());
         }
     }
-    if !c.workflow_path.starts_with(".github/workflows/")
+    relative_path(c.artifact_directory.trim_end_matches('/'))?;
+    let policy = Path::new(".chrono-harness");
+    let state = policy.join("state");
+    let artifact = Path::new(&c.artifact_directory);
+    let check = Path::new(&c.check_config);
+    if !Path::new(&c.workflow_path).starts_with(".github/workflows")
         || !c.workflow_path.ends_with(".yml")
-        || !c.check_config.starts_with(".chrono-harness/")
-        || c.check_config.starts_with(".chrono-harness/state/")
-        || !c.artifact_directory.starts_with(".chrono-harness/state/")
+        || !check.starts_with(policy)
+        || check == policy
+        || check.starts_with(&state)
+        || !artifact.starts_with(&state)
         || !c.artifact_directory.ends_with('/')
         || c.artifact_directory.contains(['*', '?', '[', ']', '!'])
-        || !c.context_path.starts_with(&c.artifact_directory)
-        || !c.preparation_path.starts_with(&c.artifact_directory)
+        || [&c.context_path, &c.preparation_path]
+            .iter()
+            .any(|p| !Path::new(p).starts_with(artifact) || Path::new(p) == artifact)
         || [&c.workflow_path, &c.runner, &c.generator, &c.check_config]
             .iter()
-            .any(|p| p.starts_with(&c.artifact_directory))
+            .any(|p| Path::new(p).starts_with(artifact))
     {
         return Err("invalid full CI policy/artifact ownership".into());
     }
@@ -92,7 +120,25 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             return Err("full CI context/report overlaps preparation process output".into());
         }
     }
-    relative_path(c.artifact_directory.trim_end_matches('/'))?;
+    match &c.scope {
+        Some(Scope::Unit { unit }) => units::id(unit)?,
+        Some(Scope::Collect { manifest }) => {
+            units::artifact_path(manifest)?;
+            literal(manifest)?;
+            if artifact.starts_with(manifest)
+                || files.iter().any(|p| overlap(manifest, p))
+                || ["prepare.stdout.json", "prepare.stderr"]
+                    .iter()
+                    .any(|name| {
+                        let output = format!("{}{name}", c.artifact_directory);
+                        overlap(manifest, &output)
+                    })
+            {
+                return Err("full CI collection manifest overlaps owned input/output paths".into());
+            }
+        }
+        None => {}
+    }
     action(&c.checkout_action, "actions/checkout")?;
     action(&c.upload_artifact_action, "actions/upload-artifact")?;
     Ok(())
@@ -101,8 +147,11 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
 fn source_path(c: &Config, path: &str) -> Result<(), String> {
     relative_path(path)?;
     literal(path)?;
-    if !path.starts_with(".chrono-harness/")
-        || path.starts_with(".chrono-harness/state/")
+    let source = Path::new(path);
+    let policy = Path::new(".chrono-harness");
+    if !source.starts_with(policy)
+        || source == policy
+        || source.starts_with(policy.join("state"))
         || [
             &c.workflow_path,
             &c.runner,
@@ -121,10 +170,17 @@ fn source_path(c: &Config, path: &str) -> Result<(), String> {
 
 pub fn argv(c: &Config, base: &str, candidate: &str) -> Vec<String> {
     if c.schema == SHORT_SCHEMA {
-        return vec![c.runner.clone(), "check".into()];
+        let mut args = vec![c.runner.clone(), "check".into()];
+        if let Some(scope) = &c.scope {
+            args.extend(scope.short_argv());
+        }
+        return args;
     }
     let mut args = canonical_argv(&c.runner, &c.check_config, Some(base), candidate, false);
     args.extend(["--context".into(), c.context_path.clone()]);
+    if let Some(scope) = &c.scope {
+        args.extend(scope.argv());
+    }
     args
 }
 
@@ -149,8 +205,13 @@ pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
         shell(&c.generator),
         shell(config_path)
     );
+    let marker = if c.scope.is_some() {
+        format!("{MARKER}{SOURCE_MARKER}{}\n", scalar(config_path))
+    } else {
+        MARKER.into()
+    };
     let rendered = format!(
-        r#"{MARKER}name: {name}
+        r#"{marker}name: {name}
 on:
   workflow_dispatch:
     inputs:
@@ -223,8 +284,12 @@ jobs:
             .find("      - name: Preserve original full check evidence")
             .ok_or("full artifact section")?;
         let check = format!(
-            "      - name: Canonical full harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n        run: |\n          {} 'check'\n",
-            shell(&c.runner)
+            "      - name: Canonical full harness check\n        shell: bash\n        env:\n          CHRONO_CHECK_SOURCE: ci\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n        run: |\n          {}\n",
+            argv(c, "", "")
+                .iter()
+                .map(|arg| shell(arg))
+                .collect::<Vec<_>>()
+                .join(" ")
         );
         Ok(format!(
             "{}{}{}",
@@ -237,9 +302,62 @@ jobs:
     }
 }
 
+fn scope_preflight(root: &Path, c: &Config) -> Result<(), String> {
+    if let Some(Scope::Collect { manifest }) = &c.scope {
+        // Evidence provisioning and admission remain caller/bootstrap and full-core work.
+        no_symlink_parents(root, manifest)?;
+    }
+    Ok(())
+}
+
+fn projection_preflight(root: &Path, path: &str, c: &Config, output: &str) -> Result<bool, String> {
+    let same = output_preflight(root, &c.workflow_path, output, MARKER)?;
+    if same {
+        return Ok(true);
+    }
+    match fs::read(no_symlink_parents(root, &c.workflow_path)?) {
+        Ok(bytes) => {
+            let text = std::str::from_utf8(&bytes).map_err(|_| "owned output is not UTF-8")?;
+            let body = text
+                .strip_prefix(MARKER)
+                .ok_or("full CI ownership marker required")?;
+            let owned = if body.starts_with(SOURCE_MARKER) {
+                body.starts_with(&format!("{SOURCE_MARKER}{}\n", scalar(path)))
+            } else if c.scope.is_some() {
+                // A legacy projection can adopt a scope only from its original explicit source.
+                let binding = format!(
+                    " 'prepare' '--host-root' '.' '--config' {} '--event' ",
+                    shell(path)
+                );
+                text.split_once("      - name: Preserve fixed full context\n")
+                    .and_then(|(_, step)| {
+                        step.split_once("      - name: Canonical full harness check\n")
+                    })
+                    .is_some_and(|(step, _)| {
+                        step.lines()
+                            .any(|line| line.starts_with("          ") && line.contains(&binding))
+                    })
+            } else {
+                // Preserve the unscoped v1 regeneration contract.
+                true
+            };
+            if !owned {
+                return Err(format!(
+                    "full CI workflow source ownership collision: {}",
+                    c.workflow_path
+                ));
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    Ok(false)
+}
+
 pub(crate) fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
     let output = render(c, path)?;
-    let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
+    scope_preflight(root, c)?;
+    let same = projection_preflight(root, path, c, &output)?;
     if verify && !same {
         return Err(format!(
             "generated full CI workflow drift: {}",
@@ -261,7 +379,8 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
         incoming
     };
     let rendered = render(&c, ADOPTED)?;
-    let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
+    scope_preflight(root, &c)?;
+    let same = projection_preflight(root, ADOPTED, &c, &rendered)?;
     if !existing {
         write_file(
             root,
@@ -285,6 +404,71 @@ fn matching_output(root: &Path, path: &str, bytes: &[u8], replace: bool) -> Resu
     }
 }
 
+/// The dispatch and automatic units consumers share exact full context parsing.
+pub(crate) fn context_input(bytes: &[u8]) -> Result<Value, String> {
+    let ctx: Value = decode(bytes)?;
+    if ctx["schema_version"] != 2
+        || !matches!(ctx["run_kind"].as_str(), Some("integration" | "delivery"))
+    {
+        return Err("full CI requires explicit context v2 and integration/delivery role".into());
+    }
+    for key in ["base", "candidate"] {
+        if !ctx[key].as_str().is_some_and(full_oid) {
+            return Err(format!("full context {key} OID required"));
+        }
+    }
+    Ok(ctx)
+}
+pub(crate) fn executable_pins(root: &Path, config: &str, runner: &str) -> Result<Value, String> {
+    let cfg = chrono_harness::load_selected_config(root, config)?;
+    let path = cfg["registries"]["judges"]
+        .as_str()
+        .ok_or("full judges registry")?;
+    let bindings: Vec<chrono_harness::wire::Binding> = decode::<Value>(
+        &fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?,
+    )?["judges"]
+        .clone()
+        .as_array()
+        .ok_or("full judges")?
+        .iter()
+        .map(|b| serde_json::from_value(b.clone()).map_err(|e| e.to_string()))
+        .collect::<Result<_, _>>()?;
+    chrono_harness::full::schedule(&bindings)?;
+    let ids: std::collections::BTreeSet<_> = bindings.iter().map(|b| b.id.as_str()).collect();
+    if ids
+        != [
+            "registration",
+            "filemap",
+            "routes",
+            "projects",
+            "cost",
+            "mixed",
+            "workflow",
+        ]
+        .into_iter()
+        .collect()
+    {
+        return Err("full provider requires all seven judge bindings".into());
+    }
+    for binding in &bindings {
+        if binding.sha256.as_deref()
+            != Some(
+                file_identity(&no_symlink_parents(root, &binding.executable)?)?
+                    .0
+                    .as_str(),
+            )
+        {
+            return Err("full judge executable binding mismatch".into());
+        }
+    }
+    let pins: Vec<_> = bindings
+        .iter()
+        .map(|b| json!({"id":b.id,"sha256":b.sha256}))
+        .collect();
+    Ok(
+        json!({"runner_sha256":file_identity(&no_symlink_parents(root,runner)?)?.0,"judge_sha256":chrono_harness::wire::digest(&pins)?,"judges":pins}),
+    )
+}
 /// Preserve caller context bytes separately from transport observations. Does not judge its policy.
 pub fn prepare(
     root: &Path,
@@ -295,7 +479,8 @@ pub fn prepare(
 ) -> Result<Value, String> {
     validate(c)?;
     source_path(c, path)?;
-    let ctx: Value = decode(context)?;
+    scope_preflight(root, c)?;
+    let ctx = context_input(context)?;
     if ctx["schema_version"] != 2
         || !matches!(ctx["run_kind"].as_str(), Some("integration" | "delivery"))
     {

@@ -147,7 +147,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     let mut tampered = receipt.clone();
     tampered.process.stdout_bytes.push(1);
     assert!(compare(&plan, op, Some(&tampered)).is_err());
-    for mode in 0..6 {
+    for mode in 0..8 {
         let mut process = receipt.process.clone();
         match mode {
             0 => process.argv.push("different".into()),
@@ -158,7 +158,17 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
             }
             3 => process.sha256 = "0".repeat(64),
             4 => process.stdin_sha256 = sha256(b"different input"),
-            _ => process.stdout_sha256 = "0".repeat(64),
+            5 => process.stdout_sha256 = "0".repeat(64),
+            6 => {
+                process.stdout_bytes = vec![b'x'; op.output_limit_bytes + 1];
+                process.stdout = String::from_utf8(process.stdout_bytes.clone()).unwrap();
+                process.stdout_sha256 = sha256(&process.stdout_bytes);
+            }
+            _ => {
+                process.stderr_bytes = vec![b'x'; op.output_limit_bytes + 1];
+                process.stderr = String::from_utf8(process.stderr_bytes.clone()).unwrap();
+                process.stderr_sha256 = sha256(&process.stderr_bytes);
+            }
         }
         let sealed = Receipt::new(&plan, op, process).unwrap();
         assert!(

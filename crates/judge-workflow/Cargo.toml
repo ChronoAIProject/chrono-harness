@@ -23,5 +23,11 @@ chrono-judge-projects = { path = "../judge-projects" }
 serde_json = "1"
 time = { version = "0.3", features = ["parsing"] }
 
+# Original-evidence replay also builds runner/projects through this root profile.
+[profile.dev]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
 [profile.dev.package.sha2]
 opt-level = 3

@@ -173,6 +173,10 @@ pub fn config(v: &Value) -> Result {
     if matches!(v["schema_version"].as_u64(), Some(3 | 4)) {
         fields.push("facts_git");
         chrono_harness::facts::git_declaration(v)?;
+        if let Some(units) = v.get("execution_units") {
+            fields.push("execution_units");
+            validate_execution_units(units)?;
+        }
     }
     common_versions(v, &fields, &[1, 2, 3, 4])?;
     choice(&v["enforcement"], &["enabled", "not-implemented"])?;
@@ -326,6 +330,98 @@ pub fn config(v: &Value) -> Result {
     }
     if let Some(coverage) = v["input_closure"].get("coverage") {
         crate::input_coverage::shape(coverage, &v["input_closure"])?;
+    }
+    Ok(())
+}
+
+fn validate_execution_units(v: &Value) -> Result {
+    chrono_harness::units::report_paths(&serde_json::json!({"execution_units":v}), None)?;
+    let fields = object(
+        v,
+        &[
+            "units",
+            "shared_operations",
+            "collection_limits",
+            "report_path",
+        ],
+        &[],
+    )?;
+    path(&fields["report_path"])?;
+    if !fields["report_path"]
+        .as_str()
+        .is_some_and(|p| p.starts_with(".chrono-harness/state/"))
+    {
+        return Err("execution_units.report_path must reside in .chrono-harness/state/".into());
+    }
+    if fields["report_path"] == ".chrono-harness/state/report.json" {
+        return Err("execution_units.report_path collides with canonical full report".into());
+    }
+    let units = fields["units"].as_object().ok_or("execution_units.units")?;
+    if units.is_empty() {
+        return Err("execution_units.units must be nonempty".into());
+    }
+    for (id, unit) in units {
+        if id.is_empty()
+            || !id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+        {
+            return Err(format!("invalid execution unit ID {id}"));
+        }
+        object(unit, &["tests", "report_path"], &[])?;
+        nonempty_strings(&unit["tests"])?;
+        path(&unit["report_path"])?;
+        if !unit["report_path"]
+            .as_str()
+            .is_some_and(|p| p.starts_with(".chrono-harness/state/"))
+        {
+            return Err("execution unit report must reside in .chrono-harness/state/".into());
+        }
+        if unit["report_path"] == fields["report_path"] {
+            return Err(format!(
+                "execution unit report collides with full report: {id}"
+            ));
+        }
+        for (other_id, other) in units {
+            if id != other_id
+                && (unit["report_path"] == other["report_path"]
+                    || unit["report_path"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with(&format!("{}/", other["report_path"].as_str().unwrap()))
+                    || other["report_path"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with(&format!("{}/", unit["report_path"].as_str().unwrap())))
+            {
+                return Err("execution unit report paths overlap".into());
+            }
+        }
+    }
+    let limits = object(
+        &fields["collection_limits"],
+        &["manifest_bytes", "report_bytes"],
+        &[],
+    )?;
+    for key in ["manifest_bytes", "report_bytes"] {
+        if !limits[key]
+            .as_u64()
+            .is_some_and(|n| n > 0 && n <= 64 * 1024 * 1024)
+        {
+            return Err(format!("invalid execution unit limit {key}"));
+        }
+    }
+    let shared = fields["shared_operations"]
+        .as_object()
+        .ok_or("execution_units.shared_operations")?;
+    for (operation, owners) in shared {
+        if operation.is_empty() {
+            return Err("empty shared operation".into());
+        }
+        let owners = owners.as_array().ok_or("shared operation owners")?;
+        if owners.len() < 2 || owners.iter().any(|v| v.as_str().is_none()) {
+            return Err(format!("invalid shared operation assignment {operation}"));
+        }
     }
     Ok(())
 }

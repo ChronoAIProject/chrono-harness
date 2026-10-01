@@ -6,7 +6,8 @@ mod registrations;
 mod transition;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_with_reader, replacements,
-    retirement_requests, reused_tools, views, views_with_reader,
+    retirement_requests, reused_tools, validate_retained_view, views, views_for_collection_inputs,
+    views_with_reader,
 };
 pub mod initial;
 mod schema;
@@ -372,6 +373,38 @@ fn readiness(
     n: &Registrations,
     r: &mut Response,
 ) -> Result<()> {
+    chrono_harness::units::report_paths(
+        n.config(),
+        n.workflow()["integration"]["evidence"].as_str(),
+    )?;
+    if let Some(block) = chrono_harness::units::full_execution_units(n.config())? {
+        let units: BTreeMap<String, chrono_harness::units::Unit> =
+            serde_json::from_value(block["units"].clone()).map_err(|e| e.to_string())?;
+        let plans = execution::plans(n.filemap())?;
+        let shared = serde_json::from_value(block["shared_operations"].clone())
+            .map_err(|e| e.to_string())?;
+        let mut operation_sets: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (unit, definition) in &units {
+            for test in &definition.tests {
+                let plan = plans
+                    .get(test)
+                    .ok_or_else(|| format!("E_UNIT_ASSIGNMENT: unknown plan {test}"))?;
+                for operation in &plan.operations {
+                    operation_sets
+                        .entry(operation.clone())
+                        .or_default()
+                        .insert(unit.clone());
+                }
+            }
+        }
+        chrono_harness::units::assignments(
+            &units,
+            &plans.keys().cloned().collect(),
+            &shared,
+            &operation_sets,
+        )
+        .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
+    }
     for (name, v) in [
         ("config", &n.config),
         ("judges", &n.judges),
@@ -463,7 +496,10 @@ fn readiness(
             true,
         ),
     }
-    validate_input_closure_bindings(n, r);
+    for finding in input_closure_findings(n) {
+        r.status = r.status.clone().max(Status::Fail);
+        r.findings.push(finding);
+    }
     input_coverage::validate(n, r);
     Ok(())
 }
@@ -471,12 +507,22 @@ fn readiness(
 /// Validate only the explicit closure whitelist. The registration owns the
 /// node inventory, but it never discovers additional dependencies from the
 /// filesystem, commands, language or directory layout.
-fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
+pub(crate) fn input_closure_findings(n: &Registrations) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let mut issue = |code: &str, message: String, reference: String| {
+        findings.push(Finding {
+            code: code.into(),
+            level: "error".into(),
+            message,
+            delta_refs: vec![reference],
+            causes: vec![],
+        });
+    };
     let Some(bindings) = n.config["input_closure"]
         .get("bindings")
         .and_then(Value::as_array)
     else {
-        return;
+        return findings;
     };
     let nodes = n.node_data();
     // Input closure is a whitelist over the same explicit graph consumed by
@@ -503,18 +549,14 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
         match nodes.get(consumer).map(|view| view.kind) {
             Some(NodeKind::Project | NodeKind::Script | NodeKind::Test | NodeKind::Judge) => {}
             Some(_) => issue(
-                r,
                 "E_REFERENCE",
                 format!("input closure consumer is not an executable node: {consumer}"),
                 consumer_reference,
-                false,
             ),
             None => issue(
-                r,
                 "E_REFERENCE",
                 format!("unknown input closure consumer {consumer}"),
                 consumer_reference,
-                false,
             ),
         }
         for (input_index, input) in binding["inputs"]
@@ -530,29 +572,23 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
             match nodes.get(input).map(|view| view.kind) {
                 Some(NodeKind::Tool | NodeKind::Input | NodeKind::Environment) => {}
                 Some(_) => issue(
-                    r,
                     "E_REFERENCE",
                     format!("input closure reference is not an external input node: {input}"),
                     reference.clone(),
-                    false,
                 ),
                 None => issue(
-                    r,
                     "E_REFERENCE",
                     format!("unknown input closure reference {input}"),
                     reference.clone(),
-                    false,
                 ),
             }
             if !project_edges.contains(&(input.to_owned(), consumer.to_owned())) {
                 issue(
-                    r,
                     "E_REFERENCE",
                     format!(
                         "input closure binding lacks explicit project edge {input} -> {consumer}"
                     ),
                     reference,
-                    false,
                 );
             }
         }
@@ -569,16 +605,16 @@ fn validate_input_closure_bindings(n: &Registrations, r: &mut Response) {
             }
             if !bound_inputs.contains(identity) {
                 issue(
-                    r,
                     "E_INPUT_UNDECLARED",
                     format!("declared-complete input closure omits external input node {identity}"),
-                    "/config/input_closure/bindings",
-                    false,
+                    "/config/input_closure/bindings".into(),
                 );
             }
         }
     }
+    findings
 }
+
 fn references(
     reader: &facts::Reader,
     root: &Path,

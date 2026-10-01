@@ -559,6 +559,78 @@ fn execution_plan_order_is_semantic_and_selects_only_explicit_edges() {
 }
 
 #[test]
+fn full_assignment_changes_select_explicit_old_and_new_complete_plans() {
+    let mut a = values();
+    a.get_mut(CONFIG).unwrap()["schema_version"] = json!(3);
+    a.get_mut(CONFIG).unwrap()["facts_git"] = json!({"tool":"sh","input":"data"});
+    a.get_mut(CONFIG).unwrap()["environment"]["inputs"] =
+        json!([{"id":"data","location":"data","presence":"present","sha256":"a".repeat(64)}]);
+    a.get_mut(CONFIG).unwrap()["input_closure"]["bindings"] = json!([]);
+    a.get_mut(CONFIG).unwrap()["execution_units"] = json!({"units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/one.json"},"two":{"tests":["test:t2"],"report_path":".chrono-harness/state/two.json"}},"shared_operations":{},"collection_limits":{"manifest_bytes":1024,"report_bytes":67108864},"report_path":".chrono-harness/state/collected.json"});
+    a.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["build"] =
+        json!({"operation":"prepare.p","tool":"sh","argv":["-c","exit 0"]});
+    let mut p2 = project("p2", "production", "t2");
+    p2["actions"]["build"] = json!({"operation":"prepare.p2","tool":"sh","argv":["-c","exit 0"]});
+    a.get_mut(PROJECTS).unwrap()["projects"]
+        .as_array_mut()
+        .unwrap()
+        .extend([p2, project("t2", "test", "p2")]);
+    a.get_mut(PROJECTS).unwrap()["owners"]
+        .as_array_mut()
+        .unwrap()
+        .extend([json!("p2"), json!("t2")]);
+    a.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    a.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["prepare.p","execute.t"],"timeout_seconds":30,"output_limit_bytes":4096},"test:t2":{"operations":["prepare.p2","execute.t2"],"timeout_seconds":30,"output_limit_bytes":4096}});
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(edge("project:p2", "test-execution", "test:t2"));
+    a.get_mut(FM).unwrap()["test_costs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"test":"t2","cost":"unknown"}));
+    let mut b = a.clone();
+    b.get_mut(CONFIG).unwrap()["execution_units"]["units"]["one"]["tests"] = json!(["test:t2"]);
+    b.get_mut(CONFIG).unwrap()["execution_units"]["units"]["two"]["tests"] = json!(["test:t"]);
+    let (impact, findings) = run(&a, &b, &[]);
+    assert!(findings.is_empty(), "{findings:?}");
+    assert_eq!(tests(&impact), ["test:t", "test:t2"]);
+}
+
+#[test]
+fn declared_judge_inputs_remain_valid_when_migration_selects_them() {
+    let mut a = values();
+    a.get_mut(CONFIG).unwrap()["environment"]["inputs"] =
+        json!([{"id":"data","location":"data","sha256":"a".repeat(64)}]);
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("tool:sh", "runtime-input", "judge:registration"),
+            edge("environment:PATH", "runtime-input", "judge:registration"),
+            edge("input:data", "judge-trigger", "judge:registration"),
+        ]);
+    for mode in 0..3 {
+        let mut b = a.clone();
+        match mode {
+            0 => b.get_mut(CONFIG).unwrap()["tools"][0]["expected_version"] = json!("new"),
+            1 => b.get_mut(CONFIG).unwrap()["environment"]["values"]["PATH"] = json!("different"),
+            _ => {
+                b.get_mut(CONFIG).unwrap()["environment"]["inputs"][0]["sha256"] =
+                    json!("b".repeat(64))
+            }
+        }
+        let (impact, findings) = run(&a, &b, &[]);
+        assert!(findings.is_empty(), "{findings:?}");
+        assert!(impact.judges.iter().any(|j| j.node == "judge:registration"));
+        assert!(
+            tests(&impact).is_empty(),
+            "judge inputs must not infer business test edges"
+        );
+    }
+}
+
+#[test]
 fn tool_environment_and_retained_input_records_use_only_explicit_consumers() {
     let mut a = values();
     a.get_mut(FM).unwrap()["project_edges"]

@@ -106,7 +106,10 @@ enum Projection {
 fn load_projection(path: &Path) -> Result<Projection, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let value: Value = decode(&bytes)?;
-    if value["schema"] == units::SCHEMA {
+    if matches!(
+        value["schema"].as_str(),
+        Some(units::SCHEMA | units::FULL_SCHEMA)
+    ) {
         let c = decode(&bytes)?;
         units::validate(&c)?;
         Ok(Projection::Units(c))
@@ -128,6 +131,9 @@ fn load_projection(path: &Path) -> Result<Projection, String> {
     }
 }
 fn validate(c: &Config) -> Result<(), String> {
+    validate_policy(c, false)
+}
+fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     if !matches!(
         (c.schema.as_str(), &c.initial_inventory, &c.facts_config),
         ("chrono-github-ci/v1", None, None)
@@ -149,9 +155,14 @@ fn validate(c: &Config) -> Result<(), String> {
     if !c.workflow_path.starts_with(".github/workflows/") || !c.workflow_path.ends_with(".yml") {
         return Err("workflow must be .github/workflows/*.yml".into());
     }
-    if !c.check_config.starts_with(".chrono-harness/ci/")
-        || !c.context_path.starts_with(".chrono-harness/")
-    {
+    let valid_policy = if full_policy {
+        c.schema == "chrono-github-ci/v4"
+            && c.check_config.starts_with(".chrono-harness/")
+            && !c.check_config.starts_with(".chrono-harness/state/")
+    } else {
+        c.check_config.starts_with(".chrono-harness/ci/")
+    };
+    if !valid_policy || !c.context_path.starts_with(".chrono-harness/") {
         return Err("CI host configuration/context ownership invalid".into());
     }
     if !c.artifact_directory.ends_with('/') {
@@ -268,7 +279,7 @@ fn check_profile(c: &Config, initial: bool) -> &str {
     &c.check_config
 }
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
-    render_extended(c, config_path, None, "", "", "chrono-check", false)
+    render_extended(c, config_path, None, "", "", "chrono-check", false, false)
 }
 fn render_extended(
     c: &Config,
@@ -278,8 +289,9 @@ fn render_extended(
     pre_check: &str,
     artifact_prefix: &str,
     read_actions: bool,
+    full_policy: bool,
 ) -> Result<String, String> {
-    validate(c)?;
+    validate_policy(c, full_policy)?;
     relative_path(config_path)?;
     if c.initial_inventory
         .as_ref()
@@ -576,7 +588,17 @@ pub fn prepare(
     payload: &Value,
     workflow_revision: &str,
 ) -> Result<Value, String> {
-    validate(c)?;
+    prepare_policy(root, c, event, payload, workflow_revision, false)
+}
+fn prepare_policy(
+    root: &Path,
+    c: &Config,
+    event: &str,
+    payload: &Value,
+    workflow_revision: &str,
+    full_policy: bool,
+) -> Result<Value, String> {
+    validate_policy(c, full_policy)?;
     if !full_oid(workflow_revision) {
         return Err("workflow source revision must be full OID".into());
     }

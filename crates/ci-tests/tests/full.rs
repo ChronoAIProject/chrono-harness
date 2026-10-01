@@ -1,4 +1,6 @@
 //! Full transport shares the real bound-Git fixture with event acquisition tests.
+#[path = "full_scope.rs"]
+mod scope_tests;
 use super::*;
 use chrono_ci::full::{self, Config as FullConfig};
 
@@ -37,6 +39,9 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 fn prepare_cli(h: &Host, bytes: &[u8], event: &str) -> std::process::Output {
+    prepare_cli_from(h, SOURCE, bytes, event)
+}
+fn prepare_cli_from(h: &Host, source: &str, bytes: &[u8], event: &str) -> std::process::Output {
     let payload = h.root.join(".chrono-harness/state/payload.json");
     write(
         &h.root,
@@ -52,7 +57,7 @@ fn prepare_cli(h: &Host, bytes: &[u8], event: &str) -> std::process::Output {
             "--host-root",
             h.root.file_name().unwrap().to_str().unwrap(),
             "--config",
-            SOURCE,
+            source,
             "--event",
             event,
             "--payload",
@@ -446,5 +451,288 @@ fn context_report_and_symlink_collisions_preserve_original_bytes() {
         fs::remove_file(&path).unwrap();
         std::os::unix::fs::symlink(&h.program, &path).unwrap();
         assert!(prepare(&h, &context(&h, &h.candidate)).is_err());
+    }
+}
+
+#[test]
+fn committed_cli_rejects_component_output_collisions_before_publication() {
+    for (field, path, expected) in [
+        (
+            "preparation_path",
+            ".chrono-harness/state/full//context.json",
+            "distinct ownership",
+        ),
+        (
+            "preparation_path",
+            ".chrono-harness/state/full/./context.json/child",
+            "distinct ownership",
+        ),
+        (
+            "preparation_path",
+            ".chrono-harness/state/full/context.json/",
+            "distinct ownership",
+        ),
+        (
+            "preparation_path",
+            ".chrono-harness/state/full//prepare.stdout.json",
+            "preparation process output",
+        ),
+        (
+            "preparation_path",
+            ".chrono-harness/state/full/./prepare.stderr",
+            "preparation process output",
+        ),
+        (
+            "context_path",
+            ".chrono-harness/state/full/./prepare.stdout.json",
+            "preparation process output",
+        ),
+        (
+            "context_path",
+            ".chrono-harness/state/full//prepare.stderr/child",
+            "preparation process output",
+        ),
+    ] {
+        let mut h = host("");
+        let original_workflow = fs::read(h.root.join(config().workflow_path)).unwrap();
+        let mut source = read(&h.root, SOURCE);
+        source[field] = json!(path);
+        write(&h.root, SOURCE, &source);
+        // Preparation paths are absent from the projection: the A1 fixture retains
+        // its real generated workflow and commits the formerly accepted source.
+        h.revise();
+        let c: FullConfig = serde_json::from_value(source).unwrap();
+        let source_bytes = fs::read(h.root.join(SOURCE)).unwrap();
+        let unrelated = h.root.join(".chrono-harness/state/full/keep.log");
+        fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
+        fs::write(&unrelated, b"unrelated retained evidence").unwrap();
+        let bytes = context(&h, &h.candidate);
+        let out = prepare_cli(&h, &bytes, "workflow_dispatch");
+        let published = fs::read(h.root.join(&c.context_path)).ok();
+        let report = serde_json::from_slice::<Value>(&out.stdout).ok();
+        assert!(
+            !out.status.success(),
+            "{field}={path}: CLI exit={:?}; reported_status={:?}; context_preserved={}; context_replaced_by_report={}",
+            out.status.code(),
+            report.as_ref().map(|r| &r["status"]),
+            published.as_deref() == Some(bytes.as_slice()),
+            published
+                .as_ref()
+                .and_then(|b| serde_json::from_slice::<Value>(b).ok())
+                .is_some_and(|v| v["schema"] == "chrono-full-ci-inputs/v1")
+        );
+        assert_eq!(out.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&out.stderr).contains(expected));
+        assert!(out.stdout.is_empty());
+        assert!(!h.root.join(&c.context_path).exists());
+        assert!(!h.root.join(&c.preparation_path).exists());
+        assert!(
+            fs::read(h.root.join(".chrono-harness/state/github-output"))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(fs::read(unrelated).unwrap(), b"unrelated retained evidence");
+        assert_eq!(fs::read(h.root.join(SOURCE)).unwrap(), source_bytes);
+        assert_eq!(
+            fs::read(h.root.join(&c.workflow_path)).unwrap(),
+            original_workflow
+        );
+        assert!(h.trace().is_empty());
+    }
+}
+
+#[test]
+fn current_source_cli_rejects_component_ownership_before_publication() {
+    for (source_path, field, value, expected) in [
+        (
+            SOURCE,
+            "runner",
+            ".chrono-harness/ci//github.json",
+            "separate host policy input",
+        ),
+        (
+            SOURCE,
+            "runner",
+            ".chrono-harness/ci/./github.json/child",
+            "separate host policy input",
+        ),
+        (
+            SOURCE,
+            "runner",
+            ".chrono-harness//ci",
+            "separate host policy input",
+        ),
+        (
+            ".chrono-harness//state/provider.json",
+            "name",
+            "current source",
+            "separate host policy input",
+        ),
+        (
+            ".chrono-harness/./state/provider.json",
+            "name",
+            "current source",
+            "separate host policy input",
+        ),
+        (
+            SOURCE,
+            "generator",
+            ".chrono-harness/bin//chrono-harness",
+            "distinct ownership",
+        ),
+        (
+            SOURCE,
+            "generator",
+            ".chrono-harness/bin/./chrono-harness/child",
+            "distinct ownership",
+        ),
+        (
+            SOURCE,
+            "check_config",
+            ".chrono-harness/./state/policy.json",
+            "policy/artifact ownership",
+        ),
+        (
+            SOURCE,
+            "check_config",
+            ".chrono-harness/state",
+            "distinct ownership",
+        ),
+        (
+            SOURCE,
+            "runner",
+            ".chrono-harness/state/./full/tool",
+            "policy/artifact ownership",
+        ),
+        (
+            SOURCE,
+            "context_path",
+            ".chrono-harness/state/fullish/context.json",
+            "policy/artifact ownership",
+        ),
+        (
+            SOURCE,
+            "context_path",
+            ".chrono-harness/state/full",
+            "distinct ownership",
+        ),
+    ] {
+        let h = host("");
+        let mut source = read(&h.root, SOURCE);
+        source[field] = json!(value);
+        write(&h.root, source_path, &source);
+        let source_bytes = fs::read(h.root.join(source_path)).unwrap();
+        let workflow_bytes = fs::read(h.root.join(config().workflow_path)).unwrap();
+        let out = prepare_cli_from(
+            &h,
+            source_path,
+            &context(&h, &h.candidate),
+            "workflow_dispatch",
+        );
+        assert_eq!(out.status.code(), Some(1), "{source_path}: {field}={value}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains(expected),
+            "{source_path}: {field}={value}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(out.stdout.is_empty());
+        let c: FullConfig = serde_json::from_value(source).unwrap();
+        assert!(!h.root.join(&c.context_path).exists());
+        assert!(!h.root.join(&c.preparation_path).exists());
+        assert!(
+            fs::read(h.root.join(".chrono-harness/state/github-output"))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(fs::read(h.root.join(source_path)).unwrap(), source_bytes);
+        assert_eq!(
+            fs::read(h.root.join(&c.workflow_path)).unwrap(),
+            workflow_bytes
+        );
+        assert!(h.trace().is_empty());
+        let generated = cli(
+            &h.root,
+            &["generate", "--host-root", ".", "--config", source_path],
+        );
+        assert_eq!(generated.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&generated.stderr).contains(expected));
+        assert_eq!(
+            fs::read(h.root.join(&c.workflow_path)).unwrap(),
+            workflow_bytes
+        );
+    }
+}
+
+#[test]
+fn committed_cli_preserves_separate_component_spellings_and_customization() {
+    for scope in [
+        None,
+        Some(json!({"kind":"unit","unit":"compiler.arm64-1"})),
+        Some(
+            json!({"kind":"collect","manifest":".chrono-harness/state/full/./context.json.distinct"}),
+        ),
+    ] {
+        let mut h = host("");
+        let mut c = config();
+        c.scope = scope.map(|value| serde_json::from_value(value).unwrap());
+        c.name = "host custom λ".into();
+        c.runs_on = "macos-14".into();
+        c.bootstrap.push("host custom argument".into());
+        c.artifact_directory = ".chrono-harness/state/./full//".into();
+        c.context_path = ".chrono-harness/state/full/./context.json".into();
+        c.preparation_path = ".chrono-harness/state/full//preparation.json".into();
+        let source_bytes = [
+            b" \n".as_slice(),
+            &serde_json::to_vec_pretty(&c).unwrap(),
+            b"\n\t",
+        ]
+        .concat();
+        fs::write(h.root.join(SOURCE), &source_bytes).unwrap();
+        generate(&h.root, SOURCE, false).unwrap();
+        h.revise();
+        let unrelated = h.root.join(".github/workflows/unrelated.yml");
+        fs::write(&unrelated, b"host-owned independent workflow").unwrap();
+        let manifest = match &c.scope {
+            Some(chrono_harness::units::Scope::Collect { manifest }) => Some(manifest),
+            _ => None,
+        };
+        if let Some(manifest) = manifest {
+            fs::create_dir_all(h.root.join(manifest).parent().unwrap()).unwrap();
+            fs::write(h.root.join(manifest), b"caller-owned collection input").unwrap();
+        }
+        let bytes = context(&h, &h.candidate);
+        let out = prepare_cli(&h, &bytes, "workflow_dispatch");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(report["status"], "prepared");
+        assert_eq!(
+            report["canonical_argv"],
+            json!(full::argv(&c, &h.candidate, &h.candidate))
+        );
+        assert_eq!(report["context"]["path"], c.context_path);
+        assert_eq!(report["context"]["input_bytes"], json!(bytes));
+        assert_eq!(report["config_sha256"], sha256(&source_bytes));
+        assert_eq!(fs::read(h.root.join(&c.context_path)).unwrap(), bytes);
+        assert_eq!(report, read(&h.root, &c.preparation_path));
+        assert_eq!(fs::read(h.root.join(SOURCE)).unwrap(), source_bytes);
+        assert_eq!(
+            fs::read(unrelated).unwrap(),
+            b"host-owned independent workflow"
+        );
+        if let Some(manifest) = manifest {
+            assert_eq!(
+                fs::read(h.root.join(manifest)).unwrap(),
+                b"caller-owned collection input"
+            );
+        }
+        assert!(!generate(&h.root, SOURCE, true).unwrap());
+        assert_eq!(
+            fs::read_to_string(h.root.join(&c.workflow_path)).unwrap(),
+            full::render(&c, SOURCE).unwrap()
+        );
     }
 }

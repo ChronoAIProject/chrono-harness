@@ -5,7 +5,7 @@
 **已实现指令生成、独立 CI 生成器、本地/CI 共用 check 入口，以及 chrono-judge/v1 运输和 registration、filemap、routes、projects、cost、mixed、workflow 的有界合同。五份完整治理登记仍 proposed；现役 CI 继续使用明确版本化的 slice。**
 完整中文合同、数据结构、协议与验收条件见 [SPEC.md](SPEC.md)。
 
-[公开测试版 v0.1.0-beta.16](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.16) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
+[公开测试版 v0.1.0-beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 提供 macOS arm64 / Linux x86_64 的原生二进制；宿主无需 Rust，按[发布与安装合同](docs/distribution.md)锁定采用。
 
 公开的独立示例宿主：
 
@@ -103,7 +103,7 @@ cargo test --locked --manifest-path crates/runner-tests/Cargo.toml
 .chrono-harness/bin/chrono-harness check --unit ci
 ```
 
-普通命令固定为 `check`、`check --unit ID` 和 `check --collect`。config schema4 在固定 `.chrono-harness/config.json` 登记 profile、输入生产者 action、工具、环境和协议边界。未设或 `local` 的 `CHRONO_CHECK_SOURCE` 自动从登记 remote/workflow target 取得 base 和 clean committed HEAD；生成的 CI 显式设 `ci`，命令内执行原事件准备与原生汇总。真实短 argv、解析后的配置／端点／scope 和原始生产者证据分别保留；采用短合同的宿主拒绝旧长拼写。full unscoped 从 worktree start/reconstruct 的目的地 origin receipt 生成 schema2 context；full 独立单元／汇总短入口仍不支持。旧配置的显式合同及未迁移示例保留。
+普通命令固定为 `check`、`check --unit ID` 和 `check --collect`。config schema4 在固定 `.chrono-harness/config.json` 登记 profile、输入生产者 action、工具、环境和协议边界。未设或 `local` 的 `CHRONO_CHECK_SOURCE` 自动从登记 remote/workflow target 取得 base 和 clean committed HEAD；生成的 CI 显式设 `ci`，命令内执行原事件准备与原生汇总。真实短 argv、解析后的配置／端点／scope 和原始生产者证据分别保留；采用短合同的宿主拒绝旧长拼写。full unscoped 从 worktree start/reconstruct 的目的地 origin receipt 生成 schema2 context；full 独立单元／汇总短入口已有源实现，实际原生 full 启用、相关二进制发布及完整 SPEC 验收仍未完成。旧配置的显式合同及未迁移示例保留。
 
 公开工具还支持[按显式单元生成独立 workflow、汇总原始报告及保留宿主自定义的迁移](docs/ci-units.md)。Go、TS、混合示例及本仓都使用显式独立 workflow。本仓在 `check.json` 登记 16 个完整测试计划的单元归属，在 `units.json` 登记 16 个 workflow 与汇总入口。各单元只启动 `bootstrap-core.json` 指定的 runner、judge-ci、ci、worktree，其余构建由该单元的完整测试计划承担；共享操作在隔离 checkout 各自执行。省略 `--unit` 可在本地串行检查完整 DELTA；汇总使用同一入口的无值 `--collect`，执行零业务操作。宿主维护自己的单元、SDK、启动参数、平台与超时；升级二进制不重置这些源，路径变化可用 `chrono-ci migrate` 核验并退休旧投影。
 

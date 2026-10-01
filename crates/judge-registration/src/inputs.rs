@@ -240,7 +240,221 @@ pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, 
     }
     Ok(out)
 }
+/// Required declared files for one unit, including explicit operation owners,
+/// their FILEMAP prerequisites, shared operations and governance consumers.
+/// Unscoped/collection evidence retains the global declaration. No IO discovery.
+pub fn required_files(
+    r: &Registrations,
+    scope: Option<&chrono_harness::units::Scope>,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    let selected = match scope {
+        Some(chrono_harness::units::Scope::Unit { unit }) => Some(assigned_plans(r, unit)?),
+        _ => None,
+    };
+    required_plan_files(r, selected.as_ref())
+}
+
+fn assigned_plans(
+    r: &Registrations,
+    unit: &str,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    use chrono_harness::units::{self, Unit};
+    let units: BTreeMap<String, Unit> =
+        serde_json::from_value(r.config()["execution_units"]["units"].clone())
+            .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
+    let plans = crate::execution::plans(r.filemap())?;
+    units::select(&units, &plans.keys().cloned().collect(), unit)
+}
+
+fn required_plan_files(
+    r: &Registrations,
+    selected: Option<&std::collections::BTreeSet<String>>,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    use crate::NodeKind;
+    use std::collections::BTreeSet;
+    let all: BTreeSet<String> = r.config()["environment"]["inputs"]
+        .as_array()
+        .ok_or("inputs missing")?
+        .iter()
+        .map(|i| i["id"].as_str().unwrap().to_owned())
+        .collect();
+    let Some(selected) = selected else {
+        return Ok(all);
+    };
+    if let Some(finding) = crate::input_closure_findings(r).first() {
+        return Err(format!("{}: {}", finding.code, finding.message));
+    }
+    let plans = crate::execution::plans(r.filemap())?;
+    let methods = crate::execution::methods(r.projects())?;
+    let nodes = r.node_data();
+    let mut needed = selected.clone();
+    for test in selected {
+        let definition = nodes
+            .get(test)
+            .and_then(|n| n.unique())
+            .ok_or_else(|| format!("E_REFERENCE: missing/ambiguous input consumer {test}"))?;
+        needed.insert(definition.identity.clone());
+        for operation in &plans[test].operations {
+            let method = methods
+                .get(operation)
+                .filter(|m| m.len() == 1)
+                .ok_or_else(|| format!("E_REFERENCE: missing/ambiguous operation {operation}"))?;
+            needed.insert(method[0].owner.clone());
+            needed.insert(format!("tool:{}", method[0].tool));
+        }
+    }
+    needed.extend(
+        nodes
+            .iter()
+            .filter(|(_, n)| n.kind == NodeKind::Judge)
+            .map(|(id, _)| id.clone()),
+    );
+    if let Some(id) = r.config()["facts_git"]["input"].as_str() {
+        needed.insert(format!("input:{id}"));
+    }
+    // The whitelist carries dependencies only in their declared direction.
+    // Reverse it to obtain the prerequisites of the chosen consumers.
+    let mut edges = Vec::new();
+    for file in r.filemap()["files"].as_array().unwrap() {
+        for edge in file["edges"].as_array().unwrap() {
+            edges.push((
+                format!("file:{}", file["path"].as_str().unwrap()),
+                edge.clone(),
+            ));
+        }
+    }
+    for edge in r.filemap()["project_edges"].as_array().unwrap() {
+        edges.push((edge["from"].as_str().unwrap().to_owned(), edge.clone()));
+    }
+    for (from, edge) in &edges {
+        for node in [from.as_str(), edge["to"].as_str().unwrap()] {
+            if !nodes.contains_key(node) {
+                return Err(format!("E_REFERENCE: unknown input dependency {node}"));
+            }
+        }
+    }
+    loop {
+        let size = needed.len();
+        for (from, edge) in &edges {
+            if needed.contains(edge["to"].as_str().unwrap())
+                && matches!(
+                    edge["kind"].as_str(),
+                    Some("compile" | "build-input" | "runtime-input" | "test-execution")
+                )
+            {
+                needed.insert(from.clone());
+            }
+        }
+        // Closure bindings are validated against explicit FILEMAP edges above.
+        for binding in r.config()["input_closure"]["bindings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            if needed.contains(binding["consumer"].as_str().unwrap()) {
+                needed.extend(
+                    binding["inputs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap().to_owned()),
+                );
+            }
+        }
+        if needed.len() == size {
+            break;
+        }
+    }
+    Ok(all
+        .into_iter()
+        .filter(|id| needed.contains(&format!("input:{id}")))
+        .collect())
+}
+
+fn endpoint_required_files(
+    endpoint: &str,
+    old: &Registrations,
+    new: &Registrations,
+    scope: Option<&chrono_harness::units::Scope>,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    if endpoint != "base" {
+        return required_files(new, scope);
+    }
+    let Some(chrono_harness::units::Scope::Unit { unit }) = scope else {
+        return required_files(old, scope);
+    };
+    // Candidate IDs need not exist historically. Project their declared plans
+    // onto the base, retaining also any plans assigned to this ID at the base.
+    // Both projections use the same input closure; no global-input fallback.
+    let plans = crate::execution::plans(old.filemap())?;
+    let mut selected = assigned_plans(new, unit)?
+        .into_iter()
+        .filter(|test| plans.contains_key(test))
+        .collect::<std::collections::BTreeSet<_>>();
+    if old.config()["execution_units"]["units"].get(unit).is_some() {
+        selected.extend(assigned_plans(old, unit)?);
+    }
+    required_plan_files(old, Some(&selected))
+}
+
+/// Compare original per-unit evidence with the same projection of the current
+/// collection obligations, retaining exact environment and endpoint bindings.
+pub fn project_effective(
+    evidence: &Value,
+    old: &Registrations,
+    new: &Registrations,
+    scope: Option<&chrono_harness::units::Scope>,
+) -> Result<Value, String> {
+    if evidence.is_null() {
+        return Ok(Value::Null);
+    }
+    if evidence["identity"] != wire::digest(&evidence["endpoints"])? {
+        return Err("effective input identity mismatch".into());
+    }
+    let mut projected = evidence.clone();
+    for endpoint in ["base", "candidate"] {
+        let required = endpoint_required_files(endpoint, old, new, scope)?;
+        let files = projected["endpoints"][endpoint]["files"]
+            .as_object_mut()
+            .ok_or("effective input files missing")?;
+        for id in &required {
+            if !files.contains_key(id) {
+                return Err(format!("missing effective input {endpoint}: {id}"));
+            }
+        }
+        files.retain(|id, _| required.contains(id));
+    }
+    projected["identity"] = json!(wire::digest(&projected["endpoints"])?);
+    Ok(projected)
+}
+
 pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Result<Value, String> {
+    validate_inner(
+        req,
+        old,
+        new,
+        None,
+        !matches!(
+            req.scope,
+            Some(chrono_harness::units::Scope::Collect { .. })
+        ),
+    )
+}
+pub fn validate_retained(
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    artifacts: &Value,
+) -> Result<Value, String> {
+    validate_inner(req, old, new, Some(artifacts), false)
+}
+fn validate_inner(
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    artifacts: Option<&Value>,
+    live: bool,
+) -> Result<Value, String> {
     if new.filemap()["schema_version"] == 1
         && old.config()["schema_version"] == 1
         && new.config()["schema_version"] == 1
@@ -260,6 +474,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
     let mut endpoints = serde_json::Map::new();
     for (name, endpoint, r) in [("base", &req.base, old), ("candidate", &req.candidate, new)] {
         let cfg = r.config();
+        let required = endpoint_required_files(name, old, new, req.scope.as_ref())?;
         let retained = &req.observations["retained"][name];
         if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
             && retained["schema"] != snapshot_schema_for(r)
@@ -326,11 +541,30 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
         }
         for input in files {
             let id = input["id"].as_str().unwrap();
+            if !required.contains(id) && retained["files"].get(id).is_none() {
+                continue;
+            }
             let value = retained["files"]
                 .get(id)
                 .ok_or_else(|| format!("{name}: missing retained input {id}"))?;
-            let identity = retained_identity(&req.candidate.root, value)
-                .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
+            let identity = match (artifacts, retained_shape(value)?) {
+                (
+                    Some(artifacts),
+                    Retained::Blob {
+                        path,
+                        digest,
+                        length,
+                    },
+                ) => {
+                    let bytes = chrono_harness::full::artifact_bytes(artifacts, path)?;
+                    if sha256(&bytes) != digest || bytes.len() as u64 != length {
+                        return Err("E_INPUT_BLOB: original input differs".into());
+                    }
+                    Ok(Some((digest.to_owned(), length)))
+                }
+                _ => retained_identity(&req.candidate.root, value),
+            }
+            .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
             match &identity {
                 None if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
                     && input["presence"] == "absent" => {}
@@ -343,7 +577,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
                     ));
                 }
             }
-            if name == "candidate" {
+            if name == "candidate" && live && required.contains(id) {
                 let path = Path::new(input["location"].as_str().unwrap());
                 let path = if path.is_absolute() {
                     path.to_path_buf()
@@ -370,7 +604,9 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
             {
                 fact["presence"] = json!("present");
             }
-            evidence.insert(id.to_string(), fact);
+            if required.contains(id) {
+                evidence.insert(id.to_string(), fact);
+            }
         }
         endpoints.insert(name.into(),json!({"commit":endpoint.commit,"environment":effective.ok(),"inherited":inherited,"files":evidence}));
     }

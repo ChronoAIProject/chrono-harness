@@ -129,6 +129,15 @@ fn validate_report(label: &str, report: &Value) -> Result<(), String> {
             "E_PARITY_UNESTABLISHED: {label} is not a full configured-judges report"
         ));
     }
+    if report["execution_scope"]["kind"] == "unit"
+        || report["tests"]["scope"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("unit:"))
+    {
+        return Err(format!(
+            "E_PARITY_UNESTABLISHED: {label} is contribution-only"
+        ));
+    }
     for field in REQUIRED {
         if report.get(*field).is_none() || report[*field].is_null() {
             return Err(format!(

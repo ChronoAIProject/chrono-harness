@@ -373,6 +373,64 @@ fn request_identity_is_deterministic_and_binds_facts() {
 }
 
 #[test]
+fn request_identity_matches_original_projection_for_scopes_and_opaque_evidence() {
+    let (_dir, mut request, _binding) = fixture("");
+    request.observations = value!({
+        "opaque":{"😀":"escaped \\\"\n", "דּ":[-0.0, 1e-27, 1e30, null, true]},
+        "bytes":(0..=255).collect::<Vec<u8>>()
+    });
+    for scope in [
+        None,
+        Some(chrono_harness::units::Scope::Unit { unit: "one".into() }),
+        Some(chrono_harness::units::Scope::Collect {
+            manifest: ".chrono-harness/state/m.json".into(),
+        }),
+    ] {
+        request.scope = scope;
+        let mut original = serde_json::to_value(&request).unwrap();
+        original.as_object_mut().unwrap().remove("request_id");
+        let expected = wire::digest(&original).unwrap();
+        request.seal().unwrap();
+        assert_eq!(request.request_id, expected);
+        request.validate().unwrap();
+        let mut changed = request.clone();
+        changed.observations["bytes"][255] = value!(254);
+        assert!(changed.validate().is_err());
+    }
+}
+
+#[test]
+fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
+    let script = format!("{RESPONSE}open('ran','w').write('yes')\nprint(json.dumps(s))");
+    let (dir, request, binding) = fixture(&script);
+    for field in ["protocol", "mode"] {
+        let mut bad = request.clone();
+        match field {
+            "protocol" => bad.protocol = "wrong".into(),
+            "mode" => bad.mode = "inventory".into(),
+            _ => unreachable!(),
+        }
+        let (status, rows) = chrono_harness::full::execute(
+            &bad,
+            &[binding.clone()],
+            &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS,
+            16384,
+        )
+        .unwrap();
+        assert_eq!(status, wire::Status::Error);
+        assert_eq!(rows[0]["state"], "error");
+        assert!(
+            rows[0]["transport_failure"]
+                .as_str()
+                .unwrap()
+                .contains("E_PROTOCOL")
+        );
+        assert!(!dir.path().join("ran").exists());
+    }
+}
+
+#[test]
 fn dag_forwards_only_direct_predecessors_and_named_outputs() {
     let script = format!(
         "{RESPONSE}expected={{'a':[], 'b':['a'], 'c':['b'], 'independent':[]}}\nassert [p['judge_id'] for p in r['prior_results']]==expected[r['judge_id']]\nif r['judge_id']=='a': s['outputs']={{'impact':{{'seeds':['file:example'],'edges':[],'tests':[],'retired_tests':[]}},'named':42}}\nif r['judge_id']=='b':\n assert r['impact']['seeds']==['file:example']\n assert r['prior_results'][0]['outputs']['named']==42\nif r['judge_id']=='c': assert r['impact'] is None\nprint(json.dumps(s))"
@@ -506,4 +564,118 @@ fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() 
     .unwrap();
     assert_eq!(status, wire::Status::Pass, "{rows:#?}");
     assert_eq!(rows.len(), 2);
+}
+
+#[test]
+fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
+    let bytes: Vec<u8> = (0..=255).collect();
+    let expected = concat!(
+        "000102030405060708090a0b0c0d0e0f",
+        "101112131415161718191a1b1c1d1e1f",
+        "202122232425262728292a2b2c2d2e2f",
+        "303132333435363738393a3b3c3d3e3f",
+        "404142434445464748494a4b4c4d4e4f",
+        "505152535455565758595a5b5c5d5e5f",
+        "606162636465666768696a6b6c6d6e6f",
+        "707172737475767778797a7b7c7d7e7f",
+        "808182838485868788898a8b8c8d8e8f",
+        "909192939495969798999a9b9c9d9e9f",
+        "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+        "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "c0c1c2c3c4c5c6c7c8c9cacbcccdcecf",
+        "d0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+        "e0e1e2e3e4e5e6e7e8e9eaebecedeeef",
+        "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+    );
+    for (bytes, hex) in [(&bytes[..], expected), (&[][..], "")] {
+        let artifact = chrono_harness::full::artifact(bytes);
+        assert_eq!(artifact["hex"], hex);
+        assert_eq!(artifact["length"], bytes.len());
+        assert_eq!(artifact["sha256"], sha256(bytes));
+        let originals = value!({"original":artifact});
+        assert_eq!(
+            chrono_harness::full::artifact_bytes(&originals, "original").unwrap(),
+            bytes
+        );
+        for field in ["hex", "length", "sha256"] {
+            let mut corrupt = originals.clone();
+            corrupt["original"][field] = match field {
+                "hex" => "0g".into(),
+                "length" => (bytes.len() + 1).into(),
+                _ => "0".repeat(64).into(),
+            };
+            assert!(chrono_harness::full::artifact_bytes(&corrupt, "original").is_err());
+        }
+    }
+}
+
+#[test]
+fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
+    let script = format!(
+        "{RESPONSE}import hashlib\nfor row in r['observations']['judges']:\n p=row['process']\n assert p['encoding']=='chrono-retained-process/v1'\n assert 'stdout_bytes' not in p and 'stderr_bytes' not in p\n out=bytes.fromhex(p['stdout_hex']); err=bytes.fromhex(p['stderr_hex'])\n assert hashlib.sha256(out).hexdigest()==p['stdout_sha256']\n assert hashlib.sha256(err).hexdigest()==p['stderr_sha256']\n assert err==bytes(range(256))\n assert json.loads(out)==row['response']\nsys.stderr.buffer.write(bytes(range(256)))\nprint(json.dumps(s))"
+    );
+    let (_dir, mut req, mut first) = fixture(&script);
+    req.candidate.root = fs::canonicalize(&req.candidate.root).unwrap();
+    req.base.root = req.candidate.root.clone();
+    req.scope = Some(chrono_harness::units::Scope::Unit { unit: "one".into() });
+    req.observations = value!({"environment":{"effective":{}}});
+    first.id = "a".into();
+    let bindings: Vec<_> = [
+        ("a", vec![]),
+        ("b", vec!["a"]),
+        ("c", vec!["b"]),
+        ("d", vec!["a"]),
+    ]
+    .into_iter()
+    .map(|(id, after)| {
+        let mut binding = first.clone();
+        binding.id = id.into();
+        binding.after = after.into_iter().map(str::to_owned).collect();
+        binding
+    })
+    .collect();
+    let template = chrono_harness::full::judge_request(&req, &first, &[]).unwrap();
+    let (status, records) = chrono_harness::full::execute(
+        &template,
+        &bindings,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        16384,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Pass, "{records:#?}");
+    let parsed = chrono_harness::full::retained_judges(&template, &bindings, &records).unwrap();
+    assert_eq!(parsed.len(), 4);
+    for (index, binding) in bindings.iter().enumerate() {
+        let rebuilt =
+            chrono_harness::full::judge_request(&template, binding, &records[..index]).unwrap();
+        assert_eq!(records[index]["request_id"], rebuilt.request_id);
+        assert_eq!(
+            records[index]["request_digest"],
+            wire::digest(&rebuilt).unwrap()
+        );
+        assert_eq!(
+            parsed[&binding.id].3.stderr_bytes,
+            (0..=255).collect::<Vec<u8>>()
+        );
+    }
+    for field in [
+        "stdin_sha256",
+        "stdout_bytes",
+        "stderr_bytes",
+        "environment",
+        "exit_code",
+    ] {
+        let mut corrupt = records.clone();
+        corrupt[0]["process"][field] = match field {
+            "stdout_bytes" | "stderr_bytes" => value!([1]),
+            "environment" => value!({"changed":"yes"}),
+            "exit_code" => value!(7),
+            _ => value!("0".repeat(64)),
+        };
+        assert!(
+            chrono_harness::full::retained_judges(&template, &bindings, &corrupt).is_err(),
+            "{field}"
+        );
+    }
 }

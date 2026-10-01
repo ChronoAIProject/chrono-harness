@@ -244,11 +244,7 @@ fn malformed_misbound_missing_and_changed_retained_inputs_fail_before_execution(
     let reject = |v: &Value, expected: &str| {
         let (exit, r) = check(&h, v);
         assert_ne!(exit, 0, "{r:#}");
-        assert!(
-            r["findings"].to_string().contains(expected),
-            "expected {expected}: {}",
-            r["findings"]
-        );
+        assert!(r.to_string().contains(expected), "expected {expected}: {r}");
         assert!(r["tests"].is_null());
         assert!(!h.root().join(".chrono-harness/state/order").exists());
     };
@@ -320,7 +316,7 @@ fn input_larger_than_judge_json_bound_remains_a_small_request_and_is_actually_va
     assert_eq!(pair["base"]["files"]["data"]["length"], length);
     assert!(serde_json::to_vec(&pair).unwrap().len() < 16384);
     let (exit, r) = check(&h, &pair);
-    assert_eq!(exit, 0, "{}", r["findings"]);
+    assert_eq!(exit, 0, "{r}");
     assert_eq!(
         r["effective_inputs"]["endpoints"]["candidate"]["files"]["data"]["sha256"],
         digest

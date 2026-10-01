@@ -3,7 +3,7 @@ mod branch;
 mod certificate;
 mod evidence;
 mod transition;
-pub use branch::branch;
+pub use branch::{branch, observation_age};
 use chrono_harness::{
     facts, json,
     wire::{self, Finding, Request, Response, Status},
@@ -95,6 +95,34 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
         .map_err(|e| e.to_string())?;
     let effective = chrono_judge_registration::inputs::validate(req, &a, &b)?;
     let binding = evidence::binding(req, &b, &plan, &results, impact, &effective)?;
+    if let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope {
+        let global_selected = req
+            .prior_results
+            .iter()
+            .find_map(|result| result.outputs.get("global_selected"))
+            .cloned()
+            .unwrap_or_else(|| impact["tests"].clone());
+        let selected: std::collections::BTreeSet<String> =
+            serde_json::from_value(global_selected.clone())
+                .map_err(|e| format!("E_WORKFLOW_INPUT: global selection: {e}"))?;
+        let units: std::collections::BTreeMap<String, chrono_harness::units::Unit> =
+            serde_json::from_value(req.observations["execution_units"]["units"].clone())
+                .map_err(|e| format!("E_WORKFLOW_INPUT: execution units: {e}"))?;
+        let required_units = chrono_harness::units::required(&units, &selected);
+        return Ok(value!({
+            "schema":"chrono-workflow-verdict/v1",
+            "mode":"contribution",
+            "acceptance":"unit-only; global completion requires collection",
+            "unit":unit,
+            "global_selected":global_selected,
+            "selected":plan.selected,
+            "required_units":required_units,
+            "integration_required":impact["workflow"]["integration_required"],
+            "integration":Value::Null,
+            "completion":"pending collection",
+            "binding":binding
+        }));
+    }
     let transitions = transition::evaluate(
         reader,
         req,

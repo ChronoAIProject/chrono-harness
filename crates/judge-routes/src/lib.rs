@@ -247,6 +247,47 @@ fn prepare_inner(
     plan.identity = plan.digest()?;
     Ok(plan)
 }
+/// Pure validation of successful retained observations, shared with full consumers.
+pub fn process_success(p: &ProcessResult) -> Result<(), String> {
+    observation::process_success(p)
+}
+/// Construct the current global declaration graph without observing any business executable.
+pub fn prepare_collection(
+    root: &Path,
+    binding: Value,
+    selected: &BTreeSet<String>,
+    plans: &BTreeMap<String, Plan>,
+    methods: &BTreeMap<String, Vec<Method>>,
+    execute: &BTreeMap<String, String>,
+    environment: BTreeMap<String, String>,
+) -> Result<Execution, String> {
+    let (selected, mut operations) = order(selected, plans, methods, execute)?;
+    for op in &mut operations {
+        op.method.argv = expand(&op.method.argv, &binding);
+    }
+    let mut plan = Execution {
+        schema: "chrono-execution-plan/v1".into(),
+        identity: String::new(),
+        binding,
+        root: root.into(),
+        environment,
+        selected,
+        operations,
+        tools: BTreeMap::new(),
+    };
+    plan.identity = plan.digest()?;
+    Ok(plan)
+}
+pub fn validate_retained_tool(
+    tool: &Tool,
+    program: &str,
+    argv: &[String],
+    env: &BTreeMap<String, String>,
+    root: &Path,
+    expected: Option<&str>,
+) -> Result<(), String> {
+    validate_tool_inner(tool, program, argv, env, root, expected, false)
+}
 pub fn validate_tool(
     tool: &Tool,
     program: &str,
@@ -255,7 +296,19 @@ pub fn validate_tool(
     root: &Path,
     expected: Option<&str>,
 ) -> Result<(), String> {
+    validate_tool_inner(tool, program, argv, env, root, expected, true)
+}
+fn validate_tool_inner(
+    tool: &Tool,
+    program: &str,
+    argv: &[String],
+    env: &BTreeMap<String, String>,
+    root: &Path,
+    expected: Option<&str>,
+    live: bool,
+) -> Result<(), String> {
     let actual = &tool.version;
+    process_success(actual).map_err(|e| format!("E_TOOL_BINDING: {e}"))?;
     let mut invocation = vec![tool.path.to_str().ok_or("tool path")?.to_string()];
     invocation.extend_from_slice(argv);
     if tool.program != program
@@ -273,11 +326,12 @@ pub fn validate_tool(
         || expected != Some(actual.stdout.trim_end())
         || actual.stdout_sha256 != chrono_harness::sha256(&actual.stdout_bytes)
         || actual.stdout.as_bytes() != actual.stdout_bytes
-        || fs::read(&tool.path)
-            .map(|b| chrono_harness::sha256(&b))
-            .ok()
-            .as_ref()
-            != Some(&tool.sha256)
+        || live
+            && fs::read(&tool.path)
+                .map(|b| chrono_harness::sha256(&b))
+                .ok()
+                .as_ref()
+                != Some(&tool.sha256)
     {
         return Err("E_TOOL_BINDING: path/version/digest/environment observation mismatch".into());
     }
@@ -289,43 +343,15 @@ pub fn validate_invocation(
     template: &[String],
     binding: &Value,
 ) -> Result<(), String> {
-    let argv: Vec<String> = serde_json::from_value(entry["argv"].clone())
-        .map_err(|_| "E_ROUTE_MISSING: observed entry argv")?;
-    let cwd = Path::new(
-        entry["cwd"]
-            .as_str()
-            .ok_or("E_ROUTE_MISSING: observed cwd")?,
-    );
-    let expected = expand(template, binding);
-    if argv.len() != expected.len() || argv.is_empty() {
-        return Err("E_ROUTE_MISSING: canonical argv differs".into());
-    }
-    // Equivalent absolute paths allow the same registered method from another caller cwd.
-    for (i, (a, b)) in argv.iter().zip(&expected).enumerate() {
-        let path_arg =
-            i == 0 || i > 0 && matches!(expected[i - 1].as_str(), "--config" | "--context");
-        if path_arg {
-            let actual = fs::canonicalize(if i > 0 && expected[i - 1] == "--context" {
-                root.join(a)
-            } else {
-                cwd.join(a)
-            })
-            .map_err(|e| format!("E_ROUTE_MISSING: {e}"))?;
-            let want =
-                fs::canonicalize(root.join(b)).map_err(|e| format!("E_ROUTE_MISSING: {e}"))?;
-            if actual != want {
-                return Err("E_ROUTE_MISSING: canonical path differs".into());
-            }
-        } else if a != b {
-            return Err("E_ROUTE_MISSING: canonical argv differs".into());
-        }
-    }
-    Ok(())
+    chrono_harness::resolve_invocation(root, entry, template, binding).map(|_| ())
 }
 pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
-    let expected: Vec<String> =
+    let mut expected: Vec<String> =
         serde_json::from_value(r.config()["canonical_check"]["argv"].clone())
             .map_err(|e| e.to_string())?;
+    if let Some(scope) = &req.scope {
+        expected.extend(scope.contract_argv(r.config()));
+    }
     validate_invocation(
         &req.candidate.root,
         &req.observations["entry"],
@@ -340,7 +366,7 @@ pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
             Some(&req.base.commit),
             &req.candidate.commit,
             false,
-            &None,
+            &req.scope,
             Some(&req.context),
             &req.observations["preparation"],
         )?;
@@ -349,6 +375,56 @@ pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
         return Err("E_ROUTE_AMBIGUOUS: validate.delta".into());
     }
     Ok(())
+}
+
+/// Validate the complete registered unit assignment before filtering a unit.
+/// The full route owns this check so projects receives an already ordered,
+/// contribution-sized plan and cannot make a selector hide a global cycle or
+/// replacement obligation.
+fn unit_selection(
+    req: &Request,
+    selected: &BTreeSet<String>,
+    plans: &BTreeMap<String, Plan>,
+) -> Result<BTreeSet<String>, String> {
+    let Some(scope) = &req.scope else {
+        return Ok(selected.clone());
+    };
+    let units = req.observations["execution_units"]["units"]
+        .as_object()
+        .ok_or("E_UNIT_ASSIGNMENT: missing execution_units")?;
+    let mut definitions = BTreeMap::new();
+    for (name, value) in units {
+        let unit: chrono_harness::units::Unit =
+            serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        definitions.insert(name.clone(), unit);
+    }
+    let mut operation_sets = BTreeMap::<String, BTreeSet<String>>::new();
+    for (name, unit) in &definitions {
+        for test in &unit.tests {
+            let plan = plans
+                .get(test)
+                .ok_or_else(|| format!("E_UNIT_ASSIGNMENT: unknown plan {test}"))?;
+            for operation in &plan.operations {
+                operation_sets
+                    .entry(operation.clone())
+                    .or_default()
+                    .insert(name.clone());
+            }
+        }
+    }
+    let shared: BTreeMap<String, Vec<String>> =
+        serde_json::from_value(req.observations["execution_units"]["shared_operations"].clone())
+            .map_err(|e| e.to_string())?;
+    let plan_ids = plans.keys().cloned().collect();
+    chrono_harness::units::assignments(&definitions, &plan_ids, &shared, &operation_sets)
+        .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
+    match scope {
+        chrono_harness::units::Scope::Unit { unit } => {
+            chrono_harness::units::select(&definitions, selected, unit)
+                .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))
+        }
+        chrono_harness::units::Scope::Collect { .. } => Ok(selected.clone()),
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -400,6 +476,8 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
         || p.environment != plan.environment
         || p.environment_digest != wire::digest(&plan.environment)?
         || p.stdin_sha256 != chrono_harness::sha256(&[])
+        || p.stdout_bytes.len() > op.output_limit_bytes
+        || p.stderr_bytes.len() > op.output_limit_bytes
         || p.stdout_sha256 != chrono_harness::sha256(&p.stdout_bytes)
         || p.stderr_sha256 != chrono_harness::sha256(&p.stderr_bytes)
         || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
@@ -449,20 +527,16 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
-    req.validate()?;
-    let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
-    canonical(req, &r)?;
-    let inputs = chrono_judge_registration::inputs::validate(req, &old, &r)?;
-    let impact: chrono_judge_filemap::Impact =
-        serde_json::from_value(req.impact.clone()).map_err(|e| format!("E_IMPACT: {e}"))?;
-    if impact.schema != chrono_judge_filemap::IMPACT_SCHEMA || impact.delta != req.delta {
-        return Err("E_IMPACT: identity".into());
-    }
+/// Shared global obligations; callers select a transport scope only after this succeeds.
+pub fn global_selection(
+    old: &Registrations,
+    r: &Registrations,
+    impact: &chrono_judge_filemap::Impact,
+    deferred: bool,
+) -> Result<BTreeSet<String>, String> {
     let mut selected: BTreeSet<_> = impact.tests.iter().cloned().collect();
-    let replacements = chrono_judge_registration::replacements(&r)?;
-    let requests = chrono_judge_registration::retirement_requests(&r)?;
-    let deferred = chrono_judge_registration::downstream_validator(&r, &req.judge_id);
+    let replacements = chrono_judge_registration::replacements(r)?;
+    let requests = chrono_judge_registration::retirement_requests(r)?;
     for test in &impact.retired_tests {
         match requests.get(test) {
             Some(Some(replacement)) => {
@@ -531,20 +605,64 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
             }
         }
     }
+    Ok(selected)
+}
+fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
+    req.validate()?;
+    let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
+    canonical(req, &r)?;
+    let inputs = chrono_judge_registration::inputs::validate(req, &old, &r)?;
+    let impact: chrono_judge_filemap::Impact =
+        serde_json::from_value(req.impact.clone()).map_err(|e| format!("E_IMPACT: {e}"))?;
+    if impact.schema != chrono_judge_filemap::IMPACT_SCHEMA || impact.delta != req.delta {
+        return Err("E_IMPACT: identity".into());
+    }
+    let selected = global_selection(
+        &old,
+        &r,
+        &impact,
+        chrono_judge_registration::downstream_validator(&r, &req.judge_id),
+    )?;
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .map_err(|e| e.to_string())?;
     let reused = chrono_judge_registration::reused_tools(&view)?;
-    let plan = prepare(
-        &req.candidate.root,
-        binding(req, &inputs),
+    // First prepare the global graph.  This validates every selected plan and
+    // its prerequisites even when the caller asks for one unit only.
+    let global_plans = chrono_judge_registration::execution::plans(r.filemap())?;
+    let (global_chosen, global_operations) = order(
         &selected,
-        &chrono_judge_registration::execution::plans(r.filemap())?,
+        &global_plans,
         &chrono_judge_registration::execution::methods(r.projects())?,
         &execute_actions(&r),
-        &r.config()["tools"],
-        env,
-        &reused,
     )?;
+    let global_selected = selected.clone();
+    let selected = unit_selection(req, &selected, &global_plans)?;
+    let plan = if matches!(
+        req.scope,
+        Some(chrono_harness::units::Scope::Collect { .. })
+    ) {
+        prepare_collection(
+            &req.candidate.root,
+            binding(req, &inputs),
+            &selected,
+            &global_plans,
+            &chrono_judge_registration::execution::methods(r.projects())?,
+            &execute_actions(&r),
+            env,
+        )?
+    } else {
+        prepare(
+            &req.candidate.root,
+            binding(req, &inputs),
+            &selected,
+            &global_plans,
+            &chrono_judge_registration::execution::methods(r.projects())?,
+            &execute_actions(&r),
+            &r.config()["tools"],
+            env,
+            &reused,
+        )?
+    };
     // Every launched tool is an explicitly retained external input or a registered candidate file.
     for tool in plan.tools.values() {
         let registered = r.config()["environment"]["inputs"]
@@ -575,6 +693,14 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
         (
             "execution_plan".into(),
             serde_json::to_value(&plan).unwrap(),
+        ),
+        (
+            "global_graph".into(),
+            json!({"schema":"chrono-global-operation-graph/v1","selected":global_chosen,"operations":global_operations}),
+        ),
+        (
+            "global_selected".into(),
+            serde_json::to_value(&global_selected).unwrap(),
         ),
         ("tools".into(), serde_json::to_value(&plan.tools).unwrap()),
         ("effective_inputs".into(), inputs),

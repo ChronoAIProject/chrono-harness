@@ -54,3 +54,18 @@ pub fn tool(
         version,
     })
 }
+
+/// Pure success and byte correspondence; no invocation or expected-version policy.
+pub fn process_success(p: &ProcessResult) -> Result<(), String> {
+    if p.exit_code != 0
+        || p.failure.is_some()
+        || p.stdout_sha256 != sha256(&p.stdout_bytes)
+        || p.stderr_sha256 != sha256(&p.stderr_bytes)
+        || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
+        || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
+        || p.environment_digest != crate::wire::digest(&p.environment)?
+    {
+        return Err("E_PROCESS_EVIDENCE: unsuccessful or inconsistent retained process".into());
+    }
+    Ok(())
+}

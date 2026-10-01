@@ -6,6 +6,8 @@
 
 ## 1. 目标、权限与边界
 
+Harness 的核心是降低耦合。显式依赖和唯一归属让局部改动可用自身的输入、接口与测试理解；共享定义只归一个自然所有者，独立单元分别构建、检查和重试。
+
 Harness 的本质：每项受治理操作只提供一条当前已登记的规范路径，并用可执行判官检查其结果。
 定制在执行前通过登记选定这条路径；日常指令只呈现当前路径，不并列提供替代配方。
 AI 先把路径、归属、依赖、成本、操作及判定方式登记为白名单，再通过该方式处理任务。
@@ -374,13 +376,17 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 
 无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 workflow。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各 workflow 具有独立检查名、checkout、启动命令、边界、报告及重跑。单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输工件或推断 workflow 间依赖。
 
-现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；bare check 保留全局 DELTA。固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。旧合同显式拼写仅留给旧登记。full 独立短单元／汇总及不可变 round 的刷新／expiry 仍待 corrected core/provider 集成，当前实现不宣称 native 完成或完整 SPEC 验收。
+现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；bare check 保留全局 DELTA。固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。旧合同显式拼写仅留给旧登记。full 独立短单元／汇总已接入显式 execution_units 与原始证据；当前实现不宣称 native 完成或完整 SPEC 验收。
 
 现役源码扩展 `chrono-ci-check/v3` 的 `policy.units` 与 `shared_operations`。判官先完成两端 DELTA、移除／替代义务及全局所选操作图验证，再按 `--unit ID` 过滤执行；不能借单元过滤隐藏全局操作环。单元报告分别列本单元所选、全局所选、交给其它单元、所需单元及真正不需要的义务。某单元成功只承担自身结果，其失败不取消不相关 workflow。本地及该 workflow 均追加完全相同的 `--unit ID` 到登记 check 指令；v1/v2 原调用行为保留。
 
 同一入口的 `--collect MANIFEST` 只重建当前义务并核所需原始单元报告，不能重跑业务测试。它检查完整报告集合、固定端点／配置／执行物 pin、原始判官输出、计划身份及候选操作／顺序／边界、工具观察、逐操作原始回执和成功状态；缺漏、重复、陈旧或失败报告不得全局通过。执行物 pin 由明确调用输入承担，不宣称据此证明构建产地、外部输入完整或跨环境同判。
 
 `chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；公开 beta.12 起提供该扩展，beta.13 继续提供；产品仓库显式将 16 个完整测试计划分配给 16 个单元，各自生成 workflow；启动核心及共享操作也由宿主登记。
+
+full-v3/v4 的 `execution_units` 由同一 assignment/select/required 与七判官 DAG 裁决。schema4 日常入口仍为 `check`、`check --unit ID`、`check --collect`；裸 check 保留全局 DELTA，单元贡献不等于准入。汇总消费 `chrono-full-collection/v1` 的原始报告、请求、七判官绑定与回执，不执行业务或业务版本命令。`chrono-github-full-ci/v2` 保留显式 exact-context dispatch；`chrono-github-units/v2` 在现有自动 push/PR provider 中显式登记 collection/各 unit 的 full context 路径与上传映射。bootstrap/caller 必须供应同一精确 full context；producer 核它与实际事件端点一致，原生 gather 核 workflow/attempt、下载原始上传目录，再交同一短命令裁决。缺失或不匹配输入失败。本仓实际 full 启用、公开新二进制和远端原生 full 验收仍未完成。
+
+local 独立 scopes 仅在当前端点、birth／role 与输入引用一致且新观察仍满足 workflow 登记的 age 判法时保留同一 context 及原 `observed_at`；超过期限自动保留旧原件并发布新的不可变观察，旧贡献不能满足新 context，当前分支仍由 workflow 拒绝 stale。裸 check 产生新观察。unit 的 live 文件输入由 registration/input 单一实现按显式 unit plans、操作所有者、FILEMAP 依赖及 closure bindings 选取，含共享操作及治理输入；结构和引用仍全局检查，缺失／漂移／畸形／未知输入失败。capture 复用该投影；collection 核原始 blobs 与逐单元有效输入投影，不启动业务或业务版本工具。这些源码行为不证明远端 full 启用、release 或完整 SPEC 验收。
 
 宿主自定义与更新是交付合同：单元、启动参数、平台、超时及扩展调用由宿主显式配置；安装新二进制不重置这些源。`init` 保留已有宿主源，常规修改仍从该源生成和核验。显式迁移以旧、新 provider 为输入，先核旧投影及所有目标冲突，再更新受管输出、退休不再使用的旧输出；保留新源和无关宿主文件，不推断测试归属或替宿主改登记。公开 beta.13 的 `chrono-ci migrate` 支持 scoped v1／units 到 units，以及同源地址的显式旧配置快照；初始 inventory、full 和 release 合同不在该迁移入口中。完整 CLI 与失败边界见上述合同；投影迁移通过不等于 CI、完整治理或跨文件事务通过。
 

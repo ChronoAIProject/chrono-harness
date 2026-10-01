@@ -112,6 +112,7 @@ impl Host {
         let a = facts::registry_values(self.root(), &self.base, CONFIG).unwrap();
         let b = facts::registry_values(self.root(), &self.candidate, CONFIG).unwrap();
         let mut r = wire::Request {
+            scope: None,
             observations: Value::Null,
             protocol: wire::PROTOCOL.into(),
             request_id: String::new(),

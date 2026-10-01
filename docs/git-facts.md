@@ -39,6 +39,24 @@ Consumers reject missing/mismatched binding observations before invoking Git.
 Process bounds apply per invocation; accumulated report storage is not a total
 run memory/disk quota.
 
+A bound Reader reuses successful blob bytes for the same full immutable OID and
+exact requested path only after that Reader's existing `verify_oid` has observed
+the exact requested commit identity and a valid full tree OID. Reads before this
+observation stay fresh; reuse adds no eligibility subprocess, and callers do not
+invoke `verify_oid` just to enable it. Each reused read still checks
+the canonical root and rechecks selector, config, executable and declared inputs
+before and after returning bytes. Reuse points to the original successful process
+receipt; it adds no invented invocation or replayed observation. New Readers
+acquire their own evidence. Mutable refs, HEAD, index, checkout and untracked
+facts, legacy unbound reads, failures and missing objects are never cached.
+Registry snapshots and config verification share this acquisition owner while
+keeping their existing parsing, endpoint and acceptance checks.
+The existing bounded `rev-parse --verify OID^{commit}` and tree observations retain
+their original receipts and return contracts. A hex-shaped ref resolving to a
+different object is read freshly; invalid, missing, malformed or failed identity
+observations cannot enable reuse. Event commit-availability and fetch probes
+retain their existing owner and original batch-check semantics.
+
 Config v3 preserves v2 external-input presence and snapshot semantics:
 `chrono-input-snapshot/v2` and the existing effective-input schema stay unchanged for
 direct policies. A strict one-level platform-map entry uses versioned

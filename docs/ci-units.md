@@ -24,8 +24,7 @@ collection. Prior producer observations remain retained while declared current
 outputs are replaced; no crash/concurrent transaction guarantee is established.
 Provider v4 puts event preparation and native gathering inside the same short
 command. Older hosts/examples below retain their registered explicit v3 forms.
-Full independent short scopes await corrected full-core integration and round
-freshness tests.
+Full independent short scopes use registered full-v3/v4 execution units and the same seven-judge DAG.
 
 Short preparation binds the selected native provider source bytes and its
 `artifact_directory`. Each unit retains context, payload, producer evidence,
@@ -43,6 +42,82 @@ through that binding, preserving the observed producing checkout/executable
 identities. No directory discovery or recursive evidence inference is used.
 Historical explicit reports retain their existing manifest contract.
 
+Full-v3/v4 hosts use the same explicit unit map and selector suffix through the
+native seven-judge entry. Their unit report manifests may use
+`chrono-full-collection/v1` (or the compatible `chrono-ci-collection/v1` shape)
+with `unit`, `path`, and `sha256`, optional explicit executable pins and native `artifacts` mappings; runner and seven-judge pins are derived
+from the fixed candidate registry and bound invocation. The full collector
+retains a reconstructible sealed request template, exact process/response bytes,
+and addressed original context/input/evidence bytes. It validates every imported
+judge and receipt against the current declaration contract, without launching
+business tools or their version commands. Original unit roots and business
+executables may be unavailable. The completed collector report retains the
+original evidence closure for subsequent integration certificate consumption.
+Both integration and delivery contexts support contribution-only units without
+requiring a prior completed certificate; only collection resolves global
+completion. Full-v3 report bounds apply to these portable bytes as well as the
+manifest. Missing, replaced, failed, stale or contradictory evidence rejects.
+Ordinary unscoped full check retains local blob references and validates their
+identities by streaming; the portable unit/report bounds do not limit those input
+files. Provider generation and artifact gathering remain owned by `chrono-ci`;
+actual native full host activation remains pending.
+
+Full short preparation preserves the exact local context through collection.
+Local manifest production asks the shared FILEMAP/routes obligation owners for
+required units and binds all seven judge executables. Registration consumes the
+explicit original report inputs for any historical conversion before the final
+required-unit manifest is published; it does not rerun the decoder. Original short acquisition
+receipts and addressed bytes are retained in full portable evidence.
+
+Local scoped preparation reuses an existing context only when its endpoints,
+origin role, birth association and retained-input reference still match the
+current producer facts and a fresh producer observation still satisfies the
+workflow-owned age predicate. While valid, its original `observed_at` stays pinned
+so independent reports bind one exact context. After expiry the same commands
+retain the original and publish a new immutable observation; old contributions
+cannot complete the new context and workflow rejects the stale branch. A bare
+check produces a fresh observation. This refresh does not reconstruct the branch.
+
+Registration/input owns the file-input projection used by live unit validation,
+`chrono-inputs capture --unit ID` and collection comparison. It uses the unit's
+explicit registered plans and operation owners, FILEMAP prerequisites and closure
+bindings, including shared operations and governance consumers. Structural and
+reference checks remain global. A missing unrelated SDK need not be retained or
+read live for that unit; selected/shared/governance omissions, drift, malformed
+snapshots and unknown inputs fail. Collection validates original per-unit blobs
+and compares each unit's effective projection against current obligations without
+launching business operations or their version tools. Original complete snapshots
+remain supported. Native Go/TS execution and full host activation remain unverified.
+
+`chrono-github-units/v2` connects full scopes to the existing automatic push/PR
+provider. V1 remains scoped and rejects the new field. V2 keeps the existing
+collection, units and gather contracts, requires collection schema
+`chrono-github-ci/v4`, and adds one explicit mapping:
+
+```json
+"full_contexts": {
+  "collection": ".chrono-harness/state/collection/full.json",
+  "units": {
+    "service": ".chrono-harness/state/service/full.json",
+    "client": ".chrono-harness/state/client/full.json"
+  }
+}
+```
+
+Unit keys must equal the full profile and workflow keys exactly. Each mapped file
+is a separate input beneath its selected upload directory. The existing bootstrap
+supplies exact schema2 context and retained inputs. Preparation compares its
+base/candidate with actual event endpoints. Gathering compares full context
+digests and all seven judge pins, retains workflow/attempt evidence, and writes
+`chrono-full-collection/v1` with explicit source/download upload mappings. Failed
+runs remain failures with downloaded originals retained. Each workflow builds and
+retries independently; collection runs no business or business version commands.
+The single registered CI producer `--config` selects this map for all short
+invocations. No role, birth time, certificate or layout is inferred.
+
+The product host still uses its scoped V1 registration. Clean-candidate admission,
+actual native full adoption, public binary publication and full SPEC acceptance
+remain separate obligations.
 
 ## Assignment and execution
 
@@ -83,6 +158,11 @@ to a requested unit, so a contradictory global operation order cannot be hidden
 by that filter. Each unit executes its selected complete plans through the
 existing routes/projects engine. Replacement success belongs to the unit owning
 the replacement plan; collection requires that unit's successful evidence.
+
+Input projection follows the candidate unit's declared plans even when that
+unit ID is new or renamed. At the base endpoint it also retains any historical
+plans assigned to that ID, using the same declared input closure for both
+assignments. An unrelated unit's business inputs are not a fallback requirement.
 
 Use the same command locally and in the generated unit workflow:
 

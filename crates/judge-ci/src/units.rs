@@ -62,7 +62,6 @@ pub(super) fn assignments(snapshot: &Snapshot) -> Result<(), String> {
     let Some(units) = &snapshot.policy.units else {
         return Ok(());
     };
-    let mut owners = BTreeMap::new();
     let mut operations: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (unit, definition) in units {
         for test in &definition.tests {
@@ -70,9 +69,6 @@ pub(super) fn assignments(snapshot: &Snapshot) -> Result<(), String> {
                 .plans
                 .get(test)
                 .ok_or_else(|| format!("unknown CI unit plan: {test}"))?;
-            if owners.insert(test, unit).is_some() {
-                return Err(format!("duplicate CI unit plan assignment: {test}"));
-            }
             for op in &plan.operations {
                 operations
                     .entry(op.clone())
@@ -81,55 +77,26 @@ pub(super) fn assignments(snapshot: &Snapshot) -> Result<(), String> {
             }
         }
     }
-    if owners.keys().copied().collect::<BTreeSet<_>>() != snapshot.plans.keys().collect() {
-        return Err("missing CI unit plan assignment".into());
-    }
-    let shared: BTreeMap<_, _> = operations
-        .into_iter()
-        .filter(|(_, owners)| owners.len() > 1)
-        .collect();
-    let declared = snapshot
-        .policy
-        .shared_operations
-        .as_ref()
-        .ok_or("missing shared operations")?;
-    let mut expected = BTreeMap::new();
-    for (op, owners) in declared {
-        let names: BTreeSet<_> = owners.iter().cloned().collect();
-        if names.len() != owners.len() || names.len() < 2 {
-            return Err(format!("invalid shared operation assignment: {op}"));
-        }
-        expected.insert(op.clone(), names);
-    }
-    if shared != expected {
-        return Err(
-            "shared operations must explicitly name exactly the units that repeat them".into(),
-        );
-    }
-    Ok(())
+    chrono_harness::units::assignments(
+        units,
+        &snapshot.plans.keys().cloned().collect(),
+        snapshot
+            .policy
+            .shared_operations
+            .as_ref()
+            .ok_or("missing shared operations")?,
+        &operations,
+    )
 }
-
 pub(super) fn selection(
     units: &BTreeMap<String, Unit>,
     selected: &BTreeSet<String>,
     unit: &str,
 ) -> Result<BTreeSet<String>, String> {
-    Ok(units
-        .get(unit)
-        .ok_or("unregistered CI unit")?
-        .tests
-        .iter()
-        .filter(|t| selected.contains(*t))
-        .cloned()
-        .collect())
+    chrono_harness::units::select(units, selected, unit)
 }
-
 pub(super) fn required(units: &BTreeMap<String, Unit>, selected: &BTreeSet<String>) -> Vec<String> {
-    units
-        .iter()
-        .filter(|(_, u)| u.tests.iter().any(|t| selected.contains(t)))
-        .map(|(id, _)| id.clone())
-        .collect()
+    chrono_harness::units::required(units, selected)
 }
 
 pub(super) fn scope_protocol(req: &Request) -> &str {

@@ -3,6 +3,10 @@ mod checkout;
 pub mod facts;
 mod facts_binding;
 mod facts_configs;
+/// Existing selector owner resolves a host policy for provider consumers.
+pub fn load_selected_config(root: &Path, path: &str) -> Result<Value, String> {
+    facts_configs::load(root, path).map(|(_, _, config, _)| config)
+}
 mod facts_inputs;
 pub mod full;
 pub mod initial;
@@ -175,6 +179,171 @@ pub fn no_symlink_parents(root: &Path, relative: &str) -> Result<PathBuf, String
         }
     }
     Ok(p)
+}
+
+/// Validate and prepare one registered publication destination before any
+/// business or judge process is launched. Missing parent directories are part
+/// of publication preparation; existing files at the final address may be
+/// replaced, while symlinks and type-conflicting parents are rejected.
+pub fn prepare_publication(root: &Path, relative: &str) -> Result<PathBuf, String> {
+    relative_path(relative)?;
+    let components: Vec<_> = Path::new(relative).components().collect();
+    let target = root.join(relative);
+    let mut current = root.to_path_buf();
+    for (index, component) in components.iter().enumerate() {
+        current.push(component);
+        let final_component = index + 1 == components.len();
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "symlink path is not allowed: {}",
+                    current.display()
+                ));
+            }
+            Ok(metadata) if !final_component && !metadata.is_dir() => {
+                return Err(format!(
+                    "publication parent is not a directory: {}",
+                    current.display()
+                ));
+            }
+            Ok(metadata) if final_component && !metadata.is_file() => {
+                return Err(format!(
+                    "publication destination is not a file: {}",
+                    current.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    no_symlink_parents(root, relative)
+}
+
+fn invocation_template(template: &[String], binding: &Value) -> Vec<String> {
+    template
+        .iter()
+        .map(|value| match value.as_str() {
+            "{base}" => binding["base"].as_str().unwrap_or("").into(),
+            "{candidate}" => binding["candidate"].as_str().unwrap_or("").into(),
+            _ => value.clone(),
+        })
+        .collect()
+}
+
+fn invocation_path(index: usize, expected: &[String]) -> bool {
+    index == 0 || index > 0 && matches!(expected[index - 1].as_str(), "--config" | "--context")
+}
+
+/// Resolve the canonical path identities used by the live route validator.
+/// Raw argv/cwd remain in the entry; this value is an additional retained
+/// observation for portable offline comparison after the original root is gone.
+pub fn resolve_invocation(
+    root: &Path,
+    entry: &Value,
+    template: &[String],
+    binding: &Value,
+) -> Result<Value, String> {
+    let argv: Vec<String> = serde_json::from_value(entry["argv"].clone())
+        .map_err(|_| "E_ROUTE_MISSING: observed entry argv")?;
+    let cwd = Path::new(
+        entry["cwd"]
+            .as_str()
+            .ok_or("E_ROUTE_MISSING: observed cwd")?,
+    );
+    let expected = invocation_template(template, binding);
+    if argv.len() != expected.len() || argv.is_empty() {
+        return Err("E_ROUTE_MISSING: canonical argv differs".into());
+    }
+    let mut paths = vec![Value::Null; argv.len()];
+    for (index, (actual, want)) in argv.iter().zip(&expected).enumerate() {
+        if invocation_path(index, &expected) {
+            let actual_path =
+                fs::canonicalize(if index > 0 && expected[index - 1] == "--context" {
+                    root.join(actual)
+                } else {
+                    cwd.join(actual)
+                })
+                .map_err(|error| format!("E_ROUTE_MISSING: {error}"))?;
+            let expected_path = fs::canonicalize(root.join(want))
+                .map_err(|error| format!("E_ROUTE_MISSING: {error}"))?;
+            if actual_path != expected_path {
+                return Err("E_ROUTE_MISSING: canonical path differs".into());
+            }
+            paths[index] = serde_json::json!({
+                "actual": actual_path,
+                "expected": expected_path,
+            });
+        } else if actual != want {
+            return Err("E_ROUTE_MISSING: canonical argv differs".into());
+        }
+    }
+    let raw = serde_json::json!({"argv": argv, "cwd": cwd});
+    Ok(serde_json::json!({
+        "raw_digest": wire::digest(&raw)?,
+        "paths": paths,
+    }))
+}
+
+/// Validate a retained entry's live path identities without touching the
+/// original checkout. The raw argv/cwd digest and non-path arguments remain
+/// checked, while path equality comes from the identities captured live.
+pub fn validate_invocation_observation(
+    entry: &Value,
+    template: &[String],
+    binding: &Value,
+) -> Result<(), String> {
+    let argv: Vec<String> = serde_json::from_value(entry["argv"].clone())
+        .map_err(|_| "E_ROUTE_MISSING: observed entry argv")?;
+    let cwd = entry["cwd"]
+        .as_str()
+        .ok_or("E_ROUTE_MISSING: observed cwd")?;
+    let expected = invocation_template(template, binding);
+    let resolved = entry["resolved_paths"]
+        .as_object()
+        .ok_or("E_ROUTE_MISSING: resolved entry paths")?;
+    let raw = serde_json::json!({"argv": argv, "cwd": cwd});
+    if *resolved
+        .get("raw_digest")
+        .ok_or("E_ROUTE_MISSING: raw entry digest")?
+        != wire::digest(&raw)?
+    {
+        return Err("E_ROUTE_MISSING: raw entry identity differs".into());
+    }
+    let paths = resolved
+        .get("paths")
+        .ok_or("E_ROUTE_MISSING: resolved entry paths")?
+        .as_array()
+        .ok_or("E_ROUTE_MISSING: resolved entry paths")?;
+    if argv.len() != expected.len() || paths.len() != argv.len() || argv.is_empty() {
+        return Err("E_ROUTE_MISSING: canonical argv differs".into());
+    }
+    for (index, (actual, want)) in argv.iter().zip(&expected).enumerate() {
+        if invocation_path(index, &expected) {
+            let identity = paths[index]
+                .as_object()
+                .ok_or("E_ROUTE_MISSING: resolved path identity")?;
+            let actual_path = identity
+                .get("actual")
+                .ok_or("E_ROUTE_MISSING: actual path identity")?
+                .as_str()
+                .ok_or("E_ROUTE_MISSING: resolved path identity")?;
+            let expected_path = identity
+                .get("expected")
+                .ok_or("E_ROUTE_MISSING: expected path identity")?
+                .as_str()
+                .ok_or("E_ROUTE_MISSING: resolved path identity")?;
+            if actual_path != expected_path || actual_path.is_empty() {
+                return Err("E_ROUTE_MISSING: canonical path differs".into());
+            }
+        } else if !paths[index].is_null() || actual != want {
+            return Err("E_ROUTE_MISSING: canonical argv differs".into());
+        }
+    }
+    Ok(())
 }
 /// Reject duplicate object members before typed decoding, including opaque policy data.
 pub fn json(bytes: &[u8]) -> Result<Value, String> {
@@ -562,7 +731,10 @@ pub fn canonical_argv(
     }
     v
 }
-fn root_for_config(path: &Path, preserve_entry: bool) -> Result<(PathBuf, String), String> {
+fn root_for_config(
+    path: &Path,
+    canonical_host: Option<&Path>,
+) -> Result<(PathBuf, String), String> {
     let full = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -570,28 +742,50 @@ fn root_for_config(path: &Path, preserve_entry: bool) -> Result<(PathBuf, String
             .map_err(|e| e.to_string())?
             .join(path)
     };
-    let full = if preserve_entry {
-        full
-    } else {
-        fs::canonicalize(full).map_err(|e| e.to_string())?
-    };
-    for p in full.ancestors().skip(1) {
+    if let Some(host) = canonical_host {
+        // Resolve only caller-to-host traversal. Below-root entries must be
+        // checked before a link or a following parent component can erase them.
+        let components: Vec<_> = full.components().collect();
+        for (index, component) in components.iter().enumerate() {
+            if *component != Component::Normal(std::ffi::OsStr::new(".chrono-harness")) {
+                continue;
+            }
+            let prefix: PathBuf = components[..index].iter().collect();
+            let root = fs::canonicalize(prefix).map_err(|e| e.to_string())?;
+            if root != host {
+                continue;
+            }
+            let mut rel = PathBuf::from(".chrono-harness");
+            no_symlink_parents(&root, rel.to_str().ok_or("non UTF-8 config path")?)?;
+            for component in &components[index + 1..] {
+                match component {
+                    Component::CurDir => {}
+                    Component::Normal(value) => {
+                        rel.push(value);
+                        no_symlink_parents(&root, rel.to_str().ok_or("non UTF-8 config path")?)?;
+                    }
+                    Component::ParentDir => {
+                        if rel == Path::new(".chrono-harness") || !rel.pop() {
+                            return Err("config path escaped host policy root".into());
+                        }
+                    }
+                    _ => return Err("config path escaped host root".into()),
+                }
+            }
+            return Ok((root, rel.to_str().ok_or("non UTF-8 config path")?.into()));
+        }
+        return Err("config must reside beneath .chrono-harness".into());
+    }
+    let canonical = fs::canonicalize(&full).map_err(|e| e.to_string())?;
+    for p in canonical.ancestors().skip(1) {
         if p.file_name().is_some_and(|n| n == ".chrono-harness") {
             let root = p.parent().ok_or("no host root")?.to_path_buf();
-            let rel = full
+            let rel = canonical
                 .strip_prefix(&root)
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("non UTF-8 config path")?
-                .to_owned();
-            // Host-root aliases (including the caller cwd) may be resolved,
-            // but a selector's path below that root must reach the shared
-            // resolver without losing linked entry or parent components.
-            let root = if preserve_entry {
-                fs::canonicalize(root).map_err(|e| e.to_string())?
-            } else {
-                root
-            };
+                .into();
             return Ok((root, rel));
         }
     }
@@ -607,7 +801,7 @@ pub fn dispatch(args: &[&str]) -> CliOutput {
 }
 pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     match args{
-    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check\nchrono-harness check --unit ID\nchrono-harness check --collect\nConfigured short checks read .chrono-harness/config.json and produce their inputs automatically. Legacy explicit spelling is accepted only by legacy registered contracts. Full independent short scopes remain unsupported.\nchrono-harness parity --host-root H --report P --compared-report P\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. The parity command adds fail-closed evidence to two completed full reports; it never changes the canonical check command. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
+    []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check\nchrono-harness check --unit ID\nchrono-harness check --collect\nConfigured short checks read .chrono-harness/config.json and produce their inputs automatically. Legacy explicit spelling is accepted only by legacy registered contracts. Full independent scopes require registered execution_units.\nchrono-harness parity --host-root H --report P --compared-report P\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. The parity command adds fail-closed evidence to two completed full reports; it never changes the canonical check command. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest, entry){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
@@ -714,14 +908,18 @@ fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     }
     let candidate = candidate.ok_or("missing --candidate")?;
     let config = Path::new(config.ok_or("missing --config")?);
-    let (root, config_path) = root_for_config(config, false)?;
-    let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
-    // Only selectors adopt the literal-entry contract. Direct and scoped
-    // profiles retain their existing canonical path and error behavior.
-    let (root, config_path) = if profile["schema"] == "chrono-git-configs/v1" {
-        root_for_config(config, true)?
+    let (root, entry_path) = root_for_config(config, None)?;
+    let entry_profile = json(&fs::read(root.join(&entry_path)).map_err(|e| e.to_string())?)?;
+    // Resolve a native selector before admitting full-unit scope.  The request
+    // keeps the literal entry path so route identity and registry provenance
+    // still bind the caller's selector; policy checks use the stable selected
+    // direct full-v3 profile.
+    let (root, config_path, _profile) = if entry_profile["schema"] == "chrono-git-configs/v1" {
+        let (root, entry_path) = root_for_config(config, Some(&root))?;
+        let (_, _, selected, _) = facts_configs::load(&root, &entry_path)?;
+        (root, entry_path, selected)
     } else {
-        (root, config_path)
+        (root, entry_path, entry_profile)
     };
     execute_check(
         root,
@@ -747,9 +945,47 @@ fn execute_check(
     entry: Value,
     preparation: Option<Value>,
 ) -> Result<(u8, String), String> {
-    let profile = json(&fs::read(root.join(&config_path)).map_err(|e| e.to_string())?)?;
-    if scope.is_some() && profile["schema"] != units::PROFILE {
-        return Err("unit/collect selection requires chrono-ci-check/v3".into());
+    let (_, _, profile, _) = facts_configs::load(&root, &config_path)?;
+    let full_units = if scope.is_some() && profile["schema"] != units::PROFILE {
+        units::full_execution_units(&profile)?
+            .ok_or("unit/collect selection requires registered full-v3/v4 execution units")
+            .map(Some)?
+    } else {
+        None
+    };
+    if scope.is_some()
+        && profile["schema"] == units::PROFILE
+        && profile["policy"].get("units").is_none()
+    {
+        return Err("unit/collect selection requires registered execution units".into());
+    }
+    if let (Some(units::Scope::Collect { manifest }), Some(block)) = (&scope, &full_units) {
+        let definitions: std::collections::BTreeMap<String, units::Unit> =
+            serde_json::from_value(block["units"].clone()).map_err(|e| e.to_string())?;
+        units::validate_collection_paths(
+            manifest,
+            block["report_path"]
+                .as_str()
+                .ok_or("collection report path")?,
+            &definitions
+                .values()
+                .map(|u| u.report_path.clone())
+                .collect::<Vec<_>>(),
+        )?;
+    }
+    let mut entry = entry;
+    if let Some(template) = profile["canonical_check"]["argv"].as_array() {
+        let mut template: Vec<String> =
+            serde_json::from_value(Value::Array(template.clone())).map_err(|e| e.to_string())?;
+        if let Some(scope) = &scope {
+            template.extend(scope.contract_argv(&profile));
+        }
+        let binding = serde_json::json!({"base":base,"candidate":candidate});
+        let resolved = resolve_invocation(&root, &entry, &template, &binding)?;
+        entry
+            .as_object_mut()
+            .ok_or("observed entry object")?
+            .insert("resolved_paths".into(), resolved);
     }
     if profile.get("schema").and_then(Value::as_str) == Some(initial::PROFILE) {
         if !initial || context.is_some() {
@@ -769,6 +1005,7 @@ fn execute_check(
             &candidate,
             Path::new(&context.ok_or("full check requires --context")?),
             entry,
+            scope,
             preparation,
         );
     }
@@ -808,7 +1045,7 @@ fn execute_check(
         candidate,
         initial,
     };
-    let report_path = no_symlink_parents(&root, &output_path)?;
+    let report_path = prepare_publication(&root, &output_path)?;
     let input = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     let proc = if req.observations["preparation"].is_object() {
         let (_, _, policy, _) = facts_configs::load(&root, ".chrono-harness/config.json")?;

@@ -7,11 +7,30 @@ use chrono_harness::{
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const SCHEMA: &str = "chrono-github-units/v1";
+pub const FULL_SCHEMA: &str = "chrono-github-units/v2";
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FullContexts {
+    pub collection: String,
+    pub units: BTreeMap<String, String>,
+}
+
+fn full_contexts_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<FullContexts>, D::Error> {
+    FullContexts::deserialize(d).map(Some)
+}
 pub(super) const MARKER: &str = "# chrono-ci: owned github-units/v1\n";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "full_contexts_present"
+    )]
+    pub full_contexts: Option<FullContexts>,
     pub schema: String,
     pub collection: super::Config,
     pub units: BTreeMap<String, Workflow>,
@@ -73,16 +92,74 @@ impl Config {
 }
 
 pub fn validate(c: &Config) -> Result<(), String> {
-    if c.schema != SCHEMA || c.units.is_empty() || c.collection.initial_inventory.is_some() {
+    if !matches!(c.schema.as_str(), SCHEMA | FULL_SCHEMA)
+        || c.units.is_empty()
+        || c.collection.initial_inventory.is_some()
+    {
         return Err("unit workflows require explicit units and the scoped initial contract".into());
     }
-    super::validate(&c.collection)?;
+    match (&c.full_contexts, c.schema.as_str()) {
+        (None, SCHEMA) => {}
+        (Some(contexts), FULL_SCHEMA)
+            if c.collection.schema == "chrono-github-ci/v4"
+                && contexts.units.keys().collect::<Vec<_>>()
+                    == c.units.keys().collect::<Vec<_>>() =>
+        {
+            let mut inputs = vec![(&contexts.collection, c.workflow(None)?)];
+            for (id, path) in &contexts.units {
+                inputs.push((path, c.workflow(Some(id))?));
+            }
+            for (path, workflow) in inputs {
+                chrono_harness::units::artifact_path(path)?;
+                if !Path::new(path).starts_with(&workflow.artifact_directory)
+                    || chrono_harness::units::overlap(path, &workflow.context_path)
+                {
+                    return Err("full context must be a separate declared upload input".into());
+                }
+            }
+        }
+        _ => {
+            return Err(
+                "v1 units are scoped; v2 requires exact full context mappings and short workflows"
+                    .into(),
+            );
+        }
+    }
+    if let Some(contexts) = &c.full_contexts {
+        let outputs: Vec<_> = std::iter::once(&c.collection.context_path)
+            .chain(c.units.values().map(|u| &u.context_path))
+            .chain([
+                &c.gather.manifest_path,
+                &c.gather.report_path,
+                &c.gather.download_directory,
+            ])
+            .collect();
+        for input in std::iter::once(&contexts.collection).chain(contexts.units.values()) {
+            if outputs
+                .iter()
+                .any(|output| chrono_harness::units::overlap(input, output))
+            {
+                return Err("full context overlaps provider publication".into());
+            }
+        }
+        let mut roots = vec![&c.collection.artifact_directory];
+        for unit in c.units.values() {
+            if roots
+                .iter()
+                .any(|root| chrono_harness::units::overlap(&unit.artifact_directory, root))
+            {
+                return Err("full units require separate upload ownership".into());
+            }
+            roots.push(&unit.artifact_directory);
+        }
+    }
+    super::validate_policy(&c.collection, c.schema == FULL_SCHEMA)?;
     let mut paths = BTreeSet::from([c.collection.workflow_path.clone()]);
     let mut names = BTreeSet::from([c.collection.name.clone()]);
     let mut contexts = BTreeSet::from([c.collection.context_path.clone()]);
     for (id, unit) in &c.units {
         chrono_harness::units::id(id)?;
-        super::validate(&c.workflow(Some(id))?)?;
+        super::validate_policy(&c.workflow(Some(id))?, c.schema == FULL_SCHEMA)?;
         if !paths.insert(unit.workflow_path.clone())
             || !names.insert(unit.name.clone())
             || !contexts.insert(unit.context_path.clone())
@@ -148,44 +225,74 @@ pub fn validate(c: &Config) -> Result<(), String> {
     Ok(())
 }
 
+pub(super) struct Profile {
+    pub units: BTreeMap<String, Unit>,
+    pub report_path: String,
+    pub judge: Option<chrono_harness::CommandSpec>,
+}
 pub(super) fn profile(
     root: &Path,
     c: &Config,
-) -> Result<(chrono_harness::CheckConfig, BTreeMap<String, Unit>), String> {
-    let profile =
-        chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
-    if profile.schema != chrono_harness::units::PROFILE {
-        return Err("unit provider requires chrono-ci-check/v3".into());
-    }
-    let units: BTreeMap<String, Unit> =
-        serde_json::from_value(profile.policy["units"].clone()).map_err(|e| e.to_string())?;
+) -> Result<(Profile, BTreeMap<String, Unit>), String> {
+    let raw = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
+    let profile = if c.schema == FULL_SCHEMA {
+        let block = chrono_harness::units::full_execution_units(&raw)?
+            .ok_or("full provider requires registered full units")?;
+        Profile {
+            units: serde_json::from_value(block["units"].clone()).map_err(|e| e.to_string())?,
+            report_path: block["report_path"]
+                .as_str()
+                .ok_or("full collection report path")?
+                .into(),
+            judge: None,
+        }
+    } else {
+        let profile =
+            chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
+        if profile.schema != chrono_harness::units::PROFILE {
+            return Err("v1 unit provider requires chrono-ci-check/v3".into());
+        }
+        Profile {
+            units: serde_json::from_value(profile.policy["units"].clone())
+                .map_err(|e| e.to_string())?,
+            report_path: profile.report_path,
+            judge: Some(profile.judge),
+        }
+    };
+    let units = profile.units.clone();
     if units.keys().collect::<Vec<_>>() != c.units.keys().collect::<Vec<_>>() {
         return Err("workflow units differ from check profile assignments".into());
     }
     for (id, unit) in &units {
         chrono_harness::units::artifact_path(&unit.report_path)?;
-        if !unit
-            .report_path
-            .starts_with(&c.units[id].artifact_directory)
-            || unit.report_path == c.units[id].context_path
+        if !Path::new(&unit.report_path).starts_with(&c.units[id].artifact_directory)
+            || chrono_harness::units::overlap(&unit.report_path, &c.units[id].context_path)
         {
             return Err("unit report must be uploaded and separate from context".into());
         }
     }
-    if !profile
-        .report_path
-        .starts_with(&c.collection.artifact_directory)
+    if !Path::new(&profile.report_path).starts_with(&c.collection.artifact_directory)
         || [
             &c.collection.context_path,
             &c.gather.manifest_path,
             &c.gather.report_path,
+            &c.gather.download_directory,
         ]
-        .contains(&&profile.report_path)
-        || profile
-            .report_path
-            .starts_with(&c.gather.download_directory)
+        .iter()
+        .any(|path| chrono_harness::units::overlap(path, &profile.report_path))
     {
         return Err("collection report collides with provider outputs".into());
+    }
+    if let Some(contexts) = &c.full_contexts {
+        for input in std::iter::once(&contexts.collection).chain(contexts.units.values()) {
+            if chrono_harness::units::overlap(input, &profile.report_path)
+                || units
+                    .values()
+                    .any(|u| chrono_harness::units::overlap(input, &u.report_path))
+            {
+                return Err("full context overlaps check report publication".into());
+            }
+        }
     }
     Ok((profile, units))
 }
@@ -230,6 +337,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
                 &pre_check,
                 &artifact,
                 unit.is_none(),
+                c.schema == FULL_SCHEMA,
             )?
             .replacen(super::MARKER, MARKER, 1),
         );
@@ -288,21 +396,55 @@ pub fn prepare(
     payload: &Value,
     revision: &str,
 ) -> Result<Value, String> {
+    prepare_scope(
+        root,
+        path,
+        c,
+        unit,
+        Some(c.scope(unit)),
+        event,
+        payload,
+        revision,
+    )
+}
+pub(crate) fn prepare_all(
+    root: &Path,
+    path: &str,
+    c: &Config,
+    event: &str,
+    payload: &Value,
+    revision: &str,
+) -> Result<Value, String> {
+    prepare_scope(root, path, c, None, None, event, payload, revision)
+}
+#[allow(clippy::too_many_arguments)]
+fn prepare_scope(
+    root: &Path,
+    path: &str,
+    c: &Config,
+    unit: Option<&str>,
+    scope: Option<Scope>,
+    event: &str,
+    payload: &Value,
+    revision: &str,
+) -> Result<Value, String> {
     generate(root, path, c, true)?;
     let (profile, _) = profile(root, c)?;
     let w = c.workflow(unit)?;
-    let scope = c.scope(unit);
-    let mut context = super::prepare(root, &w, event, payload, revision)?;
+    let mut context =
+        super::prepare_policy(root, &w, event, payload, revision, c.schema == FULL_SCHEMA)?;
     let argv = context["canonical_argv"]
         .as_array_mut()
         .ok_or("missing canonical command")?;
-    if w.schema == "chrono-github-ci/v4" {
-        match &scope {
-            Scope::Unit { unit } => argv.extend([json!("--unit"), json!(unit)]),
-            Scope::Collect { .. } => argv.push(json!("--collect")),
+    if let Some(scope) = &scope {
+        if w.schema == "chrono-github-ci/v4" {
+            match scope {
+                Scope::Unit { unit } => argv.extend([json!("--unit"), json!(unit)]),
+                Scope::Collect { .. } => argv.push(json!("--collect")),
+            }
+        } else {
+            argv.extend(scope.argv().into_iter().map(Value::String));
         }
-    } else {
-        argv.extend(scope.argv().into_iter().map(Value::String));
     }
     context["scope"] = serde_json::to_value(scope).map_err(|e| e.to_string())?;
     context["provider_sha256"] = json!(file_identity(&root.join(path))?.0);
@@ -320,7 +462,28 @@ pub fn prepare(
             ));
         }
     }
-    let judge = chrono_harness::resolve_program(root, &profile.judge.program, None)?;
-    context["executables"] = json!({"runner_sha256":file_identity(&root.join(&w.runner))?.0,"judge_sha256":file_identity(&judge)?.0});
+    let pins = if let Some(judge) = &profile.judge {
+        let judge = chrono_harness::resolve_program(root, &judge.program, None)?;
+        json!({"runner_sha256":file_identity(&root.join(&w.runner))?.0,"judge_sha256":file_identity(&judge)?.0})
+    } else {
+        super::full::executable_pins(root, &w.check_config, &w.runner)?
+    };
+    context["executables"] = pins;
+    if let Some(contexts) = &c.full_contexts {
+        let path = match unit {
+            Some(unit) => &contexts.units[unit],
+            None => &contexts.collection,
+        };
+        let raw = fs::read(no_symlink_parents(root, path)?)
+            .map_err(|e| format!("missing registered exact full context {path}: {e}"))?;
+        let ctx = super::full::context_input(&raw)?;
+        if ctx["base"] != context["base"]
+            || ctx["candidate"] != context["candidate"]
+            || context["initial"] == true
+        {
+            return Err("exact full context disagrees with automatic event endpoints".into());
+        }
+        context["full_context"] = json!({"path":path,"sha256":chrono_harness::sha256(&raw),"semantic_digest":chrono_harness::wire::digest(&ctx)?});
+    }
     Ok(context)
 }

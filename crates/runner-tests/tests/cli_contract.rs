@@ -134,6 +134,69 @@ fn unit_report_compacts_formatting_and_preserves_original_process_bytes() {
         serde_json::from_value(report["response"]["evidence"]["bytes"].clone()).unwrap();
     assert_eq!(preserved, (0..=255).cycle().take(8192).collect::<Vec<u8>>());
 }
+
+#[test]
+fn full_unit_selector_rejects_legacy_profile_before_launch() {
+    let (_dir, p) = fixture(RESPONSE);
+    let mut config: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
+    config["schema"] = serde_json::Value::Null;
+    config["schema_version"] = json!(2);
+    fs::write(&p, serde_json::to_vec(&config).unwrap()).unwrap();
+    let r = dispatch(&[
+        "check",
+        "--config",
+        &p,
+        "--base",
+        &"a".repeat(40),
+        "--candidate",
+        &"b".repeat(40),
+        "--unit",
+        "one",
+    ]);
+    assert_eq!(r.exit_code, 2);
+    assert!(r.stderr.contains("full-v3"));
+}
+
+#[test]
+fn full_execution_units_reject_duplicate_report_paths() {
+    let profile = json!({
+        "schema_version": 3,
+        "execution_units": {
+            "units": {
+                "one": {"tests": ["test:one"], "report_path": ".chrono-harness/state/unit.json"},
+                "two": {"tests": ["test:two"], "report_path": ".chrono-harness/state/unit.json"}
+            },
+            "shared_operations": {},
+            "collection_limits": {"manifest_bytes": 1024, "report_bytes": 1024},
+            "report_path": ".chrono-harness/state/collection.json"
+        }
+    });
+    let error = chrono_harness::units::full_execution_units(&profile).unwrap_err();
+    assert!(error.contains("report paths overlap"), "{error}");
+}
+
+#[test]
+fn publication_preflight_rejects_symlink_and_parent_type_conflicts() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".chrono-harness/state")).unwrap();
+    fs::write(dir.path().join(".chrono-harness/state/file"), b"blocked").unwrap();
+    let error =
+        chrono_harness::prepare_publication(dir.path(), ".chrono-harness/state/file/report.json")
+            .unwrap_err();
+    assert!(
+        error.contains("publication parent is not a directory"),
+        "{error}"
+    );
+    std::os::unix::fs::symlink(
+        "report.json",
+        dir.path().join(".chrono-harness/state/link.json"),
+    )
+    .unwrap();
+    let error = chrono_harness::prepare_publication(dir.path(), ".chrono-harness/state/link.json")
+        .unwrap_err();
+    assert!(error.contains("symlink path is not allowed"), "{error}");
+}
+
 #[test]
 fn actual_failure_is_preserved() {
     let script = RESPONSE
@@ -437,6 +500,201 @@ fn scoped_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_pass
             assert_eq!(report["response"]["results"][0]["cause"], "�");
         } else {
             assert!(report.get("transport_failure").is_some());
+        }
+    }
+}
+
+#[test]
+fn retained_entry_validation_reaches_raw_paths_and_missing_members_offline() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(dir.path()).unwrap();
+    fs::write(root.join("runner"), "runner").unwrap();
+    fs::write(root.join("config"), "config").unwrap();
+    let template = vec![
+        "runner".into(),
+        "check".into(),
+        "--config".into(),
+        "config".into(),
+    ];
+    let mut entry = json!({"argv":template,"cwd":root});
+    entry["resolved_paths"] =
+        chrono_harness::resolve_invocation(&root, &entry, &template, &json!({})).unwrap();
+    dir.close().unwrap();
+    chrono_harness::validate_invocation_observation(&entry, &template, &json!({})).unwrap();
+    let mut wrong = entry.clone();
+    wrong["argv"][3] = "other".into();
+    assert!(
+        chrono_harness::validate_invocation_observation(&wrong, &template, &json!({}))
+            .unwrap_err()
+            .contains("raw entry identity")
+    );
+    let mut wrong = entry.clone();
+    wrong["resolved_paths"]["paths"][3]["actual"] = "other".into();
+    assert!(
+        chrono_harness::validate_invocation_observation(&wrong, &template, &json!({}))
+            .unwrap_err()
+            .contains("canonical path")
+    );
+    for field in ["raw_digest", "paths"] {
+        let mut missing = entry.clone();
+        missing["resolved_paths"]
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+        assert!(
+            chrono_harness::validate_invocation_observation(&missing, &template, &json!({}))
+                .unwrap_err()
+                .contains("E_ROUTE_MISSING")
+        );
+    }
+    for field in ["actual", "expected"] {
+        let mut missing = entry.clone();
+        missing["resolved_paths"]["paths"][3]
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+        assert!(
+            chrono_harness::validate_invocation_observation(&missing, &template, &json!({}))
+                .unwrap_err()
+                .contains("E_ROUTE_MISSING")
+        );
+    }
+}
+
+#[test]
+fn collection_manifest_repeated_separators_are_filesystem_aliases() {
+    use chrono_harness::units::{overlap, validate_collection_paths};
+    for (a, b) in [
+        (
+            ".chrono-harness/state//report.json",
+            ".chrono-harness/state/report.json",
+        ),
+        (
+            ".chrono-harness//state/unit",
+            ".chrono-harness/state/unit/report.json",
+        ),
+    ] {
+        assert!(overlap(a, b));
+        assert!(overlap(b, a));
+    }
+    assert!(
+        validate_collection_paths(
+            ".chrono-harness/state//collected.json",
+            ".chrono-harness/state/collected.json",
+            &[]
+        )
+        .is_err()
+    );
+    assert!(
+        validate_collection_paths(
+            ".chrono-harness/state//one.json",
+            ".chrono-harness/state/collected.json",
+            &[".chrono-harness/state/one.json".into()]
+        )
+        .is_err()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
+    use std::os::unix::{fs::PermissionsExt, fs::symlink};
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    for parent in [
+        source.join(".chrono-harness/state/implementation-repair/selector-fixtures"),
+        source.join("crates/runner-tests/target/selector-fixtures"),
+    ] {
+        fs::create_dir_all(&parent).unwrap();
+        let dir = tempfile::tempdir_in(parent).unwrap();
+        let root = dir.path().join("host");
+        fs::create_dir_all(root.join(".chrono-harness")).unwrap();
+        let root = fs::canonicalize(root).unwrap();
+        let alias = dir.path().join("alias");
+        symlink(&root, &alias).unwrap();
+        let marker = root.join(".chrono-harness/facts-launches");
+        let tool = root.join(".chrono-harness/git-fixture");
+        fs::write(
+            &tool,
+            format!(
+                "#!/bin/sh\nprintf launch >> '{}'\nprintf wrong-version\n",
+                marker.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
+        let target = json!({"schema_version":3,"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"expected"}],"environment":{"inherit":[],"values":{},"inputs":[{"id":"git-bytes","location":tool,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&tool).unwrap())}]},"protocol":{"timeout_seconds":5,"stdout_limit_bytes":4096}});
+        fs::write(
+            root.join(".chrono-harness/direct.json"),
+            serde_json::to_vec(&target).unwrap(),
+        )
+        .unwrap();
+        let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+        fs::write(root.join(".chrono-harness/config.json"),serde_json::to_vec(&json!({"schema":"chrono-git-configs/v1","platforms":{platform:".chrono-harness/direct.json"}})).unwrap()).unwrap();
+        symlink("config.json", root.join(".chrono-harness/linked.json")).unwrap();
+        fs::create_dir(root.join(".chrono-harness/real-dir")).unwrap();
+        symlink("real-dir", root.join(".chrono-harness/linked-dir")).unwrap();
+        let runner = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../runner/target/debug/chrono-harness");
+        let invoke = |cwd: &std::path::Path, path: &std::path::Path| {
+            std::process::Command::new(&runner)
+                .current_dir(cwd)
+                .args([
+                    "check",
+                    "--config",
+                    path.to_str().unwrap(),
+                    "--base",
+                    &"a".repeat(40),
+                    "--candidate",
+                    &"b".repeat(40),
+                    "--context",
+                    ".chrono-harness/state/context.json",
+                ])
+                .output()
+                .unwrap()
+        };
+        for path in [
+            root.join(".chrono-harness/linked.json"),
+            alias.join(".chrono-harness/linked.json"),
+            alias.join(".chrono-harness/linked-dir/../config.json"),
+        ] {
+            let out = invoke(dir.path(), &path);
+            assert_eq!(out.status.code(), Some(2));
+            assert!(
+                String::from_utf8_lossy(&out.stderr).contains("symlink path"),
+                "{}: {}",
+                path.display(),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert!(!marker.exists(), "facts launched for {}", path.display());
+        }
+        let nested = root.join("nested");
+        fs::create_dir(&nested).unwrap();
+        for (cwd, path) in [
+            (
+                dir.path().to_path_buf(),
+                alias.join(".chrono-harness/config.json"),
+            ),
+            (
+                nested.clone(),
+                std::path::PathBuf::from("../.chrono-harness/config.json"),
+            ),
+            (
+                nested,
+                std::path::PathBuf::from("../../host/.chrono-harness/config.json"),
+            ),
+        ] {
+            let out = invoke(&cwd, &path);
+            assert_eq!(out.status.code(), Some(2));
+            assert!(
+                marker.exists(),
+                "legal control did not reach selected producer: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            fs::remove_file(&marker).unwrap();
         }
     }
 }

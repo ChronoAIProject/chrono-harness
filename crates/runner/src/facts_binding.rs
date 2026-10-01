@@ -6,7 +6,7 @@ use crate::{
 use serde_json::{Value, json as value};
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -14,6 +14,10 @@ use std::{
 pub struct Reader {
     bound: Option<Bound>,
     processes: RefCell<Vec<ProcessResult>>,
+    // Exact immutable endpoint/path -> original successful process. The root,
+    // tool and environment belong to this Reader's binding, never a global cache.
+    blobs: RefCell<BTreeMap<(String, String), usize>>,
+    verified_oids: RefCell<BTreeSet<String>>,
 }
 /// Original binding observations when construction fails, without decoding diagnostics.
 #[derive(Debug)]
@@ -95,6 +99,8 @@ impl Reader {
         Self {
             bound: None,
             processes: RefCell::new(vec![]),
+            blobs: RefCell::new(BTreeMap::new()),
+            verified_oids: RefCell::new(BTreeSet::new()),
         }
     }
     pub fn for_config(root: &Path, config: &str) -> Result<Self, String> {
@@ -263,6 +269,8 @@ impl Reader {
                     selection,
                 }),
                 processes: RefCell::new(vec![]),
+                blobs: RefCell::new(BTreeMap::new()),
+                verified_oids: RefCell::new(BTreeSet::new()),
             };
             if let Some(prior) = prior {
                 let current = reader.observation();
@@ -366,6 +374,47 @@ impl Reader {
         }
         Ok(())
     }
+    fn check_root(&self, root: &Path) -> Result<(), String> {
+        let b = self.bound.as_ref().ok_or("missing binding")?;
+        if fs::canonicalize(root).map_err(|e| self.error(&e.to_string()))? != b.root {
+            return Err(self.error("Git facts root mismatch"));
+        }
+        Ok(())
+    }
+    pub(crate) fn blob_with_reuse(
+        &self,
+        root: &Path,
+        oid: &str,
+        path: &str,
+    ) -> Result<Vec<u8>, String> {
+        // Legacy environments are not bound. Refs and expressions must always
+        // be observed anew, retaining the existing Git success/error semantics.
+        if self.bound.is_none() || !self.verified_oids.borrow().contains(oid) {
+            return self.git(root, &["show", &format!("{oid}:{path}")]);
+        }
+        self.check_root(root)?;
+        let key = (oid.to_string(), path.to_string());
+        let prior = self.blobs.borrow().get(&key).copied();
+        if let Some(index) = prior {
+            self.unchanged().map_err(|e| self.error(&e))?;
+            let bytes = self.processes.borrow()[index].stdout_bytes.clone();
+            self.unchanged().map_err(|e| self.error(&e))?;
+            return Ok(bytes);
+        }
+        let bytes = self.git(root, &["show", &format!("{oid}:{path}")])?;
+        // invoke retains the real receipt and completes both guards before
+        // returning success. Never index failures, absence or drifted reads.
+        let index = self.processes.borrow().len() - 1;
+        self.blobs.borrow_mut().insert(key, index);
+        Ok(bytes)
+    }
+    pub(crate) fn record_verified_oid(&self, oid: &str) {
+        // Only verify_oid's existing successful commit/tree observations may
+        // enable reuse. Never acquire another identity just to populate this set.
+        if self.bound.is_some() {
+            self.verified_oids.borrow_mut().insert(oid.into());
+        }
+    }
     fn invoke(
         &self,
         root: &Path,
@@ -374,9 +423,7 @@ impl Reader {
         literal_inventory: bool,
     ) -> Result<Vec<u8>, String> {
         let b = self.bound.as_ref().ok_or("missing binding")?;
-        if fs::canonicalize(root).map_err(|e| self.error(&e.to_string()))? != b.root {
-            return Err(self.error("Git facts root mismatch"));
-        }
+        self.check_root(root)?;
         self.unchanged().map_err(|e| self.error(&e))?;
         let mut spec = CommandSpec {
             args,

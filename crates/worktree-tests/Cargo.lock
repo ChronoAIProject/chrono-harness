@@ -47,6 +47,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-judge-filemap"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-mixed",
+ "chrono-judge-registration",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-mixed"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-registration",
+ "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-projects"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "chrono-judge-routes",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "chrono-judge-registration"
 version = "0.1.0"
 dependencies = [
@@ -57,11 +89,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-judge-routes"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "chrono-judge-workflow"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-projects",
+ "chrono-judge-registration",
+ "chrono-judge-routes",
+ "serde_json",
+ "time",
+]
+
+[[package]]
 name = "chrono-worktree"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
  "chrono-judge-registration",
+ "chrono-judge-workflow",
  "serde",
  "serde_json",
  "tempfile",

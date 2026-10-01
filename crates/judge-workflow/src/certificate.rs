@@ -185,7 +185,16 @@ pub fn consume(
             .filter(|p| p.starts_with(".chrono-harness/state/"))
             .ok_or("retained report path")?;
         // The producer transports its retained report together with the certificate.
-        let report_bytes = fs::read(no_symlink_parents(&req.candidate.root, report_path)?)
+        let report_file = no_symlink_parents(&req.candidate.root, report_path)?;
+        if results.completion.is_some()
+            && fs::metadata(&report_file).map_err(|e| e.to_string())?.len()
+                > r.config()["execution_units"]["collection_limits"]["report_bytes"]
+                    .as_u64()
+                    .ok_or("collected producer report bound")?
+        {
+            return Err("collected producer report exceeds registered bound".into());
+        }
+        let report_bytes = fs::read(&report_file)
             .map_err(|e| format!("producer report absent/not finalized: {e}"))?;
         let report = json(&report_bytes)?;
         if !matches!(report["status"].as_str(), Some("pass" | "warn"))
@@ -204,12 +213,99 @@ pub fn consume(
         {
             return Err("producer report outputs differ".into());
         }
-        let records = report["judges"].as_array().ok_or("producer judges")?;
+        let expanded = report["judges"]
+            .as_array()
+            .ok_or("producer judges")?
+            .iter()
+            .map(chrono_harness::full::expand_record)
+            .collect::<Result<Vec<_>, _>>()?;
+        let records = &expanded;
+        if results.completion.is_some() {
+            let original: Request =
+                serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
+            original.validate()?;
+            if original.candidate.root != plan.root
+                || original.context.sha256 != producer["context_digest"]
+            {
+                return Err("collected producer request differs".into());
+            }
+            let bindings: Vec<wire::Binding> =
+                serde_json::from_value(r.judges()["judges"].clone()).map_err(|e| e.to_string())?;
+            let parsed = chrono_harness::full::retained_judges(&original, &bindings, records)?;
+            let aggregate = parsed
+                .values()
+                .fold(wire::Status::Pass, |status, (_, _, response, _)| {
+                    status.max(response.status.clone())
+                });
+            let findings: Vec<Value> = records
+                .iter()
+                .flat_map(|row| {
+                    row["response"]["findings"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .cloned()
+                })
+                .collect();
+            if report["status"] != serde_json::to_value(aggregate).map_err(|e| e.to_string())?
+                || report["findings"] != value!(findings)
+            {
+                return Err("collected producer summary differs from actual judges".into());
+            }
+            let original = &parsed
+                .get(producer["judge"].as_str().ok_or("producer judge")?)
+                .ok_or("producer workflow input")?
+                .0;
+            if original.request_id != producer["request_id"]
+                || original.impact != req.impact
+                || plan.binding
+                    != chrono_judge_routes::binding(original, &proof["effective_inputs"])
+            {
+                return Err("collected producer stdin/global obligation binding differs".into());
+            }
+            let current_plan: Execution =
+                serde_json::from_value(evidence::output(req, "execution_plan")?.clone())
+                    .map_err(|e| e.to_string())?;
+            let expected = chrono_judge_routes::prepare_collection(
+                &plan.root,
+                plan.binding.clone(),
+                &current_plan.selected.keys().cloned().collect(),
+                &chrono_judge_registration::execution::plans(r.filemap())?,
+                &chrono_judge_registration::execution::methods(r.projects())?,
+                &chrono_judge_routes::execute_actions(r),
+                current_plan.environment,
+            )?;
+            if serde_json::to_value(&expected).map_err(|e| e.to_string())? != proof["plan"] {
+                return Err("collected global declaration plan differs".into());
+            }
+            let (old, _, _) = chrono_judge_registration::views_with_reader(req, reader)?;
+            if chrono_judge_projects::validate_retained_request(
+                original,
+                &old,
+                r,
+                &report["artifacts"],
+            )? != proof["effective_inputs"]
+            {
+                return Err("collected producer retained inputs differ".into());
+            }
+            chrono_judge_projects::verify_completion(
+                original,
+                r,
+                &old,
+                &proof["effective_inputs"],
+                &plan,
+                &results,
+                Some(&report["artifacts"]),
+                &req.candidate.root,
+            )?;
+        }
         let observations = proof["judges"].as_array().ok_or("producer observations")?;
         if records.len() != observations.len() + 1 {
             return Err("producer judge set differs".into());
         }
         for old in observations {
+            let expanded = chrono_harness::full::expand_record(old)?;
+            let old = &expanded;
             let matches: Vec<_> = records.iter().filter(|v| v["id"] == old["id"]).collect();
             if matches.len() != 1 {
                 return Err("producer judge observation missing/duplicate".into());

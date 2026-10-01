@@ -62,9 +62,83 @@ pub fn views(req: &Request) -> Result<(Registrations, Registrations, Value), Str
     let reader = facts::Reader::for_request(req)?;
     views_with_reader(req, &reader)
 }
+fn view_binding(
+    req: &Request,
+    base: &facts::RegistrySnapshot,
+    candidate: &facts::RegistrySnapshot,
+) -> Value {
+    let mut binding = value!({"base":req.base.commit,"candidate":req.candidate.commit,"registry":req.registries.digest,"context":req.context.sha256});
+    if base.selection.is_some() || candidate.selection.is_some() {
+        binding["entry_path"] = value!(req.config_path);
+        binding["base_config"] = value!({"entry_path":base.entry_path,"effective_path":base.effective_path,"selection":base.selection});
+        binding["candidate_config"] = value!({"entry_path":candidate.entry_path,"effective_path":candidate.effective_path,"selection":candidate.selection});
+    }
+    binding
+}
+/// Rebuild the original registration view from current immutable endpoint
+/// data and retained conversion observations. This never invokes the decoder.
+pub fn validate_retained_view(
+    req: &Request,
+    reader: &facts::Reader,
+    declaration_root: &Path,
+    supplied: &Value,
+) -> Result<(), String> {
+    let base = reader.registry_snapshot(declaration_root, &req.base.commit, &req.config_path)?;
+    let candidate =
+        reader.registry_snapshot(declaration_root, &req.candidate.commit, &req.config_path)?;
+    if facts::registry_digest(&base.values, &candidate.values)? != req.registries.digest {
+        return Err("E_COLLECTION_INPUT: original registration endpoint digest".into());
+    }
+    let binding = view_binding(req, &base, &candidate);
+    let conversion = &supplied["conversion"];
+    if !conversion.is_null() && conversion["process"]["cwd"] != value!(req.candidate.root) {
+        return Err("E_COLLECTION_INPUT: original conversion coordinates differ".into());
+    }
+    let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
+        .map_err(|e| e.to_string())?;
+    let (_, _, mut expected) = interpret_mode(
+        reader,
+        declaration_root,
+        &req.base.commit,
+        &req.candidate.commit,
+        &req.config_path,
+        base.values,
+        candidate.values,
+        &env,
+        Some("registration"),
+        Some(conversion),
+    )?;
+    expected["binding"] = binding;
+    if *supplied != expected {
+        return Err("E_COLLECTION_INPUT: original registration view differs".into());
+    }
+    Ok(())
+}
 pub fn views_with_reader(
     req: &Request,
     reader: &facts::Reader,
+) -> Result<(Registrations, Registrations, Value), String> {
+    views_using_reports(req, reader, None)
+}
+/// The local collection producer supplies original report inputs before publishing
+/// its required-unit manifest. Registration remains the conversion owner.
+pub fn views_for_collection_inputs(
+    req: &Request,
+    reader: &facts::Reader,
+    reports: &chrono_harness::units::FullManifest,
+) -> Result<(Registrations, Registrations, Value), String> {
+    if !matches!(
+        req.scope,
+        Some(chrono_harness::units::Scope::Collect { .. })
+    ) {
+        return Err("collection report inputs require collection scope".into());
+    }
+    views_using_reports(req, reader, Some(reports))
+}
+fn views_using_reports(
+    req: &Request,
+    reader: &facts::Reader,
+    reports: Option<&chrono_harness::units::FullManifest>,
 ) -> Result<(Registrations, Registrations, Value), String> {
     let base_snapshot =
         reader.registry_snapshot(&req.candidate.root, &req.base.commit, &req.config_path)?;
@@ -72,12 +146,7 @@ pub fn views_with_reader(
         reader.registry_snapshot(&req.candidate.root, &req.candidate.commit, &req.config_path)?;
     let selector_required =
         base_snapshot.selection.is_some() || candidate_snapshot.selection.is_some();
-    let mut binding = value!({"base":req.base.commit,"candidate":req.candidate.commit,"registry":req.registries.digest,"context":req.context.sha256});
-    if selector_required {
-        binding["entry_path"] = value!(req.config_path);
-        binding["base_config"] = value!({"entry_path":base_snapshot.entry_path,"effective_path":base_snapshot.effective_path,"selection":base_snapshot.selection});
-        binding["candidate_config"] = value!({"entry_path":candidate_snapshot.entry_path,"effective_path":candidate_snapshot.effective_path,"selection":candidate_snapshot.selection});
-    }
+    let binding = view_binding(req, &base_snapshot, &candidate_snapshot);
     let prior: Vec<_> = req
         .prior_results
         .iter()
@@ -121,6 +190,7 @@ pub fn views_with_reader(
     }
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .unwrap_or_default();
+    let retained = retained_conversion(req, &b, reports)?;
     let (a, b, mut view) = interpret_mode(
         reader,
         &req.candidate.root,
@@ -131,6 +201,7 @@ pub fn views_with_reader(
         b,
         &env,
         Some(&req.judge_id),
+        retained.as_ref(),
     )?;
     view["binding"] = binding;
     Ok((a, b, view))
@@ -178,7 +249,120 @@ pub fn interpret_with_reader(
         candidate,
         env,
         None,
+        None,
     )
+}
+fn retained_conversion(
+    req: &Request,
+    candidate: &Values,
+    reports: Option<&chrono_harness::units::FullManifest>,
+) -> Result<Option<Value>, String> {
+    let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope else {
+        return Ok(None);
+    };
+    let r = Registrations::load(candidate, &req.config_path)?;
+    let limits = &r.config()["execution_units"]["collection_limits"];
+    let manifest: chrono_harness::units::FullManifest = match reports {
+        Some(reports) => reports.clone(),
+        None => {
+            let bytes = chrono_harness::units::read_bounded(
+                &req.candidate.root,
+                manifest,
+                limits["manifest_bytes"].as_u64().ok_or("manifest bound")?,
+            )?;
+            chrono_harness::decode(&bytes)?
+        }
+    };
+    if !matches!(
+        manifest.schema.as_str(),
+        "chrono-full-collection/v1" | "chrono-ci-collection/v1"
+    ) {
+        return Err("E_COLLECTION_INPUT: manifest schema".into());
+    }
+    let mut seen = BTreeSet::new();
+    let mut retained = None;
+    for input in manifest.reports {
+        let source = r.config()["execution_units"]["units"][&input.unit]["report_path"]
+            .as_str()
+            .ok_or("E_COLLECTION_INPUT: unregistered original unit")?;
+        let transported = chrono_harness::prepared::original_path(
+            &chrono_harness::prepared::Original {
+                path: source.into(),
+                sha256: input.sha256.clone(),
+            },
+            input.artifacts.as_ref(),
+        )?;
+        if !seen.insert(input.unit.clone()) || transported != input.path {
+            return Err("E_COLLECTION_INPUT: original unit registration".into());
+        }
+        let bytes = chrono_harness::units::read_bounded(
+            &req.candidate.root,
+            &input.path,
+            limits["report_bytes"].as_u64().ok_or("report bound")?,
+        )?;
+        if sha256(&bytes) != input.sha256 {
+            return Err("E_COLLECTION_INPUT: original report digest".into());
+        }
+        let report = json(&bytes)?;
+        let record = report["judges"]
+            .as_array()
+            .ok_or("original judges")?
+            .iter()
+            .find(|j| j["id"] == "registration")
+            .ok_or("original registration")?;
+        let c = &record["response"]["outputs"]["registration_view"]["conversion"];
+        if !c.is_null() {
+            let original: Request =
+                serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
+            original.validate()?;
+            let expanded = chrono_harness::full::expand_record(record)?;
+            let process: chrono_harness::ProcessResult =
+                serde_json::from_value(expanded["process"].clone()).map_err(|e| e.to_string())?;
+            observation::process_success(&process)?;
+            if original.base.commit != req.base.commit
+                || original.base.tree != req.base.tree
+                || original.candidate.commit != req.candidate.commit
+                || original.candidate.tree != req.candidate.tree
+                || original.registries.digest != req.registries.digest
+                || original.context.sha256 != req.context.sha256
+                || original.runner.sha256 != req.runner.sha256
+                || original.scope
+                    != Some(chrono_harness::units::Scope::Unit {
+                        unit: input.unit.clone(),
+                    })
+                || original.observations["registry_bindings"]
+                    != req.observations["registry_bindings"]
+                || process.stdin_sha256 != wire::digest(&original)?
+                || process.sha256
+                    != r.judges()["judges"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|j| j["id"] == "registration")
+                        .ok_or("registration binding")?["sha256"]
+                        .as_str()
+                        .ok_or("registration pin")?
+                || json(&process.stdout_bytes)? != record["response"]
+                || c["process"]["cwd"] != serde_json::to_value(&original.candidate.root).unwrap()
+            {
+                return Err("E_COLLECTION_INPUT: original conversion bootstrap binding".into());
+            }
+            // Different roots carry different process coordinates. The conversion's declared input/output must agree.
+            if let Some(previous) = &retained {
+                let previous: &Value = previous;
+                if previous["input"] != c["input"]
+                    || previous["output"] != c["output"]
+                    || previous["script_sha256"] != c["script_sha256"]
+                {
+                    return Err("E_COLLECTION_INPUT: conflicting original conversion".into());
+                }
+            }
+            if retained.is_none() {
+                retained = Some(c.clone());
+            }
+        }
+    }
+    Ok(Some(retained.unwrap_or(Value::Null)))
 }
 fn interpret_mode(
     reader: &facts::Reader,
@@ -190,6 +374,7 @@ fn interpret_mode(
     candidate: Values,
     env: &BTreeMap<String, String>,
     consumer: Option<&str>,
+    retained: Option<&Value>,
 ) -> Result<(Registrations, Registrations, Value), String> {
     let new = Registrations::load(&candidate, config).map_err(|e| format!("candidate: {e}"))?;
     let deferred = consumer.is_some_and(|id| downstream_validator(&new, id));
@@ -251,6 +436,9 @@ fn interpret_mode(
         return Err("E_MIGRATION_PROFILE: missing/ambiguous historical profile".into());
     }
     let (profile, path, profile_bytes, profile_value) = matching.remove(0);
+    if retained.is_some_and(Value::is_null) {
+        return Err("E_MIGRATION: collection lacks original conversion evidence".into());
+    }
     let scripts = new.projects()["scripts"].as_array().unwrap();
     let script = scripts
         .iter()
@@ -280,25 +468,6 @@ fn interpret_mode(
         .ok_or("migration tool missing")?;
     let argv: Vec<String> =
         serde_json::from_value(t["version_argv"].clone()).map_err(|e| e.to_string())?;
-    let artifacts = facts::artifact_directories(new.config())?;
-    let before = reader.checkout_excluding(root, candidate_oid, &artifacts)?;
-    let tool = observation::tool(
-        root,
-        t["program"].as_str().unwrap(),
-        &argv,
-        env,
-        30,
-        1048576,
-    )?;
-    if tool.version.exit_code != 0
-        || tool.version.failure.is_some()
-        || t["expected_version"].as_str() != Some(tool.version.stdout.trim_end())
-    {
-        return Err(format!(
-            "E_TOOL_BINDING: migration version mismatch; observation={}",
-            value!({"tool_id":method.tool,"expected_version":t["expected_version"],"tool":tool})
-        ));
-    }
     let raw_bytes: BTreeMap<_, _> = raw
         .keys()
         .map(|p| Ok((p.clone(), reader.blob(root, base, p)?)))
@@ -314,35 +483,122 @@ fn interpret_mode(
         input["candidate"] = value!(candidate);
     }
     let script_path = script["path"].as_str().unwrap();
-    let script_bytes = fs::read(root.join(script_path)).map_err(|e| e.to_string())?;
-    if script_bytes != reader.blob(root, candidate_oid, script_path)? {
-        return Err("E_MIGRATION: decoder differs from fixed candidate".into());
-    }
-    let spec = CommandSpec {
-        program: tool.path.to_str().unwrap().into(),
-        args: method.argv.clone(),
-        env: env.clone(),
-        timeout_seconds: 30,
-        output_limit_bytes: 16 * 1024 * 1024,
+    let script_bytes = reader.blob(root, candidate_oid, script_path)?;
+    let (tool, receipt) = if let Some(c) = retained {
+        let tool: Tool = serde_json::from_value(c["tool"].clone()).map_err(|e| e.to_string())?;
+        let receipt: chrono_harness::ProcessResult =
+            serde_json::from_value(c["process"].clone()).map_err(|e| e.to_string())?;
+        observation::process_success(&tool.version)?;
+        observation::process_success(&receipt)?;
+        let mut version_argv = vec![tool.path.to_str().ok_or("migration tool path")?.to_owned()];
+        version_argv.extend(argv.clone());
+        let mut invocation = vec![tool.path.to_str().ok_or("migration tool path")?.to_owned()];
+        invocation.extend(method.argv.clone());
+        let declared_input = new.config()["environment"]["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| {
+                Path::new(i["location"].as_str().unwrap()).is_absolute()
+                    && i["location"].as_str() == tool.path.to_str()
+                    && i["sha256"] == tool.sha256
+            });
+        let candidate_file = tool
+            .path
+            .strip_prefix(&receipt.cwd)
+            .ok()
+            .and_then(|p| p.to_str())
+            .is_some_and(|p| {
+                new.filemap()["files"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|f| f["path"] == p)
+                    && reader
+                        .blob(root, candidate_oid, p)
+                        .is_ok_and(|b| sha256(&b) == tool.sha256)
+            });
+        if c["input"] != input
+            || c["input_digest"] != wire::digest(&input)?
+            || c["output_digest"] != receipt.stdout_sha256
+            || c["script"] != script_path
+            || c["script_sha256"] != sha256(&script_bytes)
+            || c["tool_id"] != method.tool
+            || tool.program != t["program"].as_str().ok_or("migration program")?
+            || tool.path.file_name().and_then(|s| s.to_str()) != Some(&tool.basename)
+            || tool.version.executable != tool.path
+            || tool.version.sha256 != tool.sha256
+            || tool.version.argv != version_argv
+            || tool.version.cwd != receipt.cwd
+            || tool.version.environment != *env
+            || tool.version.stdin_sha256 != sha256(&[])
+            || t["expected_version"].as_str() != Some(tool.version.stdout.trim_end())
+            || receipt.executable != tool.path
+            || receipt.sha256 != tool.sha256
+            || receipt.argv != invocation
+            || receipt.environment != *env
+            || receipt.stdin_sha256 != wire::digest(&input)?
+            || c["output"] != json(&receipt.stdout_bytes)?
+            || (!declared_input && !candidate_file)
+        {
+            return Err(
+                "E_MIGRATION: retained conversion differs from declared original contract".into(),
+            );
+        }
+        (tool, receipt)
+    } else {
+        let artifacts = facts::artifact_directories(new.config())?;
+        let before = reader.checkout_excluding(root, candidate_oid, &artifacts)?;
+        let tool = observation::tool(
+            root,
+            t["program"].as_str().unwrap(),
+            &argv,
+            env,
+            30,
+            1048576,
+        )?;
+        if tool.version.exit_code != 0
+            || tool.version.failure.is_some()
+            || t["expected_version"].as_str() != Some(tool.version.stdout.trim_end())
+        {
+            return Err(format!(
+                "E_TOOL_BINDING: migration version mismatch; observation={}",
+                value!({"tool_id":method.tool,"expected_version":t["expected_version"],"tool":tool})
+            ));
+        }
+        if fs::read(root.join(script_path)).map_err(|e| e.to_string())? != script_bytes {
+            return Err("E_MIGRATION: decoder differs from fixed candidate".into());
+        }
+        let spec = CommandSpec {
+            program: tool.path.to_str().unwrap().into(),
+            args: method.argv.clone(),
+            env: env.clone(),
+            timeout_seconds: 30,
+            output_limit_bytes: 16 * 1024 * 1024,
+        };
+        let receipt = run_process_observed(root, &spec, &wire::canonical(&input)?, &tool.sha256)?;
+        if receipt.exit_code != 0 || receipt.failure.is_some() {
+            return Err(format!(
+                "E_MIGRATION: exit {}: {}",
+                receipt.exit_code, receipt.stderr
+            ));
+        }
+        if before != reader.checkout_excluding(root, candidate_oid, &artifacts)? {
+            return Err("E_SNAPSHOT_DIRTY: migration changed candidate inputs".into());
+        }
+        (tool, receipt)
     };
-    let receipt = run_process_observed(root, &spec, &wire::canonical(&input)?, &tool.sha256)?;
-    if receipt.exit_code != 0 || receipt.failure.is_some() {
-        return Err(format!(
-            "E_MIGRATION: exit {}: {}",
-            receipt.exit_code, receipt.stderr
-        ));
-    }
-    let after = reader.checkout_excluding(root, candidate_oid, &artifacts)?;
-    if before != after {
-        return Err("E_SNAPSHOT_DIRTY: migration changed candidate inputs".into());
-    }
     let output = json(&receipt.stdout_bytes)?;
     if output["mappings"] != profile["mappings"] {
         return Err("E_MIGRATION: mapping mismatch".into());
     }
     view["base"] = output["values"].clone();
     view["historical"] = output["historical"].clone();
-    view["conversion"] = value!({"input":input,"input_digest":receipt.stdin_sha256,"output":output,"output_digest":receipt.stdout_sha256,"profile_path":path,"script":script_path,"script_sha256":sha256(&script_bytes),"tool_id":method.tool,"tool":tool,"process":receipt,"certification":"unresolved: workflow producer required"});
+    view["conversion"] = if let Some(c) = retained {
+        c.clone()
+    } else {
+        value!({"input":input,"input_digest":receipt.stdin_sha256,"output":output,"output_digest":receipt.stdout_sha256,"profile_path":path,"script":script_path,"script_sha256":sha256(&script_bytes),"tool_id":method.tool,"tool":tool,"process":receipt,"certification":"unresolved: workflow producer required"})
+    };
     let (old, _) = load_view(&view, config)?;
     // Every explicitly removed malformed definition must survive as its original bytes/value.
     for record in profile["legacy_records"].as_array().unwrap() {
