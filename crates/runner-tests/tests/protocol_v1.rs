@@ -496,9 +496,14 @@ fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() 
     let mut consumer = producer.clone();
     consumer.id = "consumer".into();
     consumer.after = vec!["producer".into()];
-    let (status, rows) =
-        chrono_harness::full::execute(&req, &[consumer, producer], &Default::default(), 5, 16384)
-            .unwrap();
+    let (status, rows) = chrono_harness::full::execute(
+        &req,
+        &[consumer, producer],
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        16384,
+    )
+    .unwrap();
     assert_eq!(status, wire::Status::Pass, "{rows:#?}");
     assert_eq!(rows.len(), 2);
 }
