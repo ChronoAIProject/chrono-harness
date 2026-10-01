@@ -145,8 +145,18 @@ be collected with an explicitly empty report list.
 
 Scoped v3 reports use compact JSON so retained byte arrays do not acquire one
 indented line per byte. The parsed report, original process bytes and their hashes
-are unchanged; the stored report and command stdout remain identical. Historical
-reports keep their original bytes and hashes, including pretty-printed reports.
+are unchanged. Short calls (`check`, `check --unit ID`, `check --collect`) print
+the original status and exit code, bounded identifying diagnostics and the exact
+immutable original report path. Omitted diagnostic rows or text are explicitly
+marked; consumers read the complete report at its existing published path.
+Legacy explicit `--config` calls keep stdout identical to the stored JSON.
+Historical reports keep their original bytes and hashes, including pretty-printed
+reports. Projection runs after publication and executes no business operations.
+Producer failures and version mismatches refer to retained original acquisition
+or probe evidence. Execution errors before completed publication refer to a
+retained original error, not a completed report; retention failures preserve the
+original failure and explain the write failure without claiming an artifact.
+Early configuration/selection errors keep their existing `E_CHECK` diagnostics.
 
 Hosts may declare independent collection read limits in their check policy:
 

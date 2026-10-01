@@ -132,9 +132,23 @@ impl ShortHost {
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
         let out = self.command(args).output().unwrap();
-        assert_eq!(out.status.code(),Some(exit),"{}\n{}",String::from_utf8_lossy(&out.stderr).chars().take(1500).collect::<String>(),serde_json::from_slice::<Value>(&out.stdout).map(|r|json!({"results":r["response"]["results"],"transport_failure":r["transport_failure"],"judge_exit":r["judge"]["exit_code"],"judge_stderr":r["judge"]["stderr"]}).to_string()).unwrap_or_else(|_|String::from_utf8_lossy(&out.stdout).chars().take(1000).collect::<String>()));
-        serde_json::from_slice(&out.stdout).unwrap_or(Value::Null)
+        assert_eq!(
+            out.status.code(),
+            Some(exit),
+            "{}\n{}",
+            String::from_utf8_lossy(&out.stderr),
+            String::from_utf8_lossy(&out.stdout)
+        );
+        if args.contains(&"--config") {
+            return serde_json::from_slice(&out.stdout).unwrap_or(Value::Null);
+        }
+        if out.stdout.is_empty() {
+            return Value::Null;
+        }
+        let unit = args.windows(2).find(|a| a[0] == "--unit").map(|a| a[1]);
+        published_report(&self.root, unit, &out)
     }
+
     fn revise(&mut self) {
         git(&self.root, &["add", "."]);
         git(&self.root, &["commit", "-qm", "fixture revision"]);
@@ -243,7 +257,11 @@ fn short_preserves_actual_business_and_producer_failures() {
     );
     let out = h.command(&["check"]).output().unwrap();
     assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("Git fetch exited"));
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("Git fetch exited"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 #[test]
 fn short_rejects_dirty_missing_unknown_binding_selector_and_long_spelling() {
@@ -320,7 +338,7 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         String::from_utf8_lossy(&out.stderr),
         String::from_utf8_lossy(&out.stdout)
     );
-    let r: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let r = published_report(&h.root, Some("alpha"), &out);
     assert_eq!(
         r["request"]["observations"]["preparation"]["result"]["evidence"]["source"],
         "push-before-after"
@@ -366,7 +384,7 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
             String::from_utf8_lossy(&o.stderr),
             String::from_utf8_lossy(&o.stdout)
         );
-        let r: Value = serde_json::from_slice(&o.stdout).unwrap();
+        let r = published_report(&h.root, Some("alpha"), &o);
         if event_name != "push" {
             assert_eq!(r["request"]["base"], expected_base);
         }
@@ -400,7 +418,11 @@ fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted
     h.modify(".chrono-harness/config.json", |c| c["extra"] = json!(true));
     let o = h.command(&["check"]).output().unwrap();
     assert!(!o.status.success());
-    assert!(String::from_utf8_lossy(&o.stderr).contains("unknown field extra"));
+    assert!(
+        String::from_utf8_lossy(&o.stderr).contains("unknown field extra"),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
     h.modify(".chrono-harness/config.json", |c| {
         c.as_object_mut().unwrap().remove("extra");
         let t = c["tools"][1].clone();
@@ -544,11 +566,9 @@ fn native_short_initial_requires_explicit_parentless_event_and_canonical_entry()
         Some(0),
         "{} {}",
         String::from_utf8_lossy(&o.stderr),
-        serde_json::from_slice::<Value>(&o.stdout)
-            .map(|r| r["response"]["results"].clone())
-            .unwrap_or(Value::Null)
+        String::from_utf8_lossy(&o.stdout)
     );
-    let r: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let r = published_report(&h.root, Some("alpha"), &o);
     assert_eq!(r["request"]["initial"], true);
     assert!(r["request"]["base"].is_null());
     assert_eq!(
@@ -568,7 +588,7 @@ fn collection_rejects_duplicate_registered_report_paths() {
     });
     let o = h.command(&["check", "--unit", "alpha"]).output().unwrap();
     assert_eq!(o.status.code(), Some(1));
-    let r: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let r = published_report(&h.root, Some("alpha"), &o);
     assert!(
         r["response"]["results"][0]["cause"]
             .as_str()
@@ -609,7 +629,7 @@ fn preparation_retains_environment_identities_without_credential_values() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let report = published_report(&h.root, None, &out);
     assert!(!String::from_utf8_lossy(&out.stdout).contains(token));
     let binding = &report["request"]["observations"]["preparation"];
     assert_eq!(binding["environment"]["representation"], "sha256");
@@ -729,7 +749,7 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
                 .take(500)
                 .collect::<String>()
         );
-        let r: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let r = published_report(&h.root, None, &out);
         assert_eq!(r["response"]["evidence"]["executed"], json!([]));
         assert!(!String::from_utf8_lossy(&out.stdout).contains("fixture-native-secret"));
     }
@@ -915,7 +935,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
-        let r: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let r = published_report(&h.root, None, &out);
         assert_eq!(
             r["request"]["observations"]["preparation"]["environment"]["inherited"]["SSH_AUTH_SOCK"],
             value
@@ -997,7 +1017,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
-        let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let report = published_report(&h.root, Some(unit), &out);
         assert!(
             report["retained_report"]
                 .as_str()
@@ -1064,7 +1084,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
             .take(300)
             .collect::<String>()
     );
-    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let report = published_report(&consumer, None, &out);
     assert_eq!(report["response"]["evidence"]["executed"], json!([]));
     prepared::validate_portable_binding(
         &consumer,
@@ -1142,4 +1162,587 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     assert!(String::from_utf8_lossy(&bad.stdout).contains("missing original evidence"));
     assert!(!consumer.join(".chrono-harness/state/calls-a").exists());
     assert!(!consumer.join(".chrono-harness/state/calls-b").exists());
+}
+
+// Read the existing canonical path, then verify its immutable original. Console
+// text is a human projection, not a second report protocol.
+fn published_report(root: &Path, unit: Option<&str>, out: &std::process::Output) -> Value {
+    let config: Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/ci/check.json")).unwrap())
+            .unwrap();
+    let path = unit
+        .map(|id| &config["policy"]["units"][id]["report_path"])
+        .unwrap_or(&config["report_path"])
+        .as_str()
+        .unwrap();
+    let bytes = fs::read(root.join(path)).unwrap();
+    let report: Value = serde_json::from_slice(&bytes).unwrap();
+    let retained = report["retained_report"].as_str().unwrap();
+    assert_eq!(bytes, fs::read(root.join(retained)).unwrap());
+    let console = String::from_utf8_lossy(&out.stdout);
+    assert!(console.contains(retained), "{console}");
+    assert!(console.starts_with("check: "), "{console}");
+    assert!(
+        out.stdout.len() < 16_384,
+        "routine console must not scale with evidence"
+    );
+    report
+}
+
+#[test]
+fn short_console_large_original_success_has_constant_output_and_no_extra_operations() {
+    let mut h = ShortHost::new();
+    // A large genuine business process receipt must stay in the original report.
+    fs::write(h.root.join("a.sh"), "mkdir -p .chrono-harness/state\nprintf alpha >> .chrono-harness/state/calls-a\n/usr/bin/python3 -c 'print(\"large-original-evidence\" * 50000)'\n").unwrap();
+    h.modify(".chrono-harness/FILEMAP.json", |f| {
+        f["execution_plans"]["test:a"]["output_limit_bytes"] = json!(2_000_000)
+    });
+    let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+    let original: Value = serde_json::from_slice(
+        &fs::read(h.root.join(".chrono-harness/state/alpha/check.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{} transport={} judge_failure={} results={}",
+        String::from_utf8_lossy(&out.stderr),
+        original["transport_failure"],
+        original["judge"]["failure"],
+        original["response"]["results"]
+    );
+    assert!(
+        out.stdout.len() < 2048,
+        "large original leaked into console: {} bytes",
+        out.stdout.len()
+    );
+    let report = published_report(&h.root, Some("alpha"), &out);
+    let retained = h.root.join(report["retained_report"].as_str().unwrap());
+    let original = fs::read(&retained).unwrap();
+    assert!(original.len() > 1_000_000);
+    let process = &report["response"]["evidence"]["executed"][0]["process"];
+    let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+    assert_eq!(process["stdout_sha256"], sha256(&bytes));
+    assert!(String::from_utf8_lossy(&bytes).contains("large-original-evidence"));
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("large-original-evidence"));
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(),
+        b"alpha"
+    );
+    assert!(!h.root.join(".chrono-harness/state/calls-b").exists());
+    println!(
+        "MEASURE large-scoped stdout_bytes={} report_bytes={} report_sha256={} business_operations=1",
+        out.stdout.len(),
+        original.len(),
+        sha256(&original)
+    );
+    // A subsequent check must preserve the first original byte for byte.
+    h.run(&["check", "--unit", "alpha"], 0);
+    assert_eq!(fs::read(retained).unwrap(), original);
+}
+
+fn script(root: &Path, path: &str, body: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::write(root.join(path), body).unwrap();
+    fs::set_permissions(root.join(path), fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+fn retained_receipt(root: &Path, prefix: &str) -> (String, Vec<u8>, Value) {
+    let dir = root.join(".chrono-harness/state/preparation");
+    let entry = fs::read_dir(dir)
+        .unwrap()
+        .map(Result::unwrap)
+        .find(|e| e.file_name().to_str().unwrap().starts_with(prefix))
+        .unwrap();
+    let path = entry
+        .path()
+        .strip_prefix(root)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let bytes = fs::read(entry.path()).unwrap();
+    let receipt = serde_json::from_slice(&bytes).unwrap();
+    assert!(path.contains(&sha256(&bytes)));
+    (path, bytes, receipt)
+}
+
+#[test]
+fn short_producer_failure_version_decode_and_validation_keep_originals() {
+    for case in ["failed", "version", "decode", "validation"] {
+        let mut h = ShortHost::new();
+        let body = if case == "version" {
+            "#!/bin/sh\nprintf probe >> .chrono-harness/state/producer-calls\n/usr/bin/python3 -c 'print(\"wrong-probe-version\" * 20000)'\n"
+        } else {
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then printf 'chrono-worktree 0.1.0\\n'; exit 0; fi\nprintf acquisition >> .chrono-harness/state/producer-calls\nexec /usr/bin/python3 .chrono-harness/state/producer.py\n"
+        };
+        script(&h.root, ".chrono-harness/bin/fixture-producer", body);
+        let code = match case {
+            "failed" => "import sys\nprint('producer-stdout-original' * 20000)\nprint('E_FIXTURE_ACQUISITION: fetch failed ' + 'stderr-original' * 20000, file=sys.stderr)\nsys.exit(9)\n".to_string(),
+            "decode" => "print('not-json-original' * 20000)\n".into(),
+            "validation" => format!("import json,sys,hashlib\nr=sys.stdin.buffer.read(); q=json.loads(r)\nprint(json.dumps(dict(schema='chrono-check-inputs/v1',request_sha256=hashlib.sha256(r).hexdigest(),source=q['source'],profile=q['profile'],base='{}',candidate='{}',initial=False,scope=None,context=None,originals=[],evidence=dict(note='original-validation-evidence'*20000))))\n", h.base, "b".repeat(40)),
+            _ => String::new(),
+        };
+        json_file(
+            &h.root,
+            ".chrono-harness/state/placeholder.json",
+            &json!({}),
+        );
+        fs::write(h.root.join(".chrono-harness/state/producer.py"), code).unwrap();
+        h.modify(".chrono-harness/config.json", |c| {
+            c["tools"][1]["program"] = json!(".chrono-harness/bin/fixture-producer")
+        });
+        // Invalid identity must be rejected, independent of the presentation.
+        if case == "validation" {
+            let code = fs::read_to_string(h.root.join(".chrono-harness/state/producer.py"))
+                .unwrap()
+                .replace("chrono-check-inputs/v1", "wrong-input-schema");
+            fs::write(h.root.join(".chrono-harness/state/producer.py"), code).unwrap();
+        }
+        let out = h.command(&["check"]).output().unwrap();
+        assert_eq!(out.status.code(), Some(2));
+        assert!(out.stdout.is_empty());
+        assert!(out.stderr.len() < 2048, "{case}: {}", out.stderr.len());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let prefix = if case == "version" {
+            "producer-version-"
+        } else {
+            "acquisition-"
+        };
+        let (path, raw, receipt) = retained_receipt(&h.root, prefix);
+        assert!(stderr.contains(&path), "{stderr}");
+        let process = if case == "version" {
+            &receipt["version"]
+        } else {
+            &receipt["process"]
+        };
+        let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+        assert_eq!(process["stdout_sha256"], sha256(&bytes));
+        assert_eq!(process["stdout"], std::str::from_utf8(&bytes).unwrap());
+        assert!(raw.len() > 100_000);
+        if case == "failed" {
+            assert!(stderr.contains("E_FIXTURE_ACQUISITION"));
+            assert!(stderr.contains("exit 9"));
+            assert!(stderr.contains("text omitted"));
+            let bytes: Vec<u8> = serde_json::from_value(process["stderr_bytes"].clone()).unwrap();
+            assert_eq!(process["stderr_sha256"], sha256(&bytes));
+        } else {
+            assert!(
+                stderr.contains(match case {
+                    "version" => "version mismatch",
+                    "decode" => "decode failed",
+                    _ => "validation failed",
+                }),
+                "{stderr}"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(h.root.join(".chrono-harness/state/producer-calls")).unwrap(),
+            if case == "version" {
+                "probe"
+            } else {
+                "acquisition"
+            }
+        );
+        assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+        println!(
+            "MEASURE producer-{case} stderr_bytes={} original_bytes={}",
+            out.stderr.len(),
+            raw.len()
+        );
+    }
+}
+
+#[test]
+fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
+    let mut h = ShortHost::new();
+    let long_parent = h
+        ._dir
+        .path()
+        .join(format!("target-local-{}", "x".repeat(220)));
+    fs::create_dir_all(&long_parent).unwrap();
+    let long_root = long_parent.join("host");
+    fs::rename(&h.root, &long_root).unwrap();
+    h.root = long_root;
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["report_path"] = json!(".chrono-harness/state/blocked/check.json")
+    });
+    fs::create_dir_all(h.root.join(".chrono-harness/state/elsewhere")).unwrap();
+    std::os::unix::fs::symlink("elsewhere", h.root.join(".chrono-harness/state/blocked")).unwrap();
+    let out = h.command(&["check"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    let error = fs::read_dir(h.root.join(".chrono-harness/state/preparation"))
+        .unwrap()
+        .map(Result::unwrap)
+        .find(|e| e.file_name().to_str().unwrap().starts_with("check-error-"))
+        .unwrap();
+    let original = fs::read_to_string(error.path()).unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let clipped: String = original.chars().take(240).collect();
+    assert!(stderr.contains(&clipped), "{stderr}");
+    assert!(stderr.contains("[text omitted; see original]"), "{stderr}");
+    assert!(stderr.contains(&sha256(original.as_bytes())), "{stderr}");
+    assert!(
+        stderr.contains(
+            error
+                .path()
+                .strip_prefix(&h.root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+        )
+    );
+    assert!(stderr.contains("Original check error:"));
+    assert!(!stderr.contains("Original report:"));
+    assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+
+    // Force the evidence owner to become unavailable after acquisition, in the
+    // judge process. Publication and outer-error retention must both fail.
+    fs::remove_file(h.root.join(".chrono-harness/state/blocked")).unwrap();
+    script(
+        &h.root,
+        ".chrono-harness/bin/retention-failure",
+        "#!/bin/sh\nmv .chrono-harness/state/preparation .chrono-harness/state/saved-preparation\nln -s saved-preparation .chrono-harness/state/preparation\nexec /usr/bin/python3 -c 'import json,sys; r=json.load(sys.stdin); print(json.dumps(dict(protocol=r[\"protocol\"],request_id=r[\"request_id\"],status=\"passed\",results=[dict(id=\"fixture\",status=\"passed\",cause=\"actual\",exit_code=0)],evidence=dict(actual=True))))'\n",
+    );
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["report_path"] = json!(".chrono-harness/state/check.json");
+        c["judge"]["program"] = json!(".chrono-harness/bin/retention-failure");
+    });
+    let out = h.command(&["check"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("symlink"), "{stderr}");
+    assert!(
+        stderr.contains("Original check error retention failed:"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("Original check error:"));
+    assert!(!stderr.contains("Original report:"));
+}
+
+#[test]
+fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
+    let missing_program = format!(
+        ".chrono-harness/bin/{}/{}/missing-tail-producer",
+        "a".repeat(160),
+        "b".repeat(166)
+    );
+    let expected_error = format!("executable not found: {missing_program}");
+    assert!(expected_error.chars().count() > 240);
+    let mut missing = ShortHost::new();
+    missing.modify(".chrono-harness/config.json", |c| {
+        c["tools"][1]["program"] = json!(missing_program)
+    });
+    let out = missing.command(&["check"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    assert!(out.stderr.len() < 2048, "{}", out.stderr.len());
+    assert!(!missing.root.join(".chrono-harness/state/calls-a").exists());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("executable not found"), "{stderr}");
+    assert!(stderr.contains("[text omitted; see original]"), "{stderr}");
+    assert!(stderr.contains("Original version probe:"), "{stderr}");
+    let entry = fs::read_dir(missing.root.join(".chrono-harness/state/preparation"))
+        .unwrap()
+        .map(Result::unwrap)
+        .find(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("producer-version-")
+        })
+        .unwrap();
+    let raw = fs::read(entry.path()).unwrap();
+    assert_eq!(
+        sha256(&raw),
+        entry.file_name().to_string_lossy()["producer-version-".len()..].trim_end_matches(".json")
+    );
+    assert_eq!(String::from_utf8_lossy(&raw), expected_error);
+    assert!(stderr.contains(&sha256(&raw)), "{stderr}");
+    assert!(
+        stderr.contains(
+            entry
+                .path()
+                .strip_prefix(&missing.root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+        ),
+        "{stderr}"
+    );
+
+    let mut acquisition = ShortHost::new();
+    script(
+        &acquisition.root,
+        ".chrono-harness/bin/mutating-producer",
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then printf 'chrono-worktree 0.1.0\\n'; printf '# changed after version\\n' >> \"$0\"; exit 0; fi\nexit 0\n",
+    );
+    acquisition.modify(".chrono-harness/config.json", |c| {
+        c["tools"][1]["program"] = json!(".chrono-harness/bin/mutating-producer")
+    });
+    let out = acquisition.command(&["check"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        !acquisition
+            .root
+            .join(".chrono-harness/state/calls-a")
+            .exists()
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("prelaunch executable digest mismatch"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("Original acquisition:"), "{stderr}");
+    let entry = fs::read_dir(acquisition.root.join(".chrono-harness/state/preparation"))
+        .unwrap()
+        .map(Result::unwrap)
+        .find(|e| e.file_name().to_string_lossy().starts_with("acquisition-"))
+        .unwrap();
+    let raw = fs::read(entry.path()).unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&raw),
+        "prelaunch executable digest mismatch"
+    );
+    assert!(entry.file_name().to_string_lossy().contains(&sha256(&raw)));
+
+    let mut setup = ShortHost::new();
+    setup.modify(".chrono-harness/config.json", |c| {
+        c["protocol"]["timeout_seconds"] = json!(0)
+    });
+    let out = setup.command(&["check"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(!setup.root.join(".chrono-harness/state/calls-a").exists());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid command/bounds"), "{stderr}");
+    assert!(stderr.contains("Original version probe:"), "{stderr}");
+
+    let mut persistence = ShortHost::new();
+    let state = persistence.root.join(".chrono-harness/state");
+    fs::create_dir_all(&state).unwrap();
+    let preparation = state.join("preparation");
+    if preparation.exists() {
+        fs::remove_dir_all(&preparation).unwrap();
+    }
+    fs::create_dir(persistence.root.join(".chrono-harness/state/elsewhere")).unwrap();
+    std::os::unix::fs::symlink("elsewhere", &preparation).unwrap();
+    persistence.modify(".chrono-harness/config.json", |c| {
+        c["tools"][1]["program"] = json!(missing_program)
+    });
+    let out = persistence.command(&["check"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    assert!(
+        !persistence
+            .root
+            .join(".chrono-harness/state/calls-a")
+            .exists()
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("retention failed"), "{stderr}");
+    assert!(stderr.contains(&expected_error), "{stderr}");
+    assert!(stderr.contains("missing-tail-producer"), "{stderr}");
+    assert!(!stderr.contains("Original version probe:"), "{stderr}");
+    assert!(!stderr.contains("Original check error:"), "{stderr}");
+    assert!(!stderr.contains("Original report:"), "{stderr}");
+    assert!(!stderr.contains("omitted"), "{stderr}");
+    assert!(
+        !persistence
+            .root
+            .join(".chrono-harness/state/producer-calls")
+            .exists()
+    );
+    assert!(
+        !persistence
+            .root
+            .join(".chrono-harness/state/calls-b")
+            .exists()
+    );
+    assert!(
+        fs::read_dir(state.join("elsewhere"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+    println!(
+        "MEASURE prelaunch-retention missing_program_chars={} original_error_chars={} original_error_bytes={} failed_retention_stderr_bytes={} exit={}",
+        missing_program.chars().count(),
+        expected_error.chars().count(),
+        expected_error.len(),
+        out.stderr.len(),
+        out.status.code().unwrap()
+    );
+}
+
+#[test]
+fn short_console_failed_blocked_and_transport_diagnostics_are_bounded_and_visible() {
+    for case in ["failed", "blocked", "transport"] {
+        let mut h = ShortHost::new();
+        let body = format!(
+            r#"#!/bin/sh
+printf judge >> .chrono-harness/state/judge-calls
+exec /usr/bin/python3 -c 'import json,sys
+r=json.load(sys.stdin)
+case="{case}"
+if case=="transport":
+ print("original-malformed-transport"*10000)
+else:
+ results=[dict(id="identified-operation-"+str(i)+"x"*1000,status=case,cause="actionable-cause-"+str(i)+"z"*10000,exit_code=9 if case=="failed" else None) for i in range(30)]
+ print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],status=case,results=results,evidence=dict(original="complete-original-evidence"))))
+sys.exit(9)'
+"#
+        );
+        script(&h.root, ".chrono-harness/bin/diagnostic-judge", &body);
+        h.modify(".chrono-harness/ci/check.json", |c| {
+            c["judge"]["program"] = json!(".chrono-harness/bin/diagnostic-judge")
+        });
+        let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(if case == "transport" { 2 } else { 1 })
+        );
+        let report = published_report(&h.root, Some("alpha"), &out);
+        let console = String::from_utf8_lossy(&out.stdout);
+        if case == "transport" {
+            assert!(console.contains("check: unavailable (exit 2)"));
+            assert!(console.contains("transport |"));
+            assert!(report["transport_failure"].is_string());
+        } else {
+            assert!(console.contains(&format!("check: {case} (exit 1)")));
+            assert!(console.contains("identified-operation-0"));
+            assert!(console.contains("actionable-cause-0"));
+            assert!(console.contains("18 diagnostic rows omitted"));
+            assert!(console.contains("text omitted"));
+            assert_eq!(report["response"]["results"].as_array().unwrap().len(), 30);
+            assert!(
+                report["response"]["results"][29]["cause"]
+                    .as_str()
+                    .unwrap()
+                    .len()
+                    > 10000
+            );
+        }
+        assert!(!console.contains("stdout_bytes"));
+        assert!(!console.contains("complete-original-evidence"));
+        assert_eq!(
+            fs::read(h.root.join(".chrono-harness/state/judge-calls")).unwrap(),
+            b"judge"
+        );
+        assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+    }
+}
+
+#[test]
+fn short_console_zero_delta_preserves_large_report_and_executes_zero_business() {
+    let h = ShortHost::new();
+    git(&h.root, &["push", "-q", "origin", "dev"]);
+    let out = h.command(&["check"]).output().unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let report = published_report(&h.root, None, &out);
+    assert_eq!(report["request"]["base"], h.candidate);
+    assert_eq!(report["request"]["candidate"], h.candidate);
+    assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+    assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+    assert!(!h.root.join(".chrono-harness/state/calls-b").exists());
+    assert!(out.stdout.len() < 2048);
+    let bytes = fs::read(h.root.join(report["retained_report"].as_str().unwrap())).unwrap();
+    println!(
+        "MEASURE zero-delta-scoped stdout_bytes={} report_bytes={} report_sha256={} business_operations=0",
+        out.stdout.len(),
+        bytes.len(),
+        sha256(&bytes)
+    );
+}
+
+#[test]
+fn native_short_version_failure_retains_probe_in_selected_unit_upload_directory() {
+    let mut h = ShortHost::new();
+    h.modify(".chrono-harness/config.json", |c| {
+        c["tools"][2]["expected_version"] = json!("wrong-native-version")
+    });
+    let out = h
+        .command(&["check", "--unit", "alpha"])
+        .env(prepared::SOURCE, "ci")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("input producer version mismatch: chrono-ci"),
+        "{stderr}"
+    );
+    let entry = fs::read_dir(h.root.join(".chrono-harness/state/alpha/preparation"))
+        .unwrap()
+        .map(Result::unwrap)
+        .find(|e| {
+            e.file_name()
+                .to_str()
+                .unwrap()
+                .starts_with("producer-version-")
+        })
+        .unwrap();
+    let path = entry.path();
+    assert!(stderr.contains(path.strip_prefix(&h.root).unwrap().to_str().unwrap()));
+    let raw = fs::read(path).unwrap();
+    let receipt: Value = serde_json::from_slice(&raw).unwrap();
+    let stdout: Vec<u8> =
+        serde_json::from_value(receipt["version"]["stdout_bytes"].clone()).unwrap();
+    assert_eq!(receipt["version"]["stdout_sha256"], sha256(&stdout));
+    assert_eq!(stdout, b"chrono-ci 0.1.0\n");
+    assert!(!h.root.join(".chrono-harness/state/preparation").exists());
+    assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+}
+
+#[test]
+fn short_console_does_not_revalidate_deep_accepted_evidence_or_change_verdict() {
+    let mut h = ShortHost::new();
+    script(
+        &h.root,
+        ".chrono-harness/bin/deep-judge",
+        r#"#!/bin/sh
+printf judge >> .chrono-harness/state/judge-calls
+exec /usr/bin/python3 -c 'import json,sys
+r=json.load(sys.stdin)
+e={}
+for i in range(125): e=dict(nested=e)
+print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],status="passed",results=[dict(id="deep",status="passed",cause="actual result",exit_code=0)],evidence=e)))'
+"#,
+    );
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["judge"]["program"] = json!(".chrono-harness/bin/deep-judge")
+    });
+    let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+    // The original acquisition/judge decoder accepted this evidence. Rendering
+    // must not add another verdict-bearing depth limit around its report.
+    let bytes = fs::read(h.root.join(".chrono-harness/state/alpha/check.json")).unwrap();
+    let consumed = Command::new("/usr/bin/python3").args(["-c", "import json,sys; r=json.load(open(sys.argv[1])); assert r['response']['status']=='passed' and r['judge']['exit_code']==0 and 'transport_failure' not in r; print(r['retained_report'])", h.root.join(".chrono-harness/state/alpha/check.json").to_str().unwrap()]).output().unwrap();
+    assert!(
+        consumed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&consumed.stderr)
+    );
+    let retained = String::from_utf8(consumed.stdout)
+        .unwrap()
+        .trim()
+        .to_owned();
+    assert_eq!(fs::read(h.root.join(&retained)).unwrap(), bytes);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains("check: passed (exit 0)"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains(&retained));
+    assert_eq!(
+        fs::read(h.root.join(".chrono-harness/state/judge-calls")).unwrap(),
+        b"judge"
+    );
 }

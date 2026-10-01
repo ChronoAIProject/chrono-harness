@@ -145,12 +145,9 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
         Some(0),
         "{} {}",
         String::from_utf8_lossy(&out.stderr),
-        json(&out.stdout)
-            .ok()
-            .map(|r| r["judges"].clone())
-            .unwrap_or(Value::Null)
+        String::from_utf8_lossy(&out.stdout)
     );
-    let report = json(&out.stdout).unwrap();
+    let report = published_full_report(&dest, ".chrono-harness/state/", &out);
     let context = &report["preparation"]["result"]["context"];
     let raw: Vec<u8> = serde_json::from_value(context["raw"].clone()).unwrap();
     let ctx = json(&raw).unwrap();
@@ -375,12 +372,9 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         o.status.success(),
         "{} {}",
         String::from_utf8_lossy(&o.stderr),
-        json(&o.stdout)
-            .ok()
-            .map(|r| r["judges"].clone())
-            .unwrap_or(Value::Null)
+        String::from_utf8_lossy(&o.stdout)
     );
-    let r = json(&o.stdout).unwrap();
+    let r = published_full_report(&dest, ".chrono-harness/state/native evidence λ/", &o);
     let observed: Vec<u8> =
         serde_json::from_value(r["preparation"]["result"]["context"]["raw"].clone()).unwrap();
     assert_eq!(observed, raw);
@@ -417,7 +411,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         String::from_utf8_lossy(&repeated.stderr)
     );
     assert_eq!(fs::read(&original_path).unwrap(), raw);
-    let next = json(&repeated.stdout).unwrap();
+    let next = published_full_report(&dest, ".chrono-harness/state/native evidence λ/", &repeated);
     let retained = dest.join(
         next["preparation"]["result"]["context"]["path"]
             .as_str()
@@ -454,11 +448,14 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
     prepared::validate_portable_binding(&consumer, &r["preparation"], None).unwrap();
     prepared::validate_portable_binding(&consumer, &next["preparation"], None).unwrap();
     println!(
-        "MEASURE full-v2 stdout_bytes={} repeated_stdout_bytes={} context_bytes={} original_receipt_bytes={}",
+        "MEASURE full-v2 stdout_bytes={} repeated_stdout_bytes={} context_bytes={} original_receipt_bytes={} report_bytes={}",
         o.stdout.len(),
         repeated.stdout.len(),
         raw.len(),
         fs::metadata(consumer.join(r["preparation"]["receipts"][0]["path"].as_str().unwrap()))
+            .unwrap()
+            .len(),
+        fs::metadata(consumer.join(r["report_path"].as_str().unwrap()))
             .unwrap()
             .len()
     );
@@ -518,4 +515,217 @@ fn reconstructed_destination_publishes_its_real_new_birth_association() {
         json(&fs::read(root.join(origin["birth_report"].as_str().unwrap())).unwrap()).unwrap(),
         birth
     );
+}
+
+fn published_full_report(root: &Path, directory: &str, out: &std::process::Output) -> Value {
+    let bytes = fs::read(root.join(format!("{directory}report.json"))).unwrap();
+    let report = json(&bytes).unwrap();
+    let original = report["report_path"].as_str().unwrap();
+    assert_eq!(fs::read(root.join(original)).unwrap(), bytes);
+    let console = String::from_utf8_lossy(&out.stdout);
+    assert!(console.contains(original), "{console}");
+    assert!(
+        console.contains(&format!(
+            "check: {} (exit {})",
+            report["status"].as_str().unwrap(),
+            out.status.code().unwrap()
+        )),
+        "{console}"
+    );
+    assert!(out.stdout.len() < 16_384);
+    report
+}
+
+#[test]
+fn full_short_console_projects_warnings_failures_transport_and_blocked_from_originals() {
+    for case in ["warn", "fail", "transport", "blocked"] {
+        let h = Host::new("data.txt");
+        bind(&h);
+        let status = if case == "warn" { "warn" } else { "fail" };
+        let level = if case == "warn" { "warning" } else { "error" };
+        let script = format!(
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then printf 'fixture\n'; exit 0; fi
+printf actual >> .chrono-harness/state/judge-calls
+exec /usr/bin/python3 -c 'import json,sys
+r=json.load(sys.stdin)
+if "{case}" == "transport":
+ print("complete-malformed-original"*20000)
+ sys.exit(4)
+findings=[dict(code="IDENTIFIED_"+str(i)+"x"*1000,level="{level}",message="actionable-"+str(i)+"z"*10000,delta_refs=["/delta/0/path","/delta/0"],causes=[]) for i in range(2 if "{case}" == "blocked" else 30)]
+print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],judge_id=r["judge_id"],status="{status}",findings=findings,evidence=[],outputs=dict(original="FULL_ORIGINAL"*50000))))
+sys.exit(0 if "{status}" == "warn" else 1)'
+"#
+        );
+        fs::write(h.root.join("context-judge.sh"), &script).unwrap();
+        let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
+        judges["judges"][0]["sha256"] = value!(sha256(script.as_bytes()));
+        if case == "blocked" {
+            let mut dependent = judges["judges"][0].clone();
+            dependent["id"] = value!("dependent");
+            dependent["after"] = value!(["registration"]);
+            judges["judges"].as_array_mut().unwrap().push(dependent);
+        }
+        fs::write(h.root.join(JUDGES), serde_json::to_vec(&judges).unwrap()).unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let dest = h.parent.join(format!("console-{case}"));
+        let (code, _, error) = h.invoke("integration", case, &dest);
+        assert_eq!(code, 0, "{error}");
+        install(&dest);
+        let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(&dest)
+            .env(prepared::SOURCE, "local")
+            .arg("check")
+            .output()
+            .unwrap();
+        let expected_exit = match case {
+            "warn" => 0,
+            "fail" => 1,
+            _ => 2,
+        };
+        assert_eq!(
+            out.status.code(),
+            Some(expected_exit),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let report = published_full_report(&dest, ".chrono-harness/state/", &out);
+        let console = String::from_utf8_lossy(&out.stdout);
+        assert!(!console.contains("FULL_ORIGINAL"));
+        if case == "transport" {
+            assert_eq!(report["status"], "error");
+            assert!(console.contains("transport | registration"));
+            let original: Vec<u8> =
+                serde_json::from_value(report["judges"][0]["process"]["stdout_bytes"].clone())
+                    .unwrap();
+            assert!(String::from_utf8_lossy(&original).contains("complete-malformed-original"));
+        } else {
+            assert!(console.contains("IDENTIFIED_0"));
+            assert!(console.contains("actionable-0"));
+            if case != "blocked" {
+                assert!(console.contains("diagnostic rows omitted"));
+            }
+            assert!(console.contains("text omitted"));
+            assert_eq!(
+                report["findings"].as_array().unwrap().len(),
+                if case == "blocked" { 2 } else { 30 }
+            );
+            assert_eq!(
+                report["judges"][0]["response"]["outputs"]["original"]
+                    .as_str()
+                    .unwrap()
+                    .len(),
+                13 * 50000
+            );
+        }
+        assert_eq!(
+            fs::read(dest.join(".chrono-harness/state/judge-calls")).unwrap(),
+            b"actual"
+        );
+        if case == "blocked" {
+            assert_eq!(report["judges"][1]["state"], "blocked");
+            assert!(console.contains("blocked | dependent | registration"));
+            assert_eq!(report["status"], "error");
+        }
+        println!(
+            "MEASURE full-{case} stdout_bytes={} report_bytes={} judge_launches=1",
+            out.stdout.len(),
+            fs::metadata(dest.join(report["report_path"].as_str().unwrap()))
+                .unwrap()
+                .len()
+        );
+    }
+}
+
+#[test]
+fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writing_fails() {
+    for retain in [true, false] {
+        let h = Host::new("data.txt");
+        bind(&h);
+        let break_retention = if retain {
+            ""
+        } else {
+            "mv .chrono-harness/state/preparation .chrono-harness/state/saved-preparation\nln -s saved-preparation .chrono-harness/state/preparation\n"
+        };
+        let body = format!(
+            "#!/bin/sh\n{break_retention}/usr/bin/python3 -c 'print(\"original-full-version-probe\"*20000)'\n"
+        );
+        fs::create_dir_all(h.root.join("tools")).unwrap();
+        fs::write(h.root.join("tools/gitprobe.sh"), &body).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            h.root.join("tools/gitprobe.sh"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+        cfg["tools"][0]["program"] = value!("tools/gitprobe.sh");
+        cfg["environment"]["inputs"][0]["location"] = value!("tools/gitprobe.sh");
+        cfg["environment"]["inputs"][0]["sha256"] = value!(sha256(body.as_bytes()));
+        fs::write(h.root.join(CONFIG), serde_json::to_vec(&cfg).unwrap()).unwrap();
+        let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+        fm["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(file("tools/gitprobe.sh", value!([])));
+        fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let dest = h.parent.join(if retain {
+            "outer-original"
+        } else {
+            "outer-retention-failure"
+        });
+        let (code, _, error) = h.invoke("integration", "outer", &dest);
+        assert_eq!(code, 0, "{error}");
+        install(&dest);
+        let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(&dest)
+            .env(prepared::SOURCE, "local")
+            .arg("check")
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(2));
+        assert!(out.stdout.is_empty());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("Git facts version mismatch"),
+            "{}",
+            stderr.chars().take(1000).collect::<String>()
+        );
+        assert!(!stderr.contains("Original report:"));
+        assert!(!dest.join(".chrono-harness/state/report.json").exists());
+        assert!(!dest.join(".chrono-harness/state/judge-calls").exists());
+        if retain {
+            assert!(out.stderr.len() < 2048);
+            assert!(!stderr.contains("stdout_bytes"));
+            let entry = fs::read_dir(dest.join(".chrono-harness/state/preparation"))
+                .unwrap()
+                .map(Result::unwrap)
+                .find(|e| e.file_name().to_str().unwrap().starts_with("check-error-"))
+                .unwrap();
+            let raw = fs::read(entry.path()).unwrap();
+            assert!(stderr.contains(entry.path().strip_prefix(&dest).unwrap().to_str().unwrap()));
+            assert!(entry.file_name().to_str().unwrap().contains(&sha256(&raw)));
+            let original = String::from_utf8(raw).unwrap();
+            let evidence =
+                json(original.strip_prefix("E_GIT_FACTS: ").unwrap().as_bytes()).unwrap();
+            let process = &evidence["observation"]["processes"][0];
+            let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+            assert_eq!(process["stdout_sha256"], sha256(&bytes));
+            assert!(String::from_utf8_lossy(&bytes).contains("original-full-version-probe"));
+            assert!(original.len() > 1_000_000);
+            println!(
+                "MEASURE full-outer-error stderr_bytes={} original_error_bytes={}",
+                out.stderr.len(),
+                original.len()
+            );
+        } else {
+            assert!(stderr.contains("Original check error retention failed:"));
+            assert!(stderr.contains("original-full-version-probe"));
+            assert!(out.stderr.len() > 1_000_000);
+            assert!(!stderr.contains("Original check error:"));
+        }
+    }
 }

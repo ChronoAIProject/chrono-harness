@@ -389,7 +389,9 @@ old registration and artifact. Existing v1 source is never automatically upgrade
 
 Dedicated tests exercise the generated profile with actual runner/registration
 processes on a committed parentless host, including a rejected unregistered file,
-spaced paths, unrelated cwd and stored/stdout report identity. The public
+spaced paths, unrelated cwd and legacy explicit stored/stdout report identity.
+Short checks project status, bounded diagnostics and the immutable original report
+location; report consumers read the complete existing files. The public
 [initial-host example](https://github.com/ChronoAIProject/chrono-harness-examples-initial)
 also installs beta.5 and exercises a real parentless first push with generated v2
 CI, followed by ordinary documentation DELTA checks on integration, PR and dev.

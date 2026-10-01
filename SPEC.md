@@ -351,7 +351,7 @@ Git ancestry 来自完整对象图；浅克隆缺对象返回 `E_HISTORY_MISSING
 工作开始记录 branch_started_at，observed_at 是本轮获取 dev 的时间，不用提交时间猜分支年龄。
 同一轮本地/CI 使用相同 context；dev 再推进就建立新一轮输入，不能冒用旧报告。
 
-完整报告写入 `.chrono-harness/state/report.json` 与本轮唯一的 `run-<identity>.json`，stdout 输出同一 JSON 对象。报告的 report_path 指向后者；runner 将实际前序判官进程及 request_digest 传入 observations，供 workflow 核对执行身份与完成证据。
+完整报告写入 `.chrono-harness/state/report.json` 与本轮唯一的 `run-<identity>.json`，格式、原始证据与摘要保持完整。短命令 stdout 只呈现原状态、退出码、有限的具名诊断与唯一原报告路径；超出行数或文本长度的诊断明确标示省略，完整内容从原报告读取。显式旧合同 `--config` 调用仍输出与存储报告相同的完整 JSON。报告的 report_path 指向后者；runner 将实际前序判官进程及 request_digest 传入 observations，供 workflow 核对执行身份与完成证据。
 CI 只负责准备工具、不可变输入并调用指令、保存报告和原样传播退出码。
 不得另写 CI 专属判官、skip 参数或本地宽松模式；现役生成 workflow 的 scoped 合同见 docs/ci.md；不设置虚假的绿色 workflow。
 
@@ -369,6 +369,8 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 
 
 ### 4.1 显式单元与独立 workflow
+
+短入口仅在原报告发布后投影，不另执行判官或业务。失败生产者与版本探针保留原始回执，解码／校验失败引用原 acquisition；完成报告发布前的执行错误另留原错误，不能称为已完成报告。保留失败时如实返回原错误与保留失败，不伪造路径；早期配置／选择错误仍为原 E_CHECK，不宣称普遍输出上界。
 
 无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 workflow。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各 workflow 具有独立检查名、checkout、启动命令、边界、报告及重跑。单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输工件或推断 workflow 间依赖。
 
