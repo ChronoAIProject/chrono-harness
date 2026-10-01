@@ -57,6 +57,37 @@ fn commit(root: &Path) -> String {
 fn file(path: &str) -> Value {
     json!({"path":path,"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]})
 }
+fn bind_actual_git(config: &mut Value, root: &Path) {
+    let path = chrono_harness::resolve_program(root, "git", None).unwrap();
+    let version = Command::new(&path).arg("--version").output().unwrap();
+    assert!(
+        version.status.success(),
+        "git --version failed: {version:?}"
+    );
+    let program = path.to_str().unwrap().to_owned();
+    let expected_version = String::from_utf8(version.stdout)
+        .unwrap()
+        .trim_end()
+        .to_owned();
+    let digest = sha256(&fs::read(&path).unwrap());
+
+    let tool = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == "git")
+        .expect("product config must retain its Git tool");
+    tool["program"] = program.clone().into();
+    tool["expected_version"] = expected_version.into();
+    let input = config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|input| input["id"] == "git-executable")
+        .expect("product config must retain its Git executable input");
+    input["location"] = program.into();
+    input["sha256"] = digest.into();
+}
 impl Host {
     fn new() -> Self {
         let dir = tempfile::Builder::new()
@@ -184,8 +215,12 @@ impl Host {
             ])
             .output()
             .unwrap();
-        let v = serde_json::from_slice(&out.stdout)
-            .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
+        let v = serde_json::from_slice(&out.stdout).unwrap_or_else(|_| {
+            json!({
+                "stdout": String::from_utf8_lossy(&out.stdout),
+                "stderr": String::from_utf8_lossy(&out.stderr)
+            })
+        });
         (out.status.code().unwrap(), v)
     }
     fn run(&self) -> (i32, Value) {
@@ -1244,6 +1279,7 @@ fn actual_host_registries_cannot_pass_full_governance() {
         .as_object_mut()
         .unwrap()
         .remove("credential_environment");
+    bind_actual_git(&mut config, h.root());
     write(h.root(), config_path, &config);
     h.candidate = commit(h.root());
     h.base = h.candidate.clone();
