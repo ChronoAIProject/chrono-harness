@@ -500,8 +500,8 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
     );
     assert_eq!(
         processes(&reader),
-        9,
-        "version, existing commit/tree observations and six original file acquisitions"
+        7,
+        "version, existing commit/tree observations, selector/config and two registry batch acquisitions"
     );
     assert_eq!(
         reader.observation(),
@@ -521,7 +521,7 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
         .unwrap();
     assert_eq!(
         processes(&second),
-        9,
+        7,
         "a new Reader acquires its own evidence"
     );
     assert_ne!(fs::read(h.root.join("trace")).unwrap(), trace);
@@ -883,4 +883,366 @@ fn malformed_or_failed_identity_observations_never_enable_reuse() {
             reader.observation()
         );
     }
+}
+
+fn registry_host(
+    body: &str,
+    payload_length: usize,
+) -> (Host, std::collections::BTreeMap<String, Vec<u8>>, String) {
+    let mut h = Host::new(body);
+    let mut paths = serde_json::Map::new();
+    let mut originals = std::collections::BTreeMap::new();
+    for role in ["judges", "projects", "filemap", "workflow"] {
+        let path = format!(".chrono-harness/{role} café\t:key.json");
+        let bytes = format!(
+            "{{ \"role\":\"{role}\",\"payload\":\"{}\" }}\n\n",
+            "x".repeat(payload_length)
+        )
+        .into_bytes();
+        fs::write(h.root.join(&path), &bytes).unwrap();
+        paths.insert(role.into(), json!(path));
+        originals.insert(path, bytes);
+    }
+    h.config["registries"] = paths.into();
+    h.save();
+    let oid = commit(&h);
+    (h, originals, oid)
+}
+
+#[test]
+fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges() {
+    let (h, originals, oid) = registry_host("", 40);
+    let reader = h.open().unwrap();
+    reader.verify_oid(&h.root, &oid).unwrap();
+    let start = std::time::Instant::now();
+    let snapshot = reader.registry_snapshot(&h.root, &oid, CONFIG).unwrap();
+    let elapsed = start.elapsed().as_secs_f64();
+    for (path, bytes) in &originals {
+        assert_eq!(&snapshot.bytes[path], bytes);
+    }
+    let observed = reader.observation();
+    println!("REGISTRY_ACQUISITION wall_seconds={elapsed} observation={observed}");
+    assert_eq!(
+        processes(&reader),
+        6,
+        "version, commit/tree, config, metadata and contents"
+    );
+    let process_list = observed["processes"].as_array().unwrap();
+    let metadata: chrono_harness::ProcessResult =
+        serde_json::from_value(process_list[4].clone()).unwrap();
+    let contents: chrono_harness::ProcessResult =
+        serde_json::from_value(process_list[5].clone()).unwrap();
+    assert_eq!(metadata.argv.last().unwrap(), "--batch-check");
+    assert_eq!(contents.argv.last().unwrap(), "--batch");
+    let paths = chrono_harness::facts::registry_paths(&h.config, CONFIG).unwrap();
+    let input = paths[1..]
+        .iter()
+        .map(|p| format!("{oid}:{p}\n"))
+        .collect::<String>();
+    assert_eq!(metadata.stdin_sha256, sha256(input.as_bytes()));
+    let lines = metadata.stdout.lines().collect::<Vec<_>>();
+    assert_eq!(lines.len(), 4);
+    let content_input = lines
+        .iter()
+        .map(|line| format!("{}\n", line.split(' ').next().unwrap()))
+        .collect::<String>();
+    assert_eq!(contents.stdin_sha256, sha256(content_input.as_bytes()));
+    let mut framed = vec![];
+    for (line, path) in lines.iter().zip(&paths[1..]) {
+        assert!(line.contains(" blob "));
+        assert_eq!(
+            line.split(' ').nth(2).unwrap().parse::<usize>().unwrap(),
+            originals[path].len()
+        );
+        framed.extend_from_slice(format!("{line}\n").as_bytes());
+        framed.extend_from_slice(&originals[path]);
+        framed.push(b'\n');
+    }
+    assert_eq!(contents.stdout_bytes, framed);
+    chrono_harness::observation::process_success(&metadata).unwrap();
+    chrono_harness::observation::process_success(&contents).unwrap();
+    for (path, bytes) in originals {
+        assert_eq!(reader.blob(&h.root, &oid, &path).unwrap(), bytes);
+    }
+    assert_eq!(
+        reader
+            .registry_snapshot(&h.root, &oid, CONFIG)
+            .unwrap()
+            .bytes,
+        snapshot.bytes
+    );
+    assert_eq!(
+        reader.observation(),
+        observed,
+        "reuse retains the original receipt"
+    );
+}
+
+#[test]
+fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs() {
+    for exact_limit in [false, true] {
+        let (mut h, mut originals, _) = registry_host("", 700);
+        h.config["protocol"]["stdout_limit_bytes"] = json!(2048);
+        if exact_limit {
+            for (path, bytes) in &mut originals {
+                *bytes = format!("{{\"p\":\"{}\"}}", "x".repeat(2040)).into_bytes();
+                assert_eq!(bytes.len(), 2048);
+                fs::write(h.root.join(path), &bytes).unwrap();
+            }
+        }
+        h.save();
+        let oid = commit(&h);
+        let reader = h.open().unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        let snapshot = reader.registry_snapshot(&h.root, &oid, CONFIG).unwrap();
+        for (path, bytes) in originals {
+            assert_eq!(snapshot.bytes[&path], bytes);
+            assert_eq!(reader.blob(&h.root, &oid, &path).unwrap(), bytes);
+        }
+        for process in reader.observation()["processes"].as_array().unwrap() {
+            let p: chrono_harness::ProcessResult = serde_json::from_value(process.clone()).unwrap();
+            assert!(p.stdout_bytes.len() <= 2048);
+            chrono_harness::observation::process_success(&p).unwrap();
+        }
+    }
+}
+
+#[test]
+fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused() {
+    for phase in ["--batch-check", "--batch"] {
+        for response in [
+            b"".as_slice(),
+            b"not-an-object blob 1\n",
+            b"0000000000000000000000000000000000000000 blob 0\n",
+            b"tree tree 1\n",
+            b"missing missing\n",
+            b"malformed\0\xff",
+            b"extra\n",
+        ] {
+            let body = format!(
+                "case \"$*\" in *' cat-file {phase}') if [ -e response ]; then /bin/cat response; exit 0; fi;; esac"
+            );
+            let (h, _, oid) = registry_host(&body, 20);
+            let reader = h.open().unwrap();
+            reader.verify_oid(&h.root, &oid).unwrap();
+            fs::write(h.root.join("response"), response).unwrap();
+            for _ in 0..2 {
+                let before = processes(&reader);
+                assert!(
+                    reader.registry_snapshot(&h.root, &oid, CONFIG).is_err(),
+                    "{phase}: {response:?}"
+                );
+                assert!(processes(&reader) > before);
+                let observed = reader.observation();
+                let last = observed["processes"].as_array().unwrap().last().unwrap();
+                assert_eq!(last["stdout_bytes"], json!(response));
+                assert_eq!(last["stdout_sha256"], sha256(response));
+                assert_eq!(last["exit_code"], 0);
+            }
+            fs::remove_file(h.root.join("response")).unwrap();
+            assert!(reader.registry_snapshot(&h.root, &oid, CONFIG).is_ok());
+        }
+    }
+    for drift in [false, true] {
+        let body = if drift {
+            "case \"$*\" in *' cat-file --batch') if [ ! -e retry-ready ]; then printf changed > .git/config.worktree; fi;; esac"
+        } else {
+            "case \"$*\" in *' cat-file --batch') if [ ! -e retry-ready ]; then printf 'original partial'; printf 'original error' >&2; exit 17; fi;; esac"
+        };
+        let (h, _, oid) = registry_host(body, 20);
+        let reader = h.open().unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        assert!(reader.registry_snapshot(&h.root, &oid, CONFIG).is_err());
+        let observed = reader.observation();
+        let failed_index = processes(&reader) - 1;
+        let failed = observed["processes"][failed_index].clone();
+        assert_eq!(failed["exit_code"], if drift { 0 } else { 17 });
+        if drift {
+            fs::remove_file(h.root.join(".git/config.worktree")).unwrap();
+        } else {
+            assert_eq!(failed["stdout_sha256"], sha256(b"original partial"));
+            assert_eq!(failed["stderr_sha256"], sha256(b"original error"));
+        }
+        fs::write(h.root.join("retry-ready"), b"").unwrap();
+        assert!(reader.registry_snapshot(&h.root, &oid, CONFIG).is_ok());
+        assert_eq!(reader.observation()["processes"][failed_index], failed);
+    }
+}
+
+#[test]
+fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
+    let body = "case \"$*\" in *' cat-file --batch') if [ -e response ]; then /bin/cat response; exit 0; fi;; esac";
+    let (h, _, oid) = registry_host(body, 30);
+    let first = h.open().unwrap();
+    first.verify_oid(&h.root, &oid).unwrap();
+    first.registry_snapshot(&h.root, &oid, CONFIG).unwrap();
+    let observed = first.observation();
+    let valid: chrono_harness::ProcessResult = serde_json::from_value(
+        observed["processes"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .clone(),
+    )
+    .unwrap();
+    let header_end = valid.stdout_bytes.iter().position(|b| *b == b'\n').unwrap();
+    for case in [
+        "oid",
+        "type",
+        "length",
+        "payload",
+        "terminator",
+        "truncated",
+        "trailing",
+    ] {
+        let mut raw = valid.stdout_bytes.clone();
+        match case {
+            "oid" => raw[0] = if raw[0] == b'a' { b'b' } else { b'a' },
+            "type" => raw[41] = b't',
+            "length" => raw[header_end - 1] = b'9',
+            "payload" => raw[header_end + 1] = b'\0',
+            "terminator" => *raw.last_mut().unwrap() = b'\0',
+            "truncated" => {
+                raw.truncate(header_end + 2);
+            }
+            "trailing" => raw.extend_from_slice(b"extra\n"),
+            _ => unreachable!(),
+        }
+        fs::write(h.root.join("response"), &raw).unwrap();
+        let reader = h.open().unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        for _ in 0..2 {
+            let before = processes(&reader);
+            assert!(
+                reader.registry_snapshot(&h.root, &oid, CONFIG).is_err(),
+                "{case}"
+            );
+            assert!(processes(&reader) > before);
+            let observed = reader.observation();
+            let last = observed["processes"].as_array().unwrap().last().unwrap();
+            assert_eq!(last["stdout_bytes"], json!(raw));
+            assert_eq!(last["stdout_sha256"], sha256(&raw));
+        }
+    }
+}
+
+#[test]
+fn registry_batch_keeps_configured_process_output_and_time_failures() {
+    for case in ["output", "time"] {
+        let body = if case == "output" {
+            "case \"$*\" in *' cat-file --batch') /bin/cat oversized; exit 0;; esac"
+        } else {
+            "case \"$*\" in *' cat-file --batch') /bin/sleep 60;; esac"
+        };
+        let (mut h, _, _) = registry_host(body, 20);
+        h.config["protocol"]["stdout_limit_bytes"] = json!(2048);
+        h.save();
+        let oid = commit(&h);
+        fs::write(h.root.join("oversized"), vec![b'x'; 4096]).unwrap();
+        let reader = h.open().unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        assert!(
+            reader.registry_snapshot(&h.root, &oid, CONFIG).is_err(),
+            "{case}"
+        );
+        let observed = reader.observation();
+        let last = observed["processes"].as_array().unwrap().last().unwrap();
+        assert_eq!(
+            last["failure"],
+            if case == "output" {
+                "process output limit exceeded"
+            } else {
+                "process timed out"
+            }
+        );
+        assert_eq!(
+            last["stdout_bytes"].as_array().unwrap().len(),
+            if case == "output" { 2048 } else { 0 }
+        );
+    }
+}
+
+#[test]
+fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
+    for case in [
+        "selector",
+        "config",
+        "tool",
+        "guard-present",
+        "guard-absent",
+        "root",
+    ] {
+        let (h, originals, _) = registry_host("", 20);
+        select(&h, &selection());
+        let oid = commit(&h);
+        let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        reader.registry_snapshot(&h.root, &oid, SELECTOR).unwrap();
+        let original = reader.observation();
+        let path = originals.keys().next().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let root = if case == "root" {
+            other.path()
+        } else {
+            &h.root
+        };
+        match case {
+            "selector" => fs::write(h.root.join(SELECTOR), b"{}").unwrap(),
+            "config" => fs::write(h.root.join(CONFIG), b"{}").unwrap(),
+            "tool" => fs::write(h.root.join("git-wrapper"), b"changed").unwrap(),
+            "guard-present" => fs::write(h.root.join(".git/config"), b"changed").unwrap(),
+            "guard-absent" => fs::write(h.root.join(".git/config.worktree"), b"changed").unwrap(),
+            "root" => {}
+            _ => unreachable!(),
+        }
+        assert!(reader.blob(root, &oid, path).is_err(), "{case}");
+        assert_eq!(
+            reader.observation(),
+            original,
+            "{case}: reject before process effects"
+        );
+    }
+}
+
+#[test]
+fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
+    let (h, originals, old) = registry_host("", 20);
+    let reader = h.open().unwrap();
+    for _ in 0..2 {
+        let before = processes(&reader);
+        let snapshot = reader.registry_snapshot(&h.root, &old, CONFIG).unwrap();
+        assert_eq!(processes(&reader), before + 5);
+        assert_eq!(
+            snapshot.bytes[originals.keys().next().unwrap()],
+            originals.values().next().unwrap().clone()
+        );
+    }
+    reader.verify_oid(&h.root, &old).unwrap();
+    let before = processes(&reader);
+    reader.registry_snapshot(&h.root, "HEAD", CONFIG).unwrap();
+    assert_eq!(processes(&reader), before + 5);
+    let path = originals.keys().next().unwrap();
+    fs::write(h.root.join(path), b"{\"changed\":true}").unwrap();
+    let new = commit(&h);
+    assert_ne!(new, old);
+    assert_eq!(
+        reader
+            .registry_snapshot(&h.root, "HEAD", CONFIG)
+            .unwrap()
+            .values[path]["changed"],
+        true
+    );
+    assert!(
+        reader
+            .registry_snapshot(&h.root, &old, CONFIG)
+            .unwrap()
+            .values[path]["changed"]
+            .is_null()
+    );
+    assert!(
+        Reader::legacy()
+            .registry_snapshot(&h.root, &old, CONFIG)
+            .is_ok()
+    );
 }

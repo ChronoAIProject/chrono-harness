@@ -197,6 +197,21 @@ pub fn registry_snapshot_with(
     path: &str,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<RegistrySnapshot, String> {
+    let (mut snapshot, paths) = registry_snapshot_start(path, &mut read)?;
+    for path in paths {
+        if !snapshot.bytes.contains_key(&path) {
+            let original = read(&path)?;
+            let value = json(&original)?;
+            snapshot.bytes.insert(path.clone(), original);
+            snapshot.values.insert(path, value);
+        }
+    }
+    Ok(snapshot)
+}
+fn registry_snapshot_start(
+    path: &str,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<(RegistrySnapshot, Vec<String>), String> {
     let original = read(path)?;
     let (effective_path, effective_bytes, effective_config, selection) =
         crate::facts_configs::resolve(path, original.clone(), &mut read)?;
@@ -222,15 +237,7 @@ pub fn registry_snapshot_with(
             .insert(effective_path.clone(), effective_bytes.clone());
         snapshot.values.insert(effective_path, effective_config);
     }
-    for path in paths {
-        if !snapshot.bytes.contains_key(&path) {
-            let original = read(&path)?;
-            let value = json(&original)?;
-            snapshot.bytes.insert(path.clone(), original);
-            snapshot.values.insert(path, value);
-        }
-    }
-    Ok(snapshot)
+    Ok((snapshot, paths))
 }
 pub fn registry_digest(
     base: &BTreeMap<String, Value>,
@@ -399,6 +406,22 @@ impl Reader {
         oid: &str,
         path: &str,
     ) -> Result<RegistrySnapshot, String> {
-        registry_snapshot_with(path, |path| self.blob(root, oid, path))
+        if !self.can_reuse_oid(oid) {
+            return registry_snapshot_with(path, |path| self.blob(root, oid, path));
+        }
+        let (mut snapshot, paths) =
+            registry_snapshot_start(path, |path| self.blob(root, oid, path))?;
+        let mut pending = vec![];
+        for path in paths {
+            if !snapshot.bytes.contains_key(&path) && !pending.contains(&path) {
+                pending.push(path);
+            }
+        }
+        for (path, original) in self.registry_blobs(root, oid, &pending)? {
+            let value = json(&original)?;
+            snapshot.bytes.insert(path.clone(), original);
+            snapshot.values.insert(path, value);
+        }
+        Ok(snapshot)
     }
 }
