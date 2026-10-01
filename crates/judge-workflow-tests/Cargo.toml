@@ -20,5 +20,12 @@ path = "tests/branch.rs"
 name = "consumer"
 path = "tests/consumer.rs"
 
+# Original-receipt fixtures reconstruct and reseal the judge DAG in process.
+# Path dependencies use this consumer root's profile.
+[profile.dev]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
 [profile.dev.package.sha2]
 opt-level = 3
