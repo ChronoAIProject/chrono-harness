@@ -1225,10 +1225,26 @@ fn real_host_pseudo_script_and_tool_defects_are_concrete() {
 #[test]
 fn actual_host_registries_cannot_pass_full_governance() {
     let mut h = Host::new();
+    let explicit_config: Value =
+        serde_json::from_slice(&fs::read(h.root().join(".chrono-harness/config.json")).unwrap())
+            .unwrap();
     for name in ["config", "projects", "FILEMAP", "workflow"] {
         let bytes = fs::read(source().join(format!(".chrono-harness/{name}.json"))).unwrap();
         fs::write(h.root().join(format!(".chrono-harness/{name}.json")), bytes).unwrap();
     }
+    // This host supplies its own fixed endpoints/context. Register that explicit
+    // v3 invocation while retaining the current host's proposed governance data;
+    // v4's short entry requires its registered automatic input producers.
+    let config_path = ".chrono-harness/config.json";
+    let mut config: Value =
+        serde_json::from_slice(&fs::read(h.root().join(config_path)).unwrap()).unwrap();
+    config["schema_version"] = json!(3);
+    config["canonical_check"] = explicit_config["canonical_check"].clone();
+    config["environment"]
+        .as_object_mut()
+        .unwrap()
+        .remove("credential_environment");
+    write(h.root(), config_path, &config);
     h.candidate = commit(h.root());
     h.base = h.candidate.clone();
     fs::write(

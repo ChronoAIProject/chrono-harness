@@ -168,7 +168,8 @@ fn bound_context(h: &Host, kind: &str, digest: Option<&str>, execute: bool) -> (
                     .get(key.as_str().unwrap())
                     .is_none()
                 {
-                    retained[endpoint]["environment"][key.as_str().unwrap()] = Value::Null;
+                    retained[endpoint]["environment"][key.as_str().unwrap()] =
+                        json!(std::env::var(key.as_str().unwrap()).ok());
                 }
             }
             if let Some(input) = cfg["environment"]["inputs"]

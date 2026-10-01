@@ -242,9 +242,15 @@ fn produce(
                         Ok(raw) => {
                             let previous: Value = decode(&raw)?;
                             if !previous.is_object() || previous["schema_version"] != 2 {
-                                return Err("E_LOCAL_CONTEXT: cached context must be a schema2 object".into());
+                                return Err(
+                                    "E_LOCAL_CONTEXT: cached context must be a schema2 object"
+                                        .into(),
+                                );
                             }
-                            match chrono_judge_workflow::observation_age(&previous, registrations.workflow()) {
+                            match chrono_judge_workflow::observation_age(
+                                &previous,
+                                registrations.workflow(),
+                            ) {
                                 Ok(_) => {}
                                 Err(e) if e.starts_with("E_BRANCH_STALE:") => {}
                                 Err(e) => return Err(format!("E_LOCAL_CONTEXT: {e}")),
@@ -252,7 +258,10 @@ fn produce(
                             let mut comparison = previous.clone();
                             comparison["observed_at"] = ctx["observed_at"].clone();
                             if comparison == ctx {
-                                match chrono_judge_workflow::observation_age(&ctx, registrations.workflow()) {
+                                match chrono_judge_workflow::observation_age(
+                                    &ctx,
+                                    registrations.workflow(),
+                                ) {
                                     Ok(_) => ctx = previous,
                                     Err(e) if e.starts_with("E_BRANCH_STALE:") => {}
                                     Err(e) => return Err(e),

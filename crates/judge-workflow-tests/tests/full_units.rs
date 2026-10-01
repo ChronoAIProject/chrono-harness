@@ -50,10 +50,20 @@ fn rust_host() -> (Host, tempfile::TempDir) {
         cargo.parent().unwrap().display()
     ));
     cfg["environment"]["values"]["HOME"] = json!(std::env::var("HOME").unwrap());
+    // Native bootstrap selects Cargo through rustup with this variable. Keep
+    // the same selection in the cleared judge/business environment, including
+    // its absence locally, rather than falling back to a different default.
+    cfg["environment"]["inherit"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("RUSTUP_TOOLCHAIN"));
     cfg["input_closure"]["bindings"][1]["inputs"]
         .as_array_mut()
         .unwrap()
-        .push(json!("environment:HOME"));
+        .extend([
+            json!("environment:HOME"),
+            json!("environment:RUSTUP_TOOLCHAIN"),
+        ]);
     for i in cfg["environment"]["inputs"].as_array_mut().unwrap() {
         if i["id"] == "interpreter" {
             i["location"] = json!(wrapper);
@@ -95,6 +105,11 @@ fn rust_host() -> (Host, tempfile::TempDir) {
     });
     fm["project_edges"].as_array_mut().unwrap().push(edge(
         "environment:HOME",
+        "runtime-input",
+        "judge:projects",
+    ));
+    fm["project_edges"].as_array_mut().unwrap().push(edge(
+        "environment:RUSTUP_TOOLCHAIN",
         "runtime-input",
         "judge:projects",
     ));
@@ -318,6 +333,66 @@ fn collected(root: &Path, h: &Host) -> (i32, Value) {
         h,
         &["--collect", ".chrono-harness/state/manifest.json"],
     )
+}
+
+#[test]
+fn invalid_unit_input_preserves_original_failure_and_retained_report_without_business_effects() {
+    let mut h = git_facts::bound_host();
+    h.values.get_mut(CONFIG).unwrap()["execution_units"] = json!({
+        "units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/unit-one.json"}},
+        "shared_operations":{},
+        "collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864},
+        "report_path":".chrono-harness/state/collected.json"
+    });
+    h.save();
+    git_facts::prepare_bound(&h, "integration", None);
+    let root = h.root();
+    let path = root.join(".chrono-harness/state/inputs.json");
+    let mut inputs: Value = chrono_harness::json(&fs::read(&path).unwrap()).unwrap();
+    inputs["base"]["files"]["interpreter"]["blob"] = json!("/outside");
+    fs::write(path, serde_json::to_vec(&inputs).unwrap()).unwrap();
+
+    let (exit, report) = launch(&root, &h, &["--unit", "one"]);
+    assert_eq!(exit, 2, "{report}");
+    let registration = &report["judges"][0];
+    assert_eq!(registration["id"], "registration", "{report}");
+    assert_eq!(registration["response"]["status"], "error");
+    let findings = registration["response"]["findings"].as_array().unwrap();
+    assert_eq!(findings.len(), 1, "{report}");
+    assert_eq!(findings[0]["code"], "E_EVIDENCE_UNRESOLVED");
+    assert_eq!(
+        findings[0]["message"],
+        "E_INPUT_BLOB: reference must be within host state"
+    );
+    assert_eq!(report["findings"], registration["response"]["findings"]);
+    assert_eq!(report["status"], "error");
+    assert!(report["tests"].is_null());
+    assert!(
+        report["judges"].as_array().unwrap()[1..]
+            .iter()
+            .all(|judge| judge["state"] == "blocked")
+    );
+    assert!(!root.join(".chrono-harness/state/order").exists());
+    assert!(!root.join(".chrono-harness/state/integration.json").exists());
+    assert!(report["artifacts"].get("/outside").is_none());
+    assert_eq!(
+        report["artifact_failures"]["/outside"],
+        "invalid relative path: \"/outside\""
+    );
+    assert!(report["unresolved"]["/artifacts"].is_string());
+    for path in [
+        ".chrono-harness/state/unit-one.json",
+        report["report_path"].as_str().unwrap(),
+    ] {
+        let stored = chrono_harness::json(&fs::read(root.join(path)).unwrap()).unwrap();
+        assert_eq!(stored, report, "failed report must be retained at {path}");
+    }
+    // Available originals retain their real bytes even when another address is invalid.
+    let context = report["request"]["context"]["path"].as_str().unwrap();
+    assert_eq!(
+        chrono_harness::full::artifact_bytes(&report["artifacts"], context).unwrap(),
+        fs::read(context).unwrap()
+    );
 }
 
 #[test]

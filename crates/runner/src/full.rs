@@ -7,7 +7,7 @@ use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 pub fn schedule(bindings: &[Binding]) -> Result<Vec<Binding>, String> {
@@ -273,42 +273,58 @@ pub fn artifact_bytes(artifacts: &Value, address: &str) -> Result<Vec<u8>, Strin
     }
     Ok(bytes)
 }
-fn retain_artifacts(req: &Request, judges: &[Value]) -> Result<Value, String> {
+fn retain_artifacts(
+    req: &Request,
+    judges: &[Value],
+    failed: bool,
+) -> Result<(Value, Value), String> {
     let mut out = serde_json::Map::new();
+    let mut unavailable = serde_json::Map::new();
     // Only unit contributions and collection need a portable original closure.
     // Ordinary full checks keep local blob references, validated by registration
     // through streaming identities, without imposing the unit transport bound.
     if req.scope.is_none() {
-        return Ok(Value::Object(out));
+        return Ok((Value::Object(out), Value::Object(unavailable)));
     }
     let mut retained_bytes = 0u64;
     let bound = req.observations["execution_units"]["collection_limits"]["report_bytes"]
         .as_u64()
         .unwrap_or(64 * 1024 * 1024);
-    let mut retain = |address: &str, path: &Path| -> Result<(), String> {
+    let mut retain = |address: &str, path: Result<PathBuf, String>| -> Result<(), String> {
         if out.contains_key(address) {
             return Ok(());
         }
-        let length = fs::metadata(path).map_err(|e| e.to_string())?.len();
-        retained_bytes = retained_bytes
-            .checked_add(length.saturating_mul(2))
-            .ok_or("artifact length overflow")?;
-        if length > 64 * 1024 * 1024 || retained_bytes > bound {
-            return Err("original artifact closure exceeds registered report bound".into());
+        let result = (|| {
+            let path = path?;
+            let length = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+            let total = retained_bytes
+                .checked_add(length.saturating_mul(2))
+                .ok_or("artifact length overflow")?;
+            if length > 64 * 1024 * 1024 || total > bound {
+                return Err("original artifact closure exceeds registered report bound".into());
+            }
+            let bytes = fs::read(path).map_err(|e| e.to_string())?;
+            out.insert(address.into(), artifact(&bytes));
+            retained_bytes = total;
+            Ok(())
+        })();
+        match result {
+            Err(error) if failed => {
+                // Preserve the already-produced judge failure. Missing originals
+                // remain unavailable to collection; no evidence is substituted.
+                unavailable.insert(address.into(), Value::String(error));
+                Ok(())
+            }
+            result => result,
         }
-        out.insert(
-            address.into(),
-            artifact(&fs::read(path).map_err(|e| e.to_string())?),
-        );
-        Ok(())
     };
     retain(
         req.context.path.to_str().ok_or("context path")?,
-        &req.context.path,
+        Ok(req.context.path.clone()),
     )?;
     let ctx = json(&fs::read(&req.context.path).map_err(|e| e.to_string())?)?;
     if let Some(p) = ctx["retained_inputs"].as_str() {
-        retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+        retain(p, no_symlink_parents(&req.candidate.root, p))?;
     }
     if req.observations["preparation"].is_object() {
         let binding = &req.observations["preparation"];
@@ -322,7 +338,7 @@ fn retain_artifacts(req: &Request, judges: &[Value]) -> Result<Value, String> {
         for original in originals {
             retain(
                 &original.path,
-                &no_symlink_parents(&req.candidate.root, &original.path)?,
+                no_symlink_parents(&req.candidate.root, &original.path),
             )?;
         }
     }
@@ -333,7 +349,7 @@ fn retain_artifacts(req: &Request, judges: &[Value]) -> Result<Value, String> {
             .flat_map(|m| m.values())
         {
             if let Some(p) = file["blob"].as_str() {
-                retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+                retain(p, no_symlink_parents(&req.candidate.root, p))?;
             }
         }
     }
@@ -341,7 +357,7 @@ fn retain_artifacts(req: &Request, judges: &[Value]) -> Result<Value, String> {
         if let Some(evidence) = row["response"]["evidence"].as_array() {
             for e in evidence {
                 if let Some(p) = e["path"].as_str() {
-                    retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+                    retain(p, no_symlink_parents(&req.candidate.root, p))?;
                 }
             }
         }
@@ -352,11 +368,11 @@ fn retain_artifacts(req: &Request, judges: &[Value]) -> Result<Value, String> {
                 let p = report["retained_path"]
                     .as_str()
                     .ok_or("retained unit path")?;
-                retain(p, &no_symlink_parents(&req.candidate.root, p)?)?;
+                retain(p, no_symlink_parents(&req.candidate.root, p))?;
             }
         }
     }
-    Ok(Value::Object(out))
+    Ok((Value::Object(out), Value::Object(unavailable)))
 }
 pub fn execute(
     template: &Request,
@@ -812,7 +828,19 @@ pub fn check_prepared(
     let original = judge_request(&req, &first, &[])?;
     report["request"] = value!(original);
     report["request_digest"] = wire::digest(&original)?.into();
-    report["artifacts"] = retain_artifacts(&req, &judges)?;
+    let (artifacts, unavailable) = retain_artifacts(&req, &judges, status.exit_code() != 0)?;
+    report["artifacts"] = artifacts;
+    if !unavailable
+        .as_object()
+        .ok_or("unavailable artifacts")?
+        .is_empty()
+    {
+        unresolved.insert(
+            "/artifacts".into(),
+            "original artifact closure incomplete; see artifact_failures".into(),
+        );
+        report["artifact_failures"] = unavailable;
+    }
     report["git_facts"] = reader.observation();
     report["entry"] = req.observations["entry"].clone();
     report["preparation"] = req.observations["preparation"].clone();

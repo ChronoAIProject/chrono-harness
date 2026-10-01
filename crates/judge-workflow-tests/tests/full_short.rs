@@ -273,6 +273,15 @@ fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::
     // clock. Its short freshness window measures producer behavior, not fixture
     // snapshot setup competing with the other registered tests.
     git_facts::prepare_bound(&h, "integration", None);
+    // short(..., None) explicitly removes this selector from the real caller.
+    // Its retained snapshots must describe that local invocation even when the
+    // test package itself was launched by the native CI check.
+    let inputs_path = root.join(".chrono-harness/state/inputs.json");
+    let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
+    for endpoint in ["base", "candidate"] {
+        inputs[endpoint]["environment"]["CHRONO_CHECK_SOURCE"] = Value::Null;
+    }
+    fs::write(inputs_path, serde_json::to_vec(&inputs).unwrap()).unwrap();
     // Real birth producer in an isolated fixture; no hand-filled successful birth.
     git(&root, &["checkout", "-q", "dev"]);
     let lane = tools.path().join("local-lane");
