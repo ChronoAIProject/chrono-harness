@@ -304,8 +304,16 @@ fn launch_endpoints(root: &Path, base: &str, candidate: &str, suffix: &[&str]) -
         started.elapsed().as_secs_f64(),
         out.stdout.len()
     );
+    println!(
+        "PROCESS_OUTPUT exit={} stdout_bytes={} stderr_bytes={} stderr_sha256={} stderr={:?}",
+        out.status.code().unwrap(),
+        out.stdout.len(),
+        out.stderr.len(),
+        sha256(&out.stderr),
+        String::from_utf8_lossy(&out.stderr),
+    );
     if !out.status.success() {
-        println!("FAILURE findings={} transport={}", report["findings"],json!(report["judges"].as_array().into_iter().flatten().filter(|j|j["transport_failure"].is_string()).map(|j|json!({"id":j["id"],"state":j["state"],"transport_failure":j["transport_failure"],"exit_code":j["exit_code"]})).collect::<Vec<_>>()));
+        println!("FAILURE findings={} stderr={:?} transport={}", report["findings"], report["stderr"],json!(report["judges"].as_array().into_iter().flatten().filter(|j|j["transport_failure"].is_string()).map(|j|json!({"id":j["id"],"state":j["state"],"transport_failure":j["transport_failure"],"exit_code":j["exit_code"]})).collect::<Vec<_>>()));
     }
     (out.status.code().unwrap(), report)
 }
@@ -1266,6 +1274,17 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         assert_eq!(workflow(&r)["completion"], "pending collection");
     }
     manifest(&h.root(), &["one", "two"]);
+    let one_bytes = fs::metadata(h.root().join(".chrono-harness/state/unit-one.json"))
+        .unwrap()
+        .len();
+    let two_bytes = fs::metadata(h.root().join(".chrono-harness/state/unit-two.json"))
+        .unwrap()
+        .len();
+    println!(
+        "MIGRATION_COLLECTION_INPUT unit_bytes=[{one_bytes},{two_bytes}] retained_hex_bytes={} report_bound={}",
+        2 * (one_bytes + two_bytes),
+        64 * 1024 * 1024,
+    );
     fs::remove_file(&wrapper).unwrap();
     let before = marker(&tool_root);
     let (e, collected_report) = collected(&h.root(), &h);
