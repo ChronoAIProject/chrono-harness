@@ -225,7 +225,8 @@ fn produce(
                     .ok_or("origin fork point missing")?;
                 facts::full_oid(fork)?;
                 r.oid(root, &format!("{fork}^{{commit}}"))?;
-                let mut ctx = json!({"schema_version":2,"base":base,"candidate":candidate,"dev_tip":base,"branch_ref":branch,"fork_point":fork,"branch_started_at":birth["branch_started_at"],"observed_at":OffsetDateTime::now_utc().format(&Rfc3339).map_err(|e|e.to_string())?,"operation":"validate.delta","run_kind":origin["run_kind"],"integration_evidence":origin["integration_evidence"]});
+                let observed = OffsetDateTime::now_utc();
+                let mut ctx = json!({"schema_version":2,"base":base,"candidate":candidate,"dev_tip":base,"branch_ref":branch,"fork_point":fork,"branch_started_at":birth["branch_started_at"],"observed_at":observed.format(&Rfc3339).map_err(|e|e.to_string())?,"operation":"validate.delta","run_kind":origin["run_kind"],"integration_evidence":origin["integration_evidence"]});
                 if let Some(retained) = origin["retained_inputs"].as_str() {
                     units::artifact_path(retained)?;
                     file_identity(&no_symlink_parents(root, retained)?)?;
@@ -275,6 +276,7 @@ fn produce(
                     fs::read(no_symlink_parents(root, &retained)?).map_err(|e| e.to_string())?;
                 publish(root, &p.context_path, &retained_raw, true)?;
                 report["origin"] = json!({"path":p.origin_path,"sha256":sha256(&origin_bytes),"birth_report":birth_path,"birth_sha256":sha256(&birth_bytes)});
+                report["current_observation"] = json!({"context_digest":wire::digest(&ctx)?,"unix_timestamp_nanos":observed.unix_timestamp_nanos().to_string()});
                 Some(Context {
                     path: retained,
                     sha256: sha256(&retained_raw),
@@ -311,6 +313,10 @@ fn produce(
     if let Some(path) = report["origin"]["birth_report"].as_str() {
         originals.push(prepared::original(&req.host_root, path)?);
     }
+    let mut evidence = json!({"report_path":report["report_path"],"report_sha256":file_identity(&no_symlink_parents(&req.host_root,report["report_path"].as_str().ok_or("report path")?)?)?.0,"origin":report["origin"],"remote":report["remote"],"target_ref":report["target_ref"]});
+    if let Some(observation) = report.get("current_observation") {
+        evidence["current_observation"] = observation.clone();
+    }
     Ok(PreparedCheck {
         schema: prepared::RESPONSE.into(),
         request_sha256: sha256(&serde_json::to_vec(req).map_err(|e| e.to_string())?),
@@ -326,7 +332,7 @@ fn produce(
             .map_err(|e| e.to_string())?,
         scope: serde_json::from_value(report["scope"].clone()).map_err(|e| e.to_string())?,
         originals,
-        evidence: json!({"report_path":report["report_path"],"report_sha256":file_identity(&no_symlink_parents(&req.host_root,report["report_path"].as_str().ok_or("report path")?)?)?.0,"origin":report["origin"],"remote":report["remote"],"target_ref":report["target_ref"]}),
+        evidence,
     })
 }
 pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {

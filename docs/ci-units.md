@@ -140,7 +140,7 @@ updates. The host owns these extension values and its registered operations:
   "seed_directory": ".chrono-harness/state/shared-seed/",
   "seed_artifact": "chrono-context",
   "retained_inputs": ".chrono-harness/state/inputs.json",
-  "composition_sources": [],
+  "composition_sources": [{"path": ".chrono-harness/state/inputs/base-capture.json", "sha256": "ORIGINAL_BASE_CAPTURE_SHA256"}],
   "push_roles": {"refs/heads/integration/": "integration", "refs/heads/dev": "delivery"},
   "pull_request_role": "delivery",
   "integration_evidence": null
@@ -154,17 +154,29 @@ read destination origin or manufacture historical birth. `prepare-endpoints`
 exposes the existing full-policy event preparation before full-context loading.
 Detection delegates it, observes one actual UTC time, retains the
 authentic event/payload/revision/repository records and publishes schema2 context.
-The detector captures only explicitly registered governance inputs at both fixed
-endpoint declarations through `chrono-inputs capture-governance`, retaining actual
-current observations and streamed blobs. Missing or drifted governance inputs fail.
+The detector imports original base governance observations from the explicitly
+addressed `composition_sources` snapshots or endpoint pairs, then captures current
+candidate governance inputs through `chrono-inputs capture-governance`. The inputs
+owner validates fixed endpoint/configuration, presence and streamed blob identities,
+and retains source bytes and a provenance receipt in the seed closure. A base
+snapshot can be captured before the candidate exists; its digest can then be bound
+in the provider without a circular candidate identity. This supports an H0-to-H1
+change at the same input location. Missing, corrupt or misbound originals and
+drifted current governance inputs fail.
 This does not claim a past business execution. Generation uploads the seed before
 dependent jobs start. Units and the later aggregate acquire the unique original
 detector run/production-attempt/digest-bound seed without polling, retaining its
 original bytes and producer closure. Missing, ambiguous or misbound acquisition fails. Transport checks observation
 ordering. The CI producer records a genuine current observation separately from
 the original context; the workflow judge alone applies the unchanged registered
-age bound. Original context digests and successful reports remain unchanged. Acquisition jobs have `actions: read`; bootstrap receives the
-actual `CHRONO_WORKFLOW_REVISION`.
+age bound for both consumer and certificate producer. Local preparation uses the
+same separate current-observation contract when it reuses a retained context.
+Original context digests and successful reports remain unchanged. Acquisition jobs
+have `actions: read`; the generated acquisition steps receive the actual
+`CHRONO_WORKFLOW_REVISION`. Bootstrap receives the host's registered argv. A hook
+that needs that revision must explicitly include the argv prefix
+`["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]` in its bootstrap
+registration; generation preserves this host choice.
 
 Register the adapter as the sole `canonical_check.inputs.ci` action using an
 existing interpreter tool, with argv `[adapter_path, "forward", "--config",
@@ -181,7 +193,10 @@ adapter does not contain a second subprocess runner. The outer producer
 receipt continues to describe its actual environment. Collection forwards gather
 then invokes the inputs owner's composition before returning to full execution.
 The original detector governance pair and selected unit contributions supply
-collection inputs. `composition_sources` can add explicit original pairs.
+collection inputs. `composition_sources` supplies original base snapshots or pairs
+to seed preparation. Collection consumes their validated governance projection
+from the transported seed, whose provenance retains the source bytes; the detector's
+original source paths need not remain live in other checkouts.
 FILEMAP/routes remains the DELTA selection owner; registration projects its
 selected units through both endpoint assignments to check collection coverage.
 Unselected units need neither SDK snapshots nor synthetic reports. Collection

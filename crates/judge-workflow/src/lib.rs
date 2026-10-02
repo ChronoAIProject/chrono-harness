@@ -163,7 +163,14 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
     } else if required {
         (
             "delivery",
-            certificate::consume(reader, req, &b, &ctx, &binding)?,
+            certificate::consume(
+                reader,
+                req,
+                &b,
+                &ctx,
+                &binding,
+                (!observation.is_null()).then_some(observation),
+            )?,
         )
     } else {
         ("ordinary_delta", Value::Null)

@@ -98,6 +98,7 @@ pub fn consume(
     r: &Registrations,
     ctx: &Value,
     binding: &Value,
+    observation: Option<&Value>,
 ) -> Result<Value, String> {
     let digest = ctx["integration_evidence"]
         .as_str()
@@ -160,6 +161,9 @@ pub fn consume(
             != "integration"
         {
             return Err("producer is not integration".into());
+        }
+        if let Some(observation) = observation {
+            crate::branch::current_observation_age(old_ctx, r.workflow(), observation)?;
         }
         let plan: Execution =
             serde_json::from_value(proof["plan"].clone()).map_err(|e| e.to_string())?;

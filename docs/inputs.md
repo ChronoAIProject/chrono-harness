@@ -215,11 +215,25 @@ environment binding. Compatible overlapping observations merge; contradictory
 presence, digest, environment or config rejects. Both endpoints must cover every
 globally required declared input, including governance requirements outside the
 selected business tests. Missing coverage names the endpoint and input. No live
-business input, version probe or SDK install is used. Original pair bytes remain
+business input, version probe or SDK install is used. A source's `pair` address may
+also name one genuine endpoint snapshot, captured before another endpoint exists.
+Its commit chooses the fixed endpoint; both endpoints still require complete
+coverage from the explicitly listed sources. Original snapshot/pair bytes remain
 addressed in `.chrono-harness/state/inputs/originals/`; a separate
 `chrono-input-composition-result/v1` receipt names the manifest, constituents
 and output. Snapshot v2/v3 shape stays unchanged and the receipt reports
 `completeness_proven: false`.
+
+`chrono-inputs capture-governance --host-root H --config P --base OID --candidate OID
+--manifest P --output P` consumes the same original-source manifest for the base
+governance projection and separately observes the checked-out candidate. It never
+captures candidate bytes as historical base data. Required governance inputs come
+from registration's existing empty-business-plan projection. The resulting pair,
+streamed blobs and `OUTPUT.receipt.json` retain source identities and raw originals;
+missing base observation/coverage or endpoint/configuration/presence/blob mismatch
+rejects. Native publication passes the provider's explicit `composition_sources`
+through this command before publishing its seed. Hosts provision those originals
+through their registered bootstrap; daily check commands remain unchanged.
 
 Pair transports absence unchanged without opening its historical location.
 Registration, routes and projects consume the same validation, including a final

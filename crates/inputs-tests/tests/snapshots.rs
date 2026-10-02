@@ -1052,3 +1052,210 @@ fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_
         );
     }
 }
+
+#[test]
+fn governance_seed_uses_separately_captured_same_path_original_and_current_observation() {
+    let (d, input, mut v, _) = fixture();
+    v.get_mut(FM).unwrap()["schema_version"] = value!(2);
+    v.get_mut(FM).unwrap()["execution_plans"] = value!({});
+    v.get_mut(CONFIG).unwrap()["schema_version"] = value!(2);
+    for i in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        i["presence"] = value!("present");
+        i["location"] = value!(fs::canonicalize(input.path()).unwrap());
+    }
+    let absent = fs::canonicalize(input.path().parent().unwrap())
+        .unwrap()
+        .join("missing-governance-original");
+    assert!(!absent.exists());
+    v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({"id":"absent-governance","location":absent,"presence":"absent"}));
+    v.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({"from":"input:data","kind":"runtime-input","to":"judge:registration"}));
+    v.get_mut(FM).unwrap()["project_edges"].as_array_mut().unwrap().push(
+        value!({"from":"input:absent-governance","kind":"runtime-input","to":"judge:registration"}),
+    );
+    write_values(d.path(), &v);
+    let base = commit(d.path());
+    let base_path = ".chrono-harness/state/base-original.json";
+    let old = chrono_inputs::capture(d.path(), CONFIG, &base, base_path).unwrap();
+    let old_raw = fs::read(d.path().join(base_path)).unwrap();
+    fs::write(input.path(), b"current bytes at the SAME fixed location").unwrap();
+    for i in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+    {
+        if i["presence"] == "present" {
+            i["sha256"] = value!(sha256(b"current bytes at the SAME fixed location"));
+        }
+    }
+    write_values(d.path(), &v);
+    let candidate = commit(d.path());
+    let manifest = ".chrono-harness/state/governance-sources.json";
+    let source = value!({"pair":{"path":base_path,"sha256":sha256(&old_raw)}});
+    fs::write(
+        d.path().join(manifest),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-input-composition/v1","sources":[source]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let args = [
+        "capture-governance",
+        "--config",
+        CONFIG,
+        "--base",
+        &base,
+        "--candidate",
+        &candidate,
+        "--manifest",
+        manifest,
+        "--output",
+        ".chrono-harness/state/seed/inputs.json",
+    ];
+    let (code, seed, err) = invoke(d.path(), &args);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(
+        seed["base"]["files"]["data"]["sha256"],
+        old["files"]["data"]["sha256"]
+    );
+    assert_eq!(
+        seed["candidate"]["files"]["data"]["sha256"],
+        sha256(b"current bytes at the SAME fixed location")
+    );
+    assert_eq!(
+        seed["base"]["files"]["absent-governance"],
+        value!({"absent":true})
+    );
+    assert_eq!(
+        seed["candidate"]["files"]["absent-governance"],
+        value!({"absent":true})
+    );
+    assert_eq!(fs::read(d.path().join(base_path)).unwrap(), old_raw);
+    let receipt = json(
+        &fs::read(
+            d.path()
+                .join(".chrono-harness/state/seed/inputs.json.receipt.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(
+            d.path().join(
+                receipt["originals"][0]["retained"]["path"]
+                    .as_str()
+                    .unwrap()
+            )
+        )
+        .unwrap(),
+        old_raw
+    );
+    chrono_inputs::capture(
+        d.path(),
+        CONFIG,
+        &candidate,
+        ".chrono-harness/state/current-original.json",
+    )
+    .unwrap();
+    chrono_inputs::pair(
+        d.path(),
+        d.path(),
+        base_path,
+        d.path(),
+        ".chrono-harness/state/current-original.json",
+        ".chrono-harness/state/original-pair.json",
+    )
+    .unwrap();
+    let original_pair =
+        fs::read(d.path().join(".chrono-harness/state/original-pair.json")).unwrap();
+    fs::write(
+        d.path().join(manifest),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-input-composition/v1","sources":[{"pair":{
+                "path":".chrono-harness/state/original-pair.json","sha256":sha256(&original_pair)}}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut from_pair = args;
+    from_pair[from_pair.len() - 1] = ".chrono-harness/state/pair-seed/inputs.json";
+    let (code, paired, err) = invoke(d.path(), &from_pair);
+    assert_eq!(code, 0, "{err}");
+    assert_eq!(
+        paired["base"]["files"]["data"]["sha256"],
+        old["files"]["data"]["sha256"]
+    );
+    assert_eq!(
+        fs::read(d.path().join(".chrono-harness/state/original-pair.json")).unwrap(),
+        original_pair
+    );
+    // Every negative uses a fresh output; a retained successful seed cannot hide failure.
+    for (case, expected) in [
+        ("missing", "missing original evidence"),
+        ("digest", "digest"),
+        ("endpoint", "E_COMPOSE_HEADER"),
+        ("config", "E_COMPOSE_HEADER"),
+        ("absent", "E_COMPOSE_INPUT"),
+        ("absence-lie", "E_COMPOSE_INPUT"),
+        ("coverage", "E_GOVERNANCE_INPUT"),
+        ("blob", "E_COMPOSE_BLOB"),
+        ("blob-missing", "E_INPUT_READ"),
+        ("blob-corrupt", "E_COMPOSE_BLOB"),
+        ("candidate-drift", "E_GOVERNANCE_INPUT"),
+    ] {
+        let mut bad = old.clone();
+        match case {
+            "endpoint" => bad["commit"] = value!("f".repeat(40)),
+            "config" => bad["config_digest"] = value!("0".repeat(64)),
+            "absent" => bad["files"]["data"] = value!({"absent":true}),
+            "absence-lie" => bad["files"]["absent-governance"] = old["files"]["data"].clone(),
+            "coverage" => {
+                bad["files"].as_object_mut().unwrap().remove("data");
+            }
+            "blob" => bad["files"]["data"]["length"] = value!(1),
+            "candidate-drift" => fs::write(input.path(), b"unbound current bytes").unwrap(),
+            _ => {}
+        }
+        let path = format!(".chrono-harness/state/original-{case}.json");
+        let bytes = serde_json::to_vec(&bad).unwrap();
+        fs::write(d.path().join(&path), &bytes).unwrap();
+        if case == "missing" {
+            fs::remove_file(d.path().join(&path)).unwrap();
+        }
+        fs::write(
+            d.path().join(manifest),
+            serde_json::to_vec(&value!({
+                "schema":"chrono-input-composition/v1","sources":[{"pair":{"path":path,
+                "sha256":if case == "digest" { "0".repeat(64) } else { sha256(&bytes) }}}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let output = format!(".chrono-harness/state/rejected-{case}/inputs.json");
+        let blob_path = d
+            .path()
+            .join(old["files"]["data"]["blob"].as_str().unwrap());
+        let blob_raw = fs::read(&blob_path).unwrap();
+        if case == "blob-missing" {
+            fs::remove_file(&blob_path).unwrap();
+        }
+        if case == "blob-corrupt" {
+            fs::write(&blob_path, b"corrupt retained original").unwrap();
+        }
+        let mut negative = args;
+        negative[negative.len() - 1] = &output;
+        let (code, _, err) = invoke(d.path(), &negative);
+        fs::write(&blob_path, blob_raw).unwrap();
+        assert_eq!(code, 2, "{case}: {err}");
+        assert!(err.contains(expected), "{case}: {err}");
+        assert!(!d.path().join(output).exists());
+    }
+}

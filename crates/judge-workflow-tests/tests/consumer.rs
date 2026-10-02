@@ -132,6 +132,111 @@ fn integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metada
     );
     assert_eq!(certificate(&h).1, d);
 }
+
+#[test]
+fn retained_delivery_retry_expires_independently_born_producer_at_current_nanosecond() {
+    use chrono_harness::{
+        full,
+        wire::{self, Binding, Request, Status},
+    };
+    let h = host();
+    let (exit, produced) = run(&h, "integration", None, |ctx| {
+        ctx["observed_at"] = json!("2026-01-01T23:00:00Z");
+    });
+    passed(exit, &produced);
+    let (c, digest) = certificate(&h);
+    let cert_path = h.root().join(".chrono-harness/state/integration.json");
+    let cert_raw = fs::read(&cert_path).unwrap();
+    let report_path = h
+        .root()
+        .join(c["producer"]["report_path"].as_str().unwrap());
+    let report_raw = fs::read(&report_path).unwrap();
+    let (exit, delivered) = run(&h, "delivery", Some(&digest), |ctx| {
+        ctx["branch_ref"] = json!("feature/independent-birth");
+        ctx["branch_started_at"] = json!("2026-01-01T02:00:00Z");
+        ctx["observed_at"] = json!("2026-01-01T23:00:00Z");
+    });
+    passed(exit, &delivered);
+    let original_ctx = fs::read(h.root().join(".chrono-harness/state/context.json")).unwrap();
+    let rows: Vec<_> = delivered["judges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| full::expand_record(row).unwrap())
+        .collect();
+    let index = rows.iter().position(|r| r["id"] == "workflow").unwrap();
+    let history: Vec<_> = rows[..index].iter().map(full::predecessor).collect();
+    let binding: Binding = serde_json::from_value(rows[index]["binding"].clone()).unwrap();
+    for (nanos, expected, binding_ok, error) in [
+        (1767308400000000000_i128, true, true, ""),
+        (1767312000000000000, true, true, ""),
+        (1767312000000000001, false, true, "E_BRANCH_STALE"),
+        (1767315600000000000, false, true, "E_BRANCH_STALE"),
+        (1767308400000000000, false, false, "context binding differs"),
+        (
+            1767304800000000000,
+            false,
+            true,
+            "precedes original production",
+        ),
+    ] {
+        let mut template: Request = serde_json::from_value(delivered["request"].clone()).unwrap();
+        template.observations["preparation"] = json!({"result":{"evidence":{"current_observation":{
+            "context_digest":template.context.sha256,"unix_timestamp_nanos":nanos.to_string()
+        }}}});
+        if !binding_ok {
+            template.observations["preparation"]["result"]["evidence"]["current_observation"]["context_digest"] =
+                json!("0".repeat(64));
+        }
+        template.seal().unwrap();
+        let request = full::judge_request(&template, &binding, &history).unwrap();
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(h.root().join(".chrono-harness/bin/chrono-judge-workflow"))
+            .args(["--protocol", "chrono-judge/v1"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&request).unwrap())
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        let response: wire::Response = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
+            panic!(
+                "{e}: status={} stdout={} stderr={}",
+                out.status,
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            )
+        });
+        assert_eq!(
+            response.status == Status::Pass,
+            expected,
+            "{nanos}: {response:?}; exit={}; stderr={}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(out.status.success(), expected);
+        if !expected {
+            assert!(serde_json::to_string(&response).unwrap().contains(error));
+        }
+        assert_eq!(fs::read(&cert_path).unwrap(), cert_raw);
+        assert_eq!(fs::read(&report_path).unwrap(), report_raw);
+        assert_eq!(
+            fs::read(h.root().join(".chrono-harness/state/context.json")).unwrap(),
+            original_ctx
+        );
+    }
+    assert_eq!(
+        wire::digest(&chrono_harness::json(&original_ctx).unwrap()).unwrap(),
+        delivered["context_digest"]
+    );
+}
 #[test]
 fn delivery_from_integration_named_source_still_requires_successful_evidence() {
     let h = host();

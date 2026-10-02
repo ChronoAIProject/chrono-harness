@@ -188,12 +188,17 @@ def publish(root, config, provider, extension):
     if integration_raw is not None:
         write(root, seed_dir + 'integration.json', integration_raw)
     governance_path = seed_dir + 'inputs.json'
+    governance_manifest = retain(root, directory, 'governance-sources', encoded({
+        'schema': 'chrono-input-composition/v1',
+        'sources': [{'pair': original} for original in extension['composition_sources']]}))
     governance_env = dict(os.environ, CHRONO_CHECK_SOURCE='ci')
     _, governance_processes = process(root, [extension['inputs_program'], 'capture-governance', '--host-root', str(root),
         '--config', provider['collection']['check_config'], '--base', endpoints['base'], '--candidate', endpoints['candidate'],
-        '--output', governance_path], b'', governance_env, directory, 'governance-capture', 900, BOUND,
+        '--manifest', governance_manifest['path'], '--output', governance_path], b'', governance_env, directory, 'governance-capture', 900, BOUND,
         provider['gather']['credential_environment'])
     governance_raw = raw_file(root, governance_path)
+    governance_receipt = retain(root, directory, 'governance-receipt', raw_file(root, governance_path + '.receipt.json'))
+    provenance = json.loads(raw_file(root, governance_receipt['path']))
     processes += governance_processes
     binding = {'schema': 'chrono-native-seed/v1', 'event': actual['GITHUB_EVENT_NAME'],
                'repository': actual['GITHUB_REPOSITORY'], 'base': endpoints['base'], 'candidate': endpoints['candidate'],
@@ -203,7 +208,8 @@ def publish(root, config, provider, extension):
                'payload_sha256': report['payload']['sha256'], 'endpoints_sha256': digest(raw),
                'acquisition': acquisition, 'processes': processes, 'governance_sha256': digest(governance_raw)}
     original_map = {}
-    for original in [acquisition, report['payload'], *processes]:
+    for original in [acquisition, report['payload'], *processes, governance_manifest,
+                     governance_receipt, *[item['retained'] for item in provenance['originals']]]:
         raw_original = raw_file(root, original['path'])
         file = 'originals/' + original['sha256']
         write(root, seed_dir + file, raw_original)
@@ -229,7 +235,9 @@ def composition(root, provider, extension, p, directory, env):
     seed_binding = json.loads(raw_file(root, seed_directory + 'binding.json'))
     shared = {'path': extension['seed_directory'] + 'inputs.json', 'sha256': seed_binding['governance_sha256']}
     sources = [{'pair': shared, 'transport': {'source_directory': extension['seed_directory'], 'directory': seed_directory}}]
-    sources += [{'pair': pair} for pair in extension['composition_sources']]
+    # The detector already imported the explicit originals and transported their
+    # governance projection/provenance. Independent collectors consume that seed;
+    # they do not need the detector's original source paths to remain live.
     for item in manifest['reports']:
         raw = raw_file(root, item['path'])
         if digest(raw) != item['sha256']:

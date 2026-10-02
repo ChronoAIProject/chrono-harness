@@ -6,6 +6,13 @@ fn short_host(native: bool) -> (Host, tempfile::TempDir) {
     configured_short_host(native, None)
 }
 fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, tempfile::TempDir) {
+    configured_short_host_with_governance(native, age_seconds, false)
+}
+fn configured_short_host_with_governance(
+    native: bool,
+    age_seconds: Option<f64>,
+    governance: bool,
+) -> (Host, tempfile::TempDir) {
     let (mut h, tools) = rust_host();
     let root = h.root();
     for (project, binary) in [("ci", "chrono-ci"), ("worktree", "chrono-worktree")] {
@@ -128,6 +135,31 @@ fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, tempf
         )
         .unwrap();
     }
+    if governance {
+        let path = ".chrono-harness/ci/governance-data";
+        fs::write(root.join(path), b"genuine base governance H0").unwrap();
+        h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"].as_array_mut().unwrap().push(
+            json!({"id":"governance-data","location":path,"presence":"present","sha256":sha256(b"genuine base governance H0")}),
+        );
+        h.values.get_mut(CONFIG).unwrap()["input_closure"]["bindings"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("input:governance-data"));
+        let mut f = file(path, json!([]));
+        f["surface"] = json!("documentation");
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(f);
+        h.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(
+                "input:governance-data",
+                "runtime-input",
+                "judge:registration",
+            ));
+    }
     if let Some(seconds) = age_seconds {
         h.values.get_mut(WORKFLOW).unwrap()["staleness"]["max_age_hours"] = json!(seconds / 3600.0);
     }
@@ -230,6 +262,28 @@ fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     let output = command.output().unwrap();
     if !output.status.success() {
         println!("SHORT_FAILURE {}", String::from_utf8_lossy(&output.stderr));
+        if source == Some("ci") && args == ["check", "--collect"] && output.stdout.is_empty() {
+            let retained = tempfile::Builder::new()
+                .prefix("chrono-native-collection-failure-")
+                .tempdir()
+                .unwrap()
+                .keep();
+            copy_tree(&root.join(".chrono-harness/state"), &retained.join("state"));
+            fs::write(retained.join("stdout"), &output.stdout).unwrap();
+            fs::write(retained.join("stderr"), &output.stderr).unwrap();
+            fs::write(
+                retained.join("process.json"),
+                serde_json::to_vec(&json!({
+                    "exit_code":output.status.code(),"status":output.status.to_string()
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            eprintln!(
+                "original native collection process evidence: {}",
+                retained.display()
+            );
+        }
     }
     let report = short_report(&root, args, &output, source);
     println!(
@@ -286,7 +340,13 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
     }
 }
 fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::path::PathBuf) {
-    let (h, tools) = configured_short_host(false, age_seconds);
+    local_short_lane_with_governance(age_seconds, false)
+}
+fn local_short_lane_with_governance(
+    age_seconds: Option<f64>,
+    governance: bool,
+) -> (Host, tempfile::TempDir, std::path::PathBuf) {
+    let (h, tools) = configured_short_host_with_governance(false, age_seconds, governance);
     make_local_lane(h, tools, "integration")
 }
 fn make_local_lane(
@@ -381,6 +441,27 @@ fn real_short_full_local_units_collection_and_delivery() {
     let (exit, two) = short(&lane, &["check", "--unit", "two"], None);
     passed(exit, &two);
     assert_eq!(one["context_digest"], two["context_digest"]);
+    assert_eq!(
+        one["preparation"]["result"]["context"]["raw"],
+        two["preparation"]["result"]["context"]["raw"]
+    );
+    let first_observation =
+        one["preparation"]["result"]["evidence"]["current_observation"]["unix_timestamp_nanos"]
+            .as_str()
+            .unwrap()
+            .parse::<i128>()
+            .unwrap();
+    let second_observation =
+        two["preparation"]["result"]["evidence"]["current_observation"]["unix_timestamp_nanos"]
+            .as_str()
+            .unwrap()
+            .parse::<i128>()
+            .unwrap();
+    assert!(second_observation > first_observation);
+    assert_eq!(
+        two["preparation"]["result"]["evidence"]["current_observation"]["context_digest"],
+        two["context_digest"]
+    );
     let business = tools.path().join("cargo-fixture");
     let bytes = fs::read(&business).unwrap();
     fs::remove_file(&business).unwrap();
@@ -712,7 +793,49 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
 
 #[test]
 fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
-    let (mut h, tools, lane) = local_short_lane(None);
+    let (mut h, tools, lane) = local_short_lane_with_governance(None, true);
+    // Capture the original at its actual checkout and H0 location, before H1
+    // changes that same location. No historical judge is executed.
+    let base_original_path = ".chrono-harness/state/inputs/governance-base.json";
+    git(&lane, &["checkout", "--detach", &h.base]);
+    let old_capture = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(&lane)
+        .env("CHRONO_CHECK_SOURCE", "ci")
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .args([
+            "capture",
+            "--host-root",
+            ".",
+            "--config",
+            CONFIG,
+            "--commit",
+            &h.base,
+            "--output",
+            base_original_path,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        old_capture.status.success(),
+        "exit={} stdout={} stderr={}",
+        old_capture.status,
+        String::from_utf8_lossy(&old_capture.stdout),
+        String::from_utf8_lossy(&old_capture.stderr)
+    );
+    let base_original_raw = fs::read(lane.join(base_original_path)).unwrap();
+    git(&lane, &["checkout", "integration/short-full"]);
+    fs::write(
+        lane.join(".chrono-harness/ci/governance-data"),
+        b"genuine current governance H1",
+    )
+    .unwrap();
+    h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|i| i["id"] == "governance-data")
+        .unwrap()["sha256"] = json!(sha256(b"genuine current governance H1"));
     let origin: Value =
         chrono_harness::json(&fs::read(lane.join(".chrono-harness/state/origin.json")).unwrap())
             .unwrap();
@@ -760,6 +883,8 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
         });
     write_values(&lane, &h.values);
     provider["native_adoption"] = json!({"schema":"chrono-native-adoption/v1","lineage":{"path":lineage_path,"sha256":sha256(&lineage_bytes)},"adapter_path":".chrono-harness/ci/native.py","interpreter":python,"inputs_program":source().join("crates/inputs/target/debug/chrono-inputs"),"seed_directory":seed_directory,"seed_artifact":"chrono-context","retained_inputs":".chrono-harness/state/inputs.json","composition_sources":[],"push_roles":{"refs/heads/integration/":"integration","refs/heads/dev":"delivery"},"pull_request_role":"delivery","integration_evidence":null,"integration_evidence_path":".chrono-harness/state/integration.json","integration_transport":{"source_directory":".chrono-harness/state/collection/","directory":".chrono-harness/state/cert-download/"}});
+    provider["native_adoption"]["composition_sources"] =
+        json!([{"path":base_original_path,"sha256":sha256(&base_original_raw)}]);
     let mock = tools.path().join("mock-gh");
     let metadata = tools.path().join("seed-api.json");
     let uploads = tools.path().join("shared-upload");
@@ -919,7 +1044,30 @@ else:print(json.dumps(run))
         if let Some(unit) = unit {
             c.args(["--unit", unit]);
         }
-        c.output().unwrap()
+        let out = c.output().unwrap();
+        if operation == "publish" && !out.status.success() {
+            let retained = tempfile::Builder::new()
+                .prefix("chrono-native-publication-failure-")
+                .tempdir()
+                .unwrap()
+                .keep();
+            copy_tree(&root.join(".chrono-harness/state"), &retained.join("state"));
+            fs::write(retained.join("stdout"), &out.stdout).unwrap();
+            fs::write(retained.join("stderr"), &out.stderr).unwrap();
+            fs::write(
+                retained.join("process.json"),
+                serde_json::to_vec(&json!({
+                    "exit_code":out.status.code(),"status":out.status.to_string()
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            eprintln!(
+                "original native publication process evidence: {}",
+                retained.display()
+            );
+        }
+        out
     };
     let published = native(&lane, "publish", None, "900");
     assert!(
@@ -928,6 +1076,21 @@ else:print(json.dumps(run))
         String::from_utf8_lossy(&published.stderr)
     );
     let seed = fs::read(lane.join(format!("{seed_directory}context.json"))).unwrap();
+    let governance_pair =
+        chrono_harness::json(&fs::read(lane.join(format!("{seed_directory}inputs.json"))).unwrap())
+            .unwrap();
+    assert_eq!(
+        governance_pair["base"]["files"]["governance-data"]["sha256"],
+        sha256(b"genuine base governance H0")
+    );
+    assert_eq!(
+        governance_pair["candidate"]["files"]["governance-data"]["sha256"],
+        sha256(b"genuine current governance H1")
+    );
+    assert_eq!(
+        fs::read(lane.join(base_original_path)).unwrap(),
+        base_original_raw
+    );
     let ctx = chrono_harness::json(&seed).unwrap();
     let birth = chrono_harness::json(&lineage_bytes).unwrap();
     assert_eq!(ctx["branch_started_at"], birth["branch_started_at"]);
@@ -1273,11 +1436,13 @@ else:print(json.dumps(run))
     let before_collection = marker(tools.path());
     let sdk_original = fs::read(tools.path().join("cargo-fixture")).unwrap();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
+    fs::remove_file(lane.join(base_original_path)).unwrap();
     let (exit, collected) = short(&lane, &["check", "--collect"], Some("ci"));
     passed(exit, &collected);
     assert_eq!(collected["tests"]["executed"], json!([]));
     assert_eq!(marker(tools.path()), before_collection);
     assert_eq!(workflow(&collected)["mode"], "integration_run");
+    assert!(!lane.join(base_original_path).exists());
     let result_report = collected["preparation"]["result"]["evidence"]["report_path"]
         .as_str()
         .unwrap();
@@ -1337,6 +1502,9 @@ else:print(json.dumps(run))
             > old_observation.as_str().unwrap().parse::<u128>().unwrap()
     );
     // A PR seed binds the actual original certificate bytes and consumes its relocated closure.
+    // Publication's bootstrap supplies the same captured original bytes again;
+    // collection above succeeded after the detector's source path was removed.
+    fs::write(lane.join(base_original_path), &base_original_raw).unwrap();
     let delivery_root = tempfile::tempdir().unwrap();
     assert!(
         Command::new("git")
