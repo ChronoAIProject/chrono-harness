@@ -4,6 +4,8 @@ mod certificate;
 mod evidence;
 mod transition;
 pub use branch::{branch, observation_age};
+// Existing certificate consumer, available for offline original-evidence validation.
+pub use certificate::consume as consume_integration;
 use chrono_harness::{
     facts, json,
     wire::{self, Finding, Request, Response, Status},

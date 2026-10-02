@@ -279,7 +279,8 @@ pub fn consume(
                 return Err("collected global declaration plan differs".into());
             }
             let (old, _, _) = chrono_judge_registration::views_with_reader(req, reader)?;
-            if chrono_judge_projects::validate_retained_request(
+            if chrono_judge_projects::validate_retained_request_at(
+                &req.candidate.root,
                 original,
                 &old,
                 r,

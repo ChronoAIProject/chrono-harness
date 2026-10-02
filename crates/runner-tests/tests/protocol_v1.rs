@@ -679,3 +679,99 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
         );
     }
 }
+
+#[test]
+fn external_originals_preserve_bytes_relocate_and_reject_broken_transport() {
+    use chrono_harness::full::{artifact_bytes_at, artifact_identity_at, resolve_artifacts};
+    use chrono_harness::prepared::{ArtifactTransport, retain_blob};
+    let host = tempfile::tempdir().unwrap();
+    let root = host.path();
+    let bytes: Vec<u8> = (0..2_000_000).map(|i| (i % 256) as u8).collect();
+    let source = root.join("source");
+    fs::write(&source, &bytes).unwrap();
+    let (original, length) =
+        retain_blob(root, ".chrono-harness/state/unit/blobs/", &source).unwrap();
+    let descriptor = value!({"blob":original.path,"sha256":original.sha256,"length":length});
+    let artifacts = value!({"original-address":descriptor});
+    assert_eq!(
+        artifact_bytes_at(root, &artifacts, "original-address").unwrap(),
+        bytes
+    );
+    assert_eq!(
+        retain_blob(root, ".chrono-harness/state/unit/blobs/", &source)
+            .unwrap()
+            .0,
+        original
+    );
+    assert!(artifact_bytes_at(root, &artifacts, "wrong-address").is_err());
+    for (field, bad) in [
+        ("blob", value!(".chrono-harness/state/wrong.bin")),
+        ("length", value!(length + 1)),
+        ("length", value!("not-a-length")),
+        ("sha256", value!("0".repeat(64))),
+        ("hex", value!("00")),
+    ] {
+        let mut broken = artifacts.clone();
+        broken["original-address"][field] = bad;
+        assert!(
+            artifact_bytes_at(root, &broken, "original-address").is_err(),
+            "{field}"
+        );
+    }
+    let transport = ArtifactTransport {
+        source_directory: ".chrono-harness/state/unit/".into(),
+        directory: ".chrono-harness/state/download/".into(),
+    };
+    let resolved = resolve_artifacts(&artifacts, Some(&transport), None).unwrap();
+    assert!(artifact_bytes_at(root, &resolved, "original-address").is_err());
+    let target = root.join(resolved["original-address"]["blob"].as_str().unwrap());
+    fs::create_dir_all(target.parent().unwrap()).unwrap();
+    fs::copy(root.join(&original.path), &target).unwrap();
+    fs::remove_dir_all(root.join(".chrono-harness/state/unit")).unwrap();
+    assert_eq!(
+        artifact_bytes_at(root, &resolved, "original-address").unwrap(),
+        bytes
+    );
+    let (retained, retained_length) =
+        retain_blob(root, ".chrono-harness/state/collection/blobs/", &target).unwrap();
+    let parent = value!({original.path.clone(): {"blob":retained.path,"sha256":retained.sha256,"length":retained_length}});
+    let finalized = resolve_artifacts(&artifacts, None, Some(&parent)).unwrap();
+    fs::remove_dir_all(root.join(".chrono-harness/state/download")).unwrap();
+    assert_eq!(
+        artifact_bytes_at(root, &finalized, "original-address").unwrap(),
+        bytes
+    );
+    assert!(resolve_artifacts(&artifacts, None, Some(&value!({}))).is_err());
+    let mut wrong_parent = parent.clone();
+    wrong_parent[&original.path]["length"] = value!(1);
+    assert!(resolve_artifacts(&artifacts, None, Some(&wrong_parent)).is_err());
+    let invalid_transport = ArtifactTransport {
+        source_directory: ".chrono-harness/state/other/".into(),
+        ..transport
+    };
+    assert!(resolve_artifacts(&artifacts, Some(&invalid_transport), None).is_err());
+    let blob = root.join(finalized["original-address"]["blob"].as_str().unwrap());
+    let mut corrupt = bytes.clone();
+    corrupt[0] ^= 1;
+    fs::write(&blob, corrupt).unwrap();
+    assert!(artifact_bytes_at(root, &finalized, "original-address").is_err());
+    fs::write(&blob, &bytes[..bytes.len() - 1]).unwrap();
+    assert!(artifact_identity_at(root, &finalized, "original-address").is_err());
+    fs::remove_file(&blob).unwrap();
+    assert!(artifact_bytes_at(root, &finalized, "original-address").is_err());
+    // Declared input blobs can exceed the portable JSON report bound. Validation
+    // streams these bytes instead of reading/hex-embedding them in a report.
+    let large = root.join("large-input");
+    fs::File::create(&large)
+        .unwrap()
+        .set_len(203_876_200)
+        .unwrap();
+    let (large_original, large_length) =
+        retain_blob(root, ".chrono-harness/state/collection/blobs/", &large).unwrap();
+    let large_artifacts = value!({"large": {"blob":large_original.path,"sha256":large_original.sha256,"length":large_length}});
+    assert_eq!(
+        artifact_identity_at(root, &large_artifacts, "large").unwrap(),
+        (large_original.sha256, 203_876_200)
+    );
+    assert!(artifact_bytes_at(root, &large_artifacts, "large").is_err());
+}

@@ -446,9 +446,28 @@ pub fn validate_retained(
     new: &Registrations,
     artifacts: &Value,
 ) -> Result<Value, String> {
-    validate_inner(req, old, new, Some(artifacts), false)
+    validate_retained_at(&req.candidate.root, req, old, new, artifacts)
+}
+pub fn validate_retained_at(
+    root: &Path,
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    artifacts: &Value,
+) -> Result<Value, String> {
+    validate_inner_at(root, req, old, new, Some(artifacts), false)
 }
 fn validate_inner(
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    artifacts: Option<&Value>,
+    live: bool,
+) -> Result<Value, String> {
+    validate_inner_at(&req.candidate.root, req, old, new, artifacts, live)
+}
+fn validate_inner_at(
+    root: &Path,
     req: &Request,
     old: &Registrations,
     new: &Registrations,
@@ -556,8 +575,9 @@ fn validate_inner(
                         length,
                     },
                 ) => {
-                    let bytes = chrono_harness::full::artifact_bytes(artifacts, path)?;
-                    if sha256(&bytes) != digest || bytes.len() as u64 != length {
+                    let identity =
+                        chrono_harness::full::artifact_identity_at(root, artifacts, path)?;
+                    if identity != (digest.to_owned(), length) {
                         return Err("E_INPUT_BLOB: original input differs".into());
                     }
                     Ok(Some((digest.to_owned(), length)))

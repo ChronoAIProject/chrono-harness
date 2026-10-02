@@ -431,6 +431,11 @@ fn collect_reports(
                 )?;
             }
         }
+        let resolved_artifacts = chrono_harness::full::resolve_artifacts(
+            &report["artifacts"],
+            input.artifacts.as_ref(),
+            None,
+        )?;
         let unit_results = validate_unit_report(
             req,
             registrations,
@@ -443,6 +448,7 @@ fn collect_reports(
             old,
             effective,
             &req.candidate.root,
+            &resolved_artifacts,
         )?;
         for (test, status) in &unit_results.tests {
             if let Some(previous) = tests.insert(test.clone(), status.clone()) {
@@ -627,6 +633,7 @@ fn validate_unit_report(
     old: &Registrations,
     current_effective: &Value,
     declaration_root: &Path,
+    artifacts: &Value,
 ) -> Result<Results, String> {
     let top_request: Request = serde_json::from_value(report["request"].clone())
         .map_err(|e| format!("E_COLLECTION_INPUT: retained request: {e}"))?;
@@ -690,7 +697,6 @@ fn validate_unit_report(
     let bindings: Vec<Binding> = serde_json::from_value(registrations.judges()["judges"].clone())
         .map_err(|e| e.to_string())?;
     let parsed = chrono_harness::full::retained_judges(&top_request, &bindings, records)?;
-    let artifacts = &report["artifacts"];
     if registrations.config()["schema_version"] == 4 {
         chrono_harness::prepared::validate_retained_binding(
             declaration_root,
@@ -700,7 +706,13 @@ fn validate_unit_report(
         )?;
     }
 
-    let effective = validate_retained_request(&top_request, old, registrations, artifacts)?;
+    let effective = validate_retained_request_at(
+        declaration_root,
+        &top_request,
+        old,
+        registrations,
+        artifacts,
+    )?;
     let reader = facts::Reader::for_config(declaration_root, &top_request.config_path)?;
     chrono_judge_registration::validate_retained_view(
         &top_request,
@@ -778,8 +790,12 @@ fn validate_unit_report(
                 .map(|f| serde_json::to_value(f).unwrap()),
         );
         for evidence in &response.evidence {
-            let bytes = chrono_harness::full::artifact_bytes(artifacts, &evidence.path)?;
-            if chrono_harness::sha256(&bytes) != evidence.sha256 {
+            let identity = chrono_harness::full::artifact_identity_at(
+                declaration_root,
+                artifacts,
+                &evidence.path,
+            )?;
+            if identity.0 != evidence.sha256 {
                 return Err("E_COLLECTION_INPUT: original judge artifact differs".into());
             }
         }
@@ -969,8 +985,18 @@ pub fn validate_retained_request(
     r: &Registrations,
     artifacts: &Value,
 ) -> Result<Value, String> {
+    validate_retained_request_at(&req.candidate.root, req, old, r, artifacts)
+}
+pub fn validate_retained_request_at(
+    root: &Path,
+    req: &Request,
+    old: &Registrations,
+    r: &Registrations,
+    artifacts: &Value,
+) -> Result<Value, String> {
     req.validate()?;
-    let ctx = chrono_harness::json(&chrono_harness::full::artifact_bytes(
+    let ctx = chrono_harness::json(&chrono_harness::full::artifact_bytes_at(
+        root,
         artifacts,
         req.context.path.to_str().ok_or("context address")?,
     )?)?;
@@ -981,8 +1007,9 @@ pub fn validate_retained_request(
         return Err("E_COLLECTION_INPUT: original context bytes differ".into());
     }
     if let Some(path) = ctx["retained_inputs"].as_str() {
-        if chrono_harness::json(&chrono_harness::full::artifact_bytes(artifacts, path)?)?
-            != req.observations["retained"]
+        if chrono_harness::json(&chrono_harness::full::artifact_bytes_at(
+            root, artifacts, path,
+        )?)? != req.observations["retained"]
         {
             return Err("E_COLLECTION_INPUT: original retained snapshot differs".into());
         }
@@ -1004,7 +1031,7 @@ pub fn validate_retained_request(
         }
     }
     validate_original_entry(req, r)?;
-    chrono_judge_registration::inputs::validate_retained(req, old, r, artifacts)
+    chrono_judge_registration::inputs::validate_retained_at(root, req, old, r, artifacts)
 }
 fn validate_original_entry(req: &Request, r: &Registrations) -> Result<(), String> {
     let mut expected: Vec<String> =
@@ -1179,7 +1206,7 @@ pub fn verify_completion(
         .as_u64()
         .ok_or("manifest bound")?;
     let manifest_bytes = if let Some(artifacts) = artifacts {
-        chrono_harness::full::artifact_bytes(artifacts, &completion.source)?
+        chrono_harness::full::artifact_bytes_at(declaration_root, artifacts, &completion.source)?
     } else {
         let path = chrono_harness::no_symlink_parents(&req.candidate.root, &completion.source)?;
         let bound = r.config()["execution_units"]["collection_limits"]["manifest_bytes"]
@@ -1252,7 +1279,7 @@ pub fn verify_completion(
             return Err("E_COLLECTION_INPUT: completion source set".into());
         }
         let bytes = if let Some(artifacts) = artifacts {
-            chrono_harness::full::artifact_bytes(artifacts, address)?
+            chrono_harness::full::artifact_bytes_at(declaration_root, artifacts, address)?
         } else {
             let p = chrono_harness::no_symlink_parents(&req.candidate.root, address)?;
             if fs::metadata(&p).map_err(|e| e.to_string())?.len() > limit {
@@ -1283,6 +1310,13 @@ pub fn verify_completion(
                 warnings.push(json!({"unit":unit,"finding":finding}));
             }
         }
+        let transport: Option<chrono_harness::prepared::ArtifactTransport> =
+            serde_json::from_value(source["artifacts"].clone()).map_err(|e| e.to_string())?;
+        let resolved_artifacts = chrono_harness::full::resolve_artifacts(
+            &report["artifacts"],
+            transport.as_ref(),
+            artifacts,
+        )?;
         let verified = validate_unit_report(
             req,
             r,
@@ -1295,6 +1329,7 @@ pub fn verify_completion(
             old,
             effective,
             declaration_root,
+            &resolved_artifacts,
         )?;
         for (test, status) in verified.tests {
             tests.insert(test.clone(), status);

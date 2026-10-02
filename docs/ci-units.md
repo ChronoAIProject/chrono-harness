@@ -55,11 +55,36 @@ executables may be unavailable. The completed collector report retains the
 original evidence closure for subsequent integration certificate consumption.
 Both integration and delivery contexts support contribution-only units without
 requiring a prior completed certificate; only collection resolves global
-completion. Full-v3 report bounds apply to these portable bytes as well as the
-manifest. Missing, replaced, failed, stale or contradictory evidence rejects.
+completion. The manifest and JSON report retain their registered bounds.
+Missing, replaced, failed, stale or contradictory evidence rejects.
+
+The addressed `artifacts` map accepts the original inline
+`{"sha256":HASH,"length":N,"hex":HEX}` form and an external
+`{"sha256":HASH,"length":N,"blob":PATH}` form. Scoped producers keep
+originals larger than 1 MiB external; this is a transport choice, not an input
+size limit. The existing report owner retains them as
+`blobs/blob-HASH.bin` beneath its selected evidence/upload directory. Original
+addresses remain map keys, and each external filename, digest and byte length
+must agree. Input identity validation streams external bytes, including declared
+inputs larger than the JSON report cap. Readers needing original JSON use the
+same validation before decoding exact bytes. Old inline reports remain readable;
+consumers of external reports must use the current root-aware readers.
+
+Unit manifests retain their existing `artifacts` relocation mapping. Collection
+reads every external original explicitly named by each imported unit report and
+retains it by its original blob address in the finalized report's artifact map.
+The exact unit-report bytes stay unchanged. The selected native upload root
+already includes these files; gather preserves its observed run/attempt and
+explicit source/download roots. Certificate consumers resolve child originals
+through the finalized parent map, so mutable unit reports, imported report copies
+and original download directories may disappear after collection. Transport a
+finalized report, its certificate and its declared external blob files together.
+No business process is reexecuted to recover evidence. `consume_integration`
+exposes the existing certificate consumer for offline validation; it adds no
+acceptance policy or pass authority.
+
 Ordinary unscoped full check retains local blob references and validates their
-identities by streaming; the portable unit/report bounds do not limit those input
-files. Provider generation and artifact gathering remain owned by `chrono-ci`;
+identities by streaming; portable JSON bounds do not limit those input files. Provider generation and artifact gathering remain owned by `chrono-ci`;
 actual native full host activation remains pending.
 
 Full short preparation preserves the exact local context through collection.

@@ -128,6 +128,38 @@ pub fn retain_original(
     }
     original(root, &path)
 }
+/// Stream an original into the selected evidence owner, keeping its identity.
+/// Unlike JSON preparation receipts, declared blobs need no report-size bound.
+pub fn retain_blob(root: &Path, dir: &str, source: &Path) -> Result<(Original, u64), String> {
+    directory(dir)?;
+    let (digest, length) = file_identity(source)?;
+    let path = format!("{dir}blob-{digest}.bin");
+    let target = no_symlink_parents(root, &path)?;
+    fs::create_dir_all(target.parent().ok_or("blob parent")?).map_err(|e| e.to_string())?;
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+    {
+        Ok(mut output) => {
+            let mut input = fs::File::open(source).map_err(|e| e.to_string())?;
+            std::io::copy(&mut input, &mut output).map_err(|e| e.to_string())?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    if file_identity(&target)? != (digest.clone(), length) {
+        return Err("addressed blob digest/length mismatch".into());
+    }
+    Ok((
+        Original {
+            path,
+            sha256: digest,
+        },
+        length,
+    ))
+}
+
 pub fn original_path(
     o: &Original,
     transport: Option<&ArtifactTransport>,
@@ -178,7 +210,7 @@ fn read_binding_original(
 ) -> Result<Vec<u8>, String> {
     if let Some(artifacts) = artifacts {
         units::artifact_path(&original.path)?;
-        let raw = crate::full::artifact_bytes(artifacts, &original.path)?;
+        let raw = crate::full::artifact_bytes_at(root, artifacts, &original.path)?;
         if sha256(&raw) != original.sha256 {
             return Err("retained preparation original digest mismatch".into());
         }

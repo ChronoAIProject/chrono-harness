@@ -293,6 +293,107 @@ pub fn artifact_bytes(artifacts: &Value, address: &str) -> Result<Vec<u8>, Strin
     }
     Ok(bytes)
 }
+/// The current invocation's existing evidence owner also owns external blobs.
+pub fn artifact_directory(req: &Request) -> Result<String, String> {
+    let report = req.observations["report_path"]
+        .as_str()
+        .ok_or("full report path")?;
+    let dir = report.rsplit_once('/').ok_or("full report directory")?.0;
+    Ok(format!("{dir}/blobs/"))
+}
+fn blob_original(a: &Value) -> Result<crate::prepared::Original, String> {
+    let object = a.as_object().ok_or("artifact encoding")?;
+    if object.len() != 3 || object.contains_key("hex") {
+        return Err("artifact encoding".into());
+    }
+    let path = a["blob"].as_str().ok_or("artifact blob path")?;
+    crate::units::artifact_path(path)?;
+    let digest = a["sha256"]
+        .as_str()
+        .filter(|s| wire::is_digest(s))
+        .ok_or("artifact digest")?;
+    a["length"].as_u64().ok_or("artifact length")?;
+    if !path.ends_with(&format!("/blob-{digest}.bin")) {
+        return Err("original artifact blob address differs".into());
+    }
+    Ok(crate::prepared::Original {
+        path: path.into(),
+        sha256: digest.into(),
+    })
+}
+/// Resolve only declared transport edges. A finalized parent report retains
+/// each child's external blob by its original address, even after download removal.
+/// This creates a reader view; it never rewrites the original unit-report bytes.
+pub fn resolve_artifacts(
+    artifacts: &Value,
+    transport: Option<&crate::prepared::ArtifactTransport>,
+    parent: Option<&Value>,
+) -> Result<Value, String> {
+    let mut resolved = artifacts
+        .as_object()
+        .ok_or("original artifacts map")?
+        .clone();
+    for a in resolved.values_mut() {
+        if a.get("blob").is_none() {
+            continue;
+        }
+        let original = blob_original(a)?;
+        if let Some(parent) = parent {
+            let retained = parent
+                .get(&original.path)
+                .ok_or_else(|| format!("missing original artifact {}", original.path))?;
+            if retained["sha256"] != a["sha256"] || retained["length"] != a["length"] {
+                return Err("original artifact transport identity differs".into());
+            }
+            *a = retained.clone();
+        } else {
+            a["blob"] = value!(crate::prepared::original_path(&original, transport)?);
+        }
+    }
+    Ok(Value::Object(resolved))
+}
+/// Stream validation for large original inputs; callers that need JSON bytes
+/// use artifact_bytes_at after this same digest/length/address validation.
+pub fn artifact_identity_at(
+    root: &Path,
+    artifacts: &Value,
+    address: &str,
+) -> Result<(String, u64), String> {
+    let a = artifacts
+        .get(address)
+        .ok_or_else(|| format!("missing original artifact {address}"))?;
+    if a.get("blob").is_none() {
+        let bytes = artifact_bytes(artifacts, address)?;
+        return Ok((sha256(&bytes), bytes.len() as u64));
+    }
+    let original = blob_original(a)?;
+    let identity = crate::file_identity(&no_symlink_parents(root, &original.path)?)?;
+    if identity.0 != original.sha256 || a["length"] != identity.1 {
+        return Err("original artifact digest/length".into());
+    }
+    Ok(identity)
+}
+pub fn artifact_bytes_at(root: &Path, artifacts: &Value, address: &str) -> Result<Vec<u8>, String> {
+    let a = artifacts
+        .get(address)
+        .ok_or_else(|| format!("missing original artifact {address}"))?;
+    if a.get("blob").is_none() {
+        return artifact_bytes(artifacts, address);
+    }
+    artifact_identity_at(root, artifacts, address)?;
+    // This reader materializes bounded JSON/evidence, like the old inline form.
+    // Large declared inputs use artifact_identity_at and remain streamed.
+    let raw = crate::units::read_bounded(
+        root,
+        a["blob"].as_str().ok_or("artifact blob path")?,
+        64 * 1024 * 1024,
+    )?;
+    if a["sha256"] != sha256(&raw) || a["length"] != raw.len() {
+        return Err("original artifact digest/length".into());
+    }
+    Ok(raw)
+}
+
 fn retain_artifacts(
     req: &Request,
     judges: &[Value],
@@ -317,14 +418,25 @@ fn retain_artifacts(
         let result = (|| {
             let path = path?;
             let length = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+            // Transport choice only: large originals stay exact external bytes.
+            // The registered final report bound is still enforced below.
+            let a = if length > 1024 * 1024 {
+                let (original, length) = crate::prepared::retain_blob(
+                    &req.candidate.root,
+                    &artifact_directory(req)?,
+                    &path,
+                )?;
+                value!({"blob":original.path,"sha256":original.sha256,"length":length})
+            } else {
+                artifact(&fs::read(path).map_err(|e| e.to_string())?)
+            };
             let total = retained_bytes
-                .checked_add(length.saturating_mul(2))
+                .checked_add(serde_json::to_vec(&a).map_err(|e| e.to_string())?.len() as u64)
                 .ok_or("artifact length overflow")?;
-            if length > 64 * 1024 * 1024 || total > bound {
+            if total > bound {
                 return Err("original artifact closure exceeds registered report bound".into());
             }
-            let bytes = fs::read(path).map_err(|e| e.to_string())?;
-            out.insert(address.into(), artifact(&bytes));
+            out.insert(address.into(), a);
             retained_bytes = total;
             Ok(())
         })();
@@ -389,6 +501,29 @@ fn retain_artifacts(
                     .as_str()
                     .ok_or("retained unit path")?;
                 retain(p, no_symlink_parents(&req.candidate.root, p))?;
+                let unit_report = json(
+                    &fs::read(no_symlink_parents(&req.candidate.root, p)?)
+                        .map_err(|e| e.to_string())?,
+                )?;
+                let transport: Option<crate::prepared::ArtifactTransport> =
+                    serde_json::from_value(report["artifacts"].clone())
+                        .map_err(|e| e.to_string())?;
+                for a in unit_report["artifacts"]
+                    .as_object()
+                    .ok_or("unit original artifacts")?
+                    .values()
+                {
+                    if a.get("blob").is_some() {
+                        let original = blob_original(a)?;
+                        let path = crate::prepared::original_path(&original, transport.as_ref())?;
+                        let resolved = value!({"original":{"blob":path,"sha256":original.sha256,"length":a["length"]}});
+                        artifact_identity_at(&req.candidate.root, &resolved, "original")?;
+                        retain(
+                            &original.path,
+                            no_symlink_parents(&req.candidate.root, &path),
+                        )?;
+                    }
+                }
             }
         }
     }

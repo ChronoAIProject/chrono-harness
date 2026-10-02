@@ -1225,6 +1225,15 @@ fn cross_unit_replacement_and_joint_retirement_complete_at_collection() {
 
 #[test]
 fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
+    migration_collection(false);
+}
+
+#[test]
+fn observed_linux_sizes_collect_and_consume_original_migration_evidence() {
+    migration_collection(true);
+}
+
+fn migration_collection(observed_sizes: bool) {
     let original = super::migration_host();
     let baseline = original.base.clone();
     let mut h = git_facts::bind_host(original);
@@ -1273,6 +1282,48 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         passed(e, &r);
         assert_eq!(workflow(&r)["completion"], "pending collection");
     }
+    let mut observed_originals = vec![];
+    if observed_sizes {
+        // Exercise the external representation with the same original context
+        // bytes, then relocate the declared upload closure through manifest edges.
+        for unit in ["one", "two"] {
+            let path = h
+                .root()
+                .join(format!(".chrono-harness/state/unit-{unit}.json"));
+            let mut report: Value = chrono_harness::json(&fs::read(&path).unwrap()).unwrap();
+            let address = report["request"]["context"]["path"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let bytes =
+                chrono_harness::full::artifact_bytes(&report["artifacts"], &address).unwrap();
+            let source = h
+                .root()
+                .join(format!(".chrono-harness/state/context-{unit}-original"));
+            fs::write(&source, &bytes).unwrap();
+            let (original, length) = chrono_harness::prepared::retain_blob(
+                &h.root(),
+                &format!(".chrono-harness/state/unit-{unit}-originals/blobs/"),
+                &source,
+            )
+            .unwrap();
+            report["artifacts"][&address] =
+                json!({"blob":original.path,"sha256":original.sha256,"length":length});
+            fs::write(&path, serde_json::to_vec(&report).unwrap()).unwrap();
+        }
+        // Local amplification of the original JSON report mechanism, using the
+        // observed Linux byte lengths. Trailing JSON whitespace changes no
+        // original process, context, input, conversion or assertion.
+        for (unit, length) in [("one", 23_573_701), ("two", 23_562_603)] {
+            let path = h
+                .root()
+                .join(format!(".chrono-harness/state/unit-{unit}.json"));
+            let mut bytes = fs::read(&path).unwrap();
+            assert!(bytes.len() <= length, "fixture exceeds observed unit size");
+            bytes.resize(length, b' ');
+            fs::write(path, bytes).unwrap();
+        }
+    }
     manifest(&h.root(), &["one", "two"]);
     let one_bytes = fs::metadata(h.root().join(".chrono-harness/state/unit-one.json"))
         .unwrap()
@@ -1285,6 +1336,48 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         2 * (one_bytes + two_bytes),
         64 * 1024 * 1024,
     );
+    if observed_sizes {
+        let mut inputs = vec![];
+        for unit in ["one", "two"] {
+            let registered = format!(".chrono-harness/state/unit-{unit}.json");
+            let original_bytes = fs::read(h.root().join(&registered)).unwrap();
+            let report = chrono_harness::json(&original_bytes).unwrap();
+            let transport = chrono_harness::prepared::ArtifactTransport {
+                source_directory: ".chrono-harness/state/".into(),
+                directory: format!(".chrono-harness/state/relocated-{unit}/"),
+            };
+            let report_original = chrono_harness::prepared::Original {
+                path: registered.clone(),
+                sha256: sha256(&original_bytes),
+            };
+            let path = chrono_harness::prepared::original_path(&report_original, Some(&transport))
+                .unwrap();
+            fs::create_dir_all(h.root().join(&transport.directory)).unwrap();
+            fs::write(h.root().join(&path), &original_bytes).unwrap();
+            for a in report["artifacts"].as_object().unwrap().values() {
+                if let Some(blob) = a["blob"].as_str() {
+                    let original = chrono_harness::prepared::Original {
+                        path: blob.into(),
+                        sha256: a["sha256"].as_str().unwrap().into(),
+                    };
+                    let relocated =
+                        chrono_harness::prepared::original_path(&original, Some(&transport))
+                            .unwrap();
+                    fs::create_dir_all(h.root().join(&relocated).parent().unwrap()).unwrap();
+                    fs::copy(h.root().join(blob), h.root().join(relocated)).unwrap();
+                    fs::remove_file(h.root().join(blob)).unwrap();
+                }
+            }
+            inputs.push(json!({"unit":unit,"path":path,"sha256":report_original.sha256,"artifacts":transport}));
+            observed_originals.push((registered, original_bytes));
+        }
+        fs::write(
+            h.root().join(".chrono-harness/state/manifest.json"),
+            serde_json::to_vec(&json!({"schema":"chrono-full-collection/v1","reports":inputs}))
+                .unwrap(),
+        )
+        .unwrap();
+    }
     fs::remove_file(&wrapper).unwrap();
     let before = marker(&tool_root);
     let (e, collected_report) = collected(&h.root(), &h);
@@ -1301,6 +1394,113 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
             .len(),
         2
     );
+    if observed_sizes {
+        for source in collected_report["tests"]["completion"]["reports"]
+            .as_array()
+            .unwrap()
+        {
+            let address = source["retained_path"].as_str().unwrap();
+            let bytes = chrono_harness::full::artifact_bytes_at(
+                &h.root(),
+                &collected_report["artifacts"],
+                address,
+            )
+            .unwrap();
+            let expected = &observed_originals
+                .iter()
+                .find(|(path, _)| {
+                    path.ends_with(&format!("unit-{}.json", source["unit"].as_str().unwrap()))
+                })
+                .unwrap()
+                .1;
+            assert_eq!(&bytes, expected, "original unit bytes changed");
+            assert!(collected_report["artifacts"][address]["blob"].is_string());
+            fs::remove_file(h.root().join(address)).unwrap();
+            fs::remove_dir_all(h.root().join(format!(
+                ".chrono-harness/state/relocated-{}",
+                source["unit"].as_str().unwrap()
+            )))
+            .unwrap();
+        }
+        let (certificate, digest) = super::certificate(&h);
+        let template: Request =
+            serde_json::from_value(collected_report["request"].clone()).unwrap();
+        let bindings: Vec<Binding> =
+            serde_json::from_value(h.values[JUDGES]["judges"].clone()).unwrap();
+        let parsed = chrono_harness::full::retained_judges(
+            &template,
+            &bindings,
+            collected_report["judges"].as_array().unwrap(),
+        )
+        .unwrap();
+        let request = &parsed["workflow"].0;
+        let reader = chrono_harness::facts::Reader::for_request(request).unwrap();
+        let (_, registrations, _) =
+            chrono_judge_registration::views_with_reader(request, &reader).unwrap();
+        let mut context = certificate["proof"]["context"].clone();
+        context["run_kind"] = json!("delivery");
+        context["integration_evidence"] = json!(digest);
+        let consume = || {
+            chrono_judge_workflow::consume_integration(
+                &reader,
+                request,
+                &registrations,
+                &context,
+                &certificate,
+            )
+        };
+        consume().expect("actual certificate consumer lost original evidence");
+        for case in ["missing", "corrupt", "wrong-length"] {
+            let a = collected_report["artifacts"]
+                .as_object()
+                .unwrap()
+                .values()
+                .find(|a| a["length"] == 23_573_701)
+                .unwrap();
+            let path = h.root().join(a["blob"].as_str().unwrap());
+            let bytes = fs::read(&path).unwrap();
+            match case {
+                "missing" => fs::remove_file(&path).unwrap(),
+                "corrupt" => {
+                    let mut changed = bytes.clone();
+                    changed[0] ^= 1;
+                    fs::write(&path, changed).unwrap();
+                }
+                _ => fs::write(&path, &bytes[..bytes.len() - 1]).unwrap(),
+            }
+            assert!(consume().is_err(), "certificate accepted {case} original");
+            fs::write(path, bytes).unwrap();
+        }
+        consume().unwrap();
+        assert_eq!(
+            marker(&tool_root),
+            before,
+            "certificate consumer reexecuted business"
+        );
+        println!(
+            "OBSERVED_SIZE_SCOPE platform={} amplified_original_reports=true original_native_run_replayed=false original_bytes_exact=true relocated_external_contexts=2 certificate_consumption=true business_reexecution=0 tamper_cases=3_rejected",
+            std::env::consts::OS,
+        );
+        // Restore only original unit files for the unchanged conversion-negative assertions.
+        for (path, bytes) in &observed_originals {
+            fs::write(h.root().join(path), bytes).unwrap();
+        }
+        // Their original context blobs remain available in the finalized parent's closure.
+        for (_, bytes) in &observed_originals {
+            let report = chrono_harness::json(bytes).unwrap();
+            for a in report["artifacts"].as_object().unwrap().values() {
+                if let Some(blob) = a["blob"].as_str() {
+                    let raw = chrono_harness::full::artifact_bytes_at(
+                        &h.root(),
+                        &collected_report["artifacts"],
+                        blob,
+                    )
+                    .unwrap();
+                    fs::write(h.root().join(blob), raw).unwrap();
+                }
+            }
+        }
+    }
     // Conversion provenance must come from an original successful process, not a summary.
     let path = h.root().join(".chrono-harness/state/unit-one.json");
     let original = fs::read(&path).unwrap();

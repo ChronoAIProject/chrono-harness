@@ -421,6 +421,13 @@ fn native_command(root: &Path, id: &str, candidate: &str, payload: &Path) -> (i3
 }
 #[test]
 fn generated_automatic_full_units_gather_originals_on_separate_collection() {
+    generated_full_transport(false);
+}
+#[test]
+fn generated_full_units_acquire_external_preparation_originals() {
+    generated_full_transport(true);
+}
+fn generated_full_transport(external_originals: bool) {
     let (h, tools) = short_host(true);
     let root = h.root();
     let payload = tools.path().join("push.json");
@@ -471,6 +478,43 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
             "p/Cargo.toml"
         };
         assert!(!marker(tools.path())[before.len()..].contains(other));
+        if external_originals {
+            // Lossless transport fixture: exercise the actual prepared binding
+            // consumers using exact context and acquisition bytes, including
+            // short originals beneath a narrow native upload root.
+            let mut portable = report.clone();
+            let context = portable["request"]["context"]["path"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let receipt = portable["preparation"]["receipts"][0]["path"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            for address in [context, receipt] {
+                let bytes = chrono_harness::full::artifact_bytes_at(
+                    unit_root,
+                    &portable["artifacts"],
+                    &address,
+                )
+                .unwrap();
+                let raw = unit_root.join(format!(".chrono-harness/state/{id}/transport-original"));
+                fs::write(&raw, &bytes).unwrap();
+                let (original, length) = chrono_harness::prepared::retain_blob(
+                    unit_root,
+                    &format!(".chrono-harness/state/{id}/blobs/"),
+                    &raw,
+                )
+                .unwrap();
+                portable["artifacts"][address] =
+                    json!({"blob":original.path,"sha256":original.sha256,"length":length});
+            }
+            fs::write(
+                unit_root.join(format!(".chrono-harness/state/{id}/check.json")),
+                serde_json::to_vec(&portable).unwrap(),
+            )
+            .unwrap();
+        }
         copy_tree(
             &unit_root.join(format!(".chrono-harness/state/{id}")),
             &tools.path().join(format!("uploads/{id}")),
@@ -531,6 +575,29 @@ else:
     assert_eq!(manifest.reports.len(), 2);
     assert!(manifest.reports.iter().all(|r| r.artifacts.is_some()));
     assert!(collected["request"]["observations"]["preparation"]["result"]["context"].is_object());
+    if external_originals {
+        // The bounded collector preserved external preparation originals in its
+        // own closure; the original unit upload/read locations are unavailable.
+        for input in &manifest.reports {
+            let original_bytes = fs::read(collector.path().join(&input.path)).unwrap();
+            let retained = collected["tests"]["completion"]["reports"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["unit"] == input.unit)
+                .unwrap();
+            let retained_bytes = chrono_harness::full::artifact_bytes_at(
+                collector.path(),
+                &collected["artifacts"],
+                retained["retained_path"].as_str().unwrap(),
+            )
+            .unwrap();
+            assert_eq!(retained_bytes, original_bytes);
+        }
+        println!(
+            "FULL_EXTERNAL_TRANSPORT scope=local_mock_github run_attempts_preserved=true prepared_context_and_acquisition_exact=true business_reexecution=0"
+        );
+    }
     // A changed original remains a failure, even with fresh gathering and valid current reports.
     let source = tools.path().join("uploads/one");
     let receipt = manifest.reports[0].artifacts.as_ref().unwrap();
