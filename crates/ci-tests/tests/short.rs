@@ -33,9 +33,8 @@ fn native_forwarding_resolves_declared_path_once_and_retains_real_bounded_outcom
         include_str!("../../../assets/ci/native.py"),
     )
     .unwrap();
-    let python = chrono_harness::resolve_program(&root, "python3", None).unwrap();
     let driver = r#"
-import hashlib,json,pathlib,runpy,sys
+import hashlib,json,pathlib,runpy
 root=pathlib.Path.cwd(); native=runpy.run_path('native.py')
 provider=json.loads((root/'.chrono-harness/ci/units.json').read_bytes())
 native['process'].__globals__.update(NATIVE_PROVIDER=provider,NATIVE_CONFIG='.chrono-harness/ci/units.json')
@@ -44,13 +43,14 @@ for text,nanoseconds in [('0',0),('1',100000000),('12345',123450000),('123456',1
 try:native['moment']('2026-01-01T00:00:00+08:00')
 except ValueError:pass
 else:raise AssertionError('accepted non-UTC observation')
-env={'PATH':str(pathlib.Path(sys.executable).parent),'BUSINESS_VALUE':'actual value','SECRET':'actual credential'}
-program=pathlib.Path(sys.executable).name
+# Launchers may report a different sys.executable; use the declared invocation context.
+env={'PATH':str(pathlib.Path(provider['native_adoption']['interpreter']).parent),'BUSINESS_VALUE':'actual value','SECRET':'actual credential'}
+program=provider['native_adoption']['inputs_program']
 code="import sys;sys.stdout.buffer.write(b'\\x00\\xff'+sys.stdin.buffer.read());sys.stderr.buffer.write(b'original stderr')"
 raw,refs=native['process'](root,[program,'-c',code],b'original input',env,'.chrono-harness/state/collection/preparation/','good',5,1024,['SECRET'])
 assert raw==b'\x00\xfforiginal input'
 receipt=json.loads((root/refs[-1]['path']).read_bytes())
-assert pathlib.Path(receipt['argv'][0]).is_absolute()
+assert receipt['argv'][0]==str(pathlib.Path(env['PATH'])/program)
 assert receipt['configured_argv'][0]==program
 assert receipt['executable']['sha256']==hashlib.sha256(pathlib.Path(receipt['argv'][0]).read_bytes()).hexdigest()
 assert receipt['environment']['BUSINESS_VALUE']==hashlib.sha256(b'actual value').hexdigest()
@@ -58,6 +58,10 @@ assert 'SECRET' not in receipt['environment'] and receipt['omitted_credentials']
 assert (root/receipt['stdin']['path']).read_bytes()==b'original input'
 assert (root/receipt['stdout']['path']).read_bytes()==raw
 assert (root/receipt['stderr']['path']).read_bytes()==b'original stderr'
+try:native['process'](root,[receipt['argv'][0],'-c',code],b'',env,'.chrono-harness/state/collection/preparation/','undeclared',5,1024,['SECRET'])
+except ValueError as error:
+ assert str(error)=='E_CI: native-process differs from registered acquisition operations/bounds'
+else:raise AssertionError('accepted undeclared invocation of the genuine executable')
 for prefix,code,timeout,expected in [
  ('exit','import sys;sys.stderr.buffer.write(b"real failure");sys.exit(7)',5,None),
  ('overflow','import sys;sys.stdout.buffer.write(b"x"*1000)',5,'output bound exceeded'),

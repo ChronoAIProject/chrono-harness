@@ -1410,6 +1410,33 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
             fs::copy(source.join(path), target).unwrap();
         }
     }
+    // The copied registration belongs to the source host. This fixture owns
+    // its actual Git invocation and binds it before fixing the candidate.
+    let program = chrono_harness::resolve_program(dir.path(), "git", None).unwrap();
+    let version = Command::new(&program).arg("--version").output().unwrap();
+    assert!(version.status.success());
+    let config_path = ".chrono-harness/config.json";
+    let mut config: Value =
+        serde_json::from_slice(&fs::read(dir.path().join(config_path)).unwrap()).unwrap();
+    let tool_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
+    let input_id = config["facts_git"]["input"].as_str().unwrap().to_owned();
+    let tool = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == tool_id)
+        .unwrap();
+    tool["program"] = json!(program);
+    tool["expected_version"] = json!(String::from_utf8(version.stdout).unwrap().trim());
+    let input = config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|input| input["id"] == input_id)
+        .unwrap();
+    input["location"] = json!(program);
+    input["sha256"] = json!(sha256(&fs::read(&program).unwrap()));
+    json_file(dir.path(), config_path, &config);
     // A containing migration fixture deliberately supplies workflow drift.
     // This test owns a separate candidate projection; the outer verifier still
     // rejects its original drift and is never modified here.
@@ -1465,6 +1492,35 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         String::from_utf8_lossy(&out.stderr)
     );
     let result: Value = serde_json::from_slice(&out.stdout).unwrap();
+    // Keep the production binding checks strict after accepting the real
+    // explicit fixture binding, including hosts with identical Git versions.
+    for (case, expected) in [
+        ("bytes", "facts_git declared digest mismatch"),
+        ("version", "Git facts version mismatch"),
+    ] {
+        let mut wrong = config.clone();
+        if case == "bytes" {
+            wrong["environment"]["inputs"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|input| input["id"] == input_id)
+                .unwrap()["sha256"] = json!("0".repeat(64));
+        } else {
+            wrong["tools"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|tool| tool["id"] == tool_id)
+                .unwrap()["expected_version"] = json!("wrong fixture Git version");
+        }
+        json_file(dir.path(), config_path, &wrong);
+        let error = chrono_harness::facts::Reader::for_config(dir.path(), config_path)
+            .err()
+            .expect("accepted a wrong fixture Git binding");
+        assert!(error.contains(expected), "{case}: {error}");
+    }
+    json_file(dir.path(), config_path, &config);
     assert!(
         result["detection"]["required_units"]
             .as_array()
