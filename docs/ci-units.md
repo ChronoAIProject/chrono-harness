@@ -286,7 +286,7 @@ added registered endpoint paths, preserving both dependency closures.
 The changed-file count comes from complete Git trees before selection. There is
 no file-count gate or truncation.
 GitHub documents that native workflow path filtering
-has a [300-file limit](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons),
+has a [3000-file limit](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons),
 the [PR files API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)
 returns at most 3,000, and the
 [compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits)

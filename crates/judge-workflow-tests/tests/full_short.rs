@@ -295,6 +295,54 @@ fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     );
     (output.status.code().unwrap(), report)
 }
+
+fn local_collection_observation(root: &Path, report: &Value) {
+    let preparation = &report["preparation"];
+    let endpoint = &preparation["request"]["prepared"];
+    let result = &preparation["result"];
+    let observation = &endpoint["evidence"]["current_observation"];
+    assert!(observation.is_object(), "endpoint observation missing");
+    assert_eq!(result["evidence"]["current_observation"], *observation);
+    assert_eq!(result["context"], endpoint["context"]);
+    assert_eq!(observation["context_digest"], report["context_digest"]);
+    let read = |evidence: &Value| {
+        let bytes = fs::read(root.join(evidence["report_path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&bytes), evidence["report_sha256"]);
+        chrono_harness::json(&bytes).unwrap()
+    };
+    let original_endpoint = read(&endpoint["evidence"]);
+    let original_collection = read(&result["evidence"]);
+    assert_eq!(original_endpoint["current_observation"], *observation);
+    assert_eq!(original_collection["current_observation"], *observation);
+    assert_eq!(
+        original_collection["endpoint_evidence"],
+        endpoint["evidence"]
+    );
+    let receipts = preparation["receipts"].as_array().unwrap();
+    assert_eq!(receipts.len(), 2);
+    for (index, receipt) in receipts.iter().enumerate() {
+        let raw = fs::read(root.join(receipt["path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&raw), receipt["sha256"]);
+        let receipt = chrono_harness::json(&raw).unwrap();
+        let stdout: Vec<u8> =
+            serde_json::from_value(receipt["process"]["stdout_bytes"].clone()).unwrap();
+        let produced = chrono_harness::json(&stdout).unwrap();
+        assert_eq!(produced, if index == 0 { endpoint } else { result }.clone());
+        assert_eq!(receipt["process"]["exit_code"], 0);
+        assert_eq!(receipt["process"]["sha256"], receipt["tool"]["sha256"]);
+        if index == 1 {
+            assert_eq!(receipt["request"], preparation["request"]);
+            assert_eq!(receipt["action"]["tool"], "chrono-ci");
+        }
+    }
+    for original in endpoint["originals"].as_array().unwrap() {
+        assert!(result["originals"].as_array().unwrap().contains(original));
+        assert_eq!(
+            sha256(&fs::read(root.join(original["path"].as_str().unwrap())).unwrap()),
+            original["sha256"]
+        );
+    }
+}
 #[test]
 fn full_provider_report_aliases_fail_before_generation_effects() {
     let (h, tools) = short_host(false);
@@ -465,9 +513,64 @@ fn real_short_full_local_units_collection_and_delivery() {
     let business = tools.path().join("cargo-fixture");
     let bytes = fs::read(&business).unwrap();
     fs::remove_file(&business).unwrap();
+    let unchanged: Vec<_> = [
+        origin_path.clone(),
+        lane.join(origin["birth_report"].as_str().unwrap()),
+        lane.join(".chrono-harness/state/one/check.json"),
+        lane.join(".chrono-harness/state/two/check.json"),
+    ]
+    .into_iter()
+    .map(|path| {
+        let bytes = fs::read(&path).unwrap();
+        (path, bytes)
+    })
+    .collect();
     let before = marker(tools.path());
     let (exit, collection) = short(&lane, &["check", "--collect"], None);
     passed(exit, &collection);
+    for (path, bytes) in &unchanged {
+        assert_eq!(fs::read(path).unwrap(), *bytes);
+    }
+    local_collection_observation(&lane, &collection);
+    let receipt = &collection["preparation"]["receipts"][0];
+    let receipt =
+        chrono_harness::json(&fs::read(lane.join(receipt["path"].as_str().unwrap())).unwrap())
+            .unwrap();
+    assert_eq!(
+        receipt["tool"]["path"],
+        json!(
+            fs::canonicalize(&lane)
+                .unwrap()
+                .join(".chrono-harness/bin/chrono-worktree")
+        )
+    );
+    assert_eq!(
+        receipt["tool"]["sha256"],
+        sha256(&fs::read(lane.join(".chrono-harness/bin/chrono-worktree")).unwrap())
+    );
+    assert_eq!(
+        workflow(&collection)["branch"]["current_observation"],
+        collection["preparation"]["result"]["evidence"]["current_observation"]
+    );
+    let endpoint = &collection["preparation"]["request"]["prepared"];
+    let original_worktree = chrono_harness::json(
+        &fs::read(lane.join(endpoint["evidence"]["report_path"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(original_worktree["status"], "prepared");
+    assert_eq!(
+        original_worktree["origin"]["birth_report"],
+        origin["birth_report"]
+    );
+    for field in ["raw", "sha256", "semantic_digest"] {
+        assert_eq!(
+            endpoint["context"][field],
+            one["preparation"]["result"]["context"][field]
+        );
+    }
+    println!(
+        "LOCAL_OBSERVATION genuine_worktree=true second_producer=true retained_report=true final_response=true context_unchanged=true"
+    );
     assert_eq!(marker(tools.path()), before);
     assert_eq!(collection["tests"]["executed"], json!([]));
     assert_eq!(
@@ -488,6 +591,200 @@ fn real_short_full_local_units_collection_and_delivery() {
         fs::read(lane.join(".chrono-harness/state/integration.json")).unwrap(),
         certificate
     );
+}
+
+// Deterministic times are fixture input data, not native observations. The
+// registered producer fixture uses the same request/response transport as the
+// existing CI short fixtures; the second producer and all judges are real.
+fn fixture_endpoint(h: &Host, context: &Value, nanos: i128) {
+    use chrono_harness::prepared::{self, Context, PreparedCheck};
+    let root = h.root();
+    let raw = serde_json::to_vec(context).unwrap();
+    let original = prepared::retain_original(
+        &root,
+        ".chrono-harness/state/preparation/",
+        "fixture-context",
+        &raw,
+    )
+    .unwrap();
+    let observation = json!({"context_digest":wire::digest(context).unwrap(),"unix_timestamp_nanos":nanos.to_string()});
+    let evidence =
+        json!({"schema":"fixture-local-observation/v1","current_observation":observation});
+    let report = prepared::retain_original(
+        &root,
+        ".chrono-harness/state/preparation/",
+        "fixture-endpoint",
+        &serde_json::to_vec(&evidence).unwrap(),
+    )
+    .unwrap();
+    let p = PreparedCheck {
+        schema: prepared::RESPONSE.into(),
+        request_sha256: String::new(),
+        source: "local".into(),
+        profile: CONFIG.into(),
+        base: Some(h.base.clone()),
+        candidate: h.candidate.clone(),
+        initial: false,
+        scope: None,
+        context: Some(Context {
+            path: original.path.clone(),
+            sha256: original.sha256.clone(),
+            semantic_digest: wire::digest(context).unwrap(),
+            raw,
+        }),
+        evidence: json!({"report_path":report.path,"report_sha256":report.sha256,"current_observation":observation}),
+        originals: vec![original, report],
+    };
+    fs::write(
+        root.join(".chrono-harness/state/fixture-prepared.json"),
+        serde_json::to_vec(&p).unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn local_collection_retry_preserves_observation_and_expires_older_producer() {
+    let (mut h, tools) = short_host(false);
+    let root = h.root();
+    let fixture = root.join(".chrono-harness/bin/fixture-producer");
+    // Reuse the registered producer-fixture capability, without a production
+    // clock override or a direct injection into the workflow judge request.
+    fs::write(&fixture, r#"#!/bin/sh
+if [ "$1" = --version ]; then printf 'chrono-worktree 0.1.0\n'; exit 0; fi
+exec /usr/bin/python3 -c '
+import json,sys,hashlib
+raw=sys.stdin.buffer.read(); q=json.loads(raw)
+p=json.load(open(".chrono-harness/state/fixture-prepared.json"))
+p["request_sha256"]=hashlib.sha256(raw).hexdigest()
+s=q["selection"]
+p["scope"] = None if s["kind"]=="all" else (dict(kind="unit",unit=s["unit"]) if s["kind"]=="unit" else dict(kind="collect",manifest=".chrono-harness/state/collection/manifest.json"))
+print(json.dumps(p))'
+"#).unwrap();
+    fs::set_permissions(&fixture, fs::Permissions::from_mode(0o755)).unwrap();
+    h.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|t| t["id"] == "chrono-worktree")
+        .unwrap()["program"] = json!(fixture);
+    h.save();
+    h.base = h.candidate.clone();
+    for prod in ["p", "p2"] {
+        fs::write(
+            root.join(format!("{prod}/src/lib.rs")),
+            "pub fn double(n:i32)->i32 {2*n}\n",
+        )
+        .unwrap();
+    }
+    h.save();
+    git_facts::prepare_bound(&h, "integration", None);
+    let inputs_path = root.join(".chrono-harness/state/inputs.json");
+    let mut inputs = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
+    for endpoint in ["base", "candidate"] {
+        inputs[endpoint]["environment"]["CHRONO_CHECK_SOURCE"] = Value::Null;
+    }
+    fs::write(inputs_path, serde_json::to_vec(&inputs).unwrap()).unwrap();
+    let mut producer =
+        chrono_harness::json(&fs::read(root.join(".chrono-harness/state/context.json")).unwrap())
+            .unwrap();
+    assert_eq!(producer["branch_started_at"], "2026-01-01T00:00:00Z");
+    assert_eq!(h.values[WORKFLOW]["staleness"]["max_age_hours"], 24);
+    producer["observed_at"] = json!("2026-01-01T23:00:00Z");
+    let t23 = 1767308400000000000_i128;
+    fixture_endpoint(&h, &producer, t23);
+    for unit in ["one", "two"] {
+        let (exit, report) = short(&root, &["check", "--unit", unit], None);
+        passed(exit, &report);
+    }
+    let (exit, produced) = short(&root, &["check", "--collect"], None);
+    passed(exit, &produced);
+    let certificate_path = root.join(".chrono-harness/state/integration.json");
+    let certificate_raw = fs::read(&certificate_path).unwrap();
+    let mut consumer = producer.clone();
+    consumer["run_kind"] = json!("delivery");
+    consumer["branch_ref"] = json!("feature/independent-birth");
+    consumer["branch_started_at"] = json!("2026-01-01T02:00:00Z");
+    consumer["integration_evidence"] = json!(sha256(&certificate_raw));
+    fixture_endpoint(&h, &consumer, t23);
+    for unit in ["one", "two"] {
+        let (exit, report) = short(&root, &["check", "--unit", unit], None);
+        passed(exit, &report);
+    }
+    let mut originals = vec![(certificate_path, certificate_raw)];
+    for path in [
+        ".chrono-harness/state/context.json",
+        ".chrono-harness/state/one/check.json",
+        ".chrono-harness/state/two/check.json",
+    ] {
+        let path = root.join(path);
+        originals.push((path.clone(), fs::read(path).unwrap()));
+    }
+    for report in [
+        &produced,
+        &chrono_harness::json(
+            &fs::read(root.join(".chrono-harness/state/one/check.json")).unwrap(),
+        )
+        .unwrap(),
+        &chrono_harness::json(
+            &fs::read(root.join(".chrono-harness/state/two/check.json")).unwrap(),
+        )
+        .unwrap(),
+    ] {
+        for path in [
+            report["report_path"].as_str().unwrap(),
+            report["preparation"]["result"]["context"]["path"]
+                .as_str()
+                .unwrap(),
+        ] {
+            let path = root.join(path);
+            originals.push((path.clone(), fs::read(path).unwrap()));
+        }
+    }
+    for (nanos, pass, age) in [
+        (1767315600000000000_i128, false, "90000000000000"), // producer25h, consumer23h
+        (t23, true, ""),
+        (1767312000000000000, true, ""), // producer24h equality
+        (1767312000000000001, false, "86400000000001"),
+    ] {
+        fixture_endpoint(&h, &consumer, nanos);
+        let before = marker(tools.path());
+        let (exit, report) = short(&root, &["check", "--collect"], None);
+        println!(
+            "LOCAL_RETRY_ACTUAL fixture_nanos={nanos} exit={exit} observation={} findings={}",
+            report["preparation"]["result"]["evidence"]["current_observation"], report["findings"]
+        );
+        assert_eq!(
+            exit == 0,
+            pass,
+            "observation={nanos}: {}",
+            report["findings"]
+        );
+        local_collection_observation(&root, &report);
+        assert_eq!(
+            report["preparation"]["result"]["evidence"]["current_observation"]["unix_timestamp_nanos"],
+            nanos.to_string()
+        );
+        if pass {
+            passed(exit, &report);
+            assert_eq!(workflow(&report)["mode"], "delivery");
+        } else {
+            let findings = report["findings"].to_string();
+            assert!(
+                findings.contains("E_INTEGRATION_MISMATCH")
+                    && findings.contains("E_BRANCH_STALE")
+                    && findings.contains(age),
+                "{findings}"
+            );
+        }
+        assert_eq!(marker(tools.path()), before);
+        assert_eq!(report["tests"]["executed"], json!([]));
+        for (path, raw) in &originals {
+            assert_eq!(fs::read(path).unwrap(), *raw);
+        }
+        println!(
+            "LOCAL_RETRY fixture_nanos={nanos} pass={pass} original_bytes_unchanged=true collector_business=0 second_producer=true"
+        );
+    }
 }
 fn native_command(root: &Path, id: &str, candidate: &str, payload: &Path) -> (i32, Value) {
     let workflow = fs::read_to_string(root.join(format!(".github/workflows/{id}.yml"))).unwrap();

@@ -260,9 +260,13 @@ fn local_manifest(
         &unit_paths,
     )?;
     publish(&req.host_root, &c.gather.manifest_path, &raw)?;
-    Ok(
-        json!({"schema":"chrono-local-collection-inputs/v1","manifest_path":c.gather.manifest_path,"manifest_sha256":sha256(&raw),"manifest":manifest,"expected_executables":pins,"endpoint_evidence":p.evidence,"requirements":requirements}),
-    )
+    let mut evidence = json!({"schema":"chrono-local-collection-inputs/v1","manifest_path":c.gather.manifest_path,"manifest_sha256":sha256(&raw),"manifest":manifest,"expected_executables":pins,"endpoint_evidence":p.evidence,"requirements":requirements});
+    // Collection must retain the endpoint producer's actual observation before
+    // dispatch preserves it in the final response. Its context remains original.
+    if let Some(observation) = p.evidence.get("current_observation") {
+        evidence["current_observation"] = observation.clone();
+    }
+    Ok(evidence)
 }
 fn named_env(opts: &BTreeMap<&str, &str>, flag: &str) -> Result<String, String> {
     let key = opts
