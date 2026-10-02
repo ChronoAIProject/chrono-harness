@@ -1157,8 +1157,28 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     let lineage_bytes = fs::read(lane.join(origin["birth_report"].as_str().unwrap())).unwrap();
     let lineage_path = ".chrono-harness/ci/lineage.json";
     fs::write(lane.join(lineage_path), &lineage_bytes).unwrap();
-    let python = chrono_harness::resolve_program(&lane, "python3", Some("/usr/bin:/bin")).unwrap();
+    let system_python =
+        chrono_harness::resolve_program(&lane, "python3", Some("/usr/bin:/bin")).unwrap();
+    // Exercise the Linux layout even when the host's interpreter is a regular file.
+    let python_directory = fs::canonicalize(tools.path())
+        .unwrap()
+        .join("native-python");
+    fs::create_dir(&python_directory).unwrap();
+    let python_link = python_directory.join("python3");
+    std::os::unix::fs::symlink(&system_python, &python_link).unwrap();
+    assert!(fs::symlink_metadata(&python_link).unwrap().is_symlink());
+    let python =
+        chrono_harness::resolve_program(&lane, "python3", Some(python_directory.to_str().unwrap()))
+            .unwrap();
+    let link_version = Command::new(&python).arg("--version").output().unwrap();
+    let link_digest = sha256(&fs::read(&python).unwrap());
+    // Ordinary file inputs require the actual regular executable, not its alias.
+    let python = fs::canonicalize(python).unwrap();
     let version = Command::new(&python).arg("--version").output().unwrap();
+    assert_eq!(version.status, link_version.status);
+    assert_eq!(version.stdout, link_version.stdout);
+    assert_eq!(version.stderr, link_version.stderr);
+    assert_eq!(sha256(&fs::read(&python).unwrap()), link_digest);
     let cfg = h.values.get_mut(CONFIG).unwrap();
     cfg["canonical_check"]["inputs"]["ci"] = json!({"operation":"prepare.ci","tool":"native-python","argv":[".chrono-harness/ci/native.py","forward","--config",PROVIDER]});
     cfg["tools"].as_array_mut().unwrap().push(json!({"id":"native-python","program":python,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}));
