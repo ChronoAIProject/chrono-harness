@@ -7,6 +7,29 @@ independent conditional unit jobs, and an always-run aggregate in one parent
 workflow. Each unit retains its own checkout, name, runner, bootstrap, timeout,
 context, upload and job rerun. Host languages and layouts remain opaque.
 
+The product host registers an explicit inventory of conditional units. Its existing
+workflow test project has three explicitly registered test groups, assigned to
+the units `judge-workflow` (core),
+`judge-workflow-units` (direct full-unit tests), and `judge-workflow-short`
+(full short-command tests). Registered actions select each group's members;
+the inventory guard verifies their coverage without inferring dependencies.
+Together, the groups cover the two original test binaries and preserve their
+fixtures, profiles and business limits. `actions.execute` and its original
+`test.judge-workflow-tests` operation remain unfiltered for release. The legacy
+test identity binds a distinct filtered core action through `test_groups`.
+
+Each group retains the registered build prerequisites and runs the host-owned
+`.chrono-harness/ci/workflow-inventory.py` guard. Its explicit config binds the
+original action, group map, Cargo tool and binary lists. Real unfiltered, ignored
+and filtered libtest listings must form nonempty disjoint exact coverage;
+failed listings retain their original exit and output. The guard compares current
+sets rather than fixing the test count forever. The migration's historical name
+baseline remains a separate implementation observation. Shared prerequisites and inventory
+operations are explicitly assigned to all three units. Each has a distinct context
+and check report; the existing detector and always-run aggregate remain the native
+entry and sole required branch-protection check. The grouping has no native timing
+or activation acceptance until the caller runs the committed candidate there.
+
 Providers without `job_gating` retain their original separate-workflow behavior
 and evidence contracts. Installing a new binary or running init does not opt
 an existing host in. This source correction has no published release or native

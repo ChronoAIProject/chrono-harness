@@ -498,15 +498,11 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
     Ok(())
 }
 pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
-    r.node_data()
-        .iter()
-        .filter_map(|(id, node)| {
-            if !id.starts_with("test:") {
-                return None;
-            }
-            node.unique()
-                .and_then(|d| d.value["actions"]["execute"]["operation"].as_str())
-                .map(|op| (id.clone(), op.into()))
+    r.test_bindings()
+        .into_iter()
+        .filter_map(|(id, bindings)| match bindings.as_slice() {
+            [binding] => Some((id, binding.operation.clone())),
+            _ => None,
         })
         .collect()
 }

@@ -1446,15 +1446,19 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         dir.path(),
         &["config", "user.email", "fixture@example.invalid"],
     );
-    git(dir.path(), &["add", "."]);
-    let clean = git(dir.path(), &["diff", "--cached", "--name-only"]).is_empty();
-    if clean {
-        let path = dir.path().join("crates/ci/src/gating.rs");
+    // A copied migration candidate can already contain the group adoption;
+    // regeneration can still change only its deliberately drifted workflow.
+    // Bind both producer changes explicitly for the selection assertions below.
+    for source_path in [
+        "crates/ci/src/gating.rs",
+        "crates/judge-workflow/src/lib.rs",
+    ] {
+        let path = dir.path().join(source_path);
         let mut bytes = fs::read(&path).unwrap();
         bytes.extend_from_slice(b"\n// Explicit fixture source DELTA.\n");
         fs::write(path, bytes).unwrap();
-        git(dir.path(), &["add", "."]);
     }
+    git(dir.path(), &["add", "."]);
     git(
         dir.path(),
         &["commit", "-qm", "current product host source delta"],
@@ -1527,10 +1531,54 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
             .unwrap()
             .contains(&json!("ci"))
     );
+    for (unit, test) in [
+        ("judge-workflow", "test:judge-workflow-tests"),
+        ("judge-workflow-units", "test:workflow-units"),
+        ("judge-workflow-short", "test:workflow-short"),
+    ] {
+        assert!(
+            result["detection"]["required_units"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(unit)),
+            "{result:#}"
+        );
+        assert!(
+            result["requirements"]["global_selected"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(test)),
+            "{result:#}"
+        );
+    }
+    let projects_path = ".chrono-harness/projects.json";
+    let previous: Value = serde_json::from_str(&git(
+        dir.path(),
+        &["show", &format!("{base}:{projects_path}")],
+    ))
+    .unwrap();
+    let current: Value =
+        serde_json::from_slice(&fs::read(dir.path().join(projects_path)).unwrap()).unwrap();
+    let project = |value: &Value| {
+        value["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|project| project["id"] == "judge-workflow-tests")
+            .unwrap()
+            .clone()
+    };
+    let before = project(&previous);
+    let after = project(&current);
+    assert_eq!(before["actions"]["execute"], after["actions"]["execute"]);
+    assert_eq!(
+        after["test_groups"],
+        json!({"judge-workflow-tests":"execute_core", "workflow-units":"execute_units", "workflow-short":"execute_short"})
+    );
     // Retain the real selection as bounded validation data, not a fabricated check verdict.
     json_file(
         &source,
         ".chrono-harness/state/current-host-delta-selection.json",
-        &json!({"source_baseline":original,"fixture_base":base,"fixture_candidate":candidate,"selection_scope":if clean {"sample-clean-host-delta"} else {"actual-worktree-delta"},"detection":result["detection"],"global_selected":result["requirements"]["global_selected"],"native_actions_verified":false}),
+        &json!({"source_baseline":original,"fixture_base":base,"fixture_candidate":candidate,"selection_scope":"actual-worktree-and-explicit-fixture-delta","detection":result["detection"],"global_selected":result["requirements"]["global_selected"],"native_actions_verified":false}),
     );
 }

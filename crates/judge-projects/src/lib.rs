@@ -230,6 +230,17 @@ pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Res
             ) {
                 return Err("E_TEST_PAIR: missing explicit pair execution edge".into());
             }
+            for (identity, bindings) in r.test_bindings() {
+                if bindings
+                    .iter()
+                    .any(|b| b.owner == format!("{prefix}:{test_id}"))
+                    && !edge(&format!("{prefix}:{prod_id}"), "test-execution", &identity)
+                {
+                    return Err(format!(
+                        "E_TEST_PAIR: missing explicit group execution edge {identity}"
+                    ));
+                }
+            }
             for member in [production, test] {
                 let owner = member["id"].as_str().unwrap();
                 if prefix == "script" {

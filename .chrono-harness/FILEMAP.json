@@ -3847,6 +3847,66 @@
           "to": "test:ci-tests"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/ci/workflow-inventory.py",
+      "owner": "judge-workflow-tests",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-workflow-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-units"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-short"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/workflow-inventory-tests.py",
+      "owner": "judge-workflow-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-workflow-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-units"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-short"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/workflow-inventory.json",
+      "owner": "judge-workflow-tests",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-workflow-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-units"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-short"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -5964,6 +6024,26 @@
       "from": "project:judge-filemap",
       "kind": "compile",
       "to": "project:inputs"
+    },
+    {
+      "from": "project:judge-workflow",
+      "kind": "test-execution",
+      "to": "test:workflow-units"
+    },
+    {
+      "from": "project:judge-workflow",
+      "kind": "test-execution",
+      "to": "test:workflow-short"
+    },
+    {
+      "from": "project:judge-workflow-tests",
+      "kind": "test-execution",
+      "to": "test:workflow-units"
+    },
+    {
+      "from": "project:judge-workflow-tests",
+      "kind": "test-execution",
+      "to": "test:workflow-short"
     }
   ],
   "test_costs": [
@@ -6029,6 +6109,14 @@
     },
     {
       "test": "worktree-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "workflow-units",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "workflow-short",
       "cost": "unmeasured"
     }
   ],
@@ -6182,7 +6270,9 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "test.judge-workflow-tests"
+        "workflow.inventory-tests",
+        "workflow.inventory",
+        "test.workflow.core"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -6241,6 +6331,50 @@
         "build.ci",
         "build.worktree",
         "test.worktree-tests"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:workflow-units": {
+      "operations": [
+        "fmt.judge-workflow",
+        "fmt.judge-workflow-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-cost",
+        "build.judge-mixed",
+        "build.judge-routes",
+        "build.judge-projects",
+        "build.ci",
+        "build.judge-workflow",
+        "build.worktree",
+        "build.inputs",
+        "workflow.inventory-tests",
+        "workflow.inventory",
+        "test.workflow.units"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:workflow-short": {
+      "operations": [
+        "fmt.judge-workflow",
+        "fmt.judge-workflow-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-cost",
+        "build.judge-mixed",
+        "build.judge-routes",
+        "build.judge-projects",
+        "build.ci",
+        "build.judge-workflow",
+        "build.worktree",
+        "build.inputs",
+        "workflow.inventory-tests",
+        "workflow.inventory",
+        "test.workflow.short"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576

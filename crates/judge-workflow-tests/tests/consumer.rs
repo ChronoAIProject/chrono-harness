@@ -356,6 +356,192 @@ fn retire(h: &mut Host, producer: bool) {
     }
     h.save();
 }
+
+fn grouped_project_host() -> Host {
+    let mut h = Host::new(false);
+    for (id, deps) in [
+        ("cost", vec!["registration", "filemap"]),
+        ("mixed", vec!["registration", "filemap", "cost"]),
+        (
+            "workflow",
+            vec![
+                "registration",
+                "filemap",
+                "routes",
+                "projects",
+                "cost",
+                "mixed",
+            ],
+        ),
+    ] {
+        let bytes =
+            fs::read(source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}")))
+                .expect("build registered judge first");
+        let path = format!(".chrono-harness/bin/chrono-judge-{id}");
+        fs::write(h.root().join(&path), &bytes).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(h.root().join(&path), fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        h.values.get_mut(JUDGES).unwrap()["judges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id":id,"executable":path,"version":"0.1.0","sha256":sha256(&bytes),"argv":["--protocol","chrono-judge/v1"],"selector":"every-delta","after":deps,"modes":["evaluate"]}));
+    }
+    h.values.get_mut(JUDGES).unwrap()["migration_validator"] = "workflow".into();
+    for f in h.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+    {
+        f["surface"] = match f["path"].as_str().unwrap() {
+            CONFIG | JUDGES | WORKFLOW => "judge-policy",
+            FM | PROJECTS => "membership",
+            "doc.txt" => "documentation",
+            _ => "product",
+        }
+        .into();
+    }
+    h.values.get_mut(CONFIG).unwrap()["semantic_fields"] =
+        json!([{ "path":PROJECTS,"pointers":["/projects/*/actions"],"on":"add-modify-delete"}]);
+    let w = h.values.get_mut(WORKFLOW).unwrap();
+    w["integration"]["bind"] = json!([
+        "base",
+        "candidate_tree",
+        "registry_digest",
+        "executables",
+        "tools",
+        "environment",
+        "effective_inputs",
+        "required_tests",
+        "results_digest"
+    ]);
+    w["integration"]["tests"] = json!(["t", "opaque/suffix"]);
+    w["stability"] = json!([{"id":"p","paths":["p/product.py"],"tests":["t", "opaque/suffix"],"reason":"grouped project stability fixture"}]);
+
+    let test_project = &mut h.values.get_mut(PROJECTS).unwrap()["projects"][1];
+    let execute = test_project["actions"]["execute"].clone();
+    for (action, operation) in [("alpha", "group.alpha"), ("beta", "group.beta")] {
+        let mut grouped = execute.clone();
+        grouped["operation"] = operation.into();
+        test_project["actions"][action] = grouped;
+    }
+    test_project["test_groups"] = json!({"t":"alpha","opaque/suffix":"beta"});
+
+    let filemap = h.values.get_mut(FM).unwrap();
+    filemap["execution_plans"] = json!({
+        "test:t":{"operations":["prepare.p","group.alpha"],"timeout_seconds":15,"output_limit_bytes":4096},
+        "test:opaque/suffix":{"operations":["prepare.p","group.beta"],"timeout_seconds":15,"output_limit_bytes":4096}
+    });
+    filemap["test_costs"] = json!([
+        {"test":"t","cost":"unknown"},
+        {"test":"opaque/suffix","cost":"unknown"}
+    ]);
+    filemap["project_edges"].as_array_mut().unwrap().extend([
+        edge("project:p", "test-execution", "test:opaque/suffix"),
+        edge("project:t", "test-execution", "test:opaque/suffix"),
+    ]);
+    h.save();
+    h.base = h.candidate.clone();
+    h
+}
+
+fn retire_grouped_project_pair(
+    h: &mut Host,
+    keep_producer: bool,
+    keep_test_project: bool,
+    declarations: Value,
+) {
+    h.values.get_mut(PROJECTS).unwrap()["projects"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|p| (p["id"] == "p" && keep_producer) || (p["id"] == "t" && keep_test_project));
+    let fm = h.values.get_mut(FM).unwrap();
+    fm["files"].as_array_mut().unwrap().retain(|f| {
+        let path = f["path"].as_str().unwrap();
+        !(path.starts_with("p/") && !keep_producer)
+            && !(path.starts_with("t/") && !keep_test_project)
+    });
+    fm["project_edges"] = json!([]);
+    fm["execution_plans"] = json!({});
+    fm["test_costs"] = json!([]);
+    if !keep_producer {
+        fs::remove_dir_all(h.root().join("p")).unwrap();
+    }
+    if !keep_test_project {
+        fs::remove_dir_all(h.root().join("t")).unwrap();
+    }
+    let w = h.values.get_mut(WORKFLOW).unwrap();
+    w["integration"]["tests"] = json!([]);
+    w["stability"] = json!([]);
+    w["retirements"] = declarations;
+    h.save();
+}
+
+#[test]
+fn grouped_project_pair_joint_retirement_resolves_definition_owner() {
+    let mut h = grouped_project_host();
+    retire_grouped_project_pair(
+        &mut h,
+        false,
+        false,
+        json!([
+            {"kind":"test","id":"t","replacement":null,"reason":"grouped pair removed"},
+            {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"grouped pair removed"},
+            {"kind":"project","id":"p","replacement":null,"reason":"grouped pair removed"}
+        ]),
+    );
+    let (e, r) = run(&h, "integration", None, |_| {});
+    passed(e, &r);
+    assert_eq!(r["tests"]["executed"], json!([]));
+    assert_eq!(
+        r["tests"]["removed"],
+        json!({"test:t":null,"test:opaque/suffix":null})
+    );
+    for id in ["test:t", "test:opaque/suffix"] {
+        assert!(r["costs"]["declared_before"].get(id).is_some(), "{id}");
+        assert!(
+            r["impact"]["retired_tests"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(id))
+        );
+    }
+    assert!(!h.root().join(".chrono-harness/state/order").exists());
+
+    for (keep_producer, keep_test_project, declarations) in [
+        (
+            true,
+            false,
+            json!([
+                {"kind":"test","id":"t","replacement":null,"reason":"missing paired project"},
+                {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"missing paired project"}
+            ]),
+        ),
+        (
+            false,
+            true,
+            json!([
+                {"kind":"test","id":"t","replacement":null,"reason":"missing producer"},
+                {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"missing producer"}
+            ]),
+        ),
+        (
+            false,
+            false,
+            json!([
+                {"kind":"test","id":"t","replacement":null,"reason":"missing declaration"},
+                {"kind":"project","id":"p","replacement":null,"reason":"missing declaration"}
+            ]),
+        ),
+    ] {
+        let mut h = grouped_project_host();
+        retire_grouped_project_pair(&mut h, keep_producer, keep_test_project, declarations);
+        let (e, r) = run(&h, "integration", None, |_| {});
+        assert_ne!(e, 0, "accepted invalid grouped retirement: {r:#}");
+    }
+}
+
 #[test]
 fn legal_joint_retirement_preserves_old_cost_without_executing_absent_test() {
     let mut h = host();

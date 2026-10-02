@@ -48,6 +48,11 @@ fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
     input["sha256"] = json!(git.sha256);
 }
 fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+    migration_host_with_alias_collision(false)
+}
+fn migration_host_with_alias_collision(
+    collision: bool,
+) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     let source = fs::canonicalize(source()).unwrap();
     let original = "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98";
     let dir = tempfile::Builder::new()
@@ -57,6 +62,30 @@ fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     let root = fs::canonicalize(dir.path()).unwrap();
     let tree = facts::tree(&source, original).unwrap();
     facts::export(&source, original, &tree, &root).unwrap();
+    if collision {
+        // A controlled regression input, committed in this temporary host before
+        // decoding, preserves both real original definitions under one alias.
+        let mut projects: Value =
+            serde_json::from_slice(&fs::read(root.join(PROJECTS)).unwrap()).unwrap();
+        let mut project = projects["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["kind"] == "test")
+            .unwrap()
+            .clone();
+        project["id"] = json!("ci-verify");
+        project["actions"] = json!({"execute":{"operation":"collision.execute","tool":"cargo","argv":["--version"]}});
+        projects["projects"].as_array_mut().unwrap().push(project);
+        let mut permissions = fs::metadata(root.join(PROJECTS)).unwrap().permissions();
+        permissions.set_readonly(false);
+        fs::set_permissions(root.join(PROJECTS), permissions).unwrap();
+        fs::write(
+            root.join(PROJECTS),
+            serde_json::to_vec_pretty(&projects).unwrap(),
+        )
+        .unwrap();
+    }
     git(&root, &["init", "-q"]);
     let base = commit(&root);
     let map: Value = serde_json::from_slice(&fs::read(source.join(FM)).unwrap()).unwrap();
@@ -118,6 +147,56 @@ fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     fs::write(root.join(workflow), bytes).unwrap();
     let candidate = commit(&root);
     (dir, root, base, candidate)
+}
+
+#[test]
+fn decoded_historical_bindings_preserve_original_aliases_and_ambiguity() {
+    for collision in [false, true] {
+        let (_dir, root, base, candidate) = migration_host_with_alias_collision(collision);
+        let raw = facts::registry_values(&root, &base, CONFIG).unwrap();
+        let new = facts::registry_values(&root, &candidate, CONFIG).unwrap();
+        let (old, current, view) = interpret(
+            &root,
+            &base,
+            &candidate,
+            CONFIG,
+            raw.clone(),
+            new,
+            &std::env::vars().collect(),
+        )
+        .unwrap();
+        assert_eq!(view["conversion"]["input"]["original"], json!(raw));
+        let nodes = old.node_data();
+        let node = &nodes["test:ci-verify"];
+        assert_eq!(node.definitions.len(), if collision { 2 } else { 1 });
+        let bindings = old.test_bindings();
+        let historical = &bindings["test:ci-verify"];
+        assert_eq!(historical.len(), node.definitions.len());
+        assert!(historical.iter().any(|b| b.owner == "script:ci-verify"
+            && b.action == "execute"
+            && b.operation == "ci.verify"));
+        if collision {
+            assert!(
+                historical
+                    .iter()
+                    .any(|b| b.owner == "project:ci-verify" && b.operation == "collision.execute")
+            );
+            assert!(node.unique().is_none());
+            assert!(!execute_actions(&old).contains_key("test:ci-verify"));
+            let error = chrono_judge_routes::order(
+                &BTreeSet::from(["test:ci-verify".into()]),
+                &execution::plans(old.filemap()).unwrap(),
+                &execution::methods(current.projects()).unwrap(),
+                &execute_actions(&old),
+            )
+            .unwrap_err();
+            assert!(error.contains("unique execute action"), "{error}");
+        } else {
+            assert_eq!(execute_actions(&old)["test:ci-verify"], "ci.verify");
+        }
+        assert!(!execute_actions(&current).contains_key("test:ci-verify"));
+        assert_eq!(execute_actions(&current)["test:ci-tests"], "test.ci-tests");
+    }
 }
 #[test]
 fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift() {

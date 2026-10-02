@@ -81,26 +81,39 @@ pub fn evaluate(
             None => {
                 for definition in &defs.definitions {
                     let d = &definition.value;
+                    // A grouped test alias is opaque. Its suffix may differ from
+                    // the defining test project's ID, so resolve the typed owner
+                    // from the retained definition identity and value.
+                    let (collection, kind, pair, defining_id) =
+                        if let Some(id) = definition.identity.strip_prefix("project:") {
+                            ("projects", "project", "test_project", id)
+                        } else if let Some(id) = definition.identity.strip_prefix("script:") {
+                            ("scripts", "script", "test_script", id)
+                        } else {
+                            return Err(format!(
+                                "E_RETIREMENT: retired test has invalid defining owner: {node}"
+                            ));
+                        };
                     let owner = d["tests_for"]
                         .as_str()
                         .ok_or("E_RETIREMENT: retired test has no producer")?;
-                    let (collection, kind, pair) = if definition.identity.starts_with("project:") {
-                        ("projects", "project", "test_project")
-                    } else {
-                        ("scripts", "script", "test_script")
-                    };
+                    if d["id"].as_str() != Some(defining_id) {
+                        return Err(format!(
+                            "E_RETIREMENT: defining owner identity/value mismatch: {node}"
+                        ));
+                    }
                     let originals: Vec<_> = a.projects()[collection]
                         .as_array()
                         .unwrap()
                         .iter()
-                        .filter(|p| p["id"] == owner && p[pair] == id)
+                        .filter(|p| p["id"] == owner && p[pair] == defining_id)
                         .collect();
                     if originals.len() != 1
                         || b.projects()[collection]
                             .as_array()
                             .unwrap()
                             .iter()
-                            .any(|p| p["id"] == owner || p["id"] == id)
+                            .any(|p| p["id"] == owner || p["id"] == defining_id)
                         || !declaration(b, kind, owner)?["replacement"].is_null()
                     {
                         return Err(format!(

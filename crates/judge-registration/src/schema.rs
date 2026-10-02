@@ -434,7 +434,14 @@ pub fn projects(v: &Value) -> Result {
         object(
             p,
             &["id", "kind", "actions"],
-            &["test_project", "tests_for", "manifest", "lockfile", "root"],
+            &[
+                "test_project",
+                "tests_for",
+                "manifest",
+                "lockfile",
+                "root",
+                "test_groups",
+            ],
         )?;
         choice(&p["kind"], &["production", "test"])?;
         if p.get("test_project").is_some() == p.get("tests_for").is_some() {
@@ -469,6 +476,7 @@ pub fn projects(v: &Value) -> Result {
             }],
         )?;
     }
+    crate::execution::test_bindings(v)?;
     Ok(())
 }
 pub fn filemap(v: &Value) -> Result {

@@ -201,3 +201,35 @@ fn project_without_declared_member_costs_stays_unknown() {
                 && u["coordinates"] == json!(["cpu_ms", "wall_ms", "peak_rss_bytes", "io_bytes"]))
     );
 }
+
+#[test]
+fn grouped_test_costs_keep_original_and_new_endpoint_identities() {
+    let old = known();
+    let mut new = old.clone();
+    new.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["second"] =
+        json!({"operation":"execute.second","tool":"sh","argv":["-c","exit 0"]});
+    new.get_mut(PROJECTS).unwrap()["projects"][1]["test_groups"] =
+        json!({"t":"execute","opaque":"second"});
+    new.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(edge("project:p", "test-execution", "test:opaque"));
+    new.get_mut(FM).unwrap()["test_costs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"test":"opaque","cost":"known"}));
+    let costs = report(&old, &new, &[]).unwrap();
+    assert!(costs["declared_before"]["test:opaque"].is_null());
+    assert_eq!(
+        costs["declared_after"]["test:opaque"]["costs"][0]["member"],
+        "test:opaque"
+    );
+    assert_eq!(
+        costs["declared_after"]["test:opaque"]["costs"][0]["value"]["wall_ms"],
+        20
+    );
+    assert_eq!(
+        costs["declared_before"]["test:t"]["costs"][0]["member"],
+        "test:t"
+    );
+}

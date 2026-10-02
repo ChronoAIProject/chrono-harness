@@ -72,6 +72,8 @@ pub fn classify(
                 after.get(path),
                 pointer,
                 on,
+                a.config()["registries"]["workflow"] == *path,
+                b.config()["registries"]["workflow"] == *path,
             )?);
         }
         let is_product = surfaces.iter().any(|s| matches!(*s, "product" | "test"));

@@ -122,10 +122,39 @@ impl Registrations {
     pub fn nodes(&self) -> BTreeSet<String> {
         self.node_data().into_keys().collect()
     }
+    pub fn test_bindings(&self) -> BTreeMap<String, Vec<crate::execution::TestBinding>> {
+        let mut bindings =
+            crate::execution::test_bindings(&self.projects).expect("validated test bindings");
+        for (test, definitions) in self
+            .historical
+            .iter()
+            .filter(|(id, _)| id.starts_with("test:"))
+        {
+            for (owner, row) in definitions {
+                if let Some(operation) = row["actions"]["execute"]["operation"].as_str() {
+                    bindings
+                        .entry(test.clone())
+                        .or_default()
+                        .push(crate::execution::TestBinding {
+                            owner: owner.clone(),
+                            action: "execute".into(),
+                            operation: operation.into(),
+                        });
+                }
+            }
+        }
+        // An incomplete or ambiguous original definition must never turn a
+        // remaining valid definition into a uniquely executable alias.
+        let nodes = self.node_data();
+        bindings.retain(|test, bindings| nodes[test].definitions.len() == bindings.len());
+        bindings
+    }
     /// The authoritative node inventory. Every definition is retained, including alias collisions.
     /// Values borrow immutable validated data; only `NodeView::unique` resolves a single definition.
     pub fn node_data(&self) -> BTreeMap<String, NodeView<'_>> {
         let mut nodes: BTreeMap<String, NodeView<'_>> = BTreeMap::new();
+        let bindings =
+            crate::execution::test_bindings(&self.projects).expect("validated test bindings");
         for (prefix, kind, value, key, id) in [
             ("file", NodeKind::File, &self.filemap, "files", "path"),
             (
@@ -153,24 +182,24 @@ impl Registrations {
                     value: row,
                 };
                 nodes.insert(
-                    identity,
+                    identity.clone(),
                     NodeView {
                         kind,
                         definitions: vec![definition.clone()],
                     },
                 );
-                if (kind == NodeKind::Project && row["kind"] == "test"
-                    || kind == NodeKind::Script && row.get("tests_for").is_some())
-                    && row["actions"].get("execute").is_some()
+                for (test, _) in bindings
+                    .iter()
+                    .filter(|(_, binding)| binding.iter().any(|binding| binding.owner == identity))
                 {
                     nodes
-                        .entry(format!("test:{}", row[id].as_str().unwrap()))
+                        .entry(test.clone())
                         .or_insert_with(|| NodeView {
                             kind: NodeKind::Test,
                             definitions: vec![],
                         })
                         .definitions
-                        .push(definition);
+                        .push(definition.clone());
                 }
             }
         }

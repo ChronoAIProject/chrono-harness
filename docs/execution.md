@@ -357,3 +357,23 @@ ordering/deduplication, rejection controls and real exit/output/effect observati
 Single-worker checks are not independent review, native CI or landing evidence.
 
 Declared costs from the same impact now have a dedicated [cost judge](costs.md).
+
+## Explicit groups in one test project
+
+A test-project record may add `test_groups`, a mapping from opaque test-ID suffixes
+(without the `test:` prefix) to action keys in that same record. The mapping must
+include the legacy project ID. Without it, the existing `execute` alias applies;
+scripts retain that legacy contract. For example, `{"suite":"core","detail":"detail"}`
+binds `test:suite` and `test:detail` to two explicit actions in one dedicated project.
+The registration owner resolves the identities, defining project and terminal
+operations for both full and scoped consumers. Empty/repeated bindings, missing
+local actions, production/script maps and explicit identity collisions fail.
+Legacy ambiguous aliases remain visible for existing DELTA-local adjudication.
+
+Each group has its own explicit FILEMAP execution plan, cost and dependency edges,
+and its producer retains the legacy dedicated pair. Pair validation requires an
+explicit producer execution edge to every group. Registration changes retain all
+group identities as record targets at each endpoint; names, paths and Cargo filters
+do not infer dependency selection. Plans must include their bound terminal action.
+An original unfiltered action may remain available for release without being a
+current independent-unit plan.

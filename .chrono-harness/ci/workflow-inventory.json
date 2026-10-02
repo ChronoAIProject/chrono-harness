@@ -1,0 +1,33 @@
+{
+  "schema": "chrono-workflow-inventory/v1",
+  "projects": ".chrono-harness/projects.json",
+  "project": "judge-workflow-tests",
+  "unfiltered_action": "execute",
+  "groups": {
+    "judge-workflow-tests": "execute_core",
+    "workflow-units": "execute_units",
+    "workflow-short": "execute_short"
+  },
+  "binaries": {
+    "execute": [
+      "branch",
+      "consumer"
+    ],
+    "execute_core": [
+      "branch",
+      "consumer"
+    ],
+    "execute_units": [
+      "consumer"
+    ],
+    "execute_short": [
+      "consumer"
+    ]
+  },
+  "tools": {
+    "cargo": "cargo"
+  },
+  "report_directory": ".chrono-harness/state/workflow-inventory",
+  "timeout_seconds": 600,
+  "output_limit_bytes": 1048576
+}

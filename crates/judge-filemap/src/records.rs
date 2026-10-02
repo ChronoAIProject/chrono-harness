@@ -155,11 +155,13 @@ pub fn inventory(
                         }
                     }
                     // Registration owns aliases such as project/script records' executable test nodes.
-                    let test = format!("test:{id}");
-                    if nodes.get(&test).is_some_and(|view| {
-                        view.definitions.iter().any(|d| std::ptr::eq(d.value, row))
-                    }) {
-                        targets.insert(test);
+                    for (test, view) in nodes
+                        .iter()
+                        .filter(|(identity, _)| identity.starts_with("test:"))
+                    {
+                        if view.definitions.iter().any(|d| std::ptr::eq(d.value, row)) {
+                            targets.insert(test.clone());
+                        }
                     }
                     add(scope, key, id, path, row, targets);
                 }

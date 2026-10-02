@@ -1147,9 +1147,78 @@
             "--exact",
             "--nocapture"
           ]
+        },
+        "execute_core": {
+          "operation": "test.workflow.core",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "branch",
+            "--test",
+            "consumer",
+            "--",
+            "--skip",
+            "full_units::"
+          ]
+        },
+        "execute_units": {
+          "operation": "test.workflow.units",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::",
+            "--",
+            "--skip",
+            "full_units::full_short::"
+          ]
+        },
+        "execute_short": {
+          "operation": "test.workflow.short",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::full_short::"
+          ]
+        },
+        "inventory": {
+          "operation": "workflow.inventory",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory.py",
+            ".",
+            ".chrono-harness/ci/workflow-inventory.json"
+          ]
+        },
+        "inventory_tests": {
+          "operation": "workflow.inventory-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory-tests.py"
+          ]
         }
       },
-      "tests_for": "judge-workflow"
+      "tests_for": "judge-workflow",
+      "test_groups": {
+        "judge-workflow-tests": "execute_core",
+        "workflow-units": "execute_units",
+        "workflow-short": "execute_short"
+      }
     },
     {
       "id": "inputs",

@@ -1523,3 +1523,38 @@ fn unrelated_historical_dangling_record_is_not_rejudged() {
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "{r:#}");
 }
+
+#[test]
+fn explicit_same_project_group_bindings_and_legacy_scripts_have_one_owner() {
+    use chrono_judge_registration::execution::test_bindings;
+    let legacy = json!({"projects":[{"id":"t","kind":"test","actions":{"execute":{"operation":"old"},"alpha":{"operation":"a"},"beta":{"operation":"b"}}}],"scripts":[{"id":"s","tests_for":"producer","actions":{"execute":{"operation":"script"}}}]});
+    let bindings = test_bindings(&legacy).unwrap();
+    assert_eq!(bindings["test:t"][0].operation, "old");
+    assert_eq!(bindings["test:s"][0].owner, "script:s");
+    let mut grouped = legacy.clone();
+    grouped["projects"][0]["test_groups"] = json!({"t":"alpha","opaque/suffix":"beta"});
+    let bindings = test_bindings(&grouped).unwrap();
+    assert_eq!(bindings["test:t"][0].operation, "a");
+    assert_eq!(bindings["test:opaque/suffix"][0].owner, "project:t");
+    assert_eq!(bindings["test:opaque/suffix"][0].action, "beta");
+    assert_eq!(
+        grouped["projects"][0]["actions"]["execute"]["operation"],
+        "old"
+    );
+    for mode in 0..7 {
+        let mut bad = grouped.clone();
+        match mode {
+            0 => bad["projects"][0]["test_groups"] = json!({}),
+            1 => bad["projects"][0]["test_groups"] = json!({"other":"alpha"}),
+            2 => bad["projects"][0]["test_groups"]["t"] = json!("foreign-action"),
+            3 => bad["projects"][0]["test_groups"]["opaque/suffix"] = json!("alpha"),
+            4 => bad["projects"][0]["kind"] = json!("production"),
+            5 => bad["scripts"][0]["test_groups"] = json!({"s":"execute"}),
+            _ => bad["projects"][0]["test_groups"]["s"] = json!("execute"),
+        }
+        assert!(
+            test_bindings(&bad).unwrap_err().contains("E_TEST_BINDING"),
+            "mode {mode}"
+        );
+    }
+}

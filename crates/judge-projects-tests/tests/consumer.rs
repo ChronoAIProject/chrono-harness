@@ -894,3 +894,230 @@ fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
     let (code, v) = h.run(|_| {});
     check_pass(code, &v);
 }
+
+#[test]
+fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
+    let mut h = Host::new(false);
+    let cargo = chrono_harness::resolve_program(&h.root(), "cargo", None).unwrap();
+    let version = Command::new(&cargo).arg("--version").output().unwrap();
+    assert!(version.status.success());
+    let cargo_bytes = fs::read(&cargo).unwrap();
+    let cargo_digest = sha256(&cargo_bytes);
+    let cargo_blob = ".chrono-harness/state/cargo-original";
+    fs::create_dir_all(h.root().join(".chrono-harness/state")).unwrap();
+    fs::write(h.root().join(cargo_blob), &cargo_bytes).unwrap();
+    h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"cargo-executable","location":cargo,"sha256":cargo_digest}));
+
+    h.values.get_mut(CONFIG).unwrap()["tools"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id":"cargo", "program":cargo, "resolution":"PATH-once", "version_argv":["--version"],
+            "expected_version":String::from_utf8(version.stdout).unwrap().trim_end()
+        }));
+    for key in ["PATH", "HOME", "RUSTUP_HOME", "CARGO_HOME"] {
+        if let Ok(value) = std::env::var(key) {
+            h.values.get_mut(CONFIG).unwrap()["environment"]["values"][key] = json!(value);
+        }
+    }
+    h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["RUSTUP_TOOLCHAIN"] =
+        json!("1.95.0");
+    let argv = json!(["test", "--locked", "--manifest-path", "t/Cargo.toml"]);
+    h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"] = json!({
+        "execute":{"operation":"execute.t","tool":"cargo","argv":argv},
+        "alpha":{"operation":"group.alpha","tool":"cargo","argv":["test","--locked","--manifest-path","t/Cargo.toml","alpha"]},
+        "beta":{"operation":"group.beta","tool":"cargo","argv":["test","--locked","--manifest-path","t/Cargo.toml","beta"]}
+    });
+    h.values.get_mut(PROJECTS).unwrap()["projects"][1]["test_groups"] =
+        json!({"t":"alpha","opaque":"beta"});
+    h.values.get_mut(FM).unwrap()["execution_plans"] = json!({
+        "test:t":{"operations":["group.alpha"],"timeout_seconds":30,"output_limit_bytes":65536},
+        "test:opaque":{"operations":["group.beta"],"timeout_seconds":30,"output_limit_bytes":65536}
+    });
+    h.values.get_mut(FM).unwrap()["test_costs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"test":"opaque","cost":"unknown"}));
+    for owner in ["p", "t"] {
+        h.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(
+                &format!("project:{owner}"),
+                "test-execution",
+                "test:opaque",
+            ));
+    }
+    for (path, owner, body) in [
+        (
+            "p/src/lib.rs",
+            "p",
+            "pub fn double(n: u32) -> u32 { n + n }\n",
+        ),
+        (
+            "t/src/lib.rs",
+            "t",
+            "#[cfg(test)] mod tests { fn run(name: &str) { assert_eq!(p::double(21),42); let root=std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\")).parent().unwrap(); std::fs::write(root.join(\".chrono-harness/state\").join(name), name).unwrap(); } #[test] fn alpha() { run(\"alpha\"); } #[test] fn beta() { run(\"beta\"); } }\n",
+        ),
+    ] {
+        let mut row = file(
+            path,
+            json!([{"kind":"compile","to":format!("project:{owner}")}]),
+        );
+        row["owner"] = json!(owner);
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(row);
+        fs::create_dir_all(h.root().join(path).parent().unwrap()).unwrap();
+        fs::write(h.root().join(path), body).unwrap();
+    }
+    let lock = Command::new(&cargo)
+        .current_dir(h.root())
+        .args(["generate-lockfile", "--manifest-path", "t/Cargo.toml"])
+        .output()
+        .unwrap();
+    assert!(lock.status.success(), "{lock:?}");
+    let scoped_path = ".chrono-harness/ci/group-check.json";
+    let scoped_registration = ".chrono-harness/ci/group-registration.json";
+    let mut registered = h.values[CONFIG].clone();
+    registered["canonical_check"]["argv"] = json!([
+        ".chrono-harness/bin/chrono-harness",
+        "check",
+        "--config",
+        scoped_path,
+        "--base",
+        "{base}",
+        "--candidate",
+        "{candidate}"
+    ]);
+    h.values.insert(scoped_registration.into(), registered);
+    h.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(scoped_registration, json!([])));
+    let profile = json!({"schema":"chrono-ci-check/v3", "judge":{"program":source().join("crates/judge-ci/target/debug/chrono-judge-ci"),"args":[],"timeout_seconds":120,"output_limit_bytes":8388608},
+        "report_path":".chrono-harness/state/scoped.json", "policy":{
+        "filemap":FM,"projects":PROJECTS,"registration_config":scoped_registration,
+        "tools":{"cargo":cargo,"python":h.tool},
+        "environment":h.values[CONFIG]["environment"]["values"],
+        "artifacts":[".chrono-harness/state/",".chrono-harness/bin/","p/target/","t/target/"],
+        "required_inputs":[],"adoption_base":null,"operation_timeout_seconds":30,"operation_output_limit_bytes":65536,
+        "units":{"alpha":{"tests":["test:t"],"report_path":".chrono-harness/state/alpha.json"},"beta":{"tests":["test:opaque"],"report_path":".chrono-harness/state/beta.json"}},"shared_operations":{}}});
+    h.values.insert(scoped_path.into(), profile);
+    h.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(scoped_path, json!([])));
+    h.save();
+    h.base = h.candidate.clone();
+    fs::write(
+        h.root().join("p/src/lib.rs"),
+        "pub fn double(n:u32)->u32 { 2*n }\n",
+    )
+    .unwrap();
+    h.candidate = commit(&h.root());
+    let (code, full) = h.run(|inputs| {
+        for endpoint in ["base", "candidate"] {
+            inputs[endpoint]["files"]["cargo-executable"] =
+                json!({"blob":cargo_blob,"sha256":cargo_digest,"length":cargo_bytes.len()});
+        }
+    });
+    assert_eq!(code, 0, "{full:#}");
+    assert_eq!(
+        full["tests"]["tests"],
+        json!({"test:t":"passed","test:opaque":"passed"})
+    );
+    assert_eq!(full["tests"]["executed"].as_array().unwrap().len(), 2);
+    for (unit, own, other) in [
+        ("alpha", "test:t", "beta"),
+        ("beta", "test:opaque", "alpha"),
+    ] {
+        for name in ["alpha", "beta"] {
+            fs::remove_file(h.root().join(".chrono-harness/state").join(name)).unwrap_or(());
+        }
+        let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+            .current_dir(h.root())
+            .args([
+                "check",
+                "--config",
+                scoped_path,
+                "--base",
+                &h.base,
+                "--candidate",
+                &h.candidate,
+                "--unit",
+                unit,
+            ])
+            .output()
+            .unwrap();
+        let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert!(out.status.success(), "{report:#}");
+        assert_eq!(report["response"]["evidence"]["selected"], json!([own]));
+        assert!(h.root().join(".chrono-harness/state").join(unit).is_file());
+        assert!(!h.root().join(".chrono-harness/state").join(other).exists());
+    }
+    fs::write(
+        h.root().join(".chrono-harness/state/missing.json"),
+        r#"{"schema":"chrono-ci-collection/v1","reports":[]}"#,
+    )
+    .unwrap();
+    let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(h.root())
+        .args([
+            "check",
+            "--config",
+            scoped_path,
+            "--base",
+            &h.base,
+            "--candidate",
+            &h.candidate,
+            "--collect",
+            ".chrono-harness/state/missing.json",
+        ])
+        .output()
+        .unwrap();
+    let report: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(!out.status.success(), "{report:#}");
+    assert!(
+        report
+            .to_string()
+            .contains("missing required CI unit report"),
+        "{report:#}"
+    );
+}
+
+#[test]
+fn group_terminal_operation_and_producer_edge_are_required_before_effects() {
+    for omit_edge in [false, true] {
+        let mut h = Host::new(false);
+        let terminal = h.values[PROJECTS]["projects"][1]["actions"]["execute"].clone();
+        h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["group"] = terminal;
+        h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["group"]["operation"] =
+            json!("group.t");
+        h.values.get_mut(PROJECTS).unwrap()["projects"][1]["test_groups"] = json!({"t":"group"});
+        if omit_edge {
+            h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operations"] =
+                json!(["prepare.p", "group.t"]);
+            h.values.get_mut(FM).unwrap()["project_edges"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|edge| edge["from"] != "project:p" || edge["kind"] != "test-execution");
+        }
+        h.save();
+        let (exit, report) = h.run(|_| {});
+        assert_ne!(exit, 0, "{report:#}");
+        assert!(
+            report.to_string().contains(if omit_edge {
+                "E_TEST_PAIR"
+            } else {
+                "omits its execute action"
+            }),
+            "{report:#}"
+        );
+        assert!(!h.root().join(".chrono-harness/state/order").exists());
+    }
+}

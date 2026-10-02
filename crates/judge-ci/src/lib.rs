@@ -225,7 +225,13 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             })
             .collect()
     };
-    let mut execute = BTreeMap::new();
+    let execute: BTreeMap<_, _> = chrono_judge_registration::execution::test_bindings(&pr)?
+        .into_iter()
+        .map(|(test, bindings)| match bindings.as_slice() {
+            [binding] => Ok((test, binding.operation.clone())),
+            _ => Err(format!("E_TEST_BINDING: duplicate test identity {test}")),
+        })
+        .collect::<Result<_, String>>()?;
     let owners: BTreeSet<_> = strings(&pr["owners"])?.into_iter().collect();
     if owners.is_empty() {
         return Err("empty owner registry".into());
@@ -275,12 +281,8 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             if projects.insert(name.to_owned(), entry.clone()).is_some() {
                 return Err(format!("duplicate project/script {name}"));
             }
-            if let Some(op) = entry["actions"]["execute"]["operation"].as_str() {
-                execute.insert(format!("test:{name}"), op.into());
-            }
             nodes.insert(format!("script:{name}"));
             nodes.insert(format!("project:{name}"));
-            nodes.insert(format!("test:{name}"));
             for a in entry
                 .get("actions")
                 .and_then(Value::as_object)
@@ -311,6 +313,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             }
         }
     }
+    nodes.extend(execute.keys().cloned());
     for (test, binding) in &p.bindings {
         if !test.starts_with("test:") || !nodes.contains(test) || binding.is_empty() {
             return Err(format!("invalid check binding {test}"));
@@ -495,6 +498,12 @@ fn ci_impact(
         }
         for p in changed(&old.projects, &new.projects) {
             seeds.insert(format!("project:{p}"));
+        }
+        for test in changed(&old.execute, &new.execute) {
+            extras
+                .entry(test)
+                .or_default()
+                .insert("changed test action binding".into());
         }
         for op in changed(&old.operations, &new.operations) {
             for s in [old, new] {
@@ -941,11 +950,13 @@ fn inventory(
             // Adoption projects the explicitly supplied bindings onto the real base registry;
             // it never fabricates a base tree or executes historical operations.
             let registry = json(&at(reader, root, base, &p.projects)?)?;
-            let mut names = BTreeSet::new();
+            let names: BTreeSet<_> =
+                chrono_judge_registration::execution::test_bindings(&registry)?
+                    .into_keys()
+                    .collect();
             let mut old_ops = BTreeSet::new();
             for collection in ["projects", "scripts"] {
                 for entry in array(&registry, collection)? {
-                    names.insert(format!("test:{}", text(entry, "id")?));
                     for action in entry["actions"]
                         .as_object()
                         .ok_or("actions missing")?

@@ -463,7 +463,7 @@ Implemented source and scoped host projection: opt-in `chrono-job-gating/v1` on
 units v1/v2 produces one detector, explicit job-level conditional unit jobs and
 an `always()` aggregate needing all jobs. The sole required check is the aggregate;
 actual checks still use the fixed short entries and final original-report judge.
-The product host now generates one parent with 16 units and retires the exact
+The product host now generates one parent with 18 units and retires the exact
 16 owned obsolete projections. Git supplies complete trees and registered blobs without a file-count gate. Legacy
 providers and previously published native evidence retain their meanings.
 
@@ -486,3 +486,14 @@ Full native context, original birth/input provisioning, large streamed artifact
 composition and decoder-required historical scheduling remain separate boundaries.
 This correction changes product behavior and host policy/projections together;
 `W_MIXED_JUDGE_PRODUCT` applies, with no approval or consensus claim.
+
+
+Explicit same-project test groups extend the shared registration binding owner,
+full/scoped routes, DELTA record targets, pair validation and existing cost nodes.
+The product host assigns its workflow suite to three explicitly registered groups.
+An inventory guard checks the current groups for nonempty, disjoint and complete
+coverage, while the unfiltered release action remains intact. Local owner
+and group results belong to their recorded source; native group checks, release
+platform checks/publication and full main/examples activation remain caller work.
+This changes product source and host policy together; the added validation cost is
+three inventory checks plus directly affected owner tests and exhaustive group runs.
