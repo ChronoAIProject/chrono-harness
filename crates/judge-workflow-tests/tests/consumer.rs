@@ -95,7 +95,7 @@ fn workflow(r: &Value) -> &Value {
         .unwrap()["response"]["outputs"]["workflow"]
 }
 fn passed(exit: i32, r: &Value) {
-    assert_eq!(exit, 0, "{}", r["findings"]);
+    assert_eq!(exit, 0, "findings={} tests={}", r["findings"], r["tests"]);
     assert!(
         matches!(r["status"].as_str(), Some("pass" | "warn")),
         "{r:#}"
