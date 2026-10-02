@@ -55,13 +55,27 @@ checked. Predecessor observations never embed requests. The lossless
 and reconstructs their text fields without changing argv, cwd, roots, run IDs,
 receipt identities or exits. Direct legacy reports retain their ordinary process
 encoding. Addressed context, retained snapshots/blobs and referenced evidence
-carry bytes, SHA-256 and length inside the bounded report. Immutable run records
+use external `chrono-retained-blob/v1` descriptors under their original logical
+keys: `{schema, storage, sha256, length}`. `storage` is an explicit state path
+beneath the selected upload root. Staging hashes and copies with bounded buffers,
+deduplicating equal original bytes. Existing `{sha256, length, hex}` inline
+originals remain readable. JSON reports and process streams keep their existing
+bounds; external business blobs do not consume an inline hexadecimal budget.
+JSON/process resolution remains limited to 64 MiB, while input identity and
+transport validation stream large files. Immutable run records
 preserve earlier attempts while the registered unit path identifies a new attempt.
 This portable closure applies only to unit and collection scopes. Ordinary full
 check keeps local retained blob references and registration streams their original
 and candidate identities, including inputs larger than the portable report bound.
 Malformed, missing or changed blobs still fail through the input owner before
 business execution; unscoped reports do not embed those files as portable bytes.
+Collector import restages every declared external original and preserves unit
+report bytes unchanged. Completion records explicitly map original storage
+addresses to imported descriptors. Finalization retains that entire nested
+closure beneath the collector upload root; delivery resolves it through the
+bound transport. Missing maps, lost nested bytes, truncation and conflicting
+identities reject. Failed runs preserve their original failure and report
+unavailable originals in `artifact_failures` and `unresolved./artifacts`.
 
 `--collect MANIFEST` uses the same seven-judge entry and consumes a bounded
 `chrono-full-collection/v1` manifest with `unit`, `path`, and `sha256` rows. Runner

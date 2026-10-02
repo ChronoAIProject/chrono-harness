@@ -1,0 +1,158 @@
+{
+  "schema_version": 4,
+  "status": "proposed",
+  "enforcement": "not-implemented",
+  "runner": {
+    "path": ".chrono-harness/bin/chrono-harness",
+    "version": "0.1.0",
+    "sha256": null
+  },
+  "registries": {
+    "judges": ".chrono-harness/judges.json",
+    "projects": ".chrono-harness/projects.json",
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "workflow": ".chrono-harness/workflow.json"
+  },
+  "canonical_check": {
+    "operation": "validate.delta",
+    "argv": [
+      ".chrono-harness/bin/chrono-harness",
+      "check"
+    ],
+    "profile": ".chrono-harness/ci/check.json",
+    "inputs": {
+      "local": {
+        "operation": "prepare.check.local",
+        "tool": "chrono-worktree",
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/worktree.json"
+        ]
+      },
+      "ci": {
+        "operation": "prepare.check.ci",
+        "tool": "chrono-ci",
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/ci/units.json",
+          "--event-env",
+          "GITHUB_EVENT_NAME",
+          "--payload-env",
+          "GITHUB_EVENT_PATH",
+          "--revision-env",
+          "CHRONO_WORKFLOW_REVISION",
+          "--repository-env",
+          "GITHUB_REPOSITORY"
+        ]
+      }
+    }
+  },
+  "protocol": {
+    "id": "chrono-judge/v1",
+    "timeout_seconds": 2400,
+    "stdout_limit_bytes": 67108864,
+    "encoding": "UTF-8"
+  },
+  "environment": {
+    "credential_environment": [
+      "GH_TOKEN"
+    ],
+    "inherit": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "CHRONO_CHECK_SOURCE",
+      "GITHUB_EVENT_NAME",
+      "GITHUB_EVENT_PATH",
+      "CHRONO_WORKFLOW_REVISION",
+      "GITHUB_REPOSITORY",
+      "GH_TOKEN",
+      "SSH_AUTH_SOCK",
+      "CHRONO_CI_DETECTION",
+      "CHRONO_CI_NEEDS",
+      "GITHUB_RUN_ID",
+      "GITHUB_RUN_ATTEMPT",
+      "GITHUB_JOB"
+    ],
+    "values": {},
+    "inputs": [
+      {
+        "id": "git-executable",
+        "location": "/usr/bin/git",
+        "presence": "present",
+        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+      }
+    ]
+  },
+  "facts_git": {
+    "tool": "git",
+    "input": "git-executable"
+  },
+  "input_closure": {
+    "status": "incomplete",
+    "unresolved": [
+      "This scoped example does not enable full governance or claim complete external input closure."
+    ]
+  },
+  "tools": [
+    {
+      "id": "python3",
+      "program": "/usr/bin/python3",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "Python 3.9.6"
+    },
+    {
+      "id": "chrono-ci",
+      "program": ".chrono-harness/bin/chrono-ci",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-ci 0.1.0"
+    },
+    {
+      "id": "git",
+      "program": "/usr/bin/git",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "git version 2.50.1 (Apple Git-155)"
+    },
+    {
+      "id": "chrono-worktree",
+      "program": ".chrono-harness/bin/chrono-worktree",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-worktree 0.1.0"
+    }
+  ],
+  "semantic_fields": [],
+  "artifacts": [
+    {
+      "path": ".chrono-harness/bin/",
+      "owner": "host",
+      "kind": "installed-tools",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/state/",
+      "owner": "host",
+      "kind": "evidence",
+      "tracked": false
+    },
+    {
+      "path": "__pycache__/",
+      "owner": "host",
+      "kind": "python-cache",
+      "tracked": false
+    }
+  ]
+}

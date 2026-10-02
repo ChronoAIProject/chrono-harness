@@ -1,6 +1,6 @@
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
-use chrono_harness::{facts, wire};
+use chrono_harness::{facts, observation, wire};
 use chrono_judge_registration::{execution, interpret};
 use chrono_judge_routes::{execute_actions, prepare_scoped};
 use serde_json::{Value, json};
@@ -10,6 +10,43 @@ use std::{
     process::Command,
 };
 use support::*;
+fn adopt_fixture_tool(root: &std::path::Path, config: &mut Value, id: &str) -> observation::Tool {
+    let tool = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == id)
+        .unwrap();
+    let env = std::env::vars().collect();
+    let observed = observation::tool(
+        root,
+        tool["program"].as_str().unwrap(),
+        &serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap(),
+        &env,
+        30,
+        1048576,
+    )
+    .unwrap_or_else(|error| panic!("observe fixture {id}: {error}"));
+    observation::process_success(&observed.version)
+        .unwrap_or_else(|error| panic!("observe fixture {id}: {error}; {observed:?}"));
+    tool["program"] = json!(observed.path);
+    tool["expected_version"] = json!(observed.version.stdout.trim_end());
+    observed
+}
+fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
+    adopt_fixture_tool(root, config, "python3");
+    let git_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
+    let git_input = config["facts_git"]["input"].as_str().unwrap().to_owned();
+    let git = adopt_fixture_tool(root, config, &git_id);
+    let input = config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|input| input["id"] == git_input)
+        .unwrap();
+    input["location"] = json!(git.path);
+    input["sha256"] = json!(git.sha256);
+}
 fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     let source = fs::canonicalize(source()).unwrap();
     let original = "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98";
@@ -23,6 +60,24 @@ fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     git(&root, &["init", "-q"]);
     let base = commit(&root);
     let map: Value = serde_json::from_slice(&fs::read(source.join(FM)).unwrap()).unwrap();
+    let historical: Value = serde_json::from_slice(&fs::read(root.join(FM)).unwrap()).unwrap();
+    let current_paths: BTreeSet<_> = map["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["path"].as_str().unwrap())
+        .collect();
+    // Overlaying the current candidate must include its declared retirements.
+    // The fixed historical snapshot remains untouched at base.
+    for file in historical["files"].as_array().unwrap() {
+        let path = file["path"].as_str().unwrap();
+        if !current_paths.contains(path) && path != "AGENTS.md" {
+            let target = root.join(path);
+            if target.exists() {
+                fs::remove_file(target).unwrap();
+            }
+        }
+    }
     for file in map["files"].as_array().unwrap() {
         let path = file["path"].as_str().unwrap();
         if path == "AGENTS.md" {
@@ -47,21 +102,11 @@ fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
         .unwrap();
     }
     // The copied candidate is a test host on the executing native platform.
-    // Preserve the historical snapshot; explicitly adopt the current interpreter
-    // only in the new fixture. Wrong-version rejection remains a separate test.
+    // Preserve the historical snapshot; adopt observed bindings only in the new
+    // fixture. The copied host's Git digest/version can reject at Reader::for_config
+    // before either historical-method or wrong-Python-version diagnostics.
     let mut config: Value = serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
-    let python = config["tools"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|t| t["id"] == "python3")
-        .unwrap();
-    let observed = Command::new(python["program"].as_str().unwrap())
-        .args(serde_json::from_value::<Vec<String>>(python["version_argv"].clone()).unwrap())
-        .output()
-        .unwrap();
-    assert!(observed.status.success());
-    python["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
+    adopt_fixture_bindings(&root, &mut config);
     fs::write(
         root.join(CONFIG),
         serde_json::to_vec_pretty(&config).unwrap(),
@@ -91,19 +136,20 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         .as_object_mut()
         .unwrap()
         .remove("method_replacements");
+    let error = interpret(
+        &root,
+        &base,
+        &candidate,
+        CONFIG,
+        raw.clone(),
+        missing_method.clone(),
+        &env,
+    )
+    .err()
+    .expect("missing method replacement unexpectedly accepted");
     assert!(
-        interpret(
-            &root,
-            &base,
-            &candidate,
-            CONFIG,
-            raw.clone(),
-            missing_method.clone(),
-            &env
-        )
-        .err()
-        .unwrap()
-        .contains("historical method changed")
+        error.contains("historical method changed"),
+        "unexpected historical method error: {error}"
     );
     let old_action = raw[PROJECTS]["scripts"][0]["actions"]["execute"].clone();
     missing_method.get_mut(PROJECTS).unwrap()["projects"]
@@ -112,19 +158,18 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         .iter_mut()
         .find(|p| p["id"] == "ci")
         .unwrap()["actions"]["execute"] = old_action;
-    assert!(
-        interpret(
-            &root,
-            &base,
-            &candidate,
-            CONFIG,
-            raw.clone(),
-            missing_method,
-            &env
-        )
-        .is_ok(),
-        "omitted replacements must retain the original strict unchanged-method contract"
-    );
+    interpret(
+        &root,
+        &base,
+        &candidate,
+        CONFIG,
+        raw.clone(),
+        missing_method,
+        &env,
+    )
+    .unwrap_or_else(|error| {
+        panic!("omitted replacements must retain the original strict unchanged-method contract: {error}")
+    });
     for (pointer, value) in [
         ("/from/argv", json!(["invented historical method"])),
         ("/from/owner", json!("script:missing")),
@@ -208,6 +253,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         view["conversion"]["input_digest"],
         wire::digest(&view["conversion"]["input"]).unwrap()
     );
+    assert_eq!(view["conversion"]["input"]["original"], json!(raw));
     assert_eq!(
         chrono_judge_registration::replacements(&current).unwrap()["test:ci-verify"],
         "test:ci-tests"
@@ -245,7 +291,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
                     .collect::<Vec<_>>()
             )
         });
-    assert_eq!(verify.status, "failed");
+    assert_eq!(verify.status, "failed", "ci.verify receipt: {verify:?}");
     assert!(
         verify
             .receipt
@@ -253,7 +299,8 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
             .unwrap()
             .process
             .stderr
-            .contains("drift")
+            .contains("drift"),
+        "ci.verify did not diagnose drift: {verify:?}"
     );
     let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .args([
@@ -267,8 +314,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         .unwrap();
     assert!(
         output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+        "workflow repair failed: {output:?}"
     );
     // The repair changes only workflow bytes; rerun its single registered method with a new input binding.
     let action = current.projects()["projects"]
@@ -288,7 +334,10 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
     };
     let verified = chrono_harness::run_process_observed(&root, &spec, &[], &tool.sha256).unwrap();
     assert_eq!(verified.exit_code, 0, "{}", verified.stderr);
-    assert!(verified.failure.is_none());
+    assert!(
+        verified.failure.is_none(),
+        "workflow verify failed: {verified:?}"
+    );
 }
 
 #[test]
@@ -311,7 +360,10 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
     let error = interpret(&root, &base, &candidate, CONFIG, raw, new, &env)
         .err()
         .unwrap();
-    assert!(error.starts_with("E_TOOL_BINDING: migration version mismatch"));
+    assert!(
+        error.starts_with("E_TOOL_BINDING: migration version mismatch"),
+        "unexpected migration binding error: {error}"
+    );
     assert!(
         error.contains("Python deliberately-wrong"),
         "missing expected version: {error}"
@@ -342,4 +394,138 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
             .starts_with('/')
     );
     assert!(diagnostic["tool"]["sha256"].as_str().unwrap().len() == 64);
+}
+
+#[test]
+fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
+    let (_dir, root, base, candidate) = migration_host();
+    let raw = facts::registry_values(&root, &base, CONFIG).unwrap();
+    let config = facts::registry_values(&root, &candidate, CONFIG).unwrap()[CONFIG].clone();
+    // A real forwarding executable has the same Git version but different bytes.
+    // Moving a copied host declaration to it must reject the stale digest, then
+    // pass after adopting the fixture's actual observation.
+    let original_git = config["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["id"] == "git")
+        .unwrap()["program"]
+        .as_str()
+        .unwrap();
+    let wrapper = root.join(".chrono-harness/bin/fixture-git");
+    fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nexec '{}' \"$@\"\n",
+            original_git.replace('\'', "'\\''")
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    let env: BTreeMap<String, String> = std::env::vars().collect();
+    for field in ["digest", "version"] {
+        let mut wrong = config.clone();
+        if field == "digest" {
+            wrong["tools"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|tool| tool["id"] == "git")
+                .unwrap()["program"] = json!(wrapper);
+            wrong["environment"]["inputs"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|input| input["id"] == "git-executable")
+                .unwrap()["location"] = json!(wrapper);
+        } else {
+            wrong["tools"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|tool| tool["id"] == "git")
+                .unwrap()["expected_version"] = json!("git version deliberately-wrong-platform");
+        }
+        fs::write(
+            root.join(CONFIG),
+            serde_json::to_vec_pretty(&wrong).unwrap(),
+        )
+        .unwrap();
+        let wrong_candidate = commit(&root);
+        let new = facts::registry_values(&root, &wrong_candidate, CONFIG).unwrap();
+        let error = interpret(
+            &root,
+            &base,
+            &wrong_candidate,
+            CONFIG,
+            raw.clone(),
+            new,
+            &env,
+        )
+        .err()
+        .expect("copied mismatched Git binding unexpectedly accepted");
+        if field == "digest" {
+            assert_eq!(error, "E_GIT_FACTS: facts_git declared digest mismatch");
+        } else {
+            let diagnostic: Value =
+                serde_json::from_str(error.strip_prefix("E_GIT_FACTS: ").expect(&error))
+                    .unwrap_or_else(|parse| {
+                        panic!("invalid Git binding diagnostic: {parse}; {error}")
+                    });
+            assert_eq!(
+                diagnostic["message"], "Git facts version mismatch",
+                "{error}"
+            );
+            assert_eq!(
+                diagnostic["observation"]["binding"]["expected_version"],
+                "git version deliberately-wrong-platform",
+                "{error}"
+            );
+            assert_eq!(
+                diagnostic["observation"]["processes"][0]["stdout"],
+                format!(
+                    "{}\n",
+                    config["tools"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|tool| tool["id"] == "git")
+                        .unwrap()["expected_version"]
+                        .as_str()
+                        .unwrap()
+                ),
+                "{error}"
+            );
+        }
+        adopt_fixture_bindings(&root, &mut wrong);
+        fs::write(
+            root.join(CONFIG),
+            serde_json::to_vec_pretty(&wrong).unwrap(),
+        )
+        .unwrap();
+        let repaired_candidate = commit(&root);
+        let mut new = facts::registry_values(&root, &repaired_candidate, CONFIG).unwrap();
+        new.get_mut(CONFIG).unwrap()["tools"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|tool| tool["id"] == "python3")
+            .unwrap()["expected_version"] = json!("Python deliberately-wrong");
+        let error = interpret(
+            &root,
+            &base,
+            &repaired_candidate,
+            CONFIG,
+            raw.clone(),
+            new,
+            &env,
+        )
+        .err()
+        .expect("wrong Python binding unexpectedly accepted after adopting Git");
+        assert!(
+            error.starts_with("E_TOOL_BINDING: migration version mismatch"),
+            "{error}"
+        );
+    }
 }

@@ -511,9 +511,13 @@ passed. Its tree equals the independently reviewed candidate tree; full parity
 remains unestablished.
 Failed migration binding now preserves expected and observed version diagnostics.
 
-## Independent workflows
+## Conditional independent jobs
 
-The source unit extension assigns complete plans explicitly and generates one
-workflow per unit plus an offline report collection workflow. Local and native
-unit execution use the same `check --unit` command. See [CI units](ci-units.md)
-for the v3 profile, sharing, collection, provider contracts and adoption boundary.
+The current host projects an explicit detector, conditional independent unit jobs
+and an always-run aggregate into one parent workflow. Only the aggregate is a
+required branch-protection check. Complete Git event deltas supply selection;
+no workflow paths filter or API file list is used. Actual native checks keep the
+fixed short `check`, `check --unit ID`, `check --collect` entries. Providers without
+explicit `job_gating` retain their previous independent workflows. See
+[CI units](ci-units.md) for registration, original-evidence gathering, reruns,
+migration and full scheduling boundaries.

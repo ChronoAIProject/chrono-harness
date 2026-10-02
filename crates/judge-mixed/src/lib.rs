@@ -152,15 +152,38 @@ pub fn load_documents_with_reader(
     b: &Registrations,
     reader: &facts::Reader,
 ) -> Result<[Documents; 2], String> {
+    load_documents_for_endpoints(
+        &req.candidate.root,
+        &req.base.commit,
+        &req.candidate.commit,
+        &req.delta,
+        a,
+        b,
+        reader,
+    )
+}
+/// Read only explicitly named semantic documents from immutable Git endpoints.
+#[allow(clippy::too_many_arguments)]
+pub fn load_documents_for_endpoints(
+    root: &std::path::Path,
+    base: &str,
+    candidate: &str,
+    delta: &[Delta],
+    a: &Registrations,
+    b: &Registrations,
+    reader: &facts::Reader,
+) -> Result<[Documents; 2], String> {
     let paths = patterns(a, b).into_iter().map(|(p, _, _)| p).collect();
     Ok([
-        documents(req, a, true, &paths, reader)?,
-        documents(req, b, false, &paths, reader)?,
+        documents(root, base, delta, a, true, &paths, reader)?,
+        documents(root, candidate, delta, b, false, &paths, reader)?,
     ])
 }
 
 fn documents(
-    req: &Request,
+    root: &std::path::Path,
+    commit: &str,
+    delta: &[Delta],
     r: &Registrations,
     base: bool,
     paths: &BTreeSet<String>,
@@ -168,7 +191,7 @@ fn documents(
 ) -> Result<Documents, String> {
     let mut docs = Documents::new();
     for path in paths {
-        let exists = req.delta.iter().find(|d| &d.path == path).is_some_and(|d| {
+        let exists = delta.iter().find(|d| &d.path == path).is_some_and(|d| {
             if base {
                 d.old_blob.is_some()
             } else {
@@ -192,12 +215,7 @@ fn documents(
         let value = match value {
             Some(v) => v,
             None => {
-                let commit = if base {
-                    &req.base.commit
-                } else {
-                    &req.candidate.commit
-                };
-                let bytes = reader.blob(&req.candidate.root, commit, path)?;
+                let bytes = reader.blob(root, commit, path)?;
                 chrono_harness::decode(&bytes)
                     .map_err(|e| format!("E_SEMANTIC_INPUT: {path}: {e}"))?
             }

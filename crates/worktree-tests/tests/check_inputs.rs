@@ -257,11 +257,9 @@ fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures
     delivery["run_kind"] = value!("delivery");
     fs::write(&origin_path, serde_json::to_vec(&delivery).unwrap()).unwrap();
     let (o, p) = inputs(&dest);
-    assert!(p.is_none());
-    assert!(
-        String::from_utf8_lossy(&o.stderr)
-            .contains("explicit caller-produced integration evidence handoff")
-    );
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let context: Value = serde_json::from_slice(&p.unwrap().context.unwrap().raw).unwrap();
+    assert!(context["integration_evidence"].is_null());
     fs::write(&origin_path, original).unwrap();
     git(&dest, &["branch", "-m", "unmapped-renamed"]);
     let (o, p) = inputs(&dest);

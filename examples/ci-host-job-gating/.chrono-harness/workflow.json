@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "status": "proposed",
+  "target_branch": "dev",
+  "feature_prefix": "feature/",
+  "integration_prefix": "integration/",
+  "staleness": {
+    "max_behind_commits": 3,
+    "max_age_hours": 24,
+    "combine": "any-exceeded"
+  },
+  "stability": [],
+  "semantic_changes_require_integration": true,
+  "mixed_change": {
+    "level": "warning",
+    "code": "W_MIXED_JUDGE_PRODUCT",
+    "requires_acknowledgement": false
+  },
+  "integration": {
+    "tests": [
+      "example",
+      "harness"
+    ],
+    "bind": [
+      "base",
+      "candidate_tree",
+      "registry_digest",
+      "executables",
+      "tools",
+      "environment",
+      "effective_inputs",
+      "required_tests",
+      "results_digest"
+    ],
+    "evidence": ".chrono-harness/state/integration.json"
+  },
+  "retirements": [],
+  "migrations": [],
+  "historical_profiles": []
+}

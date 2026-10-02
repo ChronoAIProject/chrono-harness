@@ -137,14 +137,23 @@ pub struct Request {
 }
 impl Request {
     fn identity(&self) -> Result<String, String> {
-        // Borrow the identity projection instead of cloning all accumulated
-        // evidence into a second JSON tree. The exhaustive destructuring keeps
+        Ok(sha256(&self.canonical_projection(None)?))
+    }
+    /// Original canonical stdin bytes, without expanding borrowed observations
+    /// into another owned JSON tree. This preserves the v1 wire representation.
+    pub fn canonical(&self) -> Result<Vec<u8>, String> {
+        self.canonical_projection(Some(&self.request_id))
+    }
+    fn canonical_projection(&self, request_id: Option<&str>) -> Result<Vec<u8>, String> {
+        // Keep the large observations borrowed while encoding the typed header.
+        // The exhaustive destructuring keeps
         // a new request field from silently escaping the identity contract.
         #[derive(Serialize)]
-        struct Identity<'a> {
+        struct Projection<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
             scope: Option<&'a crate::units::Scope>,
-            observations: &'a Value,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            request_id: Option<&'a str>,
             protocol: &'a str,
             judge_id: &'a str,
             mode: &'a str,
@@ -177,23 +186,26 @@ impl Request {
             checkout,
             runner,
         } = self;
-        digest(&Identity {
-            scope: scope.as_ref(),
+        crate::canonical_request::encode(
+            &Projection {
+                scope: scope.as_ref(),
+                request_id,
+                protocol,
+                judge_id,
+                mode,
+                base,
+                candidate,
+                delta,
+                registries,
+                context,
+                impact,
+                prior_results,
+                config_path,
+                checkout,
+                runner,
+            },
             observations,
-            protocol,
-            judge_id,
-            mode,
-            base,
-            candidate,
-            delta,
-            registries,
-            context,
-            impact,
-            prior_results,
-            config_path,
-            checkout,
-            runner,
-        })
+        )
     }
     pub fn seal(&mut self) -> Result<(), String> {
         self.request_id = self.identity()?;
@@ -233,7 +245,7 @@ pub(crate) struct PreparedRequest {
 impl PreparedRequest {
     pub(crate) fn new(mut request: Request) -> Result<Self, String> {
         request.seal()?;
-        let stdin = canonical(&request)?;
+        let stdin = request.canonical()?;
         Ok(Self { request, stdin })
     }
     pub(crate) fn request(&self) -> &Request {
@@ -350,7 +362,7 @@ pub fn invoke_detailed(
     limit: usize,
 ) -> Result<(Response, ProcessResult), TransportFailure> {
     req.validate()?;
-    invoke_bytes(req, b, env, timeout, limit, &canonical(req)?)
+    invoke_bytes(req, b, env, timeout, limit, &req.canonical()?)
 }
 pub(crate) fn invoke_prepared(
     req: &PreparedRequest,

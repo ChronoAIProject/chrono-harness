@@ -389,7 +389,22 @@ fn unit_selection(
     let Some(scope) = &req.scope else {
         return Ok(selected.clone());
     };
-    let units = req.observations["execution_units"]["units"]
+    let definitions = validate_unit_assignments(&req.observations["execution_units"], plans)?;
+    match scope {
+        chrono_harness::units::Scope::Unit { unit } => {
+            chrono_harness::units::select(&definitions, selected, unit)
+                .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))
+        }
+        chrono_harness::units::Scope::Collect { .. } => Ok(selected.clone()),
+    }
+}
+
+/// Validate the explicit assignment independently of invocation or SDK acquisition.
+pub fn validate_unit_assignments(
+    block: &Value,
+    plans: &BTreeMap<String, Plan>,
+) -> Result<BTreeMap<String, chrono_harness::units::Unit>, String> {
+    let units = block["units"]
         .as_object()
         .ok_or("E_UNIT_ASSIGNMENT: missing execution_units")?;
     let mut definitions = BTreeMap::new();
@@ -413,18 +428,11 @@ fn unit_selection(
         }
     }
     let shared: BTreeMap<String, Vec<String>> =
-        serde_json::from_value(req.observations["execution_units"]["shared_operations"].clone())
-            .map_err(|e| e.to_string())?;
+        serde_json::from_value(block["shared_operations"].clone()).map_err(|e| e.to_string())?;
     let plan_ids = plans.keys().cloned().collect();
     chrono_harness::units::assignments(&definitions, &plan_ids, &shared, &operation_sets)
         .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
-    match scope {
-        chrono_harness::units::Scope::Unit { unit } => {
-            chrono_harness::units::select(&definitions, selected, unit)
-                .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))
-        }
-        chrono_harness::units::Scope::Collect { .. } => Ok(selected.clone()),
-    }
+    Ok(definitions)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -611,7 +619,6 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     req.validate()?;
     let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     canonical(req, &r)?;
-    let inputs = chrono_judge_registration::inputs::validate(req, &old, &r)?;
     let impact: chrono_judge_filemap::Impact =
         serde_json::from_value(req.impact.clone()).map_err(|e| format!("E_IMPACT: {e}"))?;
     if impact.schema != chrono_judge_filemap::IMPACT_SCHEMA || impact.delta != req.delta {
@@ -623,6 +630,14 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
         &impact,
         chrono_judge_registration::downstream_validator(&r, &req.judge_id),
     )?;
+    let inputs = if matches!(
+        req.scope,
+        Some(chrono_harness::units::Scope::Collect { .. })
+    ) {
+        chrono_judge_registration::inputs::validate_collection(req, &old, &r, &selected)?
+    } else {
+        chrono_judge_registration::inputs::validate(req, &old, &r)?
+    };
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .map_err(|e| e.to_string())?;
     let reused = chrono_judge_registration::reused_tools(&view)?;

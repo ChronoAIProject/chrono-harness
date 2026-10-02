@@ -1147,6 +1147,18 @@
       ]
     },
     {
+      "path": "crates/runner/src/canonical_request.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
       "path": "crates/runner/src/facts.rs",
       "owner": "runner",
       "surface": "product",
@@ -3425,374 +3437,6 @@
       ]
     },
     {
-      "path": ".github/workflows/chrono-ci-runner.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-instructions.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-ci.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-ci.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-registration.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-filemap.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-routes.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-projects.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-scoped-v1.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-cost.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-mixed.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-workflow.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-inputs.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-distribution.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-judge-cargo.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
-      "path": ".github/workflows/chrono-ci-worktree.yml",
-      "owner": "repository",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
-        {
-          "kind": "runtime-input",
-          "to": "project:judge-projects-tests"
-        }
-      ],
-      "projection": {
-        "sources": [
-          ".chrono-harness/ci/units.json"
-        ],
-        "producer": "project:ci",
-        "scope": "whole-file"
-      }
-    },
-    {
       "path": ".chrono-harness/ci/bootstrap-core.json",
       "owner": "repository",
       "surface": "membership",
@@ -3949,6 +3593,258 @@
         {
           "kind": "compile",
           "to": "project:judge-workflow-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/retained_artifacts.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs/src/composition.rs",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "assets/ci/native.py",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/gating.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci/src/gating.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/FILEMAP.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/ci/check.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/ci/install.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/ci/units.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/ci/verify.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/config.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/judges.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/projects.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/workflow.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.chrono-harness/worktree.json",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.github/workflows/chrono-ci.yml",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/.gitignore",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/README.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/check.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/message.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "examples/ci-host-job-gating/message.txt",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
         }
       ]
     }
@@ -6058,6 +5954,16 @@
       "from": "project:inputs",
       "kind": "build-input",
       "to": "project:judge-workflow-tests"
+    },
+    {
+      "from": "project:judge-routes",
+      "kind": "compile",
+      "to": "project:inputs"
+    },
+    {
+      "from": "project:judge-filemap",
+      "kind": "compile",
+      "to": "project:inputs"
     }
   ],
   "test_costs": [

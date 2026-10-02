@@ -88,6 +88,190 @@ impl<'a> Transport<'a> {
     }
 }
 
+fn parent_run(
+    run: &Value,
+    repository: &str,
+    d: &super::gating::Detection,
+    c: &units::Config,
+    attempt: u64,
+) -> Result<(), String> {
+    if run["id"] != d.run_id
+        || run["run_attempt"] != attempt
+        || run["head_sha"] != d.candidate
+        || run["event"] != d.event
+        || run["path"] != c.collection.workflow_path
+        || run["repository"]["full_name"] != repository
+    {
+        return Err("parent run/repository/event/source/attempt mismatch".into());
+    }
+    // The aggregate is currently running. Waiting for parent completion would wait on itself.
+    Ok(())
+}
+fn validate_detector_jobs(
+    jobs: &[&Value],
+    d: &super::gating::Detection,
+    parent_attempt: u64,
+) -> Result<(), String> {
+    let detector: Vec<_> = jobs
+        .iter()
+        .filter(|j| j["name"] == "Detect registered DELTA")
+        .collect();
+    let latest = detector
+        .iter()
+        .filter_map(|j| j["run_attempt"].as_u64())
+        .max()
+        .ok_or("detector API execution missing")?;
+    let latest_jobs: Vec<_> = detector
+        .iter()
+        .filter(|j| j["run_attempt"] == latest)
+        .collect();
+    if latest_jobs.len() != 1
+        || latest < d.run_attempt
+        || latest > parent_attempt
+        || latest_jobs[0]["run_id"] != d.run_id
+        || latest_jobs[0]["head_sha"] != d.candidate
+        || latest_jobs[0]["id"].as_u64().is_none_or(|id| id == 0)
+        || latest_jobs[0]["status"] != "completed"
+        || latest_jobs[0]["conclusion"] != "success"
+    {
+        return Err("latest detector execution did not uniquely succeed".into());
+    }
+    Ok(())
+}
+fn parent_units(
+    root: &Path,
+    c: &units::Config,
+    repository: &str,
+    context: &Value,
+    transport: &mut Transport<'_>,
+) -> Result<BTreeMap<String, Value>, String> {
+    let d: super::gating::Detection = serde_json::from_value(context["detection"].clone())
+        .map_err(|e| format!("fixed detection missing: {e}"))?;
+    let needs: Value = decode(
+        std::env::var(super::gating::NEEDS_ENV)
+            .map_err(|_| "aggregate needs missing")?
+            .as_bytes(),
+    )?;
+    super::gating::validate_statuses(c, &d, &needs)?;
+    if d.repository != repository {
+        return Err("detection repository mismatch".into());
+    }
+    let requirements =
+        super::gating::requirements(root, c, d.base.clone(), d.candidate.clone(), d.initial)?;
+    if requirements["required_units"] != json!(d.required_units)
+        || chrono_harness::wire::digest(&requirements["global_selected"])? != d.selection_sha256
+        || requirements["changed_paths"]
+            .as_array()
+            .ok_or("complete delta missing")?
+            .len()
+            != d.changed_paths_count
+    {
+        return Err("aggregate obligations disagree with fixed detection".into());
+    }
+    let native: super::gating::NativeRun = serde_json::from_value(context["native_run"].clone())
+        .map_err(|e| format!("native parent binding missing: {e}"))?;
+    if native != super::gating::native_run(None)?
+        || native.run_id != d.run_id
+        || native.repository != d.repository
+        || native.run_attempt < d.run_attempt
+    {
+        return Err("aggregate parent run/attempt binding mismatch".into());
+    }
+    let run = transport.api(
+        &format!("repos/{repository}/actions/runs/{}", d.run_id),
+        false,
+    )?;
+    parent_run(&run, repository, &d, c, native.run_attempt)?;
+    let pages = transport.api(
+        &format!(
+            "repos/{repository}/actions/runs/{}/jobs?filter=all&per_page=100",
+            d.run_id
+        ),
+        true,
+    )?;
+    let jobs: Vec<_> = pages
+        .as_array()
+        .ok_or("job pages missing")?
+        .iter()
+        .map(|page| page["jobs"].as_array().ok_or("job list missing"))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+    validate_detector_jobs(&jobs, &d, native.run_attempt)?;
+    let mut completed = BTreeMap::new();
+    for (unit, workflow) in &c.units {
+        // needs already binds every nonrequired skip. Only selected jobs need
+        // execution metadata and artifacts; skipped jobs need no API row.
+        if !d.required_units.contains(unit) {
+            continue;
+        }
+        // Independent job retries keep successful prerequisites' original attempts.
+        // Choose the last actual execution inside this exact parent run, never another run.
+        let relevant: Vec<_> = jobs
+            .iter()
+            .filter(|job| job["name"] == workflow.name)
+            .collect();
+        if relevant.iter().any(|job| {
+            job["run_id"] != d.run_id
+                || job["head_sha"] != d.candidate
+                || job["run_attempt"]
+                    .as_u64()
+                    .is_none_or(|a| a == 0 || a > native.run_attempt)
+                || job["id"].as_u64().is_none_or(|id| id == 0)
+        }) {
+            return Err(format!("unit {unit} job run/attempt identity malformed"));
+        }
+        let latest_attempt = relevant
+            .iter()
+            .filter_map(|j| j["run_attempt"].as_u64())
+            .max()
+            .ok_or_else(|| format!("unit {unit} job missing in parent history"))?;
+        let latest: Vec<_> = relevant
+            .into_iter()
+            .filter(|j| j["run_attempt"] == latest_attempt)
+            .collect();
+        if latest.len() != 1
+            || latest[0]["status"] != "completed"
+            || latest[0]["conclusion"] != "success"
+        {
+            return Err(format!(
+                "unit {unit} latest native execution did not uniquely succeed"
+            ));
+        }
+        // API attempts can describe carried jobs. needs outputs bind the actual
+        // producer; API latest status remains a separate necessary predicate.
+        let production: super::gating::Production = decode(
+            needs[super::gating::job_id(unit)]["outputs"]["production"]
+                .as_str()
+                .ok_or("original unit production output missing")?
+                .as_bytes(),
+        )?;
+        let p = &production.native_run;
+        if production.schema != "chrono-ci-production/v1"
+            || p.repository != repository
+            || p.run_id != d.run_id
+            || p.job != super::gating::job_id(unit)
+            || p.run_attempt < d.run_attempt
+            || p.run_attempt > latest_attempt
+            || production.artifact != format!("chrono-unit-{unit}-{}-{}", p.run_id, p.run_attempt)
+            || !chrono_harness::wire::is_digest(&production.context_sha256)
+            || !chrono_harness::wire::is_digest(&production.report_sha256)
+        {
+            return Err(format!("unit {unit} original producer binding invalid"));
+        }
+        let mut binding = run.clone();
+        binding["conclusion"] = latest[0]["conclusion"].clone();
+        binding["unit_job_id"] = latest[0]["id"].clone();
+        binding["run_attempt"] = json!(p.run_attempt);
+        binding["latest_job_attempt"] = json!(latest_attempt);
+        binding["production"] = json!(production);
+        binding["parent_attempt"] = json!(native.run_attempt);
+        completed.insert(unit.clone(), binding);
+    }
+    Ok(completed)
+}
+
 fn inner(
     root: &Path,
     path: &str,
@@ -140,64 +324,69 @@ fn inner(
     if context["canonical_argv"] != json!(canonical) {
         return Err("collection command context mismatch".into());
     }
-    let deadline = Instant::now() + Duration::from_secs(c.gather.wait_seconds);
-    let mut pending: BTreeMap<_, _> = c.units.iter().collect();
-    let mut completed = BTreeMap::new();
-    while !pending.is_empty() {
-        let mut ready = vec![];
-        for (unit, workflow) in &pending {
-            let filename = workflow
-                .workflow_path
-                .strip_prefix(".github/workflows/")
-                .ok_or("workflow path")?;
-            let endpoint = format!(
-                "repos/{repository}/actions/workflows/{}/runs?head_sha={candidate}&event={event}&per_page=100",
-                encode(filename)
-            );
-            let pages = transport.api(&endpoint, true)?;
-            let mut matches = vec![];
-            for page in pages.as_array().ok_or("paginated run pages missing")? {
-                for run in page["workflow_runs"]
-                    .as_array()
-                    .ok_or("workflow run list missing")?
-                {
-                    if run["head_sha"] == candidate
-                        && run["event"] == event
-                        && run["path"] == workflow.workflow_path
+    let completed = if c.job_gating.is_some() {
+        parent_units(root, c, repository, &context, transport)?
+    } else {
+        let deadline = Instant::now() + Duration::from_secs(c.gather.wait_seconds);
+        let mut pending: BTreeMap<_, _> = c.units.iter().collect();
+        let mut completed = BTreeMap::new();
+        while !pending.is_empty() {
+            let mut ready = vec![];
+            for (unit, workflow) in &pending {
+                let filename = workflow
+                    .workflow_path
+                    .strip_prefix(".github/workflows/")
+                    .ok_or("workflow path")?;
+                let endpoint = format!(
+                    "repos/{repository}/actions/workflows/{}/runs?head_sha={candidate}&event={event}&per_page=100",
+                    encode(filename)
+                );
+                let pages = transport.api(&endpoint, true)?;
+                let mut matches = vec![];
+                for page in pages.as_array().ok_or("paginated run pages missing")? {
+                    for run in page["workflow_runs"]
+                        .as_array()
+                        .ok_or("workflow run list missing")?
                     {
-                        matches.push(run.clone());
+                        if run["head_sha"] == candidate
+                            && run["event"] == event
+                            && run["path"] == workflow.workflow_path
+                        {
+                            matches.push(run.clone());
+                        }
+                    }
+                }
+                if matches.len() > 1 {
+                    return Err(format!(
+                        "ambiguous runs for unit {unit}; use an explicit local collection manifest"
+                    ));
+                }
+                if let Some(run) = matches.first() {
+                    if run["status"] == "completed" {
+                        ready.push(((*unit).clone(), run.clone()));
                     }
                 }
             }
-            if matches.len() > 1 {
+            for (unit, run) in ready {
+                pending.remove(&unit);
+                completed.insert(unit, run);
+            }
+            if pending.is_empty() {
+                break;
+            }
+            if Instant::now() >= deadline {
                 return Err(format!(
-                    "ambiguous runs for unit {unit}; use an explicit local collection manifest"
+                    "unit collection wait expired; unresolved units: {:?}",
+                    pending.keys()
                 ));
             }
-            if let Some(run) = matches.first() {
-                if run["status"] == "completed" {
-                    ready.push(((*unit).clone(), run.clone()));
-                }
-            }
+            std::thread::sleep(
+                Duration::from_secs(c.gather.poll_seconds)
+                    .min(deadline.saturating_duration_since(Instant::now())),
+            );
         }
-        for (unit, run) in ready {
-            pending.remove(&unit);
-            completed.insert(unit, run);
-        }
-        if pending.is_empty() {
-            break;
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "unit collection wait expired; unresolved units: {:?}",
-                pending.keys()
-            ));
-        }
-        std::thread::sleep(
-            Duration::from_secs(c.gather.poll_seconds)
-                .min(deadline.saturating_duration_since(Instant::now())),
-        );
-    }
+        completed
+    };
     let mut reports = vec![];
     let mut identities = vec![];
     let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
@@ -237,7 +426,14 @@ fn inner(
             "--repo".into(),
             repository.into(),
             "--name".into(),
-            format!("chrono-unit-{unit}-{id}-{attempt}"),
+            if c.job_gating.is_some() {
+                run["production"]["artifact"]
+                    .as_str()
+                    .ok_or("original artifact name missing")?
+                    .into()
+            } else {
+                format!("chrono-unit-{unit}-{id}-{attempt}")
+            },
             "--dir".into(),
             absolute.to_str().ok_or("download path UTF-8")?.into(),
         ])?;
@@ -248,6 +444,21 @@ fn inner(
             relative_path(relative)?;
             Ok(format!("{destination}/{relative}"))
         };
+        if c.job_gating.is_some() {
+            if run["production"]["context_sha256"]
+                != file_identity(&no_symlink_parents(root, &downloaded(&w.context_path)?)?)?.0
+                || run["production"]["report_sha256"]
+                    != file_identity(&no_symlink_parents(
+                        root,
+                        &downloaded(&registered[&unit].report_path)?,
+                    )?)?
+                    .0
+            {
+                return Err(format!(
+                    "unit {unit} artifact differs from original production output"
+                ));
+            }
+        }
         let unit_context: Value = decode(
             &fs::read(no_symlink_parents(root, &downloaded(&w.context_path)?)?)
                 .map_err(|e| e.to_string())?,
@@ -287,6 +498,31 @@ fn inner(
                 "unit {unit} context disagrees with fixed collection inputs"
             ));
         }
+        if c.job_gating.is_some()
+            && (unit_context["detection"] != context["detection"]
+                || unit_context["workflow_source_revision"] != context["workflow_source_revision"])
+        {
+            return Err(format!(
+                "unit {unit} parent run/attempt/source detection mismatch"
+            ));
+        }
+        if c.job_gating.is_some() {
+            let native: super::gating::NativeRun =
+                serde_json::from_value(unit_context["native_run"].clone())
+                    .map_err(|e| format!("unit native run missing: {e}"))?;
+            if native.repository != repository
+                || native.run_id != id
+                || native.run_attempt != attempt
+                || native.job != super::gating::job_id(&unit)
+            {
+                return Err(format!("unit {unit} artifact run/attempt/job mismatch"));
+            }
+        }
+        let workflow_path = if c.job_gating.is_some() {
+            &c.collection.workflow_path
+        } else {
+            &w.workflow_path
+        };
         let revision = unit_context["workflow_source_revision"]
             .as_str()
             .filter(|v| full_oid(v))
@@ -295,12 +531,12 @@ fn inner(
             "api".into(),
             format!(
                 "repos/{repository}/contents/{}?ref={revision}",
-                w.workflow_path
+                workflow_path
             ),
             "--header".into(),
             "Accept: application/vnd.github.raw".into(),
         ])?;
-        if source != fs::read(root.join(&w.workflow_path)).map_err(|e| e.to_string())? {
+        if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
             return Err(format!("unit {unit} executed a different workflow source"));
         }
         let report_path = downloaded(&registered[&unit].report_path)?;
@@ -320,15 +556,29 @@ fn inner(
         }
         reports.push(input);
         let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
-        if fresh["run_attempt"] != attempt
-            || fresh["status"] != "completed"
-            || fresh["head_sha"] != candidate
-            || fresh["event"] != event
-            || fresh["path"] != w.workflow_path
-        {
-            return Err("unit run changed while collecting original evidence".into());
+        if c.job_gating.is_some() {
+            let d =
+                serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
+            parent_run(
+                &fresh,
+                repository,
+                &d,
+                c,
+                run["parent_attempt"]
+                    .as_u64()
+                    .ok_or("parent attempt missing")?,
+            )?;
+        } else {
+            if fresh["run_attempt"] != attempt
+                || fresh["status"] != "completed"
+                || fresh["head_sha"] != candidate
+                || fresh["event"] != event
+                || fresh["path"] != w.workflow_path
+            {
+                return Err("unit run changed while collecting original evidence".into());
+            }
         }
-        identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
+        identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
     }
     if identities.iter().any(|i| i["conclusion"] != "success") {
         return Err(format!(
@@ -404,4 +654,238 @@ pub(super) fn gather(
     )?;
     result?;
     Ok(serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n")
+}
+
+/// Acquire the completed detector publication through the registered transport.
+/// The dependency supplies its original producer attempt; there is no polling.
+pub(super) fn acquire_seed(
+    root: &Path,
+    path: &str,
+    c: &units::Config,
+    unit: Option<&str>,
+    repository: &str,
+    event: &str,
+    payload: &Value,
+    revision: &str,
+) -> Result<String, String> {
+    units::validate(c)?;
+    let a = c
+        .native_adoption
+        .as_ref()
+        .ok_or("native seed extension absent")?;
+    let endpoints = units::prepare_endpoints(root, path, c, unit, event, payload, revision)?;
+    let candidate = endpoints["candidate"].as_str().ok_or("seed candidate")?;
+    if repository.split('/').count() != 2
+        || repository
+            .bytes()
+            .any(|b| !b.is_ascii_alphanumeric() && !b"/-_.".contains(&b))
+    {
+        return Err("repository must be explicit owner/name".into());
+    }
+    let w = c.workflow(unit)?;
+    let directory = format!("{}seed/", w.artifact_directory);
+    let mut transport = Transport::new(root, &c.gather)?;
+    let result: Result<Value, String> = (|| {
+        let d: super::gating::Detection =
+            serde_json::from_value(endpoints["detection"].clone()).map_err(|e| e.to_string())?;
+        let id = d.run_id;
+        let attempt = d.run_attempt;
+        let parent_attempt = std::env::var("GITHUB_RUN_ATTEMPT")
+            .map_err(|e| e.to_string())?
+            .parse()
+            .map_err(|_| "parent attempt")?;
+        let run = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
+        parent_run(&run, repository, &d, c, parent_attempt)?;
+        let job_pages = transport.api(
+            &format!("repos/{repository}/actions/runs/{id}/jobs?filter=all&per_page=100"),
+            true,
+        )?;
+        let jobs: Vec<_> = job_pages
+            .as_array()
+            .ok_or("detector job pages missing")?
+            .iter()
+            .map(|p| p["jobs"].as_array().ok_or("detector jobs missing"))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        validate_detector_jobs(&jobs, &d, parent_attempt)?;
+        let name = format!("{}-{id}-{attempt}", a.seed_artifact);
+        let pages = transport.api(
+            &format!("repos/{repository}/actions/runs/{id}/artifacts?per_page=100"),
+            true,
+        )?;
+        let artifacts: Vec<_> = pages
+            .as_array()
+            .ok_or("seed artifact pages")?
+            .iter()
+            .map(|p| p["artifacts"].as_array().ok_or("seed artifact list"))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .filter(|a| a["name"] == name)
+            .collect();
+        if artifacts.len() != 1 || artifacts[0]["expired"] != false {
+            return Err("original detector seed missing/ambiguous/expired".into());
+        }
+        let artifact = artifacts[0].clone();
+        let absolute = no_symlink_parents(root, &directory)?;
+        if absolute.exists() {
+            return Err("seed download exists; retain original acquisition".into());
+        }
+        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
+        transport.run(&[
+            "run".into(),
+            "download".into(),
+            id.to_string(),
+            "--repo".into(),
+            repository.into(),
+            "--name".into(),
+            name,
+            "--dir".into(),
+            absolute.to_str().ok_or("seed directory UTF8")?.into(),
+        ])?;
+        let read = |file: &str| {
+            chrono_harness::units::read_bounded(
+                root,
+                &format!("{directory}{file}"),
+                64 * 1024 * 1024,
+            )
+        };
+        let binding: Value = decode(&read("binding.json")?)?;
+        let raw = read("context.json")?;
+        let ctx = super::full::context_input(&raw)?;
+        let lineage = read("lineage.json")?;
+        let original_endpoints = read("endpoints.json")?;
+        let original_payload = read("payload.json")?;
+        let seed_endpoints: Value = decode(&original_endpoints)?;
+        if binding["schema"] != "chrono-native-seed/v1"
+            || binding["repository"] != repository
+            || binding["event"] != event
+            || binding["base"] != endpoints["base"]
+            || binding["candidate"] != candidate
+            || binding["workflow"] != c.collection.workflow_path
+            || binding["workflow_revision"] != revision
+            || binding["run"] != id
+            || binding["attempt"] != attempt
+            || binding["context_sha256"] != sha256(&raw)
+            || binding["lineage_sha256"] != sha256(&lineage)
+            || binding["lineage_sha256"] != a.lineage.sha256
+            || binding["endpoints_sha256"] != sha256(&original_endpoints)
+            || binding["payload_sha256"] != sha256(&original_payload)
+            || binding["governance_sha256"] != sha256(&read("inputs.json")?)
+            || ctx["base"] != endpoints["base"]
+            || ctx["candidate"] != candidate
+            || seed_endpoints["base"] != endpoints["base"]
+            || seed_endpoints["candidate"] != candidate
+            || seed_endpoints["workflow_source_revision"] != revision
+            || seed_endpoints["lineage"] != endpoints["lineage"]
+            || seed_endpoints["workflow_policy"] != endpoints["workflow_policy"]
+        {
+            return Err("shared seed event/repository/endpoints/workflow/run/attempt/digest binding mismatch".into());
+        }
+        for original in binding["originals"]
+            .as_object()
+            .ok_or("seed original publication closure missing")?
+            .values()
+        {
+            let file = original["file"].as_str().ok_or("seed original file")?;
+            let raw = read(file)?;
+            if original["sha256"] != sha256(&raw) {
+                return Err("seed original publication closure differs".into());
+            }
+        }
+        let expected_role = if event == "pull_request" {
+            a.pull_request_role.as_str()
+        } else {
+            let reference = payload["ref"].as_str().ok_or("seed event ref missing")?;
+            let roles: Vec<_> = a
+                .push_roles
+                .iter()
+                .filter(|(prefix, _)| reference.starts_with(prefix.as_str()))
+                .map(|(_, role)| role.as_str())
+                .collect();
+            if roles.len() != 1 {
+                return Err("seed event role missing/ambiguous".into());
+            }
+            roles[0]
+        };
+        let birth: Value = decode(&lineage)?;
+        if ctx["run_kind"] != expected_role
+            || a.integration_evidence
+                .as_ref()
+                .is_some_and(|digest| ctx["integration_evidence"] != *digest)
+            || ctx["dev_tip"] != endpoints["base"]
+            || ctx["operation"] != "validate.delta"
+            || ctx["fork_point"] != birth["base"]
+            || ctx["branch_ref"] != birth["branch_ref"]
+            || ctx["branch_started_at"] != birth["branch_started_at"]
+            || ctx["retained_inputs"] != a.retained_inputs
+        {
+            return Err("shared seed birth/input binding mismatch".into());
+        }
+        if a.integration_evidence_path.is_some() && !ctx["integration_evidence"].is_null() {
+            let raw = read("integration.json")?;
+            if ctx["integration_evidence"] != sha256(&raw)
+                || binding["integration_sha256"] != ctx["integration_evidence"]
+            {
+                return Err("seed integration original digest differs".into());
+            }
+            write_file(
+                root,
+                a.integration_evidence_path
+                    .as_ref()
+                    .ok_or("integration path")?,
+                &raw,
+            )?;
+        }
+        let source = transport.run(&[
+            "api".into(),
+            format!(
+                "repos/{repository}/contents/{}?ref={revision}",
+                c.collection.workflow_path
+            ),
+            "--header".into(),
+            "Accept: application/vnd.github.raw".into(),
+        ])?;
+        if source != fs::read(root.join(&c.collection.workflow_path)).map_err(|e| e.to_string())? {
+            return Err("shared seed workflow source differs".into());
+        }
+        let fresh = transport.api(&format!("repos/{repository}/actions/runs/{id}"), false)?;
+        parent_run(&fresh, repository, &d, c, parent_attempt)?;
+        write_file(
+            root,
+            match unit {
+                Some(unit) => {
+                    &c.full_contexts
+                        .as_ref()
+                        .ok_or("full contexts missing")?
+                        .units[unit]
+                }
+                None => {
+                    &c.full_contexts
+                        .as_ref()
+                        .ok_or("full contexts missing")?
+                        .collection
+                }
+            },
+            &raw,
+        )?;
+        Ok(
+            json!({"schema":"chrono-native-seed-acquisition/v1","binding":binding,"artifact":artifact,"workflow_sha256":sha256(&source),"endpoints":endpoints}),
+        )
+    })();
+    let report = json!({"schema":"chrono-native-seed-transport/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    let original = chrono_harness::prepared::retain_original(
+        root,
+        &format!("{}preparation/", w.artifact_directory),
+        "seed-transport",
+        &serde_json::to_vec(&report).map_err(|e| e.to_string())?,
+    )?;
+    result?;
+    Ok(
+        serde_json::to_string(&json!({"report":original,"result":report["result"]}))
+            .map_err(|e| e.to_string())?
+            + "\n",
+    )
 }

@@ -6,6 +6,100 @@ use std::{
     process::Command,
 };
 use tempfile::TempDir;
+
+#[test]
+fn retained_input_duplicates_check_each_descriptor_and_refresh_on_each_validation() {
+    use chrono_judge_registration::{Registrations, inputs};
+    let h = Host::new();
+    let root = fs::canonicalize(h.root()).unwrap();
+    let config_path = ".chrono-harness/config.json";
+    let mut values = std::collections::BTreeMap::new();
+    for name in ["config", "judges", "projects", "FILEMAP", "workflow"] {
+        let path = format!(".chrono-harness/{name}.json");
+        values.insert(
+            path.clone(),
+            chrono_harness::json(&fs::read(root.join(path)).unwrap()).unwrap(),
+        );
+    }
+    let live = root.join(".chrono-harness/state/live-input");
+    let blob = ".chrono-harness/state/retained-input";
+    fs::create_dir_all(live.parent().unwrap()).unwrap();
+    let original = b"original";
+    fs::write(&live, original).unwrap();
+    fs::write(root.join(blob), original).unwrap();
+    let config = values.get_mut(config_path).unwrap();
+    config["environment"] = json!({"inherit":[],"values":{},"inputs":[{"id":"data","location":live,"sha256":sha256(original)}]});
+    let digest = chrono_harness::wire::digest(config).unwrap();
+    let r = Registrations::load(&values, config_path).unwrap();
+    let snapshot = |commit: &str| json!({"schema":"chrono-input-snapshot/v1","commit":commit,"config_path":config_path,"config_digest":digest,"environment":{},"files":{"data":{"blob":blob,"sha256":sha256(original),"length":original.len()}}});
+    let req: chrono_harness::wire::Request = serde_json::from_value(json!({
+        "protocol":"chrono-judge/v1","request_id":"","judge_id":"registration","mode":"evaluate",
+        "base":{"commit":h.base,"tree":"c".repeat(40),"root":root},
+        "candidate":{"commit":h.candidate,"tree":"d".repeat(40),"root":root},
+        "delta":[],"registries":{"base":root,"candidate":root,"digest":"e".repeat(64)},
+        "context":{"path":root.join("context.json"),"sha256":"f".repeat(64)},
+        "impact":{"seeds":[],"edges":[],"tests":[],"retired_tests":[]},"prior_results":[],
+        "config_path":config_path,"checkout":{"head":h.candidate,"tracked":[],"untracked":[],"index_flags":[]},
+        "runner":{"path":"runner","sha256":"e".repeat(64),"version":"0.1.0"},
+        "observations":{"retained":{"base":snapshot(&h.base),"candidate":snapshot(&h.candidate)},"environment":{"inherited":{},"effective":{}}}
+    })).unwrap();
+    let validate = |request: &chrono_harness::wire::Request| inputs::validate(request, &r, &r);
+    assert!(validate(&req).is_ok());
+    let originals = json!({blob:{"schema":"chrono-retained-blob/v1","storage":blob,"sha256":sha256(original),"length":original.len()}});
+    let validate_original = |request: &chrono_harness::wire::Request| {
+        inputs::validate_retained(request, &r, &r, &originals)
+    };
+    assert!(validate_original(&req).is_ok());
+    // The base reference is observed first; the candidate points at that same path.
+    for field in ["sha256", "length"] {
+        let mut bad = req.clone();
+        bad.observations["retained"]["candidate"]["files"]["data"][field] = if field == "sha256" {
+            json!("0".repeat(64))
+        } else {
+            json!(original.len() + 1)
+        };
+        let error = validate(&bad).unwrap_err();
+        assert!(
+            error.contains("candidate: retained input data") && error.contains("identity mismatch"),
+            "{field}: {error}"
+        );
+        let error = validate_original(&bad).unwrap_err();
+        assert!(
+            error.contains("candidate: retained input data")
+                && error.contains("original input differs"),
+            "{field}: {error}"
+        );
+    }
+    let other = ".chrono-harness/state/different-input";
+    fs::write(root.join(other), b"corrupt!").unwrap();
+    let mut bad = req.clone();
+    bad.observations["retained"]["candidate"]["files"]["data"]["blob"] = json!(other);
+    assert!(validate(&bad).unwrap_err().contains("identity mismatch"));
+    // A completed validation never supplies observations to the next call.
+    fs::write(root.join(blob), b"corrupt!").unwrap();
+    assert!(validate(&req).unwrap_err().contains("identity mismatch"));
+    assert!(
+        validate_original(&req)
+            .unwrap_err()
+            .contains("digest/length")
+    );
+    fs::remove_file(root.join(blob)).unwrap();
+    assert!(validate(&req).is_err());
+    assert!(validate_original(&req).is_err());
+    std::os::unix::fs::symlink(&live, root.join(blob)).unwrap();
+    assert!(validate(&req).unwrap_err().contains("symlink"));
+    assert!(validate_original(&req).unwrap_err().contains("symlink"));
+    fs::remove_file(root.join(blob)).unwrap();
+    fs::write(root.join(blob), original).unwrap();
+    assert!(validate(&req).is_ok());
+    assert!(validate_original(&req).is_ok());
+    fs::write(&live, b"corrupt!").unwrap();
+    assert!(
+        validate(&req)
+            .unwrap_err()
+            .contains("candidate input changed: data")
+    );
+}
 #[path = "git_facts.rs"]
 mod git_facts;
 struct Host {
@@ -56,6 +150,37 @@ fn commit(root: &Path) -> String {
 }
 fn file(path: &str) -> Value {
     json!({"path":path,"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]})
+}
+fn bind_actual_git(config: &mut Value, root: &Path) {
+    let path = chrono_harness::resolve_program(root, "git", None).unwrap();
+    let version = Command::new(&path).arg("--version").output().unwrap();
+    assert!(
+        version.status.success(),
+        "git --version failed: {version:?}"
+    );
+    let program = path.to_str().unwrap().to_owned();
+    let expected_version = String::from_utf8(version.stdout)
+        .unwrap()
+        .trim_end()
+        .to_owned();
+    let digest = sha256(&fs::read(&path).unwrap());
+
+    let tool = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == "git")
+        .expect("product config must retain its Git tool");
+    tool["program"] = program.clone().into();
+    tool["expected_version"] = expected_version.into();
+    let input = config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|input| input["id"] == "git-executable")
+        .expect("product config must retain its Git executable input");
+    input["location"] = program.into();
+    input["sha256"] = digest.into();
 }
 impl Host {
     fn new() -> Self {
@@ -184,8 +309,12 @@ impl Host {
             ])
             .output()
             .unwrap();
-        let v = serde_json::from_slice(&out.stdout)
-            .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
+        let v = serde_json::from_slice(&out.stdout).unwrap_or_else(|_| {
+            json!({
+                "stdout": String::from_utf8_lossy(&out.stdout),
+                "stderr": String::from_utf8_lossy(&out.stderr)
+            })
+        });
         (out.status.code().unwrap(), v)
     }
     fn run(&self) -> (i32, Value) {
@@ -1244,6 +1373,7 @@ fn actual_host_registries_cannot_pass_full_governance() {
         .as_object_mut()
         .unwrap()
         .remove("credential_environment");
+    bind_actual_git(&mut config, h.root());
     write(h.root(), config_path, &config);
     h.candidate = commit(h.root());
     h.base = h.candidate.clone();

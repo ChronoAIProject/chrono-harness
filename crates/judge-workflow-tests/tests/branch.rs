@@ -135,3 +135,22 @@ fn configured_prefixes_and_thresholds_replace_defaults() {
             .starts_with("E_BRANCH_STALE:")
     );
 }
+
+#[test]
+fn retained_context_freshness_uses_current_observation_without_changing_original() {
+    let (_, c, w) = fixture();
+    let mut ctx = context(&c[0], &c[0]);
+    ctx["observed_at"] = json!("2026-01-01T00:00:01Z");
+    let original = chrono_harness::wire::canonical(&ctx).unwrap();
+    // The existing 24-hour policy permits equality and rejects one nanosecond over.
+    for (nanos, pass) in [
+        (1767312000000000000_i128, true),
+        (1767312000000000001_i128, false),
+        (1767225600000000000_i128, false),
+    ] {
+        let observation = json!({"unix_timestamp_nanos":nanos.to_string()});
+        let result = chrono_judge_workflow::current_observation_age(&ctx, &w, &observation);
+        assert_eq!(result.is_ok(), pass, "{result:?}");
+        assert_eq!(chrono_harness::wire::canonical(&ctx).unwrap(), original);
+    }
+}

@@ -43,3 +43,13 @@ beta.8 的历史验证中，四个已合入宿主在本地 macOS arm64 使用当
 已从升级后的 mix 公开 dev 克隆固定落地提交，使用公开安装入口安装 beta.11。在本地 macOS arm64，`core.filemode=false` 隐藏 README 执行位变化时，Git diff 无路径，但规范 check 退出 1、cleanup 退出 2，工作保持；恢复执行位后同命令通过。
 
 同一消费显式准备暂存／未暂存内容、二进制、Unicode 路径、可执行文件和字面 symlink，损坏 index 并移除旧生产者收据。`inspect-rebind`／`rebind` 按给定 branch、HEAD、index tree、备份和 donor 重建，核对可见工作、选定索引及残存旧 metadata 均保留。原操作结果仍未知；保存该工作到保留提交后，登记 cleanup 成功。该结果不包含中断 rebind 续跑、历史索引推断、完整治理或同判。
+
+## Conditional-job source example
+
+[`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) is the new
+copyable installed-tools scoped host for the fixed short commands and one
+conditional-job parent. It has explicit detector/harness acquisition, two unit
+settings and original-report collection. The legacy
+ci-host bundle and the public Go/TS/mix native evidence above retain their original
+versions. Public binary release, those consumers' explicit migration and actual
+native Actions adoption of this correction belong to the caller.

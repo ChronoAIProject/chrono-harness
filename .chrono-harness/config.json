@@ -339,7 +339,9 @@
     }
   ],
   "environment": {
-    "credential_environment": ["GH_TOKEN"],
+    "credential_environment": [
+      "GH_TOKEN"
+    ],
     "inherit": [
       "PATH",
       "HOME",
@@ -353,7 +355,12 @@
       "CHRONO_WORKFLOW_REVISION",
       "GITHUB_REPOSITORY",
       "GH_TOKEN",
-      "SSH_AUTH_SOCK"
+      "SSH_AUTH_SOCK",
+      "CHRONO_CI_DETECTION",
+      "CHRONO_CI_NEEDS",
+      "GITHUB_RUN_ID",
+      "GITHUB_RUN_ATTEMPT",
+      "GITHUB_JOB"
     ],
     "values": {
       "CARGO_TERM_COLOR": "never"

@@ -3,7 +3,7 @@ mod branch;
 mod certificate;
 mod evidence;
 mod transition;
-pub use branch::{branch, observation_age};
+pub use branch::{branch, current_observation_age, observation_age};
 use chrono_harness::{
     facts, json,
     wire::{self, Finding, Request, Response, Status},
@@ -67,13 +67,34 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
     {
         return Err("E_BRANCH_CONTEXT: workflow requires matching explicit v2 context".into());
     }
-    let state = branch::with_reader(
+    let mut state = branch::with_reader(
         reader,
         &req.candidate.root,
         &req.candidate.commit,
         &ctx,
         b.workflow(),
     )?;
+    let observation = &req.observations["preparation"]["result"]["evidence"]["current_observation"];
+    let provider =
+        req.observations["preparation"]["request"]["native_artifacts"]["config_path"].as_str();
+    let requires_current = if let Some(path) = provider {
+        let raw = std::fs::read(chrono_harness::no_symlink_parents(
+            &req.candidate.root,
+            path,
+        )?)
+        .map_err(|e| e.to_string())?;
+        json(&raw)?.get("native_adoption").is_some()
+    } else {
+        false
+    };
+    if requires_current || !observation.is_null() {
+        if observation["context_digest"] != req.context.sha256 {
+            return Err("E_BRANCH_CONTEXT: current observation context binding differs".into());
+        }
+        let age = branch::current_observation_age(&ctx, b.workflow(), observation)?;
+        state["age_seconds"] = value!(age.as_seconds_f64());
+        state["current_observation"] = observation.clone();
+    }
     if !matches!(ctx["run_kind"].as_str(), Some("integration" | "delivery"))
         || (ctx["run_kind"] == "integration" && state["kind"] != "integration")
     {
@@ -142,7 +163,14 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
     } else if required {
         (
             "delivery",
-            certificate::consume(reader, req, &b, &ctx, &binding)?,
+            certificate::consume(
+                reader,
+                req,
+                &b,
+                &ctx,
+                &binding,
+                (!observation.is_null()).then_some(observation),
+            )?,
         )
     } else {
         ("ordinary_delta", Value::Null)

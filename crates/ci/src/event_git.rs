@@ -45,7 +45,14 @@ impl<'a> EventGit<'a> {
     pub(crate) fn require_commit(&self, oid: &str) -> Result<(), String> {
         if let Some(reader) = &self.reader {
             if !reader.commit_available(self.root, oid)? {
-                self.git(&["fetch", "--no-tags", "origin", oid])?;
+                self.git(&[
+                    "fetch",
+                    "--no-tags",
+                    "--depth=2",
+                    "--filter=blob:none",
+                    "origin",
+                    oid,
+                ])?;
                 if !reader.commit_available(self.root, oid)? {
                     return Err("fetched commit remains missing".into());
                 }
@@ -74,6 +81,24 @@ impl<'a> EventGit<'a> {
         let base = fields[0].to_owned();
         self.require_commit(&base)?;
         Ok(base)
+    }
+    pub(crate) fn changed_paths(
+        &self,
+        base: Option<&str>,
+        candidate: &str,
+    ) -> Result<Vec<String>, String> {
+        let tree = |oid| match &self.reader {
+            Some(reader) => reader.tree(self.root, oid),
+            None => chrono_harness::facts::tree(self.root, oid),
+        };
+        let candidate = tree(candidate)?;
+        Ok(match base {
+            Some(base) => chrono_harness::facts::delta(&tree(base)?, &candidate)
+                .into_iter()
+                .map(|d| d.path)
+                .collect(),
+            None => candidate.keys().cloned().collect(),
+        })
     }
     pub(crate) fn parents(&self, candidate: &str) -> Result<Vec<String>, String> {
         match &self.reader {
@@ -118,7 +143,17 @@ fn legacy_require_commit(root: &Path, oid: &str) -> Result<(), String> {
         return Err(format!("invalid full OID: {oid}"));
     }
     if legacy_git(root, &["cat-file", "-e", &format!("{oid}^{{commit}}")]).is_err() {
-        legacy_git(root, &["fetch", "--no-tags", "origin", oid])?;
+        legacy_git(
+            root,
+            &[
+                "fetch",
+                "--no-tags",
+                "--depth=2",
+                "--filter=blob:none",
+                "origin",
+                oid,
+            ],
+        )?;
     }
     if legacy_git(root, &["rev-parse", &format!("{oid}^{{commit}}")])?.trim() != oid {
         return Err("commit identity mismatch".into());
