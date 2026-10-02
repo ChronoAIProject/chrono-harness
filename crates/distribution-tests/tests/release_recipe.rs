@@ -11,12 +11,29 @@ use tempfile::TempDir;
 const BUILD: &str = ".chrono-harness/release/build.json";
 const PROJECTS: &str = "registered/actions.json";
 const STUB: &str = r#"#!/usr/bin/env python3
-import json, os, sys, subprocess
+import json, os, sys, subprocess, tempfile
 from pathlib import Path
 name = Path(sys.argv[0]).name
 with open(os.environ['CHRONO_RECIPE_CALLS'], 'a') as log:
     log.write(json.dumps({'tool':name,'argv':sys.argv[1:],'cwd':str(Path.cwd())})+'\n')
 failure = os.environ.get('CHRONO_RECIPE_FAIL')
+if failure in ('evidence', 'evidence-alias') and name == 'probe':
+    retained = Path(tempfile.mkdtemp(prefix='chrono-native-publication-failure-'))
+    preparation = retained / 'state' / 'collection' / 'preparation'
+    preparation.mkdir(parents=True)
+    (preparation / 'receipt.json').write_bytes(b'{"exit_code":73,"stderr":"original"}')
+    (preparation / 'stdin.bin').write_bytes(b'original input')
+    (preparation / 'stdout.bin').write_bytes(b'partial output')
+    (preparation / 'stderr.bin').write_bytes(b'original stderr')
+    (retained / 'process.json').write_bytes(b'{"exit_code":73}')
+    (retained / 'stdout').write_bytes(b'fixture stdout')
+    (retained / 'stderr').write_bytes(b'fixture stderr')
+    if failure == 'evidence-alias':
+        alias = Path.cwd() / 'temporary-directory-alias'
+        alias.symlink_to(retained.parent, target_is_directory=True)
+        retained = alias / retained.name
+    print('original native publication process evidence: ' + str(retained), file=sys.stderr)
+    sys.exit(73)
 if ((failure == 'source' and name == 'git') or
     (failure == 'install' and name == 'rustup') or
     (failure == 'build' and name == 'cargo' and sys.argv[1:2] == ['build']) or
@@ -315,6 +332,113 @@ fn release_recipe_retains_failed_operation_and_prior_processes() {
             .any(|p| p["operation"] == "finish.custom" || p["phase"] == "package")
     );
     assert!(!f.output.join("release.json").exists());
+}
+
+#[test]
+fn release_recipe_carries_nested_native_failure_evidence_into_the_artifact() {
+    for spelling in ["evidence", "evidence-alias"] {
+        let f = Recipe::new();
+        let out = f.run(spelling);
+        assert_eq!(out.status.code(), Some(73));
+        let report = evidence(&f);
+        let process = report["processes"].as_array().unwrap().last().unwrap();
+        let nested = &process["failure_evidence"];
+        assert_eq!(nested["status"], "retained", "{spelling}: {nested}");
+        assert_eq!(report["status"], "failed");
+        assert_eq!(process["exit_code"], 73);
+        assert!(!f.output.join("release.json").exists());
+        for (name, original) in [
+            (
+                "state/collection/preparation/receipt.json",
+                b"{\"exit_code\":73,\"stderr\":\"original\"}".as_slice(),
+            ),
+            (
+                "state/collection/preparation/stdin.bin",
+                b"original input".as_slice(),
+            ),
+            (
+                "state/collection/preparation/stdout.bin",
+                b"partial output".as_slice(),
+            ),
+            (
+                "state/collection/preparation/stderr.bin",
+                b"original stderr".as_slice(),
+            ),
+            ("process.json", b"{\"exit_code\":73}".as_slice()),
+            ("stdout", b"fixture stdout".as_slice()),
+            ("stderr", b"fixture stderr".as_slice()),
+        ] {
+            let row = nested["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["source"] == name)
+                .unwrap();
+            assert_eq!(row["status"], "retained");
+            assert_eq!(
+                fs::read(f.output.join(row["path"].as_str().unwrap())).unwrap(),
+                original
+            );
+            assert_eq!(row["sha256"], sha256(original));
+            assert_eq!(row["bytes"], original.len());
+        }
+        fs::remove_dir_all(std::env::temp_dir().join(nested["source"].as_str().unwrap())).unwrap();
+    }
+}
+
+#[test]
+fn native_failure_retention_preserves_directory_and_byte_boundaries() {
+    let script =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/release/build.py");
+    let out = Command::new("python3")
+        .args(["-c", r#"
+import hashlib, json, runpy, sys, tempfile
+from pathlib import Path
+module = runpy.run_path(sys.argv[1])
+retain, bound = module['retain_failure_evidence'], module['EVIDENCE_BOUND']
+with tempfile.TemporaryDirectory() as temporary, tempfile.TemporaryDirectory(prefix='chrono-native-publication-failure-') as original:
+    outside, source = Path(temporary).resolve(), Path(original).resolve()
+    output = outside / 'output'
+    marker = lambda path: b'original native publication process evidence: ' + str(path).encode() + b'\n'
+    assert retain(output, 'none', b'no marker', b'') is None
+    invalid = outside / 'chrono-native-publication-failure-outside'
+    invalid.mkdir()
+    assert retain(output, 'outside', marker(invalid), b'')['status'] == 'unavailable'
+    leaf = outside / 'chrono-native-publication-failure-link'
+    leaf.symlink_to(source, target_is_directory=True)
+    assert retain(output, 'link', marker(leaf), b'')['status'] == 'unavailable'
+    (source / 'stdout').write_bytes(b'original\xff')
+    (source / 'stderr').write_bytes(b'original\xfe')
+    (source / 'process.json').write_text('{"exit_code":73}')
+    preparation = source / 'state/collection/preparation'
+    preparation.mkdir(parents=True)
+    with (preparation / 'oversized').open('wb') as stream: stream.truncate(bound + 1)
+    secret = outside / 'not-evidence'
+    secret.write_bytes(b'not an original stream')
+    (preparation / 'linked').symlink_to(secret)
+    result = retain(output, 'bounded', b'', marker(source))
+    assert result['status'] == 'partial'
+    assert result['bound_bytes'] == bound == 67108864
+    assert result['bytes'] <= bound
+    rows = {row['source']: row for row in result['files']}
+    assert rows['state/collection/preparation/oversized']['reason'] == 'bounded evidence limit'
+    assert rows['state/collection/preparation/linked']['status'] == 'omitted'
+    assert not (output / 'failure-evidence/bounded/state/collection/preparation/linked').exists()
+    assert not (output / 'failure-evidence/bounded/state/collection/preparation/oversized').exists()
+    for name in ['stdout', 'stderr', 'process.json']:
+        raw = (source / name).read_bytes()
+        assert (output / rows[name]['path']).read_bytes() == raw
+        assert rows[name]['sha256'] == hashlib.sha256(raw).hexdigest()
+    assert result['bytes'] == sum(row.get('bytes', 0) for row in rows.values() if row['status'] == 'retained')
+"#])
+        .arg(script)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]

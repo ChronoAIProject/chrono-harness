@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 import sys
 
+EVIDENCE_BOUND = 64 * 1024 * 1024
+
 
 def path(root, value):
     if not isinstance(value, str) or not value or value.startswith('/') or any(
@@ -131,6 +133,66 @@ def observe(root, staging, phase, operation=None):
     return matches
 
 
+def retain_failure_evidence(output, phase, stdout, stderr):
+    """Carry an explicitly retained native child receipt into the artifact."""
+    marker = b'original native publication process evidence: '
+    source = None
+    for stream in (stdout, stderr):
+        for line in stream.splitlines():
+            if marker in line:
+                source = Path(line.split(marker, 1)[1].decode('utf-8', 'strict').strip())
+                break
+        if source is not None:
+            break
+    if source is None:
+        return None
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    try:
+        resolved = source.resolve(strict=True)
+    except OSError:
+        return {'status': 'unavailable', 'reason': 'retained directory disappeared'}
+    if (not source.is_absolute() or source.is_symlink() or
+            not resolved.name.startswith('chrono-native-publication-failure-') or
+            resolved.parent != temp_root or not resolved.is_dir()):
+        return {'status': 'unavailable', 'reason': 'retained directory is outside the native fixture boundary'}
+    source = resolved
+    destination = output / 'failure-evidence' / phase
+    destination.mkdir(parents=True, exist_ok=True)
+    files = [source / 'stdout', source / 'stderr', source / 'process.json']
+    preparation = source / 'state' / 'collection' / 'preparation'
+    if preparation.is_dir():
+        files.extend(p for p in sorted(preparation.rglob('*')) if p.is_file())
+    retained, used = [], 0
+    for path in files:
+        relative = path.relative_to(source)
+        if path.is_symlink() or path.resolve() != path or not path.is_file():
+            retained.append({'source': relative.as_posix(), 'status': 'omitted',
+                             'reason': 'not a regular retained file'})
+            continue
+        size = path.stat().st_size
+        if size > EVIDENCE_BOUND - used:
+            retained.append({'source': relative.as_posix(), 'status': 'omitted',
+                             'reason': 'bounded evidence limit', 'bytes': size})
+            continue
+        with path.open('rb') as stream:
+            raw = stream.read(EVIDENCE_BOUND - used + 1)
+        if len(raw) != size:
+            retained.append({'source': relative.as_posix(), 'status': 'omitted',
+                             'reason': 'source changed during retention', 'bytes': len(raw)})
+            continue
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+        used += len(raw)
+        retained.append({'source': relative.as_posix(),
+                         'path': target.relative_to(output).as_posix(),
+                         'status': 'retained', 'bytes': len(raw),
+                         'sha256': hashlib.sha256(raw).hexdigest()})
+    return {'status': 'retained' if all(row['status'] == 'retained' for row in retained) else 'partial',
+            'source': source.name, 'files': retained,
+            'bytes': used, 'bound_bytes': EVIDENCE_BOUND}
+
+
 def preflight(root):
     cfg = json.loads((root / '.chrono-harness/release/build.json').read_text())
     if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3'):
@@ -206,13 +268,21 @@ def main(root, output):
         nonlocal phase
         phase = label
         process = subprocess.run(argv, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        report['processes'].append({
+        record = {
             'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(root),
             'exit_code': process.returncode,
             'stdout_bytes': list(process.stdout), 'stderr_bytes': list(process.stderr),
             'stdout_sha256': hashlib.sha256(process.stdout).hexdigest(),
             'stderr_sha256': hashlib.sha256(process.stderr).hexdigest(),
-        })
+        }
+        if process.returncode != 0:
+            try:
+                nested = retain_failure_evidence(output, phase, process.stdout, process.stderr)
+            except (OSError, UnicodeError, ValueError) as error:
+                nested = {'status': 'unavailable', 'reason': str(error)}
+            if nested is not None:
+                record['failure_evidence'] = nested
+        report['processes'].append(record)
         sys.stdout.buffer.write(process.stdout)
         sys.stdout.buffer.flush()
         sys.stderr.buffer.write(process.stderr)
