@@ -520,4 +520,4 @@ no workflow paths filter or API file list is used. Actual native checks keep the
 fixed short `check`, `check --unit ID`, `check --collect` entries. Providers without
 explicit `job_gating` retain their previous independent workflows. See
 [CI units](ci-units.md) for registration, original-evidence gathering, reruns,
-threshold policy, migration and full scheduling boundaries.
+migration and full scheduling boundaries.

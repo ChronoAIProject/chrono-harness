@@ -650,7 +650,7 @@ struct Inventory {
 }
 
 /// Resolve only DELTA-required collection units through the adjudicator's current inventory/assignment owner.
-/// This does not validate a canonical entry, read reports, execute operations or grant admission.
+/// This does not validate a canonical entry, execute operations or grant admission.
 /// Full preparation shares FILEMAP impact and routes' global obligation owner.
 /// No judge or business/version process is launched here.
 pub fn full_collection_requirements(
@@ -659,11 +659,22 @@ pub fn full_collection_requirements(
     prepared: &chrono_harness::prepared::PreparedCheck,
     originals: &chrono_harness::units::FullManifest,
 ) -> Result<Value, String> {
+    full_collection_requirements_with_inputs(root, profile, prepared, &|_| Ok(originals.clone()))
+}
+/// The acquisition callback is used only for necessary historical conversion.
+/// Registration names the decoder test units; the collector reads DELTA-required
+/// reports separately after the shared selection owner returns its requirements.
+pub fn full_collection_requirements_with_inputs(
+    root: &Path,
+    profile: &str,
+    prepared: &chrono_harness::prepared::PreparedCheck,
+    originals: &dyn Fn(&[String]) -> Result<chrono_harness::units::FullManifest, String>,
+) -> Result<Value, String> {
     let context = prepared
         .context
         .as_ref()
         .ok_or("full collection context missing")?;
-    let (mut req, _, reader, _) = chrono_harness::full::prepare_request(
+    let (mut req, _, reader, cfg) = chrono_harness::full::prepare_request(
         root,
         profile,
         prepared.base.as_deref().ok_or("full base missing")?,
@@ -675,8 +686,24 @@ pub fn full_collection_requirements(
     )?;
     req.judge_id = "routes".into();
     let result = (|| {
+        // prepare_request observes its current process, which here is chrono-ci.
+        // Bootstrap instead carries the independently validated registered runner;
+        // no retained report can assign an executable identity to this request.
+        let runner = chrono_harness::no_symlink_parents(
+            root,
+            cfg["runner"]["path"]
+                .as_str()
+                .ok_or("registered runner path")?,
+        )?;
+        let runner = fs::canonicalize(runner).map_err(|e| e.to_string())?;
+        let digest = chrono_harness::file_identity(&runner)?.0;
+        if cfg["runner"]["sha256"] != digest || cfg["runner"]["version"] != req.runner.version {
+            return Err("E_EXECUTABLE_BINDING: registered collection runner differs".into());
+        }
+        req.runner.path = runner.to_str().ok_or("runner path UTF8")?.into();
+        req.runner.sha256 = digest;
         let (old, r, _) =
-            chrono_judge_registration::views_for_collection_inputs(&req, &reader, originals)?;
+            chrono_judge_registration::views_for_collection_inputs_with(&req, &reader, originals)?;
         let inputs = chrono_judge_registration::inputs::validate(&req, &old, &r)?;
         let (impact, findings) =
             chrono_judge_filemap::produce_for_request(&req, &old, &r, &reader, &inputs)?;

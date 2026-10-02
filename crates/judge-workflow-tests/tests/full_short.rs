@@ -13,7 +13,17 @@ fn configured_short_host_with_governance(
     age_seconds: Option<f64>,
     governance: bool,
 ) -> (Host, tempfile::TempDir) {
-    let (mut h, tools) = rust_host();
+    let (h, tools) = rust_host();
+    adopt_short_host(h, tools, native, age_seconds, governance, false)
+}
+fn adopt_short_host(
+    mut h: Host,
+    tools: tempfile::TempDir,
+    native: bool,
+    age_seconds: Option<f64>,
+    governance: bool,
+    migration: bool,
+) -> (Host, tempfile::TempDir) {
     let root = h.root();
     for (project, binary) in [("ci", "chrono-ci"), ("worktree", "chrono-worktree")] {
         fs::copy(
@@ -128,7 +138,7 @@ fn configured_short_host_with_governance(
             .unwrap()
             .push(f);
     }
-    for prod in ["p", "p2"] {
+    for prod in if migration { vec![] } else { vec!["p", "p2"] } {
         fs::write(
             root.join(format!("{prod}/src/lib.rs")),
             "pub fn double(n:i32)->i32 {n*2}\n",
@@ -163,8 +173,16 @@ fn configured_short_host_with_governance(
     if let Some(seconds) = age_seconds {
         h.values.get_mut(WORKFLOW).unwrap()["staleness"]["max_age_hours"] = json!(seconds / 3600.0);
     }
+    // Both endpoints retain the same short-entry producer registrations.
+    let current = h.values.clone();
+    if migration {
+        let fm = h.values.get_mut(FM).unwrap();
+        fm["schema_version"] = json!(1);
+        fm.as_object_mut().unwrap().remove("execution_plans");
+    }
     h.save();
     h.base = h.candidate.clone();
+    h.values = current;
     // A local filesystem remote is the existing producer's registered fixed target.
     let remote = tools.path().join("target.git");
     git(&root, &["branch", "-f", "dev", &h.base]);
@@ -182,7 +200,7 @@ fn configured_short_host_with_governance(
         &root,
         &["remote", "add", "origin", remote.to_str().unwrap()],
     );
-    for prod in ["p", "p2"] {
+    for prod in if migration { vec![] } else { vec!["p", "p2"] } {
         fs::write(
             root.join(format!("{prod}/src/lib.rs")),
             "pub fn double(n:i32)->i32 {n+n}\n",
@@ -1911,4 +1929,289 @@ else:print(json.dumps(run))
 
 fn fixture_job_id(unit: &str) -> String {
     format!("unit_{unit}")
+}
+
+// These regressions exercise the value-less local second-producer handoff with
+// real, distinct runner/CI binaries. Optional task-local capture preserves exact
+// original processes and report bytes; ordinary dedicated-suite runs need no flag.
+fn repair_short(root: &Path, name: &str, args: &[&str]) -> (i32, Value) {
+    let root = fs::canonicalize(root).unwrap();
+    let output = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(&root)
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT")
+        .env_remove("CHRONO_CHECK_SOURCE")
+        .args(args)
+        .output()
+        .unwrap();
+    let runner = sha256(&fs::read(root.join(".chrono-harness/bin/chrono-harness")).unwrap());
+    let ci = sha256(&fs::read(root.join(".chrono-harness/bin/chrono-ci")).unwrap());
+    assert_ne!(runner, ci, "fixture must have distinct actual producers");
+    if let Some(directory) = std::env::var_os("CHRONO_COLLECTION_REPAIR_EVIDENCE") {
+        let directory = std::path::PathBuf::from(directory).join(name);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("stdout"), &output.stdout).unwrap();
+        fs::write(directory.join("stderr"), &output.stderr).unwrap();
+        fs::write(directory.join("process.json"), serde_json::to_vec_pretty(&json!({
+            "argv":std::iter::once(".chrono-harness/bin/chrono-harness").chain(args.iter().copied()).collect::<Vec<_>>(),
+            "cwd":root,"source":"local","exit_code":output.status.code(),
+            "runner_sha256":runner,"ci_sha256":ci,
+            "stdout_sha256":sha256(&output.stdout),"stderr_sha256":sha256(&output.stderr),
+            "head":git(&root, &["rev-parse", "HEAD"]),
+            "expected_pre_repair_rejection":name.contains("collect")
+        })).unwrap()).unwrap();
+        copy_tree(
+            &root.join(".chrono-harness/state"),
+            &directory.join("state"),
+        );
+        println!("REPAIR_ORIGINAL {}", directory.display());
+    }
+    println!(
+        "REPAIR_PROCESS name={name} exit={} runner={runner} ci={ci} stderr={}",
+        output.status.code().unwrap(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (
+        output.status.code().unwrap(),
+        short_report(&root, args, &output, None),
+    )
+}
+fn migration_local_short_lane() -> (Host, tempfile::TempDir, std::path::PathBuf) {
+    let mut h = git_facts::bind_host(super::super::migration_host());
+    let tools = tempfile::tempdir().unwrap();
+    let wrapper = fs::canonicalize(tools.path())
+        .unwrap()
+        .join("python-migration");
+    let python = fs::canonicalize(&h.tool).unwrap();
+    let bytes = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec '{}' \"$@\"\n",
+        tools.path().join("business-launches").display(),
+        python.display()
+    );
+    fs::write(&wrapper, &bytes).unwrap();
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    h.tool = wrapper.clone();
+    let cfg = h.values.get_mut(CONFIG).unwrap();
+    cfg["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|t| t["id"] == "python")
+        .unwrap()["program"] = json!(wrapper);
+    let input = cfg["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|i| i["id"] == "interpreter")
+        .unwrap();
+    input["location"] = json!(wrapper);
+    input["sha256"] = json!(sha256(bytes.as_bytes()));
+    cfg["protocol"]["timeout_seconds"] = json!(180);
+    cfg["execution_units"] = json!({"units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/one/check.json"},"two":{"tests":["test:decoder-tests"],"report_path":".chrono-harness/state/two/check.json"}},"shared_operations":{},"collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864},"report_path":".chrono-harness/state/collection/check.json"});
+    // This real local birth baseline is readable by worktree's registration
+    // owner. Historical FILEMAP plans still require the candidate decoder;
+    // malformed retired scripts belong to the existing explicit-entry fixture.
+    let workflow = h.values.get_mut(WORKFLOW).unwrap();
+    workflow["historical_profiles"][0]["legacy_records"] = json!([]);
+    workflow["historical_profiles"][0]["mappings"] = json!([]);
+    workflow["migrations"][0]["mappings"] = json!([]);
+    workflow["retirements"] = json!([]);
+    let profile_path = h.root().join(".chrono-harness/profile.json");
+    let mut profile = chrono_harness::json(&fs::read(&profile_path).unwrap()).unwrap();
+    profile["policy"]["bindings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("test:legacy");
+    fs::write(profile_path, serde_json::to_vec(&profile).unwrap()).unwrap();
+    let (h, tools) = adopt_short_host(h, tools, false, None, false, true);
+    make_local_lane(h, tools, "integration")
+}
+fn repair_collected(root: &Path, name: &str, expected_red: &str) -> Option<Value> {
+    let (exit, report) = repair_short(root, name, &["check", "--collect"]);
+    if std::env::var_os("CHRONO_COLLECTION_REPAIR_RED").is_some() {
+        assert_eq!(exit, 2, "expected sealed-source rejection: {report}");
+        assert!(
+            report["stderr"].as_str().unwrap().contains(expected_red),
+            "{report}"
+        );
+        None
+    } else {
+        passed(exit, &report);
+        Some(report)
+    }
+}
+#[test]
+fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conversion() {
+    let (_h, tools, lane) = migration_local_short_lane();
+    let mut originals = vec![];
+    for unit in ["one", "two"] {
+        let (exit, report) = repair_short(
+            &lane,
+            &format!("q1-unit-{unit}"),
+            &["check", "--unit", unit],
+        );
+        passed(exit, &report);
+        let registration = row(&mut report.clone(), "registration");
+        assert!(report["judges"][registration]["response"]["outputs"]["registration_view"]["conversion"].is_object());
+        let path = lane.join(format!(".chrono-harness/state/{unit}/check.json"));
+        originals.push((path.clone(), fs::read(path).unwrap()));
+    }
+    let before = marker(tools.path());
+    // No decoder/version or business execution is available to the collector.
+    fs::remove_file(tools.path().join("python-migration")).unwrap();
+    let report = repair_collected(&lane, "q1-collect", "original conversion bootstrap binding");
+    assert_eq!(marker(tools.path()), before);
+    for (path, bytes) in &originals {
+        assert_eq!(fs::read(path).unwrap(), *bytes);
+    }
+    let Some(report) = report else {
+        return;
+    };
+    assert_eq!(
+        report["tests"]["completion"]["required_units"],
+        json!(["one", "two"])
+    );
+    local_collection_observation(&lane, &report);
+    for (index, (path, original)) in originals.iter().enumerate() {
+        for kind in ["runner", "context", "endpoint", "judge", "conversion"] {
+            let mut invalid: Value = chrono_harness::json(original).unwrap();
+            let registration = row(&mut invalid, "registration");
+            match kind {
+                "runner" => invalid["request"]["runner"]["sha256"] = json!("0".repeat(64)),
+                "context" => invalid["request"]["context"]["sha256"] = json!("0".repeat(64)),
+                "endpoint" => {
+                    invalid["request"]["candidate"]["commit"] =
+                        invalid["request"]["base"]["commit"].clone()
+                }
+                "judge" => {
+                    invalid["judges"][registration]["process"]["sha256"] = json!("0".repeat(64))
+                }
+                "conversion" => {
+                    invalid["judges"][registration]["response"]["outputs"]["registration_view"]["conversion"]
+                        ["input_digest"] = json!("0".repeat(64))
+                }
+                _ => unreachable!(),
+            }
+            fs::write(path, serde_json::to_vec(&invalid).unwrap()).unwrap();
+            let (exit, _) = repair_short(
+                &lane,
+                &format!("q1-selected-{index}-{kind}"),
+                &["check", "--collect"],
+            );
+            assert_ne!(exit, 0, "accepted selected original {kind} mismatch");
+            assert_eq!(marker(tools.path()), before);
+            fs::write(path, original).unwrap();
+        }
+    }
+}
+#[test]
+fn repair_q2_local_full_one_and_empty_delta_ignore_unrelated_malformed_and_stale_conversion() {
+    // Genuine old conversion bytes come from a separate real successful unit,
+    // with different fixed endpoints/context, never a synthesized report.
+    let (_old, old_tools, old_lane) = migration_local_short_lane();
+    let (exit, old_two) = repair_short(&old_lane, "q2-old-unit-two", &["check", "--unit", "two"]);
+    passed(exit, &old_two);
+    let stale = fs::read(old_lane.join(".chrono-harness/state/two/check.json")).unwrap();
+    let (exit, old_one) = repair_short(&old_lane, "q2-old-unit-one", &["check", "--unit", "one"]);
+    passed(exit, &old_one);
+    let selected_stale = fs::read(old_lane.join(".chrono-harness/state/one/check.json")).unwrap();
+    assert!(
+        old_two["judges"][0]["response"]["outputs"]["registration_view"]["conversion"].is_object()
+    );
+    for required in ["one", "empty"] {
+        let (mut h, tools) = short_host(false);
+        // Fix the registered integration obligation before the baseline: this
+        // fixture intentionally has one required unit, rather than the broader
+        // two-unit stability obligation used by the other full Rust fixtures.
+        h.values.get_mut(WORKFLOW).unwrap()["integration"]["tests"] = json!(["t"]);
+        for prod in ["p", "p2"] {
+            fs::write(
+                h.root().join(format!("{prod}/src/lib.rs")),
+                "pub fn double(n:i32)->i32 {n*2}\n",
+            )
+            .unwrap();
+        }
+        h.save();
+        h.base = h.candidate.clone();
+        git(&h.root(), &["branch", "-f", "dev", &h.base]);
+        git(&h.root(), &["push", "-q", "origin", "dev"]);
+        if required == "one" {
+            fs::write(
+                h.root().join("p/src/lib.rs"),
+                "pub fn double(n:i32)->i32 {n+n}\n",
+            )
+            .unwrap();
+        }
+        h.save();
+        let (_h, tools, lane) = make_local_lane(h, tools, "integration");
+        let required_path = lane.join(".chrono-harness/state/one/check.json");
+        let original = if required == "one" {
+            let (exit, report) =
+                repair_short(&lane, "q2-current-unit-one", &["check", "--unit", "one"]);
+            passed(exit, &report);
+            let impact = report["judges"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|j| j["id"] == "filemap")
+                .unwrap();
+            assert_eq!(
+                impact["response"]["outputs"]["impact"]["tests"],
+                json!(["test:t"])
+            );
+            Some(fs::read(&required_path).unwrap())
+        } else {
+            None
+        };
+        let before = marker(tools.path());
+        for (case, bytes, red) in [
+            ("malformed", b"{}".as_slice(), "original judges"),
+            (
+                "stale-conversion",
+                stale.as_slice(),
+                "original conversion bootstrap binding",
+            ),
+        ] {
+            let path = lane.join(".chrono-harness/state/two/check.json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, bytes).unwrap();
+            if let Some(report) =
+                repair_collected(&lane, &format!("q2-{required}-{case}-collect"), red)
+            {
+                assert_eq!(
+                    report["tests"]["completion"]["required_units"],
+                    if required == "one" {
+                        json!(["one"])
+                    } else {
+                        json!([])
+                    }
+                );
+                assert_eq!(report["judges"].as_array().unwrap().len(), 7);
+                local_collection_observation(&lane, &report);
+            }
+            assert_eq!(fs::read(path).unwrap(), bytes);
+            assert_eq!(marker(tools.path()), before);
+        }
+        if std::env::var_os("CHRONO_COLLECTION_REPAIR_RED").is_none() {
+            if let Some(original) = original {
+                for case in ["missing", "malformed", "stale"] {
+                    match case {
+                        "missing" => fs::remove_file(&required_path).unwrap(),
+                        "malformed" => fs::write(&required_path, b"{}").unwrap(),
+                        "stale" => fs::write(&required_path, &selected_stale).unwrap(),
+                        _ => unreachable!(),
+                    }
+                    let (exit, _) = repair_short(
+                        &lane,
+                        &format!("q2-selected-{case}-collect"),
+                        &["check", "--collect"],
+                    );
+                    assert_ne!(exit, 0, "accepted selected {case} report");
+                    assert_eq!(marker(tools.path()), before);
+                    fs::write(&required_path, &original).unwrap();
+                }
+            }
+        }
+    }
+    assert!(!marker(old_tools.path()).is_empty());
 }

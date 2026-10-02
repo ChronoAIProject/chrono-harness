@@ -13,6 +13,10 @@ use std::{
     path::Path,
 };
 type Values = BTreeMap<String, Value>;
+enum Conversion<'a> {
+    Original(&'a Value),
+    Acquire(&'a dyn Fn(&Registrations, &Value) -> Result<Option<Value>, String>),
+}
 fn config_binding(base: &Values, candidate: &Values, entry: &str) -> Result<Value, String> {
     Ok(value!({"base":facts::registry_identity(base, entry)?,
         "candidate":facts::registry_identity(candidate, entry)?}))
@@ -106,7 +110,7 @@ pub fn validate_retained_view(
         candidate.values,
         &env,
         Some("registration"),
-        Some(conversion),
+        Some(Conversion::Original(conversion)),
         true,
     )?;
     expected["binding"] = binding;
@@ -128,6 +132,16 @@ pub fn views_for_collection_inputs(
     reader: &facts::Reader,
     reports: &chrono_harness::units::FullManifest,
 ) -> Result<(Registrations, Registrations, Value), String> {
+    views_for_collection_inputs_with(req, reader, &|_| Ok(reports.clone()))
+}
+/// Acquire only the declared historical decoder test's unit originals, and only
+/// if the fixed endpoint profiles actually require conversion. DELTA selection
+/// still belongs to FILEMAP/routes after registration interprets those endpoints.
+pub fn views_for_collection_inputs_with(
+    req: &Request,
+    reader: &facts::Reader,
+    reports: &dyn Fn(&[String]) -> Result<chrono_harness::units::FullManifest, String>,
+) -> Result<(Registrations, Registrations, Value), String> {
     if !matches!(
         req.scope,
         Some(chrono_harness::units::Scope::Collect { .. })
@@ -139,7 +153,7 @@ pub fn views_for_collection_inputs(
 fn views_using_reports(
     req: &Request,
     reader: &facts::Reader,
-    reports: Option<&chrono_harness::units::FullManifest>,
+    reports: Option<&dyn Fn(&[String]) -> Result<chrono_harness::units::FullManifest, String>>,
 ) -> Result<(Registrations, Registrations, Value), String> {
     let base_snapshot =
         reader.registry_snapshot(&req.candidate.root, &req.base.commit, &req.config_path)?;
@@ -191,7 +205,24 @@ fn views_using_reports(
     }
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .unwrap_or_default();
-    let retained = retained_conversion(req, &b, reports)?;
+    let acquire = |r: &Registrations, profile: &Value| {
+        let originals = reports
+            .map(|load| {
+                let block = chrono_harness::units::full_execution_units(r.config())?
+                    .ok_or("full collection units missing")?;
+                let units =
+                    serde_json::from_value(block["units"].clone()).map_err(|e| e.to_string())?;
+                let test = format!("test:{}", profile["test"].as_str().ok_or("migration test")?);
+                let required =
+                    chrono_harness::units::required(&units, &[test].into_iter().collect());
+                if required.is_empty() {
+                    return Err("E_COLLECTION_INPUT: migration test has no registered unit".into());
+                }
+                load(&required)
+            })
+            .transpose()?;
+        retained_conversion(req, r, originals.as_ref())
+    };
     let (a, b, mut view) = interpret_mode(
         reader,
         &req.candidate.root,
@@ -202,7 +233,7 @@ fn views_using_reports(
         b,
         &env,
         Some(&req.judge_id),
-        retained.as_ref(),
+        Some(Conversion::Acquire(&acquire)),
         true,
     )?;
     view["binding"] = binding;
@@ -283,13 +314,12 @@ pub fn interpret_scheduling_with_reader(
 }
 fn retained_conversion(
     req: &Request,
-    candidate: &Values,
+    r: &Registrations,
     reports: Option<&chrono_harness::units::FullManifest>,
 ) -> Result<Option<Value>, String> {
     let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope else {
         return Ok(None);
     };
-    let r = Registrations::load(candidate, &req.config_path)?;
     let limits = &r.config()["execution_units"]["collection_limits"];
     let manifest: chrono_harness::units::FullManifest = match reports {
         Some(reports) => reports.clone(),
@@ -403,7 +433,7 @@ fn interpret_mode(
     candidate: Values,
     env: &BTreeMap<String, String>,
     consumer: Option<&str>,
-    retained: Option<&Value>,
+    retained: Option<Conversion<'_>>,
     allow_conversion: bool,
 ) -> Result<(Registrations, Registrations, Value), String> {
     let new = Registrations::load(&candidate, config).map_err(|e| format!("candidate: {e}"))?;
@@ -469,6 +499,15 @@ fn interpret_mode(
         return Err("E_SCHEDULING_CONVERSION: historical registries require a decoder; scheduling cannot acquire its interpreter or execute conversion".into());
     }
     let (profile, path, profile_bytes, profile_value) = matching.remove(0);
+    let acquired;
+    let retained = match retained {
+        Some(Conversion::Original(value)) => Some(value),
+        Some(Conversion::Acquire(load)) => {
+            acquired = load(&new, profile)?;
+            acquired.as_ref()
+        }
+        None => None,
+    };
     if retained.is_some_and(Value::is_null) {
         return Err("E_MIGRATION: collection lacks original conversion evidence".into());
     }

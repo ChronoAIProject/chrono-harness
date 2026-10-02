@@ -49,7 +49,7 @@ beta.8 的历史验证中，四个已合入宿主在本地 macOS arm64 使用当
 [`examples/ci-host-job-gating`](../examples/ci-host-job-gating/README.md) is the new
 copyable installed-tools scoped host for the fixed short commands and one
 conditional-job parent. It has explicit detector/harness acquisition, two unit
-settings, optional count policy, and original-report collection. The legacy
+settings and original-report collection. The legacy
 ci-host bundle and the public Go/TS/mix native evidence above retain their original
 versions. Public binary release, those consumers' explicit migration and actual
 native Actions adoption of this correction belong to the caller.

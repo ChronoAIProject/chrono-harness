@@ -154,29 +154,36 @@ fn local_manifest(
         let limit = cfg["execution_units"]["collection_limits"]["report_bytes"]
             .as_u64()
             .ok_or("full report bound")?;
-        let mut originals = FullManifest {
-            schema: "chrono-full-collection/v1".into(),
-            reports: vec![],
-        };
-        for (unit, input) in &registered {
-            let path = no_symlink_parents(&req.host_root, &input.report_path)?;
-            match fs::symlink_metadata(path) {
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.to_string()),
-                Ok(_) => {}
-            }
-            let raw =
-                chrono_harness::units::read_bounded(&req.host_root, &input.report_path, limit)?;
-            originals.reports.push(FullReportInput {
-                unit: unit.clone(),
-                path: input.report_path.clone(),
-                sha256: sha256(&raw),
-                runner_sha256: None,
-                judge_sha256: None,
-                artifacts: None,
-            });
-        }
-        chrono_judge_ci::full_collection_requirements(&req.host_root, &req.profile, p, &originals)?
+        chrono_judge_ci::full_collection_requirements_with_inputs(
+            &req.host_root,
+            &req.profile,
+            p,
+            &|conversion_units| {
+                let mut originals = FullManifest {
+                    schema: "chrono-full-collection/v1".into(),
+                    reports: vec![],
+                };
+                for unit in conversion_units {
+                    let input = registered
+                        .get(unit)
+                        .ok_or("migration unit missing provider registration")?;
+                    let raw = chrono_harness::units::read_bounded(
+                        &req.host_root,
+                        &input.report_path,
+                        limit,
+                    )?;
+                    originals.reports.push(FullReportInput {
+                        unit: unit.clone(),
+                        path: input.report_path.clone(),
+                        sha256: sha256(&raw),
+                        runner_sha256: None,
+                        judge_sha256: None,
+                        artifacts: None,
+                    });
+                }
+                Ok(originals)
+            },
+        )?
     } else {
         chrono_judge_ci::collection_requirements(
             &req.host_root,
