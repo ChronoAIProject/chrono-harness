@@ -324,7 +324,7 @@ impl CapturedChild {
             stderr: fs::read(&self.stderr)?,
         })
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn record_wait_state(&self, watched: &Path) {
         // Observe this fixture's declared child before teardown. These reads are
         // failure diagnostics, never a cleanup or completion decision.
@@ -335,28 +335,62 @@ impl CapturedChild {
             if seen.len() >= 128 || !seen.insert(pid) {
                 continue;
             }
-            let root = PathBuf::from(format!("/proc/{pid}"));
-            let read = |name: &str| match fs::read(root.join(name)) {
-                Ok(mut bytes) => {
-                    bytes.truncate(4096);
-                    value!({"bytes": String::from_utf8_lossy(&bytes).replace('\0', " ")})
-                }
-                Err(error) => value!({"error": error.to_string()}),
-            };
-            let before = read("stat");
-            let mut children = Vec::new();
-            if let Ok(tasks) = fs::read_dir(root.join("task")) {
-                for task in tasks.flatten() {
-                    if let Ok(ids) = fs::read_to_string(task.path().join("children")) {
-                        children.extend(
-                            ids.split_whitespace()
-                                .filter_map(|id| id.parse::<u32>().ok()),
-                        );
+            #[cfg(target_os = "linux")]
+            {
+                let root = PathBuf::from(format!("/proc/{pid}"));
+                let read = |name: &str| match fs::read(root.join(name)) {
+                    Ok(mut bytes) => {
+                        bytes.truncate(4096);
+                        value!({"bytes": String::from_utf8_lossy(&bytes).replace('\0', " ")})
+                    }
+                    Err(error) => value!({"error": error.to_string()}),
+                };
+                let before = read("stat");
+                let mut children = Vec::new();
+                if let Ok(tasks) = fs::read_dir(root.join("task")) {
+                    for task in tasks.flatten() {
+                        if let Ok(ids) = fs::read_to_string(task.path().join("children")) {
+                            children.extend(
+                                ids.split_whitespace()
+                                    .filter_map(|id| id.parse::<u32>().ok()),
+                            );
+                        }
                     }
                 }
+                pending.extend(children.iter().copied());
+                processes.push(value!({"pid":pid,"stat_before":before,"command":read("cmdline"),"wait_channel":read("wchan"),"children":children,"stat_after":read("stat")}));
             }
-            pending.extend(children.iter().copied());
-            processes.push(value!({"pid":pid,"stat_before":before,"command":read("cmdline"),"wait_channel":read("wchan"),"children":children,"stat_after":read("stat")}));
+            #[cfg(target_os = "macos")]
+            {
+                let observe = |program: &str, args: &[&str]| match Command::new(program)
+                    .args(args)
+                    .output()
+                {
+                    Ok(out) => {
+                        value!({"exit":out.status.code(),"stdout":String::from_utf8_lossy(&out.stdout),"stderr":String::from_utf8_lossy(&out.stderr)})
+                    }
+                    Err(error) => value!({"error":error.to_string()}),
+                };
+                let pid_text = pid.to_string();
+                let state = observe(
+                    "/bin/ps",
+                    &[
+                        "-p",
+                        &pid_text,
+                        "-o",
+                        "pid=,ppid=,state=,etime=,time=,command=",
+                    ],
+                );
+                let children = observe("/usr/bin/pgrep", &["-P", &pid_text]);
+                pending.extend(
+                    children["stdout"]
+                        .as_str()
+                        .unwrap_or("")
+                        .split_whitespace()
+                        .filter_map(|pid| pid.parse::<u32>().ok()),
+                );
+                processes.push(value!({"pid":pid,"state":state,"children":children}));
+            }
         }
         let parent = watched.parent().unwrap();
         let markers: Vec<_> = [
@@ -387,7 +421,7 @@ impl CapturedChild {
         if !path.exists() {
             let before_kill = self.try_wait().unwrap();
             if before_kill.is_none() {
-                #[cfg(target_os = "linux")]
+                #[cfg(any(target_os = "linux", target_os = "macos"))]
                 self.record_wait_state(path);
                 let _ = self.kill();
             }
@@ -1160,7 +1194,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         thread::sleep(Duration::from_millis(10));
     }
     if !handshake.exists() {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         check.record_wait_state(&handshake);
         let _ = check.kill();
         let original = check.wait_with_output().unwrap();

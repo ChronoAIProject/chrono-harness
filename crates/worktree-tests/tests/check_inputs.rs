@@ -366,6 +366,25 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .env("CHRONO_WORKFLOW_REVISION", &revision)
         .output()
         .unwrap();
+    if !o.status.success() {
+        // The console points to the complete producer evidence. Preserve that
+        // specific failure before the fixture's temporary host is dropped.
+        for line in String::from_utf8_lossy(&o.stderr).lines() {
+            if let Some(path) = line.strip_prefix("Original acquisition: ") {
+                let original = chrono_harness::no_symlink_parents(&dest, path)
+                    .and_then(|path| fs::read(path).map_err(|error| error.to_string()));
+                match original {
+                    Ok(bytes) => eprintln!(
+                        "ORIGINAL_ACQUISITION path={path} sha256={} bytes={}\n{}",
+                        sha256(&bytes),
+                        bytes.len(),
+                        String::from_utf8_lossy(&bytes)
+                    ),
+                    Err(error) => eprintln!("ORIGINAL_ACQUISITION path={path} read_error={error}"),
+                }
+            }
+        }
+    }
     assert!(
         o.status.success(),
         "{} {}",
