@@ -95,7 +95,19 @@ fn workflow(r: &Value) -> &Value {
         .unwrap()["response"]["outputs"]["workflow"]
 }
 fn passed(exit: i32, r: &Value) {
-    assert_eq!(exit, 0, "findings={} tests={}", r["findings"], r["tests"]);
+    assert_eq!(
+        exit,
+        0,
+        "findings={} tests={} transport={:?}",
+        r["findings"],
+        r["tests"],
+        r["judges"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|j| j["transport_failure"].as_str())
+            .collect::<Vec<_>>()
+    );
     assert!(
         matches!(r["status"].as_str(), Some("pass" | "warn")),
         "{r:#}"
