@@ -114,10 +114,11 @@ fn load_projection(path: &Path) -> Result<Projection, String> {
         let c = decode(&bytes)?;
         units::validate(&c)?;
         Ok(Projection::Units(c))
-    } else if value["schema"] == release::SCHEMA {
-        let c = decode(&bytes)?;
-        release::validate(&c)?;
-        Ok(Projection::Release(c))
+    } else if matches!(
+        value["schema"].as_str(),
+        Some(release::SCHEMA | release::UNITS_SCHEMA)
+    ) {
+        Ok(Projection::Release(release::decode_config(&bytes)?))
     } else if matches!(
         value["schema"].as_str(),
         Some(full::SCHEMA | full::SHORT_SCHEMA)

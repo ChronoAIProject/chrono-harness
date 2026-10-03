@@ -3907,6 +3907,18 @@
           "to": "test:workflow-short"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/release/build-tests.py",
+      "owner": "repository",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:distribution-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

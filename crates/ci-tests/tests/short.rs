@@ -296,6 +296,38 @@ fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
     assert!(observed.iter().any(|a| a == "check-inputs"));
     assert_ne!(h.remote, h.root);
 }
+// Keep original fixture reports before TempDir teardown on an unexpected owner
+// failure. This changes diagnostics only; commands, assertions and bounds stay fixed.
+impl Drop for ShortHost {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        let Some(directory) = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY") else {
+            return;
+        };
+        fn copy(source: &Path, destination: &Path) -> std::io::Result<()> {
+            fs::create_dir_all(destination)?;
+            for entry in fs::read_dir(source)? {
+                let entry = entry?;
+                let target = destination.join(entry.file_name());
+                if entry.file_type()?.is_dir() {
+                    copy(&entry.path(), &target)?;
+                } else if entry.file_type()?.is_file() {
+                    fs::copy(entry.path(), target)?;
+                }
+            }
+            Ok(())
+        }
+        let target =
+            PathBuf::from(directory).join(sha256(self.root.as_os_str().as_encoded_bytes()));
+        match copy(&self.root.join(".chrono-harness/state"), &target) {
+            Ok(()) => eprintln!("Original failed fixture reports: {}", target.display()),
+            Err(error) => eprintln!("Failed fixture report retention failed: {error}"),
+        }
+    }
+}
+
 #[test]
 fn short_units_are_independent_and_value_less_collection_runs_zero_business() {
     let h = ShortHost::new();
