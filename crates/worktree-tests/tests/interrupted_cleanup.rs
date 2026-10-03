@@ -1279,7 +1279,7 @@ module.validate(root,Path(c))
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let body = r#"mkdir -p .chrono-harness/state/cargo-case/src
+    let preparation = r#"mkdir -p .chrono-harness/state/cargo-case/src
 cat > .chrono-harness/state/cargo-case/Cargo.toml <<'TOML'
 [package]
 name="lease-native-fixture"
@@ -1296,13 +1296,35 @@ fn native_holder() {
     std::fs::write(".chrono-harness/state/native-done", "joined").unwrap();
 }
 RUST
-printf '%s' "$$" > .chrono-harness/state/cargo-wrapper
+exec cargo test --offline --manifest-path .chrono-harness/state/cargo-case/Cargo.toml --no-run
+"#;
+    let body = r#"printf '%s' "$$" > .chrono-harness/state/cargo-wrapper
 export CHRONO_NATIVE_FIXTURE_ROOT="$PWD"
 exec cargo test --offline --manifest-path .chrono-harness/state/cargo-case/Cargo.toml -- --nocapture
 "#;
     consuming_operation(&h, body);
+    // Compile under the separately registered fixture action, with the same
+    // managed environment and process bounds as its later Cargo invocation.
+    // The native-holder deadline measures launch/lease handoff after preparation.
+    fs::write(h.root.join("st.sh"), preparation).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("native-cargo");
     assert_eq!(h.invoke("feature", "native-cargo", &target).0, 0);
+    let (code, prepared, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "test.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{prepared} {error}");
+    assert_eq!(prepared["status"], "used");
+    assert_eq!(prepared["managed_process"]["exit_code"], 0);
+    assert_eq!(prepared["managed_process"]["failure"], Value::Null);
+    assert!(!target.join(".chrono-harness/state/native-holder").exists());
     output(&target);
     let mut owner = wrapper(&h, &target);
     owner.await_file(&target.join(".chrono-harness/state/native-holder"));
