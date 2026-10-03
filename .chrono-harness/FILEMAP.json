@@ -1787,6 +1787,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
         }
       ]
     },
@@ -3897,6 +3901,10 @@
         {
           "kind": "test-execution",
           "to": "test:workflow-short"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
         }
       ]
     },

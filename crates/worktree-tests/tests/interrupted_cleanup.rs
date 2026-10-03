@@ -877,7 +877,7 @@ fn returned_use_without_token_still_protects_detached_python_child() {
     let helper = source().join(".chrono-harness");
     let body = format!(
         r#"mkdir -p .chrono-harness/state
-/usr/bin/python3 - <<'PY'
+/usr/bin/python3 -B - <<'PY'
 import os, subprocess, sys
 sys.path.insert(0, {helper:?})
 from process_fds import inherited_fds
@@ -1024,6 +1024,55 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
 }
 
 #[test]
+fn registered_python_sources_load_without_creating_unregistered_outputs() {
+    let sources = [
+        ".chrono-harness/process_fds.py",
+        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/workflow-inventory.py",
+        ".chrono-harness/ci/workflow-inventory-tests.py",
+        ".chrono-harness/migrations/scoped-v1.py",
+        ".chrono-harness/migrations/scoped-v1-tests.py",
+    ];
+    for script in [sources[1], sources[2], sources[3], sources[5]] {
+        let root = tempfile::tempdir().unwrap();
+        for path in sources {
+            let destination = root.path().join(path);
+            fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            fs::copy(source().join(path), destination).unwrap();
+        }
+        let loaded = Command::new("/usr/bin/python3")
+            .args([
+                "-c",
+                "import runpy,sys; sys.dont_write_bytecode=False; sys.pycache_prefix=None; runpy.run_path(sys.argv[1],run_name='consumer')",
+                script,
+            ])
+            .current_dir(root.path())
+            .env_remove("PYTHONDONTWRITEBYTECODE")
+            .env_remove("PYTHONPYCACHEPREFIX")
+            .env_remove("CHRONO_PROCESS_FDS")
+            .output()
+            .unwrap();
+        assert!(loaded.status.success(), "{script}: {loaded:?}");
+        for parent in [
+            ".chrono-harness",
+            ".chrono-harness/ci",
+            ".chrono-harness/migrations",
+        ] {
+            assert!(
+                !root.path().join(parent).join("__pycache__").exists(),
+                "{script} wrote unregistered bytecode in {parent}"
+            );
+        }
+        for path in sources {
+            assert_eq!(
+                fs::read(root.path().join(path)).unwrap(),
+                fs::read(source().join(path)).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
 fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
     use std::os::unix::fs::PermissionsExt;
     for route in ["bootstrap", "workflow-inventory", "scoped-v1-tests"] {
@@ -1074,7 +1123,7 @@ module.validate(root,Path(c))
             _ => "module.blob('opaque-declared-input')\n",
         };
         let body = format!(
-            "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/python-wrapper\nexport PATH='{}':\"$PATH\"\nexec /usr/bin/python3 - <<'PY'\nimport importlib.util,sys\nfrom pathlib import Path\nroot=Path.cwd();script=Path({:?})\nspec=importlib.util.spec_from_file_location('consumer',script);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\n{}\nPY\n",
+            "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/python-wrapper\nexport PATH='{}':\"$PATH\"\nexec /usr/bin/python3 -B - <<'PY'\nimport importlib.util,sys\nfrom pathlib import Path\nroot=Path.cwd();script=Path({:?})\nspec=importlib.util.spec_from_file_location('consumer',script);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\n{}\nPY\n",
             tools.display(),
             script.to_str().unwrap(),
             setup
