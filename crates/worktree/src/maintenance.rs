@@ -3,9 +3,9 @@ use crate::{
     recovery::{self, ExpectedResult, state_bytes},
     start::{self, Runner},
 };
-use chrono_harness::{decode, facts, json, no_symlink_parents, relative_path, sha256};
+use chrono_harness::{decode, facts, json, relative_path, sha256};
 use chrono_judge_registration::Registrations;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -97,7 +97,7 @@ enum Plan {
         allow_absent_ref: bool,
     },
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Retention {
     Ancestor,
@@ -482,7 +482,7 @@ fn physical(r: &mut Runner, root: &Path, args: &[&str]) -> Result<PathBuf, Strin
 fn common(r: &mut Runner, root: &Path) -> Result<PathBuf, String> {
     physical(r, root, &["rev-parse", "--git-common-dir"])
 }
-fn identity(
+pub(crate) fn identity(
     r: &mut Runner,
     root: &Path,
     target: &Path,
@@ -593,7 +593,7 @@ fn recover(
         Ok(())
     })
 }
-fn release_reconciled(
+pub(crate) fn release_reconciled(
     r: &mut Runner,
     root: &Path,
     report: &mut Value,
@@ -670,73 +670,20 @@ pub(crate) fn saved_commit(
     Ok(())
 }
 
-struct Cleanup {
-    path: PathBuf,
-    branch: String,
-    head: String,
-    retained_ref: String,
-    retained_commit: String,
-    retention: Retention,
-    discard_artifacts: Vec<String>,
-    remove_branch: bool,
-    allow_absent_worktree: bool,
+pub(crate) struct Cleanup {
+    pub(crate) path: PathBuf,
+    pub(crate) branch: String,
+    pub(crate) head: String,
+    pub(crate) retained_ref: String,
+    pub(crate) retained_commit: String,
+    pub(crate) retention: Retention,
+    pub(crate) discard_artifacts: Vec<String>,
+    pub(crate) remove_branch: bool,
+    pub(crate) allow_absent_worktree: bool,
 }
 impl Cleanup {
     fn disposal_paths(&self, r: &mut Runner, target: &Path) -> Result<Vec<PathBuf>, String> {
-        if self.discard_artifacts.is_empty() {
-            return Ok(Vec::new());
-        }
-        let tree =
-            facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", &self.head])?)?;
-        self.discard_artifacts
-            .iter()
-            .map(|name| {
-                if tree.keys().any(|p| p.starts_with(name)) {
-                    return Err(format!("disposal directory contains tracked paths: {name}"));
-                }
-                let path = no_symlink_parents(target, name.trim_end_matches('/'))?;
-                match fs::symlink_metadata(&path) {
-                    Ok(m) if m.is_dir() => Ok(path),
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(path),
-                    Err(e) => Err(e.to_string()),
-                    Ok(_) => Err(format!("disposal requires a physical directory: {name}")),
-                }
-            })
-            .collect()
-    }
-    fn dispose_artifacts(
-        &self,
-        target: &Path,
-        paths: &[PathBuf],
-        report: &mut Value,
-    ) -> Result<(), String> {
-        for (name, path) in self.discard_artifacts.iter().zip(paths) {
-            // The whole plan was checked before any deletion. Check the physical
-            // path again immediately before this explicitly authorized effect.
-            no_symlink_parents(target, name.trim_end_matches('/'))?;
-            let state = match fs::symlink_metadata(path) {
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => "already-absent",
-                Err(e) => return Err(e.to_string()),
-                Ok(m) if m.is_dir() => "attempted-unverified",
-                Ok(_) => return Err(format!("disposal requires a physical directory: {name}")),
-            };
-            let effects = report["artifact_disposals"].as_array_mut().unwrap();
-            effects.push(value!({"path":name,"status":state}));
-            if state == "already-absent" {
-                continue;
-            }
-            // Generated outputs do not belong in the bounded Git checkout
-            // removal. If this phase stops, tracked files remain recoverable
-            // through ordinary owned-lock recovery and an explicit retry.
-            fs::remove_dir_all(path).map_err(|e| format!("artifact disposal {name}: {e}"))?;
-            match fs::symlink_metadata(path) {
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-                Err(e) => return Err(e.to_string()),
-                Ok(_) => return Err(format!("disposed artifact still exists: {name}")),
-            }
-            effects.last_mut().unwrap()["status"] = value!("verified-absent");
-        }
-        Ok(())
+        crate::artifact_disposal::paths(r, target, &self.head, &self.discard_artifacts)
     }
     fn saved(&self, r: &mut Runner, root: &Path) -> Result<(), String> {
         saved_commit(
@@ -769,14 +716,26 @@ impl Cleanup {
         }
         Ok(())
     }
-    fn execute(
-        mut self,
+    pub(crate) fn execute(
+        self,
         r: &mut Runner,
         root: &Path,
         registrations: &Registrations,
         token: &str,
         report: &mut Value,
     ) -> Result<(), String> {
+        self.execute_checked(r, root, registrations, token, report, |_| Ok(()))
+    }
+    pub(crate) fn execute_checked(
+        mut self,
+        r: &mut Runner,
+        root: &Path,
+        registrations: &Registrations,
+        token: &str,
+        report: &mut Value,
+        mut guard: impl FnMut(&mut Runner) -> Result<(), String>,
+    ) -> Result<(), String> {
+        guard(r)?;
         report["worktree_removed"] = value!(false);
         report["branch_removed"] = value!(false);
         report["artifact_disposals"] = value!([]);
@@ -824,21 +783,10 @@ impl Cleanup {
                 let (target_registrations, _) =
                     start::registrations(r, &target, &self.head, &config_path)?;
                 let mut disposal = target_registrations.config().clone();
-                for path in &self.discard_artifacts {
-                    for host in [registrations.config(), target_registrations.config()] {
-                        if !host["artifacts"]
-                            .as_array()
-                            .unwrap()
-                            .iter()
-                            .any(|a| a["path"] == *path && a["tracked"] == false)
-                        {
-                            return Err(
-                                "disposal directory is not an artifact in both endpoint registries"
-                                    .into(),
-                            );
-                        }
-                    }
-                }
+                crate::artifact_disposal::registered(
+                    &self.discard_artifacts,
+                    &[registrations.config(), target_registrations.config()],
+                )?;
                 disposal["artifacts"]
                     .as_array_mut()
                     .unwrap()
@@ -847,18 +795,26 @@ impl Cleanup {
                 self.disposal_paths(r, &target)?;
                 let path = target.to_str().ok_or("cleanup path is not UTF-8")?;
                 recovery::publish(root, report)?;
+                guard(r)?;
                 r.git(root, &["worktree", "lock", "--reason", token, "--", path])?;
                 identity(r, root, &target, &self.branch, &self.head, Some(token))?;
                 self.saved(r, root)?;
                 start::cleanliness(r, &target, &disposal)?;
                 let artifacts = self.disposal_paths(r, &target)?;
-                self.dispose_artifacts(&target, &artifacts, report)?;
+                crate::artifact_disposal::dispose(
+                    &target,
+                    &self.discard_artifacts,
+                    &artifacts,
+                    report,
+                    || guard(r),
+                )?;
                 start::cleanliness(r, &target, &disposal)?;
                 self.saved(r, root)?;
                 start::unlock(r, root, path, &branch_ref, &self.head)?;
                 identity(r, root, &target, &self.branch, &self.head, None)?;
                 self.saved(r, root)?;
                 start::cleanliness(r, &target, &disposal)?;
+                guard(r)?;
                 report["worktree_removal"] = value!("attempted-unverified");
                 r.git(root, &["worktree", "remove", "--force", "--", path])?;
                 self.absent(r, root)?;
@@ -878,6 +834,7 @@ impl Cleanup {
                     if r.oid(root, &branch_ref)? != self.head {
                         return Err("cleanup branch changed; preserve its current ref".into());
                     }
+                    guard(r)?;
                     report["branch_removal"] = value!("attempted-unverified");
                     r.git(
                         root,
@@ -894,6 +851,7 @@ impl Cleanup {
                 n => return Err(format!("cleanup branch lookup exited {n}")),
             }
         }
+        guard(r)?;
         self.saved(r, root)?;
         self.absent(r, root)
     }

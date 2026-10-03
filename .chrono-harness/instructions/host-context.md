@@ -4,7 +4,7 @@
 
 产品默认归 assets/instructions/catalog.json、default-manifest.json；本宿主独立拥有 .chrono-harness/instructions/catalog.json、manifest.json 和本上下文。产品资产是编译／测试输入，宿主数据及已存在投影是运行输入；FILEMAP 的 owner、输入、消费者与边仍显式登记。升级二进制或重复 init 不覆盖既有宿主选择；采用新默认须明确编辑宿主数据。
 
-当前指令 schema=2、producer=chrono-instructions、render=atomic-rules/relative-alias/v3。114 个 atom（98 个双语内容叶子、16 个聚合）及原 requires 保留。产品与本宿主根明确选择 20 个叶子及 workflow 五节短流程；完整 core.general/general 仍可用于自定义输出。本宿主 general-en 输出仍含 98 个叶子，repair-skill 仍为原 7 叶子闭包。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 CLAUDE.md；修改宿主源后使用登记入口，不手改投影：
+当前指令 schema=2、producer=chrono-instructions、render=atomic-rules/relative-alias/v3。115 个 atom（99 个双语内容叶子、16 个聚合）及原 requires 保留。产品与本宿主根明确选择 21 个叶子及 workflow 五节短流程；完整 core.general/general 仍可用于自定义输出。本宿主 general-en 输出仍含 99 个叶子，repair-skill 仍为原 7 叶子闭包。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 CLAUDE.md；修改宿主源后使用登记入口，不手改投影：
 
 ```sh
 cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-instructions -- generate --host-root .
@@ -30,3 +30,5 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 详细历史与限定仍在可选 docs/ 下，来源／许可资料不是必读政策。指令生成不证明 AI 遵守或翻译等价；成本仍 unmeasured。Git 生命周期按当前任务授权，不从本文推断提交、推送或启用门已获授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
 
 本宿主现将同一个 judge-workflow-tests 项目显式绑定为 core、full_units、full_short 三个 test_groups／CI 单元；成员由当前 inventory 动态核定，原 test ID、生产／测试项目配对、未过滤 execute／release 操作、历史测试正文与限制保留。注册所有者统一解析组 ID、本项目 action 与终端操作；FILEMAP 完整登记各组边、计划、成本及共享前置。宿主 workflow-inventory guard 从真实未过滤／过滤 libtest 列表核非空、无忽略、互斥且全集相等；长期核当前集合，不冻结历史数量。当前变化同时含产品合同与宿主政策，验证成本包括受影响 owner 专属测试、三组完整执行及独立库存核验。原生时限充分性、发布平台／公开分发和 main/examples full 启用仍归调用方后续验证；本地通过不证明激活。
+
+本宿主在 worktree.json 显式采用 cleanup.json 的 automatic_cleanup。协调锚明确选择现有 Git owner inventory 的 main worktree；state 固定在该存活宿主的 .chrono-harness/state/automatic-cleanup/，不扫描同级目录。当前政策逐项采用已登记输出目录，保留 bin 与 state，默认仅回收已 finish 且无 managed use 的缓存，未解决证据不删除 checkout；不允许 finish 自行处置证据。调用方负责加入后台任务与实际落地，并从协调宿主运行固定 `.chrono-harness/bin/chrono-worktree finish --path <工作树>`；独立重试为 `.chrono-harness/bin/chrono-worktree maintain`，消费登记操作为 `.chrono-harness/bin/chrono-worktree use --operation <操作> --path <工作树>`。start/reconstruct 已接入同一 drain 与新生登记，不是定时空闲清理。旧工作树只按明确 `import --path <工作树>` 迁移；旧配置缺 automatic_cleanup 仍 opt-out。源与宿主政策同改，验证成本为 worktree owner 全套真实 Git 用例、受影响登记及指令生成／专属验证；落地与真实宿主 finish 事件仍由调用方交付。

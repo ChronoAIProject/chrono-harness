@@ -12,6 +12,7 @@ const POLICY: &str = ".chrono-harness/worktree.json";
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
+mod automatic;
 mod check_inputs;
 mod maintenance;
 mod rebind;
@@ -123,12 +124,30 @@ impl Host {
         self.received(out)
     }
     fn received(&self, out: std::process::Output) -> (i32, Value, String) {
+        if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {
+            static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let id = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let directory = Path::new(&directory).join(format!("cli-{}-{id}", std::process::id()));
+            fs::create_dir_all(&directory).unwrap();
+            fs::write(directory.join("stdout.bin"), &out.stdout).unwrap();
+            fs::write(directory.join("stderr.bin"), &out.stderr).unwrap();
+            fs::write(directory.join("binding.json"), serde_json::to_vec_pretty(&value!({
+                "root":self.root,"exit":out.status.code(),"head":git(&self.root, &["rev-parse", "HEAD"]),
+                "policy_sha256":sha256(&fs::read(self.root.join(POLICY)).unwrap())
+            })).unwrap()).unwrap();
+        }
         let report = json(&out.stdout).unwrap_or(Value::Null);
         if !report.is_null() {
             assert_eq!(
                 report,
-                json(&fs::read(self.root.join(report["report_path"].as_str().unwrap())).unwrap())
+                json(
+                    &fs::read(
+                        Path::new(report["source_root"].as_str().unwrap())
+                            .join(report["report_path"].as_str().unwrap())
+                    )
                     .unwrap()
+                )
+                .unwrap()
             );
             assert_eq!(report["governance"], "not-evaluated");
             assert_eq!(report["parity"], "unestablished");
@@ -150,7 +169,7 @@ impl Host {
             }
         }
         (
-            out.status.code().unwrap(),
+            out.status.code().unwrap_or(-1),
             report,
             String::from_utf8_lossy(&out.stderr).into(),
         )
@@ -767,6 +786,23 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
     let h = Host::new("host files/no-language-contract.data");
     let adopted_bytes = fs::read(source().join(POLICY)).unwrap();
     let adopted = json(&adopted_bytes).unwrap();
+    if let Some(path) = adopted["automatic_cleanup"].as_str() {
+        let cleanup_bytes = fs::read(source().join(path)).unwrap();
+        fs::write(h.root.join(path), &cleanup_bytes).unwrap();
+        let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+        fm["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(file(path, value!([])));
+        fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+        let host_config = json(&fs::read(source().join(CONFIG)).unwrap()).unwrap();
+        let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+        config["artifacts"] = host_config["artifacts"].clone();
+        for artifact in config["artifacts"].as_array_mut().unwrap() {
+            artifact["owner"] = value!("host");
+        }
+        fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    }
     h.policy(|p| {
         // This independent host binds its own declared Git, not the product host's bytes.
         let git =

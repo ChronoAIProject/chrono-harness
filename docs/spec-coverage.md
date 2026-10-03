@@ -497,3 +497,19 @@ and group results belong to their recorded source; native group checks, release
 platform checks/publication and full main/examples activation remain caller work.
 This changes product source and host policy together; the added validation cost is
 three inventory checks plus directly affected owner tests and exhaustive group runs.
+
+## Registered automatic lifecycle cleanup
+
+The candidate worktree owner implements opt-in exact artifact policy, surviving
+coordinator state, successful birth enrollment, explicit import, registered-command
+managed use, terminal finish and shared finish/start/reconstruct/maintain drain.
+Legacy Cleanup remains the whole-checkout mechanical owner. Local real-Git
+fixtures cover full deletion and protected/cache-only work, use admission, identity
+and retained-ref drift, symlink containment, partial filesystem/Git effects, original
+report preservation and retry. Main host adopts a cache-only policy retaining
+state/bin and generated lifecycle instructions. Actual deployed binary adoption,
+main-host finish/landing and existing-host reclamation are caller-owned acceptance;
+local fixtures do not prove those events or periodic idle cleanup. Interrupted
+unknown jobs/state need explicit reconciliation; no general archive, scheduler,
+process scanner or concurrent/power-loss transaction is claimed. See
+[worktree contract](worktree.md#opt-in-automatic-lifecycle-cleanup).

@@ -426,18 +426,25 @@ pub(super) fn create(
         "created"
     };
     let origin = config.check_inputs.clone();
-    let report = with_report(
-        &o.root,
-        &o.config_path,
-        config,
-        &bytes,
-        operation,
-        success,
-        |runner, token, report| match plan {
-            Some(plan) => crate::reconstruct::execute(runner, &o, &bytes, token, report, plan),
-            None => execute(runner, &o, &bytes, token, report, false),
-        },
-    )?;
+    let report =
+        with_report(
+            &o.root,
+            &o.config_path,
+            config,
+            &bytes,
+            operation,
+            success,
+            |runner, token, report| {
+                crate::automatic::create(runner, &o, &bytes, token, report, |runner, report| {
+                    match plan {
+                        Some(plan) => {
+                            crate::reconstruct::execute(runner, &o, &bytes, token, report, plan)
+                        }
+                        None => execute(runner, &o, &bytes, token, report, false),
+                    }
+                })
+            },
+        )?;
     if report["status"] == success {
         if let Some(p) = origin {
             crate::check_inputs::publish_origin(&o.root, &report, &p)?;
@@ -575,7 +582,24 @@ pub(crate) fn with_report(
         Ok(()) => report["status"] = value!(success),
         Err(e) => report["error"] = value!(e),
     }
-    report["processes"] = value!(runner.processes);
+    report["processes"] = value!(runner.processes.clone());
+    if matches!(operation, "start" | "reconstruct") && report["status"] == success {
+        if let Err(error) =
+            crate::automatic::seal_birth(&mut runner, root, config_path, bytes, &report)
+        {
+            report["status"] = value!("failed");
+            report["error"] = value!(error);
+        }
+        report["processes"] = value!(runner.processes);
+    }
+    if matches!(operation, "finish" | "maintain" | "import" | "use") {
+        if let Some(coordinator) = report["lifecycle_coordinator_root"].as_str() {
+            if Path::new(coordinator) != root {
+                crate::automatic::publish_result(Path::new(coordinator), &report)?;
+                return Ok(report);
+            }
+        }
+    }
     let mut data = serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?;
     data.push(b'\n');
     output.write_all(&data).map_err(|e| e.to_string())?;

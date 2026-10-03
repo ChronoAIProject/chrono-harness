@@ -139,6 +139,8 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 
 新工作树使用独立的 `chrono-worktree start` 与宿主 `.chrono-harness/worktree.json`；它抓取已登记目标并保留实际 Git 回执。`reconstruct` 通过逐路径计划在新工作树暂存仍需保留的旧变化；冲突和旧工作均保留，完成后仍须重新提交检查。创建／重建合同及尚未实现的 PR／落地范围见 [worktree 文档](docs/worktree.md)。该二进制已随 beta.8 在 macOS arm64 / Linux x86_64 公开发布；宿主通过锁定的发布安装登记采用。
 
+源码提供显式 opt-in 的自动清理：start/reconstruct 登记新生工作树并重试终态清理，调用方完成／落地且加入任务后使用固定 `chrono-worktree finish --path <工作树>`；独立入口为 `chrono-worktree maintain`，登记消费命令使用 `use --operation` 持有使用保护。主宿主逐项采用已登记输出，保留 state/bin，默认只清缓存；没有定时空闲清理。合同与失败／证据边界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
+
 `chrono-worktree recover`／`cleanup`／`cleanup-fetch` 消费宿主 state 下的显式维护计划：保留原失败报告，验证重建后的状态和锁，或核对保留引用与工件白名单后清理指定工作树。它们不产生治理或合并通过判词；完整格式及未实现的恢复范围见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。这三个入口已包含在公开 beta.8 中，可由宿主的版本锁定安装入口取得。
 
 公开测试版提供 `chrono-worktree cleanup-remote`，以显式远端地址、提交保留关系及精确 OID lease 清理远端工作分支，保留失败和缺失重试结果。该入口从 beta.10 起公开分发；见 [远端清理合同](docs/worktree.md#remote-branch-retirement)。
