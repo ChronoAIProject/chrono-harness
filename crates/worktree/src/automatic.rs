@@ -726,11 +726,12 @@ impl Manager {
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
-        let target_snapshot = if head == self.anchor_head {
-            None
-        } else {
-            Some(start::registrations(r, &entry.path, &head, &host_config)?)
-        };
+        let target_snapshot =
+            if head == self.anchor_head && host_config == self.registrations.entry_path() {
+                None
+            } else {
+                Some(start::registrations(r, &entry.path, &head, &host_config)?)
+            };
         let target_registrations = target_snapshot
             .as_ref()
             .map_or(&self.registrations, |(registrations, _)| registrations);
@@ -1016,11 +1017,12 @@ impl Manager {
         // check_entry just verified the live attachment and common repository.
         // Equal immutable commits use the already observed coordinator registry;
         // different commits acquire their own snapshot. No live check is reused.
-        let target_snapshot = if head == self.anchor_head {
-            None
-        } else {
-            Some(start::registrations(r, &e.path, &head, &host_config)?)
-        };
+        let target_snapshot =
+            if head == self.anchor_head && host_config == self.registrations.entry_path() {
+                None
+            } else {
+                Some(start::registrations(r, &e.path, &head, &host_config)?)
+            };
         let (target_regs, target_digest) = target_snapshot
             .as_ref()
             .map_or((&self.registrations, &self.registry_digest), |(r, d)| {
@@ -1748,13 +1750,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let head = r.oid(target, "HEAD")?;
                     manager.check_entry(r, &e, &head, None)?;
                     let host_config = r.config.host_config.clone();
-                    let (target_regs, _) = start::registrations(r, target, &head, &host_config)?;
-                    let command = if operation == "check" {
-                        canonical_command(target, &target_regs, &selection)?
-                    } else if operation == "bootstrap" {
-                        bootstrap_command(r, target, &target_regs, values["--bootstrap-config"])?
+                    let target_snapshot = if head == manager.anchor_head
+                        && host_config == manager.registrations.entry_path()
+                    {
+                        None
                     } else {
-                        registered_command(target, &target_regs, values["--operation"])?
+                        Some(start::registrations(r, target, &head, &host_config)?)
+                    };
+                    let target_regs = target_snapshot
+                        .as_ref()
+                        .map_or(&manager.registrations, |(registrations, _)| registrations);
+                    let command = if operation == "check" {
+                        canonical_command(target, target_regs, &selection)?
+                    } else if operation == "bootstrap" {
+                        bootstrap_command(r, target, target_regs, values["--bootstrap-config"])?
+                    } else {
+                        registered_command(target, target_regs, values["--operation"])?
                     };
                     let use_operation = if operation == "check" {
                         "validate.delta"
