@@ -244,3 +244,117 @@ fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
             .contains(".chrono-harness")
     );
 }
+
+fn units_config() -> Value {
+    let mut c = config();
+    c["schema"] = json!("chrono-github-release/v2");
+    c["download_artifact_action"] =
+        json!("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+    let mut consumer = c["jobs"][0].clone();
+    consumer["id"] = json!("consumer");
+    consumer["artifact_name"] = json!("consumer-output");
+    consumer["artifact_directory"] = json!("consumer-out/");
+    consumer["needs"] = json!(["native"]);
+    consumer["downloads"] = json!([{"job":"native","directory":"inputs/native/"}]);
+    consumer["always"] = json!(true);
+    consumer["dependency_metadata"] = json!("inputs/dependencies.json");
+    c["jobs"].as_array_mut().unwrap().push(consumer);
+    c
+}
+
+#[test]
+fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_metadata() {
+    let c: release::Config = serde_json::from_value(units_config()).unwrap();
+    let yaml = release::render(&c).unwrap();
+    assert!(yaml.contains("needs: [\"native\"]"));
+    assert!(yaml.contains("artifact-ids: ${{ needs.native.outputs.artifact_id }}"));
+    assert!(yaml.contains("path: \"inputs/native/\""));
+    assert!(yaml.contains("artifact_id: ${{ steps.release_upload.outputs.artifact-id }}"));
+    assert!(yaml.contains("${{ github.run_id }}-${{ github.run_attempt }}"));
+    assert!(yaml.contains("CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}"));
+    assert!(yaml.contains("if: ${{ always() && github.event.deleted != true }}"));
+    assert!(!yaml.contains("cargo") && !yaml.contains("rustup"));
+}
+
+#[test]
+fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
+    for case in 0..7 {
+        let mut c = units_config();
+        match case {
+            0 => c["jobs"][1]["needs"] = json!(["missing"]),
+            1 => c["jobs"][0]["needs"] = json!(["consumer"]),
+            2 => c["jobs"][1]["downloads"][0]["job"] = json!("missing"),
+            3 => c["jobs"][1]["downloads"][0]["directory"] = json!("../escape/"),
+            4 => {
+                c["jobs"][1]["downloads"] = json!([
+                {"job":"native","directory":"inputs/"},
+                {"job":"native","directory":"inputs/nested/"}])
+            }
+            5 => c["jobs"][1]["dependency_metadata"] = json!("inputs/native/metadata.json"),
+            _ => c["schema"] = json!("chrono-github-release/v1"),
+        }
+        let c: release::Config = serde_json::from_value(c).unwrap();
+        assert!(release::render(&c).is_err(), "case {case}");
+    }
+}
+
+#[test]
+fn release_units_cli_runs_non_rust_literal_command_and_writes_original_dependency_data() {
+    let d = tempfile::Builder::new()
+        .prefix("units host λ ")
+        .tempdir()
+        .unwrap();
+    let root = d.path();
+    let program = root.join("consumer command.py");
+    fs::write(&program,"import json,sys\nfrom pathlib import Path\nPath('args.json').write_text(json.dumps(sys.argv[1:]))\nsys.stderr.buffer.write(b'original failure\\xff')\nsys.exit(17)\n").unwrap();
+    let mut c = units_config();
+    c["jobs"][1]["command"] = json!([
+        "/usr/bin/python3",
+        program.to_str().unwrap(),
+        "$HOME",
+        "$(touch wrong)",
+        "space value"
+    ]);
+    c["jobs"][1]["dependency_metadata"] = json!("metadata with spaces/current.json");
+    write(root, "source.json", &c);
+    assert!(init(root, &root.join("source.json")).unwrap());
+    assert!(!generate(root, ".chrono-harness/ci/release.json", true).unwrap());
+    let yaml = fs::read_to_string(root.join(".github/workflows/package.yml")).unwrap();
+    let command = yaml
+        .split("      - name: Run registered release command\n")
+        .nth(2)
+        .unwrap();
+    let command = script(command);
+    let original = r#"{"native":{"result":"failure","outputs":{"artifact_id":"123","attempt":"1","run_id":"45"}}}"#;
+    let result = Command::new("/bin/bash")
+        .args(["-e", "-c", &command])
+        .env("CHRONO_RELEASE_DEPENDENCIES", original)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(17));
+    assert_eq!(result.stderr, b"original failure\xff");
+    assert_eq!(
+        fs::read(root.join("metadata with spaces/current.json")).unwrap(),
+        format!("{original}\n").as_bytes()
+    );
+    let argv: Value = serde_json::from_slice(&fs::read(root.join("args.json")).unwrap()).unwrap();
+    assert_eq!(argv, json!(["$HOME", "$(touch wrong)", "space value"]));
+    assert!(!root.join("wrong").exists());
+}
+
+#[test]
+fn release_v1_rejects_even_empty_opt_in_fields() {
+    for (key, value) in [
+        ("needs", json!([])),
+        ("downloads", json!([])),
+        ("always", json!(false)),
+        ("dependency_metadata", Value::Null),
+    ] {
+        let d = tempfile::tempdir().unwrap();
+        let mut c = config();
+        c["jobs"][0][key] = value;
+        write(d.path(), "source.json", &c);
+        assert!(init(d.path(), &d.path().join("source.json")).is_err());
+    }
+}

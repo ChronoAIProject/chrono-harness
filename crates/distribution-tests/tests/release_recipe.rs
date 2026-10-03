@@ -843,3 +843,18 @@ fn release_consumers_observe_failed_pack_without_masking_its_exit() {
         json!(b"original diagnostic\xfe\n".to_vec())
     );
 }
+
+#[test]
+fn independent_release_units_preserve_original_evidence_and_collect_without_reexecution() {
+    let host = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let out = Command::new("python3")
+        .arg(host.join(".chrono-harness/release/build-tests.py"))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

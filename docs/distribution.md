@@ -4,7 +4,7 @@
 
 ## 发布者
 
-本库 `.chrono-harness/release/build.json` 使用 `chrono-release-build/v3`，显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`。操作 ID 仍从登记项目或独立 scripts 的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现；不扫描项目、不复制测试命令。v2 保持原有无暂存语义，并拒绝 `consumer_staging` 字段（包括 null）。
+本库 `.chrono-harness/release/build.json` 现采用 `chrono-release-build/v4` 的显式独立单元；v2/v3 保留原有顺序配方。旧顺序配方显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`。操作 ID 仍从登记项目或独立 scripts 的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现；不扫描项目、不复制测试命令。v2 保持原有无暂存语义，并拒绝 `consumer_staging` 字段（包括 null）。
 
 v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以运行迁移消费者内登记的 format 操作。v3 必须声明 `consumer_staging.release_plan`、`host_config` 和非空 `bindings`。每项显式选择 release plan 的资产名与测试消费者目的路径；目的必须属于宿主唯一的 `tracked: false` artifact，不能重复、互相嵌套或与任何发布源路径重叠。拒绝路径越界及路径组件中的 symlink。源码身份读取后、构建前，实际 `git ls-files` 拒绝已跟踪的目的路径；这项读数属于运行证据，失败会产生失败报告。其它结构预检失败不启动子进程。
 
@@ -20,7 +20,7 @@ v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以�
 
 这里仅消费显式操作登记并保存实测结果，不代表完整治理准入、构建输入闭包、二进制来源证明或跨平台同判。消费者必须核对相应版本的状态、实际操作与源身份，不能以目录或报告存在判定发布成功。
 
-这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 在登记的 macOS、Ubuntu runner 上实际执行同一配方，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。这个发布工作流由 `chrono-ci` 从宿主显式[发布源](../.chrono-harness/ci/release.json)生成，合同与扩展边界见 [release CI](release-ci.md)；公开 beta.10 已包含该生成扩展。
+这是本产品的宿主配方；其它语言仓库只安装发布的二进制。`.github/workflows/chrono-release.yml` 投影为登记的 macOS、Ubuntu 独立单元，并在失败时仍尝试上传原始产物；上传构建 artifacts 不等于已发布。这个发布工作流由 `chrono-ci` 从宿主显式[发布源](../.chrono-harness/ci/release.json)生成，合同与扩展边界见 [release CI](release-ci.md)；公开 beta.10 包含原 v1 生成合同；本次 v2/v4 尚待调用方原生验证与发布。
 
 [beta.11](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.11) 已从固定源码 `a4af1a0ca7f3a69f7b3298abc5b187a74578b3f9` 公开发布，包含两个平台各 15 个工具、合并清单以及各平台的原始构建报告和打包清单，共 35 个资产。其[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36566708631)使用 v3 配方／v4 报告，在每个平台通过十个专属测试项目的 391 项测试；核对 31 个实际进程、28 个暂存目的路径及 24 轮身份观察。已匿名下载核对合并清单及两个平台的 worktree／installer／CI／runner／scoped judge 字节。合并清单 SHA-256 为 `93c6d9b2a0da66a7bc555a4d475c6f300f6d705d0ee7c634c92c445c0e435330`。beta.11 新增显式元数据重建与原始 checkout 身份核对，并包含先前发布的 Git 绑定、CI 生成、context 传递、远端清理和发布证据合同，宿主须自行选择采用相应版本配置；测试与摘要核验不证明完整输入闭包或确定性同判。
 
