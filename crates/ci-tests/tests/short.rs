@@ -219,6 +219,12 @@ impl ShortHost {
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
         let out = self.command(args).output().unwrap();
+        if out.status.code() != Some(exit) {
+            let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
+                .chain(args.iter().map(|arg| (*arg).to_owned()))
+                .collect::<Vec<_>>();
+            retain_command_result(&self.root, &argv, &Value::Null, &out);
+        }
         assert_eq!(
             out.status.code(),
             Some(exit),
