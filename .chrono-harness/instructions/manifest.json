@@ -30,7 +30,8 @@
         "policy.evolution",
         "policy.mixed-warning",
         "candidate.landing",
-        "artifact.results"
+        "artifact.results",
+        "artifact.cleanup"
       ],
       "title": "通用工作方法",
       "layout": "workflow"

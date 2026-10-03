@@ -28,5 +28,6 @@
       "feature": "integration",
       "integration": "integration"
     }
-  }
+  },
+  "automatic_cleanup": ".chrono-harness/cleanup.json"
 }

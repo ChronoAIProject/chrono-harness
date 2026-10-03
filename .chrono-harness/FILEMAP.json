@@ -3919,6 +3919,58 @@
           "to": "test:distribution-tests"
         }
       ]
+    },
+    {
+      "path": "crates/worktree/src/automatic.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/artifact_disposal.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/automatic.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/cleanup.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

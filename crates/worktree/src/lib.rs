@@ -1,4 +1,6 @@
 //! Produce real Git worktrees and observations; governance remains with the judges.
+mod artifact_disposal;
+mod automatic;
 mod check_inputs;
 mod maintenance;
 mod rebind;
@@ -35,6 +37,8 @@ pub struct Environment {
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub schema: String,
+    #[serde(default)]
+    pub automatic_cleanup: Option<String>,
     #[serde(default)]
     pub check_inputs: Option<check_inputs::Policy>,
     pub host_config: String,
@@ -91,7 +95,7 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nCreates from a fetched target. Maintenance consumes explicit saved-state plans; no governance or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree import --path WORKTREE\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
     }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return match check_inputs::dispatch(args) {
@@ -108,6 +112,11 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     let result = if matches!(
+        args.first().map(String::as_str),
+        Some("finish" | "maintain" | "import" | "use")
+    ) {
+        automatic::dispatch(args)
+    } else if matches!(
         args.first().map(String::as_str),
         Some(
             "inspect-rebind"
@@ -133,7 +142,16 @@ pub fn run(args: &[String]) -> CliOutput {
             exit_code: if matches!(
                 report["status"].as_str(),
                 Some(
-                    "created" | "reconstructed" | "recovered" | "cleaned" | "observed" | "rebound"
+                    "created"
+                        | "reconstructed"
+                        | "recovered"
+                        | "cleaned"
+                        | "observed"
+                        | "rebound"
+                        | "finished"
+                        | "maintained"
+                        | "imported"
+                        | "used"
                 )
             ) {
                 0
@@ -179,6 +197,12 @@ fn configuration(root: &Path, config_path: &str) -> Result<(Config, Vec<u8>), St
         || !config.report_directory.ends_with('/')
     {
         return Err("invalid worktree configuration or branch kind/name".into());
+    }
+    if let Some(path) = &config.automatic_cleanup {
+        relative_path(path)?;
+        if !path.starts_with(".chrono-harness/") || path.starts_with(".chrono-harness/state/") {
+            return Err("automatic cleanup policy must be a tracked .chrono-harness input".into());
+        }
     }
     relative_path(&config.host_config)?;
     relative_path(config.report_directory.trim_end_matches('/'))?;

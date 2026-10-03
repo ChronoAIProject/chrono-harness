@@ -2414,7 +2414,8 @@
         "cache.compatibility",
         "cache.build-separate",
         "cache.query",
-        "test.first-useful-case"
+        "test.first-useful-case",
+        "artifact.cleanup"
       ],
       "variants": [
         {
@@ -2429,6 +2430,26 @@
           "source": {
             "type": "inline",
             "text": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "artifact.cleanup",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "按宿主登记完成清理。 宿主明确采用 automatic_cleanup 后，start/reconstruct 自动登记新工作树并排空已完成项；消费命令用 `.chrono-harness/bin/chrono-worktree use --operation <已登记操作> --path <工作树>` 持有使用保护。调用方加入所有自有任务、确认完成／落地后，在存活协调宿主运行 `.chrono-harness/bin/chrono-worktree finish --path <工作树>`；独立重试用 `.chrono-harness/bin/chrono-worktree maintain`。保留所需证据、未保存源码及未保留提交；不能靠年龄、目录名或空闲推断可删除。未登记后台写入归调用方加入，缺失／中断状态先保留并协调；没有定时空闲清理。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "Complete registered host cleanup. When the host explicitly adopts automatic_cleanup, start/reconstruct enroll new worktrees and drain terminal entries. Hold managed use for consuming commands with `.chrono-harness/bin/chrono-worktree use --operation <registered operation> --path <worktree>`. After joining all owned jobs and establishing completion/landing, the caller runs `.chrono-harness/bin/chrono-worktree finish --path <worktree>` from the surviving coordinator; retry independently with `.chrono-harness/bin/chrono-worktree maintain`. Retain needed evidence, unsaved source and unretained commits. Never infer deletion from age, directory names or idle time. The caller joins unregistered background writers; missing/interrupted state stays protected pending reconciliation. There is no periodic idle cleanup."
           }
         }
       ]
@@ -2611,7 +2632,8 @@
             "artifact.results",
             "artifact.substance",
             "artifact.temporary",
-            "artifact.no-diary"
+            "artifact.no-diary",
+            "artifact.cleanup"
           ]
         },
         {
@@ -2855,7 +2877,8 @@
             "policy.evolution",
             "policy.mixed-warning",
             "candidate.landing",
-            "artifact.results"
+            "artifact.results",
+            "artifact.cleanup"
           ]
         }
       ]

@@ -729,3 +729,114 @@ raw binary bytes, executable mode, literal symlink, selected index and original
 metadata. The original outcome stayed unknown. Retained work was committed
 before registered cleanup verified checkout/branch removal. This does not cover
 interrupted rebind continuation; see [example adoption](examples.md).
+
+## Opt-in automatic lifecycle cleanup
+
+The source adds `automatic_cleanup` to the existing v1/v2 worktree configuration.
+Its value is one tracked, FILEMAP-registered policy path under `.chrono-harness/`.
+Omitting it retains the existing explicit maintenance behavior. There is no daemon,
+periodic idle trigger, age expiry, sibling-directory inventory or language inference.
+The main host invokes its registered `.chrono-harness/bin/chrono-worktree`; deploy
+the candidate binary before using its newly adopted configuration.
+
+The adopted main-host configuration selects `.chrono-harness/cleanup.json`. Its
+`chrono-worktree-automatic-cleanup/v1` policy contains:
+
+| Field | Contract |
+| --- | --- |
+| `coordinator_root` | An exact absolute physical Git checkout root, or the explicit `git-main-worktree` selector delegated to the existing Git owner inventory. It must survive disposal and belong to the same common repository. |
+| `state_directory` | A registered untracked directory under the coordinator's `.chrono-harness/state/`. |
+| `retained_ref`, `retention` | One direct local branch and existing `ancestor` or exact `same-tree` semantics. |
+| `remove_branch` | Explicit choice; main host keeps branches. |
+| `allow_evidence_disposal` | Whether the terminal owner may additionally select evidence disposal. Main host disables it. |
+| `artifacts` | Exact `config.artifacts` directory paths, each with `dispose`, `retain`, or `evidence-retain`. No kind-name or layout interpretation. Omitted paths remain retained. |
+
+Policy/configuration bytes must match committed inputs at the invoking host and
+coordinator. Selected artifacts must be untracked declarations at both disposal
+endpoints. Main-host adoption individually selects the current registered build
+outputs and cache. It retains `.chrono-harness/bin/` and evidence in
+`.chrono-harness/state/`; its ordinary finish therefore reclaims caches and retains
+the checkout. Settling that evidence for whole-checkout removal requires an
+explicit policy change by its owner, followed by enrollment migration; changing a
+policy does not silently reinterpret existing enrollments.
+
+Successful `start` and `reconstruct` automatically enroll their exact linked
+checkout attachment and retain the producer's birth observation at the surviving
+coordinator. Failed creation, missing state, missing completed birth evidence and
+unknown ownership remain protected. Before creation, both entries call the shared
+drain after validating policy/identity, excluding the invoking source and intended
+destination. A drain failure prevents creation and preserves its original reports.
+
+The fixed lifecycle commands default to `--host-root .` and
+`--config .chrono-harness/worktree.json`:
+
+```sh
+chrono-worktree use --path /exact/worktree --operation test.example
+chrono-worktree finish --path /exact/worktree
+chrono-worktree maintain
+chrono-worktree import --path /exact/existing-worktree
+```
+
+`use` consumes exactly one registered project/script operation and its tool,
+argv, environment and process bounds. It records managed use under the same
+admission gate used by finish/disposal, invokes the existing bounded process
+owner, preserves original process bytes and exit, and releases use after the child
+has joined. A nonzero child exit is reported as failure even when use was safely
+released. Lifecycle results publish at the surviving coordinator even when the
+wrapper was invoked from the disposable checkout, so release leaves no result
+writer there. Admission/release wait within the registered process bound when
+another owned gate is busy; an interrupted gate is preserved, never expired.
+Active use blocks finish. Terminated wrappers, missing results and
+unknown ownership retain the use record; they are never expired by age. The
+existing process owner terminates lingering descendants within its owned process
+group; detached/background writers escaping that ownership are unsupported and
+must be joined by the caller. Git locks provide additional checks, not this use
+protocol.
+
+`finish` is the caller's explicit terminal handoff after joining all owned jobs
+and establishing completion/landing. The runtime observes the enrolled physical
+attachment, current HEAD/branch and allowed retained ref, publishes an immutable
+terminal receipt, and immediately invokes the same drain. It does not create a
+source-HEAD retention ref or determine PR/merge success. `--retained-commit OID`
+optionally verifies a caller's actual squash-landing pin before the reference can
+move; the observed OID is always fixed in the receipt. A later changed ref is a
+visible failure, never a replacement landing guess.
+
+`--artifacts-only` requests cache disposal with checkout/refs retained. Default
+unsettled `evidence-retain`, unretained commits, dirty source or other retained
+artifacts also produce an explicit preserved reason and permit disposal only of
+selected quiescent outputs. These successful cache-only entries become `retained`
+and are not rescanned on every later start. A subsequent explicit finish may settle
+evidence using `--dispose-evidence` only when policy allows it; the prior terminal
+receipt stays in history. New managed use is refused after terminal handoff.
+When finish runs from the enrolled checkout itself, the drain excludes that source;
+a later coordinator `maintain` or start performs disposal.
+
+Whole-checkout removal delegates to existing `Cleanup`, including literal
+cleanliness, two-endpoint artifact whitelist, exact retention, physical identity,
+worktree/Git locks, nested checkout checks and optional expected-OID branch removal.
+The shared artifact phase also protects staged source inside artifact prefixes,
+rejects symlink roots/ancestors and unlinks internal symlinks without following
+external targets. Automatic reports measure literal entry lengths before disposal
+and verified zero afterward; these are logical bytes, not allocated-block savings.
+Legacy explicit maintenance keeps its report shape.
+
+The coordinator ledger records original identity, terminal receipts and attempted
+report paths before effects. Failed results retain their original bytes/digests and
+partial effects. A normal retry can reconcile only its recorded owned lock and
+exact unchanged checkout, then use existing absence-tolerant cleanup. Missing or
+interrupted results, changed attachment/HEAD/policy/ref, another lock or damaged
+source are preserved for explicit reconciliation. Retrying never overwrites an
+original failure. Storage failure, unregistered concurrent writers and power loss
+are not transactional guarantees; stale admission/use records currently require
+caller reconciliation after joining their original jobs.
+
+`import` enrolls one explicitly named existing linked worktree, validates its
+current registration/attachment and binds its existing policy inputs (including
+explicit absence). It can import a legacy checkout without editing that checkout
+or pretending it adopted the new automatic policy. Disposal paths must already
+be declared at both endpoints. Its observation is `import`, with no historical
+birth claim. It does not enumerate old hosts. Caller-owned Git/GitHub,
+publication, immediate existing-host reclamation and evidence settlement remain
+outside this producer. Local real-Git fixtures exercise full checkout removal;
+actual main-host finish/landing is the caller's acceptance event after adoption.

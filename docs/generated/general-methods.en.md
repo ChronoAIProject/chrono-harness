@@ -109,6 +109,8 @@ Honor temporary lifecycles. One-use probes, query snapshots and run artifacts fo
 
 Report results plainly. Use ordinary language by default, retaining material conditions, detail and open limits. State changes, actual checks, measurements and results; a synopsis cannot replace substance. Keep no thought transcripts, diaries, review dialogue, command streams, receipt copies or duplicate snapshots, even via links, archives or required reading. Results must stand alone without the session.
 
+Complete registered host cleanup. When the host explicitly adopts automatic_cleanup, start/reconstruct enroll new worktrees and drain terminal entries. Hold managed use for consuming commands with `.chrono-harness/bin/chrono-worktree use --operation <registered operation> --path <worktree>`. After joining all owned jobs and establishing completion/landing, the caller runs `.chrono-harness/bin/chrono-worktree finish --path <worktree>` from the surviving coordinator; retry independently with `.chrono-harness/bin/chrono-worktree maintain`. Retain needed evidence, unsaved source and unretained commits. Never infer deletion from age, directory names or idle time. The caller joins unregistered background writers; missing/interrupted state stays protected pending reconciliation. There is no periodic idle cleanup.
+
 ## Execution contracts
 
 ### Tools and registry

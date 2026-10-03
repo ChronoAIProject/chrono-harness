@@ -60,4 +60,6 @@ host_context: `.chrono-harness/instructions/host-context.md`
 完成须核落地。 合并或发布交付须核实际状态、落地 SHA、产物及必要后验；提交、开 PR、检查绿或 CLOSED 不单独证明交付。被验候选与落地树不同时，说明并核受影响范围。调用方负责生命周期则明确交接边界，不把阶段完成说成已交付。
 
 只留有用成果。 代码、当前规范、必要实验程序与数据、来源、许可、程序维护的必要状态各归其位。实验支持搜索、枚举、反例或边界验证即有用，不因未被正文引用或未进主构建删除。失败留下可复用判据或回归用例。
+
+按宿主登记完成清理。 宿主明确采用 automatic_cleanup 后，start/reconstruct 自动登记新工作树并排空已完成项；消费命令用 `.chrono-harness/bin/chrono-worktree use --operation <已登记操作> --path <工作树>` 持有使用保护。调用方加入所有自有任务、确认完成／落地后，在存活协调宿主运行 `.chrono-harness/bin/chrono-worktree finish --path <工作树>`；独立重试用 `.chrono-harness/bin/chrono-worktree maintain`。保留所需证据、未保存源码及未保留提交；不能靠年龄、目录名或空闲推断可删除。未登记后台写入归调用方加入，缺失／中断状态先保留并协调；没有定时空闲清理。
 <!-- chrono-instructions:end -->
