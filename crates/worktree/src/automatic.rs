@@ -1,7 +1,8 @@
-//! Opt-in lifecycle cleanup. Eligibility is an explicit terminal handoff, never age or discovery.
+//! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
 use crate::{
     Start, artifact_disposal,
     maintenance::{self, Cleanup, Retention},
+    ownership::Lease,
     start::{self, Runner},
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
@@ -72,6 +73,22 @@ struct Terminal {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Ownership {
+    path: String,
+    id: String,
+    cache_pending: bool,
+    generation: u64,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheAttempt {
+    path: String,
+    intent: Receipt,
+    generation: u64,
+    receipt: Option<Receipt>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Entry {
     path: PathBuf,
     branch: String,
@@ -82,6 +99,10 @@ struct Entry {
     uses: Vec<String>,
     terminal: Option<Terminal>,
     attempts: Vec<Attempt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ownership: Option<Ownership>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    cache_attempts: Vec<CacheAttempt>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -90,14 +111,19 @@ struct Ledger {
     coordinator_root: PathBuf,
     common: PathBuf,
     entries: Vec<Entry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    admission_id: Option<String>,
 }
 struct Gate {
     path: PathBuf,
     token: String,
+    lease: Option<Lease>,
 }
 impl Drop for Gate {
     fn drop(&mut self) {
-        if fs::read(self.path.join("owner")).ok().as_deref() == Some(self.token.as_bytes()) {
+        if self.lease.is_none()
+            && fs::read(self.path.join("owner")).ok().as_deref() == Some(self.token.as_bytes())
+        {
             let _ = fs::remove_file(self.path.join("owner"));
             let _ = fs::remove_dir(&self.path);
         }
@@ -211,8 +237,10 @@ fn load_policy(
         return Err("automatic cleanup policy differs from source commit".into());
     }
     let mut p: Policy = decode(&policy_bytes)?;
-    if p.schema != "chrono-worktree-automatic-cleanup/v1"
-        || !p.state_directory.starts_with(".chrono-harness/state/")
+    if !matches!(
+        p.schema.as_str(),
+        "chrono-worktree-automatic-cleanup/v1" | "chrono-worktree-automatic-cleanup/v2"
+    ) || !p.state_directory.starts_with(".chrono-harness/state/")
         || !p.state_directory.ends_with('/')
         || !p.retained_ref.starts_with("refs/heads/")
     {
@@ -307,46 +335,96 @@ impl Manager {
         start::registered_policy(&registrations, config_path, &r.config.report_directory)?;
         let directory = no_symlink_parents(anchor, policy.state_directory.trim_end_matches('/'))?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        let gate_path =
-            no_symlink_parents(anchor, &format!("{}gate.lock", policy.state_directory))?;
-        let waiting = std::time::Instant::now();
-        loop {
-            match fs::create_dir(&gate_path) {
-                Ok(()) => break,
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    // The owner file is published/removed inside the atomic directory
-                    // lease. Its transient absence must not shorten a live handoff.
-                    let bound = std::time::Duration::from_secs(r.config.timeout_seconds);
-                    if waiting.elapsed() >= bound {
-                        return Err("automatic cleanup admission remains busy or interrupted; no lock was expired".into());
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-        let gate = Gate {
-            path: gate_path,
-            token: token.into(),
-        };
-        fs::write(gate.path.join("owner"), token).map_err(|e| e.to_string())?;
+        let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
         let ledger_path =
             no_symlink_parents(anchor, &format!("{}ledger.json", policy.state_directory))?;
         let marker = no_symlink_parents(anchor, &format!("{}owner.json", policy.state_directory))?;
+        let gate_path =
+            no_symlink_parents(anchor, &format!("{}gate.lock", policy.state_directory))?;
+        let gate = if kernel {
+            if gate_path.exists() {
+                return Err(
+                    "legacy admission ownership is unknown; preserve its gate and records".into(),
+                );
+            }
+            let owner = if marker.exists() {
+                Some(json(&fs::read(&marker).map_err(|e| e.to_string())?)?)
+            } else {
+                None
+            };
+            let expected = owner
+                .as_ref()
+                .map(|v| {
+                    v["admission_id"]
+                        .as_str()
+                        .ok_or("missing admission identity")
+                })
+                .transpose()?;
+            let path = no_symlink_parents(
+                anchor,
+                &format!("{}admission.lease", policy.state_directory),
+            )?;
+            let lease = Lease::acquire(
+                &path,
+                expected,
+                expected.is_none(),
+                true,
+                Some(std::time::Duration::from_secs(r.config.timeout_seconds)),
+            )?
+            .ok_or("admission unavailable")?;
+            Gate {
+                path,
+                token: token.into(),
+                lease: Some(lease),
+            }
+        } else {
+            let waiting = std::time::Instant::now();
+            loop {
+                match fs::create_dir(&gate_path) {
+                    Ok(()) => break,
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                        if waiting.elapsed()
+                            >= std::time::Duration::from_secs(r.config.timeout_seconds)
+                        {
+                            return Err("automatic cleanup admission remains busy or interrupted; no lock was expired".into());
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(e) => return Err(e.to_string()),
+                }
+            }
+            let gate = Gate {
+                path: gate_path,
+                token: token.into(),
+                lease: None,
+            };
+            fs::write(gate.path.join("owner"), token).map_err(|e| e.to_string())?;
+            gate
+        };
+        let schema = if kernel {
+            "chrono-worktree-cleanup-state/v2"
+        } else {
+            "chrono-worktree-cleanup-state/v1"
+        };
+        let admission_id = gate.lease.as_ref().map(|l| l.id().to_owned());
+        let expected_owner = if kernel {
+            value!({"schema":"chrono-worktree-cleanup-owner/v2","coordinator_root":anchor,"common":common,"admission_id":admission_id})
+        } else {
+            value!({"schema":"chrono-worktree-cleanup-owner/v1","coordinator_root":anchor,"common":common})
+        };
         let ledger: Ledger = match fs::read(&ledger_path) {
             Ok(b) => decode(&b)?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && !marker.exists() => {
                 let ledger = Ledger {
-                    schema: "chrono-worktree-cleanup-state/v1".into(),
+                    schema: schema.into(),
                     coordinator_root: anchor.clone(),
                     common: common.clone(),
                     entries: vec![],
+                    admission_id: admission_id.clone(),
                 };
-                write_json(
-                    &marker,
-                    &value!({"schema":"chrono-worktree-cleanup-owner/v1","coordinator_root":anchor,"common":common}),
-                    true,
-                )?;
+                if !kernel {
+                    write_json(&marker, &expected_owner, true)?;
+                }
                 write_json(&ledger_path, &ledger, true)?;
                 ledger
             }
@@ -356,14 +434,20 @@ impl Manager {
                 ));
             }
         };
-        let owner = json(&fs::read(&marker).map_err(|e| e.to_string())?)?;
-        if ledger.schema != "chrono-worktree-cleanup-state/v1"
+        if ledger.schema != schema
             || ledger.coordinator_root != *anchor
             || ledger.common != common
-            || owner
-                != value!({"schema":"chrono-worktree-cleanup-owner/v1","coordinator_root":anchor,"common":common})
+            || ledger.admission_id != admission_id
         {
-            return Err("cleanup ledger/owner identity mismatch".into());
+            return Err(
+                "cleanup ledger/ownership identity mismatch; preserve legacy records".into(),
+            );
+        }
+        if kernel && !marker.exists() && ledger.entries.is_empty() {
+            write_json(&marker, &expected_owner, true)?;
+        }
+        if json(&fs::read(&marker).map_err(|e| e.to_string())?)? != expected_owner {
+            return Err("cleanup owner identity mismatch".into());
         }
         // Entries are successive physical attachments, with disposed generations
         // retained in order. A pathname may have only one unresolved generation.
@@ -405,6 +489,9 @@ impl Manager {
         Ok(())
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
+        if let Some(lease) = &self._gate.lease {
+            lease.stable()?;
+        }
         let anchor = &self.policy.coordinator_root;
         if r.oid(anchor, "HEAD")? != self.anchor_head
             || fs::read(no_symlink_parents(anchor, &self.config_path)?)
@@ -476,8 +563,22 @@ impl Manager {
         head: &str,
         lock: Option<&str>,
     ) -> Result<(), String> {
+        if self._gate.lease.is_some() && e.ownership.is_none() {
+            return Err(
+                "kernel enrollment ownership is missing; preserve legacy/unknown work".into(),
+            );
+        }
         if e.policy_sha256 != sha256(&self.policy_bytes) {
             return Err("enrolled policy changed; explicit migration is required".into());
+        }
+        if let Some(owner) = &e.ownership {
+            if self._gate.lease.is_none() || !owner.path.starts_with(&self.policy.state_directory) {
+                return Err("enrollment ownership policy mismatch".into());
+            }
+            let path = no_symlink_parents(&self.policy.coordinator_root, &owner.path)?;
+            if crate::ownership::identity(&path)? != owner.id {
+                return Err("enrollment lease identity changed".into());
+            }
         }
         absolute(&e.path, false)?;
         maintenance::identity(
@@ -584,6 +685,30 @@ impl Manager {
         {
             return Err("new birth did not adopt the coordinator policy/configuration".into());
         }
+        let ownership = if self._gate.lease.is_some() {
+            let token = receipt["report_path"]
+                .as_str()
+                .ok_or("enrollment receipt identity")?;
+            let path = format!(
+                "{}enrollment-{}.lease",
+                self.policy.state_directory,
+                sha256(token.as_bytes())
+            );
+            let physical = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+            if physical.exists() {
+                return Err("enrollment lease identity already exists".into());
+            }
+            let lease = Lease::acquire(&physical, None, true, true, None)?
+                .ok_or("new enrollment lease unavailable")?;
+            Some(Ownership {
+                path,
+                id: lease.id().into(),
+                cache_pending: true,
+                generation: 1,
+            })
+        } else {
+            None
+        };
         let entry = Entry {
             path: target,
             branch,
@@ -594,6 +719,8 @@ impl Manager {
             uses: vec![],
             terminal: None,
             attempts: vec![],
+            ownership,
+            cache_attempts: vec![],
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
@@ -646,12 +773,167 @@ impl Manager {
             sha256: sha256(&b),
         })
     }
+    fn immutable_reconciled(&self, name: &str, value: &Value) -> Result<Receipt, String> {
+        let path = format!("{}{name}", self.policy.state_directory);
+        let physical = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+        match fs::read(&physical) {
+            Ok(bytes) => {
+                if json(&bytes)? != *value {
+                    return Err("interrupted use reconciliation receipt changed".into());
+                }
+                Ok(Receipt {
+                    path,
+                    sha256: sha256(&bytes),
+                })
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => self.immutable(name, value),
+            Err(e) => Err(e.to_string()),
+        }
+    }
     fn receipt(&self, receipt: &Receipt) -> Result<Vec<u8>, String> {
         let b = crate::recovery::state_bytes(&self.policy.coordinator_root, &receipt.path)?;
         if sha256(&b) != receipt.sha256 {
             return Err("original lifecycle receipt changed".into());
         }
         Ok(b)
+    }
+    fn lease(&self, e: &Entry, exclusive: bool) -> Result<Option<Lease>, String> {
+        let owner = e
+            .ownership
+            .as_ref()
+            .ok_or("enrollment has no kernel ownership; preserve legacy state")?;
+        if self._gate.lease.is_none() || !owner.path.starts_with(&self.policy.state_directory) {
+            return Err("enrollment lease policy mismatch".into());
+        }
+        let path = no_symlink_parents(&self.policy.coordinator_root, &owner.path)?;
+        Lease::acquire(&path, Some(&owner.id), false, exclusive, None)
+    }
+    fn reconcile_uses(&mut self, i: usize, lease: &Lease) -> Result<(), String> {
+        lease.stable()?;
+        let e = self.ledger.entries[i].clone();
+        for token in &e.uses {
+            relative_path(token)?;
+            let intent_path = format!("{}use-intent-{token}.json", self.policy.state_directory);
+            let intent_bytes =
+                crate::recovery::state_bytes(&self.policy.coordinator_root, &intent_path)?;
+            let intent = json(&intent_bytes)?;
+            if intent["path"] != value!(e.path)
+                || intent["attachment"] != value!(e.attachment)
+                || intent["lease_path"]
+                    != value!(e.ownership.as_ref().ok_or("missing use ownership")?.path)
+                || intent["lease_id"] != value!(e.ownership.as_ref().unwrap().id)
+            {
+                return Err("interrupted use intent binding changed; preserve record".into());
+            }
+            let path = format!("{}use-{token}.json", self.policy.state_directory);
+            let original = self.result_input(&path, None)?;
+            let receipt = self.immutable_reconciled(&format!("interrupted-use-{token}.json"), &value!({
+                "schema":"chrono-worktree-interrupted-use/v2", "path":e.path, "token":token,
+                "intent":{"path":intent_path,"sha256":sha256(&intent_bytes)}, "original_result":original,
+                "state":"registered-consumers-quiescent", "command_outcome":"result-unavailable-unless-original-proves-it",
+                "task_completion":"not-claimed", "terminal_handoff":"not-claimed"
+            }))?;
+            let history = self.ledger.entries[i]
+                .enrollment
+                .as_object_mut()
+                .ok_or("enrollment object")?
+                .entry("interrupted_uses")
+                .or_insert(value!([]));
+            history
+                .as_array_mut()
+                .ok_or("interrupted use history")?
+                .push(value!(receipt));
+            self.ledger.entries[i].uses.retain(|s| s != token);
+            self.save()?;
+        }
+        Ok(())
+    }
+    fn result_input(&self, path: &str, receipt: Option<&Receipt>) -> Result<Value, String> {
+        if let Some(receipt) = receipt {
+            let bytes = self.receipt(receipt)?;
+            return Ok(
+                value!({"presence":"present","sha256":sha256(&bytes),"input_bytes":bytes,"receipt":receipt}),
+            );
+        }
+        let physical = no_symlink_parents(&self.policy.coordinator_root, path)?;
+        match fs::read(physical) {
+            Ok(bytes) => Ok(
+                value!({"presence":"present","sha256":sha256(&bytes),"input_bytes":bytes,"original_outcome":"unknown"}),
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Ok(value!({"presence":"absent","original_outcome":"unknown"}))
+            }
+            Err(e) => Err(e.to_string()),
+        }
+    }
+    fn execute_cache(
+        &mut self,
+        r: &mut Runner,
+        i: usize,
+        token: &str,
+        report: &mut Value,
+    ) -> Result<(), String> {
+        let e = self.ledger.entries[i].clone();
+        let owner = e
+            .ownership
+            .as_ref()
+            .ok_or("cache disposal requires kernel ownership")?;
+        let head = r.oid(&e.path, "HEAD")?;
+        self.check_entry(r, &e, &head, None)?;
+        let names: Vec<_> = self
+            .policy
+            .artifacts
+            .iter()
+            .filter(|a| a.disposition == Disposition::Dispose)
+            .map(|a| a.path.clone())
+            .collect();
+        let host_config = r.config.host_config.clone();
+        let (target_regs, target_digest) = start::registrations(r, &e.path, &head, &host_config)?;
+        artifact_disposal::registered(
+            &names,
+            &[self.registrations.config(), target_regs.config()],
+        )?;
+        let paths = artifact_disposal::paths(r, &e.path, &head, &names)?;
+        let binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,
+            "head":head,"policy_sha256":e.policy_sha256,"config_sha256":sha256(&self.config_bytes),
+            "anchor_registry_digest":chrono_harness::wire::digest(&value!(self.registrations.filemap()))?,
+            "target_registry_digest":target_digest,"artifacts":names,"generation":owner.generation});
+        if let Some(prior) = e
+            .cache_attempts
+            .last()
+            .filter(|a| a.generation == owner.generation)
+        {
+            let bytes = self.receipt(&prior.intent)?;
+            let intent = json(&bytes)?;
+            if intent["binding"] != binding {
+                return Err("interrupted cache disposal bindings changed; preserve original intent and work".into());
+            }
+            report["prior_cache_attempt"] = value!({"intent":prior.intent,"input_bytes":bytes,"result":self.result_input(&prior.path, prior.receipt.as_ref())?});
+        }
+        let intent = self.immutable(&format!("cache-intent-{token}.json"), &value!({"schema":"chrono-worktree-cache-intent/v2","binding":binding,"report_path":report["report_path"],"terminal_handoff":"not-claimed"}))?;
+        self.ledger.entries[i].cache_attempts.push(CacheAttempt {
+            path: report["report_path"]
+                .as_str()
+                .ok_or("cache report path")?
+                .into(),
+            intent: intent.clone(),
+            generation: owner.generation,
+            receipt: None,
+        });
+        self.save()?;
+        report["cache_intent"] = value!(intent);
+        report["cache_generation"] = value!(owner.generation);
+        report["destination"] = value!(e.path);
+        report["head"] = value!(head);
+        report["worktree_removal"] = value!("preserved");
+        report["branch_removal"] = value!("not-requested");
+        report["preserved_reason"] =
+            value!("unfinished resumable enrollment; only registered disposable outputs selected");
+        report["artifact_disposals"] = value!([]);
+        artifact_disposal::dispose(&e.path, &names, &paths, report, || {
+            self.check_entry(r, &e, &head, None)
+        })?;
+        self.check_entry(r, &e, &head, None)
     }
     fn finish(
         &mut self,
@@ -667,6 +949,15 @@ impl Manager {
         let i = self
             .current_entry(&target)
             .ok_or("worktree is not enrolled; use exact import for existing work")?;
+        let _lease = if self.ledger.entries[i].ownership.is_some() {
+            let lease = self
+                .lease(&self.ledger.entries[i], true)?
+                .ok_or("worktree has live registered consumers; preserve it")?;
+            self.reconcile_uses(i, &lease)?;
+            Some(lease)
+        } else {
+            None
+        };
         let e = self.ledger.entries[i].clone();
         if !matches!(e.status.as_str(), "active" | "retained") || !e.uses.is_empty() {
             return Err(
@@ -719,18 +1010,57 @@ impl Manager {
     }
     fn drain(&mut self, exclude: &[PathBuf], report: &mut Value) -> Result<(), String> {
         report["drain"] = value!([]);
+        report["cleanup_failures"] = value!([]);
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
-            if e.status != "terminal" {
+            let cache =
+                e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
+            if e.status != "terminal" && !cache {
+                continue;
+            }
+            if self._gate.lease.is_some() && e.ownership.is_none() {
+                report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"status":"preserved","preserved_reason":"legacy/unknown enrollment has no kernel ownership"}));
                 continue;
             }
             if exclude.contains(&e.path) {
                 report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"status":"preserved","preserved_reason":"invoking source or destination"}));
                 continue;
             }
-            if !e.uses.is_empty() {
+            let _lease = if e.ownership.is_some() {
+                match self.lease(&e, true) {
+                    Ok(Some(lease)) => Some(lease),
+                    Ok(None) => {
+                        report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"status":"preserved","preserved_reason":"live registered consumers hold enrollment lease"}));
+                        continue;
+                    }
+                    Err(error) => {
+                        failures.push(format!("{}: {error}", e.path.display()));
+                        report["drain"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(value!({"path":e.path,"status":"failed","error":error}));
+                        continue;
+                    }
+                }
+            } else {
+                None
+            };
+            if let Some(lease) = &_lease {
+                if let Err(error) = self.reconcile_uses(i, lease) {
+                    failures.push(format!("{}: {error}", e.path.display()));
+                    report["drain"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(value!({"path":e.path,"status":"failed","error":error}));
+                    continue;
+                }
+            }
+            if !self.ledger.entries[i].uses.is_empty() {
                 failures.push(format!("{}: active/unknown managed use", e.path.display()));
+                report["drain"].as_array_mut().unwrap().push(
+                    value!({"path":e.path,"status":"failed","error":"active/unknown managed use"}),
+                );
                 continue;
             }
             let (config, bytes) =
@@ -750,7 +1080,11 @@ impl Manager {
                         self.registrations.filemap()
                     ))?);
                     attempt["automatic_cleanup"] = value!(true);
-                    self.execute_entry(r, i, token, attempt)
+                    if cache {
+                        self.execute_cache(r, i, token, attempt)
+                    } else {
+                        self.execute_entry(r, i, token, attempt)
+                    }
                 },
             );
             match outcome {
@@ -760,6 +1094,25 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
+                    if cache {
+                        if let Some(a) = self.ledger.entries[i]
+                            .cache_attempts
+                            .last_mut()
+                            .filter(|a| a.path == path)
+                        {
+                            a.receipt = Some(Receipt {
+                                path: path.clone(),
+                                sha256: sha256(&b),
+                            });
+                            if result["status"] == "cleaned" {
+                                self.ledger.entries[i]
+                                    .ownership
+                                    .as_mut()
+                                    .unwrap()
+                                    .cache_pending = false;
+                            }
+                        }
+                    }
                     if let Some(a) = self.ledger.entries[i].attempts.last_mut() {
                         if a.path == path {
                             a.receipt = Some(Receipt {
@@ -768,14 +1121,16 @@ impl Manager {
                             });
                         }
                     }
-                    if result["status"] == "cleaned"
+                    if !cache
+                        && result["status"] == "cleaned"
                         && matches!(
                             result["worktree_removal"].as_str(),
                             Some("verified-absent" | "already-absent")
                         )
                     {
                         self.ledger.entries[i].status = "disposed".into();
-                    } else if result["status"] == "cleaned"
+                    } else if !cache
+                        && result["status"] == "cleaned"
                         && result["worktree_removal"] == "preserved"
                     {
                         self.ledger.entries[i].status = "retained".into();
@@ -795,6 +1150,7 @@ impl Manager {
                 }
             }
         }
+        report["cleanup_failures"] = value!(failures);
         if failures.is_empty() {
             Ok(())
         } else {
@@ -802,6 +1158,24 @@ impl Manager {
                 "automatic cleanup pending failures: {}",
                 failures.join("; ")
             ))
+        }
+    }
+    /// Entry-local refusals remain in the drain report and immutable receipts.
+    /// Coordinator/state publication failures still prevent admission.
+    fn drain_for_admission(
+        &mut self,
+        exclude: &[PathBuf],
+        report: &mut Value,
+    ) -> Result<(), String> {
+        match self.drain(exclude, report) {
+            Err(_)
+                if report["cleanup_failures"]
+                    .as_array()
+                    .is_some_and(|f| !f.is_empty()) =>
+            {
+                Ok(())
+            }
+            result => result,
         }
     }
     fn execute_entry(
@@ -1019,7 +1393,7 @@ pub(crate) fn create(
         true,
     )?;
     manager.preflight_birth(r, &destination)?;
-    manager.drain(&[o.root.clone(), destination.clone()], report)?;
+    manager.drain_for_admission(&[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
@@ -1063,6 +1437,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     let mut n = 1;
     while n < args.len() {
         let key = &args[n];
+        if operation == "check" && key == "--collect" {
+            if !flags.insert("--collect") {
+                return Err("repeated check selection".into());
+            }
+            n += 1;
+            continue;
+        }
         if ["--dispose-evidence", "--artifacts-only"].contains(&key.as_str()) {
             if operation != "finish" || !flags.insert(key.as_str()) {
                 return Err("invalid or repeated terminal flag".into());
@@ -1076,6 +1457,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--path",
             "--operation",
             "--retained-commit",
+            "--unit",
+            "--bootstrap-config",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -1086,7 +1469,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         }
         n += 2;
     }
-    if (values.contains_key("--operation") && operation != "use")
+    if (values.contains_key("--bootstrap-config") && operation != "bootstrap")
+        || (operation == "bootstrap" && !values.contains_key("--bootstrap-config"))
+        || (values.contains_key("--path") && operation == "bootstrap")
+        || (values.contains_key("--unit") && operation != "check")
+        || (values.contains_key("--unit") && flags.contains("--collect"))
+        || (values.contains_key("--path") && operation == "check")
+        || (values.contains_key("--operation") && operation != "use")
         || (operation == "use" && !values.contains_key("--operation"))
         || (values.contains_key("--retained-commit") && operation != "finish")
         || (operation == "maintain" && values.contains_key("--path"))
@@ -1116,9 +1505,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "finish" => "finished",
         "maintain" => "maintained",
         "import" => "imported",
-        "use" => "used",
+        "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
+    let mut use_guard = None;
     start::with_report(
         &invoking,
         config_path,
@@ -1153,11 +1543,52 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     )?;
                     manager.drain(&[invoking.clone()], report)
                 }
-                "use" => {
+                "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
-                    let i = manager
-                        .current_entry(target)
-                        .ok_or("managed use requires an enrolled worktree")?;
+                    let selection = if flags.contains("--collect") {
+                        vec!["--collect".to_owned()]
+                    } else if let Some(unit) = values.get("--unit") {
+                        vec!["--unit".to_owned(), (*unit).to_owned()]
+                    } else {
+                        vec![]
+                    };
+                    let i = match manager.current_entry(target) {
+                        Some(i) => i,
+                        None if matches!(operation.as_str(), "check" | "bootstrap")
+                            && target == &manager.policy.coordinator_root =>
+                        {
+                            manager.drain_for_admission(&[invoking.clone()], report)?;
+                            let command = if operation == "bootstrap" {
+                                bootstrap_command(
+                                    r,
+                                    target,
+                                    &manager.registrations,
+                                    values["--bootstrap-config"],
+                                )?
+                            } else {
+                                canonical_command(target, &manager.registrations, &selection)?
+                            };
+                            drop(manager);
+                            let digest =
+                                chrono_harness::file_identity(Path::new(&command.program))?.0;
+                            let process = chrono_harness::run_process_observed(
+                                target,
+                                &command,
+                                &[],
+                                &digest,
+                            )?;
+                            report["managed_process"] = value!(process);
+                            if process.failure.is_some() || process.exit_code != 0 {
+                                report["managed_command_failed"] = value!(true);
+                                return Err(format!(
+                                    "check failed with exit {}",
+                                    process.exit_code
+                                ));
+                            }
+                            return Ok(());
+                        }
+                        None => return Err("managed use requires an enrolled worktree".into()),
+                    };
                     let e = manager.ledger.entries[i].clone();
                     if e.status != "active" {
                         return Err("terminal worktree refuses new managed use".into());
@@ -1167,9 +1598,40 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.check_entry(r, &e, &head, None)?;
                     let host_config = r.config.host_config.clone();
                     let (target_regs, _) = start::registrations(r, target, &head, &host_config)?;
-                    let command = registered_command(target, &target_regs, values["--operation"])?;
+                    let command = if operation == "check" {
+                        canonical_command(target, &target_regs, &selection)?
+                    } else if operation == "bootstrap" {
+                        bootstrap_command(r, target, &target_regs, values["--bootstrap-config"])?
+                    } else {
+                        registered_command(target, &target_regs, values["--operation"])?
+                    };
+                    let use_operation = if operation == "check" {
+                        "validate.delta"
+                    } else if operation == "bootstrap" {
+                        "bootstrap.build"
+                    } else {
+                        values["--operation"]
+                    };
+                    if e.ownership.is_some() {
+                        use_guard = Some(
+                            manager
+                                .lease(&e, false)?
+                                .ok_or("enrollment lease is busy")?,
+                        );
+                        let owner = manager.ledger.entries[i].ownership.as_mut().unwrap();
+                        if !owner.cache_pending {
+                            owner.generation = owner
+                                .generation
+                                .checked_add(1)
+                                .ok_or("cache generation overflow")?;
+                        }
+                        owner.cache_pending = true;
+                        let owner = owner.clone();
+                        manager.immutable(&format!("use-intent-{token}.json"), &value!({"schema":"chrono-worktree-managed-use-intent/v2","path":target,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,"operation":use_operation,"report_path":report["report_path"]}))?;
+                    }
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
+                    manager.drain_for_admission(&[invoking.clone(), target.clone()], report)?;
                     let coordinator = manager.policy.coordinator_root.clone();
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
@@ -1178,7 +1640,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     report["managed_process"] = value!(process);
                     let mut manager = Manager::open(r, &coordinator, config_path, &bytes, token)?
                         .ok_or("cleanup policy disappeared during managed use")?;
-                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":values["--operation"],"process":process}))?;
+                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":process}))?;
                     report["managed_use_receipt"] = value!(receipt);
                     let i = manager
                         .current_entry(target)
@@ -1193,6 +1655,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
                     if process.failure.is_some() || process.exit_code != 0 {
+                        report["managed_command_failed"] = value!(true);
                         return Err(format!(
                             "registered managed command failed with exit {}: {:?}",
                             process.exit_code, process.failure
@@ -1230,14 +1693,28 @@ fn registered_command(
     if selected.len() != 1 {
         return Err("managed use requires one exact registered project/script operation".into());
     }
-    let a = selected[0];
-    let config = registrations.config();
+    action_command(root, registrations.config(), selected[0])
+}
+fn action_command(root: &Path, config: &Value, a: &Value) -> Result<CommandSpec, String> {
     let tool = config["tools"]
         .as_array()
         .ok_or("missing registered tools")?
         .iter()
         .find(|t| t["id"] == a["tool"])
         .ok_or("consuming tool is not registered")?;
+    program_command(
+        root,
+        config,
+        tool["program"].as_str().ok_or("registered program")?,
+        serde_json::from_value(a["argv"].clone()).map_err(|e| e.to_string())?,
+    )
+}
+fn program_command(
+    root: &Path,
+    config: &Value,
+    program: &str,
+    argv: Vec<String>,
+) -> Result<CommandSpec, String> {
     let mut environment = BTreeMap::new();
     for key in config["environment"]["inherit"]
         .as_array()
@@ -1260,12 +1737,12 @@ fn registered_command(
     }
     let program = chrono_harness::resolve_program(
         root,
-        tool["program"].as_str().ok_or("registered program")?,
+        program,
         environment.get("PATH").map(String::as_str),
     )?;
     let command = CommandSpec {
         program: program.to_str().ok_or("command path UTF-8")?.into(),
-        args: serde_json::from_value(a["argv"].clone()).map_err(|e| e.to_string())?,
+        args: argv,
         env: environment,
         timeout_seconds: config["protocol"]["timeout_seconds"]
             .as_u64()
@@ -1275,6 +1752,74 @@ fn registered_command(
             .ok_or("registered output limit")? as usize,
     };
     chrono_harness::validate_command(&command)?;
+    Ok(command)
+}
+
+fn bootstrap_command(
+    r: &mut Runner,
+    root: &Path,
+    registrations: &Registrations,
+    path: &str,
+) -> Result<CommandSpec, String> {
+    relative_path(path)?;
+    if !path.starts_with(".chrono-harness/ci/") {
+        return Err("bootstrap configuration must be a registered CI policy".into());
+    }
+    let head = r.oid(root, "HEAD")?;
+    let bytes = fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())?;
+    if r.blob(root, &head, path)? != bytes {
+        return Err("bootstrap configuration differs from commit".into());
+    }
+    let policy = json(&bytes)?;
+    if policy["schema"] != "chrono-bootstrap/v1" || policy["participation"].is_null() {
+        return Err("bootstrap has not adopted participation".into());
+    }
+    let script = policy["entrypoint"]["script"]
+        .as_str()
+        .ok_or("bootstrap entrypoint script")?;
+    relative_path(script)?;
+    start::registered_policy(registrations, path, &r.config.report_directory)?;
+    start::registered_policy(registrations, script, &r.config.report_directory)?;
+    let source = fs::read(no_symlink_parents(root, script)?).map_err(|e| e.to_string())?;
+    if r.blob(root, &head, script)? != source {
+        return Err("bootstrap entrypoint differs from commit".into());
+    }
+    let action = value!({"tool":policy["entrypoint"]["tool"],"argv":[script,root,path]});
+    let mut command = action_command(root, registrations.config(), &action)?;
+    command.env.insert(
+        "CHRONO_WORKTREE_BOOTSTRAP".into(),
+        root.to_str().ok_or("bootstrap root UTF-8")?.into(),
+    );
+    Ok(command)
+}
+
+fn canonical_command(
+    root: &Path,
+    registrations: &Registrations,
+    selection: &[String],
+) -> Result<CommandSpec, String> {
+    let config = registrations.config();
+    let canonical = chrono_harness::prepared::declaration(config)?;
+    let participation = canonical
+        .participation
+        .ok_or("canonical check has not adopted worktree participation")?;
+    if participation.operation != "worktree.check" || participation.argv != ["check"] {
+        return Err("canonical participation must declare worktree.check with check argv".into());
+    }
+    let mut argv = vec!["check".to_owned()];
+    argv.extend_from_slice(selection);
+    let mut command = program_command(
+        root,
+        config,
+        config["runner"]["path"]
+            .as_str()
+            .ok_or("canonical runner path")?,
+        argv,
+    )?;
+    command.env.insert(
+        "CHRONO_WORKTREE_CHECK".into(),
+        root.to_str().ok_or("check root UTF-8")?.into(),
+    );
     Ok(command)
 }
 

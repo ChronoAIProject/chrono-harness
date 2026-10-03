@@ -604,15 +604,49 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
         .current_dir(root)
         .output()
         .unwrap();
+    if let Ok(directory) = std::env::var("CHRONO_CI_TEST_RECEIPTS") {
+        static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let id = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let destination = Path::new(&directory).join(format!(
+            "context-{}-{}-{id}",
+            std::process::id(),
+            chrono_harness::sha256(root.as_os_str().as_encoded_bytes())
+        ));
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("stdout.bin"), &output.stdout).unwrap();
+        fs::write(destination.join("stderr.bin"), &output.stderr).unwrap();
+        fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"joined":true})).unwrap()).unwrap();
+        retain_context_state(
+            &root.join(".chrono-harness/state"),
+            &destination.join("original-state"),
+        );
+    }
     assert_eq!(
         output.status.code(),
         Some(expected_exit),
-        "{}",
+        "root {}; argv {argv:?}; stdout {}; stderr {}",
+        root.display(),
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(report.get("transport_failure").is_none(), "{report}");
     report
+}
+fn retain_context_state(root: &Path, destination: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+    fs::create_dir_all(destination).unwrap();
+    for row in fs::read_dir(root).unwrap() {
+        let row = row.unwrap();
+        let kind = row.file_type().unwrap();
+        if kind.is_dir() {
+            retain_context_state(&row.path(), &destination.join(row.file_name()));
+        } else if kind.is_file() {
+            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+        }
+    }
 }
 #[test]
 fn first_baseline_push_runs_copied_example_inventory_with_failure_and_passing_control() {
@@ -698,7 +732,17 @@ fn host_bootstrap_consumes_registered_operations_and_propagates_failure() {
         .unwrap();
     let dir = root.path().join(".chrono-harness/ci");
     fs::create_dir_all(&dir).unwrap();
-    fs::copy(source, dir.join("bootstrap.py")).unwrap();
+    fs::copy(&source, dir.join("bootstrap.py")).unwrap();
+    fs::copy(
+        source
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("process_fds.py"),
+        dir.parent().unwrap().join("process_fds.py"),
+    )
+    .unwrap();
     let config = json!({"schema":"chrono-bootstrap/v1","projects":".chrono-harness/projects.json","rust_toolchain":"1.95.0","tools":{"sh":"/bin/sh"},"operations":["make.tool"],"install":[{"source":"built-tool","destination":".chrono-harness/bin/tool"}]});
     fs::write(
         dir.join("bootstrap.json"),

@@ -840,3 +840,92 @@ birth claim. It does not enumerate old hosts. Caller-owned Git/GitHub,
 publication, immediate existing-host reclamation and evidence settlement remain
 outside this producer. Local real-Git fixtures exercise full checkout removal;
 actual main-host finish/landing is the caller's acceptance event after adoption.
+
+### Kernel ownership and unfinished cache recovery (v2)
+
+The v2 candidate uses `chrono-worktree-automatic-cleanup/v2` with the existing
+policy fields and a new registered state directory. The host source selects
+`.chrono-harness/state/automatic-cleanup-v2/`. Caller cutover must seed the
+compatible coordinator binary and exclude incompatible producers; v1 gates,
+tokens and unknown records are never retrospectively treated as kernel leases.
+
+The caller owns staged validation and coordinator cutover. First validate the
+exact committed candidate in an independent, clean Git main clone using the
+registered bootstrap and short check commands. The current scoped local producer
+has `full_context: None`; this route needs no synthetic linked origin receipt.
+Main-only bootstrap may seed a missing owner binary. This is candidate validation,
+not acceptance of the surviving coordinator or of full/native obligations.
+
+For actual cutover, join/exclude incompatible producers, retain the v1 state,
+and install the compatible binary in the surviving main coordinator. Commit and
+deploy the matching v2 worktree policy, cleanup policy, selected host configuration
+and participation declarations there before starting v2 linked work. Only then
+use ordinary `start`/`reconstruct` for automatic v2 enrollment and the unchanged
+public bootstrap/check commands in a fresh linked checkout. Working and committed
+coordinator policy/config bytes must agree with the invoking checkout; upgrading
+only the binary or only a linked policy intentionally refuses before build or
+cleanup. Never convert v1 tokens to leases. The real coordinator transition and
+its retained evidence remain caller-owned acceptance.
+
+Admission is a stable identity-bound flock inode. Each physical attachment
+generation has one stable SH/EX lease. Normal use acquires SH before intent/spawn
+and holds it across result publication; admission is released before business
+execution. Git mutation children inherit admission. Cleanup holds admission and
+nonblocking EX, preserving live holders. Last close releases ownership; no
+`LOCK_UN` is issued on a shared inherited open description. Missing/replaced
+identities, policy drift and foreign Git locks preserve work.
+
+Cleanup refusals are scoped to their enrollment. Normal start/reconstruct/use/check
+and bootstrap retain unrelated failures in `drain`, immutable failed receipts and
+`cleanup_failures`, then admit a valid target. Target admission/ownership failures
+and coordinator/state publication errors still block. Explicit `maintain` returns
+failure while any attempted cleanup fails; it never discards an earlier receipt.
+
+Later start/reconstruct/maintain and managed admission can dispose unfinished
+quiescent caches, including a successful use with no orphan token. EX permits
+orphan-use reconciliation as result-unavailable while retaining original result
+bytes. Cache disposal keeps `status: active`, `terminal: null`, checkout, refs,
+dirty/staged source, unretained commits, bin and evidence. It selects only
+`dispose` paths registered at both endpoints, rejects tracked/index paths and
+symlink ancestors, and creates no persistent owned Git worktree lock. A successful
+pass clears its pending generation; later use rearms it. Cache-specific immutable
+intent binds attachment, lease, HEAD, policies, registries, paths and generation
+before effects. Missing/failed results retry idempotently under reacquired
+exclusion with unchanged bindings and a new real receipt; originals stay intact.
+
+The optional canonical config declaration is:
+`"participation":{"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]}`.
+The public spellings remain `check`, `check --unit ID`, and `check --collect`.
+Participation forwards original stdout, stderr and exit, including successful
+warnings and nonzero diagnostics. The owner separately marks a completed command
+failure; transport, ownership and result-publication failures remain lifecycle
+errors with their original report reference. The CLI's string result preserves
+UTF-8 console bytes; owner process reports retain the original byte arrays.
+The worktree owner admits the existing runner before acquisition and forwards its
+original console/exit. Bootstrap separately declares `entrypoint` tool/script and
+`participation` coordinator/program/Git/config. Standalone bootstrap delegates to
+the registered deployed coordinator binary before build effects, including fresh
+linked checkouts with no local bin. Missing ownership fails explicitly.
+
+The existing engine transfers explicit opaque descriptors using CLOEXEC owner
+copies and inheritable child copies in pre-exec. `CHRONO_PROCESS_FDS` survives
+nested-runner cleared environments. The three registered Python consumers use
+`process_fds.py` and explicit `pass_fds`. These are tested routes, not universal
+inheritance. The real Cargo test regression verifies distinct launcher and native
+child identities, kills the Cargo and managed wrappers, and checks that the live
+child retains the lease until it completes. Cargo run may exec-replace its own
+process; killing that PID does not demonstrate surviving-child behavior. Do not
+infer child exit from a PID or parent disappearance. Committed composition and
+supported native platforms remain required before complete adoption.
+
+Whole-checkout finish/retention and legacy owned-lock recovery retain their
+contracts. There is no daemon, global process/filesystem inventory, age expiry,
+idle scheduler or power-loss transaction claim. Caller-owned committed canonical
+checks, supported native platforms, accepted process-engine composition and main
+host deployment/cutover remain acceptance work.
+
+A Git main checkout with no deployed owner may seed its own bootstrap tools: it
+cannot enroll as a disposable linked attachment. A linked checkout without the
+registered coordinator owner fails before build effects. This keeps clean native
+CI bootstrap possible without changing workflow topology or authorizing unsafe
+linked-checkout fallback.

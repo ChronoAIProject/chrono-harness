@@ -47,6 +47,13 @@
           "GITHUB_REPOSITORY"
         ]
       }
+    },
+    "participation": {
+      "operation": "worktree.check",
+      "tool": "chrono-worktree",
+      "argv": [
+        "check"
+      ]
     }
   },
   "tools": [

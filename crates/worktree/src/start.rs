@@ -592,7 +592,10 @@ pub(crate) fn with_report(
         }
         report["processes"] = value!(runner.processes);
     }
-    if matches!(operation, "finish" | "maintain" | "import" | "use") {
+    if matches!(
+        operation,
+        "finish" | "maintain" | "import" | "use" | "check" | "bootstrap"
+    ) {
         if let Some(coordinator) = report["lifecycle_coordinator_root"].as_str() {
             if Path::new(coordinator) != root {
                 crate::automatic::publish_result(Path::new(coordinator), &report)?;

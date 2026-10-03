@@ -1,7 +1,7 @@
 use super::*;
 use chrono_harness::prepared::{self, InputRequest, PreparedCheck, Selection};
 
-fn bind(h: &Host) {
+pub(super) fn bind(h: &Host) {
     let git_bin = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
@@ -41,7 +41,7 @@ print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],judge_id
     fs::write(h.root.join(JUDGES), serde_json::to_vec(&judges).unwrap()).unwrap();
     h.policy(|p|{p["schema"]=value!("chrono-worktree-config/v2");p["check_inputs"]=value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}});});
 }
-fn install(root: &Path) {
+pub(super) fn install(root: &Path) {
     use std::os::unix::fs::PermissionsExt;
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
     for (project, name) in [

@@ -14,6 +14,7 @@ const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 mod automatic;
 mod check_inputs;
+mod interrupted_cleanup;
 mod maintenance;
 mod rebind;
 
@@ -22,6 +23,64 @@ struct Host {
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
+}
+fn retain_fixture_state(root: &Path, destination: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+    fs::create_dir_all(destination).unwrap();
+    for row in fs::read_dir(root).unwrap() {
+        let row = row.unwrap();
+        let kind = row.file_type().unwrap();
+        if kind.is_dir() {
+            retain_fixture_state(&row.path(), &destination.join(row.file_name()));
+        } else if kind.is_file() {
+            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+        }
+    }
+}
+impl Drop for Host {
+    fn drop(&mut self) {
+        if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {
+            let destination = Path::new(&directory).join(format!(
+                "fixture-{}",
+                sha256(self.root.as_os_str().as_encoded_bytes())
+            ));
+            retain_fixture_state(
+                &self.root.join(".chrono-harness/state"),
+                &destination.join("coordinator-state"),
+            );
+            for name in [
+                "git-mutation.stdout",
+                "git-mutation.stderr",
+                "admission-holder",
+                "native-hook",
+            ] {
+                let path = self.parent.join(name);
+                if path.is_file() {
+                    fs::copy(path, destination.join(name)).unwrap();
+                }
+            }
+            // Only explicitly enrolled fixtures, never live worker artifacts.
+            if let Ok(bytes) = fs::read(
+                self.root
+                    .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
+            ) {
+                if let Ok(ledger) = json(&bytes) {
+                    for entry in ledger["entries"].as_array().unwrap() {
+                        let target = Path::new(entry["path"].as_str().unwrap());
+                        retain_fixture_state(
+                            &target.join(".chrono-harness/state"),
+                            &destination.join(format!(
+                                "enrollment-{}",
+                                sha256(target.as_os_str().as_encoded_bytes())
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 impl Host {
     fn new(layout: &str) -> Self {

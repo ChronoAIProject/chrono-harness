@@ -3,7 +3,7 @@ const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
 const STATE: &str = ".chrono-harness/state/automatic-cleanup/ledger.json";
 
 impl Host {
-    fn automatic(&self, disposition: &str) {
+    pub(super) fn automatic(&self, disposition: &str) {
         let mut config = json(&fs::read(self.root.join(CONFIG)).unwrap()).unwrap();
         for artifact in [
             value!({"path":"output λ/","owner":"host","kind":"arbitrary-output","tracked":false}),
@@ -54,7 +54,7 @@ impl Host {
         .unwrap();
         self.policy(|p| p["automatic_cleanup"] = value!(AUTO_POLICY));
     }
-    fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
+    pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
         let mut c = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
         c.current_dir(&self.root)
             .env_clear()
@@ -69,10 +69,10 @@ impl Host {
             .args(extra);
         c
     }
-    fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
+    pub(super) fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
         self.received(self.auto_command(command, extra).output().unwrap())
     }
-    fn ledger(&self) -> Value {
+    pub(super) fn ledger(&self) -> Value {
         json(&fs::read(self.root.join(STATE)).unwrap()).unwrap()
     }
 }
@@ -434,8 +434,13 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
         let bytes = fs::read(&receipt).unwrap();
         let next = h.parent.join("next");
         if !after_effect {
-            assert_ne!(h.invoke("feature", "next", &next).0, 0);
-            assert!(!next.exists(), "creation must not erase cleanup failure");
+            let independent = h.parent.join("independent");
+            let (code, admitted, error) = h.invoke("feature", "independent", &independent);
+            assert_eq!(code, 0, "{} {error}", admitted["error"]);
+            assert!(independent.exists());
+            assert!(!admitted["cleanup_failures"].as_array().unwrap().is_empty());
+            assert_eq!(admitted["drain"][0]["report"]["status"], "failed");
+            assert_eq!(fs::read(&receipt).unwrap(), bytes);
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
         let (code, r, e) = h.invoke("feature", "next", &next);
@@ -488,7 +493,7 @@ fn automatic_symlink_containment_and_internal_external_target_safety() {
     }
 }
 
-fn consuming_operation(h: &Host, body: &str) {
+pub(super) fn consuming_operation(h: &Host, body: &str) {
     let mut projects = json(&fs::read(h.root.join(PROJECTS)).unwrap()).unwrap();
     projects["owners"]
         .as_array_mut()
@@ -914,10 +919,6 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
 
 #[test]
 fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     consuming_operation(
@@ -927,8 +928,8 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
     let target = h.parent.join("unknown-use");
     assert_eq!(h.invoke("feature", "unknown-use", &target).0, 0);
     output(&target);
-    let mut wrapper = h
-        .auto_command(
+    let mut wrapper = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command(
             "use",
             &[
                 "--path",
@@ -936,18 +937,10 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
                 "--operation",
                 "use.consumer",
             ],
-        )
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let began = Instant::now();
-    while !target.join(".chrono-harness/state/ready").exists()
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        thread::sleep(Duration::from_millis(20));
-    }
-    assert!(target.join(".chrono-harness/state/ready").exists());
+        ),
+        &h.root,
+    );
+    wrapper.await_file(&target.join(".chrono-harness/state/ready"));
     let child_pid = fs::read_to_string(target.join(".chrono-harness/state/ready")).unwrap();
     wrapper.kill().unwrap();
     let out = wrapper.wait_with_output().unwrap();
