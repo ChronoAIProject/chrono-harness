@@ -662,13 +662,22 @@ fn run_process_inner(
         });
         let exceeded = Arc::new(AtomicBool::new(false));
         let limit = s.output_limit_bytes;
-        let monitor = std::thread::current();
-        fn reader<'scope, R: Read + Send + 'scope>(
+        #[cfg(unix)]
+        let wake = child.ownership.wake();
+        #[cfg(not(unix))]
+        let wake = std::thread::current();
+        let monitor = move || {
+            #[cfg(unix)]
+            wake.notify();
+            #[cfg(not(unix))]
+            wake.unpark();
+        };
+        fn reader<'scope, R: Read + Send + 'scope, W: Fn() + Send + 'scope>(
             scope: &'scope std::thread::Scope<'scope, '_>,
             mut r: R,
             limit: usize,
             flag: Arc<AtomicBool>,
-            monitor: std::thread::Thread,
+            monitor: W,
         ) -> std::thread::ScopedJoinHandle<'scope, std::io::Result<Vec<u8>>> {
             scope.spawn(move || {
                 let result = (|| {
@@ -680,7 +689,7 @@ fn run_process_inner(
                             break;
                         }
                         if out.len() + n > limit && !flag.swap(true, Ordering::Relaxed) {
-                            monitor.unpark();
+                            monitor();
                         }
                         let keep = n.min(limit.saturating_sub(out.len()));
                         out.extend_from_slice(&buf[..keep]);
@@ -689,7 +698,7 @@ fn run_process_inner(
                 })();
                 // EOF or an IO error prompts another real child-status probe;
                 // neither is treated as evidence that the process has exited.
-                monitor.unpark();
+                monitor();
                 result
             })
         }
@@ -734,6 +743,9 @@ fn run_process_inner(
                     break None;
                 }
             }
+            #[cfg(unix)]
+            child.ownership.wait_for_wake(Duration::from_millis(10));
+            #[cfg(not(unix))]
             std::thread::park_timeout(Duration::from_millis(10));
         };
         #[cfg(unix)]

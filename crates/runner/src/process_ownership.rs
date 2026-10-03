@@ -1,6 +1,7 @@
 //! Unix runner-owned launch tree. Anonymous inherited descriptors carry ownership,
 //! never argv/environment policy. Each launcher reaps its own children on cancellation.
 use std::{
+    collections::BTreeMap,
     fs::File,
     os::fd::{AsRawFd, FromRawFd},
     ptr::NonNull,
@@ -43,6 +44,27 @@ struct LaunchFailure {
     stage: LaunchStage,
     reason: LaunchReason,
     errno: i32,
+}
+
+// The existing private handoff socket also carries wake hints after the child
+// has consumed its registration acknowledgement. Hints never establish exit.
+#[derive(Clone)]
+pub(crate) struct Wake(Arc<File>);
+impl Wake {
+    pub(crate) fn notify(&self) {
+        notify(self.0.as_raw_fd());
+    }
+}
+fn notify(fd: i32) {
+    let hint = 1u8;
+    unsafe {
+        libc::send(
+            fd,
+            (&hint as *const u8).cast(),
+            1,
+            libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL,
+        );
+    }
 }
 impl LaunchFailure {
     fn os(stage: LaunchStage, errno: i32) -> Self {
@@ -289,7 +311,7 @@ pub(crate) struct Launch {
     context: File,
     acknowledged: AtomicBool,
     acknowledgement: File,
-    acknowledgement_sender: File,
+    acknowledgement_sender: Arc<File>,
 }
 impl Drop for Launch {
     fn drop(&mut self) {
@@ -351,7 +373,7 @@ impl Launch {
             context,
             acknowledged: AtomicBool::new(true),
             acknowledgement,
-            acknowledgement_sender,
+            acknowledgement_sender: Arc::new(acknowledgement_sender),
         };
         use std::os::unix::fs::FileExt;
         launch
@@ -476,6 +498,30 @@ impl Launch {
     pub(crate) fn cancelled(&self) -> bool {
         self.tree.cancelled(self.index)
     }
+    pub(crate) fn wake(&self) -> Wake {
+        Wake(self.acknowledgement_sender.clone())
+    }
+    pub(crate) fn wait_for_wake(&self, interval: Duration) {
+        let mut pending = libc::pollfd {
+            fd: self.acknowledgement.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let timeout = interval.as_millis().min(i32::MAX as u128) as i32;
+        if unsafe { libc::poll(&mut pending, 1, timeout) } > 0 {
+            // Consume only an advisory notification. The process monitor must
+            // still probe Child::try_wait and enforce cancellation/output bounds.
+            let mut hints = [0u8; 32];
+            unsafe {
+                libc::recv(
+                    pending.fd,
+                    hints.as_mut_ptr().cast(),
+                    hints.len(),
+                    libc::MSG_DONTWAIT,
+                );
+            }
+        }
+    }
     /// Cancellation is scoped to this launch. Allow nested engines to kill and
     /// reap their children before terminating the enclosing group. If an owner
     /// crashed, terminate only its explicitly recorded groups and report failure.
@@ -580,6 +626,7 @@ impl ExitObserver {
             .name("chrono-owned-exits".into())
             .spawn(move || {
                 let shared = unsafe { &*(memory as *const Shared) };
+                let mut wake = BTreeMap::new();
                 while !stopping.load(Ordering::Acquire) {
                     // Receive only explicit launch handoffs. The reply descriptor is
                     // specific to this child, so sibling registrations cannot steal it.
@@ -606,7 +653,14 @@ impl ExitObserver {
                         let reply =
                             unsafe { File::from_raw_fd(*(libc::CMSG_DATA(header).cast::<i32>())) };
                         let [index, generation, pid, launcher] = data;
-                        let ack: i32 = if index < CAPACITY
+                        // The observer retains this endpoint until exit. It is
+                        // private notification state, not a child capability.
+                        let ack: i32 = if unsafe {
+                            libc::fcntl(reply.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC)
+                        } < 0
+                        {
+                            std::io::Error::last_os_error().raw_os_error().unwrap_or(-2)
+                        } else if index < CAPACITY
                             && shared.slots[index].generation.load(Ordering::Acquire) == generation
                         {
                             identities
@@ -628,11 +682,19 @@ impl ExitObserver {
                                 libc::MSG_NOSIGNAL,
                             );
                         }
+                        if ack == 0 {
+                            wake.insert(generation * CAPACITY * 2 + index * 2, reply);
+                        }
                     }
                     identities.retain(|cookie| {
                         let slot = &shared.slots[(cookie / 2) % CAPACITY];
                         slot.state.load(Ordering::Acquire) != 0
                             && slot.generation.load(Ordering::Acquire) == cookie / (CAPACITY * 2)
+                    });
+                    wake.retain(|cookie, _| {
+                        let slot = &shared.slots[(*cookie / 2) % CAPACITY];
+                        slot.state.load(Ordering::Acquire) != 0
+                            && slot.generation.load(Ordering::Acquire) == *cookie / (CAPACITY * 2)
                     });
                     identities.completed(|cookie| {
                         let index = (cookie / 2) % CAPACITY;
@@ -640,6 +702,9 @@ impl ExitObserver {
                         if shared.slots[index].generation.load(Ordering::Acquire) == generation {
                             if cookie % 2 == 0 {
                                 shared.slots[index].terminal.store(true, Ordering::Release);
+                                if let Some(reply) = wake.remove(&cookie) {
+                                    notify(reply.as_raw_fd());
+                                }
                             } else {
                                 shared.slots[index]
                                     .launcher_terminal
