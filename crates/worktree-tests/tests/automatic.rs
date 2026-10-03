@@ -129,6 +129,197 @@ fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     assert_eq!(h.auto("maintain", &[]).0, 0);
 }
 
+fn entry_receipts(h: &Host, entry: &Value) -> Vec<(PathBuf, Vec<u8>)> {
+    let evidence = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS")
+        .ok()
+        .map(|p| PathBuf::from(p).join("original-lifecycle-state"));
+    if let Some(directory) = &evidence {
+        fs::create_dir_all(directory).unwrap();
+        let ledger = fs::read(h.root.join(STATE)).unwrap();
+        fs::write(
+            directory.join(format!("ledger-{}.json", sha256(&ledger))),
+            ledger,
+        )
+        .unwrap();
+    }
+    let mut receipts = vec![entry["terminal"]["receipt"].clone()];
+    if !entry["enrollment"]["sealed_receipt"].is_null() {
+        receipts.push(entry["enrollment"]["sealed_receipt"].clone());
+    }
+    receipts.extend(
+        entry["attempts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["receipt"].clone()),
+    );
+    receipts
+        .iter()
+        .map(|r| {
+            let path = h.root.join(r["path"].as_str().unwrap());
+            let bytes = fs::read(&path).unwrap();
+            assert_eq!(r["sha256"], sha256(&bytes));
+            if let Some(directory) = &evidence {
+                fs::write(
+                    directory.join(format!("receipt-{}.json", sha256(&bytes))),
+                    &bytes,
+                )
+                .unwrap();
+            }
+            (path, bytes)
+        })
+        .collect()
+}
+
+#[test]
+fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    consuming_operation(
+        &h,
+        "mkdir -p 'output λ'\nprintf managed-output > 'output λ/use'\ngit symbolic-ref --short HEAD\n",
+    );
+    let target = h.parent.join("reused");
+    let args = ["--path", target.to_str().unwrap(), "--dispose-evidence"];
+    let (code, r, e) = h.invoke("feature", "first-task", &target);
+    assert_eq!(code, 0, "{r} {e}");
+    output(&target);
+    let (code, r, e) = h.auto("finish", &args);
+    assert_eq!(code, 0, "{r} {e}");
+    assert!(!target.exists());
+    assert_eq!(
+        r["drain"][0]["report"]["artifact_disposals"][0]["bytes_before"],
+        8192
+    );
+    assert_eq!(
+        r["drain"][0]["report"]["artifact_disposals"][0]["bytes_after"],
+        0
+    );
+    let first = h.ledger()["entries"][0].clone();
+    assert_eq!(first["status"], "disposed");
+    assert!(!first["attempts"].as_array().unwrap().is_empty());
+    let mut originals = entry_receipts(&h, &first);
+
+    let (code, r, e) = h.invoke("feature", "second-task", &target);
+    assert_eq!(code, 0, "{r} {e}");
+    assert_eq!(r["drain"], value!([]));
+    let ledger = h.ledger();
+    assert_eq!(ledger["entries"].as_array().unwrap().len(), 2);
+    assert_eq!(ledger["entries"][0], first);
+    assert_eq!(ledger["entries"][1]["branch"], "feature/second-task");
+    assert_ne!(
+        ledger["entries"][1]["enrollment"]["receipt"],
+        first["enrollment"]["receipt"]
+    );
+    for branch in ["second-task", "third-task"] {
+        let (code, r, e) = h.auto(
+            "use",
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        assert_eq!(code, 0, "{r} {e}");
+        assert_eq!(
+            r["managed_process"]["stdout"],
+            format!("feature/{branch}\n")
+        );
+        assert_eq!(
+            fs::read(target.join("output λ/use")).unwrap(),
+            b"managed-output"
+        );
+        originals.push((
+            h.root
+                .join(r["managed_use_receipt"]["path"].as_str().unwrap()),
+            fs::read(
+                h.root
+                    .join(r["managed_use_receipt"]["path"].as_str().unwrap()),
+            )
+            .unwrap(),
+        ));
+        let (code, r, e) = h.auto("finish", &args);
+        assert_eq!(code, 0, "{r} {e}");
+        assert!(!target.exists());
+        assert_eq!(r["drain"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            r["drain"][0]["report"]["branch_ref"],
+            format!("feature/{branch}")
+        );
+        assert_eq!(
+            r["drain"][0]["report"]["worktree_removal"],
+            "verified-absent"
+        );
+        assert_eq!(h.ledger()["entries"][0], first);
+        let entries = h.ledger()["entries"].as_array().unwrap().clone();
+        let retired = entries.last().unwrap().clone();
+        assert_eq!(retired["status"], "disposed");
+        assert_eq!(retired["uses"], value!([]));
+        originals.extend(entry_receipts(&h, &retired));
+        let (code, r, e) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{r} {e}");
+        assert_eq!(r["drain"], value!([]));
+        assert_eq!(h.ledger()["entries"], value!(entries));
+        for (path, bytes) in &originals {
+            assert_eq!(&fs::read(path).unwrap(), bytes);
+        }
+        if branch == "second-task" {
+            git(
+                &h.root,
+                &[
+                    "worktree",
+                    "add",
+                    "-b",
+                    "feature/third-task",
+                    target.to_str().unwrap(),
+                    "dev",
+                ],
+            );
+            let (code, r, e) = h.auto("import", &["--path", target.to_str().unwrap()]);
+            assert_eq!(code, 0, "{r} {e}");
+            assert_eq!(h.ledger()["entries"][2]["enrollment"]["kind"], "import");
+            assert_eq!(
+                &h.ledger()["entries"].as_array().unwrap()[..2],
+                entries.as_slice()
+            );
+        }
+    }
+}
+
+#[test]
+fn automatic_absent_active_enrollment_conflict_preflights_without_creation() {
+    let h = Host::new("payload");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("unresolved");
+    assert_eq!(h.invoke("feature", "original-task", &target).0, 0);
+    let original = h.ledger();
+    // External removal does not establish a terminal handoff in this owner.
+    git(
+        &h.root,
+        &["worktree", "remove", "--force", target.to_str().unwrap()],
+    );
+    assert!(!target.exists());
+    let refs = git(&h.root, &["show-ref"]);
+    let inventory = git(&h.root, &["worktree", "list", "--porcelain"]);
+    let (code, r, e) = h.invoke("feature", "conflicting-task", &target);
+    assert_ne!(code, 0, "{r} {e}");
+    assert!(
+        r["error"].as_str().unwrap().contains("already enrolled"),
+        "{r} {e}"
+    );
+    assert!(
+        !target.exists(),
+        "registration conflict must precede checkout creation: {r}"
+    );
+    assert_eq!(git(&h.root, &["show-ref"]), refs);
+    assert_eq!(
+        git(&h.root, &["worktree", "list", "--porcelain"]),
+        inventory
+    );
+    assert_eq!(h.ledger(), original);
+}
+
 #[test]
 fn automatic_cache_only_preserves_evidence_dirty_and_unretained_work() {
     for reason in ["evidence", "dirty", "unretained"] {

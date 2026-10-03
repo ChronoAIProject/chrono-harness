@@ -365,14 +365,19 @@ impl Manager {
         {
             return Err("cleanup ledger/owner identity mismatch".into());
         }
-        let mut paths = BTreeSet::new();
+        // Entries are successive physical attachments, with disposed generations
+        // retained in order. A pathname may have only one unresolved generation.
+        let mut paths = BTreeMap::new();
         for e in &ledger.entries {
-            if !paths.insert(&e.path)
+            if paths
+                .insert(&e.path, e.status.as_str())
+                .is_some_and(|previous| previous != "disposed")
                 || !matches!(
                     e.status.as_str(),
                     "active" | "terminal" | "disposed" | "retained"
                 )
                 || (e.status == "active") != e.terminal.is_none()
+                || (e.status == "disposed" && !e.uses.is_empty())
             {
                 return Err("invalid cleanup enrollment state".into());
             }
@@ -523,6 +528,33 @@ impl Manager {
         }
         Ok(())
     }
+    fn current_entry(&self, target: &Path) -> Option<usize> {
+        self.ledger
+            .entries
+            .iter()
+            .position(|e| e.path == target && e.status != "disposed")
+    }
+    fn enrollment_available(&self, target: &Path) -> Result<(), String> {
+        if self.current_entry(target).is_some() {
+            return Err("path is already enrolled; preserve its original state".into());
+        }
+        Ok(())
+    }
+    fn preflight_birth(&self, r: &mut Runner, target: &Path) -> Result<(), String> {
+        self.enrollment_available(target)?;
+        match fs::symlink_metadata(target) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.to_string()),
+            Ok(_) => return Err("birth destination must be absent before enrollment".into()),
+        }
+        if r.inventory(&self.policy.coordinator_root)?
+            .iter()
+            .any(|row| row.get("worktree").is_some_and(|p| Path::new(p) == target))
+        {
+            return Err("birth destination still has a Git attachment; preserve it".into());
+        }
+        Ok(())
+    }
     fn enroll(
         &mut self,
         r: &mut Runner,
@@ -531,9 +563,7 @@ impl Manager {
         receipt: Value,
     ) -> Result<(), String> {
         let target = absolute(target, false)?;
-        if self.ledger.entries.iter().any(|e| e.path == target) {
-            return Err("path is already enrolled; preserve its original state".into());
-        }
+        self.enrollment_available(&target)?;
         let branch = r
             .text(&target, &["symbolic-ref", "--short", "HEAD"])?
             .trim()
@@ -635,10 +665,7 @@ impl Manager {
     ) -> Result<(), String> {
         let target = absolute(target, false)?;
         let i = self
-            .ledger
-            .entries
-            .iter()
-            .position(|e| e.path == target)
+            .current_entry(&target)
             .ok_or("worktree is not enrolled; use exact import for existing work")?;
         let e = self.ledger.entries[i].clone();
         if !matches!(e.status.as_str(), "active" | "retained") || !e.uses.is_empty() {
@@ -991,8 +1018,10 @@ pub(crate) fn create(
             .join(o.destination.file_name().ok_or("destination name")?),
         true,
     )?;
-    manager.drain(&[o.root.clone(), destination], report)?;
+    manager.preflight_birth(r, &destination)?;
+    manager.drain(&[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
+    manager.preflight_birth(r, &destination)?;
     create(r, report)?;
     manager.stable(r)?;
     manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"]}))?;
@@ -1014,13 +1043,11 @@ pub(crate) fn seal_birth(
     };
     let target = Path::new(report["destination"].as_str().ok_or("birth destination")?);
     let i = manager
-        .ledger
-        .entries
-        .iter()
-        .position(|e| e.path == target)
+        .current_entry(target)
         .ok_or("birth enrollment missing")?;
     if manager.ledger.entries[i].status != "active"
         || manager.ledger.entries[i].enrollment["kind"] != "birth"
+        || manager.ledger.entries[i].enrollment["receipt"]["report_path"] != report["report_path"]
     {
         return Err("birth enrollment changed before receipt publication".into());
     }
@@ -1129,10 +1156,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 "use" => {
                     let target = target.as_ref().unwrap();
                     let i = manager
-                        .ledger
-                        .entries
-                        .iter()
-                        .position(|e| &e.path == target)
+                        .current_entry(target)
                         .ok_or("managed use requires an enrolled worktree")?;
                     let e = manager.ledger.entries[i].clone();
                     if e.status != "active" {
@@ -1157,12 +1181,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":values["--operation"],"process":process}))?;
                     report["managed_use_receipt"] = value!(receipt);
                     let i = manager
-                        .ledger
-                        .entries
-                        .iter()
-                        .position(|e| &e.path == target)
+                        .current_entry(target)
                         .ok_or("managed enrollment disappeared")?;
-                    if !manager.ledger.entries[i].uses.iter().any(|s| s == token) {
+                    if manager.ledger.entries[i].attachment != e.attachment
+                        || manager.ledger.entries[i].enrollment["receipt"]
+                            != e.enrollment["receipt"]
+                        || !manager.ledger.entries[i].uses.iter().any(|s| s == token)
+                    {
                         return Err("managed use identity disappeared".into());
                     }
                     manager.ledger.entries[i].uses.retain(|s| s != token);
