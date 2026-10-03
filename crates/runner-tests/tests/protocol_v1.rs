@@ -1220,6 +1220,43 @@ fn concurrent_live_identity_handoffs_complete_each_real_child_once() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn closed_output_streams_preserve_child_exit_and_timeout() {
+    for (delay, expected_exit) in [(0.05, Some(7)), (20.0, None)] {
+        let root = tempfile::tempdir().unwrap();
+        let spec = chrono_harness::CommandSpec {
+            program: "/usr/bin/python3".into(),
+            args: vec![
+                "-c".into(),
+                format!(
+                    "import os,time; os.close(1); os.close(2); time.sleep({delay}); open('completed','x').close(); os._exit(7)"
+                ),
+            ],
+            env: Default::default(),
+            timeout_seconds: 1,
+            output_limit_bytes: 4096,
+        };
+        let result = chrono_harness::run_process_observed(
+            root.path(),
+            &spec,
+            &[],
+            &sha256(&fs::read(&spec.program).unwrap()),
+        )
+        .unwrap();
+        assert!(result.stdout_bytes.is_empty());
+        assert!(result.stderr_bytes.is_empty());
+        if let Some(exit) = expected_exit {
+            assert_eq!(result.exit_code, exit, "{result:?}");
+            assert!(result.failure.is_none(), "{result:?}");
+            assert!(root.path().join("completed").exists());
+        } else {
+            assert_eq!(result.failure.as_deref(), Some("process timed out"));
+            assert!(!root.path().join("completed").exists());
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_live_identity_registration_helper() {

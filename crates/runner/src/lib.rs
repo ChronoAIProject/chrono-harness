@@ -662,27 +662,35 @@ fn run_process_inner(
         });
         let exceeded = Arc::new(AtomicBool::new(false));
         let limit = s.output_limit_bytes;
+        let monitor = std::thread::current();
         fn reader<'scope, R: Read + Send + 'scope>(
             scope: &'scope std::thread::Scope<'scope, '_>,
             mut r: R,
             limit: usize,
             flag: Arc<AtomicBool>,
+            monitor: std::thread::Thread,
         ) -> std::thread::ScopedJoinHandle<'scope, std::io::Result<Vec<u8>>> {
             scope.spawn(move || {
-                let mut out = Vec::new();
-                let mut buf = [0u8; 8192];
-                loop {
-                    let n = r.read(&mut buf)?;
-                    if n == 0 {
-                        break;
+                let result = (|| {
+                    let mut out = Vec::new();
+                    let mut buf = [0u8; 8192];
+                    loop {
+                        let n = r.read(&mut buf)?;
+                        if n == 0 {
+                            break;
+                        }
+                        if out.len() + n > limit && !flag.swap(true, Ordering::Relaxed) {
+                            monitor.unpark();
+                        }
+                        let keep = n.min(limit.saturating_sub(out.len()));
+                        out.extend_from_slice(&buf[..keep]);
                     }
-                    if out.len() + n > limit {
-                        flag.store(true, Ordering::Relaxed);
-                    }
-                    let keep = n.min(limit.saturating_sub(out.len()));
-                    out.extend_from_slice(&buf[..keep]);
-                }
-                Ok(out)
+                    Ok(out)
+                })();
+                // EOF or an IO error prompts another real child-status probe;
+                // neither is treated as evidence that the process has exited.
+                monitor.unpark();
+                result
             })
         }
         let stdout = reader(
@@ -690,12 +698,14 @@ fn run_process_inner(
             child.stdout.take().ok_or("missing stdout")?,
             limit,
             exceeded.clone(),
+            monitor.clone(),
         );
         let stderr = reader(
             scope,
             child.stderr.take().ok_or("missing stderr")?,
             limit,
             exceeded.clone(),
+            monitor,
         );
         let start = Instant::now();
         let mut failure = None;
@@ -724,7 +734,7 @@ fn run_process_inner(
                     break None;
                 }
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::park_timeout(Duration::from_millis(10));
         };
         #[cfg(unix)]
         if !child.ownership.drain() {
