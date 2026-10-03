@@ -72,6 +72,19 @@ never acknowledge completion. Launch generations prevent delayed events or a
 retired inherited context from referring to a reused slot. Native macOS behavior
 is tested; Linux pidfd behavior requires native verification.
 
+The observer also records when it actually receives a child's kernel exit event,
+using the system clock underlying `Instant` (Apple `CLOCK_UPTIME_RAW`, otherwise
+`CLOCK_MONOTONIC`). The monitor fixes its evidence cutoff before starting its
+existing execution timer. If it resumes after the deadline, an observation
+strictly before that cutoff permits an immediate child-status probe. Only an
+actual completed status preserves the child result; missing/late observations,
+clock failures or an incomplete probe still time out without another wait.
+The timestamp bounds observed exit from above; it never infers an earlier exit
+when the observer was delayed too. Cancellation, output limits and ownership
+cleanup remain independent guards. The private mapping identity versions this
+layout, so coupled nested binaries must be upgraded together; incompatible
+inherited owners fail instead of silently reinterpreting shared memory.
+
 An operation timeout cancels only that launch subtree. Nested engines terminate
 their groups and reap their children before the enclosing engine joins its child
 and stream workers. The existing one-second cleanup allowance follows the

@@ -716,6 +716,10 @@ fn run_process_inner(
             exceeded.clone(),
             monitor,
         );
+        // Read the shared clock first: this evidence cutoff cannot extend the
+        // existing monitor deadline, including a delay between the two reads.
+        #[cfg(unix)]
+        let terminal_deadline = process_ownership::terminal_deadline(timeout);
         let start = Instant::now();
         let mut failure = None;
         let mut status = loop {
@@ -724,19 +728,27 @@ fn run_process_inner(
                 failure = Some("process cancelled by enclosing owner".to_string());
                 break None;
             }
-            if exceeded.load(Ordering::Relaxed) || start.elapsed() >= timeout {
-                failure = Some(
-                    if exceeded.load(Ordering::Relaxed) {
-                        "process output limit exceeded"
-                    } else {
-                        "process timed out"
-                    }
-                    .to_string(),
-                );
+            if exceeded.load(Ordering::Relaxed) {
+                failure = Some("process output limit exceeded".into());
+                break None;
+            }
+            let expired = start.elapsed() >= timeout;
+            #[cfg(unix)]
+            let timely_exit = child.ownership.observed_exit_before(terminal_deadline);
+            #[cfg(not(unix))]
+            let timely_exit = false;
+            if expired && !timely_exit {
+                failure = Some("process timed out".into());
                 break None;
             }
             match child.try_wait() {
                 Ok(Some(v)) => break Some(v),
+                // A kernel observation never substitutes for joining the child
+                // and never grants another wait interval beyond the deadline.
+                Ok(None) if expired => {
+                    failure = Some("process timed out".into());
+                    break None;
+                }
                 Ok(None) => {}
                 Err(e) => {
                     failure = Some(format!("process wait: {e}"));
