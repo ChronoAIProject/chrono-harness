@@ -6,6 +6,11 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from process_fds import inherited_fds
+
+PASS_FDS = inherited_fds()
 import time
 
 
@@ -73,7 +78,7 @@ def validate(root, config_path):
         with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
             try:
                 process = subprocess.run(argv, cwd=root, stdout=stdout, stderr=stderr,
-                                         timeout=config["timeout_seconds"])
+                                         pass_fds=PASS_FDS, timeout=config["timeout_seconds"])
                 exit_code, error = process.returncode, None
             except subprocess.TimeoutExpired:
                 exit_code, error = 124, "listing timeout"

@@ -17,6 +17,8 @@ pub mod input_file;
 pub mod observation;
 pub mod parity;
 pub mod prepared;
+#[cfg(unix)]
+pub mod process_fds;
 pub mod retained_artifacts;
 mod short_console;
 pub mod units;
@@ -599,7 +601,7 @@ fn run_process_inner(
     }
     let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    let environment = if expected.is_some() {
+    let mut environment = if expected.is_some() {
         s.env.clone()
     } else {
         let mut env: std::collections::BTreeMap<String, String> = std::env::vars().collect();
@@ -626,6 +628,14 @@ fn run_process_inner(
     {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
+    }
+    #[cfg(unix)]
+    let _transfer = process_fds::Transfer::prepare(&mut command)?;
+    #[cfg(unix)]
+    if let Some(value) = &_transfer.value {
+        environment.insert(process_fds::ENV.into(), value.clone());
+    } else {
+        environment.remove(process_fds::ENV);
     }
     #[cfg(unix)]
     let ownership = process_ownership::Launch::prepare()?;
@@ -920,12 +930,26 @@ pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check\nchrono-harness check --unit ID\nchrono-harness check --collect\nConfigured short checks read .chrono-harness/config.json and produce their inputs automatically. Legacy explicit spelling is accepted only by legacy registered contracts. Full independent scopes require registered execution_units.\nchrono-harness parity --host-root H --report P --compared-report P\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. The parity command adds fail-closed evidence to two completed full reports; it never changes the canonical check command. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
     ["--version"]|["-V"]=>CliOutput{exit_code:0,stdout:format!("chrono-harness {}\n",env!("CARGO_PKG_VERSION")),stderr:String::new()},
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
-    ["check",rest @ ..]=>match check(rest, entry){Ok((code,s))=>CliOutput{exit_code:code,stdout:s,stderr:String::new()},Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
+    ["check",rest @ ..]=>match check(rest, entry){Ok(output)=>output,Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
     ["parity",rest @ ..]=>parity_command(rest),
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
 }
-fn check(args: &[&str], entry: Value) -> Result<(u8, String), String> {
+fn check(args: &[&str], entry: Value) -> Result<CliOutput, String> {
+    if args.is_empty() || args == ["--collect"] || matches!(args, ["--unit", _]) {
+        let root = fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        if let Some(result) = prepared::participate(&root, args)? {
+            return Ok(result);
+        }
+    }
+    check_unmanaged(args, entry).map(|(exit_code, stdout)| CliOutput {
+        exit_code,
+        stdout,
+        stderr: String::new(),
+    })
+}
+fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     if args.is_empty() || args == ["--collect"] || matches!(args, ["--unit", _]) {
         let root = fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;

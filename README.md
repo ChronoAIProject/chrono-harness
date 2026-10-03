@@ -148,3 +148,5 @@ Registered routes/projects execution, actual receipts, FILEMAP v2 and the finite
 公开 beta.8 还提供 `recover-interrupted`：在创建工作树或取得清理锁前保留恢复身份，对缺失／截断结果按显式计划核对当前状态并解锁，原操作结果仍标未知。`cleanup-fetch-interrupted` 还按 fetch 前保留的独立身份清理中断留下的临时 ref，要求明确的当前 OID 与保留分支。这两个入口已包含在公开 beta.8 中；格式与剩余恢复范围见 [中断恢复](docs/worktree.md#interrupted-checkout-recovery)。
 
 beta.11 新增显式 `inspect-rebind`／`rebind` 元数据重建，以及所有现役检查／worktree 消费者共用的原始 checkout 身份核对。真实公开混合宿主已验证：Git 配置隐藏的执行位变化仍被拒绝，损坏索引重建保留未提交工作、显式选择的索引和旧元数据。重建不推断丢失的历史索引，不证明原操作成功；源码新增 `resume-rebind`，按保留 intent 与原计划续跑中断／失败重建，保留原结果与备份；beta.15 开始包含此入口。见[元数据重建](docs/worktree.md#explicit-metadata-rebind)与[原始快照身份](docs/git-facts.md#literal-checkout-identity)。
+
+候选源码增加显式 automatic_cleanup/v2 的内核租约与未 finish 缓存恢复，并为短 check/bootstrap 登记自动参与。本地真实 Cargo test／原生子进程回归验证包装器终止后的租约保留；已提交组合、协调者二进制部署、兼容生产者切换和支持平台验收仍归调用方，尚未宣称完整采用。

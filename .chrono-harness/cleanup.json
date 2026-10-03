@@ -1,7 +1,7 @@
 {
-  "schema": "chrono-worktree-automatic-cleanup/v1",
+  "schema": "chrono-worktree-automatic-cleanup/v2",
   "coordinator_root": "git-main-worktree",
-  "state_directory": ".chrono-harness/state/automatic-cleanup/",
+  "state_directory": ".chrono-harness/state/automatic-cleanup-v2/",
   "retained_ref": "refs/heads/dev",
   "retention": "same-tree",
   "remove_branch": false,

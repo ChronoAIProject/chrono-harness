@@ -246,10 +246,33 @@ else:sys.exit(8)
     fn units(&self, d: &Value) {
         for unit in d["required_units"].as_array().unwrap() {
             let unit = unit.as_str().unwrap();
-            let out = self
-                .command(&["check", "--unit", unit], d, &Value::Null)
-                .output()
-                .unwrap();
+            let command = self.command(&["check", "--unit", unit], d, &Value::Null);
+            let argv: Vec<String> = std::iter::once(command.get_program())
+                .chain(command.get_args())
+                .map(|s| s.to_string_lossy().into_owned())
+                .collect();
+            let environment: Value = command
+                .get_envs()
+                .map(|(key, value)| {
+                    (
+                        key.to_string_lossy().into_owned(),
+                        value
+                            .map(|v| json!(v.to_string_lossy()))
+                            .unwrap_or(Value::Null),
+                    )
+                })
+                .collect::<serde_json::Map<String, Value>>()
+                .into();
+            let out = {
+                let mut command = command;
+                command.output().unwrap()
+            };
+            retain_command_result(
+                &self.host.root,
+                &argv,
+                &json!({"unit":unit,"detection":d,"needs":Value::Null,"environment":environment}),
+                &out,
+            );
             assert!(
                 out.status.success(),
                 "{} {}",
@@ -1467,7 +1490,8 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     install(dir.path());
     let payload = json!({"ref":"refs/heads/dev","before":base,"after":candidate,"created":false,"deleted":false});
     json_file(dir.path(), ".chrono-harness/state/event.json", &payload);
-    let out = Command::new(dir.path().join(".chrono-harness/bin/chrono-ci"))
+    let mut command = Command::new(dir.path().join(".chrono-harness/bin/chrono-ci"));
+    command
         .current_dir(dir.path())
         .args([
             "detect",
@@ -1487,9 +1511,18 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         .env("GITHUB_RUN_ID", "101")
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GITHUB_JOB", "detect")
-        .env("CHRONO_WORKFLOW_REVISION", &candidate)
-        .output()
-        .unwrap();
+        .env("CHRONO_WORKFLOW_REVISION", &candidate);
+    let argv: Vec<String> = std::iter::once(command.get_program())
+        .chain(command.get_args())
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect();
+    let out = command.output().unwrap();
+    retain_command_result(
+        dir.path(),
+        &argv,
+        &json!({"payload":payload,"candidate":candidate}),
+        &out,
+    );
     assert!(
         out.status.success(),
         "{}",

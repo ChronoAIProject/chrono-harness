@@ -993,6 +993,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
         }
       ]
     },
@@ -1803,6 +1807,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
         }
       ]
     },
@@ -3865,6 +3873,10 @@
         {
           "kind": "test-execution",
           "to": "test:workflow-short"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
         }
       ]
     },
@@ -3969,6 +3981,98 @@
         {
           "kind": "runtime-input",
           "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/process_fds.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/ownership.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/interrupted_cleanup.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/process_fds.py",
+      "owner": "repository",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-workflow-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-units"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-short"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/process_fds.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
         }
       ]
     },
