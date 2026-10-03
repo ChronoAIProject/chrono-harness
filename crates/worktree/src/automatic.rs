@@ -137,6 +137,7 @@ struct Manager {
     config_bytes: Vec<u8>,
     anchor_head: String,
     registrations: Registrations,
+    registry_digest: String,
     ledger: Ledger,
     directory: PathBuf,
     _gate: Gate,
@@ -293,24 +294,18 @@ impl Manager {
             return Ok(None);
         };
         let anchor = &policy.coordinator_root;
-        if absolute(
-            Path::new(r.text(anchor, &["rev-parse", "--show-toplevel"])?.trim()),
-            false,
-        )? != *anchor
-        {
+        let observed = r.checkout_identity(anchor)?;
+        if absolute(&observed.top, false)? != *anchor {
             return Err("coordinator is not a Git checkout root".into());
         }
-        let common = absolute(
-            &anchor.join(r.text(anchor, &["rev-parse", "--git-common-dir"])?.trim()),
-            false,
-        )?;
+        let common = absolute(&observed.common, false)?;
         let root_common =
             fs::canonicalize(root.join(r.text(root, &["rev-parse", "--git-common-dir"])?.trim()))
                 .map_err(|e| e.to_string())?;
         if common != root_common {
             return Err("coordinator belongs to a different repository".into());
         }
-        let anchor_head = r.oid(anchor, "HEAD")?;
+        let anchor_head = observed.head;
         if fs::read(no_symlink_parents(anchor, config_path)?).map_err(|e| e.to_string())? != bytes
             || r.blob(anchor, &anchor_head, config_path)? != bytes
             || fs::read(no_symlink_parents(anchor, &policy_path)?).map_err(|e| e.to_string())?
@@ -320,7 +315,8 @@ impl Manager {
             return Err("coordinator policy/configuration identity mismatch".into());
         }
         let host_config = r.config.host_config.clone();
-        let (registrations, _) = start::registrations(r, anchor, &anchor_head, &host_config)?;
+        let (registrations, registry_digest) =
+            start::registrations(r, anchor, &anchor_head, &host_config)?;
         for path in [config_path, &policy_path] {
             start::registered_policy(&registrations, path, &policy.state_directory)?;
         }
@@ -475,6 +471,7 @@ impl Manager {
             config_bytes: bytes.into(),
             anchor_head,
             registrations,
+            registry_digest,
             ledger,
             directory,
             _gate: gate,
@@ -729,7 +726,14 @@ impl Manager {
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
-        let (target_registrations, _) = start::registrations(r, &entry.path, &head, &host_config)?;
+        let target_snapshot = if head == self.anchor_head {
+            None
+        } else {
+            Some(start::registrations(r, &entry.path, &head, &host_config)?)
+        };
+        let target_registrations = target_snapshot
+            .as_ref()
+            .map_or(&self.registrations, |(registrations, _)| registrations);
         artifact_disposal::registered(
             &self
                 .policy
@@ -1009,7 +1013,19 @@ impl Manager {
             .map(|a| a.path.clone())
             .collect();
         let host_config = r.config.host_config.clone();
-        let (target_regs, target_digest) = start::registrations(r, &e.path, &head, &host_config)?;
+        // check_entry just verified the live attachment and common repository.
+        // Equal immutable commits use the already observed coordinator registry;
+        // different commits acquire their own snapshot. No live check is reused.
+        let target_snapshot = if head == self.anchor_head {
+            None
+        } else {
+            Some(start::registrations(r, &e.path, &head, &host_config)?)
+        };
+        let (target_regs, target_digest) = target_snapshot
+            .as_ref()
+            .map_or((&self.registrations, &self.registry_digest), |(r, d)| {
+                (r, d)
+            });
         artifact_disposal::registered(
             &names,
             &[self.registrations.config(), target_regs.config()],

@@ -21,6 +21,60 @@ fn output(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/cache"), "reproducible").unwrap();
 }
+#[test]
+fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let script = h.parent.join("identity-git");
+    fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+if [ -f "$HOME/identity-fault" ] && [ "$PWD" = "$HOME/observed" ] && [ "$2" = rev-parse ] && [ "$3" = --show-toplevel ] && [ "$4" = --git-common-dir ]; then
+    case "$(cat "$HOME/identity-fault")" in
+        truncated) printf '%s\n' "$PWD"; exit 0 ;;
+        malformed-head) printf '%s\n' "$PWD" "$HOME/source with spaces/.git" not-an-oid; exit 0 ;;
+        foreign-common) printf '%s\n' "$PWD" "$HOME/foreign-common" "$('{}' rev-parse HEAD)"; exit 0 ;;
+        failure) printf 'original identity failure\n' >&2; exit 71 ;;
+    esac
+fi
+exec '{}' "$@"
+"#,
+            real.display(),
+            real.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    h.policy(|p| p["git"]["program"] = value!(script));
+    let target = h.parent.join("observed");
+    assert_eq!(h.invoke("feature", "observed", &target).0, 0);
+    output(&target);
+    fs::create_dir(h.parent.join("foreign-common")).unwrap();
+    let source = fs::read(target.join("payload")).unwrap();
+    for fault in ["truncated", "malformed-head", "foreign-common", "failure"] {
+        fs::write(h.parent.join("identity-fault"), fault).unwrap();
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert!(target.join("output λ/cache").exists(), "{fault}");
+        assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+        assert_eq!(h.ledger()["entries"][0]["ownership"]["cache_pending"], true);
+        if fault == "failure" {
+            let processes = report["drain"][0]["report"]["processes"]
+                .as_array()
+                .unwrap();
+            let original = &processes.last().unwrap()["process"];
+            assert_eq!(original["exit_code"], 71);
+            assert_eq!(original["stderr"], "original identity failure\n");
+        }
+    }
+    fs::remove_file(h.parent.join("identity-fault")).unwrap();
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(!target.join("output λ").exists());
+    assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+}
 fn participating_check(h: &Host) {
     super::check_inputs::bind(h);
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();

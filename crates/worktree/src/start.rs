@@ -21,6 +21,11 @@ pub(crate) struct Runner {
     processes: Vec<Value>,
     immutable_blobs: BTreeMap<(PathBuf, String, String), Vec<u8>>,
 }
+pub(crate) struct CheckoutIdentity {
+    pub(crate) top: PathBuf,
+    pub(crate) common: PathBuf,
+    pub(crate) head: String,
+}
 impl Runner {
     pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
         self.input(root, args, &[])
@@ -108,6 +113,31 @@ impl Runner {
             .to_string();
         facts::full_oid(&oid)?;
         Ok(oid)
+    }
+    /// Read the current checkout identity in one Git invocation. This is a live
+    /// observation, never an immutable-object cache or a cross-effect snapshot.
+    pub(crate) fn checkout_identity(&mut self, root: &Path) -> Result<CheckoutIdentity, String> {
+        let observed = self.text(
+            root,
+            &[
+                "rev-parse",
+                "--show-toplevel",
+                "--git-common-dir",
+                "--verify",
+                "--end-of-options",
+                "HEAD",
+            ],
+        )?;
+        let fields: Vec<_> = observed.trim_end_matches('\n').split('\n').collect();
+        if fields.len() != 3 || fields.iter().any(|field| field.is_empty()) {
+            return Err("invalid Git checkout identity observation".into());
+        }
+        facts::full_oid(fields[2])?;
+        Ok(CheckoutIdentity {
+            top: root.join(fields[0]),
+            common: root.join(fields[1]),
+            head: fields[2].into(),
+        })
     }
     pub(crate) fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         facts::full_oid(oid)?;
