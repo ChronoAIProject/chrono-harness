@@ -3,6 +3,44 @@ use serde_json::json as value;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
+// Isolated launch helpers reject allocator use between fork and exec, including
+// error paths. This observes real child execution, independent of its diagnostics.
+struct ForkCheckedAllocator;
+static LAUNCH_PARENT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+unsafe extern "C" {
+    fn getpid() -> i32;
+    fn _exit(status: i32) -> !;
+}
+fn check_fork_allocator() {
+    let parent = LAUNCH_PARENT.load(std::sync::atomic::Ordering::Relaxed);
+    if parent != 0 && unsafe { getpid() } != parent {
+        unsafe { _exit(97) };
+    }
+}
+fn check_launch_allocations() {
+    LAUNCH_PARENT.store(unsafe { getpid() }, std::sync::atomic::Ordering::Relaxed);
+}
+unsafe impl std::alloc::GlobalAlloc for ForkCheckedAllocator {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        check_fork_allocator();
+        unsafe { std::alloc::System.alloc(layout) }
+    }
+    unsafe fn alloc_zeroed(&self, layout: std::alloc::Layout) -> *mut u8 {
+        check_fork_allocator();
+        unsafe { std::alloc::System.alloc_zeroed(layout) }
+    }
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: std::alloc::Layout) {
+        check_fork_allocator();
+        unsafe { std::alloc::System.dealloc(pointer, layout) }
+    }
+    unsafe fn realloc(&self, pointer: *mut u8, layout: std::alloc::Layout, size: usize) -> *mut u8 {
+        check_fork_allocator();
+        unsafe { std::alloc::System.realloc(pointer, layout, size) }
+    }
+}
+#[global_allocator]
+static ALLOCATOR: ForkCheckedAllocator = ForkCheckedAllocator;
+
 // Ordinary protocol cases test responses, not startup latency. Real child
 // startup has exceeded five seconds on the shared host. Deliberate timeout
 // cases below keep their separate two-second bound and thirty-second stall.
@@ -1110,6 +1148,7 @@ fn owned_launch_burst_helper() {
     let Ok(root) = std::env::var("CHRONO_LAUNCH_BURST") else {
         return;
     };
+    check_launch_allocations();
     let root = std::path::Path::new(&root);
     let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
     let digest = sha256(&fs::read(&python).unwrap());
@@ -1188,6 +1227,7 @@ fn failed_live_identity_registration_helper() {
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
         return;
     };
+    check_launch_allocations();
     // The independent Python parent fixes this process's descriptor budget.
     // Leave the ownership transport free, while exhausting the observer's
     // remaining kernel descriptor when it receives the live handoff.
@@ -1220,6 +1260,10 @@ fn failed_live_identity_registration_helper() {
         "{error}"
     );
     assert!(error.contains("os error 24"), "{error}");
+    assert!(
+        error.split(';').next().unwrap().contains("os error 24"),
+        "spawn must preserve the actual errno independently of its diagnostic: {error}"
+    );
 }
 
 #[cfg(target_os = "macos")]

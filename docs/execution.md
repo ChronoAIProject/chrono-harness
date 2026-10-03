@@ -80,12 +80,17 @@ undeclared-writer guarantee or cross-invocation lock. Callers retain disjoint
 checkouts and established worktree lifecycle boundaries.
 
 Failed live-identity registration returns the observer's actual kernel errno.
-The launch owner retains a pre-exec diagnostic in its private context descriptor
-and reads it after a failed spawn: Rust's fork/exec error channel otherwise turns
-custom pre-exec errors into bare EINVAL. A failed spawn still has no executed
-process receipt; the additional diagnostic does not invent an exit or completion.
+The child publishes a fixed stage/reason/errno record in its private context
+descriptor with bounded checked writes. All pre-exec error paths use stack-only
+records and raw OS errors; diagnostic text is constructed only by the parent
+after a failed spawn. Unavailable or partial diagnostics do not replace the
+actual errno; owner failures without an OS errno use EINVAL. A failed spawn still
+has no executed process receipt; diagnostics do not invent an exit or completion.
 This changes neither the one-second handoff/cleanup allowances nor execution
-limits. Linux's pidfd syscall uses the explicit existing `libc::pid_t` ABI type;
+limits. The existing send loop retries EAGAIN, EINTR and ENOBUFS within that same
+handoff allowance; exhaustion retains the last send errno. Parent diagnostics
+distinguish an acknowledgement poll timeout from a short read.
+Linux's pidfd syscall uses the explicit existing `libc::pid_t` ABI type;
 successful compilation does not certify Linux runtime behavior.
 
 Registration owns strict interpretation; FILEMAP owns record identities, targets

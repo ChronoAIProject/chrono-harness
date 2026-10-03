@@ -15,6 +15,102 @@ const CONTEXT_FD: i32 = 199;
 const MAGIC: u64 = 0x4348524f4e4f5032;
 const OBSERVER_FD: i32 = 200;
 const CAPACITY: usize = 4096;
+
+#[repr(i32)]
+enum LaunchStage {
+    HandoffSend = 1,
+    HandoffPoll,
+    HandoffRead,
+    Registration,
+    Descriptors,
+    DescriptorFlags,
+    Ancestry,
+    HandoffClock,
+}
+#[repr(i32)]
+enum LaunchReason {
+    Os = 1,
+    Unavailable,
+    IdentityRetired,
+    MissingErrno,
+    Cancelled,
+    InvalidAncestry,
+}
+// Stack-only child errors. The private diagnostic follows the unchanged two-u64
+// launch identity. No formatting, allocation or allocator-backed error may occur
+// between fork and exec, even when publishing this record fails.
+struct LaunchFailure {
+    stage: LaunchStage,
+    reason: LaunchReason,
+    errno: i32,
+}
+impl LaunchFailure {
+    fn os(stage: LaunchStage, errno: i32) -> Self {
+        Self {
+            stage,
+            reason: LaunchReason::Os,
+            errno,
+        }
+    }
+    fn last_os(stage: LaunchStage) -> Self {
+        Self::os(
+            stage,
+            std::io::Error::last_os_error()
+                .raw_os_error()
+                .unwrap_or(libc::EINVAL),
+        )
+    }
+    fn owner(stage: LaunchStage, reason: LaunchReason) -> Self {
+        Self {
+            stage,
+            reason,
+            errno: 0,
+        }
+    }
+    fn publish(self, fd: i32) -> std::io::Error {
+        let record = [self.stage as i32, self.reason as i32, self.errno];
+        let bytes = unsafe {
+            std::slice::from_raw_parts(record.as_ptr().cast::<u8>(), std::mem::size_of_val(&record))
+        };
+        let mut written = 0;
+        // Bound retries, including EINTR. Partial/unavailable diagnostics never
+        // change the original errno transported by Command's exec error pipe.
+        for _ in 0..bytes.len() {
+            let n = unsafe {
+                libc::pwrite(
+                    fd,
+                    bytes[written..].as_ptr().cast(),
+                    bytes.len() - written,
+                    16 + written as libc::off_t,
+                )
+            };
+            if n > 0 {
+                written += n as usize;
+                if written == bytes.len() {
+                    break;
+                }
+            } else if n == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR)
+            {
+                break;
+            }
+        }
+        std::io::Error::from_raw_os_error(if self.errno == 0 {
+            libc::EINVAL
+        } else {
+            self.errno
+        })
+    }
+}
+
+fn handoff_clock() -> Result<u128, LaunchFailure> {
+    let mut now: libc::timespec = unsafe { std::mem::zeroed() };
+    if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) } < 0 {
+        return Err(LaunchFailure::last_os(LaunchStage::HandoffClock));
+    }
+    Ok((now.tv_sec as u128)
+        .saturating_mul(1_000_000_000)
+        .saturating_add(now.tv_nsec as u128))
+}
 #[repr(C)]
 struct Slot {
     state: AtomicU8,
@@ -310,13 +406,13 @@ impl Launch {
                         || libc::dup2(context_fd, CONTEXT_FD) < 0
                         || libc::dup2(observer_fd, OBSERVER_FD) < 0
                     {
-                        return Err(std::io::Error::last_os_error());
+                        return Err(LaunchFailure::last_os(LaunchStage::Descriptors));
                     }
                     if libc::fcntl(TREE_FD, libc::F_SETFD, 0) < 0
                         || libc::fcntl(CONTEXT_FD, libc::F_SETFD, 0) < 0
                         || libc::fcntl(OBSERVER_FD, libc::F_SETFD, 0) < 0
                     {
-                        return Err(std::io::Error::last_os_error());
+                        return Err(LaunchFailure::last_os(LaunchStage::DescriptorFlags));
                     }
                     let mut at = index;
                     for _ in 0..CAPACITY {
@@ -324,31 +420,57 @@ impl Launch {
                             return Ok(());
                         }
                         if shared.slots[at].cancelled.load(Ordering::Acquire) {
-                            return Err(std::io::Error::other(
-                                "process cancelled by enclosing owner before exec",
+                            return Err(LaunchFailure::owner(
+                                LaunchStage::Ancestry,
+                                LaunchReason::Cancelled,
                             ));
                         }
                         at = shared.slots[at].parent.load(Ordering::Acquire);
                     }
-                    Err(std::io::Error::other("invalid process ownership ancestry"))
+                    Err(LaunchFailure::owner(
+                        LaunchStage::Ancestry,
+                        LaunchReason::InvalidAncestry,
+                    ))
                 })();
-                if let Err(error) = &result {
-                    // std's fork/exec error pipe preserves only errno, replacing
-                    // custom pre_exec errors with EINVAL. Keep the actual owner
-                    // diagnostic in this launch's already-private context file.
-                    let message = error.to_string();
-                    libc::pwrite(context_fd, message.as_ptr().cast(), message.len(), 16);
-                }
-                result
+                result.map_err(|failure| failure.publish(context_fd))
             });
         }
     }
     pub(crate) fn spawn_error(&self, error: std::io::Error) -> String {
         use std::os::unix::fs::FileExt;
-        let mut message = [0u8; 4096];
-        match self.context.read_at(&mut message, 16) {
-            Ok(n) if n > 0 => format!("{error}; {}", String::from_utf8_lossy(&message[..n])),
-            _ => error.to_string(),
+        let mut bytes = [0u8; 12];
+        if self.context.read_exact_at(&mut bytes, 16).is_err() {
+            return error.to_string();
+        }
+        let [stage, reason, errno] = std::array::from_fn(|i| {
+            i32::from_ne_bytes(bytes[i * 4..i * 4 + 4].try_into().unwrap())
+        });
+        // Render only in the parent, after spawn has returned and reaped a
+        // failed pre-exec child. Incomplete or unknown records are diagnostic
+        // absence, never evidence of a process exit or successful registration.
+        let detail = match (stage, reason) {
+            (1, 1) => "process ownership exit handoff send",
+            (2, 1) => "process ownership live exit handoff poll",
+            (3, 1) => "process ownership live exit handoff read",
+            (2, 2) => "process ownership live exit handoff failed (poll timeout)",
+            (3, 2) => "process ownership live exit handoff failed (short read)",
+            (4, 1) => "process ownership live exit registration",
+            (4, 3) => "process ownership live exit handoff identity retired",
+            (4, 4) => "process ownership live exit registration failed without OS errno",
+            (5, 1) => "process ownership descriptor duplication",
+            (6, 1) => "process ownership descriptor flags",
+            (7, 5) => "process cancelled by enclosing owner before exec",
+            (7, 6) => "invalid process ownership ancestry",
+            (8, 1) => "process ownership live exit handoff clock",
+            _ => return error.to_string(),
+        };
+        if errno == 0 {
+            format!("{error}; {detail}")
+        } else {
+            format!(
+                "{error}; {detail}: {}",
+                std::io::Error::from_raw_os_error(errno)
+            )
         }
     }
     pub(crate) fn cancelled(&self) -> bool {
@@ -561,7 +683,7 @@ fn register_exit(
     reply: i32,
     index: usize,
     generation: usize,
-) -> std::io::Result<()> {
+) -> Result<(), LaunchFailure> {
     let mut data = [
         index,
         generation,
@@ -584,23 +706,26 @@ fn register_exit(
         (*header).cmsg_type = libc::SCM_RIGHTS;
         (*header).cmsg_len = libc::CMSG_LEN(std::mem::size_of::<i32>() as _) as _;
         *(libc::CMSG_DATA(header).cast::<i32>()) = reply;
-        let start = Instant::now();
+        let start = handoff_clock()?;
         loop {
             if libc::sendmsg(observer, &msg, libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL) >= 0 {
                 break;
             }
-            let error = std::io::Error::last_os_error();
-            if !matches!(error.raw_os_error(), Some(libc::EAGAIN) | Some(libc::EINTR))
-                || start.elapsed() >= Duration::from_secs(1)
+            let failure = LaunchFailure::last_os(LaunchStage::HandoffSend);
+            if !matches!(failure.errno, libc::EAGAIN | libc::EINTR | libc::ENOBUFS)
+                || handoff_clock()?.saturating_sub(start) >= 1_000_000_000
             {
-                return Err(std::io::Error::other(format!(
-                    "process ownership exit handoff send: {error}"
-                )));
+                return Err(failure);
             }
-            // Finite anonymous transport can exert backpressure under ordinary
+            // ENOBUFS may succeed once kernel buffers become available, just as
+            // finite anonymous transport can exert backpressure under ordinary
             // concurrent launches. No child has exec'd; retain one handoff and
             // the existing one-second bound instead of losing its registration.
-            std::thread::sleep(Duration::from_millis(1));
+            let pause = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 1_000_000,
+            };
+            libc::nanosleep(&pause, std::ptr::null_mut());
         }
         let mut poll = libc::pollfd {
             fd: acknowledgement,
@@ -608,36 +733,48 @@ fn register_exit(
             revents: 0,
         };
         let mut ack = 0i32;
-        if libc::poll(
+        let polled = libc::poll(
             &mut poll,
             1,
-            (1000u128.saturating_sub(start.elapsed().as_millis())) as i32,
-        ) != 1
-            || libc::read(
-                acknowledgement,
-                (&mut ack as *mut i32).cast(),
-                std::mem::size_of_val(&ack),
-            ) != std::mem::size_of_val(&ack) as isize
-        {
-            return Err(std::io::Error::other(
-                "process ownership live exit handoff failed",
+            (1000u128.saturating_sub(handoff_clock()?.saturating_sub(start) / 1_000_000)) as i32,
+        );
+        if polled < 0 {
+            return Err(LaunchFailure::last_os(LaunchStage::HandoffPoll));
+        }
+        if polled != 1 {
+            return Err(LaunchFailure::owner(
+                LaunchStage::HandoffPoll,
+                LaunchReason::Unavailable,
+            ));
+        }
+        let received = libc::read(
+            acknowledgement,
+            (&mut ack as *mut i32).cast(),
+            std::mem::size_of_val(&ack),
+        );
+        if received < 0 {
+            return Err(LaunchFailure::last_os(LaunchStage::HandoffRead));
+        }
+        if received != std::mem::size_of_val(&ack) as isize {
+            return Err(LaunchFailure::owner(
+                LaunchStage::HandoffRead,
+                LaunchReason::Unavailable,
             ));
         }
         if ack == -1 {
-            return Err(std::io::Error::other(
-                "process ownership live exit handoff identity retired",
+            return Err(LaunchFailure::owner(
+                LaunchStage::Registration,
+                LaunchReason::IdentityRetired,
             ));
         }
         if ack == -2 {
-            return Err(std::io::Error::other(
-                "process ownership live exit registration failed without OS errno",
+            return Err(LaunchFailure::owner(
+                LaunchStage::Registration,
+                LaunchReason::MissingErrno,
             ));
         }
         if ack != 0 {
-            return Err(std::io::Error::other(format!(
-                "process ownership live exit registration: {}",
-                std::io::Error::from_raw_os_error(ack)
-            )));
+            return Err(LaunchFailure::os(LaunchStage::Registration, ack));
         }
     }
     Ok(())
