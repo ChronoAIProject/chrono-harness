@@ -324,6 +324,58 @@ impl CapturedChild {
             stderr: fs::read(&self.stderr)?,
         })
     }
+    #[cfg(target_os = "linux")]
+    fn record_wait_state(&self, watched: &Path) {
+        // Observe this fixture's declared child before teardown. These reads are
+        // failure diagnostics, never a cleanup or completion decision.
+        let mut pending = vec![self.child.id()];
+        let mut seen = std::collections::BTreeSet::new();
+        let mut processes = Vec::new();
+        while let Some(pid) = pending.pop() {
+            if seen.len() >= 128 || !seen.insert(pid) {
+                continue;
+            }
+            let root = PathBuf::from(format!("/proc/{pid}"));
+            let read = |name: &str| match fs::read(root.join(name)) {
+                Ok(mut bytes) => {
+                    bytes.truncate(4096);
+                    value!({"bytes": String::from_utf8_lossy(&bytes).replace('\0', " ")})
+                }
+                Err(error) => value!({"error": error.to_string()}),
+            };
+            let before = read("stat");
+            let mut children = Vec::new();
+            if let Ok(tasks) = fs::read_dir(root.join("task")) {
+                for task in tasks.flatten() {
+                    if let Ok(ids) = fs::read_to_string(task.path().join("children")) {
+                        children.extend(
+                            ids.split_whitespace()
+                                .filter_map(|id| id.parse::<u32>().ok()),
+                        );
+                    }
+                }
+            }
+            pending.extend(children.iter().copied());
+            processes.push(value!({"pid":pid,"stat_before":before,"command":read("cmdline"),"wait_channel":read("wchan"),"children":children,"stat_after":read("stat")}));
+        }
+        let parent = watched.parent().unwrap();
+        let markers: Vec<_> = [
+            "cargo-wrapper",
+            "native-pid",
+            "native-holder",
+            "check-holder",
+        ]
+        .into_iter()
+        .map(|name| {
+            let result = fs::read_to_string(parent.join(name));
+            value!({"name":name,"result":result.map_err(|e| e.to_string())})
+        })
+        .collect();
+        eprintln!(
+            "CAPTURED_CHILD_WAIT_STATE {}",
+            value!({"watched":watched,"processes":processes,"markers":markers})
+        );
+    }
     pub(super) fn await_file(&mut self, path: &Path) {
         let began = Instant::now();
         while !path.exists() && began.elapsed() < Duration::from_secs(10) {
@@ -335,6 +387,8 @@ impl CapturedChild {
         if !path.exists() {
             let before_kill = self.try_wait().unwrap();
             if before_kill.is_none() {
+                #[cfg(target_os = "linux")]
+                self.record_wait_state(path);
                 let _ = self.kill();
             }
             let status = self.wait().unwrap();
@@ -1019,6 +1073,8 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         thread::sleep(Duration::from_millis(10));
     }
     if !handshake.exists() {
+        #[cfg(target_os = "linux")]
+        check.record_wait_state(&handshake);
         let _ = check.kill();
         let original = check.wait_with_output().unwrap();
         panic!(
