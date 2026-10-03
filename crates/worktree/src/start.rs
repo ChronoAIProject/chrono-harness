@@ -151,6 +151,49 @@ impl Runner {
         self.immutable_blobs.insert(key, bytes.clone());
         Ok(bytes)
     }
+    fn registry_blobs(
+        &mut self,
+        root: &Path,
+        oid: &str,
+        paths: &[String],
+    ) -> Result<Vec<(String, Vec<u8>)>, String> {
+        facts::full_oid(oid)?;
+        let pending = paths
+            .iter()
+            .filter(|path| {
+                !self.immutable_blobs.contains_key(&(
+                    root.to_path_buf(),
+                    oid.into(),
+                    (*path).clone(),
+                ))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let acquired = facts::acquire_registry_blobs(
+            oid,
+            &pending,
+            self.config.output_limit_bytes,
+            |args, input| {
+                let process = self.input(root, args, input)?;
+                let index = self.processes.len() - 1;
+                Ok((index, Self::output(process, args)?))
+            },
+            str::to_owned,
+        )?;
+        for blob in acquired {
+            self.immutable_blobs
+                .insert((root.to_path_buf(), oid.into(), blob.path), blob.bytes);
+        }
+        Ok(paths
+            .iter()
+            .map(|path| {
+                (
+                    path.clone(),
+                    self.immutable_blobs[&(root.to_path_buf(), oid.into(), path.clone())].clone(),
+                )
+            })
+            .collect())
+    }
     pub(crate) fn inventory(
         &mut self,
         root: &Path,
@@ -663,7 +706,9 @@ pub(crate) fn registrations(
     head: &str,
     config_path: &str,
 ) -> Result<(Registrations, String), String> {
-    let snapshot = facts::registry_snapshot_with(config_path, |path| r.blob(root, head, path))?;
+    let snapshot = facts::registry_snapshot_with_batches(config_path, |paths| {
+        r.registry_blobs(root, head, paths)
+    })?;
     let registrations = Registrations::load(&snapshot.values, config_path)?;
     Ok((
         registrations,
