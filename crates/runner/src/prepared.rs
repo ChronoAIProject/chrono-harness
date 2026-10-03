@@ -42,6 +42,8 @@ pub struct Canonical {
     pub argv: Vec<String>,
     pub profile: String,
     pub inputs: Inputs,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub participation: Option<Action>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
@@ -209,7 +211,10 @@ pub fn declaration(config: &Value) -> Result<Canonical, String> {
         return Err("short preparation lacks declared artifact ownership".into());
     }
     let mut operations = BTreeSet::new();
-    for a in std::iter::once(&c.inputs.local).chain(c.inputs.ci.iter()) {
+    for a in std::iter::once(&c.inputs.local)
+        .chain(c.inputs.ci.iter())
+        .chain(c.participation.iter())
+    {
         if !operations.insert(&a.operation)
             || a.operation.is_empty()
             || a.tool.is_empty()
@@ -229,6 +234,83 @@ pub fn declaration(config: &Value) -> Result<Canonical, String> {
         }
     }
     Ok(c)
+}
+/// The declared lifecycle owner acquires protection before any check acquisition.
+/// A participating child keeps the same public spelling and original console result.
+pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::CliOutput>, String> {
+    const MARKER: &str = "CHRONO_WORKTREE_CHECK";
+    let cfg = crate::load_selected_config(root, ".chrono-harness/config.json")?;
+    let canonical = declaration(&cfg)?;
+    let Some(action) = canonical.participation else {
+        return Ok(None);
+    };
+    if let Some(marker) = std::env::var_os(MARKER) {
+        if std::path::Path::new(&marker) != root {
+            return Err("check participation root mismatch".into());
+        }
+        return Ok(None);
+    }
+    let (env, _) = environment(&cfg)?;
+    let tool = cfg["tools"]
+        .as_array()
+        .ok_or("missing participation tools")?
+        .iter()
+        .find(|t| t["id"] == action.tool)
+        .ok_or("missing participation tool")?;
+    let program = crate::resolve_program(
+        root,
+        tool["program"].as_str().ok_or("participation program")?,
+        env.get("PATH").map(String::as_str),
+    )?;
+    let mut argv = action.argv.clone();
+    argv.extend(args.iter().map(|s| s.to_string()));
+    let spec = CommandSpec {
+        program: program.to_str().ok_or("participation path UTF-8")?.into(),
+        args: argv,
+        env,
+        timeout_seconds: cfg["protocol"]["timeout_seconds"]
+            .as_u64()
+            .ok_or("participation timeout")?,
+        output_limit_bytes: cfg["protocol"]["stdout_limit_bytes"]
+            .as_u64()
+            .ok_or("participation output bound")? as usize,
+    };
+    let process = run_process_observed(root, &spec, &[], &file_identity(&program)?.0)?;
+    if process.failure.is_some() {
+        return Err(format!(
+            "check participation failed: {:?}; stdout {}; stderr {}",
+            process.failure, process.stdout, process.stderr
+        ));
+    }
+    let report: Value = crate::json(&process.stdout_bytes)
+        .map_err(|e| format!("check participation result: {e}; {}", process.stderr))?;
+    let inner = report
+        .get("managed_process")
+        .ok_or_else(|| format!("check participation refused: {}", report["error"]))?;
+    if inner["failure"].as_str().is_some() {
+        return Err(format!(
+            "check process failed: {}; original lifecycle report {}",
+            inner["failure"], report["report_path"]
+        ));
+    }
+    let exit = inner["exit_code"].as_i64().ok_or("check process exit")?;
+    if report["status"] != "used" && report["managed_command_failed"] != true {
+        return Err(format!(
+            "check lifecycle failed: {}; original report {}",
+            report["error"], report["report_path"]
+        ));
+    }
+    Ok(Some(crate::CliOutput {
+        exit_code: u8::try_from(exit).map_err(|_| "check process exit out of range")?,
+        stdout: inner["stdout"]
+            .as_str()
+            .ok_or("check process stdout")?
+            .into(),
+        stderr: inner["stderr"]
+            .as_str()
+            .ok_or("check process stderr")?
+            .into(),
+    }))
 }
 /// Acquisition credentials are declared in the existing environment policy and never forwarded to judges.
 pub fn credential_environment(cfg: &Value) -> Result<BTreeSet<String>, String> {

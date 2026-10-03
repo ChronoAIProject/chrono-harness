@@ -219,6 +219,12 @@ impl ShortHost {
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
         let out = self.command(args).output().unwrap();
+        if out.status.code() != Some(exit) {
+            let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
+                .chain(args.iter().map(|arg| (*arg).to_owned()))
+                .collect::<Vec<_>>();
+            retain_command_result(&self.root, &argv, &Value::Null, &out);
+        }
         assert_eq!(
             out.status.code(),
             Some(exit),
@@ -1361,6 +1367,37 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     // A subsequent check must preserve the first original byte for byte.
     h.run(&["check", "--unit", "alpha"], 0);
     assert_eq!(fs::read(retained).unwrap(), original);
+}
+
+#[test]
+fn short_transport_preserves_process_failure_before_decoding_partial_output() {
+    for (body, expected) in [
+        (
+            "import sys,time; sys.stdin.buffer.read(); print('{',flush=True); time.sleep(8)",
+            "process timed out",
+        ),
+        (
+            "import sys; sys.stdin.buffer.read(); print('x'*8192,flush=True)",
+            "process output limit exceeded",
+        ),
+    ] {
+        let mut h = ShortHost::new();
+        let path = ".chrono-harness/bin/bound-judge";
+        script(&h.root, path, &format!("#!/usr/bin/python3\n{body}\n"));
+        h.modify(".chrono-harness/ci/check.json", |config| {
+            config["judge"]["program"] = json!(path);
+            config["judge"]["args"] = json!([]);
+            config["judge"]["timeout_seconds"] = json!(1);
+            config["judge"]["output_limit_bytes"] = json!(4096);
+        });
+        let report = h.run(&["check", "--unit", "alpha"], 2);
+        assert_eq!(report["judge"]["failure"], expected, "{report}");
+        assert_eq!(report["transport_failure"], expected);
+        assert!(report["response"].is_null());
+        let original: Vec<u8> =
+            serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
+        assert_eq!(report["judge"]["stdout_sha256"], sha256(&original));
+    }
 }
 
 fn script(root: &Path, path: &str, body: &str) {

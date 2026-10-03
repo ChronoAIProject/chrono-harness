@@ -513,3 +513,11 @@ local fixtures do not prove those events or periodic idle cleanup. Interrupted
 unknown jobs/state need explicit reconciliation; no general archive, scheduler,
 process scanner or concurrent/power-loss transaction is claimed. See
 [worktree contract](worktree.md#opt-in-automatic-lifecycle-cleanup).
+
+The v2 candidate adds stable kernel admission/enrollment leases, no-finish cache
+recovery, immutable cache retry intents, short-check/bootstrap participation and
+explicit Python/nested-runner forwarding. The local real Cargo test regression
+checks lease retention by a distinct native child after both wrappers die.
+Committed composition, supported native platforms and complete host adoption
+remain acceptance obligations.
+Legacy v1 records remain protected; no retrospective ownership is fabricated.

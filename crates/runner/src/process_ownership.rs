@@ -667,7 +667,14 @@ impl ExitObserver {
                             slot.state.store(0, Ordering::Release);
                         }
                     }
-                    std::thread::sleep(Duration::from_millis(2));
+                    // Wake immediately for the next declared launch handoff,
+                    // retaining the same interval for observing exit events.
+                    let mut pending = libc::pollfd {
+                        fd: receiver.as_raw_fd(),
+                        events: libc::POLLIN,
+                        revents: 0,
+                    };
+                    unsafe { libc::poll(&mut pending, 1, 2) };
                 }
             })
             .map_err(|e| e.to_string())?;

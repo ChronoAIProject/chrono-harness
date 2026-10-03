@@ -6,6 +6,12 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from process_fds import inherited_fds
+
+PASS_FDS = inherited_fds()
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,7 +23,7 @@ BASE = "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98"
 
 
 def blob(path):
-    return subprocess.check_output(["git", "-C", str(ROOT), "show", BASE + ":" + path])
+    return subprocess.check_output(["git", "-C", str(ROOT), "show", BASE + ":" + path], pass_fds=PASS_FDS)
 
 
 def request():
@@ -41,7 +47,7 @@ class DecoderTests(unittest.TestCase):
         tool = next(t for t in cfg["tools"] if t["id"] == "python3")
         self.assertTrue(Path(tool["program"]).is_absolute())
         observed = subprocess.run([tool["program"], *tool["version_argv"]],
-                                  env={}, capture_output=True)
+                                  env={}, pass_fds=PASS_FDS, capture_output=True)
         self.assertEqual(observed.returncode, 0, observed.stderr)
         self.assertEqual(observed.stdout.decode().strip(), tool["expected_version"])
 
@@ -69,11 +75,11 @@ class DecoderTests(unittest.TestCase):
 
     def test_actual_process_preserves_input_and_failure_exit(self):
         req = request()
-        run = subprocess.run([sys.executable, str(SOURCE)], input=json.dumps(req).encode(), capture_output=True, cwd="/")
+        run = subprocess.run([sys.executable, str(SOURCE)], input=json.dumps(req).encode(), pass_fds=PASS_FDS, capture_output=True, cwd="/")
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(json.loads(run.stdout), DECODER.convert(req))
         req["profile_value"]["schema"] = "wrong"
-        bad = subprocess.run([sys.executable, str(SOURCE)], input=json.dumps(req).encode(), capture_output=True)
+        bad = subprocess.run([sys.executable, str(SOURCE)], input=json.dumps(req).encode(), pass_fds=PASS_FDS, capture_output=True)
         self.assertNotEqual(bad.returncode, 0)
         self.assertIn(b"unsupported version/profile", bad.stderr)
 

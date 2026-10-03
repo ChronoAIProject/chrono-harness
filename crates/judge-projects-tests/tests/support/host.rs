@@ -219,8 +219,30 @@ impl Host {
             ])
             .output()
             .unwrap();
+        self.retain_command_result("check", &out);
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
         (out.status.code().unwrap(), v)
+    }
+    pub fn retain_command_result(&self, label: &str, out: &std::process::Output) {
+        let Ok(directory) = std::env::var("CHRONO_FULL_TEST_RECEIPTS") else {
+            return;
+        };
+        static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let number = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let destination = std::path::Path::new(&directory)
+            .join(format!("{}-{number}-{label}", std::process::id()));
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("stdout.bin"), &out.stdout).unwrap();
+        fs::write(destination.join("stderr.bin"), &out.stderr).unwrap();
+        fs::write(
+            destination.join("binding.json"),
+            serde_json::to_vec_pretty(&json!({
+                "root": self.root(), "base": self.base, "candidate": self.candidate,
+                "exit": out.status.code(), "status": out.status.to_string(), "joined": true
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     }
 }

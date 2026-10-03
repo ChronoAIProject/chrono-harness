@@ -14,6 +14,7 @@ const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 mod automatic;
 mod check_inputs;
+mod interrupted_cleanup;
 mod maintenance;
 mod rebind;
 
@@ -22,6 +23,64 @@ struct Host {
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
+}
+fn retain_fixture_state(root: &Path, destination: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+    fs::create_dir_all(destination).unwrap();
+    for row in fs::read_dir(root).unwrap() {
+        let row = row.unwrap();
+        let kind = row.file_type().unwrap();
+        if kind.is_dir() {
+            retain_fixture_state(&row.path(), &destination.join(row.file_name()));
+        } else if kind.is_file() {
+            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+        }
+    }
+}
+impl Drop for Host {
+    fn drop(&mut self) {
+        if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {
+            let destination = Path::new(&directory).join(format!(
+                "fixture-{}",
+                sha256(self.root.as_os_str().as_encoded_bytes())
+            ));
+            retain_fixture_state(
+                &self.root.join(".chrono-harness/state"),
+                &destination.join("coordinator-state"),
+            );
+            for name in [
+                "git-mutation.stdout",
+                "git-mutation.stderr",
+                "admission-holder",
+                "native-hook",
+            ] {
+                let path = self.parent.join(name);
+                if path.is_file() {
+                    fs::copy(path, destination.join(name)).unwrap();
+                }
+            }
+            // Only explicitly enrolled fixtures, never live worker artifacts.
+            if let Ok(bytes) = fs::read(
+                self.root
+                    .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
+            ) {
+                if let Ok(ledger) = json(&bytes) {
+                    for entry in ledger["entries"].as_array().unwrap() {
+                        let target = Path::new(entry["path"].as_str().unwrap());
+                        retain_fixture_state(
+                            &target.join(".chrono-harness/state"),
+                            &destination.join(format!(
+                                "enrollment-{}",
+                                sha256(target.as_os_str().as_encoded_bytes())
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 impl Host {
     fn new(layout: &str) -> Self {
@@ -63,7 +122,11 @@ impl Host {
         v.get_mut(FM).unwrap()["project_edges"] = value!([]);
         v.get_mut(FM).unwrap()["test_costs"] = value!([]);
         write_values(&root, &v);
-        fs::write(root.join(".gitignore"), ".chrono-harness/state/\n").unwrap();
+        fs::write(
+            root.join(".gitignore"),
+            ".chrono-harness/state/\n.chrono-harness/bin/\n",
+        )
+        .unwrap();
         fs::create_dir_all(root.join(layout).parent().unwrap()).unwrap();
         fs::write(
             root.join(layout),
@@ -132,7 +195,8 @@ impl Host {
             fs::write(directory.join("stdout.bin"), &out.stdout).unwrap();
             fs::write(directory.join("stderr.bin"), &out.stderr).unwrap();
             fs::write(directory.join("binding.json"), serde_json::to_vec_pretty(&value!({
-                "root":self.root,"exit":out.status.code(),"head":git(&self.root, &["rev-parse", "HEAD"]),
+                "root":self.root,"exit":out.status.code(),"status":out.status.to_string(),"joined":true,
+                "head":git(&self.root, &["rev-parse", "HEAD"]),
                 "policy_sha256":sha256(&fs::read(self.root.join(POLICY)).unwrap())
             })).unwrap()).unwrap();
         }

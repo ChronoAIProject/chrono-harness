@@ -519,10 +519,11 @@ pub(crate) fn identity(
     {
         return Err("worktree identity or ownership lock mismatch".into());
     }
+    let observed = r.checkout_identity(target)?;
     if fs::canonicalize(target).map_err(|e| e.to_string())? != target
-        || physical(r, target, &["rev-parse", "--show-toplevel"])? != target
-        || common(r, target)? != common(r, root)?
-        || r.oid(target, "HEAD")? != head
+        || fs::canonicalize(&observed.top).map_err(|e| e.to_string())? != target
+        || fs::canonicalize(&observed.common).map_err(|e| e.to_string())? != common(r, root)?
+        || observed.head != head
         || r.text(target, &["symbolic-ref", "HEAD"])?.trim() != format!("refs/heads/{branch}")
     {
         return Err("checkout identity or common repository mismatch".into());
