@@ -604,6 +604,25 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
         .current_dir(root)
         .output()
         .unwrap();
+    retain_command_result(root, &argv, context, &output);
+    assert_eq!(
+        output.status.code(),
+        Some(expected_exit),
+        "root {}; argv {argv:?}; stdout {}; stderr {}",
+        root.display(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(report.get("transport_failure").is_none(), "{report}");
+    report
+}
+fn retain_command_result(
+    root: &Path,
+    argv: &[String],
+    context: &Value,
+    output: &std::process::Output,
+) {
     if let Ok(directory) = std::env::var("CHRONO_CI_TEST_RECEIPTS") {
         static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let id = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -620,18 +639,24 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
             &root.join(".chrono-harness/state"),
             &destination.join("original-state"),
         );
+        // Retain each command's actual configuration beside its original state.
+        retain_context_state(
+            &root.join(".chrono-harness/ci"),
+            &destination.join("configuration/ci"),
+        );
+        for name in [
+            "config.json",
+            "FILEMAP.json",
+            "projects.json",
+            "judges.json",
+            "workflow.json",
+        ] {
+            let path = root.join(".chrono-harness").join(name);
+            if path.is_file() {
+                fs::copy(path, destination.join("configuration").join(name)).unwrap();
+            }
+        }
     }
-    assert_eq!(
-        output.status.code(),
-        Some(expected_exit),
-        "root {}; argv {argv:?}; stdout {}; stderr {}",
-        root.display(),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert!(report.get("transport_failure").is_none(), "{report}");
-    report
 }
 fn retain_context_state(root: &Path, destination: &Path) {
     if !root.is_dir() {

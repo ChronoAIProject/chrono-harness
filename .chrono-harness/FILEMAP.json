@@ -4075,6 +4075,22 @@
           "to": "project:runner-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/process_ownership.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -6546,6 +6562,361 @@
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
+    }
+  },
+  "execution_scheduling": {
+    "max_running": 2,
+    "resources": [
+      "workflow-test-inventory"
+    ],
+    "claims": {
+      "build.ci": {
+        "resources": [],
+        "outputs": [
+          "crates/ci/target/"
+        ]
+      },
+      "build.distribution": {
+        "resources": [],
+        "outputs": [
+          "crates/distribution/target/"
+        ]
+      },
+      "build.inputs": {
+        "resources": [],
+        "outputs": [
+          "crates/inputs/target/"
+        ]
+      },
+      "build.instructions": {
+        "resources": [],
+        "outputs": [
+          "crates/instructions/target/"
+        ]
+      },
+      "build.judge-cargo": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-cargo/target/"
+        ]
+      },
+      "build.judge-ci": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-ci/target/"
+        ]
+      },
+      "build.judge-cost": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-cost/target/"
+        ]
+      },
+      "build.judge-filemap": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-filemap/target/"
+        ]
+      },
+      "build.judge-mixed": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-mixed/target/"
+        ]
+      },
+      "build.judge-projects": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-projects/target/"
+        ]
+      },
+      "build.judge-registration": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-registration/target/"
+        ]
+      },
+      "build.judge-routes": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-routes/target/"
+        ]
+      },
+      "build.judge-workflow": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-workflow/target/"
+        ]
+      },
+      "build.runner": {
+        "resources": [],
+        "outputs": [
+          "crates/runner/target/"
+        ]
+      },
+      "build.worktree": {
+        "resources": [],
+        "outputs": [
+          "crates/worktree/target/"
+        ]
+      },
+      "ci.release.verify": {
+        "resources": [],
+        "outputs": []
+      },
+      "ci.verify": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.ci": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.ci-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.distribution": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.distribution-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.inputs": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.inputs-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.instructions": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.instructions-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-cargo": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-cargo-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-ci": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-ci-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-cost": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-cost-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-filemap": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-filemap-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-mixed": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-mixed-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-projects": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-projects-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-registration": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-registration-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-routes": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-routes-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-workflow": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.judge-workflow-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.runner": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.runner-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.worktree": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.worktree-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "migration.scoped-v1-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "test.ci-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/ci-tests/target/"
+        ]
+      },
+      "test.distribution-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/distribution-tests/target/"
+        ]
+      },
+      "test.inputs-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/inputs-tests/target/"
+        ]
+      },
+      "test.instructions-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/instructions-tests/target/"
+        ]
+      },
+      "test.judge-cargo-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-cargo-tests/target/"
+        ]
+      },
+      "test.judge-ci-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-ci-tests/target/"
+        ]
+      },
+      "test.judge-cost-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-cost-tests/target/"
+        ]
+      },
+      "test.judge-filemap-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-filemap-tests/target/"
+        ]
+      },
+      "test.judge-mixed-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-mixed-tests/target/"
+        ]
+      },
+      "test.judge-projects-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-projects-tests/target/"
+        ]
+      },
+      "test.judge-registration-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-registration-tests/target/"
+        ]
+      },
+      "test.judge-routes-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/judge-routes-tests/target/"
+        ]
+      },
+      "test.runner-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/runner-tests/target/"
+        ]
+      },
+      "test.workflow.core": {
+        "resources": [
+          "workflow-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-workflow-tests/target/"
+        ]
+      },
+      "test.workflow.short": {
+        "resources": [
+          "workflow-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-workflow-tests/target/"
+        ]
+      },
+      "test.workflow.units": {
+        "resources": [
+          "workflow-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-workflow-tests/target/"
+        ]
+      },
+      "test.worktree-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/worktree-tests/target/"
+        ]
+      },
+      "workflow.inventory": {
+        "resources": [
+          "workflow-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-workflow-tests/target/",
+          ".chrono-harness/state/"
+        ]
+      },
+      "workflow.inventory-tests": {
+        "resources": [
+          "workflow-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-workflow-tests/target/"
+        ]
+      }
     }
   }
 }

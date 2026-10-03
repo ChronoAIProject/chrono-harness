@@ -492,10 +492,15 @@ pub fn filemap(v: &Value) -> Result {
                 "test_costs",
                 "execution_plans",
             ],
-            &[],
+            &["execution_scheduling"],
         )?;
         choice(&v["status"], &["active", "proposed"])?;
         crate::execution::plans(v)?;
+        if let Some(policy) = v.get("execution_scheduling") {
+            let policy: crate::execution::Scheduling =
+                serde_json::from_value(policy.clone()).map_err(|e| e.to_string())?;
+            policy.validate()?;
+        }
     } else {
         common(v, &["cost_models", "files", "project_edges", "test_costs"])?;
     }

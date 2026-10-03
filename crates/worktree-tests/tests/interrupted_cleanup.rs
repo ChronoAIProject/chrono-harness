@@ -518,6 +518,197 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
 }
 
 #[test]
+fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_source_commit() {
+    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    consuming_operation(
+        &h,
+        "mkdir -p 'output λ'; printf rebuilt > 'output λ/cache'\n",
+    );
+    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let script = h.parent.join("supersession-git");
+    fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-cache\" ] && [ ! -d \"$HOME/superseded/output λ\" ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    h.policy(|p| p["git"]["program"] = value!(script));
+    let target = h.parent.join("superseded");
+    assert_eq!(h.invoke("feature", "superseded", &target).0, 0);
+    output(&target);
+    fs::create_dir_all(target.join("nested/cache")).unwrap();
+    fs::write(target.join("nested/cache/data"), "partial cleanup").unwrap();
+    fs::write(h.parent.join("interrupt-cache"), "interrupt").unwrap();
+    let interrupted = CapturedChild::spawn(&mut h.auto_command("maintain", &[]), &h.root)
+        .wait_with_output()
+        .unwrap();
+    assert_eq!(interrupted.status.signal(), Some(9), "{interrupted:?}");
+    h.received(interrupted);
+    assert!(!target.join("output λ").exists());
+    assert!(target.join("nested/cache/data").exists());
+    let old = h.ledger()["entries"][0]["cache_attempts"][0].clone();
+    let intent_path = h.root.join(old["intent"]["path"].as_str().unwrap());
+    let result_path = h.root.join(old["path"].as_str().unwrap());
+    let intent = fs::read(&intent_path).unwrap();
+    let result = fs::read(&result_path).ok();
+    fs::remove_file(h.parent.join("interrupt-cache")).unwrap();
+    fs::write(target.join("payload"), "ordinary source commit").unwrap();
+    let head = commit(&target);
+    let refs = git(&h.root, &["show-ref"]);
+    let (code, report, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(target.join("output λ/cache").exists());
+    reclaim(&h, &target);
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["ownership"]["generation"], 2);
+    assert_eq!(entry["cache_attempts"][0], old);
+    assert_eq!(fs::read(intent_path).unwrap(), intent);
+    assert_eq!(fs::read(result_path).ok(), result);
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git(&h.root, &["show-ref"]), refs);
+    assert_eq!(entry["status"], "active");
+    assert!(entry["terminal"].is_null());
+}
+
+#[test]
+fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruption() {
+    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    consuming_operation(
+        &h,
+        "mkdir -p 'output λ'; printf rebuilt > 'output λ/cache'\n",
+    );
+    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let program = h.parent.join("birth-git");
+    let ledger = h
+        .root
+        .join(".chrono-harness/state/automatic-cleanup/ledger.json");
+    fs::write(&program, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-birth\" ] && [ -f '{}' ] && /usr/bin/grep -q '\"kind\": \"birth\"' '{}'; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", ledger.display(), ledger.display(), real.display())).unwrap();
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+    h.policy(|p| p["git"]["program"] = value!(program));
+    fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
+    let target = h.parent.join("unsealed");
+    let interrupted = CapturedChild::spawn(
+        Command::new(source().join("crates/worktree/target/debug/chrono-worktree")).args([
+            "start",
+            "--host-root",
+            h.root.to_str().unwrap(),
+            "--config",
+            POLICY,
+            "--kind",
+            "feature",
+            "--name",
+            "unsealed",
+            "--path",
+            target.to_str().unwrap(),
+        ]),
+        &h.root,
+    )
+    .wait_with_output()
+    .unwrap();
+    assert_eq!(interrupted.status.signal(), Some(9), "{interrupted:?}");
+    h.received(interrupted);
+    let original = h.ledger()["entries"][0].clone();
+    assert!(original["enrollment"]["sealed_receipt"].is_null());
+    fs::remove_file(h.parent.join("interrupt-birth")).unwrap();
+    // Refusal still validates the original attachment/policy before recovery.
+    fs::write(target.join(AUTO_POLICY), "unsaved policy").unwrap();
+    let (code, _, _) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_ne!(code, 0);
+    assert!(h.ledger()["entries"][0]["enrollment"]["recovered_receipt"].is_null());
+    fs::copy(h.root.join(AUTO_POLICY), target.join(AUTO_POLICY)).unwrap();
+    let recovery_path = h.root.join(format!(
+        ".chrono-harness/state/automatic-cleanup/interrupted-birth-{}.json",
+        sha256(
+            original["enrollment"]["receipt"]["report_path"]
+                .as_str()
+                .unwrap()
+                .as_bytes()
+        )
+    ));
+    fs::write(&program, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-recovery\" ] && [ -f '{}' ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", recovery_path.display(), real.display())).unwrap();
+    fs::write(
+        h.parent.join("interrupt-recovery"),
+        "after durable reconciliation",
+    )
+    .unwrap();
+    let again = CapturedChild::spawn(
+        &mut h.auto_command(
+            "use",
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        ),
+        &h.root,
+    )
+    .wait_with_output()
+    .unwrap();
+    assert_eq!(again.status.signal(), Some(9), "{again:?}");
+    h.received(again);
+    assert!(h.ledger()["entries"][0]["enrollment"]["recovered_receipt"].is_null());
+    let interrupted_recovery = fs::read(&recovery_path).unwrap();
+    fs::remove_file(h.parent.join("interrupt-recovery")).unwrap();
+    let (code, report, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    let recovered = h.ledger()["entries"][0].clone();
+    assert!(recovered["enrollment"]["sealed_receipt"].is_null());
+    assert_eq!(
+        recovered["enrollment"]["receipt"],
+        original["enrollment"]["receipt"]
+    );
+    assert!(recovered["enrollment"]["recovered_receipt"].is_object());
+    let recovery_path = h.root.join(
+        recovered["enrollment"]["recovered_receipt"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let bytes = fs::read(&recovery_path).unwrap();
+    assert_eq!(bytes, interrupted_recovery);
+    let recovery = json(&bytes).unwrap();
+    assert_eq!(recovery["original_outcome"], "not-established");
+    assert_eq!(recovery["terminal_handoff"], "not-claimed");
+    let (code, report, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(fs::read(recovery_path).unwrap(), bytes);
+    reclaim(&h, &target);
+    assert!(h.ledger()["entries"][0]["terminal"].is_null());
+}
+
+#[test]
 fn kernel_caches_preserve_staged_source_unknown_lease_drift_and_foreign_locks() {
     use std::os::unix::fs::symlink;
     for fault in [
@@ -754,6 +945,10 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     output(&other);
     fs::write(target.join("payload"), "candidate").unwrap();
     commit(&target);
+    assert!(
+        git(&target, &["ls-files", "--", ".chrono-harness/bin/"]).is_empty(),
+        "installed executables must remain untracked host artifacts"
+    );
     let mut check = CapturedChild::spawn(
         Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
@@ -1072,7 +1267,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     let mut child = CapturedChild::spawn(
         Command::new("/usr/bin/python3")
             .current_dir(&target)
-            .env("PATH", path)
+            .env("PATH", &path)
             .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path]),
         &h.root,
     );
@@ -1121,6 +1316,49 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
         .unwrap();
     assert_eq!(checked.status.code(), Some(0), "{checked:?}");
     assert_eq!(checked.stdout, b"canonical-linked-check");
+    // A real nonzero build followed by owner reopening refusal retains both outcomes.
+    let original_policy = fs::read(h.root.join(AUTO_POLICY)).unwrap();
+    fs::write(target.join("st.sh"), format!(
+        "printf 'original build stdout\\n'; printf 'original build stderr\\n' >&2; printf drift > '{}'; exit 7\n",
+        h.root.join(AUTO_POLICY).display()
+    )).unwrap();
+    commit(&target);
+    let refused = Command::new("/usr/bin/python3")
+        .current_dir(&target)
+        .env("PATH", &path)
+        .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
+        .output()
+        .unwrap();
+    assert_ne!(
+        refused.status.code(),
+        Some(7),
+        "lifecycle refusal was masked: {refused:?}"
+    );
+    assert_eq!(refused.stdout, b"original build stdout\n");
+    let error = String::from_utf8_lossy(&refused.stderr);
+    assert!(error.starts_with("original build stderr\n"), "{error}");
+    assert!(error.contains("bootstrap lifecycle failed"), "{error}");
+    let reference = error
+        .split("original report ")
+        .nth(1)
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap();
+    let original = json(&fs::read(h.root.join(reference)).unwrap()).unwrap();
+    // The existing inner bootstrap wraps the build's exit 7 as its own exit 1;
+    // preserve that wrapper result and its original build exception/streams.
+    assert_eq!(original["managed_process"]["exit_code"], 1);
+    let build_error = original["managed_process"]["stderr"].as_str().unwrap();
+    assert!(build_error.starts_with("original build stderr\n"));
+    assert!(build_error.contains("non-zero exit status 7"));
+    assert_eq!(
+        original["managed_process"]["stdout"],
+        "original build stdout\n"
+    );
+    assert_eq!(original["status"], "failed");
+    assert_ne!(original["managed_command_failed"], true);
+    fs::write(h.root.join(AUTO_POLICY), original_policy).unwrap();
     // An upgraded binary alone cannot bridge committed v1/v2 policy disagreement.
     let candidate_policy = fs::read(h.root.join(AUTO_POLICY)).unwrap();
     let mut old = json(&candidate_policy).unwrap();

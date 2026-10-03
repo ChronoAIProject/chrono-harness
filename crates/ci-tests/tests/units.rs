@@ -257,11 +257,21 @@ fn json_file(root: &Path, path: &str, value: &Value) {
 }
 
 fn install(root: &Path) {
-    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/bin");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
-    for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
-        fs::copy(installed.join(name), bin.join(name)).unwrap();
+    // Test the current product outputs; deployed host tools have a separate
+    // caller-owned rollout and may intentionally retain an older schema.
+    for (project, name) in [
+        ("runner", "chrono-harness"),
+        ("judge-ci", "chrono-judge-ci"),
+        ("ci", "chrono-ci"),
+    ] {
+        fs::copy(
+            source.join(format!("crates/{project}/target/debug/{name}")),
+            bin.join(name),
+        )
+        .unwrap();
     }
 }
 

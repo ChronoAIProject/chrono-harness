@@ -72,10 +72,12 @@ def participate(root, config_path, config):
         raise ValueError("bootstrap ownership refused: " + result.stdout.decode("utf-8", "replace") + result.stderr.decode("utf-8", "replace"))
     sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
     sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
+    if report["status"] != "used" and report.get("managed_command_failed") is not True:
+        raise ValueError("bootstrap lifecycle failed: " + str(report.get("error")) +
+                         "; original report " + str(report.get("report_path")))
     if process["failure"] is not None:
-        raise ValueError("bootstrap process failed: " + process["failure"])
-    if report["status"] != "used" and process["exit_code"] == 0:
-        raise ValueError("bootstrap lifecycle failed: " + str(report.get("error")))
+        raise ValueError("bootstrap process failed: " + process["failure"] +
+                         "; original report " + str(report.get("report_path")))
     sys.exit(process["exit_code"] if 0 <= process["exit_code"] <= 255 else 1)
 
 

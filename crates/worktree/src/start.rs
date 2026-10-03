@@ -15,9 +15,11 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 pub(crate) struct Runner {
     pub(crate) config: Config,
+    pub(crate) birth_lease: Option<crate::ownership::Lease>,
     environment: BTreeMap<String, String>,
     tool: observation::Tool,
     processes: Vec<Value>,
+    immutable_blobs: BTreeMap<(PathBuf, String, String), Vec<u8>>,
 }
 impl Runner {
     pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
@@ -108,7 +110,16 @@ impl Runner {
         Ok(oid)
     }
     pub(crate) fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
-        self.git(root, &["show", &format!("{oid}:{path}")])
+        facts::full_oid(oid)?;
+        let key = (root.to_path_buf(), oid.to_owned(), path.to_owned());
+        if let Some(bytes) = self.immutable_blobs.get(&key) {
+            return Ok(bytes.clone());
+        }
+        // Keep original successful reads within this operation. Mutable HEAD,
+        // checkout bytes, attachment and policy comparisons still run each time.
+        let bytes = self.git(root, &["show", &format!("{oid}:{path}")])?;
+        self.immutable_blobs.insert(key, bytes.clone());
+        Ok(bytes)
     }
     pub(crate) fn inventory(
         &mut self,
@@ -570,9 +581,11 @@ pub(crate) fn with_report(
     });
     let mut runner = Runner {
         config,
+        birth_lease: None,
         environment,
         tool,
         processes: vec![],
+        immutable_blobs: BTreeMap::new(),
     };
     let result = match version_error {
         Some(e) => Err(e),
@@ -592,6 +605,9 @@ pub(crate) fn with_report(
         }
         report["processes"] = value!(runner.processes);
     }
+    // Enrollment ownership spans the separate producer/sealing phases. A later
+    // entrant may reconcile only after this owner and inherited consumers close.
+    drop(runner.birth_lease.take());
     if matches!(
         operation,
         "finish" | "maintain" | "import" | "use" | "check" | "bootstrap"

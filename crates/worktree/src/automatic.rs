@@ -685,6 +685,7 @@ impl Manager {
         {
             return Err("new birth did not adopt the coordinator policy/configuration".into());
         }
+        let mut birth_lease = None;
         let ownership = if self._gate.lease.is_some() {
             let token = receipt["report_path"]
                 .as_str()
@@ -700,12 +701,16 @@ impl Manager {
             }
             let lease = Lease::acquire(&physical, None, true, true, None)?
                 .ok_or("new enrollment lease unavailable")?;
-            Some(Ownership {
+            let owner = Ownership {
                 path,
                 id: lease.id().into(),
                 cache_pending: true,
                 generation: 1,
-            })
+            };
+            if kind == "birth" {
+                birth_lease = Some(lease);
+            }
+            Some(owner)
         } else {
             None
         };
@@ -744,10 +749,34 @@ impl Manager {
             }
         }
         self.ledger.entries.push(entry);
-        self.save()
+        self.save()?;
+        r.birth_lease = birth_lease;
+        Ok(())
+    }
+    fn birth_binding(e: &Entry) -> Value {
+        value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,
+            "policy_sha256":e.policy_sha256,"observed_head":e.enrollment["observed_head"],
+            "policy_inputs":e.enrollment["policy_inputs"],"original_receipt":e.enrollment["receipt"],
+            "ownership":e.ownership.as_ref().map(|o| value!({"path":o.path,"id":o.id}))})
     }
     fn birth_ready(&self, e: &Entry) -> Result<(), String> {
         if e.enrollment["kind"] == "birth" {
+            if e.enrollment["sealed_receipt"].is_null()
+                && !e.enrollment["recovered_receipt"].is_null()
+            {
+                let receipt: Receipt =
+                    serde_json::from_value(e.enrollment["recovered_receipt"].clone())
+                        .map_err(|_| "invalid recovered birth receipt")?;
+                let recovered = json(&self.receipt(&receipt)?)?;
+                if recovered["schema"] != "chrono-worktree-interrupted-birth/v2"
+                    || recovered["binding"] != Self::birth_binding(e)
+                    || recovered["original_outcome"] != "not-established"
+                    || recovered["terminal_handoff"] != "not-claimed"
+                {
+                    return Err("recovered birth receipt does not establish this enrollment".into());
+                }
+                return Ok(());
+            }
             let receipt: Receipt =
                 serde_json::from_value(e.enrollment["sealed_receipt"].clone())
                     .map_err(|_| "birth has no completed original receipt; preserve it")?;
@@ -762,6 +791,98 @@ impl Manager {
             }
         }
         Ok(())
+    }
+    fn reconcile_birth(&mut self, r: &mut Runner, i: usize, lease: &Lease) -> Result<(), String> {
+        let e = self.ledger.entries[i].clone();
+        if e.enrollment["kind"] != "birth"
+            || !e.enrollment["sealed_receipt"].is_null()
+            || !e.enrollment["recovered_receipt"].is_null()
+        {
+            return self.birth_ready(&e);
+        }
+        lease.stable()?;
+        let head = r.oid(&e.path, "HEAD")?;
+        self.check_entry(r, &e, &head, None)?;
+        let original_head = e.enrollment["observed_head"]
+            .as_str()
+            .ok_or("birth original HEAD")?;
+        let inputs: BTreeMap<String, Option<String>> =
+            serde_json::from_value(e.enrollment["policy_inputs"].clone())
+                .map_err(|_| "birth original policy inputs")?;
+        if self.target_policy_inputs(r, &e.path, original_head)? != inputs {
+            return Err("birth original policy bindings changed; preserve enrollment".into());
+        }
+        let report_path = e.enrollment["receipt"]["report_path"]
+            .as_str()
+            .ok_or("birth original report path")?;
+        let name = format!("interrupted-birth-{}.json", sha256(report_path.as_bytes()));
+        let physical = no_symlink_parents(
+            &self.policy.coordinator_root,
+            &format!("{}{name}", self.policy.state_directory),
+        )?;
+        let binding = Self::birth_binding(&e);
+        // Reuse an already-published reconciliation on repeated interruption.
+        // Its original missing/partial outcome is immutable, even if another
+        // report becomes available later.
+        let receipt = match fs::read(&physical) {
+            Ok(bytes) => {
+                let original = json(&bytes)?;
+                if original["schema"] != "chrono-worktree-interrupted-birth/v2"
+                    || original["binding"] != binding
+                {
+                    return Err("interrupted birth reconciliation binding changed".into());
+                }
+                Receipt {
+                    path: format!("{}{name}", self.policy.state_directory),
+                    sha256: sha256(&bytes),
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                relative_path(report_path)?;
+                if !report_path.starts_with(&r.config.report_directory) {
+                    return Err(
+                        "birth original report is outside registered lifecycle evidence".into(),
+                    );
+                }
+                let source = Path::new(
+                    e.enrollment["receipt"]["source_root"]
+                        .as_str()
+                        .ok_or("birth original source root")?,
+                );
+                let original_path = no_symlink_parents(source, report_path)?;
+                let original_result = match fs::read(&original_path) {
+                    Ok(bytes) => {
+                        value!({"presence":"present","sha256":sha256(&bytes),"input_bytes":bytes})
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        value!({"presence":"absent"})
+                    }
+                    Err(error) => return Err(error.to_string()),
+                };
+                let token = e.enrollment["receipt"]["token"].as_str();
+                if let Some(token) = token {
+                    relative_path(token)?;
+                }
+                let sealed_original = token
+                    .map(|t| {
+                        self.result_input(
+                            &format!("{}birth-{t}.json", self.policy.state_directory),
+                            None,
+                        )
+                    })
+                    .transpose()?;
+                self.immutable(&name, &value!({"schema":"chrono-worktree-interrupted-birth/v2","binding":binding,
+                    "original_report":{"source_root":source,"path":report_path,"result":original_result},
+                    "unreferenced_original_receipt":sealed_original,"original_outcome":"not-established",
+                    "state":"registered-consumers-quiescent","terminal_handoff":"not-claimed","task_completion":"not-claimed"}))?
+            }
+            Err(error) => return Err(error.to_string()),
+        };
+        // Publication and ledger attachment can themselves be interrupted.
+        self.check_entry(r, &e, &head, None)?;
+        lease.stable()?;
+        self.ledger.entries[i].enrollment["recovered_receipt"] = value!(receipt);
+        self.save()
     }
     fn immutable(&self, name: &str, v: &Value) -> Result<Receipt, String> {
         relative_path(name)?;
@@ -954,6 +1075,7 @@ impl Manager {
                 .lease(&self.ledger.entries[i], true)?
                 .ok_or("worktree has live registered consumers; preserve it")?;
             self.reconcile_uses(i, &lease)?;
+            self.reconcile_birth(r, i, &lease)?;
             Some(lease)
         } else {
             None
@@ -1080,6 +1202,9 @@ impl Manager {
                         self.registrations.filemap()
                     ))?);
                     attempt["automatic_cleanup"] = value!(true);
+                    if let Some(lease) = &_lease {
+                        self.reconcile_birth(r, i, lease)?;
+                    }
                     if cache {
                         self.execute_cache(r, i, token, attempt)
                     } else {
@@ -1398,7 +1523,7 @@ pub(crate) fn create(
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
     manager.stable(r)?;
-    manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"]}))?;
+    manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"]}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.policy.coordinator_root,"state_directory":manager.policy.state_directory,"kind":"birth"});
     Ok(())
 }
@@ -1593,6 +1718,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if e.status != "active" {
                         return Err("terminal worktree refuses new managed use".into());
                     }
+                    if e.enrollment["kind"] == "birth"
+                        && e.enrollment["sealed_receipt"].is_null()
+                        && e.enrollment["recovered_receipt"].is_null()
+                    {
+                        let lease = manager
+                            .lease(&e, true)?
+                            .ok_or("birth still has live registered consumers; preserve it")?;
+                        manager.reconcile_birth(r, i, &lease)?;
+                    }
+                    let e = manager.ledger.entries[i].clone();
                     manager.birth_ready(&e)?;
                     let head = r.oid(target, "HEAD")?;
                     manager.check_entry(r, &e, &head, None)?;
@@ -1618,8 +1753,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                                 .lease(&e, false)?
                                 .ok_or("enrollment lease is busy")?,
                         );
+                        let published_attempt = manager.ledger.entries[i]
+                            .cache_attempts
+                            .iter()
+                            .any(|a| a.generation == e.ownership.as_ref().unwrap().generation);
                         let owner = manager.ledger.entries[i].ownership.as_mut().unwrap();
-                        if !owner.cache_pending {
+                        if !owner.cache_pending || published_attempt {
                             owner.generation = owner
                                 .generation
                                 .checked_add(1)

@@ -762,10 +762,14 @@ policy does not silently reinterpret existing enrollments.
 
 Successful `start` and `reconstruct` automatically enroll their exact linked
 checkout attachment and retain the producer's birth observation at the surviving
-coordinator. Failed creation, missing state, missing completed birth evidence and
-unknown ownership remain protected. Before creation, both entries call the shared
+coordinator. Failed creation, missing state and unknown ownership remain protected.
+For v2, persisted enrollment with unsealed birth evidence is reconciled at a normal
+entry after admission/attachment exclusion and original policy validation. The
+original missing or partial outcome stays unknown; recovery does not claim an
+original successful birth or terminal handoff. Before creation, both entries call the shared
 drain after validating policy/identity, excluding the invoking source and intended
-destination. A drain failure prevents creation and preserves its original reports.
+destination. Unrelated drain failures retain their original reports and do not block valid
+admission; target identity and coordinator publication failures still block.
 
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:
@@ -873,7 +877,13 @@ and holds it across result publication; admission is released before business
 execution. Git mutation children inherit admission. Cleanup holds admission and
 nonblocking EX, preserving live holders. Last close releases ownership; no
 `LOCK_UN` is issued on a shared inherited open description. Missing/replaced
-identities, policy drift and foreign Git locks preserve work.
+identities, policy drift and foreign Git locks preserve work. Birth holds its
+attachment lease through enrollment and receipt sealing. If that producer is
+interrupted, normal use/maintain/finish can publish an immutable identity-bound
+reconciliation under EX. Repeated interruption after reconciliation publication
+reuses its original bytes before attaching the pointer to the ledger. Recovery
+retains the original report and any unreferenced sealed receipt as input evidence;
+it leaves `sealed_receipt` absent and records `original_outcome: not-established`.
 
 Cleanup refusals are scoped to their enrollment. Normal start/reconstruct/use/check
 and bootstrap retain unrelated failures in `drain`, immutable failed receipts and
@@ -888,7 +898,10 @@ bytes. Cache disposal keeps `status: active`, `terminal: null`, checkout, refs,
 dirty/staged source, unretained commits, bin and evidence. It selects only
 `dispose` paths registered at both endpoints, rejects tracked/index paths and
 symlink ancestors, and creates no persistent owned Git worktree lock. A successful
-pass clears its pending generation; later use rearms it. Cache-specific immutable
+pass clears its pending generation; later use rearms it. Admitted consumption
+after any published cache attempt also opens a new generation, even if the prior
+attempt was interrupted or failed. It retains the old intent/result unchanged and
+permits current HEAD/registry bindings for rebuilding and later reclamation. Cache-specific immutable
 intent binds attachment, lease, HEAD, policies, registries, paths and generation
 before effects. Missing/failed results retry idempotently under reacquired
 exclusion with unchanged bindings and a new real receipt; originals stay intact.

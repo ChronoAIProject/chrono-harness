@@ -811,3 +811,91 @@ fn group_registration_delta_and_endpoints_preserve_every_opaque_test_identity() 
         ["test:opaque-group"]
     );
 }
+
+#[test]
+fn scheduling_cap_claim_changes_and_removal_keep_both_endpoint_targets() {
+    let mut a = values();
+    script_pair(&mut a, "st");
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("project:t", "test-execution", "test:t"),
+            edge("script:st", "test-execution", "test:st"),
+        ]);
+    a.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    a.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["execute.t"],"timeout_seconds":30,"output_limit_bytes":4096},"test:st":{"operations":["script.st"],"timeout_seconds":30,"output_limit_bytes":4096}});
+    a.get_mut(FM).unwrap()["execution_scheduling"] = json!({"max_running":2,"resources":["one","two"],"claims":{"execute.t":{"resources":["one"],"outputs":[]},"script.st":{"resources":[],"outputs":[]}}});
+    for mode in 0..4 {
+        let mut b = a.clone();
+        match mode {
+            0 => b.get_mut(FM).unwrap()["execution_scheduling"]["max_running"] = json!(1),
+            1 => {
+                b.get_mut(FM).unwrap()["execution_scheduling"]["claims"]["execute.t"]["resources"] =
+                    json!(["two"])
+            }
+            2 => {
+                b.get_mut(FM)
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("execution_scheduling");
+            }
+            _ => {
+                b.get_mut(FM).unwrap()["execution_scheduling"]["claims"]["execute.t"]["outputs"] =
+                    json!([".chrono-harness/state/"])
+            }
+        }
+        for (before, after) in [(&a, &b), (&b, &a)] {
+            let (i, f) = run(before, after, &[]);
+            assert!(f.is_empty(), "{f:?}");
+            assert_eq!(
+                tests(&i),
+                if mode == 0 || mode == 2 {
+                    vec!["test:st", "test:t"]
+                } else {
+                    vec!["test:t"]
+                }
+            );
+        }
+    }
+    assert!(tests(&run(&a, &a, &[]).0).is_empty());
+}
+
+#[test]
+fn scheduling_resource_reassignment_and_artifact_changes_reach_declared_consumers() {
+    let mut a = values();
+    script_pair(&mut a, "st");
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("project:t", "test-execution", "test:t"),
+            edge("script:st", "test-execution", "test:st"),
+        ]);
+    a.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    a.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["execute.t"],"timeout_seconds":30,"output_limit_bytes":4096},"test:st":{"operations":["script.st"],"timeout_seconds":30,"output_limit_bytes":4096}});
+    a.get_mut(CONFIG).unwrap()["artifacts"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"path":"out/","owner":"p","kind":"output","tracked":false}));
+    a.get_mut(FM).unwrap()["execution_scheduling"] = json!({"max_running":2,"resources":["one","two"],"claims":{"execute.t":{"resources":["one"],"outputs":["out/"]},"script.st":{"resources":["two"],"outputs":["out/"]}}});
+    for mode in 0..2 {
+        let mut b = a.clone();
+        if mode == 0 {
+            b.get_mut(FM).unwrap()["execution_scheduling"]["claims"]["execute.t"]["resources"] =
+                json!(["two"]);
+        } else {
+            b.get_mut(CONFIG).unwrap()["artifacts"]
+                .as_array_mut()
+                .unwrap()
+                .last_mut()
+                .unwrap()["owner"] = json!("s");
+        }
+        for (before, after) in [(&a, &b), (&b, &a)] {
+            let (i, f) = run(before, after, &[]);
+            assert!(f.is_empty(), "{f:?}");
+            assert_eq!(tests(&i), ["test:st", "test:t"]);
+        }
+    }
+}

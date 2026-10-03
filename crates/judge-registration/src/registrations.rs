@@ -59,6 +59,7 @@ impl Registrations {
         ] {
             check(v).map_err(|e| format!("{name}: {e}"))?;
         }
+        crate::execution::scheduling(s.filemap(), s.projects(), &s.config()["artifacts"])?;
         Ok(s)
     }
     /// Structurally validated values; semantic admissibility is still registration policy.

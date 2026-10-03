@@ -122,7 +122,11 @@ impl Host {
         v.get_mut(FM).unwrap()["project_edges"] = value!([]);
         v.get_mut(FM).unwrap()["test_costs"] = value!([]);
         write_values(&root, &v);
-        fs::write(root.join(".gitignore"), ".chrono-harness/state/\n").unwrap();
+        fs::write(
+            root.join(".gitignore"),
+            ".chrono-harness/state/\n.chrono-harness/bin/\n",
+        )
+        .unwrap();
         fs::create_dir_all(root.join(layout).parent().unwrap()).unwrap();
         fs::write(
             root.join(layout),
@@ -191,7 +195,8 @@ impl Host {
             fs::write(directory.join("stdout.bin"), &out.stdout).unwrap();
             fs::write(directory.join("stderr.bin"), &out.stderr).unwrap();
             fs::write(directory.join("binding.json"), serde_json::to_vec_pretty(&value!({
-                "root":self.root,"exit":out.status.code(),"head":git(&self.root, &["rev-parse", "HEAD"]),
+                "root":self.root,"exit":out.status.code(),"status":out.status.to_string(),"joined":true,
+                "head":git(&self.root, &["rev-parse", "HEAD"]),
                 "policy_sha256":sha256(&fs::read(self.root.join(POLICY)).unwrap())
             })).unwrap()).unwrap();
         }
