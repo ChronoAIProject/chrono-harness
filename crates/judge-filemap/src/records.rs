@@ -154,6 +154,31 @@ pub fn inventory(
                             }
                         }
                     }
+                    if scope == "config" && key == "artifacts" {
+                        if let Some(policy) = r.filemap().get("execution_scheduling") {
+                            for (operation, claims) in policy["claims"].as_object().unwrap() {
+                                if claims["outputs"]
+                                    .as_array()
+                                    .unwrap()
+                                    .iter()
+                                    .any(|p| p == &row["path"])
+                                {
+                                    for (test, plan) in
+                                        r.filemap()["execution_plans"].as_object().unwrap()
+                                    {
+                                        if plan["operations"]
+                                            .as_array()
+                                            .unwrap()
+                                            .iter()
+                                            .any(|o| o == operation)
+                                        {
+                                            targets.extend(plan_targets(test, Some(plan), nodes));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Registration owns aliases such as project/script records' executable test nodes.
                     for (test, view) in nodes
                         .iter()
@@ -219,6 +244,42 @@ pub fn inventory(
                         &v[field],
                         BTreeSet::from([format!("file:{path}")]),
                     );
+                }
+            } else if scope == "filemap" && key == "execution_scheduling" {
+                let all_targets = || {
+                    r.filemap()["execution_plans"]
+                        .as_object()
+                        .unwrap()
+                        .iter()
+                        .flat_map(|(test, plan)| plan_targets(test, Some(plan), nodes))
+                        .collect()
+                };
+                for field in ["max_running", "resources"] {
+                    add(scope, key, field, path, &v[field], all_targets());
+                }
+                let policy: chrono_judge_registration::execution::Scheduling =
+                    serde_json::from_value(v.clone()).expect("validated scheduling");
+                for (operation, claims) in v["claims"].as_object().unwrap() {
+                    let affected: BTreeSet<_> = policy
+                        .claims
+                        .keys()
+                        .filter(|other| *other == operation || policy.conflicts(operation, other))
+                        .collect();
+                    let targets = r.filemap()["execution_plans"]
+                        .as_object()
+                        .unwrap()
+                        .iter()
+                        .filter(|(_, p)| {
+                            p["operations"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .filter_map(Value::as_str)
+                                .any(|o| affected.iter().any(|id| id.as_str() == o))
+                        })
+                        .flat_map(|(test, plan)| plan_targets(test, Some(plan), nodes))
+                        .collect();
+                    add(scope, "execution_claims", operation, path, claims, targets);
                 }
             } else if scope == "filemap" && key == "execution_plans" {
                 for (test, plan) in v.as_object().unwrap() {

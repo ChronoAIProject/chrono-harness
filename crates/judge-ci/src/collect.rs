@@ -283,7 +283,8 @@ pub(super) fn collect(
         for op in &mut operations {
             op.method.argv = chrono_judge_routes::expand(&op.method.argv, &plan.binding);
         }
-        if object!(chosen) != object!(plan.selected)
+        if plan.scheduling != snapshot.scheduling
+            || object!(chosen) != object!(plan.selected)
             || object!(operations) != object!(plan.operations)
         {
             return Err(

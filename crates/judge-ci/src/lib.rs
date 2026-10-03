@@ -64,6 +64,7 @@ struct Snapshot {
     policy: Policy,
     plans: BTreeMap<String, chrono_judge_registration::execution::Plan>,
     execute: BTreeMap<String, String>,
+    scheduling: Option<chrono_judge_registration::execution::Scheduling>,
 }
 use chrono_harness::facts::{Reader, utf8};
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str, String> {
@@ -430,6 +431,18 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     for e in array(&fm, "project_edges")? {
         add(text(e, "from")?, e)?
     }
+    let artifacts = if let Some(config_path) = &p.registration_config {
+        let values = reader.registry_snapshot(root, oid, config_path)?;
+        values.values[&values.effective_path]["artifacts"].clone()
+    } else {
+        object!(
+            p.artifacts
+                .iter()
+                .map(|path| object!({"path":path}))
+                .collect::<Vec<_>>()
+        )
+    };
+    let scheduling = chrono_judge_registration::execution::scheduling(&fm, &pr, &artifacts)?;
     let snapshot = Snapshot {
         files,
         projects,
@@ -439,6 +452,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         policy: p,
         plans,
         execute,
+        scheduling,
     };
     units::assignments(&snapshot)?;
     Ok(snapshot)
@@ -540,6 +554,47 @@ fn ci_impact(
                 }
                 if before.output_limit_bytes != after.output_limit_bytes {
                     reasons.insert("changed operation output limit".into());
+                }
+            }
+        }
+        if old.scheduling != new.scheduling {
+            for s in [old, new] {
+                for (test, plan) in &s.plans {
+                    let global = old
+                        .scheduling
+                        .as_ref()
+                        .map(|p| (p.max_running, &p.resources))
+                        != new
+                            .scheduling
+                            .as_ref()
+                            .map(|p| (p.max_running, &p.resources));
+                    if global
+                        || plan.operations.iter().any(|op| {
+                            old.scheduling.as_ref().and_then(|p| p.claims.get(op))
+                                != new.scheduling.as_ref().and_then(|p| p.claims.get(op))
+                                || [old.scheduling.as_ref(), new.scheduling.as_ref()]
+                                    .into_iter()
+                                    .flatten()
+                                    .any(|policy| {
+                                        policy.claims.keys().any(|changed| {
+                                            old.scheduling
+                                                .as_ref()
+                                                .and_then(|p| p.claims.get(changed))
+                                                != new
+                                                    .scheduling
+                                                    .as_ref()
+                                                    .and_then(|p| p.claims.get(changed))
+                                                && policy.claims.contains_key(op)
+                                                && policy.conflicts(op, changed)
+                                        })
+                                    })
+                        })
+                    {
+                        extras
+                            .entry(test.clone())
+                            .or_default()
+                            .insert("changed execution scheduling declaration".into());
+                    }
                 }
             }
         }
@@ -1293,7 +1348,7 @@ fn evaluate(
         )?;
     }
     let plan = if blocked.is_empty() {
-        Some(chrono_judge_routes::prepare_scoped(
+        Some(chrono_judge_routes::prepare_scheduled(
             root,
             object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"]}),
             &selected,
@@ -1303,6 +1358,8 @@ fn evaluate(
             &declarations,
             environment,
             &reused,
+            new.scheduling.clone(),
+            false,
         )?)
     } else {
         None

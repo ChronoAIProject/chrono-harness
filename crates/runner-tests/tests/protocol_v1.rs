@@ -763,3 +763,159 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
         );
     }
 }
+// Real nested runner launch: the outer process must finish only after its owned
+// operation has been terminated. The PID is produced by that actual operation.
+#[test]
+fn owned_nested_helper() {
+    let Ok(root) = std::env::var("CHRONO_NESTED_FIXTURE") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: python.to_string_lossy().into_owned(),
+        args: vec!["-c".into(), "import os,time;open('nested.pid','w').write(str(os.getpid()));time.sleep(30);open('escaped','w').write('escaped')".into()],
+        env: Default::default(), timeout_seconds: 30, output_limit_bytes: 4096,
+    };
+    let _ = chrono_harness::run_process_observed(
+        root,
+        &spec,
+        &[],
+        &chrono_harness::sha256(&std::fs::read(&python).unwrap()),
+    );
+}
+
+#[test]
+fn outer_timeout_contains_nested_owned_operation() {
+    for helper in ["owned_nested_helper", "owned_nested_middle_helper"] {
+        let d = tempfile::tempdir().unwrap();
+        let exe = std::env::current_exe().unwrap();
+        let spec = chrono_harness::CommandSpec {
+            program: exe.to_string_lossy().into_owned(),
+            args: vec!["--exact".into(), helper.into(), "--nocapture".into()],
+            env: [
+                (
+                    "CHRONO_NESTED_FIXTURE".into(),
+                    d.path().to_string_lossy().into_owned(),
+                ),
+                ("PATH".into(), std::env::var("PATH").unwrap()),
+            ]
+            .into(),
+            timeout_seconds: 2,
+            output_limit_bytes: 4096,
+        };
+        let p = chrono_harness::run_process_observed(
+            d.path(),
+            &spec,
+            &[],
+            &chrono_harness::sha256(&std::fs::read(&exe).unwrap()),
+        )
+        .unwrap();
+        assert_eq!(p.failure.as_deref(), Some("process timed out"), "{p:?}");
+        let pid = std::fs::read_to_string(d.path().join("nested.pid")).unwrap();
+        let python = chrono_harness::resolve_program(d.path(), "python3", None).unwrap();
+        // Always clean the exact fixture PID before asserting the regression.
+        let out = std::process::Command::new(python).args(["-c", "import os,sys,signal\np=int(sys.argv[1])\ntry: os.kill(p,0)\nexcept ProcessLookupError: print('joined')\nelse:\n print('survived');os.kill(p,signal.SIGKILL)", &pid]).output().unwrap();
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap().trim(),
+            "joined",
+            "nested process survived outer completion"
+        );
+    }
+}
+
+#[test]
+fn owned_nested_middle_helper() {
+    let Ok(root) = std::env::var("CHRONO_NESTED_FIXTURE") else {
+        return;
+    };
+    let exe = std::env::current_exe().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: exe.to_string_lossy().into_owned(),
+        args: vec![
+            "--exact".into(),
+            "owned_nested_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: std::env::vars().collect(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let _ = chrono_harness::run_process_observed(
+        std::path::Path::new(&root),
+        &spec,
+        &[],
+        &chrono_harness::sha256(&std::fs::read(exe).unwrap()),
+    );
+}
+#[test]
+fn owned_timeout_helper_keeps_unrelated_sibling() {
+    let Ok(root) = std::env::var("CHRONO_SIBLING_FIXTURE") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
+    let digest = chrono_harness::sha256(&std::fs::read(&python).unwrap());
+    std::thread::scope(|scope| {
+        let slow = scope.spawn(|| {
+            chrono_harness::run_process_observed(
+                root,
+                &chrono_harness::CommandSpec {
+                    program: python.to_string_lossy().into_owned(),
+                    args: vec!["-c".into(), "import time;time.sleep(5)".into()],
+                    env: Default::default(),
+                    timeout_seconds: 1,
+                    output_limit_bytes: 4096,
+                },
+                &[],
+                &digest,
+            )
+            .unwrap()
+        });
+        let sibling=chrono_harness::run_process_observed(root,&chrono_harness::CommandSpec {program:python.to_string_lossy().into_owned(),args:vec!["-c".into(),"import time;time.sleep(2);open('sibling','w').write('joined');print('original')".into()],env:Default::default(),timeout_seconds:5,output_limit_bytes:4096},&[],&digest).unwrap();
+        assert_eq!(
+            slow.join().unwrap().failure.as_deref(),
+            Some("process timed out")
+        );
+        assert_eq!(sibling.exit_code, 0);
+        assert!(sibling.failure.is_none());
+        assert_eq!(sibling.stdout_bytes, b"original\n");
+    });
+}
+#[test]
+fn nested_operation_timeout_does_not_cancel_owned_sibling() {
+    let d = tempfile::tempdir().unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: exe.to_string_lossy().into_owned(),
+        args: vec![
+            "--exact".into(),
+            "owned_timeout_helper_keeps_unrelated_sibling".into(),
+            "--nocapture".into(),
+        ],
+        env: [
+            (
+                "CHRONO_SIBLING_FIXTURE".into(),
+                d.path().to_string_lossy().into_owned(),
+            ),
+            ("PATH".into(), std::env::var("PATH").unwrap()),
+        ]
+        .into(),
+        timeout_seconds: 5,
+        output_limit_bytes: 4096,
+    };
+    let p = chrono_harness::run_process_observed(
+        d.path(),
+        &spec,
+        &[],
+        &chrono_harness::sha256(&std::fs::read(exe).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(p.exit_code, 0, "{p:?}");
+    assert!(p.failure.is_none());
+    assert_eq!(
+        std::fs::read_to_string(d.path().join("sibling")).unwrap(),
+        "joined"
+    );
+    assert_eq!(p.environment, spec.env);
+}

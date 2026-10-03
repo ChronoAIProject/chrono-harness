@@ -4,6 +4,8 @@ mod checkout;
 pub mod facts;
 mod facts_binding;
 mod facts_configs;
+#[cfg(unix)]
+mod process_ownership;
 /// Existing selector owner resolves a host policy for provider consumers.
 pub fn load_selected_config(root: &Path, path: &str) -> Result<Value, String> {
     facts_configs::load(root, path).map(|(_, _, config, _)| config)
@@ -550,6 +552,40 @@ pub fn run_process_observed_for(
 ) -> Result<ProcessResult, String> {
     run_process_inner(root, s, input, Some(digest), timeout)
 }
+// The existing process engine owns termination on errors and unwinding too.
+struct OwnedProcess {
+    child: std::process::Child,
+    #[cfg(unix)]
+    ownership: process_ownership::Launch,
+    joined: bool,
+}
+impl std::ops::Deref for OwnedProcess {
+    type Target = std::process::Child;
+    fn deref(&self) -> &Self::Target {
+        &self.child
+    }
+}
+impl std::ops::DerefMut for OwnedProcess {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.child
+    }
+}
+impl Drop for OwnedProcess {
+    fn drop(&mut self) {
+        if self.joined {
+            return;
+        }
+        #[cfg(unix)]
+        {
+            self.ownership.drain();
+            unsafe {
+                libc::kill(-(self.child.id() as i32), libc::SIGKILL);
+            }
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
 fn run_process_inner(
     root: &Path,
     s: &CommandSpec,
@@ -591,105 +627,154 @@ fn run_process_inner(
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("{}: {e}", executable.display()))?;
-    let pid = child.id();
-    let stdin = child.stdin.take().ok_or("missing process stdin")?;
-    let input = input.to_vec();
-    let writer = std::thread::spawn(move || {
-        let mut stdin = stdin;
-        stdin.write_all(&input)
-    });
-    let exceeded = Arc::new(AtomicBool::new(false));
-    let limit = s.output_limit_bytes;
-    fn reader<R: Read + Send + 'static>(
-        mut r: R,
-        limit: usize,
-        flag: Arc<AtomicBool>,
-    ) -> std::thread::JoinHandle<std::io::Result<Vec<u8>>> {
-        std::thread::spawn(move || {
-            let mut out = Vec::new();
-            let mut buf = [0u8; 8192];
-            loop {
-                let n = r.read(&mut buf)?;
-                if n == 0 {
-                    break;
-                }
-                if out.len() + n > limit {
-                    flag.store(true, Ordering::Relaxed);
-                }
-                let keep = n.min(limit.saturating_sub(out.len()));
-                out.extend_from_slice(&buf[..keep]);
-            }
-            Ok(out)
-        })
-    }
-    let stdout = reader(
-        child.stdout.take().ok_or("missing stdout")?,
-        limit,
-        exceeded.clone(),
-    );
-    let stderr = reader(
-        child.stderr.take().ok_or("missing stderr")?,
-        limit,
-        exceeded.clone(),
-    );
-    let start = Instant::now();
-    let mut failure = None;
-    let mut status = loop {
-        if exceeded.load(Ordering::Relaxed) || start.elapsed() >= timeout {
-            failure = Some(if exceeded.load(Ordering::Relaxed) {
-                "process output limit exceeded"
-            } else {
-                "process timed out"
-            });
-            break None;
-        }
-        if let Some(v) = child.try_wait().map_err(|e| e.to_string())? {
-            break Some(v);
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    };
-    // Kill lingering descendants even when their direct parent has exited; pipe readers remain bounded.
     #[cfg(unix)]
-    unsafe {
-        libc::kill(-(pid as i32), libc::SIGKILL);
-    }
-    if status.is_none() {
-        let _ = child.kill();
-        status = child.wait().ok();
-    }
-    let a = stdout
-        .join()
-        .map_err(|_| "stdout reader panicked")?
-        .map_err(|e| e.to_string())?;
-    let b = stderr
-        .join()
-        .map_err(|_| "stderr reader panicked")?
-        .map_err(|e| e.to_string())?;
-    let _ = writer.join();
-    if exceeded.load(Ordering::Relaxed) {
-        failure = Some("process output limit exceeded");
-    }
-    Ok(ProcessResult {
-        argv: std::iter::once(executable.to_string_lossy().into_owned())
-            .chain(s.args.clone())
-            .collect(),
-        cwd: root,
-        environment_digest: wire::digest(&environment)?,
-        environment,
-        stdin_sha256,
-        stdout_sha256: sha256(&a),
-        stderr_sha256: sha256(&b),
-        stdout: String::from_utf8_lossy(&a).into_owned(),
-        stderr: String::from_utf8_lossy(&b).into_owned(),
-        stdout_bytes: a,
-        stderr_bytes: b,
-        failure: failure.map(str::to_owned),
-        exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
-        executable,
-        sha256: hash,
+    let ownership = process_ownership::Launch::prepare()?;
+    #[cfg(unix)]
+    ownership.configure(&mut command);
+    std::thread::scope(|scope| {
+        let child = command
+            .spawn()
+            .map_err(|e| format!("{}: {e}", executable.display()))?;
+        let mut child = OwnedProcess {
+            child,
+            #[cfg(unix)]
+            ownership,
+            joined: false,
+        };
+        let pid = child.id();
+        let stdin = child.stdin.take().ok_or("missing process stdin")?;
+        let input = input.to_vec();
+        let writer = scope.spawn(move || {
+            let mut stdin = stdin;
+            stdin.write_all(&input)
+        });
+        let exceeded = Arc::new(AtomicBool::new(false));
+        let limit = s.output_limit_bytes;
+        fn reader<'scope, R: Read + Send + 'scope>(
+            scope: &'scope std::thread::Scope<'scope, '_>,
+            mut r: R,
+            limit: usize,
+            flag: Arc<AtomicBool>,
+        ) -> std::thread::ScopedJoinHandle<'scope, std::io::Result<Vec<u8>>> {
+            scope.spawn(move || {
+                let mut out = Vec::new();
+                let mut buf = [0u8; 8192];
+                loop {
+                    let n = r.read(&mut buf)?;
+                    if n == 0 {
+                        break;
+                    }
+                    if out.len() + n > limit {
+                        flag.store(true, Ordering::Relaxed);
+                    }
+                    let keep = n.min(limit.saturating_sub(out.len()));
+                    out.extend_from_slice(&buf[..keep]);
+                }
+                Ok(out)
+            })
+        }
+        let stdout = reader(
+            scope,
+            child.stdout.take().ok_or("missing stdout")?,
+            limit,
+            exceeded.clone(),
+        );
+        let stderr = reader(
+            scope,
+            child.stderr.take().ok_or("missing stderr")?,
+            limit,
+            exceeded.clone(),
+        );
+        let start = Instant::now();
+        let mut failure = None;
+        let mut status = loop {
+            #[cfg(unix)]
+            if child.ownership.cancelled() {
+                failure = Some("process cancelled by enclosing owner".to_string());
+                break None;
+            }
+            if exceeded.load(Ordering::Relaxed) || start.elapsed() >= timeout {
+                failure = Some(
+                    if exceeded.load(Ordering::Relaxed) {
+                        "process output limit exceeded"
+                    } else {
+                        "process timed out"
+                    }
+                    .to_string(),
+                );
+                break None;
+            }
+            match child.try_wait() {
+                Ok(Some(v)) => break Some(v),
+                Ok(None) => {}
+                Err(e) => {
+                    failure = Some(format!("process wait: {e}"));
+                    break None;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        #[cfg(unix)]
+        if !child.ownership.drain() {
+            let original = failure
+                .take()
+                .unwrap_or_else(|| "process ownership cleanup failed".into());
+            failure = Some(format!(
+                "{original}; nested owner did not acknowledge joined completion"
+            ));
+        }
+        // Kill lingering descendants even when their direct parent has exited; pipe readers remain bounded.
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGKILL);
+        }
+        if status.is_none() {
+            let _ = child.kill();
+            match child.wait() {
+                Ok(v) => status = Some(v),
+                Err(e) => {
+                    let original = failure.take().unwrap_or_default();
+                    failure = Some(format!("{original}; process join: {e}"));
+                }
+            }
+        }
+        child.joined = status.is_some();
+        let stdout_result = stdout.join();
+        let stderr_result = stderr.join();
+        let _ = writer.join();
+        let a = stdout_result
+            .map_err(|_| "stdout reader panicked")?
+            .map_err(|e| e.to_string())?;
+        let b = stderr_result
+            .map_err(|_| "stderr reader panicked")?
+            .map_err(|e| e.to_string())?;
+        if exceeded.load(Ordering::Relaxed)
+            && failure.as_deref() != Some("process output limit exceeded")
+        {
+            failure = Some(match failure {
+                Some(original) => format!("{original}; process output limit exceeded"),
+                None => "process output limit exceeded".into(),
+            });
+        }
+        Ok(ProcessResult {
+            argv: std::iter::once(executable.to_string_lossy().into_owned())
+                .chain(s.args.clone())
+                .collect(),
+            cwd: root,
+            environment_digest: wire::digest(&environment)?,
+            environment,
+            stdin_sha256,
+            stdout_sha256: sha256(&a),
+            stderr_sha256: sha256(&b),
+            stdout: String::from_utf8_lossy(&a).into_owned(),
+            stderr: String::from_utf8_lossy(&b).into_owned(),
+            stdout_bytes: a,
+            stderr_bytes: b,
+            failure,
+            exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
+            executable,
+            sha256: hash,
+        })
     })
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {

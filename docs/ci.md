@@ -57,7 +57,7 @@ The final bootstrap argument selects an explicit host CI configuration. Omitting
 it preserves the full bootstrap default. Generated unit/collection workflows
 select runner, judge-ci, ci and the local worktree input producer; remaining builds come from the unchanged
 complete test plans. Run units concurrently in separate checkouts. A local check
-without `--unit` executes the whole selected DELTA serially; the same entry with
+without `--unit` executes the whole selected DELTA under FILEMAP scheduling; the same entry with
 value-less `--collect` prepares the declared manifest and verifies unit evidence without running business operations.
 
 The current host uses config schema4. `canonical_check` adds `profile` and
@@ -178,7 +178,7 @@ validate every proposed field's semantics.
 | policy.artifacts | Relative directory prefixes ending `/`; ignored execution products may exist there; tracked files may not overlap them |
 | policy.required_inputs | Explicit regular tracked inputs required by this profile |
 | policy.adoption_base | Null or exact full base OID whose missing prior CI profile is deliberately accepted |
-| policy.operation_timeout_seconds / operation_output_limit_bytes | Positive serial operation process bounds |
+| policy.operation_timeout_seconds / operation_output_limit_bytes | Positive legacy fallback operation process bounds |
 
 Scoped v2 changes Git acquisition, preserving the selection, execution and
 operation-environment contracts below. Its explicit `facts_config` binds the Git
@@ -230,7 +230,7 @@ input edges propagate to declared nodes. `judge-trigger` metadata remains outsid
 this slice. Missing nodes, bindings, duplicate operations, invalid actions and
 unknown changed paths fail. Removing an edge still selects its old surviving
 consumer. Removing an affected binding or bound operation fails; no implicit
-retirement or full-suite fallback exists. Candidate operations run serially,
+retirement or full-suite fallback exists. Candidate operations use the registered FILEMAP scheduling policy (serial when absent),
 keeping binding order and deduplicating shared operations. Historical commands are
 never executed. Each command's actual failure remains in the result. This host
 binds each affected production/test pair to formatting, the production binary

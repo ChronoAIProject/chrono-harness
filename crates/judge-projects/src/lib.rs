@@ -71,61 +71,95 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
         scope: None,
         completion: None,
     };
-    for op in &plan.operations {
-        if op
-            .predecessors
-            .iter()
-            .any(|id| statuses.get(id).map(String::as_str) != Some("passed"))
-        {
-            statuses.insert(op.method.operation.clone(), "blocked".into());
-            results.blocked.push(OperationResult {
-                operation: op.method.operation.clone(),
-                status: "blocked".into(),
-                receipt: None,
-                error: Some("failed prerequisite".into()),
-            });
-            continue;
-        }
-        let tool = plan
-            .tools
-            .get(&op.method.tool)
-            .ok_or("E_TOOL_BINDING: missing plan tool")?;
-        let spec = CommandSpec {
-            program: tool.path.to_str().ok_or("tool UTF-8")?.into(),
-            args: op.method.argv.clone(),
-            env: plan.environment.clone(),
-            timeout_seconds: op.timeout_seconds,
-            output_limit_bytes: op.output_limit_bytes,
-        };
-        let result = run_process_observed(&plan.root, &spec, &[], &tool.sha256)
-            .and_then(|p| Receipt::new(plan, op, p));
-        let (receipt, error, status) = match result {
-            Ok(receipt) => {
-                let infrastructure = chrono_judge_routes::compare(plan, op, Some(&receipt))
-                    .err()
-                    .or_else(|| receipt.process.failure.clone());
-                let (error, status) = if let Some(error) = infrastructure {
-                    (Some(error), "error")
-                } else if receipt.process.exit_code != 0 {
-                    (
-                        Some(format!("operation exit {}", receipt.process.exit_code)),
-                        "failed",
-                    )
-                } else {
-                    (None, "passed")
-                };
-                (Some(receipt), error, status)
+    // Scoped threads are joined even if a launch, receipt or worker fails. Claims
+    // are acquired together by this sole coordinator, never inside workers.
+    let rows = std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut pending: BTreeSet<usize> = (0..plan.operations.len()).collect();
+        let mut running = BTreeSet::new();
+        let mut rows = BTreeMap::new();
+        let cap = plan.scheduling.as_ref().map_or(1, |p| p.max_running);
+        while !pending.is_empty() || !running.is_empty() {
+            let mut progressed = false;
+            for index in pending.iter().copied().collect::<Vec<_>>() {
+                let op = &plan.operations[index];
+                if op
+                    .predecessors
+                    .iter()
+                    .any(|id| statuses.get(id).is_some_and(|s| s != "passed"))
+                {
+                    let row = OperationResult {
+                        operation: op.method.operation.clone(),
+                        status: "blocked".into(),
+                        receipt: None,
+                        error: Some("failed prerequisite".into()),
+                    };
+                    statuses.insert(row.operation.clone(), row.status.clone());
+                    rows.insert(index, row);
+                    pending.remove(&index);
+                    progressed = true;
+                    continue;
+                }
+                if running.len() >= cap
+                    || op.predecessors.iter().any(|id| !statuses.contains_key(id))
+                    || plan.scheduling.as_ref().is_some_and(|policy| {
+                        running.iter().any(|i: &usize| {
+                            policy.conflicts(
+                                &op.method.operation,
+                                &plan.operations[*i].method.operation,
+                            )
+                        })
+                    })
+                {
+                    continue;
+                }
+                pending.remove(&index);
+                running.insert(index);
+                progressed = true;
+                let tx = tx.clone();
+                let launch = std::thread::Builder::new().spawn_scoped(scope, move || {
+                    let row = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        execute_operation(plan, op)
+                    }))
+                    .unwrap_or_else(|_| OperationResult {
+                        operation: op.method.operation.clone(),
+                        status: "error".into(),
+                        receipt: None,
+                        error: Some("operation worker panicked".into()),
+                    });
+                    let _ = tx.send((index, row));
+                });
+                if let Err(error) = launch {
+                    running.remove(&index);
+                    let row = OperationResult {
+                        operation: op.method.operation.clone(),
+                        status: "error".into(),
+                        receipt: None,
+                        error: Some(format!("operation worker launch: {error}")),
+                    };
+                    statuses.insert(row.operation.clone(), row.status.clone());
+                    rows.insert(index, row);
+                }
             }
-            Err(e) => (None, Some(e), "error"),
-        };
-        let status = status.to_string();
-        statuses.insert(op.method.operation.clone(), status.clone());
-        results.executed.push(OperationResult {
-            operation: op.method.operation.clone(),
-            status,
-            receipt,
-            error,
-        });
+            if !running.is_empty() {
+                let (index, row) = rx.recv().expect("owned workers always send terminal rows");
+                running.remove(&index);
+                statuses.insert(row.operation.clone(), row.status.clone());
+                rows.insert(index, row);
+            } else if !pending.is_empty() && !progressed {
+                // Routes rejects cycles; a malformed retained graph is still a
+                // pre-effect error through Execution::validate.
+                unreachable!("validated operation graph has no ready work");
+            }
+        }
+        rows
+    });
+    for row in rows.into_values() {
+        if row.status == "blocked" {
+            results.blocked.push(row);
+        } else {
+            results.executed.push(row);
+        }
     }
     for (test, p) in &plan.selected {
         results.tests.insert(
@@ -142,6 +176,48 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
         );
     }
     Ok(results)
+}
+fn execute_operation(plan: &Execution, op: &chrono_judge_routes::Operation) -> OperationResult {
+    let result = (|| {
+        let tool = plan
+            .tools
+            .get(&op.method.tool)
+            .ok_or("E_TOOL_BINDING: missing plan tool")?;
+        let spec = CommandSpec {
+            program: tool.path.to_str().ok_or("tool UTF-8")?.into(),
+            args: op.method.argv.clone(),
+            env: plan.environment.clone(),
+            timeout_seconds: op.timeout_seconds,
+            output_limit_bytes: op.output_limit_bytes,
+        };
+        let process = run_process_observed(&plan.root, &spec, &[], &tool.sha256)?;
+        Receipt::new(plan, op, process)
+    })();
+    let (receipt, error, status) = match result {
+        Ok(receipt) => {
+            let infrastructure = chrono_judge_routes::compare(plan, op, Some(&receipt))
+                .err()
+                .or_else(|| receipt.process.failure.clone());
+            let (error, status) = if let Some(error) = infrastructure {
+                (Some(error), "error")
+            } else if receipt.process.exit_code != 0 {
+                (
+                    Some(format!("operation exit {}", receipt.process.exit_code)),
+                    "failed",
+                )
+            } else {
+                (None, "passed")
+            };
+            (Some(receipt), error, status)
+        }
+        Err(e) => (None, Some(e), "error"),
+    };
+    OperationResult {
+        operation: op.method.operation.clone(),
+        status: status.into(),
+        receipt,
+        error,
+    }
 }
 pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Result<(), String> {
     let projects = r.projects()["projects"].as_array().unwrap();
@@ -894,7 +970,13 @@ fn validate_unit_report(
         operation.method.argv =
             chrono_judge_routes::expand(&operation.method.argv, &route_plan.binding);
     }
-    if route_plan.selected != expected_selected
+    if route_plan.scheduling
+        != chrono_judge_registration::execution::scheduling(
+            registrations.filemap(),
+            registrations.projects(),
+            &registrations.config()["artifacts"],
+        )?
+        || route_plan.selected != expected_selected
         || serde_json::to_value(&route_plan.operations).unwrap()
             != serde_json::to_value(&expected_operations).unwrap()
     {

@@ -594,3 +594,43 @@ fn collection_supports_explicit_judge_resolved_through_recorded_path() {
     pass(&collect(&h, &b, &c, json!([report])));
     assert_eq!(h.calls(), 1);
 }
+
+#[test]
+fn scheduling_delta_selects_complete_plans_and_collection_rejects_rewritten_policy() {
+    let h = report_host();
+    explicit_plans(&h);
+    h.change_registry(".chrono-harness/FILEMAP.json",|v|v["execution_scheduling"]=json!({"max_running":1,"resources":[],"claims":{"test.suite":{"resources":[],"outputs":[]},"test.other":{"resources":[],"outputs":[]}}}));
+    let b = h.commit();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_scheduling"]["max_running"] = json!(2)
+    });
+    let c = h.commit();
+    let alpha = write_report(&h, &b, &c, "alpha");
+    let beta = write_report(&h, &b, &c, "beta");
+    let r = collect(&h, &b, &c, json!([alpha.clone(), beta.clone()]));
+    pass(&r);
+    assert_eq!(h.calls(), 1);
+    assert_eq!(
+        r.evidence["global_selected"],
+        json!(["test:other", "test:suite"])
+    );
+    let path = alpha["path"].as_str().unwrap().to_string();
+    let mut report = h.read(&path);
+    report["response"]["evidence"]["plan"]
+        .as_object_mut()
+        .unwrap()
+        .remove("scheduling");
+    let mut plan = report["response"]["evidence"]["plan"].clone();
+    plan.as_object_mut().unwrap().remove("identity");
+    report["response"]["evidence"]["plan"]["identity"] =
+        json!(chrono_harness::wire::digest(&plan).unwrap());
+    let stdout = serde_json::to_vec(&report["response"]).unwrap();
+    report["judge"]["stdout_bytes"] = json!(stdout);
+    report["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+    report["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+    h.json(&path, &report);
+    let mut changed = alpha;
+    changed["sha256"] = json!(sha256(&fs::read(h.root().join(&path)).unwrap()));
+    fail(&collect(&h, &b, &c, json!([changed, beta])), "plan differs");
+    assert_eq!(h.calls(), 1);
+}

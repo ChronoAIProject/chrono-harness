@@ -9,6 +9,64 @@ runs shared operations once, and rejects cycles or conflicting shared bounds bef
 tool observation or operation launch. Bounds are positive; each output stream is
 limited to 64 MiB. A timeout is an infrastructure failure, not a functional result.
 
+FILEMAP v2 may additionally declare one `execution_scheduling` policy:
+
+```json
+{
+  "max_running": 2,
+  "resources": ["shared-inventory"],
+  "claims": {
+    "build.example": {"resources": [], "outputs": ["example/output/"]},
+    "test.example": {"resources": ["shared-inventory"], "outputs": ["example/output/"]}
+  }
+}
+```
+
+`max_running` is a positive finite operation cap, independent of CPU count and
+of tool-internal threads. Every operation participating in any registered plan
+must have exactly one claim record, including explicit empty resource/output
+lists. Resource names come only from `resources`; outputs name exact existing
+`config.artifacts` paths (the scoped legacy adapter uses its declared artifact
+paths). Missing, unknown, duplicate, ambiguous and invalid declarations fail
+before business tool observation or launch. There is no language, directory,
+call-graph or test discovery. All resource claims are exclusive; equal or nested
+output namespaces conflict. The declaration remains responsible for completeness.
+
+Projects alone schedules the routes DAG. It chooses ready work in canonical
+plan order, skips conflicts so disjoint ready work advances, and acquires all
+claims together before launch. A pending prerequisite waits; an unsuccessful
+terminal prerequisite blocks only its descendants. Shared operations run once
+per selected invocation. All owned workers join, and executed/blocked report
+rows retain canonical order independent of completion order. Original exits,
+output bytes, timeout failures and receipt errors remain failures. Without the
+policy, execution stays serial and the serialized plan and its identity retain
+the legacy shape. With the policy, its complete declarations enter plan identity;
+collection reconstructs and compares them against retained candidate registration
+without executing business or version commands.
+
+Scheduling cap/resource changes affect registered plan consumers. Claim changes
+also affect explicitly conflicting consumers at both endpoints; output declaration
+changes retain declared output consumers and owners. Removal and reassignment
+use the same union of endpoint records and edges. No selected obligation is
+removed to obtain overlap.
+
+On Unix, the runner process engine carries a bounded anonymous launch-tree
+registry through inherited descriptors 198/199, without changing observed argv
+or environment. Each known nested runner launch registers before exec. An
+operation timeout cancels only that launch subtree. An enclosing timeout first
+cancels nested engines, which terminate their groups and reap their own children,
+then joins the enclosing child and stream workers. A finite one-second teardown
+allowance is for cleanup after the unchanged execution deadline. A crashed or
+unresponsive nested owner causes explicit cleanup failure and termination of
+only recorded groups; it cannot produce successful completion. The registry
+has 4096 simultaneous launch slots and fails before launch when exhausted.
+Descriptor collisions fail explicitly. Native tools' ordinary descendants remain
+in their launch group; a wrapper that closes the inherited ownership descriptors
+cannot transport nested runner ownership. Non-Unix process teardown retains its
+existing direct-child behavior. There is no process scanner, daemon, arbitrary
+undeclared-writer guarantee or cross-invocation lock. Callers retain ownership of
+disjoint checkouts and established worktree lifecycle boundaries.
+
 Registration owns strict interpretation; FILEMAP owns record identities, targets
 and impact. Plan changes target defining records of the test and listed operations.
 `operations`, `argv` and `version_argv` preserve order. `tool:ID` and
