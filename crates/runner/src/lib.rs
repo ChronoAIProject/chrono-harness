@@ -1231,7 +1231,10 @@ fn execute_check(
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});
     let mut report = match proc {
         Ok(p) => {
-            let response: Result<Response, String> = decode(&p.stdout_bytes);
+            let response: Result<Response, String> = match &p.failure {
+                Some(failure) => Err(failure.clone()),
+                None => decode(&p.stdout_bytes),
+            };
             match response.and_then(|r| {
                 validate_response_protocol(&r, &request_id, p.exit_code, protocol)?;
                 Ok(r)
