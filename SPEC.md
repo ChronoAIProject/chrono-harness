@@ -245,6 +245,7 @@ argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
 | execution_plans | FILEMAP v2: `test:ID` -> `{operations: string[], timeout_seconds, output_limit_bytes}`; ordered nonempty unique IDs, test execute required; shared precedence and bounds must agree before any launch |
+| execution_scheduling | FILEMAP v2 optional: `{max_running: positive integer, resources: string[], claims: {operation: {resources: string[], outputs: artifact-path[]}}}`; every participating operation explicitly claimed, including empty lists; exclusive resources and overlapping output namespaces; absent preserves serial plan identity |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
 
 symlink/projection 是明确的文件表示及所有权说明，不自动增加编译或测试执行边。
@@ -810,3 +811,9 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 完整 schema、组合配方、CLI、迁移、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
 [来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
 五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
+
+现役本地执行扩展由 projects 唯一调度 routes 已合并的 DAG。显式有限 cap 只限操作数，不推断 CPU／语言，不限工具内部线程；前置未终结等待，失败只阻断后继，冲突 ready 项可让位于独立项。回执保留原字节与失败，结果按规范计划顺序输出，线程与已知嵌套 runner 进程由原 runner 引擎收束。FILEMAP 声明缺失／未知／歧义在执行前失败；两端 cap、claim、冲突消费者与输出登记变更进入 DELTA，collection 仅重建核原登记和证据。Unix 匿名继承描述符承载已知 launch tree，超时后有限清理不延长执行额度；不承诺跨调用锁或关闭继承描述符的未登记外部进程树。本宿主 cap 2 与独立输出／workflow inventory 共用 claim 属于宿主政策；未从 owner suites 声称完整 canonical／native 成功、交付或完整 SPEC 验收。
+
+Unix runner 的中断恢复由同一 process engine 的单个已加入 observer 承载：exec 前固定 child 与 launcher 的活身份，macOS 用 kernel exit event，Linux 用 pidfd；只有两者的实际终结与已登记子树完成才能协调丢失 destructor 的 slot。PID 消失、已发信号或外层 exit 0 都不是完成回执；代际固定阻止旧事件／上下文消费复用 slot。清理仍限原一秒；中断 owner 的存活子进程终止后仍保留清理失败，未知完成不成功。进程 exit 0 后的 receipt／清理失败在 CI 摘要投影为 failed、exit null，原 receipt 保留真实 exit 0、诊断与绑定；collection 保留原失败而不重执行。宿主 cap、计划、选择义务及本地／原生验收仍由原登记与调用方负责。
+
+exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。

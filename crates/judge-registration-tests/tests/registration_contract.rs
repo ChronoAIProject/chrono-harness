@@ -1558,3 +1558,46 @@ fn explicit_same_project_group_bindings_and_legacy_scripts_have_one_owner() {
         );
     }
 }
+
+#[test]
+fn scheduling_requires_complete_unambiguous_explicit_claims() {
+    use chrono_judge_registration::execution::scheduling;
+    let fm = json!({"execution_plans":{"test:t":{"operations":["run"],"timeout_seconds":30,"output_limit_bytes":4096}},"execution_scheduling":{"max_running":2,"resources":["db"],"claims":{"run":{"resources":["db"],"outputs":["out/"]}}}});
+    let pr = json!({"projects":[{"id":"t","actions":{"execute":{"operation":"run","tool":"sh","argv":[]}}}],"scripts":[]});
+    let artifacts = json!([{"path":"out/"}]);
+    assert!(scheduling(&fm, &pr, &artifacts).unwrap().is_some());
+    let mut old = fm.clone();
+    old.as_object_mut().unwrap().remove("execution_scheduling");
+    assert!(scheduling(&old, &pr, &artifacts).unwrap().is_none());
+    for mode in 0..9 {
+        let mut bad = fm.clone();
+        let mut p = pr.clone();
+        let mut a = artifacts.clone();
+        match mode {
+            0 => bad["execution_scheduling"]["max_running"] = json!(0),
+            1 => {
+                bad["execution_scheduling"]["claims"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("run");
+            }
+            2 => {
+                bad["execution_scheduling"]["claims"]["extra"] =
+                    json!({"resources":[],"outputs":[]})
+            }
+            3 => bad["execution_scheduling"]["claims"]["run"]["resources"] = json!(["unknown"]),
+            4 => bad["execution_scheduling"]["claims"]["run"]["outputs"] = json!(["unknown/"]),
+            5 => {
+                let row = p["projects"][0].clone();
+                p["projects"].as_array_mut().unwrap().push(row);
+            }
+            6 => bad["execution_scheduling"]["claims"]["run"] = json!({"resources":[]}),
+            7 => bad["execution_scheduling"]["claims"]["run"]["outputs"] = json!(["../out/"]),
+            _ => a.as_array_mut().unwrap().push(json!({"path":"out"})),
+        }
+        assert!(
+            scheduling(&bad, &p, &a).is_err(),
+            "accepted invalid declaration {mode}"
+        );
+    }
+}

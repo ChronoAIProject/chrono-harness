@@ -1121,3 +1121,40 @@ fn group_terminal_operation_and_producer_edge_are_required_before_effects() {
         assert!(!h.root().join(".chrono-harness/state/order").exists());
     }
 }
+
+#[test]
+fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_effects() {
+    for script in [false, true] {
+        let mut h = Host::new(script);
+        let policy = json!({"max_running":2,"resources":["order"],"claims":{"prepare.p":{"resources":["order"],"outputs":[]},"execute.t":{"resources":["order"],"outputs":[]}}});
+        h.values.get_mut(FM).unwrap()["execution_scheduling"] = policy.clone();
+        h.save();
+        let (code, v) = h.run(|_| {});
+        check_pass(code, &v);
+        let route = v["judges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "routes")
+            .unwrap();
+        let plan = &route["response"]["outputs"]["execution_plan"];
+        assert_eq!(plan["scheduling"], policy);
+        assert_eq!(v["tests"]["plan"], plan["identity"]);
+        assert_eq!(
+            fs::read_to_string(h.root().join(".chrono-harness/state/order")).unwrap(),
+            "pt"
+        );
+        h.values.get_mut(FM).unwrap()["execution_scheduling"]["claims"]
+            .as_object_mut()
+            .unwrap()
+            .remove("execute.t");
+        h.save();
+        let (code, v) = h.run(|_| {});
+        assert_ne!(code, 0);
+        assert!(serde_json::to_string(&v).unwrap().contains("E_SCHEDULING"));
+        assert_eq!(
+            fs::read_to_string(h.root().join(".chrono-harness/state/order")).unwrap(),
+            "pt"
+        );
+    }
+}

@@ -6,7 +6,7 @@ use chrono_harness::{
 };
 use chrono_judge_registration::{
     Registrations,
-    execution::{Method, Plan},
+    execution::{Method, Plan, Scheduling},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -35,6 +35,8 @@ pub struct Execution {
     pub selected: BTreeMap<String, Plan>,
     pub operations: Vec<Operation>,
     pub tools: BTreeMap<String, Tool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scheduling: Option<Scheduling>,
 }
 impl Execution {
     fn digest(&self) -> Result<String, String> {
@@ -46,7 +48,37 @@ impl Execution {
         if self.schema != "chrono-execution-plan/v1" || self.identity != self.digest()? {
             return Err("E_PLAN_IDENTITY".into());
         }
+        let mut preceding = BTreeSet::new();
+        for op in &self.operations {
+            if !op.predecessors.is_subset(&preceding)
+                || !preceding.insert(op.method.operation.clone())
+                || op.timeout_seconds == 0
+                || op.output_limit_bytes == 0
+                || op.output_limit_bytes > 64 * 1024 * 1024
+            {
+                return Err(
+                    "E_EXECUTION_PLAN: duplicate, unordered prerequisite or invalid bound".into(),
+                );
+            }
+        }
+        if let Some(policy) = &self.scheduling {
+            policy.validate()?;
+            for op in &self.operations {
+                if !policy.claims.contains_key(&op.method.operation) {
+                    return Err(format!(
+                        "E_SCHEDULING: missing claims for {}",
+                        op.method.operation
+                    ));
+                }
+            }
+        }
         Ok(())
+    }
+    pub fn with_scheduling(mut self, policy: Option<Scheduling>) -> Result<Self, String> {
+        self.scheduling = policy;
+        self.identity = self.digest()?;
+        self.validate()?;
+        Ok(self)
     }
 }
 pub fn binding(req: &Request, inputs: &Value) -> Value {
@@ -149,6 +181,7 @@ pub fn prepare(
         environment,
         reused,
         true,
+        None,
     )
 }
 /// Legacy CI supplies its explicitly scoped declarations; missing version contracts remain unverified.
@@ -174,6 +207,35 @@ pub fn prepare_scoped(
         environment,
         reused,
         false,
+        None,
+    )
+}
+/// Registered full/scoped callers share one preparation owner and process engine.
+pub fn prepare_scheduled(
+    root: &Path,
+    binding: Value,
+    selected: &BTreeSet<String>,
+    plans: &BTreeMap<String, Plan>,
+    methods: &BTreeMap<String, Vec<Method>>,
+    execute: &BTreeMap<String, String>,
+    declarations: &Value,
+    environment: BTreeMap<String, String>,
+    reused: &BTreeMap<String, Tool>,
+    scheduling: Option<Scheduling>,
+    strict: bool,
+) -> Result<Execution, String> {
+    prepare_inner(
+        root,
+        binding,
+        selected,
+        plans,
+        methods,
+        execute,
+        declarations,
+        environment,
+        reused,
+        strict,
+        scheduling,
     )
 }
 fn prepare_inner(
@@ -187,8 +249,20 @@ fn prepare_inner(
     environment: BTreeMap<String, String>,
     reused: &BTreeMap<String, Tool>,
     strict: bool,
+    scheduling: Option<Scheduling>,
 ) -> Result<Execution, String> {
     let (selected, mut operations) = order(selected, plans, methods, execute)?;
+    if let Some(policy) = &scheduling {
+        policy.validate()?;
+        for op in &operations {
+            if !policy.claims.contains_key(&op.method.operation) {
+                return Err(format!(
+                    "E_SCHEDULING: missing claims for {}",
+                    op.method.operation
+                ));
+            }
+        }
+    }
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let mut tools = BTreeMap::new();
     for op in &mut operations {
@@ -243,6 +317,7 @@ fn prepare_inner(
         selected,
         operations,
         tools,
+        scheduling,
     };
     plan.identity = plan.digest()?;
     Ok(plan)
@@ -274,6 +349,7 @@ pub fn prepare_collection(
         selected,
         operations,
         tools: BTreeMap::new(),
+        scheduling: None,
     };
     plan.identity = plan.digest()?;
     Ok(plan)
@@ -648,6 +724,11 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     )?;
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;
+    let scheduling = chrono_judge_registration::execution::scheduling(
+        r.filemap(),
+        r.projects(),
+        &r.config()["artifacts"],
+    )?;
     let plan = if matches!(
         req.scope,
         Some(chrono_harness::units::Scope::Collect { .. })
@@ -661,8 +742,9 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
             &execute_actions(&r),
             env,
         )?
+        .with_scheduling(scheduling.clone())?
     } else {
-        prepare(
+        prepare_scheduled(
             &req.candidate.root,
             binding(req, &inputs),
             &selected,
@@ -672,6 +754,8 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
             &r.config()["tools"],
             env,
             &reused,
+            scheduling,
+            true,
         )?
     };
     // Every launched tool is an explicitly retained external input or a registered candidate file.

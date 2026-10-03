@@ -10,6 +10,110 @@ pub struct Plan {
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Claims {
+    pub resources: Vec<String>,
+    pub outputs: Vec<String>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Scheduling {
+    pub max_running: usize,
+    pub resources: Vec<String>,
+    pub claims: BTreeMap<String, Claims>,
+}
+impl Scheduling {
+    pub fn validate(&self) -> Result<(), String> {
+        let unique = |items: &[String]| {
+            items.iter().all(|v| !v.is_empty() && !v.contains('\0'))
+                && items.iter().collect::<BTreeSet<_>>().len() == items.len()
+        };
+        if self.max_running == 0 || !unique(&self.resources) {
+            return Err(
+                "E_SCHEDULING: positive max_running and unique resource names required".into(),
+            );
+        }
+        for (op, claims) in &self.claims {
+            if op.is_empty()
+                || !unique(&claims.resources)
+                || !unique(&claims.outputs)
+                || claims
+                    .outputs
+                    .iter()
+                    .map(|p| std::path::Path::new(p))
+                    .collect::<BTreeSet<_>>()
+                    .len()
+                    != claims.outputs.len()
+                || claims.resources.iter().any(|r| !self.resources.contains(r))
+                || claims
+                    .outputs
+                    .iter()
+                    .any(|p| chrono_harness::relative_path(p.trim_end_matches('/')).is_err())
+            {
+                return Err(format!("E_SCHEDULING: invalid claims for {op}"));
+            }
+        }
+        Ok(())
+    }
+    pub fn conflicts(&self, a: &str, b: &str) -> bool {
+        let a = &self.claims[a];
+        let b = &self.claims[b];
+        a.resources.iter().any(|r| b.resources.contains(r))
+            || a.outputs.iter().any(|x| {
+                b.outputs
+                    .iter()
+                    .any(|y| chrono_harness::units::overlap(x, y))
+            })
+    }
+}
+/// Interpret the complete host policy before tool observation or operation effects.
+pub fn scheduling(
+    filemap: &Value,
+    projects: &Value,
+    artifacts: &Value,
+) -> Result<Option<Scheduling>, String> {
+    let Some(value) = filemap.get("execution_scheduling") else {
+        return Ok(None);
+    };
+    let policy: Scheduling =
+        serde_json::from_value(value.clone()).map_err(|e| format!("E_SCHEDULING: {e}"))?;
+    policy.validate()?;
+    let participating: BTreeSet<_> = plans(filemap)?
+        .values()
+        .flat_map(|p| p.operations.iter().cloned())
+        .collect();
+    if policy.claims.keys().cloned().collect::<BTreeSet<_>>() != participating {
+        return Err("E_SCHEDULING: claims must name every participating operation exactly once, including empty claims".into());
+    }
+    let methods = methods(projects)?;
+    for (operation, claims) in &policy.claims {
+        if methods.get(operation).is_none_or(|m| m.len() != 1) {
+            return Err(format!(
+                "E_SCHEDULING: unknown or ambiguous operation {operation}"
+            ));
+        }
+        for output in &claims.outputs {
+            let matches: Vec<_> = artifacts
+                .as_array()
+                .ok_or("E_SCHEDULING: artifact declarations missing")?
+                .iter()
+                .filter(|a| {
+                    a["path"]
+                        .as_str()
+                        .is_some_and(|p| std::path::Path::new(p) == std::path::Path::new(output))
+                })
+                .collect();
+            if matches.len() != 1 || matches[0]["path"] != *output {
+                return Err(format!(
+                    "E_SCHEDULING: output must name one registered artifact path: {operation}: {output}"
+                ));
+            }
+        }
+    }
+    Ok(Some(policy))
+}
 pub fn plans(filemap: &Value) -> Result<BTreeMap<String, Plan>, String> {
     let plans: BTreeMap<String, Plan> = serde_json::from_value(filemap["execution_plans"].clone())
         .map_err(|e| format!("E_EXECUTION_PLAN: {e}"))?;

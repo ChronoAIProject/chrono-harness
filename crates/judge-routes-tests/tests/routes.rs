@@ -426,3 +426,39 @@ fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothi
         "conflicting plan launched no tool version process"
     );
 }
+
+#[test]
+fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
+    let d = tempfile::tempdir().unwrap();
+    let plans = BTreeMap::from([("test:t".into(), p(&["run"]))]);
+    let methods = BTreeMap::from([("run".into(), vec![method("run", vec!["literal".into()])])]);
+    let actions = BTreeMap::from([("test:t".into(), "run".into())]);
+    let legacy = chrono_judge_routes::prepare_collection(
+        d.path(),
+        json!({}),
+        &plans.keys().cloned().collect(),
+        &plans,
+        &methods,
+        &actions,
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let value = serde_json::to_value(&legacy).unwrap();
+    assert!(value.get("scheduling").is_none());
+    let mut unsigned = value.clone();
+    unsigned.as_object_mut().unwrap().remove("identity");
+    assert_eq!(legacy.identity, wire::digest(&unsigned).unwrap());
+    let policy = serde_json::from_value(
+        json!({"max_running":2,"resources":[],"claims":{"run":{"resources":[],"outputs":[]}}}),
+    )
+    .unwrap();
+    let concurrent = legacy.clone().with_scheduling(Some(policy)).unwrap();
+    assert_ne!(legacy.identity, concurrent.identity);
+    assert!(concurrent.tools.is_empty());
+    let mut changed = serde_json::to_value(&concurrent).unwrap();
+    changed["scheduling"]["max_running"] = json!(1);
+    let changed: chrono_judge_routes::Execution = serde_json::from_value(changed).unwrap();
+    assert!(changed.validate().is_err());
+    let bad = serde_json::from_value(json!({"max_running":2,"resources":[],"claims":{}})).unwrap();
+    assert!(legacy.with_scheduling(Some(bad)).is_err());
+}
