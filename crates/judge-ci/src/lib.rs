@@ -109,20 +109,12 @@ pub fn full_oid(s: &str) -> Result<(), String> {
 }
 fn verify_oid(reader: &Reader, root: &Path, oid: &str) -> Result<(), String> {
     full_oid(oid)?;
-    if utf8(reader.git(
-        root,
-        &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
-    )?)?
-    .trim()
-        != oid
-    {
-        return Err("OID is not a commit".into());
-    }
+    reader.verify_oid(root, oid)?;
     Ok(())
 }
 fn at(reader: &Reader, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
     relative_path(path)?;
-    reader.git(root, &["show", &format!("{oid}:{path}")])
+    reader.blob(root, oid, path)
 }
 fn tree(
     reader: &Reader,
@@ -233,7 +225,13 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             })
             .collect()
     };
-    let mut execute = BTreeMap::new();
+    let execute: BTreeMap<_, _> = chrono_judge_registration::execution::test_bindings(&pr)?
+        .into_iter()
+        .map(|(test, bindings)| match bindings.as_slice() {
+            [binding] => Ok((test, binding.operation.clone())),
+            _ => Err(format!("E_TEST_BINDING: duplicate test identity {test}")),
+        })
+        .collect::<Result<_, String>>()?;
     let owners: BTreeSet<_> = strings(&pr["owners"])?.into_iter().collect();
     if owners.is_empty() {
         return Err("empty owner registry".into());
@@ -283,12 +281,8 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             if projects.insert(name.to_owned(), entry.clone()).is_some() {
                 return Err(format!("duplicate project/script {name}"));
             }
-            if let Some(op) = entry["actions"]["execute"]["operation"].as_str() {
-                execute.insert(format!("test:{name}"), op.into());
-            }
             nodes.insert(format!("script:{name}"));
             nodes.insert(format!("project:{name}"));
-            nodes.insert(format!("test:{name}"));
             for a in entry
                 .get("actions")
                 .and_then(Value::as_object)
@@ -319,6 +313,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             }
         }
     }
+    nodes.extend(execute.keys().cloned());
     for (test, binding) in &p.bindings {
         if !test.starts_with("test:") || !nodes.contains(test) || binding.is_empty() {
             return Err(format!("invalid check binding {test}"));
@@ -504,6 +499,12 @@ fn ci_impact(
         for p in changed(&old.projects, &new.projects) {
             seeds.insert(format!("project:{p}"));
         }
+        for test in changed(&old.execute, &new.execute) {
+            extras
+                .entry(test)
+                .or_default()
+                .insert("changed test action binding".into());
+        }
         for op in changed(&old.operations, &new.operations) {
             for s in [old, new] {
                 if let Some((owner, _, _)) = s.operations.get(&op) {
@@ -658,7 +659,7 @@ struct Inventory {
 }
 
 /// Resolve only DELTA-required collection units through the adjudicator's current inventory/assignment owner.
-/// This does not validate a canonical entry, read reports, execute operations or grant admission.
+/// This does not validate a canonical entry, execute operations or grant admission.
 /// Full preparation shares FILEMAP impact and routes' global obligation owner.
 /// No judge or business/version process is launched here.
 pub fn full_collection_requirements(
@@ -667,11 +668,22 @@ pub fn full_collection_requirements(
     prepared: &chrono_harness::prepared::PreparedCheck,
     originals: &chrono_harness::units::FullManifest,
 ) -> Result<Value, String> {
+    full_collection_requirements_with_inputs(root, profile, prepared, &|_| Ok(originals.clone()))
+}
+/// The acquisition callback is used only for necessary historical conversion.
+/// Registration names the decoder test units; the collector reads DELTA-required
+/// reports separately after the shared selection owner returns its requirements.
+pub fn full_collection_requirements_with_inputs(
+    root: &Path,
+    profile: &str,
+    prepared: &chrono_harness::prepared::PreparedCheck,
+    originals: &dyn Fn(&[String]) -> Result<chrono_harness::units::FullManifest, String>,
+) -> Result<Value, String> {
     let context = prepared
         .context
         .as_ref()
         .ok_or("full collection context missing")?;
-    let (mut req, _, reader, _) = chrono_harness::full::prepare_request(
+    let (mut req, _, reader, cfg) = chrono_harness::full::prepare_request(
         root,
         profile,
         prepared.base.as_deref().ok_or("full base missing")?,
@@ -683,8 +695,24 @@ pub fn full_collection_requirements(
     )?;
     req.judge_id = "routes".into();
     let result = (|| {
+        // prepare_request observes its current process, which here is chrono-ci.
+        // Bootstrap instead carries the independently validated registered runner;
+        // no retained report can assign an executable identity to this request.
+        let runner = chrono_harness::no_symlink_parents(
+            root,
+            cfg["runner"]["path"]
+                .as_str()
+                .ok_or("registered runner path")?,
+        )?;
+        let runner = fs::canonicalize(runner).map_err(|e| e.to_string())?;
+        let digest = chrono_harness::file_identity(&runner)?.0;
+        if cfg["runner"]["sha256"] != digest || cfg["runner"]["version"] != req.runner.version {
+            return Err("E_EXECUTABLE_BINDING: registered collection runner differs".into());
+        }
+        req.runner.path = runner.to_str().ok_or("runner path UTF8")?.into();
+        req.runner.sha256 = digest;
         let (old, r, _) =
-            chrono_judge_registration::views_for_collection_inputs(&req, &reader, originals)?;
+            chrono_judge_registration::views_for_collection_inputs_with(&req, &reader, originals)?;
         let inputs = chrono_judge_registration::inputs::validate(&req, &old, &r)?;
         let (impact, findings) =
             chrono_judge_filemap::produce_for_request(&req, &old, &r, &reader, &inputs)?;
@@ -709,6 +737,102 @@ pub fn full_collection_requirements(
     fs::remove_dir_all(&req.base.root).map_err(|e| e.to_string())?;
     result
 }
+/// Full scheduling reads complete trees and registry/semantic blobs, never exports host sources,
+/// captures SDK inputs, or launches a historical decoder. Unsupported historical registries fail.
+/// External effective-input changes remain the final full collection owner's obligation.
+pub fn full_scheduling_requirements(
+    root: &Path,
+    profile: &str,
+    base: &str,
+    candidate: &str,
+) -> Result<Value, String> {
+    let reader = Reader::for_config(root, profile)?;
+    reader.verify_config(root, candidate)?;
+    reader.verify_oid(root, base)?;
+    reader.verify_oid(root, candidate)?;
+    let (old, current, _) = chrono_judge_registration::interpret_scheduling_with_reader(
+        &reader,
+        root,
+        base,
+        candidate,
+        profile,
+        reader.registry_values(root, base, profile)?,
+        reader.registry_values(root, candidate, profile)?,
+    )
+    .map_err(|e| {
+        format!("full scheduling requires directly readable historical registries: {e}")
+    })?;
+    let delta =
+        chrono_harness::facts::delta(&reader.tree(root, base)?, &reader.tree(root, candidate)?);
+    let (impact, findings) = chrono_judge_filemap::produce_for_endpoints(
+        root, base, candidate, profile, &delta, &old, &current, &reader,
+    )?;
+    if findings.iter().any(|f| f.level == "error") {
+        return Err(format!(
+            "blocked full scheduling obligations: {}",
+            serde_json::to_string(&findings).map_err(|e| e.to_string())?
+        ));
+    }
+    let selected = chrono_judge_routes::global_selection(
+        &old,
+        &current,
+        &impact,
+        chrono_judge_registration::downstream_validator(&current, "routes"),
+    )?;
+    let plans = chrono_judge_registration::execution::plans(current.filemap())?;
+    let block = chrono_harness::units::full_execution_units(current.config())?
+        .ok_or("full scheduling units missing")?;
+    let units = chrono_judge_routes::validate_unit_assignments(&block, &plans)?;
+    chrono_judge_routes::order(
+        &selected,
+        &plans,
+        &chrono_judge_registration::execution::methods(current.projects())?,
+        &chrono_judge_routes::execute_actions(&current),
+    )?;
+    Ok(
+        object!({"required_units":chrono_harness::units::required(&units, &selected),"global_selected":selected,"changed_paths":delta.iter().map(|d| &d.path).collect::<Vec<_>>(),"git_facts":reader.observation(),"input_scope":"git-and-declarations; final-effective-input-admission-required"}),
+    )
+}
+
+/// Scheduling uses the same scoped inventory without requiring a materialized host checkout.
+/// Registry bytes are still bound to the fixed candidate; this grants no check admission.
+pub fn scheduling_requirements(
+    root: &Path,
+    profile: &str,
+    base: Option<String>,
+    candidate: String,
+    initial: bool,
+) -> Result<Value, String> {
+    let req = Request {
+        protocol: PROTOCOL.into(),
+        request_id: "scheduling-requirements".into(),
+        host_root: root.into(),
+        config_path: profile.into(),
+        config_sha256: sha256(&fs::read(root.join(profile)).map_err(|e| e.to_string())?),
+        base,
+        candidate,
+        initial,
+        scope: None,
+        observations: object!({}),
+    };
+    let mut reader = Reader::legacy();
+    let i = inventory(
+        &req,
+        &mut reader,
+        &mut Value::Null,
+        &mut String::new(),
+        false,
+        false,
+    )?;
+    if !i.blocked.is_empty() {
+        return Err(format!("blocked global obligations: {:?}", i.blocked));
+    }
+    Ok(
+        object!({"required_units":units::required(i.p.units.as_ref().ok_or("scheduling requires registered units")?, &i.global_selected),
+        "global_selected":i.global_selected,"changed_paths":i.paths,"selection_explanation":i.selection_explanation,"git_facts":reader.observation()}),
+    )
+}
+
 pub fn collection_requirements(
     root: &Path,
     profile: &str,
@@ -738,6 +862,7 @@ pub fn collection_requirements(
         &mut Value::Null,
         &mut String::new(),
         false,
+        true,
     )?;
     if !i.blocked.is_empty() {
         return Err(format!("blocked global obligations: {:?}", i.blocked));
@@ -760,6 +885,7 @@ fn inventory(
     opening: &mut Value,
     scope: &mut String,
     admit_entry: bool,
+    verify_checkout: bool,
 ) -> Result<Inventory, String> {
     if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
         return Err("invalid request protocol/identity".into());
@@ -791,7 +917,9 @@ fn inventory(
     if at(reader, root, &req.candidate, &req.config_path)? != bytes {
         return Err("config does not match candidate/request".into());
     }
-    clean(reader, root, &req.candidate, &p)?;
+    if verify_checkout {
+        clean(reader, root, &req.candidate, &p)?;
+    }
     let previous;
     let old = if req.initial {
         if req.base.is_some() {
@@ -822,11 +950,13 @@ fn inventory(
             // Adoption projects the explicitly supplied bindings onto the real base registry;
             // it never fabricates a base tree or executes historical operations.
             let registry = json(&at(reader, root, base, &p.projects)?)?;
-            let mut names = BTreeSet::new();
+            let names: BTreeSet<_> =
+                chrono_judge_registration::execution::test_bindings(&registry)?
+                    .into_keys()
+                    .collect();
             let mut old_ops = BTreeSet::new();
             for collection in ["projects", "scripts"] {
                 for entry in array(&registry, collection)? {
-                    names.insert(format!("test:{}", text(entry, "id")?));
                     for action in entry["actions"]
                         .as_object()
                         .ok_or("actions missing")?
@@ -995,7 +1125,17 @@ fn inventory(
         for (key, value) in &p.environment {
             environment_policy["values"][key] = object!(value);
         }
-        let (_, r, view) = if reader.is_bound() {
+        let (_, r, view) = if !verify_checkout {
+            chrono_judge_registration::interpret_scheduling_with_reader(
+                reader,
+                root,
+                base,
+                &req.candidate,
+                config_path,
+                a,
+                b,
+            )?
+        } else if reader.is_bound() {
             chrono_judge_registration::interpret_with_reader(
                 reader,
                 root,
@@ -1123,7 +1263,7 @@ fn evaluate(
         environment_policy,
         declarations,
         methods,
-    } = inventory(req, reader, opening, scope, true)?;
+    } = inventory(req, reader, opening, scope, true, true)?;
     let root = &req.host_root;
     if let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope {
         if !blocked.is_empty() {

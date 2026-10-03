@@ -1,0 +1,157 @@
+# chrono-ci: owned github-job-gating/v1
+name: "Example / aggregate"
+on:
+  push:
+    branches: ["dev","integration/**"]
+  pull_request:
+    branches: ["dev"]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  detect:
+    name: Detect registered DELTA
+    runs-on: "self-hosted"
+    timeout-minutes: 45
+    outputs:
+      detection: ${{ steps.detect.outputs.detection }}
+      unit_example: ${{ steps.detect.outputs.unit_example }}
+      unit_harness: ${{ steps.detect.outputs.unit_harness }}
+    steps:
+      - name: Acquire declared detector source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .chrono-harness/
+            .github/workflows/chrono-ci.yml
+          persist-credentials: true
+      - name: Bootstrap registered detector tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+      - name: Detect required units from fixed Git endpoints
+        id: detect
+        shell: bash
+        env:
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-ci' detect --host-root . --config '.chrono-harness/ci/units.json' --github-output "$GITHUB_OUTPUT"
+  unit_example:
+    outputs:
+      production: ${{ steps.production.outputs.production }}
+    name: "Example / example"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_example == 'true' }}
+    runs-on: "self-hosted"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'example'
+      - name: Bind original unit artifact production
+        id: production
+        shell: bash
+        run: |
+          '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'example' --github-output "$GITHUB_OUTPUT"
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-example-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/example/"
+          if-no-files-found: error
+  unit_harness:
+    outputs:
+      production: ${{ steps.production.outputs.production }}
+    name: "Example / harness"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_harness == 'true' }}
+    runs-on: "self-hosted"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'harness'
+      - name: Bind original unit artifact production
+        id: production
+        shell: bash
+        run: |
+          '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'harness' --github-output "$GITHUB_OUTPUT"
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-harness-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/harness/"
+          if-no-files-found: error
+  aggregate:
+    name: "Example / aggregate"
+    needs: ["detect","unit_example","unit_harness"]
+    if: ${{ always() }}
+    runs-on: "self-hosted"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/install.py' '.' '/opt/chrono-tools'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_CI_NEEDS: ${{ toJSON(needs) }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--collect'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-collection-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/collection/"
+          if-no-files-found: error

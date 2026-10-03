@@ -95,7 +95,7 @@ fn workflow(r: &Value) -> &Value {
         .unwrap()["response"]["outputs"]["workflow"]
 }
 fn passed(exit: i32, r: &Value) {
-    assert_eq!(exit, 0, "{}", r["findings"]);
+    assert_eq!(exit, 0, "findings={} tests={}", r["findings"], r["tests"]);
     assert!(
         matches!(r["status"].as_str(), Some("pass" | "warn")),
         "{r:#}"
@@ -131,6 +131,111 @@ fn integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metada
         "ptpt"
     );
     assert_eq!(certificate(&h).1, d);
+}
+
+#[test]
+fn retained_delivery_retry_expires_independently_born_producer_at_current_nanosecond() {
+    use chrono_harness::{
+        full,
+        wire::{self, Binding, Request, Status},
+    };
+    let h = host();
+    let (exit, produced) = run(&h, "integration", None, |ctx| {
+        ctx["observed_at"] = json!("2026-01-01T23:00:00Z");
+    });
+    passed(exit, &produced);
+    let (c, digest) = certificate(&h);
+    let cert_path = h.root().join(".chrono-harness/state/integration.json");
+    let cert_raw = fs::read(&cert_path).unwrap();
+    let report_path = h
+        .root()
+        .join(c["producer"]["report_path"].as_str().unwrap());
+    let report_raw = fs::read(&report_path).unwrap();
+    let (exit, delivered) = run(&h, "delivery", Some(&digest), |ctx| {
+        ctx["branch_ref"] = json!("feature/independent-birth");
+        ctx["branch_started_at"] = json!("2026-01-01T02:00:00Z");
+        ctx["observed_at"] = json!("2026-01-01T23:00:00Z");
+    });
+    passed(exit, &delivered);
+    let original_ctx = fs::read(h.root().join(".chrono-harness/state/context.json")).unwrap();
+    let rows: Vec<_> = delivered["judges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| full::expand_record(row).unwrap())
+        .collect();
+    let index = rows.iter().position(|r| r["id"] == "workflow").unwrap();
+    let history: Vec<_> = rows[..index].iter().map(full::predecessor).collect();
+    let binding: Binding = serde_json::from_value(rows[index]["binding"].clone()).unwrap();
+    for (nanos, expected, binding_ok, error) in [
+        (1767308400000000000_i128, true, true, ""),
+        (1767312000000000000, true, true, ""),
+        (1767312000000000001, false, true, "E_BRANCH_STALE"),
+        (1767315600000000000, false, true, "E_BRANCH_STALE"),
+        (1767308400000000000, false, false, "context binding differs"),
+        (
+            1767304800000000000,
+            false,
+            true,
+            "precedes original production",
+        ),
+    ] {
+        let mut template: Request = serde_json::from_value(delivered["request"].clone()).unwrap();
+        template.observations["preparation"] = json!({"result":{"evidence":{"current_observation":{
+            "context_digest":template.context.sha256,"unix_timestamp_nanos":nanos.to_string()
+        }}}});
+        if !binding_ok {
+            template.observations["preparation"]["result"]["evidence"]["current_observation"]["context_digest"] =
+                json!("0".repeat(64));
+        }
+        template.seal().unwrap();
+        let request = full::judge_request(&template, &binding, &history).unwrap();
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(h.root().join(".chrono-harness/bin/chrono-judge-workflow"))
+            .args(["--protocol", "chrono-judge/v1"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&request).unwrap())
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        let response: wire::Response = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
+            panic!(
+                "{e}: status={} stdout={} stderr={}",
+                out.status,
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            )
+        });
+        assert_eq!(
+            response.status == Status::Pass,
+            expected,
+            "{nanos}: {response:?}; exit={}; stderr={}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(out.status.success(), expected);
+        if !expected {
+            assert!(serde_json::to_string(&response).unwrap().contains(error));
+        }
+        assert_eq!(fs::read(&cert_path).unwrap(), cert_raw);
+        assert_eq!(fs::read(&report_path).unwrap(), report_raw);
+        assert_eq!(
+            fs::read(h.root().join(".chrono-harness/state/context.json")).unwrap(),
+            original_ctx
+        );
+    }
+    assert_eq!(
+        wire::digest(&chrono_harness::json(&original_ctx).unwrap()).unwrap(),
+        delivered["context_digest"]
+    );
 }
 #[test]
 fn delivery_from_integration_named_source_still_requires_successful_evidence() {
@@ -251,6 +356,192 @@ fn retire(h: &mut Host, producer: bool) {
     }
     h.save();
 }
+
+fn grouped_project_host() -> Host {
+    let mut h = Host::new(false);
+    for (id, deps) in [
+        ("cost", vec!["registration", "filemap"]),
+        ("mixed", vec!["registration", "filemap", "cost"]),
+        (
+            "workflow",
+            vec![
+                "registration",
+                "filemap",
+                "routes",
+                "projects",
+                "cost",
+                "mixed",
+            ],
+        ),
+    ] {
+        let bytes =
+            fs::read(source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}")))
+                .expect("build registered judge first");
+        let path = format!(".chrono-harness/bin/chrono-judge-{id}");
+        fs::write(h.root().join(&path), &bytes).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(h.root().join(&path), fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        h.values.get_mut(JUDGES).unwrap()["judges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id":id,"executable":path,"version":"0.1.0","sha256":sha256(&bytes),"argv":["--protocol","chrono-judge/v1"],"selector":"every-delta","after":deps,"modes":["evaluate"]}));
+    }
+    h.values.get_mut(JUDGES).unwrap()["migration_validator"] = "workflow".into();
+    for f in h.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+    {
+        f["surface"] = match f["path"].as_str().unwrap() {
+            CONFIG | JUDGES | WORKFLOW => "judge-policy",
+            FM | PROJECTS => "membership",
+            "doc.txt" => "documentation",
+            _ => "product",
+        }
+        .into();
+    }
+    h.values.get_mut(CONFIG).unwrap()["semantic_fields"] =
+        json!([{ "path":PROJECTS,"pointers":["/projects/*/actions"],"on":"add-modify-delete"}]);
+    let w = h.values.get_mut(WORKFLOW).unwrap();
+    w["integration"]["bind"] = json!([
+        "base",
+        "candidate_tree",
+        "registry_digest",
+        "executables",
+        "tools",
+        "environment",
+        "effective_inputs",
+        "required_tests",
+        "results_digest"
+    ]);
+    w["integration"]["tests"] = json!(["t", "opaque/suffix"]);
+    w["stability"] = json!([{"id":"p","paths":["p/product.py"],"tests":["t", "opaque/suffix"],"reason":"grouped project stability fixture"}]);
+
+    let test_project = &mut h.values.get_mut(PROJECTS).unwrap()["projects"][1];
+    let execute = test_project["actions"]["execute"].clone();
+    for (action, operation) in [("alpha", "group.alpha"), ("beta", "group.beta")] {
+        let mut grouped = execute.clone();
+        grouped["operation"] = operation.into();
+        test_project["actions"][action] = grouped;
+    }
+    test_project["test_groups"] = json!({"t":"alpha","opaque/suffix":"beta"});
+
+    let filemap = h.values.get_mut(FM).unwrap();
+    filemap["execution_plans"] = json!({
+        "test:t":{"operations":["prepare.p","group.alpha"],"timeout_seconds":15,"output_limit_bytes":4096},
+        "test:opaque/suffix":{"operations":["prepare.p","group.beta"],"timeout_seconds":15,"output_limit_bytes":4096}
+    });
+    filemap["test_costs"] = json!([
+        {"test":"t","cost":"unknown"},
+        {"test":"opaque/suffix","cost":"unknown"}
+    ]);
+    filemap["project_edges"].as_array_mut().unwrap().extend([
+        edge("project:p", "test-execution", "test:opaque/suffix"),
+        edge("project:t", "test-execution", "test:opaque/suffix"),
+    ]);
+    h.save();
+    h.base = h.candidate.clone();
+    h
+}
+
+fn retire_grouped_project_pair(
+    h: &mut Host,
+    keep_producer: bool,
+    keep_test_project: bool,
+    declarations: Value,
+) {
+    h.values.get_mut(PROJECTS).unwrap()["projects"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|p| (p["id"] == "p" && keep_producer) || (p["id"] == "t" && keep_test_project));
+    let fm = h.values.get_mut(FM).unwrap();
+    fm["files"].as_array_mut().unwrap().retain(|f| {
+        let path = f["path"].as_str().unwrap();
+        !(path.starts_with("p/") && !keep_producer)
+            && !(path.starts_with("t/") && !keep_test_project)
+    });
+    fm["project_edges"] = json!([]);
+    fm["execution_plans"] = json!({});
+    fm["test_costs"] = json!([]);
+    if !keep_producer {
+        fs::remove_dir_all(h.root().join("p")).unwrap();
+    }
+    if !keep_test_project {
+        fs::remove_dir_all(h.root().join("t")).unwrap();
+    }
+    let w = h.values.get_mut(WORKFLOW).unwrap();
+    w["integration"]["tests"] = json!([]);
+    w["stability"] = json!([]);
+    w["retirements"] = declarations;
+    h.save();
+}
+
+#[test]
+fn grouped_project_pair_joint_retirement_resolves_definition_owner() {
+    let mut h = grouped_project_host();
+    retire_grouped_project_pair(
+        &mut h,
+        false,
+        false,
+        json!([
+            {"kind":"test","id":"t","replacement":null,"reason":"grouped pair removed"},
+            {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"grouped pair removed"},
+            {"kind":"project","id":"p","replacement":null,"reason":"grouped pair removed"}
+        ]),
+    );
+    let (e, r) = run(&h, "integration", None, |_| {});
+    passed(e, &r);
+    assert_eq!(r["tests"]["executed"], json!([]));
+    assert_eq!(
+        r["tests"]["removed"],
+        json!({"test:t":null,"test:opaque/suffix":null})
+    );
+    for id in ["test:t", "test:opaque/suffix"] {
+        assert!(r["costs"]["declared_before"].get(id).is_some(), "{id}");
+        assert!(
+            r["impact"]["retired_tests"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(id))
+        );
+    }
+    assert!(!h.root().join(".chrono-harness/state/order").exists());
+
+    for (keep_producer, keep_test_project, declarations) in [
+        (
+            true,
+            false,
+            json!([
+                {"kind":"test","id":"t","replacement":null,"reason":"missing paired project"},
+                {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"missing paired project"}
+            ]),
+        ),
+        (
+            false,
+            true,
+            json!([
+                {"kind":"test","id":"t","replacement":null,"reason":"missing producer"},
+                {"kind":"test","id":"opaque/suffix","replacement":null,"reason":"missing producer"}
+            ]),
+        ),
+        (
+            false,
+            false,
+            json!([
+                {"kind":"test","id":"t","replacement":null,"reason":"missing declaration"},
+                {"kind":"project","id":"p","replacement":null,"reason":"missing declaration"}
+            ]),
+        ),
+    ] {
+        let mut h = grouped_project_host();
+        retire_grouped_project_pair(&mut h, keep_producer, keep_test_project, declarations);
+        let (e, r) = run(&h, "integration", None, |_| {});
+        assert_ne!(e, 0, "accepted invalid grouped retirement: {r:#}");
+    }
+}
+
 #[test]
 fn legal_joint_retirement_preserves_old_cost_without_executing_absent_test() {
     let mut h = host();

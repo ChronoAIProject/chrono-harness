@@ -57,22 +57,9 @@
       ".chrono-harness/ci/bootstrap.json",
       ".chrono-harness/ci/bootstrap-core.json",
       ".github/workflows/chrono-ci.yml",
-      ".github/workflows/chrono-ci-runner.yml",
-      ".github/workflows/chrono-ci-instructions.yml",
-      ".github/workflows/chrono-ci-judge-ci.yml",
-      ".github/workflows/chrono-ci-ci.yml",
-      ".github/workflows/chrono-ci-judge-registration.yml",
-      ".github/workflows/chrono-ci-judge-filemap.yml",
-      ".github/workflows/chrono-ci-judge-routes.yml",
-      ".github/workflows/chrono-ci-judge-projects.yml",
-      ".github/workflows/chrono-ci-scoped-v1.yml",
-      ".github/workflows/chrono-ci-judge-cost.yml",
-      ".github/workflows/chrono-ci-judge-mixed.yml",
-      ".github/workflows/chrono-ci-judge-workflow.yml",
-      ".github/workflows/chrono-ci-inputs.yml",
-      ".github/workflows/chrono-ci-distribution.yml",
-      ".github/workflows/chrono-ci-judge-cargo.yml",
-      ".github/workflows/chrono-ci-worktree.yml"
+      ".chrono-harness/ci/workflow-inventory.py",
+      ".chrono-harness/ci/workflow-inventory-tests.py",
+      ".chrono-harness/ci/workflow-inventory.json"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
@@ -178,6 +165,18 @@
           "test:worktree-tests"
         ],
         "report_path": ".chrono-harness/state/units/worktree/check.json"
+      },
+      "judge-workflow-units": {
+        "tests": [
+          "test:workflow-units"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-workflow-units/check.json"
+      },
+      "judge-workflow-short": {
+        "tests": [
+          "test:workflow-short"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-workflow-short/check.json"
       }
     },
     "shared_operations": {
@@ -185,11 +184,15 @@
         "ci",
         "judge-projects",
         "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units",
         "worktree"
       ],
       "build.inputs": [
         "inputs",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-ci": [
         "ci",
@@ -202,7 +205,9 @@
         "judge-cargo",
         "judge-cost",
         "judge-mixed",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-filemap": [
         "inputs",
@@ -212,20 +217,26 @@
         "judge-mixed",
         "judge-projects",
         "judge-routes",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-mixed": [
         "inputs",
         "judge-cargo",
         "judge-mixed",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-projects": [
         "inputs",
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-registration": [
         "ci",
@@ -237,7 +248,9 @@
         "judge-projects",
         "judge-registration",
         "judge-routes",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-routes": [
         "inputs",
@@ -245,12 +258,16 @@
         "judge-filemap",
         "judge-projects",
         "judge-routes",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.judge-workflow": [
         "inputs",
         "judge-cargo",
-        "judge-workflow"
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ],
       "build.runner": [
         "ci",
@@ -263,12 +280,36 @@
         "judge-registration",
         "judge-routes",
         "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units",
         "runner"
       ],
       "build.worktree": [
         "ci",
         "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units",
         "worktree"
+      ],
+      "fmt.judge-workflow": [
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
+      ],
+      "fmt.judge-workflow-tests": [
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
+      ],
+      "workflow.inventory-tests": [
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
+      ],
+      "workflow.inventory": [
+        "judge-workflow",
+        "judge-workflow-short",
+        "judge-workflow-units"
       ]
     },
     "facts_config": ".chrono-harness/config.json"

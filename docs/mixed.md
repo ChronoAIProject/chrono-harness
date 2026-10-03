@@ -20,7 +20,9 @@ views; other JSON comes from the fixed Git objects and strict UTF-8 decoding.
 Missing required bytes, invalid JSON or invalid pointer escapes fail explicitly.
 
 Pointers use RFC 6901 `~0` / `~1` escaping; `*` selects exactly one object key or
-array element. Path/id row arrays compare by `id` when present, otherwise `path`;
+array element. Path/id row arrays compare by `id` when present, otherwise `path`.
+The registered workflow's `retirements` collection uses its declared `(kind, id)`
+identity instead. Equal IDs across different retirement kinds are distinct;
 duplicate identities, invalid identities and mixed identified/unidentified rows
 are errors. Row order is neutral, including selected subtrees. Other arrays,
 such as argv and operation sequences, retain their order. Physical source pointers

@@ -247,6 +247,89 @@ fn old_patterns_survive_removal_and_invalid_pointers_or_ambiguous_rows_fail() {
 }
 
 #[test]
+fn workflow_retirements_use_typed_identity_without_losing_either_obligation() {
+    for pointer in [
+        "/retirements",
+        "/retirements/*",
+        "/retirements/*/replacement",
+    ] {
+        let mut a = fixture();
+        a.get_mut(CONFIG).unwrap()["semantic_fields"] = json!([
+            {"path":WORKFLOW,"pointers":[pointer],"on":"add-modify-delete"}
+        ]);
+        a.get_mut(WORKFLOW).unwrap()["retirements"] = json!([
+            {"kind":"test","id":"shared","replacement":"t","reason":"test obligation"},
+            {"kind":"script","id":"shared","replacement":"s","reason":"script obligation"}
+        ]);
+        let classify = |b: &Values| {
+            chrono_judge_mixed::classify(&load(&a), &load(b), &[delta(WORKFLOW)], &a, b)
+        };
+        let mut reordered = a.clone();
+        reordered.get_mut(WORKFLOW).unwrap()["retirements"]
+            .as_array_mut()
+            .unwrap()
+            .reverse();
+        assert!(
+            classify(&reordered).unwrap()["changes"][0]["semantic"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        for index in 0..2 {
+            let mut changed = a.clone();
+            changed.get_mut(WORKFLOW).unwrap()["retirements"][index]["replacement"] =
+                json!("other");
+            assert_eq!(
+                classify(&changed).unwrap()["changes"][0]["semantic"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                1
+            );
+            let mut removed = a.clone();
+            removed.get_mut(WORKFLOW).unwrap()["retirements"]
+                .as_array_mut()
+                .unwrap()
+                .remove(index);
+            let result = classify(&removed).unwrap();
+            let fields = result["changes"][0]["semantic"].as_array().unwrap();
+            assert_eq!(fields.len(), 1);
+            assert!(fields[0]["after"].is_null() || pointer == "/retirements");
+            let mut duplicate = a.clone();
+            let row = duplicate[WORKFLOW]["retirements"][index].clone();
+            duplicate.get_mut(WORKFLOW).unwrap()["retirements"]
+                .as_array_mut()
+                .unwrap()
+                .push(row);
+            assert!(
+                classify(&duplicate)
+                    .unwrap_err()
+                    .contains("E_SEMANTIC_IDENTITY")
+            );
+        }
+    }
+}
+
+#[test]
+fn kind_fields_do_not_weaken_id_uniqueness_outside_workflow_retirements() {
+    let mut a = fixture();
+    a.get_mut(CONFIG).unwrap()["semantic_fields"] = json!([
+        {"path":"doc.txt","pointers":["/retirements"],"on":"add-modify-delete"}
+    ]);
+    a.insert(
+        "doc.txt".into(),
+        json!({"retirements":[
+            {"kind":"test","id":"shared"}, {"kind":"script","id":"shared"}
+        ]}),
+    );
+    assert!(
+        report(&a, &a, &["doc.txt"])
+            .unwrap_err()
+            .contains("E_SEMANTIC_IDENTITY")
+    );
+}
+
+#[test]
 fn selected_row_subtrees_ignore_reordering_but_operation_sequences_keep_order() {
     let mut a = fixture();
     a.get_mut(CONFIG).unwrap()["semantic_fields"] = json!([{

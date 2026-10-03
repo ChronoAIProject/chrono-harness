@@ -16,8 +16,11 @@ test = false
 bench = false
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
 chrono-harness = { path = "../runner" }
 chrono-judge-registration = { path = "../judge-registration" }
+chrono-judge-filemap = { path = "../judge-filemap" }
+chrono-judge-routes = { path = "../judge-routes" }
 serde_json = "1"
 tempfile = "3"
 

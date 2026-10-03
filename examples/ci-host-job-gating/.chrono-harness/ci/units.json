@@ -1,0 +1,104 @@
+{
+  "schema": "chrono-github-units/v1",
+  "collection": {
+    "schema": "chrono-github-ci/v4",
+    "workflow_path": ".github/workflows/chrono-ci.yml",
+    "name": "Example / aggregate",
+    "runs_on": "self-hosted",
+    "push_branches": [
+      "dev",
+      "integration/**"
+    ],
+    "pull_request_branches": [
+      "dev"
+    ],
+    "branch_creation_base_ref": "refs/heads/dev",
+    "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+    "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "timeout_minutes": 45,
+    "bootstrap": [
+      "/usr/bin/python3",
+      ".chrono-harness/ci/install.py",
+      ".",
+      "/opt/chrono-tools"
+    ],
+    "runner": ".chrono-harness/bin/chrono-harness",
+    "generator": ".chrono-harness/bin/chrono-ci",
+    "check_config": ".chrono-harness/ci/check.json",
+    "context_path": ".chrono-harness/state/collection/event.json",
+    "artifact_directory": ".chrono-harness/state/collection/",
+    "push_baselines": [
+      {
+        "ref_prefix": "refs/heads/integration/",
+        "base_ref": "refs/heads/dev"
+      }
+    ],
+    "facts_config": ".chrono-harness/config.json"
+  },
+  "units": {
+    "example": {
+      "workflow_path": ".github/workflows/chrono-ci-example.yml",
+      "name": "Example / example",
+      "runs_on": "self-hosted",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/install.py",
+        ".",
+        "/opt/chrono-tools"
+      ],
+      "context_path": ".chrono-harness/state/example/event.json",
+      "artifact_directory": ".chrono-harness/state/example/"
+    },
+    "harness": {
+      "workflow_path": ".github/workflows/chrono-ci-harness.yml",
+      "name": "Example / harness",
+      "runs_on": "self-hosted",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/install.py",
+        ".",
+        "/opt/chrono-tools"
+      ],
+      "context_path": ".chrono-harness/state/harness/event.json",
+      "artifact_directory": ".chrono-harness/state/harness/"
+    }
+  },
+  "gather": {
+    "program": "gh",
+    "inherit_environment": [
+      "PATH",
+      "HOME",
+      "GH_TOKEN"
+    ],
+    "credential_environment": [
+      "GH_TOKEN"
+    ],
+    "environment": {},
+    "timeout_seconds": 60,
+    "output_limit_bytes": 8388608,
+    "wait_seconds": 1800,
+    "poll_seconds": 30,
+    "manifest_path": ".chrono-harness/state/collection/manifest.json",
+    "download_directory": ".chrono-harness/state/collection/downloads/",
+    "report_path": ".chrono-harness/state/collection/gather.json"
+  },
+  "job_gating": {
+    "schema": "chrono-job-gating/v1",
+    "detector": {
+      "runs_on": "self-hosted",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/install.py",
+        ".",
+        "/opt/chrono-tools"
+      ],
+      "sparse_checkout": [
+        ".chrono-harness/",
+        ".github/workflows/chrono-ci.yml"
+      ]
+    }
+  }
+}

@@ -1,15 +1,39 @@
 # Independent CI units
 
 `chrono-ci-check/v3` explicitly assigns every registered test plan to one unit.
-`chrono-github-units/v1` generates one GitHub Actions workflow for each unit and
-one collection workflow. A unit has its own checkout, job name, runner,
-bootstrap command, timeout, context, artifact upload and retry. Host languages
-and directory layouts are opaque to both contracts.
+`chrono-github-units/v1` (scoped) and `/v2` (full) accept an explicit optional
+`job_gating` registration. The current product host adopts it: one detector,
+independent conditional unit jobs, and an always-run aggregate in one parent
+workflow. Each unit retains its own checkout, name, runner, bootstrap, timeout,
+context, upload and job rerun. Host languages and layouts remain opaque.
 
-These contracts extend the scoped CI adapter. They do not activate the full
-seven-judge profile, prove complete input closure or establish deterministic
-local/CI parity. Public beta.12 introduced these contracts; beta.13 adds the
-explicit customization-preserving migration below.
+The product host registers an explicit inventory of conditional units. Its existing
+workflow test project has three explicitly registered test groups, assigned to
+the units `judge-workflow` (core),
+`judge-workflow-units` (direct full-unit tests), and `judge-workflow-short`
+(full short-command tests). Registered actions select each group's members;
+the inventory guard verifies their coverage without inferring dependencies.
+Together, the groups cover the two original test binaries and preserve their
+fixtures, profiles and business limits. `actions.execute` and its original
+`test.judge-workflow-tests` operation remain unfiltered for release. The legacy
+test identity binds a distinct filtered core action through `test_groups`.
+
+Each group retains the registered build prerequisites and runs the host-owned
+`.chrono-harness/ci/workflow-inventory.py` guard. Its explicit config binds the
+original action, group map, Cargo tool and binary lists. Real unfiltered, ignored
+and filtered libtest listings must form nonempty disjoint exact coverage;
+failed listings retain their original exit and output. The guard compares current
+sets rather than fixing the test count forever. The migration's historical name
+baseline remains a separate implementation observation. Shared prerequisites and inventory
+operations are explicitly assigned to all three units. Each has a distinct context
+and check report; the existing detector and always-run aggregate remain the native
+entry and sole required branch-protection check. The grouping has no native timing
+or activation acceptance until the caller runs the committed candidate there.
+
+Providers without `job_gating` retain their original separate-workflow behavior
+and evidence contracts. Installing a new binary or running init does not opt
+an existing host in. This source correction has no published release or native
+Actions verification claim; earlier beta.12–19 evidence keeps its original scope.
 
 The repository's schema4 contract uses fixed `check`, `check --unit ID`, and
 value-less `check --collect`. Bare check keeps global DELTA execution. The local
@@ -55,8 +79,10 @@ executables may be unavailable. The completed collector report retains the
 original evidence closure for subsequent integration certificate consumption.
 Both integration and delivery contexts support contribution-only units without
 requiring a prior completed certificate; only collection resolves global
-completion. Full-v3 report bounds apply to these portable bytes as well as the
-manifest. Missing, replaced, failed, stale or contradictory evidence rejects.
+completion. Full-v3 report bounds apply to report JSON and the manifest;
+external retained blobs stream under their declared upload roots, including the
+full nested collector closure. Legacy inline originals remain supported.
+Missing, replaced, failed, stale or contradictory evidence rejects.
 Ordinary unscoped full check retains local blob references and validates their
 identities by streaming; the portable unit/report bounds do not limit those input
 files. Provider generation and artifact gathering remain owned by `chrono-ci`;
@@ -115,9 +141,237 @@ retries independently; collection runs no business or business version commands.
 The single registered CI producer `--config` selects this map for all short
 invocations. No role, birth time, certificate or layout is inferred.
 
-The product host still uses its scoped V1 registration. Clean-candidate admission,
+The product host uses scoped V1 with explicit job gating. Clean-candidate admission,
 actual native full adoption, public binary publication and full SPEC acceptance
 remain separate obligations.
+
+## Optional native provisioning extension
+
+Full units/v2 using the conditional parent can explicitly select `native_adoption` with schema
+`chrono-native-adoption/v1`. Omitting it preserves existing generation and
+projection behavior. A compatible released generator is required before adoption.
+The product owns the embedded `assets/ci/native.py` template and owned output
+updates. The host owns these extension values and its registered operations:
+
+```json
+"native_adoption": {
+  "schema": "chrono-native-adoption/v1",
+  "lineage": {"path": ".chrono-harness/ci/lineage.json", "sha256": "ORIGINAL_BIRTH_SHA256"},
+  "adapter_path": ".chrono-harness/ci/native.py",
+  "interpreter": "/usr/bin/python3",
+  "inputs_program": ".chrono-harness/bin/chrono-inputs",
+  "seed_directory": ".chrono-harness/state/shared-seed/",
+  "seed_artifact": "chrono-context",
+  "retained_inputs": ".chrono-harness/state/inputs.json",
+  "composition_sources": [{"path": ".chrono-harness/state/inputs/base-capture.json", "sha256": "ORIGINAL_BASE_CAPTURE_SHA256"}],
+  "push_roles": {"refs/heads/integration/": "integration", "refs/heads/dev": "delivery"},
+  "pull_request_role": "delivery",
+  "integration_evidence": null
+}
+```
+
+Before the candidate commit the caller tracks and registers unchanged original
+successful `start`/`reconstruct` report bytes as `lineage`. The native consumer
+checks their digest, original branch/fork/time and event association; it does not
+read destination origin or manufacture historical birth. `prepare-endpoints`
+exposes the existing full-policy event preparation before full-context loading.
+Detection delegates it, observes one actual UTC time, retains the
+authentic event/payload/revision/repository records and publishes schema2 context.
+The detector imports original base governance observations from the explicitly
+addressed `composition_sources` snapshots or endpoint pairs, then captures current
+candidate governance inputs through `chrono-inputs capture-governance`. The inputs
+owner validates fixed endpoint/configuration, presence and streamed blob identities,
+and retains source bytes and a provenance receipt in the seed closure. A base
+snapshot can be captured before the candidate exists; its digest can then be bound
+in the provider without a circular candidate identity. This supports an H0-to-H1
+change at the same input location. Missing, corrupt or misbound originals and
+drifted current governance inputs fail.
+This does not claim a past business execution. Generation uploads the seed before
+dependent jobs start. Units and the later aggregate acquire the unique original
+detector run/production-attempt/digest-bound seed without polling, retaining its
+original bytes and producer closure. Missing, ambiguous or misbound acquisition fails. Transport checks observation
+ordering. The CI producer records a genuine current observation separately from
+the original context; the workflow judge alone applies the unchanged registered
+age bound for both consumer and certificate producer. Local preparation uses the
+same separate current-observation contract when it reuses a retained context.
+Original context digests and successful reports remain unchanged. Acquisition jobs
+have `actions: read`; the generated acquisition steps receive the actual
+`CHRONO_WORKFLOW_REVISION`. Bootstrap receives the host's registered argv. A hook
+that needs that revision must explicitly include the argv prefix
+`["env", "CHRONO_WORKFLOW_REVISION=${{ github.workflow_sha }}", ...]` in its bootstrap
+registration; generation preserves this host choice.
+
+Register the adapter as the sole `canonical_check.inputs.ci` action using an
+existing interpreter tool, with argv `[adapter_path, "forward", "--config",
+PROVIDER_PATH]`. Exactly one provider `--config` pair binds the selected upload
+contract. Remove acquisition-only `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`,
+`CHRONO_WORKFLOW_REVISION` and `GITHUB_REPOSITORY` from business inherit; retain
+`CHRONO_CHECK_SOURCE`, actual business variables and the existing credential
+contract. Forwarding reads authentic retained acquisition records and passes their
+actual named-env values to `chrono-ci check-inputs`. An internal CI bridge delegates
+bounded child execution to the existing Rust transport and retains child stdin,
+stdout, stderr, executable identity and process result. It is needed because
+acquisition event fields and credentials are outside business inheritance; the
+adapter does not contain a second subprocess runner. The outer producer
+receipt continues to describe its actual environment. Collection forwards gather
+then invokes the inputs owner's composition before returning to full execution.
+The original detector governance pair and selected unit contributions supply
+collection inputs. `composition_sources` supplies original base snapshots or pairs
+to seed preparation. Collection consumes their validated governance projection
+from the transported seed, whose provenance retains the source bytes; the detector's
+original source paths need not remain live in other checkouts.
+FILEMAP/routes remains the DELTA selection owner; registration projects its
+selected units through both endpoint assignments to check collection coverage.
+Unselected units need neither SDK snapshots nor synthetic reports. Collection
+performs no SDK installation or business probe.
+
+Optional `integration_evidence_path` selects original transported certificate
+bytes for delivery publication; their actual SHA-256 becomes the context binding.
+Missing bytes leave the original null value for the workflow's impact decision.
+An optional declared `integration_evidence` digest must match supplied bytes.
+Optional `integration_transport: {source_directory, directory}` binds the
+producer's original upload root to its delivery download root, including the
+finalized report and nested blobs. The host bootstrap acquires that explicit
+completed certificate/report closure; this extension does not add a scheduler.
+Workflow retains all nine certificate bindings and requires the matching
+finalized producer when impact selects integration. Ordinary feature preparation
+can carry null evidence; only the existing workflow decides whether it suffices.
+
+Register lineage, adapter, interpreter, inputs binary, bootstrap inputs, provider
+and composition originals in the host FILEMAP/input/dependency declarations, and
+use disjoint seed/unit/collector/download roots. Existing owned output preflight
+preserves customized host source and refuses unowned overwrites. Main and examples
+are not activated by these source contracts; public release and real native
+push/PR/dev adoption remain caller-owned.
+
+## Conditional jobs and the required aggregate
+
+The smallest projection is one parent at `collection.workflow_path`. Require only
+its aggregate job (`collection.name`, currently **chrono / collection** in this
+host) in branch protection. The generator never mutates branch protection.
+`detect` publishes one Boolean output per registered unit. Each independent unit
+has `needs: detect` and a job-level `if` on its Boolean; an irrelevant job allocates
+no runner and executes no bootstrap or SDK setup. `aggregate` has `if: always()`
+and needs the detector and every unit. No workflow-level `paths` or `paths-ignore`
+is emitted. No matrix fail-fast couples unit failures.
+
+The host adds just this optional provider block, with its own tool acquisition:
+
+```json
+"job_gating": {
+  "schema": "chrono-job-gating/v1",
+  "detector": {
+    "runs_on": "macos-26",
+    "timeout_minutes": 45,
+    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-core.json"],
+    "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
+  }
+}
+```
+
+This form requires collection provider v4. The generated internal `chrono-ci
+detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` command
+reads the event and native bindings itself; it adds no daily flags or manual
+preparation. All actual checks remain `chrono-harness check`, `check --unit ID`,
+and `check --collect`. Short collection owns both native transport/status rejection
+and the existing final judge admission. A successful GitHub status alone cannot
+supply a successful original report. No synthetic reports are made for skipped
+units. Empty DELTA still reaches structural/global checks with an empty manifest
+and zero business operations.
+
+Scoped detection and local collection share judge-ci's inventory, two-endpoint
+impact and `units::required` owner. Scheduling skips checkout-materialization
+admission, while actual checks still enforce their clean candidate and canonical
+entry contracts. Registration's scheduling entry shares historical profile
+matching and rejects decoder-dependent history before acquiring an interpreter
+or executing conversion; actual check/collection conversion admission is preserved.
+Detection reads complete Git trees and registered registry blobs;
+it does not execute business tests or business version probes. Only declared
+product-source inputs need materialization for a source bootstrap. The sparse
+paths above are this Rust product host's choices; a released-binary consumer can
+materialize just its host registration/installer/workflow paths. The detector
+never discovers host SDKs, imports, directories or language boundaries.
+
+PR endpoints are event base/head. Default push endpoints are the complete event
+before/after, including multiple commits. Explicit `push_baselines` and branch
+creation rules keep their existing meanings; the detector observes a configured
+remote baseline once and its fixed output supplies the dependent jobs. Acquisition
+starts with blobless depth-two checkout/fetch where sufficient and explicitly
+fetches missing endpoint OIDs using `--depth=2 --filter=blob:none`. Depth two is
+not a general history guarantee. Full unit/aggregate jobs retain their existing
+complete history acquisition, with blob filtering, for the branch/fork judge;
+their detector still reads exact endpoint trees from shallow acquisition.
+Missing/unobtainable endpoints, parented initial
+baseline creation, deletion without a candidate, and malformed registrations fail;
+there is no HEAD^, merge-base or select-all fallback. Rename is the deleted and
+added registered endpoint paths, preserving both dependency closures.
+
+The changed-file count comes from complete Git trees before selection. There is
+no file-count gate or truncation.
+GitHub documents that native workflow path filtering
+has a [3000-file limit](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons),
+the [PR files API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)
+returns at most 3,000, and the
+[compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits)
+returns at most 300 changed files for the comparison. None supplies this detector's
+file list or defines a universal runtime cap.
+
+The Rust provider rejects failed/cancelled/missing detection and every selected
+unit whose result is failure, cancelled, missing or unexpectedly skipped. A skip
+is accepted only for a detector-declared nonrequired unit. Gather validates the
+exact parent run/repository/current attempt/event/workflow source, then reads its
+paginated job history after dependencies have completed. It never polls separate
+workflows or waits for its own parent to finish. Independent retries retain the
+original detector and successful prerequisite attempts. Nonrequired skips are
+bound by `needs` and need neither job execution metadata nor artifacts. Each selected unit must have a successful latest API status in the same parent
+run. Its generated `production` output addresses the actual original artifact,
+context digest, report digest and producing attempt. API job identities and
+`run_attempt` can describe carried work and never manufacture artifact names.
+Gather checks the original context/run/attempt/job and both digests against that
+output. A later failed/skipped execution cannot be replaced
+by an older success. Parent-attempt drift and mismatched/missing artifacts fail.
+Original process bytes, source SHA/revision, event/endpoints, report digests,
+executable pins and upload/source-directory mappings remain bound and judged.
+
+Scoped providers register `CHRONO_CI_DETECTION`, `CHRONO_CI_NEEDS`,
+`GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT` and `GITHUB_JOB` in the producer environment.
+The optional full native adapter instead records their actual acquisition values
+and forwards them outside business inheritance, preserving differences between
+independent jobs. The generated aggregate supplies its exact `needs` object; the
+provider owns the acceptance predicate in Rust. YAML and bootstrap Python contain
+no second whitelist or status/selection algorithm.
+
+New v4 unit initialization chooses the conditional parent when no existing
+provider has adopted a topology. Existing explicit legacy provider meanings and
+customization remain preserved.
+
+Full-v2 scheduling reuses pure FILEMAP declaration impact, fixed semantic-document
+reads, routes `global_selection`/assignment validation and `units::required` before
+SDK snapshots exist. It does not provide a schema2 full context, original birth
+receipt, input snapshots, streamed artifacts or historical conversion observations.
+Final full collection still validates actual effective inputs and seven-judge
+originals. An external-input change that introduces additional final obligations
+rejects missing evidence; declaration scheduling does not claim those snapshots
+are known. Historical registries needing a decoder fail with a named scheduling
+boundary instead of executing historical code or guessing. Actual full native
+context/snapshot provisioning and activation remain a separate caller handoff.
+
+On adoption, generate/init preflight all outputs and retire only exact known
+legacy unit projections. A modified obsolete file or unowned parent collision
+fails before writes; use explicit `migrate` with the exact prior provider snapshot
+when settings/addresses also change. Regeneration preserves explicit runners,
+bootstrap argv, timeouts and all host source data. In this opt-in form,
+`units.*.workflow_path` retains the declared legacy addresses for migration; all
+current preparation and source checks bind the one `collection.workflow_path`.
+The existing gather wait/poll settings keep their legacy-workflow meaning and are
+unused by this nonpolling parent transport. Unlisted or edited files are never
+retired by scanning. Verification detects both
+parent drift and still-present known obsolete projections without repairing them.
+
+The [copyable conditional host](../examples/ci-host-job-gating/README.md) uses
+installed tools and the fixed short commands. The old ci-host bundle and released
+Go/TS/mix providers retain their historical forms until explicitly migrated by
+the caller after public binaries are available.
 
 ## Assignment and execution
 

@@ -765,20 +765,43 @@ fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
 #[test]
 fn adopted_policy_runs_the_actual_creation_consumer() {
     let h = Host::new("host files/no-language-contract.data");
-    let adopted = json(&fs::read(source().join(POLICY)).unwrap()).unwrap();
+    let adopted_bytes = fs::read(source().join(POLICY)).unwrap();
+    let adopted = json(&adopted_bytes).unwrap();
     h.policy(|p| {
+        // This independent host binds its own declared Git, not the product host's bytes.
+        let git =
+            chrono_harness::resolve_program(&h.root, p["git"]["program"].as_str().unwrap(), None)
+                .unwrap();
+        let version = Command::new(&git).arg("--version").output().unwrap();
+        assert!(version.status.success());
         let environment = p["environment"].clone();
         *p = adopted;
         p["remote"] = value!("warehouse");
         p["environment"] = environment;
+        p["git"]["program"] = value!(git);
+        p["git"]["expected_version"] = value!(String::from_utf8(version.stdout).unwrap().trim());
+        p["git"]["sha256"] = value!(sha256(&fs::read(&git).unwrap()));
     });
+    let policy = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
+    assert_eq!(
+        json(git(&h.remote, &["show", &format!("dev:{POLICY}")]).as_bytes()).unwrap(),
+        policy
+    );
     let target = h.parent.join("adopted");
     let (code, report, error) = h.invoke("integration", "adopted", &target);
     assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["tool"]["path"], policy["git"]["program"]);
+    assert_eq!(report["tool"]["sha256"], policy["git"]["sha256"]);
+    assert_eq!(report["tool"]["version"]["exit_code"], 0);
+    assert_eq!(
+        report["tool"]["version"]["stdout"].as_str().unwrap().trim(),
+        policy["git"]["expected_version"].as_str().unwrap()
+    );
     assert_eq!(
         git(&target, &["rev-parse", "HEAD"]),
         git(&h.root, &["rev-parse", "HEAD"])
     );
+    assert_eq!(fs::read(source().join(POLICY)).unwrap(), adopted_bytes);
 }
 
 #[test]

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "proposed",
+  "migration_validator": "registration",
+  "judges": [
+    {
+      "id": "registration",
+      "executable": ".chrono-harness/bin/chrono-judge-registration",
+      "version": "0.1.0",
+      "sha256": null,
+      "argv": [
+        "--protocol",
+        "chrono-judge/v1"
+      ],
+      "selector": "every-delta",
+      "modes": [
+        "evaluate"
+      ],
+      "after": []
+    }
+  ]
+}

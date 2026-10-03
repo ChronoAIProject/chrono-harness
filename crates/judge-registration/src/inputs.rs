@@ -242,13 +242,15 @@ pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, 
 }
 /// Required declared files for one unit, including explicit operation owners,
 /// their FILEMAP prerequisites, shared operations and governance consumers.
-/// Unscoped/collection evidence retains the global declaration. No IO discovery.
+/// Collection starts with governance inputs; routes supplies its DELTA obligations
+/// after FILEMAP impact. No IO discovery or report-derived selection.
 pub fn required_files(
     r: &Registrations,
     scope: Option<&chrono_harness::units::Scope>,
 ) -> Result<std::collections::BTreeSet<String>, String> {
     let selected = match scope {
         Some(chrono_harness::units::Scope::Unit { unit }) => Some(assigned_plans(r, unit)?),
+        Some(chrono_harness::units::Scope::Collect { .. }) => Some(Default::default()),
         _ => None,
     };
     required_plan_files(r, selected.as_ref())
@@ -266,7 +268,7 @@ fn assigned_plans(
     units::select(&units, &plans.keys().cloned().collect(), unit)
 }
 
-fn required_plan_files(
+pub fn required_plan_files(
     r: &Registrations,
     selected: Option<&std::collections::BTreeSet<String>>,
 ) -> Result<std::collections::BTreeSet<String>, String> {
@@ -371,7 +373,38 @@ fn required_plan_files(
         .collect())
 }
 
-fn endpoint_required_files(
+/// Project routes' selected obligations through the existing explicit unit map.
+/// Retain the old assignments as well as candidate plans that existed at base.
+pub fn collection_required_files(
+    endpoint: &str,
+    old: &Registrations,
+    new: &Registrations,
+    selected: &std::collections::BTreeSet<String>,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    let units = chrono_harness::units::full_execution_units(new.config())?
+        .ok_or("collection execution units missing")?;
+    let units: BTreeMap<String, chrono_harness::units::Unit> =
+        serde_json::from_value(units["units"].clone()).map_err(|e| e.to_string())?;
+    let mut plans = std::collections::BTreeSet::new();
+    for unit in chrono_harness::units::required(&units, selected) {
+        plans.extend(assigned_plans(new, &unit)?);
+        if endpoint == "base"
+            && old.config()["execution_units"]["units"]
+                .get(&unit)
+                .is_some()
+        {
+            plans.extend(assigned_plans(old, &unit)?);
+        }
+    }
+    let r = if endpoint == "base" { old } else { new };
+    if endpoint == "base" {
+        let existing = crate::execution::plans(old.filemap())?;
+        plans.retain(|p| existing.contains_key(p));
+    }
+    required_plan_files(r, Some(&plans))
+}
+
+pub fn endpoint_required_files(
     endpoint: &str,
     old: &Registrations,
     new: &Registrations,
@@ -440,19 +473,53 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
         ),
     )
 }
+/// Routes is the selection owner. It checks collection coverage before preparing
+/// the zero-business collection plan, without a registration/filemap cycle.
+pub fn validate_collection(
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    selected: &std::collections::BTreeSet<String>,
+) -> Result<Value, String> {
+    for endpoint in ["base", "candidate"] {
+        for id in collection_required_files(endpoint, old, new, selected)? {
+            if req.observations["retained"][endpoint]["files"]
+                .get(&id)
+                .is_none()
+            {
+                return Err(format!("{endpoint}: missing retained input {id}"));
+            }
+        }
+    }
+    validate(req, old, new)
+}
 pub fn validate_retained(
     req: &Request,
     old: &Registrations,
     new: &Registrations,
     artifacts: &Value,
 ) -> Result<Value, String> {
-    validate_inner(req, old, new, Some(artifacts), false)
+    validate_retained_at(req, old, new, artifacts, &req.candidate.root, None)
+}
+pub fn validate_retained_at(
+    req: &Request,
+    old: &Registrations,
+    new: &Registrations,
+    artifacts: &Value,
+    root: &Path,
+    transport: Option<&chrono_harness::prepared::ArtifactTransport>,
+) -> Result<Value, String> {
+    validate_inner(req, old, new, Some((artifacts, root, transport)), false)
 }
 fn validate_inner(
     req: &Request,
     old: &Registrations,
     new: &Registrations,
-    artifacts: Option<&Value>,
+    artifacts: Option<(
+        &Value,
+        &Path,
+        Option<&chrono_harness::prepared::ArtifactTransport>,
+    )>,
     live: bool,
 ) -> Result<Value, String> {
     if new.filemap()["schema_version"] == 1
@@ -547,23 +614,25 @@ fn validate_inner(
             let value = retained["files"]
                 .get(id)
                 .ok_or_else(|| format!("{name}: missing retained input {id}"))?;
-            let identity = match (artifacts, retained_shape(value)?) {
+            let identity = (|| match (artifacts, retained_shape(value)?) {
                 (
-                    Some(artifacts),
+                    Some((artifacts, root, transport)),
                     Retained::Blob {
                         path,
                         digest,
                         length,
                     },
                 ) => {
-                    let bytes = chrono_harness::full::artifact_bytes(artifacts, path)?;
-                    if sha256(&bytes) != digest || bytes.len() as u64 != length {
+                    let identity = chrono_harness::retained_artifacts::identity(
+                        root, artifacts, path, transport,
+                    )?;
+                    if identity != (digest.to_owned(), length) {
                         return Err("E_INPUT_BLOB: original input differs".into());
                     }
                     Ok(Some((digest.to_owned(), length)))
                 }
                 _ => retained_identity(&req.candidate.root, value),
-            }
+            })()
             .map_err(|e| format!("{name}: retained input {id}: {e}"))?;
             match &identity {
                 None if matches!(cfg["schema_version"].as_u64(), Some(2 | 3 | 4))
@@ -604,7 +673,12 @@ fn validate_inner(
             {
                 fact["presence"] = json!("present");
             }
-            if required.contains(id) {
+            if required.contains(id)
+                || matches!(
+                    req.scope,
+                    Some(chrono_harness::units::Scope::Collect { .. })
+                )
+            {
                 evidence.insert(id.to_string(), fact);
             }
         }

@@ -1,6 +1,93 @@
+#[path = "gating.rs"]
+mod gating;
 use super::*;
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
+
+#[test]
+fn native_forwarding_resolves_declared_path_once_and_retains_real_bounded_outcomes() {
+    let mut h = ShortHost::new();
+    let root = h.root.clone();
+    let python = chrono_harness::resolve_program(&root, "python3", None).unwrap();
+    let program = python.file_name().unwrap().to_str().unwrap();
+    h.modify(".chrono-harness/config.json", |c| {
+        c["environment"]["credential_environment"] = json!(["SECRET"]);
+        c["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("SECRET"));
+    });
+    h.modify(".chrono-harness/ci/units.json",|c| {
+        c["schema"] = json!("chrono-github-units/v2");
+        c["collection"]["check_config"] = json!(".chrono-harness/config.json");
+        c["collection"]["artifact_directory"] = json!(".chrono-harness/state/collection/");
+        c["collection"]["context_path"] = json!(".chrono-harness/state/collection/context.json");
+        c["full_contexts"] = json!({"collection":".chrono-harness/state/collection/full.json","units":{"alpha":".chrono-harness/state/alpha/full.json","beta":".chrono-harness/state/beta/full.json"}});
+        c["job_gating"] = json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["/bin/true"],"sparse_checkout":[".chrono-harness/"]}});
+        c["native_adoption"] = json!({"schema":"chrono-native-adoption/v1","lineage":{"path":".chrono-harness/ci/lineage.json","sha256":"0".repeat(64)},"adapter_path":".chrono-harness/ci/native.py","interpreter":python,"inputs_program":program,"seed_directory":".chrono-harness/state/shared-seed/","seed_artifact":"chrono-context","retained_inputs":".chrono-harness/state/inputs.json","composition_sources":[],"push_roles":{"refs/heads/integration/":"integration"},"pull_request_role":"delivery","integration_evidence":null});
+        c["gather"]["credential_environment"] = json!(["SECRET"]);
+        c["gather"]["inherit_environment"] = json!(["PATH", "HOME", "SECRET"]);
+    });
+    fs::write(
+        root.join("native.py"),
+        include_str!("../../../assets/ci/native.py"),
+    )
+    .unwrap();
+    let driver = r#"
+import hashlib,json,pathlib,runpy
+root=pathlib.Path.cwd(); native=runpy.run_path('native.py')
+provider=json.loads((root/'.chrono-harness/ci/units.json').read_bytes())
+native['process'].__globals__.update(NATIVE_PROVIDER=provider,NATIVE_CONFIG='.chrono-harness/ci/units.json')
+for text,nanoseconds in [('0',0),('1',100000000),('12345',123450000),('123456',123456000),('123456789',123456789)]:
+ assert native['moment']('2026-01-01T00:00:00.'+text+'Z')==1767225600000000000+nanoseconds
+try:native['moment']('2026-01-01T00:00:00+08:00')
+except ValueError:pass
+else:raise AssertionError('accepted non-UTC observation')
+# Launchers may report a different sys.executable; use the declared invocation context.
+env={'PATH':str(pathlib.Path(provider['native_adoption']['interpreter']).parent),'BUSINESS_VALUE':'actual value','SECRET':'actual credential'}
+program=provider['native_adoption']['inputs_program']
+code="import sys;sys.stdout.buffer.write(b'\\x00\\xff'+sys.stdin.buffer.read());sys.stderr.buffer.write(b'original stderr')"
+raw,refs=native['process'](root,[program,'-c',code],b'original input',env,'.chrono-harness/state/collection/preparation/','good',5,1024,['SECRET'])
+assert raw==b'\x00\xfforiginal input'
+receipt=json.loads((root/refs[-1]['path']).read_bytes())
+assert receipt['argv'][0]==str(pathlib.Path(env['PATH'])/program)
+assert receipt['configured_argv'][0]==program
+assert receipt['executable']['sha256']==hashlib.sha256(pathlib.Path(receipt['argv'][0]).read_bytes()).hexdigest()
+assert receipt['environment']['BUSINESS_VALUE']==hashlib.sha256(b'actual value').hexdigest()
+assert 'SECRET' not in receipt['environment'] and receipt['omitted_credentials']==['SECRET']
+assert (root/receipt['stdin']['path']).read_bytes()==b'original input'
+assert (root/receipt['stdout']['path']).read_bytes()==raw
+assert (root/receipt['stderr']['path']).read_bytes()==b'original stderr'
+try:native['process'](root,[receipt['argv'][0],'-c',code],b'',env,'.chrono-harness/state/collection/preparation/','undeclared',5,1024,['SECRET'])
+except ValueError as error:
+ assert str(error)=='E_CI: native-process differs from registered acquisition operations/bounds'
+else:raise AssertionError('accepted undeclared invocation of the genuine executable')
+for prefix,code,timeout,expected in [
+ ('exit','import sys;sys.stderr.buffer.write(b"real failure");sys.exit(7)',5,None),
+ ('overflow','import sys;sys.stdout.buffer.write(b"x"*1000)',5,'output bound exceeded'),
+ ('timeout','import time;time.sleep(10)',0.1,'timeout')]:
+ try:native['process'](root,[program,'-c',code],b'',env,'.chrono-harness/state/collection/preparation/',prefix,timeout,32,['SECRET'])
+ except ValueError as error:
+  original=str(error).split('retained at ')[1]
+  failed=json.loads((root/original).read_bytes())
+  assert failed['failure']==expected
+  assert len((root/failed['stdout']['path']).read_bytes())<=32
+  if prefix=='exit':
+   assert failed['exit_code']==7
+   assert (root/failed['stderr']['path']).read_bytes()==b'real failure'
+ else:raise AssertionError('accepted original child failure: '+prefix)
+"#;
+    let output = Command::new(&python)
+        .current_dir(&root)
+        .args(["-c", driver])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 
 struct ShortHost {
     _dir: tempfile::TempDir,
@@ -708,8 +795,9 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         let out = command(&["check", "--unit", unit]).output().unwrap();
         assert!(
             out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
+            "{} {}",
+            String::from_utf8_lossy(&out.stderr),
+            String::from_utf8_lossy(&out.stdout)
         );
         let target = h
             .root
@@ -932,8 +1020,9 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
         let out = command.output().unwrap();
         assert!(
             out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
+            "{} {}",
+            String::from_utf8_lossy(&out.stderr),
+            String::from_utf8_lossy(&out.stdout)
         );
         let r = published_report(&h.root, None, &out);
         assert_eq!(
@@ -1014,8 +1103,9 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
             .unwrap();
         assert!(
             out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
+            "{} {}",
+            String::from_utf8_lossy(&out.stderr),
+            String::from_utf8_lossy(&out.stdout)
         );
         let report = published_report(&h.root, Some(unit), &out);
         assert!(

@@ -18,7 +18,27 @@ fn moment(v: &Value, k: &str) -> Result<OffsetDateTime, String> {
 /// Registered observation freshness, shared with the local round producer.
 /// The caller supplies the observation; this predicate never reads a clock.
 pub fn observation_age(ctx: &Value, w: &Value) -> Result<time::Duration, String> {
-    let age = moment(ctx, "observed_at")? - moment(ctx, "branch_started_at")?;
+    age_at(ctx, w, moment(ctx, "observed_at")?)
+}
+/// Admission can observe now without changing the original common context.
+pub fn current_observation_age(
+    ctx: &Value,
+    w: &Value,
+    observation: &Value,
+) -> Result<time::Duration, String> {
+    let nanos = observation["unix_timestamp_nanos"]
+        .as_str()
+        .ok_or("E_BRANCH_CONTEXT: current observation missing")?
+        .parse()
+        .map_err(|_| "E_BRANCH_CONTEXT: invalid current observation")?;
+    let current = OffsetDateTime::from_unix_timestamp_nanos(nanos).map_err(|e| e.to_string())?;
+    if current < moment(ctx, "observed_at")? {
+        return Err("E_BRANCH_CONTEXT: current observation precedes original production".into());
+    }
+    age_at(ctx, w, current)
+}
+fn age_at(ctx: &Value, w: &Value, observed: OffsetDateTime) -> Result<time::Duration, String> {
+    let age = observed - moment(ctx, "branch_started_at")?;
     if age.is_negative() {
         return Err("E_BRANCH_CONTEXT: negative age".into());
     }

@@ -758,3 +758,56 @@ fn artifact_owner_changes_and_removal_preserve_explicit_endpoint_consumers() {
     assert!(findings.is_empty());
     assert!(tests(&impact).is_empty());
 }
+
+#[test]
+fn group_registration_delta_and_endpoints_preserve_every_opaque_test_identity() {
+    let old = values();
+    let mut new = old.clone();
+    new.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["second"] =
+        json!({"operation":"execute.second","tool":"sh","argv":["-c","exit 0"]});
+    new.get_mut(PROJECTS).unwrap()["projects"][1]["test_groups"] =
+        json!({"t":"execute","opaque-group":"second"});
+    new.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .push(edge("project:p", "test-execution", "test:opaque-group"));
+    new.get_mut(FM).unwrap()["test_costs"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"test":"opaque-group","cost":"unknown"}));
+    for test in ["test:t", "test:opaque-group"] {
+        new.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge("project:t", "test-execution", test));
+    }
+    for paths in [vec![], vec![delta("src.bin")]] {
+        let (impact, findings) = run(&old, &new, &paths);
+        assert!(findings.is_empty(), "{findings:?}");
+        assert_eq!(tests(&impact), ["test:opaque-group", "test:t"]);
+        assert!(impact.retired_tests.is_empty());
+        assert_eq!(
+            impact.nodes["test:opaque-group"].candidate_definitions[0].identity,
+            "project:t"
+        );
+    }
+    let mut rebound = new.clone();
+    rebound.get_mut(PROJECTS).unwrap()["projects"][1]["test_groups"] =
+        json!({"t":"second","opaque-group":"execute"});
+    let (impact, findings) = run(&new, &rebound, &[]);
+    assert!(findings.is_empty(), "{findings:?}");
+    assert_eq!(tests(&impact), ["test:opaque-group", "test:t"]);
+    let (impact, findings) = run(&new, &old, &[]);
+    assert!(
+        findings.iter().all(|f| f.code != "E_REFERENCE"),
+        "{findings:?}"
+    );
+    assert_eq!(
+        impact
+            .retired_tests
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["test:opaque-group"]
+    );
+}

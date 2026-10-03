@@ -1,4 +1,5 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
+mod canonical_request;
 mod checkout;
 pub mod facts;
 mod facts_binding;
@@ -14,6 +15,7 @@ pub mod input_file;
 pub mod observation;
 pub mod parity;
 pub mod prepared;
+pub mod retained_artifacts;
 mod short_console;
 pub mod units;
 pub mod wire;
@@ -494,7 +496,13 @@ pub fn resolve_program(
     Err(format!("executable not found: {program}"))
 }
 pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<ProcessResult, String> {
-    finish_process(run_process_inner(root, s, input, None)?)
+    finish_process(run_process_inner(
+        root,
+        s,
+        input,
+        None,
+        Duration::from_secs(s.timeout_seconds),
+    )?)
 }
 /// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
 pub fn run_process_bound(
@@ -503,7 +511,13 @@ pub fn run_process_bound(
     input: &[u8],
     digest: &str,
 ) -> Result<ProcessResult, String> {
-    finish_process(run_process_inner(root, s, input, Some(digest))?)
+    finish_process(run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+    )?)
 }
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
     if let Some(error) = &p.failure {
@@ -518,13 +532,30 @@ pub fn run_process_observed(
     input: &[u8],
     digest: &str,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(root, s, input, Some(digest))
+    run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+    )
+}
+/// Preserve a caller's finer acquisition deadline through the same engine.
+pub fn run_process_observed_for(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    timeout: Duration,
+) -> Result<ProcessResult, String> {
+    run_process_inner(root, s, input, Some(digest), timeout)
 }
 fn run_process_inner(
     root: &Path,
     s: &CommandSpec,
     input: &[u8],
     expected: Option<&str>,
+    timeout: Duration,
 ) -> Result<ProcessResult, String> {
     validate_command(s)?;
     if expected.is_some() && !Path::new(&s.program).is_absolute() {
@@ -607,9 +638,7 @@ fn run_process_inner(
     let start = Instant::now();
     let mut failure = None;
     let mut status = loop {
-        if exceeded.load(Ordering::Relaxed)
-            || start.elapsed() >= Duration::from_secs(s.timeout_seconds)
-        {
+        if exceeded.load(Ordering::Relaxed) || start.elapsed() >= timeout {
             failure = Some(if exceeded.load(Ordering::Relaxed) {
                 "process output limit exceeded"
             } else {
