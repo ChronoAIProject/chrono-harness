@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 
+sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("inventory", Path(__file__).with_name("workflow-inventory.py"))
 inventory = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inventory)

@@ -967,7 +967,7 @@ fn interrupted_launch_child_owner_helper() {
     let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
     let complete = std::env::var("CHRONO_INTERRUPTED_COMPLETE").unwrap();
     let code = format!(
-        "import os,time\nopen('ready','w').write(str(os.getpid()))\nstart=time.monotonic()\nwhile not os.path.exists('observing'):\n assert time.monotonic()-start<3\n time.sleep(.01)\nos.kill(os.getppid(),9)\n{}",
+        "import os,time\nwith open('ready.tmp','w') as ready:\n ready.write(str(os.getpid()))\nos.replace('ready.tmp','ready')\nstart=time.monotonic()\nwhile not os.path.exists('observing'):\n assert time.monotonic()-start<3\n time.sleep(.01)\nos.kill(os.getppid(),9)\n{}",
         if complete == "yes" {
             "open('child-original','w').write('original child bytes');open('completed','w').write('child reached exit')"
         } else {
