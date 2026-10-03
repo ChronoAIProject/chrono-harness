@@ -1124,9 +1124,12 @@ fn group_terminal_operation_and_producer_edge_are_required_before_effects() {
 
 #[test]
 fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_effects() {
-    for script in [false, true] {
+    for (script, priority) in [(false, false), (true, false), (false, true), (true, true)] {
         let mut h = Host::new(script);
-        let policy = json!({"max_running":2,"resources":["order"],"claims":{"prepare.p":{"resources":["order"],"outputs":[]},"execute.t":{"resources":["order"],"outputs":[]}}});
+        let mut policy = json!({"max_running":2,"resources":["order"],"claims":{"prepare.p":{"resources":["order"],"outputs":[]},"execute.t":{"resources":["order"],"outputs":[]}}});
+        if priority {
+            policy["priority"] = json!(["execute.t", "prepare.p"]);
+        }
         h.values.get_mut(FM).unwrap()["execution_scheduling"] = policy.clone();
         h.save();
         let (code, v) = h.run(|_| {});

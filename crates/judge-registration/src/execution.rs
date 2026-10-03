@@ -21,6 +21,8 @@ pub struct Claims {
 #[serde(deny_unknown_fields)]
 pub struct Scheduling {
     pub max_running: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub priority: Vec<String>,
     pub resources: Vec<String>,
     pub claims: BTreeMap<String, Claims>,
 }
@@ -33,6 +35,11 @@ impl Scheduling {
         if self.max_running == 0 || !unique(&self.resources) {
             return Err(
                 "E_SCHEDULING: positive max_running and unique resource names required".into(),
+            );
+        }
+        if !unique(&self.priority) || self.priority.iter().any(|id| !self.claims.contains_key(id)) {
+            return Err(
+                "E_SCHEDULING: priority must list distinct registered operation IDs".into(),
             );
         }
         for (op, claims) in &self.claims {
