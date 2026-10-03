@@ -1398,7 +1398,13 @@ fn evaluate(
                     .error
                     .clone()
                     .unwrap_or_else(|| "registered command completed with matching receipt".into()),
-                exit_code: result.receipt.as_ref().map(|r| r.process.exit_code),
+                // Infrastructure/receipt failures can follow a successful child.
+                // The summary has no failing subprocess exit in that case; the
+                // original zero exit and diagnostic remain in the receipt below.
+                exit_code: result.receipt.as_ref().and_then(|r| {
+                    (result.status == "passed" || r.process.exit_code != 0)
+                        .then_some(r.process.exit_code)
+                }),
             });
             if let Some(receipt) = &result.receipt {
                 executed.push(object!({"operation":result.operation,"process":receipt.process,"receipt":receipt}));

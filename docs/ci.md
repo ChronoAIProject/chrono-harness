@@ -256,9 +256,13 @@ initial}`. The response is one JSON object:
 `{protocol, request_id, status, results, evidence}`. `status` is `passed`, `failed`,
 `blocked` or `not-required`. `results` is nonempty, with unique nonempty IDs and
 `{id, status, cause, exit_code}`; cause is nonempty and exit_code can be null for
-nonprocess checks. A `not-required` result always has null `exit_code`; an executed
-exit (including zero) cannot be labeled unexecuted. Passed process results require
-zero and failed process results require nonzero. The aggregate is `not-required`
+nonprocess checks and infrastructure failures. A `not-required` result always has
+null `exit_code`; an executed operation cannot be labeled unexecuted. Passed
+process results require zero and failed process summaries cannot carry zero.
+If receipt or cleanup validation fails after a successful child, the failed summary
+exit is null; the original process receipt retains the actual exit 0, diagnostic,
+argv, environment and bytes. Collection retains that failed original report and
+executes no replacement business operation. The aggregate is `not-required`
 exactly when all results are `not-required`. Evidence must be a nonempty object. IDs/protocol, aggregate and
 individual statuses and actual child exit must agree. Empty/extra/malformed output,
 missing results, timeout, output overflow or crashes fail. Processes use bounded

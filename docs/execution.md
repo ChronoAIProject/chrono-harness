@@ -51,21 +51,33 @@ use the same union of endpoint records and edges. No selected obligation is
 removed to obtain overlap.
 
 On Unix, the runner process engine carries a bounded anonymous launch-tree
-registry through inherited descriptors 198/199, without changing observed argv
-or environment. Each known nested runner launch registers before exec. An
-operation timeout cancels only that launch subtree. An enclosing timeout first
-cancels nested engines, which terminate their groups and reap their own children,
-then joins the enclosing child and stream workers. A finite one-second teardown
-allowance is for cleanup after the unchanged execution deadline. A crashed or
-unresponsive nested owner causes explicit cleanup failure and termination of
-only recorded groups; it cannot produce successful completion. The registry
-has 4096 simultaneous launch slots and fails before launch when exhausted.
-Descriptor collisions fail explicitly. Native tools' ordinary descendants remain
-in their launch group; a wrapper that closes the inherited ownership descriptors
-cannot transport nested runner ownership. Non-Unix process teardown retains its
-existing direct-child behavior. There is no process scanner, daemon, arbitrary
-undeclared-writer guarantee or cross-invocation lock. Callers retain ownership of
-disjoint checkouts and established worktree lifecycle boundaries.
+registry through inherited descriptors 198/199/200, without changing observed
+argv or environment. Each known nested launch hands off its live child and
+launcher identities before exec to one observer thread owned and joined by the
+first engine. On macOS the observer uses kernel process exit events; on Linux it
+uses pidfds (requiring kernel support). An interrupted launcher cannot run its
+destructor. A surviving owner can instead reconcile that launch only after exact
+kernel terminal observations for both identities and completion of its registered
+subtree. PID disappearance, a kill request and successful enclosing exit alone
+never acknowledge completion. Launch generations prevent delayed events or a
+retired inherited context from referring to a reused slot. Native macOS behavior
+is tested; Linux pidfd behavior requires native verification.
+
+An operation timeout cancels only that launch subtree. Nested engines terminate
+their groups and reap their children before the enclosing engine joins its child
+and stream workers. The existing one-second cleanup allowance follows the
+unchanged execution deadline. An interrupted launcher's child still live halfway
+through that allowance is terminated and its exact exit is observed during the
+remaining allowance; the abandoned live child remains a cleanup failure even
+when it is terminated. Unknown or unresponsive completion also remains failure.
+No execution bound is increased. The registry has 4096 simultaneous launch slots;
+slot or kernel descriptor exhaustion fails explicitly before exec. Descriptor
+collisions and unavailable live-identity handoff fail explicitly. Native tools'
+ordinary descendants remain in their launch group; a wrapper that closes the
+inherited descriptors cannot transport nested runner ownership. Non-Unix teardown
+retains direct-child behavior. There is no process scanner, daemon, arbitrary
+undeclared-writer guarantee or cross-invocation lock. Callers retain disjoint
+checkouts and established worktree lifecycle boundaries.
 
 Registration owns strict interpretation; FILEMAP owns record identities, targets
 and impact. Plan changes target defining records of the test and listed operations.

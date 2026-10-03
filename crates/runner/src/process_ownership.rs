@@ -12,7 +12,8 @@ use std::{
 };
 const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
-const MAGIC: u64 = 0x4348524f4e4f5031;
+const MAGIC: u64 = 0x4348524f4e4f5032;
+const OBSERVER_FD: i32 = 200;
 const CAPACITY: usize = 4096;
 #[repr(C)]
 struct Slot {
@@ -20,31 +21,43 @@ struct Slot {
     cancelled: AtomicBool,
     pid: AtomicI32,
     parent: AtomicUsize,
+    generation: AtomicUsize,
+    terminal: AtomicBool,
+    launcher_terminal: AtomicBool,
 }
 #[repr(C)]
 struct Shared {
     magic: u64,
+    next_generation: AtomicUsize,
     slots: [Slot; CAPACITY],
 }
 struct Tree {
     file: File,
     memory: NonNull<Shared>,
+    registration: File,
+    observer: Option<ExitObserver>,
 }
 // MAP_SHARED is synchronized exclusively by the atomic slot protocol.
 unsafe impl Send for Tree {}
 unsafe impl Sync for Tree {}
 impl Drop for Tree {
     fn drop(&mut self) {
+        if let Some(mut observer) = self.observer.take() {
+            observer.join();
+        }
         unsafe {
             libc::munmap(self.memory.as_ptr().cast(), std::mem::size_of::<Shared>());
         }
     }
 }
 impl Tree {
+    fn memory(&self) -> &Shared {
+        unsafe { self.memory.as_ref() }
+    }
     fn slots(&self) -> &[Slot; CAPACITY] {
         unsafe { &self.memory.as_ref().slots }
     }
-    fn map(file: File) -> Result<Arc<Self>, String> {
+    fn map(file: File, registration: File) -> Result<Arc<Self>, String> {
         if file.metadata().map_err(|e| e.to_string())?.len() != std::mem::size_of::<Shared>() as u64
         {
             return Err("process ownership descriptor size mismatch".into());
@@ -68,24 +81,40 @@ impl Tree {
         Ok(Arc::new(Self {
             file,
             memory: NonNull::new(p.cast()).unwrap(),
+            registration,
+            observer: None,
         }))
     }
     fn create() -> Result<Arc<Self>, String> {
         let file = high_descriptor(tempfile::tempfile().map_err(|e| e.to_string())?)?;
         file.set_len(std::mem::size_of::<Shared>() as u64)
             .map_err(|e| e.to_string())?;
-        let tree = Self::map(file)?;
+        let (sender, receiver) =
+            std::os::unix::net::UnixDatagram::pair().map_err(|e| e.to_string())?;
+        let mut tree = Self::map(
+            file,
+            high_descriptor(File::from(std::os::fd::OwnedFd::from(sender)))?,
+        )?;
         unsafe {
             tree.memory.as_ptr().write(Shared {
                 magic: MAGIC,
+                next_generation: AtomicUsize::new(1),
                 slots: std::array::from_fn(|_| Slot {
                     state: AtomicU8::new(0),
                     cancelled: AtomicBool::new(false),
                     pid: AtomicI32::new(0),
                     parent: AtomicUsize::new(CAPACITY),
+                    generation: AtomicUsize::new(0),
+                    terminal: AtomicBool::new(false),
+                    launcher_terminal: AtomicBool::new(false),
                 }),
             });
         }
+        let observer = ExitObserver::start(
+            File::from(std::os::fd::OwnedFd::from(receiver)),
+            tree.memory.as_ptr() as usize,
+        )?;
+        Arc::get_mut(&mut tree).unwrap().observer = Some(observer);
         Ok(tree)
     }
     fn cancelled(&self, mut index: usize) -> bool {
@@ -101,19 +130,23 @@ impl Tree {
         }
         true
     }
-    fn descendant(&self, mut index: usize, ancestor: usize) -> bool {
-        for _ in 0..CAPACITY {
-            if index == CAPACITY {
-                return false;
-            }
-            index = self.slots()[index].parent.load(Ordering::Acquire);
-            if index == ancestor {
-                return true;
-            }
-        }
-        false
+    fn descendant(&self, index: usize, ancestor: usize) -> bool {
+        descendant(self.slots(), index, ancestor)
     }
 }
+fn descendant(slots: &[Slot; CAPACITY], mut index: usize, ancestor: usize) -> bool {
+    for _ in 0..CAPACITY {
+        if index == CAPACITY {
+            return false;
+        }
+        index = slots[index].parent.load(Ordering::Acquire);
+        if index == ancestor {
+            return true;
+        }
+    }
+    false
+}
+
 fn high_descriptor(file: File) -> Result<File, String> {
     let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 202) };
     if fd < 0 {
@@ -121,8 +154,8 @@ fn high_descriptor(file: File) -> Result<File, String> {
     }
     Ok(unsafe { File::from_raw_fd(fd) })
 }
-fn inherited() -> Result<Option<(Arc<Tree>, usize)>, String> {
-    static INHERITED: OnceLock<Result<Option<(Arc<Tree>, usize)>, String>> = OnceLock::new();
+fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, String> {
+    static INHERITED: OnceLock<Result<Option<(Arc<Tree>, usize, usize)>, String>> = OnceLock::new();
     INHERITED
         .get_or_init(|| {
             let mut magic = 0u64;
@@ -133,9 +166,9 @@ fn inherited() -> Result<Option<(Arc<Tree>, usize)>, String> {
             if n != 8 || magic != MAGIC {
                 return Err("process ownership descriptor collision".into());
             }
-            let mut index = CAPACITY as u64;
-            if unsafe { libc::pread(CONTEXT_FD, (&mut index as *mut u64).cast(), 8, 0) } != 8
-                || index >= CAPACITY as u64
+            let mut context = [CAPACITY as u64, 0];
+            if unsafe { libc::pread(CONTEXT_FD, context.as_mut_ptr().cast(), 16, 0) } != 16
+                || context[0] >= CAPACITY as u64
             {
                 return Err("process ownership context missing".into());
             }
@@ -143,8 +176,14 @@ fn inherited() -> Result<Option<(Arc<Tree>, usize)>, String> {
             if fd < 0 {
                 return Err(std::io::Error::last_os_error().to_string());
             }
-            let tree = Tree::map(unsafe { File::from_raw_fd(fd) })?;
-            Ok(Some((tree, index as usize)))
+            let observer_fd = unsafe { libc::fcntl(OBSERVER_FD, libc::F_DUPFD_CLOEXEC, 202) };
+            if observer_fd < 0 {
+                return Err("process ownership exit observer missing".into());
+            }
+            let tree = Tree::map(unsafe { File::from_raw_fd(fd) }, unsafe {
+                File::from_raw_fd(observer_fd)
+            })?;
+            Ok(Some((tree, context[0] as usize, context[1] as usize)))
         })
         .clone()
 }
@@ -153,24 +192,43 @@ pub(crate) struct Launch {
     index: usize,
     context: File,
     acknowledged: AtomicBool,
+    acknowledgement: File,
+    acknowledgement_sender: File,
 }
 impl Drop for Launch {
     fn drop(&mut self) {
         let slot = &self.tree.slots()[self.index];
-        slot.pid.store(0, Ordering::Release);
         // A crashed nested owner must not let its ancestry slot be reused by
         // an unrelated launch while retained descendants still reference it.
+        // Only the observer releases acknowledged slots for reuse, after its
+        // current batch of identity events has finished writing their markers.
         if self.acknowledged.load(Ordering::Acquire) {
-            slot.state.store(0, Ordering::Release);
+            slot.state.store(3, Ordering::Release);
         }
     }
 }
 impl Launch {
     pub(crate) fn prepare() -> Result<Self, String> {
-        let (tree, parent) = match inherited()? {
+        let (tree, parent, parent_generation) = match inherited()? {
             Some(v) => v,
-            None => (Tree::create()?, CAPACITY),
+            None => (Tree::create()?, CAPACITY, 0),
         };
+        if parent != CAPACITY
+            && (tree.slots()[parent].state.load(Ordering::Acquire) != 2
+                || tree.slots()[parent].generation.load(Ordering::Acquire) != parent_generation)
+        {
+            return Err("process ownership inherited launch identity retired".into());
+        }
+        // Acquire fallible resources before publishing a reservation. A failed
+        // descriptor allocation has no launched child and must not strand a slot.
+        let context = high_descriptor(tempfile::tempfile().map_err(|e| e.to_string())?)?;
+        let (acknowledgement, acknowledgement_sender) =
+            std::os::unix::net::UnixStream::pair().map_err(|e| e.to_string())?;
+        let acknowledgement =
+            high_descriptor(File::from(std::os::fd::OwnedFd::from(acknowledgement)))?;
+        let acknowledgement_sender = high_descriptor(File::from(std::os::fd::OwnedFd::from(
+            acknowledgement_sender,
+        )))?;
         let index = tree
             .slots()
             .iter()
@@ -182,31 +240,45 @@ impl Launch {
             .ok_or("process ownership capacity exhausted")?;
         let slot = &tree.slots()[index];
         slot.pid.store(0, Ordering::Release);
+        slot.generation.store(
+            tree.memory().next_generation.fetch_add(1, Ordering::AcqRel),
+            Ordering::Release,
+        );
+        slot.terminal.store(false, Ordering::Release);
+        slot.launcher_terminal.store(false, Ordering::Release);
         slot.cancelled.store(false, Ordering::Release);
         slot.parent.store(parent, Ordering::Release);
         slot.state.store(2, Ordering::Release);
-        let context = match tempfile::tempfile()
-            .map_err(|e| e.to_string())
-            .and_then(high_descriptor)
-        {
-            Ok(f) => f,
-            Err(e) => {
-                slot.state.store(0, Ordering::Release);
-                return Err(e.to_string());
-            }
-        };
         let launch = Self {
             tree,
             index,
             context,
             acknowledged: AtomicBool::new(true),
+            acknowledgement,
+            acknowledgement_sender,
         };
         use std::os::unix::fs::FileExt;
         launch
             .context
             .write_all_at(&(index as u64).to_ne_bytes(), 0)
             .map_err(|e| e.to_string())?;
-        if launch.cancelled() {
+        launch
+            .context
+            .write_all_at(
+                &(launch.tree.slots()[index]
+                    .generation
+                    .load(Ordering::Acquire) as u64)
+                    .to_ne_bytes(),
+                8,
+            )
+            .map_err(|e| e.to_string())?;
+        if launch.cancelled()
+            || (parent != CAPACITY
+                && launch.tree.slots()[parent]
+                    .generation
+                    .load(Ordering::Acquire)
+                    != parent_generation)
+        {
             return Err("process cancelled by enclosing owner before launch".into());
         }
         Ok(launch)
@@ -217,17 +289,31 @@ impl Launch {
         let context_fd = self.context.as_raw_fd();
         let memory = self.tree.memory.as_ptr() as usize;
         let index = self.index;
+        let observer_fd = self.tree.registration.as_raw_fd();
+        let acknowledgement_fd = self.acknowledgement.as_raw_fd();
+        let sender_fd = self.acknowledgement_sender.as_raw_fd();
         unsafe {
             command.pre_exec(move || {
                 let shared = &*(memory as *const Shared);
                 shared.slots[index]
                     .pid
                     .store(libc::getpid(), Ordering::Release);
-                if libc::dup2(tree_fd, TREE_FD) < 0 || libc::dup2(context_fd, CONTEXT_FD) < 0 {
+                register_exit(
+                    observer_fd,
+                    acknowledgement_fd,
+                    sender_fd,
+                    index,
+                    shared.slots[index].generation.load(Ordering::Acquire),
+                )?;
+                if libc::dup2(tree_fd, TREE_FD) < 0
+                    || libc::dup2(context_fd, CONTEXT_FD) < 0
+                    || libc::dup2(observer_fd, OBSERVER_FD) < 0
+                {
                     return Err(std::io::Error::last_os_error());
                 }
                 if libc::fcntl(TREE_FD, libc::F_SETFD, 0) < 0
                     || libc::fcntl(CONTEXT_FD, libc::F_SETFD, 0) < 0
+                    || libc::fcntl(OBSERVER_FD, libc::F_SETFD, 0) < 0
                 {
                     return Err(std::io::Error::last_os_error());
                 }
@@ -258,7 +344,32 @@ impl Launch {
             .cancelled
             .store(true, Ordering::Release);
         let start = Instant::now();
+        let mut abandoned = Vec::new();
         loop {
+            // Keep the existing one-second cleanup allowance. If an interrupted
+            // launcher still has a live child halfway through it, terminate that
+            // explicit group, then require its kernel exit acknowledgement in
+            // the remaining allowance. That abandoned-live-child outcome stays
+            // a failure even when cleanup establishes terminal completion.
+            if start.elapsed() >= Duration::from_millis(500) {
+                for (i, slot) in self.tree.slots().iter().enumerate() {
+                    if i != self.index
+                        && slot.state.load(Ordering::Acquire) == 2
+                        && self.tree.descendant(i, self.index)
+                        && slot.launcher_terminal.load(Ordering::Acquire)
+                        && !slot.terminal.load(Ordering::Acquire)
+                        && !abandoned.contains(&i)
+                    {
+                        abandoned.push(i);
+                        let pid = slot.pid.load(Ordering::Acquire);
+                        if pid > 0 {
+                            unsafe {
+                                libc::kill(-pid, libc::SIGKILL);
+                            }
+                        }
+                    }
+                }
+            }
             let descendants: Vec<_> = self
                 .tree
                 .slots()
@@ -277,7 +388,7 @@ impl Launch {
                 .iter()
                 .any(|s| s.state.load(Ordering::Acquire) == 1);
             if descendants.is_empty() && !initializing {
-                return true;
+                return abandoned.is_empty();
             }
             if start.elapsed() >= Duration::from_secs(1) {
                 self.acknowledged.store(false, Ordering::Release);
@@ -292,5 +403,335 @@ impl Launch {
             }
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+}
+
+// The first engine owns one joined observer for its finite launch tree. Children
+// hand off a live identity before exec; the observer stays with the surviving
+// root even if an intermediate launcher is killed. No process discovery occurs.
+struct ExitObserver {
+    stop: Arc<AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl ExitObserver {
+    fn join(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+    fn start(receiver: File, memory: usize) -> Result<Self, String> {
+        let flags = unsafe { libc::fcntl(receiver.as_raw_fd(), libc::F_GETFL) };
+        if flags < 0
+            || unsafe {
+                libc::fcntl(
+                    receiver.as_raw_fd(),
+                    libc::F_SETFL,
+                    flags | libc::O_NONBLOCK,
+                )
+            } < 0
+        {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        let mut identities = ExitIdentities::new()?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = stop.clone();
+        let thread = std::thread::Builder::new()
+            .name("chrono-owned-exits".into())
+            .spawn(move || {
+                let shared = unsafe { &*(memory as *const Shared) };
+                while !stopping.load(Ordering::Acquire) {
+                    // Receive only explicit launch handoffs. The reply descriptor is
+                    // specific to this child, so sibling registrations cannot steal it.
+                    loop {
+                        let mut data = [0usize; 4];
+                        let mut control = [0usize; 8];
+                        let mut iov = libc::iovec {
+                            iov_base: data.as_mut_ptr().cast(),
+                            iov_len: std::mem::size_of_val(&data),
+                        };
+                        let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
+                        msg.msg_iov = &mut iov;
+                        msg.msg_iovlen = 1;
+                        msg.msg_control = control.as_mut_ptr().cast();
+                        msg.msg_controllen = std::mem::size_of_val(&control) as _;
+                        let n = unsafe { libc::recvmsg(receiver.as_raw_fd(), &mut msg, 0) };
+                        if n < 0 {
+                            break;
+                        }
+                        let header = unsafe { libc::CMSG_FIRSTHDR(&msg) };
+                        if n as usize != std::mem::size_of_val(&data) || header.is_null() {
+                            continue;
+                        }
+                        let reply =
+                            unsafe { File::from_raw_fd(*(libc::CMSG_DATA(header).cast::<i32>())) };
+                        let [index, generation, pid, launcher] = data;
+                        let accepted = index < CAPACITY
+                            && shared.slots[index].generation.load(Ordering::Acquire) == generation
+                            && identities
+                                .register(
+                                    pid as i32,
+                                    launcher as i32,
+                                    generation * CAPACITY * 2 + index * 2,
+                                )
+                                .is_ok();
+                        let ack = u8::from(accepted);
+                        unsafe {
+                            libc::send(
+                                reply.as_raw_fd(),
+                                (&ack as *const u8).cast(),
+                                1,
+                                libc::MSG_NOSIGNAL,
+                            );
+                        }
+                    }
+                    identities.retain(|cookie| {
+                        let slot = &shared.slots[(cookie / 2) % CAPACITY];
+                        slot.state.load(Ordering::Acquire) != 0
+                            && slot.generation.load(Ordering::Acquire) == cookie / (CAPACITY * 2)
+                    });
+                    identities.completed(|cookie| {
+                        let index = (cookie / 2) % CAPACITY;
+                        let generation = cookie / (CAPACITY * 2);
+                        if shared.slots[index].generation.load(Ordering::Acquire) == generation {
+                            if cookie % 2 == 0 {
+                                shared.slots[index].terminal.store(true, Ordering::Release);
+                            } else {
+                                shared.slots[index]
+                                    .launcher_terminal
+                                    .store(true, Ordering::Release);
+                            }
+                        }
+                    });
+                    // This thread is the sole slot recycler. Complete the event
+                    // batch before freeing any slot: a delayed event cannot pass
+                    // a generation check and then write into a reused slot.
+                    for (index, slot) in shared.slots.iter().enumerate() {
+                        if slot.state.load(Ordering::Acquire) == 3 {
+                            slot.state.store(0, Ordering::Release);
+                            continue;
+                        }
+                        if slot.state.load(Ordering::Acquire) == 2
+                            && slot.terminal.load(Ordering::Acquire)
+                            && slot.launcher_terminal.load(Ordering::Acquire)
+                            && !shared.slots.iter().enumerate().any(|(child, child_slot)| {
+                                child != index
+                                    && child_slot.state.load(Ordering::Acquire) == 2
+                                    && descendant(&shared.slots, child, index)
+                            })
+                        {
+                            slot.state.store(0, Ordering::Release);
+                        }
+                    }
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            stop,
+            thread: Some(thread),
+        })
+    }
+}
+fn register_exit(
+    observer: i32,
+    acknowledgement: i32,
+    reply: i32,
+    index: usize,
+    generation: usize,
+) -> std::io::Result<()> {
+    let mut data = [
+        index,
+        generation,
+        unsafe { libc::getpid() } as usize,
+        unsafe { libc::getppid() } as usize,
+    ];
+    let mut control = [0usize; 8];
+    let mut iov = libc::iovec {
+        iov_base: data.as_mut_ptr().cast(),
+        iov_len: std::mem::size_of_val(&data),
+    };
+    let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
+    msg.msg_iov = &mut iov;
+    msg.msg_iovlen = 1;
+    msg.msg_control = control.as_mut_ptr().cast();
+    msg.msg_controllen = unsafe { libc::CMSG_SPACE(std::mem::size_of::<i32>() as _) } as _;
+    unsafe {
+        let header = libc::CMSG_FIRSTHDR(&msg);
+        (*header).cmsg_level = libc::SOL_SOCKET;
+        (*header).cmsg_type = libc::SCM_RIGHTS;
+        (*header).cmsg_len = libc::CMSG_LEN(std::mem::size_of::<i32>() as _) as _;
+        *(libc::CMSG_DATA(header).cast::<i32>()) = reply;
+        let start = Instant::now();
+        loop {
+            if libc::sendmsg(observer, &msg, libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL) >= 0 {
+                break;
+            }
+            let error = std::io::Error::last_os_error();
+            if !matches!(error.raw_os_error(), Some(libc::EAGAIN) | Some(libc::EINTR))
+                || start.elapsed() >= Duration::from_secs(1)
+            {
+                return Err(std::io::Error::other(format!(
+                    "process ownership exit handoff send: {error}"
+                )));
+            }
+            // Finite anonymous transport can exert backpressure under ordinary
+            // concurrent launches. No child has exec'd; retain one handoff and
+            // the existing one-second bound instead of losing its registration.
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let mut poll = libc::pollfd {
+            fd: acknowledgement,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let mut ack = 0u8;
+        if libc::poll(
+            &mut poll,
+            1,
+            (1000u128.saturating_sub(start.elapsed().as_millis())) as i32,
+        ) != 1
+            || libc::read(acknowledgement, (&mut ack as *mut u8).cast(), 1) != 1
+            || ack != 1
+        {
+            return Err(std::io::Error::other(
+                "process ownership live exit handoff failed",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+struct ExitIdentities(Vec<(File, usize)>);
+#[cfg(target_os = "macos")]
+impl ExitIdentities {
+    fn new() -> Result<Self, String> {
+        Ok(Self(Vec::new()))
+    }
+    fn register(&mut self, pid: i32, launcher: i32, cookie: usize) -> std::io::Result<()> {
+        let fd = unsafe { libc::kqueue() };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let queue = unsafe { File::from_raw_fd(fd) };
+        unsafe {
+            libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+        let events = [(pid, cookie), (launcher, cookie + 1)].map(|(pid, cookie)| libc::kevent {
+            ident: pid as _,
+            filter: libc::EVFILT_PROC,
+            flags: libc::EV_ADD | libc::EV_ONESHOT,
+            fflags: libc::NOTE_EXIT,
+            data: 0,
+            udata: cookie as *mut libc::c_void,
+        });
+        if unsafe {
+            libc::kevent(
+                queue.as_raw_fd(),
+                events.as_ptr(),
+                2,
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null(),
+            )
+        } < 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+        self.0.push((queue, cookie));
+        Ok(())
+    }
+    fn retain(&mut self, mut active: impl FnMut(usize) -> bool) {
+        self.0.retain(|(_, cookie)| active(*cookie));
+    }
+    fn completed(&mut self, mut accept: impl FnMut(usize)) {
+        // One kernel readiness query for the declared handles; do not repeatedly
+        // query every empty queue while unrelated fixture owners are running.
+        let mut ready: Vec<_> = self
+            .0
+            .iter()
+            .map(|(queue, _)| libc::pollfd {
+                fd: queue.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            })
+            .collect();
+        if unsafe { libc::poll(ready.as_mut_ptr(), ready.len() as _, 0) } <= 0 {
+            return;
+        }
+        let timeout = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        for ((queue, _), ready) in self.0.iter().zip(ready) {
+            if ready.revents & libc::POLLIN == 0 {
+                continue;
+            }
+            let mut events: [libc::kevent; 2] = unsafe { std::mem::zeroed() };
+            let n = unsafe {
+                libc::kevent(
+                    queue.as_raw_fd(),
+                    std::ptr::null(),
+                    0,
+                    events.as_mut_ptr(),
+                    2,
+                    &timeout,
+                )
+            };
+            for event in events.iter().take(n.max(0) as usize) {
+                if event.flags & libc::EV_ERROR == 0 && event.fflags & libc::NOTE_EXIT != 0 {
+                    accept(event.udata as usize);
+                }
+            }
+        }
+    }
+}
+#[cfg(target_os = "linux")]
+struct ExitIdentities(Vec<(File, usize)>);
+#[cfg(target_os = "linux")]
+impl ExitIdentities {
+    fn new() -> Result<Self, String> {
+        Ok(Self(Vec::new()))
+    }
+    fn register(&mut self, pid: i32, launcher: i32, cookie: usize) -> std::io::Result<()> {
+        let open = |pid| {
+            let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) } as i32;
+            if fd < 0 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(unsafe { File::from_raw_fd(fd) })
+            }
+        };
+        let child = open(pid)?;
+        let owner = open(launcher)?;
+        self.0.extend([(child, cookie), (owner, cookie + 1)]);
+        Ok(())
+    }
+    fn retain(&mut self, mut active: impl FnMut(usize) -> bool) {
+        self.0.retain(|(_, cookie)| active(*cookie));
+    }
+    fn completed(&mut self, mut accept: impl FnMut(usize)) {
+        let mut ready: Vec<_> = self
+            .0
+            .iter()
+            .map(|(file, _)| libc::pollfd {
+                fd: file.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            })
+            .collect();
+        if unsafe { libc::poll(ready.as_mut_ptr(), ready.len() as _, 0) } <= 0 {
+            return;
+        }
+        let mut index = 0;
+        self.0.retain(|(_, cookie)| {
+            let terminal = ready[index].revents & libc::POLLIN != 0;
+            index += 1;
+            if terminal {
+                accept(*cookie);
+            }
+            !terminal
+        });
     }
 }

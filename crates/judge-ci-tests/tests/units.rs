@@ -634,3 +634,74 @@ fn scheduling_delta_selects_complete_plans_and_collection_rejects_rewritten_poli
     fail(&collect(&h, &b, &c, json!([changed, beta])), "plan differs");
     assert_eq!(h.calls(), 1);
 }
+
+#[test]
+fn exit_zero_infrastructure_launcher_helper() {
+    let Ok(root) = std::env::var("CHRONO_CI_INFRASTRUCTURE") else {
+        return;
+    };
+    let root = Path::new(&root);
+    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
+    let _ = chrono_harness::run_process_observed(root,&chrono_harness::CommandSpec {
+        program:python.to_string_lossy().into_owned(),
+        args:vec!["-c".into(),"import os,time;open('.chrono-harness/state/infra-ready','w').write(str(os.getpid()));os.kill(os.getppid(),9);time.sleep(30)".into()],
+        env:Default::default(),timeout_seconds:30,output_limit_bytes:4096,
+    },&[],&sha256(&fs::read(python).unwrap()));
+    panic!("child must interrupt launcher");
+}
+
+#[test]
+fn exit_zero_infrastructure_failure_has_null_summary_and_retained_receipt_in_collection() {
+    let h = host();
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    h.change_registry(CONFIG, |v| {
+        v["judge"] = json!({"program":source.join("crates/judge-ci/target/debug/chrono-judge-ci"),"args":[],"timeout_seconds":30,"output_limit_bytes":1048576});
+    });
+    let b = h.commit();
+    let exe = std::env::current_exe().unwrap();
+    // The ordinary registered shell waits for the interrupted launcher and
+    // returns its own genuine zero exit. The orphaned registered child remains
+    // live, so the process engine must retain an infrastructure failure.
+    h.write("check.sh", &format!("mkdir -p .chrono-harness/state\nprintf called >> .chrono-harness/state/calls\nCHRONO_CI_INFRASTRUCTURE=\"$PWD\" '{}' --exact units::exit_zero_infrastructure_launcher_helper --nocapture > .chrono-harness/state/infra-original 2>&1\nexit 0\n",exe.display()));
+    let c = h.commit();
+    let (exit, report) = cli(&h, &b, &c, &["--unit", "alpha"]);
+    assert_eq!(exit, 1, "{report}");
+    assert!(report.get("transport_failure").is_none(), "{report}");
+    let response: Response = serde_json::from_value(report["response"].clone()).unwrap();
+    chrono_harness::validate_response_protocol(
+        &response,
+        &response.request_id,
+        1,
+        chrono_harness::units::PROTOCOL,
+    )
+    .unwrap();
+    let row = response
+        .results
+        .iter()
+        .find(|r| r.id == "test.suite")
+        .unwrap();
+    assert_eq!(row.status, Status::Failed);
+    assert_eq!(row.exit_code, None);
+    let original = &response.evidence["executed"][0]["receipt"]["process"];
+    assert_eq!(original["exit_code"], 0);
+    assert!(
+        original["failure"]
+            .as_str()
+            .unwrap()
+            .contains("joined completion")
+    );
+    assert_eq!(original["argv"], json!(["/bin/sh", "check.sh"]));
+    assert!(h.root().join(".chrono-harness/state/infra-ready").exists());
+    let path = ".chrono-harness/state/alpha/check.json";
+    let bytes = fs::read(h.root().join(path)).unwrap();
+    let retained: Value = serde_json::from_slice(&bytes).unwrap();
+    let reference = json!({"unit":"alpha","path":path,"sha256":sha256(&bytes),"runner_sha256":retained["runner"]["sha256"],"judge_sha256":retained["judge"]["sha256"]});
+    let collected = collect(&h, &b, &c, json!([reference]));
+    fail(&collected, "unit failed; original report");
+    assert_eq!(
+        collected.evidence["reports"][0]["status"],
+        "failed-original-retained"
+    );
+    assert_eq!(fs::read(h.root().join(path)).unwrap(), bytes);
+    assert_eq!(h.calls(), 1);
+}
