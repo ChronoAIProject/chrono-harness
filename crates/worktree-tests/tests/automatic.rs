@@ -453,6 +453,111 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
 }
 
 #[test]
+fn automatic_retries_keep_original_evidence_without_recursive_growth() {
+    for kernel in [false, true] {
+        let h = Host::new("payload");
+        blocked_remove(&h, false);
+        if kernel {
+            h.kernel_cleanup();
+        } else {
+            h.automatic("evidence-retain");
+        }
+        let target = h.parent.join("bounded-retry");
+        assert_eq!(h.invoke("feature", "bounded-retry", &target).0, 0);
+        output(&target);
+        fs::write(h.parent.join("fail-remove"), "retain original failure").unwrap();
+        let (code, failed, error) = h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+        );
+        assert_ne!(code, 0, "{failed} {error}");
+        let report = &failed["drain"][0]["report"];
+        let original_path = h.root.join(report["report_path"].as_str().unwrap());
+        let original = fs::read(&original_path).unwrap();
+        let bound = original.len() * 3;
+        let mut originals = vec![(original_path, original)];
+        for retry in 0..3 {
+            let (code, failed, error) = h.auto("maintain", &[]);
+            assert_ne!(code, 0, "{failed} {error}");
+            let report = &failed["drain"][0]["report"];
+            assert_eq!(report["status"], "failed");
+            assert!(report["processes"].as_array().unwrap().iter().any(|p| {
+                p["process"]["exit_code"] == 71
+                    && p["process"]["stderr"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("original automatic removal failure")
+            }));
+            let path = h.root.join(report["report_path"].as_str().unwrap());
+            let bytes = fs::read(&path).unwrap();
+            // The controlled operation is unchanged across retries. Its report
+            // may grow with current observations, but cannot multiply history.
+            assert!(
+                bytes.len() <= bound,
+                "retry {retry}, kernel={kernel}: {} bytes exceeds current-operation bound {bound}",
+                bytes.len()
+            );
+            let input = &report["prior_report"]["input"];
+            assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+            assert_eq!(input["source_root"], value!(h.root));
+            let retained = fs::read(h.root.join(input["path"].as_str().unwrap())).unwrap();
+            assert_eq!(retained, originals.last().unwrap().1);
+            assert_eq!(input["sha256"], sha256(&retained));
+            assert_eq!(input["byte_length"], retained.len());
+            for (path, bytes) in &originals {
+                assert_eq!(fs::read(path).unwrap(), *bytes);
+            }
+            originals.push((path, bytes));
+        }
+        fs::remove_file(h.parent.join("fail-remove")).unwrap();
+        for fault in ["latest", "ancestor", "absent", "symlink"] {
+            let (path, bytes) = if fault == "latest" {
+                originals.last().unwrap()
+            } else {
+                &originals[0]
+            };
+            match fault {
+                "absent" => fs::remove_file(path).unwrap(),
+                "symlink" => {
+                    fs::remove_file(path).unwrap();
+                    let outside = h.parent.join("same-original-bytes");
+                    fs::write(&outside, bytes).unwrap();
+                    std::os::unix::fs::symlink(&outside, path).unwrap();
+                }
+                _ => {
+                    let mut drifted = bytes.clone();
+                    drifted.push(b' ');
+                    fs::write(path, drifted).unwrap();
+                }
+            }
+            let (code, refused, error) = h.auto("maintain", &[]);
+            assert_ne!(code, 0, "{fault}: {refused} {error}");
+            if matches!(fault, "latest" | "ancestor") {
+                assert!(
+                    refused["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("original lifecycle receipt changed")
+                );
+            }
+            assert!(
+                target.exists(),
+                "{fault}: invalid evidence cannot authorize deletion"
+            );
+            if fault == "symlink" {
+                fs::remove_file(path).unwrap();
+            }
+            fs::write(path, bytes).unwrap();
+        }
+        assert_eq!(h.auto("maintain", &[]).0, 0);
+        assert!(!target.exists());
+        for (path, bytes) in originals {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+    }
+}
+
+#[test]
 fn automatic_symlink_containment_and_internal_external_target_safety() {
     use std::os::unix::fs::symlink;
     for fault in ["internal", "ancestor", "selected-root"] {
