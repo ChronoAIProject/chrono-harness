@@ -96,7 +96,11 @@ cover different effective configuration/workflow paths with unchanged worktree
 policy, dirty source preservation, missing/unsupported endpoint rejection and a
 changed selected workflow target without checkout creation, selected reconstruction,
 and selected recovery/cleanup with original failed-process evidence. Direct controls
-remain. The next full-SPEC gaps remain full host activation, complete effective
+remain. The worktree producer and bound Reader share the bounded explicit-registry
+batch acquisition. Tests bind each endpoint to original metadata/content bytes and
+retain actual failed or malformed batch output before fetch or checkout creation;
+reader tests retain output partitioning, guard, identity and legacy controls.
+The next full-SPEC gaps remain full host activation, complete effective
 inputs, native full dispatch and lifecycle delivery; parity and formal Rust
 refinement are also unfinished.
 

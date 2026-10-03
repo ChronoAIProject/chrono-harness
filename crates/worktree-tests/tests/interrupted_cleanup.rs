@@ -1205,6 +1205,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
             String::from_utf8_lossy(&original.stderr)
         );
     }
+    let handoff_seconds = began.elapsed().as_secs_f64();
     assert!(
         !other.join("output λ").exists(),
         "ordinary check must drain other interrupted enrollment"
@@ -1231,6 +1232,28 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         "original check console must be forwarded: {}",
         String::from_utf8_lossy(&out.stdout)
     );
+    let policy = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
+    let directory = h.root.join(policy["report_directory"].as_str().unwrap());
+    for row in fs::read_dir(directory).unwrap() {
+        let path = row.unwrap().path();
+        if path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("check-")
+        {
+            let report = json(&fs::read(&path).unwrap()).unwrap();
+            let mut calls = std::collections::BTreeMap::<String, usize>::new();
+            for process in report["processes"].as_array().unwrap() {
+                *calls.entry(process["argv"].to_string()).or_default() += 1;
+            }
+            eprintln!(
+                "CHECK_ADMISSION_MEASUREMENT {}",
+                value!({"handoff_seconds":handoff_seconds,"report_sha256":sha256(&fs::read(&path).unwrap()),"git_calls":calls,"drain":report["drain"].as_array().map(Vec::len)})
+            );
+        }
+    }
     reclaim(&h, &target);
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
     for args in [

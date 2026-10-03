@@ -51,6 +51,13 @@ acquire their own evidence. Mutable refs, HEAD, index, checkout and untracked
 facts, legacy unbound reads, failures and missing objects are never cached.
 Registry snapshots and config verification share this acquisition owner while
 keeping their existing parsing, endpoint and acceptance checks.
+The bound Reader and worktree producer share one registry batch transport and
+framing validator. Each supplies its own bounded Git invocation and retains its
+original process receipts. Only explicitly resolved registry paths participate;
+metadata determines bounded content partitions, with direct reads for small
+lists or frames exceeding the batch budget. Successful cache entries retain
+their original source coordinates; malformed, failed and drifted acquisitions
+cannot populate the cache.
 The existing bounded `rev-parse --verify OID^{commit}` and tree observations retain
 their original receipts and return contracts. A hex-shaped ref resolving to a
 different object is read freshly; invalid, missing, malformed or failed identity

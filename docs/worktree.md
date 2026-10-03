@@ -81,6 +81,14 @@ Receipt and intent `config_path`/`config_sha256` continue to identify the worktr
 policy itself. Reconstruction and maintenance, including recovery, rebind and
 cleanup, use the same snapshot acquisition helper.
 
+Resolved registry lists use the runner's shared bounded Git batch acquisition.
+Metadata fixes each blob identity and size; content requests are partitioned under
+the existing output limit and validated against that metadata. Small lists or
+insufficient framing space retain direct reads. Original process bytes and exits
+remain in the report on malformed or failed batches, before checkout effects.
+Only fully validated immutable bytes enter the operation-local cache; live HEAD,
+checkout, policy, attachment and ownership observations remain fresh.
+
 Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before
 unlocking it. The producer reuses registration's artifact classifier: declared

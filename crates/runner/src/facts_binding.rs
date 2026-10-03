@@ -55,6 +55,172 @@ impl BlobObject {
         oid == self.oid
     }
 }
+/// One successful registered blob and its original acquisition coordinates.
+/// Callers retain the processes; no synthetic process receipt is produced here.
+pub struct RegistryBlob {
+    pub path: String,
+    pub bytes: Vec<u8>,
+    receipt: BlobReceipt,
+}
+/// Acquire only explicit immutable registry paths through the caller's bounded
+/// Git transport. Metadata partitions requests under the same output limit.
+/// The callback returns its retained process index and exact stdout bytes.
+pub fn acquire_registry_blobs(
+    oid: &str,
+    paths: &[String],
+    limit: usize,
+    mut git: impl FnMut(&[&str], &[u8]) -> Result<(usize, Vec<u8>), String>,
+    error: impl Fn(&str) -> String,
+) -> Result<Vec<RegistryBlob>, String> {
+    facts::full_oid(oid)?;
+    let mut unique = BTreeSet::new();
+    for path in paths {
+        crate::relative_path(path)?;
+        if !unique.insert(path) {
+            return Err(error("duplicate registered blob path"));
+        }
+    }
+    let pending = paths;
+    let mut bytes = BTreeMap::new();
+    let mut receipts = vec![];
+    // The longest supported metadata header is 64 hex bytes, a blob
+    // type, a 20-digit length and LF. Tiny declared limits remain usable.
+    if pending.len() < 3 || pending.len().saturating_mul(91) > limit {
+        for path in pending {
+            let (process, original) = git(&["show", &format!("{oid}:{path}")], &[])?;
+            receipts.push((
+                path.clone(),
+                BlobReceipt {
+                    process,
+                    range: 0..original.len(),
+                    object: None,
+                },
+            ));
+            bytes.insert(path.clone(), original);
+        }
+    } else {
+        let input = pending
+            .iter()
+            .map(|path| format!("{oid}:{path}\n"))
+            .collect::<String>();
+        let (metadata_process, metadata) = git(&["cat-file", "--batch-check"], input.as_bytes())?;
+        let parse = || -> Result<Vec<BlobObject>, String> {
+            let text = std::str::from_utf8(&metadata).map_err(|_| "non UTF-8 batch metadata")?;
+            let rows = text
+                .strip_suffix('\n')
+                .ok_or("missing batch metadata terminator")?
+                .split('\n')
+                .collect::<Vec<_>>();
+            if rows.len() != pending.len() {
+                return Err("batch metadata count mismatch".into());
+            }
+            rows.iter()
+                .map(|row| {
+                    let fields = row.split(' ').collect::<Vec<_>>();
+                    if fields.len() != 3 || fields[1] != "blob" || fields[0].len() != oid.len() {
+                        return Err("expected exact blob metadata".into());
+                    }
+                    facts::full_oid(fields[0])?;
+                    let length = fields[2]
+                        .parse::<usize>()
+                        .map_err(|_| "invalid blob length")?;
+                    if length.to_string() != fields[2] {
+                        return Err("noncanonical blob length".into());
+                    }
+                    Ok(BlobObject {
+                        oid: fields[0].into(),
+                        length,
+                    })
+                })
+                .collect()
+        };
+        let objects = parse().map_err(|e| error(&e))?;
+        let mut first = 0;
+        while first < pending.len() {
+            let mut end = first;
+            let mut length = 0usize;
+            while end < pending.len() {
+                let object = &objects[end];
+                let framed = object
+                    .length
+                    .checked_add(object.header().len())
+                    .and_then(|n| n.checked_add(1));
+                let Some(total) = framed
+                    .and_then(|n| length.checked_add(n))
+                    .filter(|n| *n <= limit)
+                else {
+                    break;
+                };
+                length = total;
+                end += 1;
+            }
+            if end.saturating_sub(first) < 2 {
+                let path = &pending[first];
+                let (process, original) = git(&["show", &format!("{oid}:{path}")], &[])?;
+                if !objects[first].matches(&original) {
+                    return Err(error("blob bytes differ from batch metadata"));
+                }
+                receipts.push((
+                    path.clone(),
+                    BlobReceipt {
+                        process,
+                        range: 0..original.len(),
+                        object: Some((metadata_process, objects[first].clone())),
+                    },
+                ));
+                bytes.insert(path.clone(), original);
+                first += 1;
+                continue;
+            }
+            let input = objects[first..end]
+                .iter()
+                .map(|object| format!("{}\n", object.oid))
+                .collect::<String>();
+            let (process, original) = git(&["cat-file", "--batch"], input.as_bytes())?;
+            let mut offset = 0;
+            for i in first..end {
+                let object = &objects[i];
+                let header = object.header();
+                if !original[offset..].starts_with(header.as_bytes()) {
+                    return Err(error("batch blob header mismatch"));
+                }
+                offset += header.len();
+                let stop = offset
+                    .checked_add(object.length)
+                    .ok_or_else(|| error("batch blob length overflow"))?;
+                let content = original
+                    .get(offset..stop)
+                    .ok_or_else(|| error("truncated batch blob"))?;
+                if original.get(stop) != Some(&b'\n') || !object.matches(content) {
+                    return Err(error("batch blob bytes/terminator mismatch"));
+                }
+                receipts.push((
+                    pending[i].clone(),
+                    BlobReceipt {
+                        process,
+                        range: offset..stop,
+                        object: Some((metadata_process, object.clone())),
+                    },
+                ));
+                bytes.insert(pending[i].clone(), content.to_vec());
+                offset = stop + 1;
+            }
+            if offset != original.len() {
+                return Err(error("trailing batch blob output"));
+            }
+            first = end;
+        }
+    }
+    Ok(receipts
+        .into_iter()
+        .map(|(path, receipt)| RegistryBlob {
+            bytes: bytes.remove(&path).expect("acquired explicit registry"),
+            path,
+            receipt,
+        })
+        .collect())
+}
+
 /// Original binding observations when construction fails, without decoding diagnostics.
 #[derive(Debug)]
 pub struct OpenFailure {
@@ -462,9 +628,8 @@ impl Reader {
     pub(crate) fn can_reuse_oid(&self, oid: &str) -> bool {
         self.bound.is_some() && self.verified_oids.borrow().contains(oid)
     }
-    /// Only the explicit, resolved registry list is batched. Metadata sizes
-    /// partition content requests under the existing process bound; a blob
-    /// whose framing would exceed it keeps its original `show` acquisition.
+    /// Only explicit resolved registry paths participate; the shared acquisition
+    /// retains framing, object identity, guards and original process receipts.
     pub(crate) fn registry_blobs(
         &self,
         root: &Path,
@@ -491,140 +656,21 @@ impl Reader {
             .ok_or("missing binding")?
             .spec
             .output_limit_bytes;
-        // The longest supported metadata header is 64 hex bytes, a blob
-        // type, a 20-digit length and LF. Tiny declared limits remain usable.
-        if pending.len() < 3 || pending.len().saturating_mul(91) > limit {
-            for path in pending {
-                bytes.insert(path.clone(), self.blob_with_reuse(root, oid, &path)?);
-            }
-        } else {
-            let input = pending
-                .iter()
-                .map(|path| format!("{oid}:{path}\n"))
-                .collect::<String>();
-            let metadata = self.git_input(
-                root,
-                &["cat-file", "--batch-check"],
-                input.as_bytes(),
-                false,
-            )?;
-            let metadata_process = self.processes.borrow().len() - 1;
-            let parse = || -> Result<Vec<BlobObject>, String> {
-                let text =
-                    std::str::from_utf8(&metadata).map_err(|_| "non UTF-8 batch metadata")?;
-                let rows = text
-                    .strip_suffix('\n')
-                    .ok_or("missing batch metadata terminator")?
-                    .split('\n')
-                    .collect::<Vec<_>>();
-                if rows.len() != pending.len() {
-                    return Err("batch metadata count mismatch".into());
-                }
-                rows.iter()
-                    .map(|row| {
-                        let fields = row.split(' ').collect::<Vec<_>>();
-                        if fields.len() != 3 || fields[1] != "blob" || fields[0].len() != oid.len()
-                        {
-                            return Err("expected exact blob metadata".into());
-                        }
-                        facts::full_oid(fields[0])?;
-                        let length = fields[2]
-                            .parse::<usize>()
-                            .map_err(|_| "invalid blob length")?;
-                        if length.to_string() != fields[2] {
-                            return Err("noncanonical blob length".into());
-                        }
-                        Ok(BlobObject {
-                            oid: fields[0].into(),
-                            length,
-                        })
-                    })
-                    .collect()
-            };
-            let objects = parse().map_err(|e| self.error(&e))?;
-            let mut receipts = vec![];
-            let mut first = 0;
-            while first < pending.len() {
-                let mut end = first;
-                let mut length = 0usize;
-                while end < pending.len() {
-                    let object = &objects[end];
-                    let framed = object
-                        .length
-                        .checked_add(object.header().len())
-                        .and_then(|n| n.checked_add(1));
-                    let Some(total) = framed
-                        .and_then(|n| length.checked_add(n))
-                        .filter(|n| *n <= limit)
-                    else {
-                        break;
-                    };
-                    length = total;
-                    end += 1;
-                }
-                if end.saturating_sub(first) < 2 {
-                    let path = &pending[first];
-                    let original = self.git(root, &["show", &format!("{oid}:{path}")])?;
-                    if !objects[first].matches(&original) {
-                        return Err(self.error("blob bytes differ from batch metadata"));
-                    }
-                    receipts.push((
-                        path.clone(),
-                        BlobReceipt {
-                            process: self.processes.borrow().len() - 1,
-                            range: 0..original.len(),
-                            object: Some((metadata_process, objects[first].clone())),
-                        },
-                    ));
-                    bytes.insert(path.clone(), original);
-                    first += 1;
-                    continue;
-                }
-                let input = objects[first..end]
-                    .iter()
-                    .map(|object| format!("{}\n", object.oid))
-                    .collect::<String>();
-                let original =
-                    self.git_input(root, &["cat-file", "--batch"], input.as_bytes(), false)?;
-                let process = self.processes.borrow().len() - 1;
-                let mut offset = 0;
-                for i in first..end {
-                    let object = &objects[i];
-                    let header = object.header();
-                    if !original[offset..].starts_with(header.as_bytes()) {
-                        return Err(self.error("batch blob header mismatch"));
-                    }
-                    offset += header.len();
-                    let stop = offset
-                        .checked_add(object.length)
-                        .ok_or_else(|| self.error("batch blob length overflow"))?;
-                    let content = original
-                        .get(offset..stop)
-                        .ok_or_else(|| self.error("truncated batch blob"))?;
-                    if original.get(stop) != Some(&b'\n') || !object.matches(content) {
-                        return Err(self.error("batch blob bytes/terminator mismatch"));
-                    }
-                    receipts.push((
-                        pending[i].clone(),
-                        BlobReceipt {
-                            process,
-                            range: offset..stop,
-                            object: Some((metadata_process, object.clone())),
-                        },
-                    ));
-                    bytes.insert(pending[i].clone(), content.to_vec());
-                    offset = stop + 1;
-                }
-                if offset != original.len() {
-                    return Err(self.error("trailing batch blob output"));
-                }
-                first = end;
-            }
-            // Publish only fully validated, guarded acquisitions. Failed,
-            // missing, malformed and drifted originals stay in processes.
-            for (path, receipt) in receipts {
-                self.blobs.borrow_mut().insert((oid.into(), path), receipt);
-            }
+        let acquired = acquire_registry_blobs(
+            oid,
+            &pending,
+            limit,
+            |args, input| {
+                let bytes = self.git_input(root, args, input, false)?;
+                Ok((self.processes.borrow().len() - 1, bytes))
+            },
+            |message| self.error(message),
+        )?;
+        for blob in acquired {
+            self.blobs
+                .borrow_mut()
+                .insert((oid.into(), blob.path.clone()), blob.receipt);
+            bytes.insert(blob.path, blob.bytes);
         }
         Ok(paths
             .iter()

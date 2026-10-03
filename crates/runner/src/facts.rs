@@ -18,7 +18,9 @@ pub struct Entry {
     pub oid: String,
     pub kind: String,
 }
-pub use crate::facts_binding::{OpenFailure, Reader, declaration as git_declaration};
+pub use crate::facts_binding::{
+    OpenFailure, Reader, RegistryBlob, acquire_registry_blobs, declaration as git_declaration,
+};
 
 pub type Tree = BTreeMap<String, Entry>;
 pub use crate::checkout::{changes as checkout_changes, tree as parse_tree};
@@ -205,6 +207,39 @@ pub fn registry_snapshot_with(
             snapshot.bytes.insert(path.clone(), original);
             snapshot.values.insert(path, value);
         }
+    }
+    Ok(snapshot)
+}
+/// Resolve the entry and selector before acquiring their explicit registry list.
+/// The reader must return the requested paths in order with their original bytes.
+pub fn registry_snapshot_with_batches(
+    path: &str,
+    mut read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
+) -> Result<RegistrySnapshot, String> {
+    let (mut snapshot, paths) = registry_snapshot_start(path, |path| {
+        let mut originals = read(&[path.to_owned()])?;
+        if originals.len() != 1 || originals[0].0 != path {
+            return Err("registry acquisition path mismatch".into());
+        }
+        Ok(originals.remove(0).1)
+    })?;
+    let mut pending = vec![];
+    for path in paths {
+        if !snapshot.bytes.contains_key(&path) && !pending.contains(&path) {
+            pending.push(path);
+        }
+    }
+    let originals = read(&pending)?;
+    if originals.len() != pending.len() {
+        return Err("registry acquisition count mismatch".into());
+    }
+    for (expected, (path, original)) in pending.iter().zip(originals) {
+        if expected != &path {
+            return Err("registry acquisition path mismatch".into());
+        }
+        let value = json(&original)?;
+        snapshot.bytes.insert(path.clone(), original);
+        snapshot.values.insert(path, value);
     }
     Ok(snapshot)
 }
@@ -409,19 +444,6 @@ impl Reader {
         if !self.can_reuse_oid(oid) {
             return registry_snapshot_with(path, |path| self.blob(root, oid, path));
         }
-        let (mut snapshot, paths) =
-            registry_snapshot_start(path, |path| self.blob(root, oid, path))?;
-        let mut pending = vec![];
-        for path in paths {
-            if !snapshot.bytes.contains_key(&path) && !pending.contains(&path) {
-                pending.push(path);
-            }
-        }
-        for (path, original) in self.registry_blobs(root, oid, &pending)? {
-            let value = json(&original)?;
-            snapshot.bytes.insert(path.clone(), original);
-            snapshot.values.insert(path, value);
-        }
-        Ok(snapshot)
+        registry_snapshot_with_batches(path, |paths| self.registry_blobs(root, oid, paths))
     }
 }
