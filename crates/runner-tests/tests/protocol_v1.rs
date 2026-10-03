@@ -1222,6 +1222,199 @@ fn concurrent_live_identity_handoffs_complete_each_real_child_once() {
 
 #[cfg(unix)]
 #[test]
+fn delayed_monitor_helper() {
+    let Ok(root) = std::env::var("CHRONO_DELAYED_MONITOR") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
+    let digest = sha256(&fs::read(&python).unwrap());
+    let spec = chrono_harness::CommandSpec {
+        program: python.to_string_lossy().into(),
+        args: vec![
+            "-c".into(),
+            r#"import os,time
+with open('ready.tmp','w') as ready:
+ ready.write(str(os.getpid()))
+os.replace('ready.tmp','ready')
+start=time.monotonic()
+while not os.path.exists('release'):
+ assert time.monotonic()-start<5
+ time.sleep(.005)
+delay,overflow=open('release').read().split(',')
+time.sleep(float(delay))
+if overflow=='yes':
+ os.write(1,b'x'*8192)
+os.close(1)
+os.close(2)
+os._exit(7)
+"#
+            .into(),
+        ],
+        env: Default::default(),
+        timeout_seconds: 1,
+        output_limit_bytes: 4096,
+    };
+    let mut now: libc::timespec = unsafe { std::mem::zeroed() };
+    #[cfg(target_vendor = "apple")]
+    let clock = libc::CLOCK_UPTIME_RAW;
+    #[cfg(not(target_vendor = "apple"))]
+    let clock = libc::CLOCK_MONOTONIC;
+    assert_eq!(unsafe { libc::clock_gettime(clock, &mut now) }, 0);
+    fs::write(
+        root.join("launcher"),
+        serde_json::to_vec(&value!({
+            "pid": std::process::id(),
+            "started": now.tv_sec as f64 + now.tv_nsec as f64 / 1e9,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
+    fs::write(
+        root.join("result.json"),
+        serde_json::to_vec(&result).unwrap(),
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
+    let root = tempfile::tempdir().unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let digest = sha256(&fs::read(&exe).unwrap());
+    let python = chrono_harness::resolve_program(root.path(), "python3", None).unwrap();
+    // Only the nested launcher is suspended. The actual child and root's kernel
+    // exit observer remain runnable. This separate oracle observes real exit,
+    // including the late-exit control that a try_wait-before-timeout fix accepts.
+    let controller = std::process::Command::new(python)
+        .args([
+            "-c",
+            r#"import json,os,select,signal,sys,time
+clock=time.CLOCK_UPTIME_RAW if sys.platform=='darwin' else time.CLOCK_MONOTONIC
+now=lambda:time.clock_gettime(clock)
+start=now()
+while not os.path.exists('ready'):
+ assert now()-start<5
+ time.sleep(.005)
+launcher=json.load(open('launcher'))
+pid=int(open('ready').read())
+if sys.platform=='darwin':
+ handle=select.kqueue()
+ handle.control([select.kevent(pid,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ONESHOT,fflags=select.KQ_NOTE_EXIT)],0,0)
+else:
+ fd=os.pidfd_open(pid)
+ handle=select.poll()
+ handle.register(fd,select.POLLIN)
+time.sleep(.15)
+stopped=now()
+assert 0<=stopped-launcher['started']<.75, 'fixture missed the original deadline'
+os.kill(launcher['pid'],signal.SIGSTOP)
+try:
+ with open('release.tmp','w') as release:
+  release.write(('1.3' if sys.argv[1]=='late' else '.05')+(','+'yes' if sys.argv[1]=='overflow' else ',no'))
+ os.replace('release.tmp','release')
+ if sys.platform=='darwin':
+  events=handle.control(None,1,3)
+  assert len(events)==1 and events[0].ident==pid and events[0].fflags & select.KQ_NOTE_EXIT
+ else:
+  events=handle.poll(3000)
+  assert events and events[0][0]==fd and events[0][1] & select.POLLIN
+  os.close(fd)
+ terminal=now()
+ if sys.argv[1]=='late':
+  assert terminal-stopped>1
+ else:
+  assert 0<=terminal-launcher['started']<1, 'child did not exit inside the deadline'
+ time.sleep(max(0,stopped+2.1-now()))
+ with open('kernel-terminal.json','w') as result:
+  json.dump(dict(pid=pid,started=launcher['started'],stopped=stopped,terminal=terminal,resumed=now()),result)
+finally:
+ os.kill(launcher['pid'],signal.SIGCONT)
+"#,
+            case,
+        ])
+        .current_dir(root.path())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: exe.to_string_lossy().into(),
+        args: vec![
+            "--exact".into(),
+            "delayed_monitor_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: [
+            (
+                "CHRONO_DELAYED_MONITOR".into(),
+                root.path().to_string_lossy().into(),
+            ),
+            ("PATH".into(), std::env::var("PATH").unwrap()),
+        ]
+        .into(),
+        timeout_seconds: 8,
+        output_limit_bytes: 16384,
+    };
+    let result = chrono_harness::run_process_observed(root.path(), &spec, &[], &digest);
+    let observed = controller.wait_with_output().unwrap();
+    assert!(
+        observed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&observed.stderr)
+    );
+    let result = result.unwrap();
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(result.failure.is_none(), "{result:?}");
+    let observed: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.path().join("kernel-terminal.json")).unwrap())
+            .unwrap();
+    eprintln!("delayed monitor kernel evidence ({case}): {observed}");
+    assert!(observed["resumed"].as_f64().unwrap() - observed["stopped"].as_f64().unwrap() > 1.0);
+    let result: chrono_harness::ProcessResult =
+        serde_json::from_slice(&fs::read(root.path().join("result.json")).unwrap()).unwrap();
+    assert_eq!(result.exit_code, 7, "{result:?}; kernel: {observed}");
+    if case == "overflow" {
+        assert_eq!(result.stdout_bytes, vec![b'x'; 4096]);
+    } else {
+        assert!(result.stdout_bytes.is_empty());
+    }
+    assert!(result.stderr_bytes.is_empty());
+    result
+}
+
+#[cfg(unix)]
+#[test]
+fn delayed_monitor_preserves_on_time_child_exit() {
+    let result = delayed_monitor("on-time");
+    assert!(result.failure.is_none(), "{result:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn delayed_monitor_retains_late_child_timeout() {
+    let result = delayed_monitor("late");
+    assert_eq!(
+        result.failure.as_deref(),
+        Some("process timed out"),
+        "{result:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn delayed_monitor_preserves_output_bound() {
+    let result = delayed_monitor("overflow");
+    assert_eq!(
+        result.failure.as_deref(),
+        Some("process output limit exceeded"),
+        "{result:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn closed_output_streams_preserve_child_exit_and_timeout() {
     for (delay, expected_exit) in [(0.05, Some(7)), (20.0, None)] {
         let root = tempfile::tempdir().unwrap();

@@ -819,6 +819,8 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 
 Unix runner 的中断恢复由同一 process engine 的单个已加入 observer 承载：exec 前固定 child 与 launcher 的活身份，macOS 用 kernel exit event，Linux 用 pidfd；只有两者的实际终结与已登记子树完成才能协调丢失 destructor 的 slot。PID 消失、已发信号或外层 exit 0 都不是完成回执；代际固定阻止旧事件／上下文消费复用 slot。清理仍限原一秒；中断 owner 的存活子进程终止后仍保留清理失败，未知完成不成功。进程 exit 0 后的 receipt／清理失败在 CI 摘要投影为 failed、exit null，原 receipt 保留真实 exit 0、诊断与绑定；collection 保留原失败而不重执行。宿主 cap、计划、选择义务及本地／原生验收仍由原登记与调用方负责。
 
+observer 以与执行时限相同的系统单调时钟记录实际内核退出观察。监控恢复时已过期限，仅当该观察严格早于原期限且立即取得真实子进程退出状态，才保留原退出结果；观察缺失、过晚、时钟失败或仍未退出均不授予额外等待。取消、输出上限与收束失败仍独立生效。时间戳是退出的观察上界，不是内核记录的精确退出时间；observer 自身延迟时不推断更早退出。共享布局身份独立钉版，嵌套执行须配套运行时，不兼容继承描述符直接拒绝。
+
 exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。
 
 已登记 v2 birth 的封口中断由原 worktree owner 在正常入口取得实际排除、核原附件与政策后恢复；保留原缺失／部分结果及独立恢复回执，重复中断重用固定回执，不据恢复制造原成功或 finish。新消费在已发布缓存尝试后开启新代际、保留旧 intent/result；后续回收可绑定当前 HEAD。bootstrap 消费原 managed_command_failed 分类，原非零构建与后续生命周期拒绝及报告引用分别保留。

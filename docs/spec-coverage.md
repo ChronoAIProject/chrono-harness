@@ -522,6 +522,15 @@ Committed composition, supported native platforms and complete host adoption
 remain acceptance obligations.
 Legacy v1 records remain protected; no retrospective ownership is fabricated.
 
+The runner retains monotonic kernel-exit observations across its anonymous launch
+tree. A resumed monitor can join a child observed terminal before its deadline;
+late or missing evidence never adds execution time. Protocol real-process tests
+suspend only the nested monitor, independently observe child exit, and distinguish
+on-time exit from late exit and output overflow. Cancellation and ownership cleanup
+keep their separate failure paths. The shared layout rejects incompatible owners;
+all participating binaries must be upgraded together. This behavior does not
+establish the cause of other host timeouts or full candidate acceptance.
+
 The registered scheduler accepts optional explicit launch priority while retaining
 dependency readiness, cap, failure propagation, exclusive resources/outputs and
 canonical report order. Real-process rendezvous tests cover reordered launches,
