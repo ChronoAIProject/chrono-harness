@@ -632,9 +632,11 @@ fn run_process_inner(
     #[cfg(unix)]
     ownership.configure(&mut command);
     std::thread::scope(|scope| {
-        let child = command
-            .spawn()
-            .map_err(|e| format!("{}: {e}", executable.display()))?;
+        let child = command.spawn().map_err(|e| {
+            #[cfg(unix)]
+            let e = ownership.spawn_error(e);
+            format!("{}: {e}", executable.display())
+        })?;
         let mut child = OwnedProcess {
             child,
             #[cfg(unix)]

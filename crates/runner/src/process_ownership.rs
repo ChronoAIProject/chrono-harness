@@ -294,43 +294,61 @@ impl Launch {
         let sender_fd = self.acknowledgement_sender.as_raw_fd();
         unsafe {
             command.pre_exec(move || {
-                let shared = &*(memory as *const Shared);
-                shared.slots[index]
-                    .pid
-                    .store(libc::getpid(), Ordering::Release);
-                register_exit(
-                    observer_fd,
-                    acknowledgement_fd,
-                    sender_fd,
-                    index,
-                    shared.slots[index].generation.load(Ordering::Acquire),
-                )?;
-                if libc::dup2(tree_fd, TREE_FD) < 0
-                    || libc::dup2(context_fd, CONTEXT_FD) < 0
-                    || libc::dup2(observer_fd, OBSERVER_FD) < 0
-                {
-                    return Err(std::io::Error::last_os_error());
-                }
-                if libc::fcntl(TREE_FD, libc::F_SETFD, 0) < 0
-                    || libc::fcntl(CONTEXT_FD, libc::F_SETFD, 0) < 0
-                    || libc::fcntl(OBSERVER_FD, libc::F_SETFD, 0) < 0
-                {
-                    return Err(std::io::Error::last_os_error());
-                }
-                let mut at = index;
-                for _ in 0..CAPACITY {
-                    if at == CAPACITY {
-                        return Ok(());
+                let result = (|| {
+                    let shared = &*(memory as *const Shared);
+                    shared.slots[index]
+                        .pid
+                        .store(libc::getpid(), Ordering::Release);
+                    register_exit(
+                        observer_fd,
+                        acknowledgement_fd,
+                        sender_fd,
+                        index,
+                        shared.slots[index].generation.load(Ordering::Acquire),
+                    )?;
+                    if libc::dup2(tree_fd, TREE_FD) < 0
+                        || libc::dup2(context_fd, CONTEXT_FD) < 0
+                        || libc::dup2(observer_fd, OBSERVER_FD) < 0
+                    {
+                        return Err(std::io::Error::last_os_error());
                     }
-                    if shared.slots[at].cancelled.load(Ordering::Acquire) {
-                        return Err(std::io::Error::other(
-                            "process cancelled by enclosing owner before exec",
-                        ));
+                    if libc::fcntl(TREE_FD, libc::F_SETFD, 0) < 0
+                        || libc::fcntl(CONTEXT_FD, libc::F_SETFD, 0) < 0
+                        || libc::fcntl(OBSERVER_FD, libc::F_SETFD, 0) < 0
+                    {
+                        return Err(std::io::Error::last_os_error());
                     }
-                    at = shared.slots[at].parent.load(Ordering::Acquire);
+                    let mut at = index;
+                    for _ in 0..CAPACITY {
+                        if at == CAPACITY {
+                            return Ok(());
+                        }
+                        if shared.slots[at].cancelled.load(Ordering::Acquire) {
+                            return Err(std::io::Error::other(
+                                "process cancelled by enclosing owner before exec",
+                            ));
+                        }
+                        at = shared.slots[at].parent.load(Ordering::Acquire);
+                    }
+                    Err(std::io::Error::other("invalid process ownership ancestry"))
+                })();
+                if let Err(error) = &result {
+                    // std's fork/exec error pipe preserves only errno, replacing
+                    // custom pre_exec errors with EINVAL. Keep the actual owner
+                    // diagnostic in this launch's already-private context file.
+                    let message = error.to_string();
+                    libc::pwrite(context_fd, message.as_ptr().cast(), message.len(), 16);
                 }
-                Err(std::io::Error::other("invalid process ownership ancestry"))
+                result
             });
+        }
+    }
+    pub(crate) fn spawn_error(&self, error: std::io::Error) -> String {
+        use std::os::unix::fs::FileExt;
+        let mut message = [0u8; 4096];
+        match self.context.read_at(&mut message, 16) {
+            Ok(n) if n > 0 => format!("{error}; {}", String::from_utf8_lossy(&message[..n])),
+            _ => error.to_string(),
         }
     }
     pub(crate) fn cancelled(&self) -> bool {
@@ -466,21 +484,25 @@ impl ExitObserver {
                         let reply =
                             unsafe { File::from_raw_fd(*(libc::CMSG_DATA(header).cast::<i32>())) };
                         let [index, generation, pid, launcher] = data;
-                        let accepted = index < CAPACITY
+                        let ack: i32 = if index < CAPACITY
                             && shared.slots[index].generation.load(Ordering::Acquire) == generation
-                            && identities
+                        {
+                            identities
                                 .register(
                                     pid as i32,
                                     launcher as i32,
                                     generation * CAPACITY * 2 + index * 2,
                                 )
-                                .is_ok();
-                        let ack = u8::from(accepted);
+                                .err()
+                                .map_or(0, |e| e.raw_os_error().unwrap_or(-2))
+                        } else {
+                            -1
+                        };
                         unsafe {
                             libc::send(
                                 reply.as_raw_fd(),
-                                (&ack as *const u8).cast(),
-                                1,
+                                (&ack as *const i32).cast(),
+                                std::mem::size_of_val(&ack),
                                 libc::MSG_NOSIGNAL,
                             );
                         }
@@ -585,18 +607,37 @@ fn register_exit(
             events: libc::POLLIN,
             revents: 0,
         };
-        let mut ack = 0u8;
+        let mut ack = 0i32;
         if libc::poll(
             &mut poll,
             1,
             (1000u128.saturating_sub(start.elapsed().as_millis())) as i32,
         ) != 1
-            || libc::read(acknowledgement, (&mut ack as *mut u8).cast(), 1) != 1
-            || ack != 1
+            || libc::read(
+                acknowledgement,
+                (&mut ack as *mut i32).cast(),
+                std::mem::size_of_val(&ack),
+            ) != std::mem::size_of_val(&ack) as isize
         {
             return Err(std::io::Error::other(
                 "process ownership live exit handoff failed",
             ));
+        }
+        if ack == -1 {
+            return Err(std::io::Error::other(
+                "process ownership live exit handoff identity retired",
+            ));
+        }
+        if ack == -2 {
+            return Err(std::io::Error::other(
+                "process ownership live exit registration failed without OS errno",
+            ));
+        }
+        if ack != 0 {
+            return Err(std::io::Error::other(format!(
+                "process ownership live exit registration: {}",
+                std::io::Error::from_raw_os_error(ack)
+            )));
         }
     }
     Ok(())
@@ -695,7 +736,7 @@ impl ExitIdentities {
         Ok(Self(Vec::new()))
     }
     fn register(&mut self, pid: i32, launcher: i32, cookie: usize) -> std::io::Result<()> {
-        let open = |pid| {
+        let open = |pid: libc::pid_t| {
             let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) } as i32;
             if fd < 0 {
                 Err(std::io::Error::last_os_error())

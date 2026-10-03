@@ -1180,3 +1180,66 @@ fn concurrent_live_identity_handoffs_complete_each_real_child_once() {
         );
     }
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_live_identity_registration_helper() {
+    use std::os::fd::AsRawFd;
+    let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
+        return;
+    };
+    // The independent Python parent fixes this process's descriptor budget.
+    // Leave the ownership transport free, while exhausting the observer's
+    // remaining kernel descriptor when it receives the live handoff.
+    let mut held = Vec::new();
+    loop {
+        let file = fs::File::open("/dev/null").unwrap();
+        let fd = file.as_raw_fd();
+        held.push(file);
+        if fd >= 195 {
+            break;
+        }
+    }
+    let spec = chrono_harness::CommandSpec {
+        program: "/usr/bin/python3".into(),
+        args: vec!["-c".into(), "open('unexpected-exec','x').close()".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let error = chrono_harness::run_process_observed(
+        std::path::Path::new(&root),
+        &spec,
+        &[],
+        &sha256(&fs::read(&spec.program).unwrap()),
+    )
+    .expect_err("kernel registration exhaustion must prevent exec");
+    println!("{error}");
+    assert!(
+        error.contains("process ownership live exit registration"),
+        "{error}"
+    );
+    assert!(error.contains("os error 24"), "{error}");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec() {
+    let root = tempfile::tempdir().unwrap();
+    let out = std::process::Command::new("/usr/bin/python3")
+        .args([
+            "-c",
+            "import os,resource,sys\nfor fd in (198,199,200):\n try: os.close(fd)\n except OSError: pass\nresource.setrlimit(resource.RLIMIT_NOFILE,(210,210))\nos.execv(sys.argv[1],[sys.argv[1],'--exact','failed_live_identity_registration_helper','--nocapture'])",
+        ])
+        .arg(std::env::current_exe().unwrap())
+        .env("CHRONO_FAILED_HANDOFF", root.path())
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!root.path().join("unexpected-exec").exists());
+}

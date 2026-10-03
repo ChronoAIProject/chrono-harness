@@ -536,7 +536,7 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
     let target = h.parent.join("in-use");
     assert_eq!(h.invoke("feature", "in-use", &target).0, 0);
     output(&target);
-    let child = h
+    let mut child = h
         .auto_command(
             "use",
             &[
@@ -554,21 +554,33 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
     while !target.join(".chrono-harness/state/ready").exists()
         && began.elapsed() < Duration::from_secs(10)
     {
+        if child.try_wait().unwrap().is_some() {
+            break;
+        }
         thread::sleep(Duration::from_millis(20));
     }
-    assert!(target.join(".chrono-harness/state/ready").exists());
-    let (code, r, e) = h.auto(
-        "finish",
-        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
-    );
-    assert_ne!(code, 0, "{r} {e}");
-    assert!(target.join("output λ/data").exists());
-    assert_eq!(
-        h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
-        1
-    );
-    fs::write(target.join(".chrono-harness/state/release"), "join now").unwrap();
+    let ready = target.join(".chrono-harness/state/ready").exists();
+    // Join the wrapper before asserting, including its failure path. A missing
+    // readiness marker must expose the real wrapper result and retain its receipt.
+    let finish = ready.then(|| {
+        h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+        )
+    });
+    let output_retained = target.join("output λ/data").exists();
+    let uses = h.ledger()["entries"][0]["uses"].clone();
+    let release = fs::write(target.join(".chrono-harness/state/release"), "join now");
     let (code, r, e) = h.received(child.wait_with_output().unwrap());
+    assert!(
+        ready,
+        "managed child did not become ready: exit {code}; {r} {e}"
+    );
+    release.unwrap();
+    let (finish_code, finish_report, finish_error) = finish.unwrap();
+    assert_ne!(finish_code, 0, "{finish_report} {finish_error}");
+    assert!(output_retained);
+    assert_eq!(uses.as_array().unwrap().len(), 1);
     assert_eq!(code, 0, "{r} {e}");
     assert_eq!(r["managed_process"]["stdout"], "joined-child");
     assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));

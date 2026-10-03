@@ -79,6 +79,15 @@ retains direct-child behavior. There is no process scanner, daemon, arbitrary
 undeclared-writer guarantee or cross-invocation lock. Callers retain disjoint
 checkouts and established worktree lifecycle boundaries.
 
+Failed live-identity registration returns the observer's actual kernel errno.
+The launch owner retains a pre-exec diagnostic in its private context descriptor
+and reads it after a failed spawn: Rust's fork/exec error channel otherwise turns
+custom pre-exec errors into bare EINVAL. A failed spawn still has no executed
+process receipt; the additional diagnostic does not invent an exit or completion.
+This changes neither the one-second handoff/cleanup allowances nor execution
+limits. Linux's pidfd syscall uses the explicit existing `libc::pid_t` ABI type;
+successful compilation does not certify Linux runtime behavior.
+
 Registration owns strict interpretation; FILEMAP owns record identities, targets
 and impact. Plan changes target defining records of the test and listed operations.
 `operations`, `argv` and `version_argv` preserve order. `tool:ID` and
