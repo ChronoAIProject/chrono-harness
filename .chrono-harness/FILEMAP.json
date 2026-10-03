@@ -6574,6 +6574,26 @@
   },
   "execution_scheduling": {
     "max_running": 2,
+    "priority": [
+      "fmt.judge-workflow",
+      "fmt.judge-workflow-tests",
+      "build.runner",
+      "build.judge-registration",
+      "build.judge-filemap",
+      "build.judge-cost",
+      "build.judge-mixed",
+      "build.judge-routes",
+      "build.judge-projects",
+      "build.ci",
+      "build.judge-workflow",
+      "build.worktree",
+      "build.inputs",
+      "workflow.inventory-tests",
+      "workflow.inventory",
+      "test.workflow.units",
+      "test.workflow.short",
+      "test.workflow.core"
+    ],
     "resources": [
       "workflow-test-inventory"
     ],

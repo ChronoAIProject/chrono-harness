@@ -863,6 +863,53 @@ fn scheduling_cap_claim_changes_and_removal_keep_both_endpoint_targets() {
 }
 
 #[test]
+fn scheduling_priority_changes_reorder_and_removal_reach_both_endpoint_consumers() {
+    let mut a = values();
+    script_pair(&mut a, "st");
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("project:t", "test-execution", "test:t"),
+            edge("script:st", "test-execution", "test:st"),
+        ]);
+    a.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    a.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["execute.t"],"timeout_seconds":30,"output_limit_bytes":4096},"test:st":{"operations":["script.st"],"timeout_seconds":30,"output_limit_bytes":4096}});
+    a.get_mut(FM).unwrap()["execution_scheduling"] = json!({"max_running":2,"priority":["script.st","execute.t"],"resources":[],"claims":{"execute.t":{"resources":[],"outputs":[]},"script.st":{"resources":[],"outputs":[]}}});
+    for priority in [
+        Some(json!(["execute.t", "script.st"])),
+        Some(json!(["execute.t"])),
+        Some(json!([])),
+        None,
+    ] {
+        let mut b = a.clone();
+        if let Some(priority) = priority {
+            b.get_mut(FM).unwrap()["execution_scheduling"]["priority"] = priority;
+        } else {
+            b.get_mut(FM).unwrap()["execution_scheduling"]
+                .as_object_mut()
+                .unwrap()
+                .remove("priority");
+        }
+        for (before, after) in [(&a, &b), (&b, &a)] {
+            let (impact, findings) = run(before, after, &[]);
+            assert!(findings.is_empty(), "{findings:?}");
+            assert_eq!(tests(&impact), ["test:st", "test:t"]);
+        }
+    }
+    assert!(tests(&run(&a, &a, &[]).0).is_empty());
+    let mut empty = a.clone();
+    empty.get_mut(FM).unwrap()["execution_scheduling"]["priority"] = json!([]);
+    let mut absent = empty.clone();
+    absent.get_mut(FM).unwrap()["execution_scheduling"]
+        .as_object_mut()
+        .unwrap()
+        .remove("priority");
+    assert!(tests(&run(&empty, &absent, &[]).0).is_empty());
+    assert!(tests(&run(&absent, &empty, &[]).0).is_empty());
+}
+
+#[test]
 fn scheduling_resource_reassignment_and_artifact_changes_reach_declared_consumers() {
     let mut a = values();
     script_pair(&mut a, "st");

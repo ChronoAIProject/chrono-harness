@@ -149,6 +149,171 @@ fn scheduled(
     p = p.with_scheduling(Some(policy)).unwrap();
     p
 }
+fn prioritized(
+    p: chrono_judge_routes::Execution,
+    priority: serde_json::Value,
+) -> chrono_judge_routes::Execution {
+    let mut policy = serde_json::to_value(p.scheduling.as_ref().unwrap()).unwrap();
+    policy["priority"] = priority;
+    p.with_scheduling(Some(serde_json::from_value(policy).unwrap()))
+        .unwrap()
+}
+
+#[test]
+fn priority_controls_actual_launches_and_preserves_canonical_results() {
+    let (_d, p, listener) = barrier_plan(&["a", "b", "c", "d"]);
+    let p = scheduled(
+        p,
+        1,
+        json!({
+            "a":{"resources":[],"outputs":[]},"b":{"resources":[],"outputs":[]},
+            "c":{"resources":[],"outputs":[]},"d":{"resources":[],"outputs":[]},
+            "outside-selected-unit":{"resources":[],"outputs":[]}
+        }),
+    );
+    let unchanged = prioritized(p.clone(), json!([]));
+    assert_eq!(unchanged.identity, p.identity);
+    assert_eq!(
+        serde_json::to_value(&unchanged).unwrap(),
+        serde_json::to_value(&p).unwrap()
+    );
+    let ordered = prioritized(p.clone(), json!(["c", "b", "outside-selected-unit"]));
+    assert_ne!(ordered.identity, p.identity);
+    assert_ne!(
+        ordered.identity,
+        prioritized(p, json!(["b", "c", "outside-selected-unit"])).identity
+    );
+    let mut tampered = serde_json::to_value(&ordered).unwrap();
+    tampered["scheduling"]["priority"] = json!(["b", "c", "outside-selected-unit"]);
+    assert!(
+        serde_json::from_value::<chrono_judge_routes::Execution>(tampered)
+            .unwrap()
+            .validate()
+            .is_err()
+    );
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(|| execute(&ordered).unwrap());
+        for expected in ["c", "b", "a", "d"] {
+            let (id, stream) = arrival(&listener);
+            assert_eq!(id, expected);
+            release(stream);
+        }
+        let result = worker.join().unwrap();
+        assert!(result.passed());
+        assert_eq!(
+            result
+                .executed
+                .iter()
+                .map(|r| r.operation.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "b", "c", "d"]
+        );
+    });
+}
+
+#[test]
+fn priority_waits_for_dependencies_and_conflicts_without_holding_disjoint_work() {
+    for outputs in [false, true] {
+        let (_d, mut p, listener) = barrier_plan(&["a", "b", "c", "x", "y", "z"]);
+        p.selected.get_mut("test:c").unwrap().operations = vec!["a".into(), "c".into()];
+        p.operations[2].predecessors = std::collections::BTreeSet::from(["a".into()]);
+        p.operations[0].method.argv[1].push_str(";open('a-done','w').write('done')");
+        p.operations[5].method.argv[1].push_str(";open('z-done','w').write('done')");
+        for index in [1, 2] {
+            p.operations[index].method.argv[1] = format!(
+                "assert open('z-done').read()=='done';{}",
+                p.operations[index].method.argv[1]
+            );
+        }
+        p.operations[2].method.argv[1] = format!(
+            "assert open('a-done').read()=='done';{}",
+            p.operations[2].method.argv[1]
+        );
+        let shared = if outputs {
+            json!({"resources":[],"outputs":["out/nested/"]})
+        } else {
+            json!({"resources":["shared"],"outputs":[]})
+        };
+        let holder = if outputs {
+            json!({"resources":[],"outputs":["out/"]})
+        } else {
+            shared.clone()
+        };
+        let p = prioritized(
+            scheduled(
+                p,
+                2,
+                json!({
+                    "a":{"resources":[],"outputs":[]},"b":shared,"c":shared,
+                    "x":{"resources":[],"outputs":[]},"y":{"resources":[],"outputs":[]},"z":holder
+                }),
+            ),
+            json!(["c", "z", "b", "x"]),
+        );
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| execute(&p).unwrap());
+            let mut first = BTreeMap::from([arrival(&listener), arrival(&listener)]);
+            assert_eq!(
+                first.keys().map(String::as_str).collect::<Vec<_>>(),
+                ["x", "z"]
+            );
+            release(first.remove("x").unwrap());
+            let (id, a) = arrival(&listener);
+            assert_eq!(id, "a");
+            release(a);
+            let (id, y) = arrival(&listener);
+            assert_eq!(id, "y");
+            release(y);
+            release(first.remove("z").unwrap());
+            for expected in ["c", "b"] {
+                let (id, stream) = arrival(&listener);
+                assert_eq!(id, expected);
+                release(stream);
+            }
+            assert!(worker.join().unwrap().passed());
+        });
+    }
+}
+
+#[test]
+fn priority_does_not_run_failed_descendants_or_drop_unlisted_work() {
+    let (d, p) = plan(
+        &[
+            ("a", "raise SystemExit(9)"),
+            ("b", "open('forbidden','x').write('ran')"),
+            ("z", "open('independent','x').write('ran')"),
+        ],
+        &[("test:b", vec!["a", "b"]), ("test:z", vec!["z"])],
+    );
+    let p = prioritized(
+        scheduled(
+            p,
+            2,
+            json!({
+                "a":{"resources":[],"outputs":[]},"b":{"resources":[],"outputs":[]},"z":{"resources":[],"outputs":[]}
+            }),
+        ),
+        json!(["b"]),
+    );
+    let result = execute(&p).unwrap();
+    assert!(!result.passed());
+    assert_eq!(result.blocked[0].operation, "b");
+    assert_eq!(result.tests["test:z"], "passed");
+    assert_eq!(
+        result.executed[0]
+            .receipt
+            .as_ref()
+            .unwrap()
+            .process
+            .exit_code,
+        9
+    );
+    assert!(!d.path().join("forbidden").exists());
+    assert_eq!(
+        std::fs::read_to_string(d.path().join("independent")).unwrap(),
+        "ran"
+    );
+}
 fn barrier_plan(
     ids: &[&str],
 ) -> (

@@ -79,9 +79,30 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
         let mut running = BTreeSet::new();
         let mut rows = BTreeMap::new();
         let cap = plan.scheduling.as_ref().map_or(1, |p| p.max_running);
+        let mut launch_order: Vec<_> = pending.iter().copied().collect();
+        if let Some(policy) = &plan.scheduling {
+            let ranks: BTreeMap<_, _> = policy
+                .priority
+                .iter()
+                .enumerate()
+                .map(|(rank, id)| (id, rank))
+                .collect();
+            launch_order.sort_by_key(|index| {
+                (
+                    ranks
+                        .get(&plan.operations[*index].method.operation)
+                        .copied()
+                        .unwrap_or(usize::MAX),
+                    *index,
+                )
+            });
+        }
         while !pending.is_empty() || !running.is_empty() {
             let mut progressed = false;
-            for index in pending.iter().copied().collect::<Vec<_>>() {
+            for index in launch_order.iter().copied() {
+                if !pending.contains(&index) {
+                    continue;
+                }
                 let op = &plan.operations[index];
                 if op
                     .predecessors

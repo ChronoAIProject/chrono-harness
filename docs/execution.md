@@ -14,6 +14,7 @@ FILEMAP v2 may additionally declare one `execution_scheduling` policy:
 ```json
 {
   "max_running": 2,
+  "priority": ["build.example", "test.example"],
   "resources": ["shared-inventory"],
   "claims": {
     "build.example": {"resources": [], "outputs": ["example/output/"]},
@@ -32,8 +33,15 @@ before business tool observation or launch. There is no language, directory,
 call-graph or test discovery. All resource claims are exclusive; equal or nested
 output namespaces conflict. The declaration remains responsible for completeness.
 
-Projects alone schedules the routes DAG. It chooses ready work in canonical
-plan order, skips conflicts so disjoint ready work advances, and acquires all
+`priority` optionally lists distinct registered operation IDs in launch order.
+Listed ready operations precede unlisted ready operations; unlisted operations
+retain canonical plan order. Empty or absent priority retains the previous
+serialized identity and ordering. The full policy may include operations outside
+the selected unit; priority does not select them or infer durations or dependencies.
+Unknown, empty and duplicate priority IDs fail before business effects.
+
+Projects alone schedules the routes DAG. It chooses ready work by the registered
+priority followed by canonical plan order, skips conflicts so disjoint ready work advances, and acquires all
 claims together before launch. A pending prerequisite waits; an unsuccessful
 terminal prerequisite blocks only its descendants. Shared operations run once
 per selected invocation. All owned workers join, and executed/blocked report
@@ -44,7 +52,8 @@ the legacy shape. With the policy, its complete declarations enter plan identity
 collection reconstructs and compares them against retained candidate registration
 without executing business or version commands.
 
-Scheduling cap/resource changes affect registered plan consumers. Claim changes
+Scheduling cap/resource/priority changes affect registered plan consumers. Priority
+order is semantic, and changes or removal reach consumers at both endpoints. Claim changes
 also affect explicitly conflicting consumers at both endpoints; output declaration
 changes retain declared output consumers and owners. Removal and reassignment
 use the same union of endpoint records and edges. No selected obligation is

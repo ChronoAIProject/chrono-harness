@@ -521,3 +521,13 @@ checks lease retention by a distinct native child after both wrappers die.
 Committed composition, supported native platforms and complete host adoption
 remain acceptance obligations.
 Legacy v1 records remain protected; no retrospective ownership is fabricated.
+
+The registered scheduler accepts optional explicit launch priority while retaining
+dependency readiness, cap, failure propagation, exclusive resources/outputs and
+canonical report order. Real-process rendezvous tests cover reordered launches,
+unlisted work, blocked prerequisites and conflicts; schema tests reject malformed
+IDs and FILEMAP tests cover both-endpoint changes, reordering and removal. Empty
+priority preserves legacy plan identity; nonempty priority is bound by the plan
+and retained comparison. Main explicitly prioritizes its workflow prerequisite
+and long-test chain with cap 2. Timing sufficiency, committed canonical/native
+acceptance, deployment and complete SPEC delivery remain separate obligations.
