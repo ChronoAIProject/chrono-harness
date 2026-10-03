@@ -26,6 +26,17 @@ def put(p, value):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(value, indent=2) + '\n')
 
+def retain_failed_fixture(test, directory):
+    destination=os.environ.get('CHRONO_TEST_FAILURE_DIRECTORY')
+    result=test._outcome.result
+    failed=any(case is test and error is not None for case,error in getattr(test._outcome,'errors',[]))
+    failed=failed or any(case is test for case,_ in result.failures+result.errors)
+    if destination and failed:
+        target=Path(destination)/test.id()
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copytree(directory,target,symlinks=True)
+        print('Original failed fixture: '+str(target),file=sys.stderr)
+
 TOOLS = r'''#!/usr/bin/env python3
 import json, os, sys, shutil, subprocess
 from pathlib import Path
@@ -107,7 +118,7 @@ class Fixture:
         for m in self.cfg['manifests']:(self.root/m).write_text('manifest')
         (self.root/'producer-a').write_bytes(b'#!/bin/sh\nprintf "actual produced bytes\\n"\n')
         (self.root/'producer-distribution').write_text(PACK)
-        self.outcomes={};self.receipts={}
+        self.outcomes={};self.receipts={};self.invocations=0
 
     def close(self):self.temp.cleanup()
     def calls_read(self):return [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
@@ -121,6 +132,10 @@ class Fixture:
         if id0=='package':put(self.root/'dependencies.json',selected)
         command=[sys.executable,str(SCRIPT),str(self.root),str(output),*(['--collect'] if id0=='package' else ['--unit',id0])]
         process=subprocess.run(command,env=env,capture_output=True)
+        original=Path(self.temp.name)/'driver-processes'/str(self.invocations);self.invocations+=1
+        original.mkdir(parents=True)
+        (original/'stdout.bin').write_bytes(process.stdout);(original/'stderr.bin').write_bytes(process.stderr)
+        put(original/'process.json',{'argv':command,'exit_code':process.returncode})
         if output.exists():
             receipt=json.loads((output/'receipt.json').read_text());self.receipts[str(len(self.receipts))]=(output,receipt)
         if id0!='package' and output.exists():
@@ -143,6 +158,7 @@ class Fixture:
 
 class ReleaseUnits(unittest.TestCase):
     def setUp(self):self.f=Fixture();self.addCleanup(self.f.close)
+    def tearDown(self):retain_failed_fixture(self,Path(self.f.temp.name))
     def passed(self,p):self.assertEqual(p.returncode,0,p.stderr.decode(errors='replace'))
     def test_producer_verifier_collector_execute_distinct_original_commands(self):
         f=self.f;f.ready();before=f.calls_read();p,out=f.run('package');self.passed(p)
@@ -332,5 +348,99 @@ class ReleaseUnits(unittest.TestCase):
                 j=jobs[mapping[u['id']]]
                 self.assertEqual(j['needs'],[mapping[n] for n in u['needs']]);self.assertEqual(j['timeout_minutes'],45)
                 self.assertEqual([d['job'] for d in j['downloads']],j['needs'])
+
+class UnitFailureRetention(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location('release_recipe',SCRIPT)
+        self.recipe=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.recipe)
+        self.temp=tempfile.TemporaryDirectory(prefix='release failure retention ')
+        self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.output=self.root/'output';self.output.mkdir()
+
+    def tearDown(self):retain_failed_fixture(self,self.root)
+
+    def failed_child(self,stderr):
+        execution=self.recipe.UnitExecution(self.root,self.output,
+            {'rust_toolchain':'1.95.0','limits':{'unit_seconds':2700,'platform_seconds':2700}}, {}, {'id':'verify'})
+        stdout=b'original stdout\xff\n'
+        code='import sys;from pathlib import Path;stdout='+repr(stdout)+';stderr='+repr(stderr)+';Path("child.stdout").write_bytes(stdout);Path("child.stderr").write_bytes(stderr);sys.stdout.buffer.write(stdout);sys.stderr.buffer.write(stderr);sys.exit(73)'
+        stdout_capture=io.TextIOWrapper(io.BytesIO(),encoding='utf-8')
+        stderr_capture=io.TextIOWrapper(io.BytesIO(),encoding='utf-8')
+        with contextlib.redirect_stdout(stdout_capture),contextlib.redirect_stderr(stderr_capture):
+            with self.assertRaises(subprocess.CalledProcessError) as caught:
+                execution.run('verification',[sys.executable,'-c',code],'original.verify')
+            self.assertEqual(caught.exception.output,stdout)
+            self.assertEqual(caught.exception.stderr,stderr)
+            result=execution.save(caught.exception)
+        stdout_capture.flush();stderr_capture.flush()
+        self.assertEqual(result,73)
+        self.assertEqual(stdout_capture.buffer.getvalue(),stdout)
+        self.assertTrue(stderr_capture.buffer.getvalue().startswith(stderr))
+        self.assertEqual(execution.report['failure']['exit_code'],73)
+        self.assertEqual(execution.report['failure']['phase'],'verification')
+        self.assertEqual(len(execution.report['processes']),1)
+        record=execution.report['processes'][0];self.assertEqual(record['exit_code'],73)
+        for name,raw in [('stdout',stdout),('stderr',stderr)]:
+            retained=record[name]
+            self.assertEqual(retained['size'],len(raw));self.assertEqual(retained['sha256'],hashlib.sha256(raw).hexdigest())
+            if 'path' in retained:self.assertEqual((self.output/retained['path']).read_bytes(),raw)
+            else:
+                self.assertEqual(retained['status'],'unavailable')
+                self.assertEqual(bytes(retained['bytes']),raw)
+        return execution.report,stderr_capture.buffer.getvalue()
+
+    def test_child_failure_survives_stream_write_failure_with_actual_bytes(self):
+        (self.output/'processes/0.stderr').mkdir(parents=True)
+        report,diagnostic=self.failed_child(b'original stderr\xfe\n')
+        record=report['processes'][0]
+        self.assertNotIn('path',record['stderr'])
+        self.assertEqual(record['stdout']['path'],'processes/0.stdout')
+        receipt=json.loads((self.output/'receipt.json').read_bytes())
+        self.assertEqual(receipt['failure']['exit_code'],73)
+        self.assertTrue(receipt['secondary_failures'])
+        self.assertIn(b'stderr retention',diagnostic)
+
+    def test_child_failure_survives_native_marker_copy_failure(self):
+        with tempfile.TemporaryDirectory(prefix='chrono-native-publication-failure-') as retained:
+            for name in ['stdout','stderr','process.json']:(Path(retained)/name).write_bytes(b'original nested evidence')
+            (self.output/'failure-evidence').write_bytes(b'blocked auxiliary directory')
+            report,diagnostic=self.failed_child(b'original native publication process evidence: '+retained.encode()+b'\n')
+        self.assertEqual(report['processes'][0]['failure_evidence']['status'],'unavailable')
+        self.assertTrue(report['secondary_failures'])
+        self.assertIn(b'native marker retention',diagnostic)
+        self.assertFalse((self.output/'failure-evidence').is_dir())
+
+    def test_child_failure_survives_non_utf8_native_marker(self):
+        report,diagnostic=self.failed_child(b'original native publication process evidence: /tmp/invalid-\xff\n')
+        self.assertEqual(report['processes'][0]['failure_evidence']['status'],'unavailable')
+        self.assertTrue(report['secondary_failures'])
+        self.assertIn(b'native marker retention',diagnostic)
+
+    def test_child_failure_survives_receipt_and_stream_publication_failure(self):
+        (self.output/'receipt.json').mkdir()
+        (self.output/'processes/0.stderr').mkdir(parents=True)
+        report,diagnostic=self.failed_child(b'original stderr\xfe\n')
+        self.assertEqual(report['status'],'failed')
+        self.assertFalse((self.output/'receipt.json').is_file())
+        self.assertIn(b'cannot retain release unit evidence',diagnostic)
+        self.assertTrue(any(f['component']=='receipt publication' for f in report['secondary_failures']))
+
+    def test_child_failure_survives_receipt_publication_failure(self):
+        (self.output/'receipt.json').mkdir()
+        report,diagnostic=self.failed_child(b'original stderr\xfe\n')
+        self.assertEqual(report['status'],'failed')
+        self.assertFalse((self.output/'receipt.json').is_file())
+        self.assertIn(b'cannot retain release unit evidence',diagnostic)
+        self.assertTrue(any(f['component']=='receipt publication' for f in report['secondary_failures']))
+
+    def test_successful_child_cannot_pass_when_receipt_publication_fails(self):
+        (self.output/'receipt.json').mkdir()
+        execution=self.recipe.UnitExecution(self.root,self.output,
+            {'rust_toolchain':'1.95.0','limits':{'unit_seconds':2700,'platform_seconds':2700}}, {}, {'id':'verify'})
+        execution.run('verification',[sys.executable,'-c','pass'],'original.verify')
+        self.assertEqual(execution.save(),2)
+        self.assertEqual(execution.report['status'],'failed')
+        self.assertIsNone(execution.report['failure']['exit_code'])
+        self.assertFalse((self.output/'receipt.json').is_file())
 
 if __name__=='__main__':unittest.main()

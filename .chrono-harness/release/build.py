@@ -456,9 +456,19 @@ class UnitExecution:
         self.root, self.output, self.cfg, self.tools = root, output, cfg, tools
         self.env = dict(os.environ, RUSTUP_TOOLCHAIN=cfg['rust_toolchain'], CARGO_PROFILE_RELEASE_STRIP='symbols')
         self.phase = 'source-identity'
+        self.child_failure = None
         self.report = {'schema': 'chrono-release-unit/v1', 'unit': unit, 'status': 'failed',
                        'started_ns': time.time_ns(), 'finished_ns': None, 'context': None,
                        'lineage': None, 'environment': {k: self.env.get(k) for k in ['PATH', 'RUSTUP_TOOLCHAIN', 'CARGO_PROFILE_RELEASE_STRIP', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET', 'CARGO_TARGET_DIR', 'RUSTFLAGS']}, 'processes': [], 'failure': None, 'selected': {}, 'assets': {}}
+
+    def secondary_failure(self, component, error):
+        self.report.setdefault('secondary_failures', []).append(
+            {'phase': self.phase, 'component': component, 'message': str(error)})
+        try:
+            print('release unit ' + component + ' failed: ' + str(error), file=sys.stderr)
+        except (OSError, UnicodeError) as diagnostic_error:
+            self.report['secondary_failures'].append(
+                {'phase': self.phase, 'component': 'diagnostic publication', 'message': str(diagnostic_error)})
 
     def run(self, phase, argv, operation=None):
         self.phase = phase
@@ -467,21 +477,43 @@ class UnitExecution:
         record = {'phase': phase, 'operation': operation, 'argv': argv, 'cwd': str(self.root),
                   'started_ns': before, 'finished_ns': time.time_ns(), 'exit_code': process.returncode}
         prefix = 'processes/' + str(len(self.report['processes']))
+        original = subprocess.CalledProcessError(process.returncode, argv, output=process.stdout, stderr=process.stderr) if process.returncode else None
+        if original is not None:
+            self.child_failure = (phase, original)
+        # The child outcome is already observed. Auxiliary IO cannot replace it.
+        self.report['processes'].append(record)
+        auxiliary_errors = []
+        for name, raw, stream in [('stdout', process.stdout, sys.stdout), ('stderr', process.stderr, sys.stderr)]:
+            record[name] = {'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+            try:
+                stream.buffer.write(raw); stream.buffer.flush()
+            except (OSError, UnicodeError) as error:
+                auxiliary_errors.append((name + ' forwarding', error))
         for name, raw in [('stdout', process.stdout), ('stderr', process.stderr)]:
             file = self.output / (prefix + '.' + name)
-            file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_bytes(raw)
-            record[name] = {'path': file.relative_to(self.output).as_posix(), 'size': len(raw),
-                            'sha256': hashlib.sha256(raw).hexdigest()}
+            try:
+                file.parent.mkdir(parents=True, exist_ok=True)
+                if file.write_bytes(raw) != len(raw):
+                    raise OSError('short original stream write')
+                record[name]['path'] = file.relative_to(self.output).as_posix()
+            except OSError as error:
+                # Original bytes remain actual even when no stream file was retained.
+                record[name].update(status='unavailable', error=str(error), bytes=list(raw))
+                auxiliary_errors.append((name + ' retention', error))
         if process.returncode:
-            nested = retain_failure_evidence(self.output, phase, process.stdout, process.stderr)
+            try:
+                nested = retain_failure_evidence(self.output, phase, process.stdout, process.stderr)
+            except (OSError, UnicodeError, ValueError) as error:
+                nested = {'status': 'unavailable', 'reason': str(error)}
+                auxiliary_errors.append(('native marker retention', error))
             if nested is not None:
                 record['failure_evidence'] = nested
-        self.report['processes'].append(record)
-        sys.stdout.buffer.write(process.stdout); sys.stdout.buffer.flush()
-        sys.stderr.buffer.write(process.stderr); sys.stderr.buffer.flush()
-        if process.returncode:
-            raise subprocess.CalledProcessError(process.returncode, argv)
+        for component, error in auxiliary_errors:
+            self.secondary_failure(component, error)
+        if original is not None:
+            raise original
+        if auxiliary_errors:
+            raise auxiliary_errors[0][1]
         return process.stdout
 
     def context(self):
@@ -543,6 +575,11 @@ class UnitExecution:
         self.report['toolchain'] = {'versions': versions, 'tools': {n: executable_identity(Path(p)) for n, p in self.tools.items()}, 'active_compilers': active}
 
     def save(self, error=None):
+        if self.child_failure is not None:
+            phase, original = self.child_failure
+            if error is not None and error is not original:
+                self.secondary_failure('post-child operation', error)
+            self.phase, error = phase, original
         finished = time.time_ns()
         if error is None and finished - self.report['started_ns'] > self.cfg['limits']['unit_seconds'] * 1000000000:
             self.phase = 'unit-span'
@@ -559,9 +596,23 @@ class UnitExecution:
             original = error.returncode if isinstance(error, subprocess.CalledProcessError) else None
             self.report['failure'] = {'phase': self.phase, 'message': str(error), 'exit_code': original}
             code = (original if original > 0 else 128 - original) if original is not None else 2
-            print(str(error), file=sys.stderr)
+            try:
+                print(str(error), file=sys.stderr)
+            except (OSError, UnicodeError) as diagnostic_error:
+                self.secondary_failure('failure diagnostic publication', diagnostic_error)
         self.report['finished_ns'] = finished
-        write_json(self.output / 'receipt.json', self.report)
+        try:
+            write_json(self.output / 'receipt.json', self.report)
+        except (OSError, ValueError, TypeError) as publication_error:
+            self.report['status'] = 'failed'
+            if self.report['failure'] is None:
+                self.report['failure'] = {'phase': 'receipt-publication', 'message': str(publication_error), 'exit_code': None}
+            self.secondary_failure('receipt publication', publication_error)
+            try:
+                print('cannot retain release unit evidence: ' + str(publication_error), file=sys.stderr)
+            except (OSError, UnicodeError) as diagnostic_error:
+                self.secondary_failure('receipt diagnostic publication', diagnostic_error)
+            return code or 2
         return code
 
 

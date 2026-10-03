@@ -122,7 +122,12 @@ fn release_adoption_preserves_customization_and_verify_does_not_repair() {
     second["artifact_name"] = json!("another-artifact");
     c["jobs"].as_array_mut().unwrap().push(second);
     write(root, ".chrono-harness/ci/release.json", &c);
+    let adopted_before = fs::read(root.join(".chrono-harness/ci/release.json")).unwrap();
     assert!(init(root, &source).unwrap());
+    assert_eq!(
+        fs::read(root.join(".chrono-harness/ci/release.json")).unwrap(),
+        adopted_before
+    );
     let changed = fs::read_to_string(&output).unwrap();
     assert_ne!(changed.as_bytes(), before);
     assert!(changed.contains("Host customization") && changed.contains("  another:\n"));
@@ -357,4 +362,86 @@ fn release_v1_rejects_even_empty_opt_in_fields() {
         write(d.path(), "source.json", &c);
         assert!(init(d.path(), &d.path().join("source.json")).is_err());
     }
+}
+
+#[test]
+fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
+    for (key, value) in [
+        ("needs", json!([])),
+        ("downloads", json!([])),
+        ("always", json!(false)),
+        ("dependency_metadata", Value::Null),
+        ("download_artifact_action", Value::Null),
+    ] {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        let source = root.join("source.json");
+        write(root, "source.json", &config());
+        init(root, &source).unwrap();
+        let adopted = root.join(".chrono-harness/ci/release.json");
+        let mut existing = config();
+        if key == "download_artifact_action" {
+            existing[key] = value;
+        } else {
+            existing["jobs"][0][key] = value;
+        }
+        write(root, ".chrono-harness/ci/release.json", &existing);
+        let original = fs::read(&adopted).unwrap();
+        let workflow = root.join(".github/workflows/package.yml");
+        let rendered = fs::read(&workflow).unwrap();
+        for result in [
+            init(root, &source),
+            generate(root, ".chrono-harness/ci/release.json", false),
+            generate(root, ".chrono-harness/ci/release.json", true),
+        ] {
+            assert!(result.unwrap_err().contains("require v2"), "{key}");
+            assert_eq!(fs::read(&adopted).unwrap(), original, "{key}");
+            assert_eq!(fs::read(&workflow).unwrap(), rendered, "{key}");
+        }
+    }
+}
+
+#[test]
+fn release_single_id_download_extracts_receipt_at_the_registered_root() {
+    let c: release::Config = serde_json::from_value(units_config()).unwrap();
+    let yaml = release::render(&c).unwrap();
+    let d = tempfile::tempdir().unwrap();
+    let workflow = d.path().join("workflow.yml");
+    fs::write(&workflow, yaml).unwrap();
+    // This models the exact pinned action's extraction contract, including its
+    // default-false negative control. A single artifact ID is NOT a name download.
+    // https://github.com/actions/download-artifact/blob/d3f86a106a0bac45b974a628896c90dbdf5c8093/src/download-artifact.ts
+    let out = Command::new("/usr/bin/python3")
+        .args(["-c", r#"
+import io, pathlib, sys, zipfile
+root = pathlib.Path(sys.argv[1]); workflow = (root/'workflow.yml').read_text()
+step = workflow.split('      - name: Download selected original artifact from native\n')[1].split('      - name:')[0]
+assert 'uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093' in step
+inputs = dict(line.strip().split(': ', 1) for line in step.splitlines() if line.startswith('          '))
+assert inputs['artifact-ids'] == '${{ needs.native.outputs.artifact_id }}'
+assert 'name' not in inputs and 'pattern' not in inputs
+registered = root / inputs['path'].strip('"')
+artifact_name = 'native-output-123-2'
+archive = io.BytesIO()
+with zipfile.ZipFile(archive, 'w') as z: z.writestr('receipt.json', b'original receipt bytes')
+def extract(inputs, resolved_path):
+    # Pinned action: isSingleArtifactDownload = !!inputs.name; merge default false.
+    target = resolved_path if inputs.get('name') or inputs.get('merge-multiple', 'false') == 'true' else resolved_path / artifact_name
+    with zipfile.ZipFile(archive) as z: z.extractall(target)
+    return target
+negative = root/'default-control'
+assert extract({'artifact-ids': '567'}, negative) == negative/artifact_name
+assert not (negative/'receipt.json').exists()
+assert (negative/artifact_name/'receipt.json').read_bytes() == b'original receipt bytes'
+extract(inputs, registered)
+assert (registered/'receipt.json').read_bytes() == b'original receipt bytes'
+assert not (registered/artifact_name).exists()
+"#, d.path().to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }

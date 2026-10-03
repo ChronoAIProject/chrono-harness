@@ -118,21 +118,7 @@ fn load_projection(path: &Path) -> Result<Projection, String> {
         value["schema"].as_str(),
         Some(release::SCHEMA | release::UNITS_SCHEMA)
     ) {
-        if value["schema"] == release::SCHEMA
-            && (value.get("download_artifact_action").is_some()
-                || value["jobs"].as_array().is_some_and(|jobs| {
-                    jobs.iter().any(|job| {
-                        ["needs", "downloads", "always", "dependency_metadata"]
-                            .iter()
-                            .any(|key| job.get(key).is_some())
-                    })
-                }))
-        {
-            return Err("release dependency fields require v2".into());
-        }
-        let c = decode(&bytes)?;
-        release::validate(&c)?;
-        Ok(Projection::Release(c))
+        Ok(Projection::Release(release::decode_config(&bytes)?))
     } else if matches!(
         value["schema"].as_str(),
         Some(full::SCHEMA | full::SHORT_SCHEMA)

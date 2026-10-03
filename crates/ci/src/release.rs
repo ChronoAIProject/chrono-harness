@@ -2,6 +2,7 @@
 use super::{action, output_preflight, scalar, shell, write_file};
 use chrono_harness::{decode, no_symlink_parents, relative_path};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{collections::BTreeSet, fs, path::Path};
 
 pub const SCHEMA: &str = "chrono-github-release/v1";
@@ -47,6 +48,25 @@ pub struct Job {
 pub struct Download {
     pub job: String,
     pub directory: String,
+}
+
+pub(crate) fn decode_config(bytes: &[u8]) -> Result<Config, String> {
+    let value: Value = decode(bytes)?;
+    if value["schema"] == SCHEMA
+        && (value.get("download_artifact_action").is_some()
+            || value["jobs"].as_array().is_some_and(|jobs| {
+                jobs.iter().any(|job| {
+                    ["needs", "downloads", "always", "dependency_metadata"]
+                        .iter()
+                        .any(|key| job.get(key).is_some())
+                })
+            }))
+    {
+        return Err("release dependency fields require v2".into());
+    }
+    let c = decode(bytes)?;
+    validate(&c)?;
+    Ok(c)
 }
 
 fn literal(value: &str) -> Result<(), String> {
@@ -299,6 +319,7 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
         uses: {action}
         with:
           artifact-ids: ${{{{ needs.{producer}.outputs.artifact_id }}}}
+          merge-multiple: true
           path: {directory}
 "#,
             producer = download.job,
@@ -373,9 +394,7 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     let target = no_symlink_parents(root, ADOPTED)?;
     let existing = target.exists();
     let c = if existing {
-        let c = decode(&fs::read(target).map_err(|e| e.to_string())?)?;
-        validate(&c)?;
-        c
+        decode_config(&fs::read(target).map_err(|e| e.to_string())?)?
     } else {
         incoming
     };
