@@ -349,10 +349,46 @@ class ReleaseUnits(unittest.TestCase):
                 self.assertEqual(j['needs'],[mapping[n] for n in u['needs']]);self.assertEqual(j['timeout_minutes'],45)
                 self.assertEqual([d['job'] for d in j['downloads']],j['needs'])
 
+class RecipeSourceLoading(unittest.TestCase):
+    def test_writable_copied_recipe_stays_clean_without_cache_prefix(self):
+        state=ROOT/'.chrono-harness/state';state.mkdir(parents=True,exist_ok=True)
+        child=r'''
+import importlib.util, json, sys, unittest
+from pathlib import Path
+sys.pycache_prefix=None
+sys.dont_write_bytecode=False
+mode,script=sys.argv[1],Path(sys.argv[2])
+print(json.dumps({'loader':mode,'pycache_prefix':sys.pycache_prefix,'dont_write_bytecode':sys.dont_write_bytecode}),flush=True)
+if mode=='original':
+    spec=importlib.util.spec_from_file_location('release_recipe',script.with_name('build.py'))
+    recipe=importlib.util.module_from_spec(spec);spec.loader.exec_module(recipe)
+else:
+    namespace={'__file__':str(script),'__name__':'copied_release_tests'}
+    exec(compile(script.read_bytes(),str(script),'exec'),namespace)
+    suite=unittest.TestSuite([namespace['UnitFailureRetention']('test_child_failure_survives_receipt_publication_failure')])
+    if not unittest.TextTestRunner().run(suite).wasSuccessful():sys.exit(1)
+'''
+        env=dict(os.environ)
+        for name in ['PYTHONPYCACHEPREFIX','PYTHONDONTWRITEBYTECODE']:env.pop(name,None)
+        with tempfile.TemporaryDirectory(prefix='release bytecode boundary ',dir=state) as temporary:
+            for mode in ['original','candidate']:
+                source=Path(temporary)/mode/'.chrono-harness/release';source.mkdir(parents=True)
+                recipe=source/'build.py';recipe.write_bytes(SCRIPT.read_bytes())
+                script=source/'build-tests.py';script.write_bytes(Path(__file__).read_bytes())
+                before={p.name:sha(p) for p in source.iterdir()}
+                process=subprocess.run([sys.executable,'-c',child,mode,str(script)],env=env,capture_output=True)
+                sys.stdout.buffer.write(process.stdout);sys.stderr.buffer.write(process.stderr)
+                self.assertEqual(process.returncode,0,process.stderr.decode(errors='replace'))
+                caches=list((source/'__pycache__').glob('build.*.pyc'))
+                print(json.dumps({'loader':mode,'recipe_caches':[p.name for p in caches]}))
+                if mode=='original':self.assertTrue(caches,'original loader must reproduce native cache emission')
+                else:self.assertEqual({p.name:sha(p) if p.is_file() else 'directory' for p in source.iterdir()},before)
+
 class UnitFailureRetention(unittest.TestCase):
     def setUp(self):
         spec=importlib.util.spec_from_file_location('release_recipe',SCRIPT)
-        self.recipe=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.recipe)
+        self.recipe=importlib.util.module_from_spec(spec)
+        exec(compile(SCRIPT.read_bytes(),str(SCRIPT),'exec'),self.recipe.__dict__)
         self.temp=tempfile.TemporaryDirectory(prefix='release failure retention ')
         self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.output=self.root/'output';self.output.mkdir()
