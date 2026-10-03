@@ -7,7 +7,7 @@ use std::{
 };
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
 impl Host {
-    fn kernel_cleanup(&self) {
+    pub(super) fn kernel_cleanup(&self) {
         self.automatic("evidence-retain");
         let path = self.root.join(AUTO_POLICY);
         let mut policy = json(&fs::read(&path).unwrap()).unwrap();
@@ -623,6 +623,93 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
             .len(),
         2
     );
+}
+
+#[test]
+fn cache_retries_reference_failed_and_partial_originals_without_growth() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let script = h.parent.join("cache-git");
+    fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/fail-cache\" ] && [ ! -d \"$HOME/cache-retry/output λ\" ]; then\nprintf 'original cache failure\\n' >&2\nexit 71\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    h.policy(|p| p["git"]["program"] = value!(script));
+    let target = h.parent.join("cache-retry");
+    assert_eq!(h.invoke("feature", "cache-retry", &target).0, 0);
+    fs::write(h.parent.join("fail-cache"), "fail after disposal").unwrap();
+    let mut originals = Vec::new();
+    for retry in 0..4 {
+        output(&target);
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_ne!(code, 0, "{report} {error}");
+        let report = &report["drain"][0]["report"];
+        assert_eq!(report["status"], "failed");
+        assert!(report["processes"].as_array().unwrap().iter().any(|p| {
+            p["process"]["exit_code"] == 71 && p["process"]["stderr"] == "original cache failure\n"
+        }));
+        let path = h.root.join(report["report_path"].as_str().unwrap());
+        let bytes = fs::read(&path).unwrap();
+        if retry > 0 {
+            let input = &report["prior_cache_attempt"]["result"]["input"];
+            assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+            let retained = fs::read(h.root.join(input["path"].as_str().unwrap())).unwrap();
+            let (_, previous): &(PathBuf, Vec<u8>) = originals.last().unwrap();
+            assert_eq!(&retained, previous);
+            assert_eq!(input["sha256"], sha256(&retained));
+            assert_eq!(input["byte_length"], retained.len());
+            assert!(
+                bytes.len() <= originals[0].1.len() * 3,
+                "recursive cache report growth"
+            );
+        }
+        originals.push((path, bytes));
+    }
+    // Model a torn, unpublished result of the explicitly registered last attempt.
+    let mut ledger = h.ledger();
+    let latest = ledger["entries"][0]["cache_attempts"]
+        .as_array_mut()
+        .unwrap()
+        .last_mut()
+        .unwrap();
+    latest["receipt"] = Value::Null;
+    let path = originals.last().unwrap().0.clone();
+    let partial = b"{\"status\":\"failed\",\"processes\":";
+    fs::write(&path, partial).unwrap();
+    fs::write(
+        h.root
+            .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
+        serde_json::to_vec_pretty(&ledger).unwrap(),
+    )
+    .unwrap();
+    output(&target);
+    let (code, failed, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{failed} {error}");
+    let original = &failed["drain"][0]["report"]["prior_cache_attempt"]["result"];
+    assert_eq!(original["original_outcome"], "unknown");
+    let input = &original["input"];
+    assert_eq!(input["format"], "bytes");
+    let retained_path = h.root.join(input["path"].as_str().unwrap());
+    assert_ne!(retained_path, path);
+    assert_eq!(fs::read(&retained_path).unwrap(), partial);
+    assert_eq!(input["sha256"], sha256(partial));
+    assert_eq!(input["byte_length"], partial.len());
+    fs::write(&path, "source subsequently changed").unwrap();
+    fs::remove_file(h.parent.join("fail-cache")).unwrap();
+    output(&target);
+    fs::write(&retained_path, "damaged snapshot").unwrap();
+    let (code, refused, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{refused} {error}");
+    assert!(target.join("output λ/cache").exists());
+    fs::write(&retained_path, partial).unwrap();
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(!target.join("output λ").exists());
+    assert!(target.exists());
+    assert!(h.ledger()["entries"][0]["terminal"].is_null());
+    assert_eq!(fs::read(&path).unwrap(), b"source subsequently changed");
+    for (path, bytes) in &originals[..originals.len() - 1] {
+        assert_eq!(fs::read(path).unwrap(), *bytes);
+    }
 }
 
 #[test]

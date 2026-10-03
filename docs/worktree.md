@@ -891,6 +891,27 @@ and bootstrap retain unrelated failures in `drain`, immutable failed receipts an
 and coordinator/state publication errors still block. Explicit `maintain` returns
 failure while any attempted cleanup fails; it never discards an earlier receipt.
 
+Automatic lifecycle reports preserve prior inputs through
+`chrono-worktree-retained-input/v1` references. Each reference carries the physical
+coordinator `source_root`, relative state `path`, `sha256`, `byte_length`, and
+`format` (`receipt` or opaque `bytes`). Completed immutable receipts are referenced
+in place. Partial or unsealed bytes are published once under the coordinator's
+registered state directory; their missing/unknown outcome is not upgraded to
+success. Existing originals are never rewritten. Retrying an unchanged operation
+does not embed the previous report's bytes or parsed history.
+
+The reference-bearing fields are `terminal_input`, `prior_report.input`,
+`prior_cache_attempt.intent_input`, `prior_cache_attempt.result.input`,
+`original_report.result.input`, `unreferenced_original_receipt.input`, and
+`original_result.input`. Inline current results in `drain[].report` use the same
+contract. Receipt consumption checks these explicit references transitively,
+deduplicating reads within the check. Missing, changed, incorrectly bound or
+symlinked inputs refuse cleanup; an opaque partial result is preserved without
+requiring valid JSON. Historical inline evidence remains readable. Explicit
+maintenance outside automatic lifecycle retains its existing report shape.
+This bounds historical embedding, not the number or total size of necessary
+original observations; retention and disposal remain governed by host policy.
+
 Later start/reconstruct/maintain and managed admission can dispose unfinished
 quiescent caches, including a successful use with no orphan token. EX permits
 orphan-use reconciliation as result-unavailable while retaining original result

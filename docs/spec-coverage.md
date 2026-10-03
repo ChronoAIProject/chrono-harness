@@ -522,6 +522,17 @@ Committed composition, supported native platforms and complete host adoption
 remain acceptance obligations.
 Legacy v1 records remain protected; no retrospective ownership is fabricated.
 
+Automatic retry evidence uses versioned retained-input references, preserving
+immutable receipts in place and storing opaque partial bytes once at the surviving
+coordinator. The dedicated worktree regressions
+`automatic_retries_keep_original_evidence_without_recursive_growth` and
+`cache_retries_reference_failed_and_partial_originals_without_growth` exercise
+repeated real terminal/cache failures, bounded report growth, original-byte
+preservation, transitive drift/missing/symlink refusals and partial-result
+retention without claiming success. Explicit maintenance keeps its prior shape.
+This does not dispose historical evidence, deploy the coordinator or establish
+complete native acceptance.
+
 The runner retains monotonic kernel-exit observations across its anonymous launch
 tree. A resumed monitor can join a child observed terminal before its deadline;
 late or missing evidence never adds execution time. Protocol real-process tests

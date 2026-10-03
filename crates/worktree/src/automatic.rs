@@ -55,6 +55,16 @@ struct Receipt {
     path: String,
     sha256: String,
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetainedInput {
+    schema: String,
+    source_root: PathBuf,
+    path: String,
+    sha256: String,
+    byte_length: usize,
+    format: String,
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Attempt {
@@ -203,18 +213,22 @@ fn attachment(r: &mut Runner, target: &Path) -> Result<Attachment, String> {
 fn write_json(path: &Path, v: &impl Serialize, immutable: bool) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
+    write_bytes(path, &bytes, immutable)?;
+    Ok(bytes)
+}
+fn write_bytes(path: &Path, bytes: &[u8], immutable: bool) -> Result<(), String> {
     let mut out = tempfile::Builder::new()
         .prefix(".publish-")
         .tempfile_in(path.parent().ok_or("publication parent")?)
         .map_err(|e| e.to_string())?;
-    out.write_all(&bytes).map_err(|e| e.to_string())?;
+    out.write_all(bytes).map_err(|e| e.to_string())?;
     out.as_file().sync_all().map_err(|e| e.to_string())?;
     if immutable {
         out.persist_noclobber(path).map_err(|e| e.to_string())?;
     } else {
         out.persist(path).map_err(|e| e.to_string())?;
     }
-    Ok(bytes)
+    Ok(())
 }
 fn load_policy(
     r: &mut Runner,
@@ -837,6 +851,7 @@ impl Manager {
                 {
                     return Err("interrupted birth reconciliation binding changed".into());
                 }
+                self.verify_inputs(&original)?;
                 Receipt {
                     path: format!("{}{name}", self.policy.state_directory),
                     sha256: sha256(&bytes),
@@ -857,7 +872,7 @@ impl Manager {
                 let original_path = no_symlink_parents(source, report_path)?;
                 let original_result = match fs::read(&original_path) {
                     Ok(bytes) => {
-                        value!({"presence":"present","sha256":sha256(&bytes),"input_bytes":bytes})
+                        value!({"presence":"present","sha256":sha256(&bytes),"input":self.retain_bytes(&bytes)?})
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                         value!({"presence":"absent"})
@@ -921,7 +936,90 @@ impl Manager {
         if sha256(&b) != receipt.sha256 {
             return Err("original lifecycle receipt changed".into());
         }
+        self.verify_inputs(&json(&b)?)?;
         Ok(b)
+    }
+    fn retained_input(&self, path: &str, bytes: &[u8], format: &str) -> Value {
+        value!(RetainedInput {
+            schema: "chrono-worktree-retained-input/v1".into(),
+            source_root: self.policy.coordinator_root.clone(),
+            path: path.into(),
+            sha256: sha256(bytes),
+            byte_length: bytes.len(),
+            format: format.into(),
+        })
+    }
+    /// Preserve partial/unsealed bytes independently of their mutable source.
+    fn retain_bytes(&self, bytes: &[u8]) -> Result<Value, String> {
+        let path = format!("{}input-{}.bin", self.policy.state_directory, sha256(bytes));
+        let physical = no_symlink_parents(&self.policy.coordinator_root, &path)?;
+        match fs::symlink_metadata(&physical) {
+            Ok(_) => {
+                if crate::recovery::state_bytes(&self.policy.coordinator_root, &path)? != bytes {
+                    return Err("retained lifecycle input changed".into());
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                write_bytes(&physical, bytes, true)?;
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+        Ok(self.retained_input(&path, bytes, "bytes"))
+    }
+    /// Follow only the reference-bearing fields of the lifecycle contract.
+    /// Historical inline receipts keep their original representation.
+    fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(), String> {
+        let mut reports = vec![report];
+        while let Some(report) = reports.pop() {
+            for pointer in [
+                "/terminal_input",
+                "/prior_report/input",
+                "/prior_cache_attempt/intent_input",
+                "/prior_cache_attempt/result/input",
+                "/original_report/result/input",
+                "/unreferenced_original_receipt/input",
+                "/original_result/input",
+            ] {
+                if let Some(input) = report.pointer(pointer) {
+                    inputs.push(serde_json::from_value(input.clone()).map_err(|e| {
+                        format!("invalid retained lifecycle input at {pointer}: {e}")
+                    })?);
+                }
+            }
+            if let Some(drain) = report.get("drain").and_then(Value::as_array) {
+                reports.extend(drain.iter().filter_map(|entry| entry.get("report")));
+            }
+        }
+        Ok(())
+    }
+    fn verify_inputs(&self, report: &Value) -> Result<(), String> {
+        let mut inputs = Vec::new();
+        let mut checked = BTreeSet::new();
+        Self::collect_inputs(report, &mut inputs)?;
+        while let Some(input) = inputs.pop() {
+            if input.schema != "chrono-worktree-retained-input/v1"
+                || input.source_root != self.policy.coordinator_root
+                || !matches!(input.format.as_str(), "bytes" | "receipt")
+            {
+                return Err("invalid retained lifecycle input binding".into());
+            }
+            if !checked.insert((
+                input.path.clone(),
+                input.sha256.clone(),
+                input.byte_length,
+                input.format.clone(),
+            )) {
+                continue;
+            }
+            let bytes = crate::recovery::state_bytes(&input.source_root, &input.path)?;
+            if bytes.len() != input.byte_length || sha256(&bytes) != input.sha256 {
+                return Err("original lifecycle receipt changed: retained input mismatch".into());
+            }
+            if input.format == "receipt" {
+                Self::collect_inputs(&json(&bytes)?, &mut inputs)?;
+            }
+        }
+        Ok(())
     }
     fn lease(&self, e: &Entry, exclusive: bool) -> Result<Option<Lease>, String> {
         let owner = e
@@ -976,15 +1074,18 @@ impl Manager {
     }
     fn result_input(&self, path: &str, receipt: Option<&Receipt>) -> Result<Value, String> {
         if let Some(receipt) = receipt {
+            if receipt.path != path {
+                return Err("original lifecycle result path changed".into());
+            }
             let bytes = self.receipt(receipt)?;
             return Ok(
-                value!({"presence":"present","sha256":sha256(&bytes),"input_bytes":bytes,"receipt":receipt}),
+                value!({"presence":"present","sha256":sha256(&bytes),"input":self.retained_input(path, &bytes, "receipt"),"receipt":receipt}),
             );
         }
         let physical = no_symlink_parents(&self.policy.coordinator_root, path)?;
         match fs::read(physical) {
             Ok(bytes) => Ok(
-                value!({"presence":"present","sha256":sha256(&bytes),"input_bytes":bytes,"original_outcome":"unknown"}),
+                value!({"presence":"present","sha256":sha256(&bytes),"input":self.retain_bytes(&bytes)?,"original_outcome":"unknown"}),
             ),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 Ok(value!({"presence":"absent","original_outcome":"unknown"}))
@@ -1047,7 +1148,7 @@ impl Manager {
             if intent["binding"] != binding {
                 return Err("interrupted cache disposal bindings changed; preserve original intent and work".into());
             }
-            report["prior_cache_attempt"] = value!({"intent":prior.intent,"input_bytes":bytes,"result":self.result_input(&prior.path, prior.receipt.as_ref())?});
+            report["prior_cache_attempt"] = value!({"intent":prior.intent,"intent_input":self.retained_input(&prior.intent.path, &bytes, "receipt"),"result":self.result_input(&prior.path, prior.receipt.as_ref())?});
         }
         let intent = self.immutable(&format!("cache-intent-{token}.json"), &value!({"schema":"chrono-worktree-cache-intent/v2","binding":binding,"report_path":report["report_path"],"terminal_handoff":"not-claimed"}))?;
         self.ledger.entries[i].cache_attempts.push(CacheAttempt {
@@ -1335,7 +1436,8 @@ impl Manager {
             .ok_or("missing terminal handoff")?
             .clone();
         report["terminal_receipt"] = value!(t.receipt);
-        report["terminal_input_bytes"] = value!(self.receipt(&t.receipt)?);
+        report["terminal_input"] =
+            self.retained_input(&t.receipt.path, &self.receipt(&t.receipt)?, "receipt");
         if e.policy_sha256 != sha256(&self.policy_bytes) {
             return Err("enrolled policy changed; preserve terminal work".into());
         }
@@ -1348,8 +1450,7 @@ impl Manager {
                 .ok_or("interrupted cleanup has no original result; explicit recovery required")?;
             let b = self.receipt(receipt)?;
             let prior_report = json(&b)?;
-            report["prior_report"] =
-                value!({"receipt":receipt,"input_bytes":b,"report":prior_report});
+            report["prior_report"] = value!({"receipt":receipt,"input":self.retained_input(&receipt.path, &b, "receipt")});
             if e.path.exists() {
                 let locked = r
                     .inventory(&self.policy.coordinator_root)?
