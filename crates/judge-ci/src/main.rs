@@ -24,8 +24,11 @@ fn main() {
         response.status,
         chrono_harness::Status::Failed | chrono_harness::Status::Blocked
     );
-    if serde_json::to_writer(std::io::stdout(), &response).is_err()
-        || std::io::stdout().write_all(b"\n").is_err()
+    let stdout = std::io::stdout();
+    let mut output = std::io::BufWriter::new(stdout.lock());
+    if serde_json::to_writer(&mut output, &response).is_err()
+        || output.write_all(b"\n").is_err()
+        || output.flush().is_err()
     {
         std::process::exit(2)
     }
