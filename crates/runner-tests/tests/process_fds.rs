@@ -25,8 +25,11 @@ fn scoped_descriptor_survives_bound_env_clear_and_parent_keeps_cloexec() {
         0
     );
     let scope = Scope::new(&[file.as_fd()]).unwrap();
-    let script = "import os,fcntl; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; assert len(fds)==1; assert fcntl.fcntl(fds[0],fcntl.F_GETFD)&fcntl.FD_CLOEXEC==0; os.write(fds[0],b'child-capability'); print('inherited')";
-    let command = spec("/usr/bin/python3", vec!["-c".into(), script.into()]);
+    let script = "import os,fcntl; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; assert len(fds)==1; assert fcntl.fcntl(fds[0],fcntl.F_GETFD)&fcntl.FD_CLOEXEC==0; os.write(fds[0],b'child-capability'); print(os.environ['CHRONO_PROCESS_FDS'])";
+    let mut command = spec("/usr/bin/python3", vec!["-c".into(), script.into()]);
+    command
+        .env
+        .insert("CHRONO_PROCESS_FDS".into(), "not-a-descriptor".into());
     let result = run_process_observed(
         dir.path(),
         &command,
@@ -35,8 +38,14 @@ fn scoped_descriptor_survives_bound_env_clear_and_parent_keeps_cloexec() {
     )
     .unwrap();
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
-    assert_eq!(result.stdout, "inherited\n");
-    assert!(result.environment.contains_key("CHRONO_PROCESS_FDS"));
+    assert!(!result.environment.contains_key("CHRONO_PROCESS_FDS"));
+    let observed = serde_json::to_value(&result).unwrap();
+    assert!(observed["ownership_fds"].is_string());
+    assert_eq!(observed["ownership_fds"], result.stdout.trim());
+    assert_eq!(
+        result.environment_digest,
+        chrono_harness::wire::digest(&result.environment).unwrap()
+    );
     assert_ne!(
         unsafe { libc::fcntl(raw, libc::F_GETFD) } & libc::FD_CLOEXEC,
         0,

@@ -1,5 +1,14 @@
 # Registered operation execution
 
+Unix process observations record the engine's actual capability carrier in optional
+`ownership_fds`. The `environment` map and `environment_digest` describe business
+inputs, excluding reserved `CHRONO_PROCESS_FDS`; that child environment variable
+is set from live inherited/scoped descriptors by the process engine. Explicit
+caller values cannot replace it. Receipts retain the carrier separately so input
+preparation, tool binding and operation validation compare the registered business
+environment without treating descriptor allocation as input drift. Observations
+without a carrier omit the field; existing observations remain readable.
+
 FILEMAP v2 owns `execution_plans`: a map from `test:ID` to
 `{operations: [operation-ID, ...], timeout_seconds, output_limit_bytes}`.
 Sequences are nonempty, ordered and duplicate-free. Actions, tools and argv remain

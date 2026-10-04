@@ -110,6 +110,9 @@ pub struct ProcessResult {
     pub cwd: PathBuf,
     pub environment: std::collections::BTreeMap<String, String>,
     pub environment_digest: String,
+    /// Actual process-engine capability carrier, separate from declared inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ownership_fds: Option<String>,
     pub stdin_sha256: String,
     pub stdout_bytes: Vec<u8>,
     pub stderr_bytes: Vec<u8>,
@@ -632,11 +635,12 @@ fn run_process_inner(
     #[cfg(unix)]
     let _transfer = process_fds::Transfer::prepare(&mut command)?;
     #[cfg(unix)]
-    if let Some(value) = &_transfer.value {
-        environment.insert(process_fds::ENV.into(), value.clone());
-    } else {
+    let ownership_fds = {
         environment.remove(process_fds::ENV);
-    }
+        _transfer.value.clone()
+    };
+    #[cfg(not(unix))]
+    let ownership_fds = None;
     #[cfg(unix)]
     let ownership = process_ownership::Launch::prepare()?;
     #[cfg(unix)]
@@ -818,6 +822,7 @@ fn run_process_inner(
             cwd: root,
             environment_digest: wire::digest(&environment)?,
             environment,
+            ownership_fds,
             stdin_sha256,
             stdout_sha256: sha256(&a),
             stderr_sha256: sha256(&b),
