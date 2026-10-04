@@ -168,6 +168,33 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
         String::from_utf8_lossy(&out.stdout)
     );
     let report = published_full_report(&dest, ".chrono-harness/state/", &out);
+    let producer_path = report["preparation"]["result"]["evidence"]["report_path"]
+        .as_str()
+        .unwrap();
+    let producer = json(&fs::read(dest.join(producer_path)).unwrap()).unwrap();
+    let identity = producer["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
+            row["argv"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|arg| arg == "--show-toplevel")
+        })
+        .unwrap();
+    let original: chrono_harness::ProcessResult =
+        serde_json::from_value(identity["process"].clone()).unwrap();
+    chrono_harness::observation::process_success(&original).unwrap();
+    assert!(
+        original
+            .stdout
+            .lines()
+            .any(|line| line == report["candidate"].as_str().unwrap()),
+        "local preparation must bind root and candidate HEAD in the same original observation"
+    );
+    assert_eq!(original.stdout.lines().next(), dest.to_str());
     let context = &report["preparation"]["result"]["context"];
     let raw: Vec<u8> = serde_json::from_value(context["raw"].clone()).unwrap();
     let ctx = json(&raw).unwrap();

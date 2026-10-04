@@ -111,9 +111,9 @@ fn produce(
         "prepared",
         |r, token, report| {
             let root = &req.host_root;
-            let candidate = r.oid(root, "HEAD")?;
-            let top = fs::canonicalize(r.text(root, &["rev-parse", "--show-toplevel"])?.trim())
-                .map_err(|e| e.to_string())?;
+            let observed = r.checkout_identity(root)?;
+            let candidate = observed.head;
+            let top = fs::canonicalize(&observed.top).map_err(|e| e.to_string())?;
             if top != *root {
                 return Err("short check cwd must be the actual host root".into());
             }
