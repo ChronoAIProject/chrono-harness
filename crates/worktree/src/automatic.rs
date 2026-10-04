@@ -540,7 +540,7 @@ impl Manager {
         target: &Path,
         head: &str,
     ) -> Result<BTreeMap<String, Option<String>>, String> {
-        let tree = facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", head])?)?;
+        let tree = r.tree(target, head)?;
         let mut inputs = BTreeMap::new();
         for path in [&self.config_path, &self.policy_path] {
             let physical = no_symlink_parents(target, path)?;

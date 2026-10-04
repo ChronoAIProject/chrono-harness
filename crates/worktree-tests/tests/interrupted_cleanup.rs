@@ -22,6 +22,119 @@ fn output(target: &Path) {
     fs::write(target.join("output λ/cache"), "reproducible").unwrap();
 }
 #[test]
+fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("tree-reuse");
+    assert_eq!(h.invoke("feature", "tree-reuse", &target).0, 0);
+    output(&target);
+    fs::create_dir_all(target.join("nested/cache")).unwrap();
+    fs::write(target.join("nested/cache/other"), "rebuildable").unwrap();
+    let head = git(&target, &["rev-parse", "HEAD"]);
+    let source = fs::read(target.join("payload")).unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let processes = report["drain"][0]["report"]["processes"]
+        .as_array()
+        .unwrap();
+    let trees: Vec<_> = processes
+        .iter()
+        .filter(|p| {
+            p["root"] == value!(target)
+                && p["argv"]
+                    == value!([
+                        "--no-replace-objects",
+                        "ls-tree",
+                        "-rz",
+                        "--full-tree",
+                        head.trim()
+                    ])
+        })
+        .collect();
+    let live = processes
+        .iter()
+        .filter(|p| {
+            p["root"] == value!(target)
+                && p["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|a| a == "--show-toplevel")
+        })
+        .count();
+    println!(
+        "CACHE_DISPOSAL tree_processes={} live_identity_processes={live}",
+        trees.len()
+    );
+    assert_eq!(
+        trees.len(),
+        1,
+        "one immutable tree acquisition in the disposal operation"
+    );
+    assert!(
+        live >= 4,
+        "identity must remain live across both removal effects"
+    );
+    assert!(processes.iter().any(|p| p["root"] == value!(target)
+        && p["argv"] == value!(["--no-replace-objects", "ls-files", "-z"])));
+    let original: chrono_harness::ProcessResult =
+        serde_json::from_value(trees[0]["process"].clone()).unwrap();
+    chrono_harness::observation::process_success(&original).unwrap();
+    assert!(!target.join("output λ").exists());
+    assert!(!target.join("nested/cache").exists());
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+}
+
+#[test]
+fn cache_disposal_checks_new_index_paths_after_immutable_tree_acquisition() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let script = h.parent.join("tree-index-git");
+    fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+if [ -f "$HOME/stage-after-tree" ] && [ "$PWD" = "$HOME/tree-index" ] && [ "$2" = ls-tree ]; then
+    '{}' "$@" || exit $?
+    mkdir -p 'output λ'
+    printf source > 'output λ/staged-source'
+    '{}' add -f -- 'output λ/staged-source' || exit $?
+    exit 0
+fi
+exec '{}' "$@"
+"#,
+            real.display(),
+            real.display(),
+            real.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    h.policy(|p| p["git"]["program"] = value!(script));
+    let target = h.parent.join("tree-index");
+    assert_eq!(h.invoke("feature", "tree-index", &target).0, 0);
+    output(&target);
+    fs::write(h.parent.join("stage-after-tree"), "inject").unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report
+            .to_string()
+            .contains("disposal directory contains tracked paths"),
+        "{report}"
+    );
+    assert_eq!(
+        fs::read_to_string(target.join("output λ/staged-source")).unwrap(),
+        "source"
+    );
+    assert!(target.join("output λ/cache").exists());
+    assert_eq!(h.ledger()["entries"][0]["ownership"]["cache_pending"], true);
+}
+
+#[test]
 fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error() {
     use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");

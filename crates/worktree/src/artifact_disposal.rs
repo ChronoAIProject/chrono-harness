@@ -1,6 +1,6 @@
 //! Explicit directory disposal shared by legacy checkout cleanup and lifecycle cleanup.
 use crate::start::Runner;
-use chrono_harness::{facts, no_symlink_parents};
+use chrono_harness::no_symlink_parents;
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -34,7 +34,7 @@ pub(crate) fn paths(
     if names.is_empty() {
         return Ok(vec![]);
     }
-    let tree = facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", head])?)?;
+    let tree = r.tree(target, head)?;
     // Staged files are also source, including additions within an artifact prefix.
     let index = crate::start::paths(r.git(target, &["ls-files", "-z"])?)?;
     names

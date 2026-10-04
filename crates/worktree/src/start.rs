@@ -10,6 +10,7 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -20,6 +21,7 @@ pub(crate) struct Runner {
     tool: observation::Tool,
     processes: Vec<Value>,
     immutable_blobs: BTreeMap<(PathBuf, String, String), Vec<u8>>,
+    immutable_trees: BTreeMap<(PathBuf, String), Arc<facts::Tree>>,
 }
 pub(crate) struct CheckoutIdentity {
     pub(crate) top: PathBuf,
@@ -143,6 +145,18 @@ impl Runner {
             head: fields[3].into(),
             branch: fields[4].into(),
         })
+    }
+    pub(crate) fn tree(&mut self, root: &Path, oid: &str) -> Result<Arc<facts::Tree>, String> {
+        facts::full_oid(oid)?;
+        let key = (root.to_path_buf(), oid.to_owned());
+        if let Some(tree) = self.immutable_trees.get(&key) {
+            return Ok(tree.clone());
+        }
+        let tree = Arc::new(facts::parse_tree(
+            &self.git(root, &["ls-tree", "-rz", "--full-tree", oid])?,
+        )?);
+        self.immutable_trees.insert(key, tree.clone());
+        Ok(tree)
     }
     pub(crate) fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         facts::full_oid(oid)?;
@@ -287,7 +301,7 @@ pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Resu
     untracked(r, target, config)
 }
 pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Result<(), String> {
-    let expected = facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", tree])?)?;
+    let expected = r.tree(target, tree)?;
     let index = r.git(target, &["ls-files", "--stage", "-z"])?;
     if !facts::checkout_changes(target, &expected, &index)?.is_empty() {
         return Err(
@@ -660,6 +674,7 @@ pub(crate) fn with_report(
         tool,
         processes: vec![],
         immutable_blobs: BTreeMap::new(),
+        immutable_trees: BTreeMap::new(),
     };
     let result = match version_error {
         Some(e) => Err(e),
