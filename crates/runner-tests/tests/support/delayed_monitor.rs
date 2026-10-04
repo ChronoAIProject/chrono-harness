@@ -123,7 +123,8 @@ impl Exit {
                 "missing kernel exit: {}",
                 std::io::Error::last_os_error()
             );
-            assert_eq!(event.ident, pid as _);
+            let observed_pid = event.ident;
+            assert_eq!(observed_pid, pid as libc::uintptr_t);
             assert_eq!(event.flags & libc::EV_ERROR, 0);
             assert_ne!(event.fflags & libc::NOTE_EXIT, 0);
         }
