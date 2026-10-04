@@ -1520,14 +1520,12 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
     let out = std::process::Command::new("/usr/bin/python3")
         .args([
             "-c",
-            "import os,resource,sys\nfor fd in (198,199,200):\n try: os.close(fd)\n except OSError: pass\nresource.setrlimit(resource.RLIMIT_NOFILE,(210,210))\nos.execv(sys.argv[1],[sys.argv[1],'--exact','failed_live_identity_registration_helper','--nocapture'])",
+            "import fcntl,os,resource,sys\nleases=os.environ.pop('CHRONO_PROCESS_FDS','')\nheld=[]\nfor value in leases.split(',') if leases else []:\n fd=int(value)\n copy=fcntl.fcntl(fd,fcntl.F_DUPFD,210)\n os.set_inheritable(copy,True)\n held.append(copy)\nfor value in leases.split(',') if leases else []: os.close(int(value))\nfor fd in (198,199,200):\n try: os.close(fd)\n except OSError: pass\nresource.setrlimit(resource.RLIMIT_NOFILE,(210,210))\nos.execv(sys.argv[1],[sys.argv[1],'--exact','failed_live_identity_registration_helper','--nocapture'])",
         ])
         .arg(std::env::current_exe().unwrap())
         .env("CHRONO_FAILED_HANDOFF", root.path())
-        // Isolate the fixed descriptor-allocation experiment from additional
-        // engine transfers. Existing inherited lease descriptors stay open;
-        // only their carrier is absent in this independent helper.
-        .env_remove("CHRONO_PROCESS_FDS")
+        // Keep inherited leases open above the fixed allocation experiment's
+        // budget. Its independent helper omits the carrier to avoid transfers.
         .output()
         .unwrap();
     assert!(
@@ -1537,4 +1535,36 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(!root.path().join("unexpected-exec").exists());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget() {
+    use std::os::fd::AsFd;
+    let root = tempfile::tempdir().unwrap();
+    let capability = fs::File::open(root.path()).unwrap();
+    let _ownership = chrono_harness::process_fds::Scope::new(&[capability.as_fd()]).unwrap();
+    let executable = std::env::current_exe().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: executable.to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "failed_live_identity_registration_preserves_actual_kernel_error_before_exec".into(),
+            "--nocapture".into(),
+        ],
+        env: Default::default(),
+        timeout_seconds: FIXTURE_TIMEOUT_SECONDS,
+        output_limit_bytes: 4096,
+    };
+    let result = chrono_harness::run_process_observed(
+        root.path(),
+        &spec,
+        &[],
+        &sha256(&fs::read(&executable).unwrap()),
+    )
+    .unwrap();
+    assert!(result.ownership_fds.is_some(), "{result:?}");
+    assert!(result.failure.is_none(), "{result:?}");
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");
 }
