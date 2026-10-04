@@ -101,6 +101,18 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 形式模型与反例可以推动 SPEC 演进：发现缺失前提、错误推论或实现不符时，分别修订适用的模型、产品合同或实现，并验证受影响义务。不得为匹配当前实现而静默缩小用户目标或改写旧结论的适用范围。Lean 核验只证明其形式陈述；Rust 实现符合模型仍需单独的对应证据，完整依赖登记、局部性与确定性等现实前提也不能由图闭包或一次通过自动取得。
 
+### 2.2 实现与测试使用同一种语言
+
+用什么语言实现，就用什么语言测试。生产单元的行为测试、断言、测试驱动及承载测试逻辑的子进程 helper 必须使用该单元的实现语言：Rust 用 Rust 测，Go 用 Go 测，TypeScript 用 TypeScript 测，Python 用 Python 测。Shell 脚本（包括 sh、bash）允许用 Python 测试。
+
+不能把另一种语言的测试逻辑嵌入源码字符串、here-document 或解释器参数，也不能通过同语言薄包装调用另一种语言的测试来满足本条。Rust 的进程、文件描述符、资源上限等行为应由 Rust 测试及 Rust 子进程 helper 验证，不因编写方便改用 Python 或 Shell 承担测试逻辑。
+
+跨语言集成测试可以调用实际外部程序；测试驱动与断言仍遵守被测生产单元的语言要求。用于验证脚本／插件协议的外部 fixture 应独立成文件，显式登记所有者、输入、依赖、成本和消费操作；它只能提供所需接口行为，不能藏入替代同语言测试的驱动或断言。各生产单元仍各自对应一个专属测试项目，独立脚本及其测试可以单独登记。
+
+混合语言宿主按生产单元分别配对。实现语言、测试语言及 Shell／Python 配对由宿主显式登记，配对判官核对这些声明与登记的测试入口，不按目录、扩展名、命令名或代码扫描推断语言及依赖。未登记语言、配对不符或观察到的实际执行不符须报错；声明核验不证明不存在隐藏的跨语言测试逻辑。此合同不要求宿主采用 Rust、特定目录结构或特定测试框架。
+
+本条是目标合同；现有跨语言测试夹具的迁移、语言登记与配对判官执法仍待实现，规范文字不代表当前机器门已启用。
+
 ## 3. 登记格式与字段合同
 
 Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
@@ -827,8 +839,14 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 工具链／target／profile／features 或适用构建输入不兼容 | 拒绝不兼容恢复／直接执行物，按登记冷构建或重建；不能用宽前缀冒充精确命中 |
 | CI 缓存未命中／损坏／服务失败 | 保留原异常及处理记录，沿同一入口重建；构建或当前执行物绑定仍失败时非零 |
 | 独立 job 并发／重跑，或编译成功后测试失败 | 活输出隔离、生产者加入后保存；可保留完成的编译缓存，原测试失败及本轮证据不被缓存状态覆盖 |
+| 生产单元及其专属测试、断言和测试 helper 使用同一种语言 | 按显式配对和 DELTA 运行对应测试，不引入额外语言要求 |
+| 除 Shell／Python 配对外，登记或实际执行证据显示不同语言承担测试逻辑，包括源码字符串／解释器参数／薄包装 | 配对判官拒绝并指出生产单元、语言声明及不符的测试入口；不能凭外层文件语言放行，也不声称自动识别任意隐藏逻辑 |
+| Shell 脚本显式配对 Python 测试 | 允许该配对；继续核对独立归属、依赖、操作及实际测试结果 |
+| 混合语言宿主分别登记各生产单元与同语言测试 | 各单元独立选测；不推断宿主语言、不合并测试项目，不引入 Rust 工具链前提 |
 
 ## 14. Implementation boundaries
+
+§2.2 的同语言测试要求尚未完成登记与判官实现。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。现役 schema 与机器门尚未承载语言配对合同。
 
 §4.2、§7.1 与 §7.2 是新增目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，但尚未统一结构化日志与跨层异常链，也未在现役生成的检查／发布 CI 中采用持久的依赖、判官及增量编译缓存。现有 target、bin、名为 cache 的工件目录及原始 artifact 传输不满足这些新增合同。日志／异常记录、缓存登记与投影须由后续实现及显式迁移接入；本次 SPEC 更新不改变当前 schema、执行入口或声称这些验收已通过。具体待实现项同步见 docs/spec-coverage.md。
 
