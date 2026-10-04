@@ -672,6 +672,112 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
 }
 
 #[test]
+fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
+    let h = Host::new("");
+    h.save();
+    fs::write(h.root.join("payload"), b"original").unwrap();
+    let old = commit(&h);
+    let reader = h.open().unwrap();
+    reader.verify_oid(&h.root, &old).unwrap();
+    let tree = reader.tree(&h.root, &old).unwrap();
+    let original = reader.observation();
+    assert_eq!(reader.tree(&h.root, &old).unwrap(), tree);
+    assert_eq!(
+        reader.observation(),
+        original,
+        "reuse must retain one original tree acquisition"
+    );
+
+    fs::write(h.root.join("payload"), b"changed").unwrap();
+    assert!(
+        reader
+            .tracked_changes(&h.root, &old)
+            .unwrap()
+            .contains(&"payload".into())
+    );
+    let git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    assert!(
+        Command::new(git)
+            .current_dir(&h.root)
+            .args(["add", "payload"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(h.root.join("payload"), b"original").unwrap();
+    assert!(
+        reader
+            .tracked_changes(&h.root, &old)
+            .unwrap()
+            .contains(&"payload".into()),
+        "a staged change is not cancelled by opposite worktree bytes"
+    );
+    let observed = reader.observation();
+    let reads = observed["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["argv"].as_array().unwrap().iter().any(|v| v == "ls-tree"))
+        .count();
+    assert_eq!(reads, 1);
+    let other = Host::new("");
+    let count = processes(&reader);
+    assert!(
+        reader
+            .tree(&other.root, &old)
+            .unwrap_err()
+            .contains("root mismatch")
+    );
+    assert_eq!(processes(&reader), count);
+
+    let fresh = h.open().unwrap();
+    fresh.verify_oid(&h.root, &old).unwrap();
+    let count = processes(&fresh);
+    assert_eq!(fresh.tree(&h.root, &old).unwrap(), tree);
+    assert_eq!(processes(&fresh), count + 1);
+    let before = reader.tree(&h.root, "HEAD").unwrap();
+    fs::write(h.root.join("payload"), b"next commit").unwrap();
+    let new = commit(&h);
+    assert_ne!(
+        reader.tree(&h.root, "HEAD").unwrap()["payload"],
+        before["payload"]
+    );
+    reader.verify_oid(&h.root, &new).unwrap();
+    assert_ne!(
+        reader.tree(&h.root, &new).unwrap()["payload"],
+        tree["payload"]
+    );
+    assert_eq!(reader.tree(&h.root, &old).unwrap(), tree);
+}
+
+#[test]
+fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
+    for drift in [false, true] {
+        let h = Host::new(if drift {
+            "case \"$*\" in *' ls-tree '*) if [ -e fail-tree ]; then printf changed > .git/config.worktree; fi;; esac"
+        } else {
+            "case \"$*\" in *' ls-tree '*) if [ -e fail-tree ]; then printf malformed; exit 0; fi;; esac"
+        });
+        h.save();
+        fs::write(h.root.join("payload"), b"original").unwrap();
+        let oid = commit(&h);
+        let reader = h.open().unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        fs::write(h.root.join("fail-tree"), b"").unwrap();
+        let count = processes(&reader);
+        assert!(reader.tree(&h.root, &oid).is_err());
+        let original = reader.observation()["processes"][count].clone();
+        fs::remove_file(h.root.join("fail-tree")).unwrap();
+        if drift {
+            fs::remove_file(h.root.join(".git/config.worktree")).unwrap();
+        }
+        assert!(reader.tree(&h.root, &oid).unwrap().contains_key("payload"));
+        assert_eq!(processes(&reader), count + 2);
+        assert_eq!(reader.observation()["processes"][count], original);
+    }
+}
+
+#[test]
 fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() {
     for case in [
         "selector",
@@ -688,6 +794,7 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
         reader.verify_oid(&h.root, &oid).unwrap();
         assert_eq!(reader.blob(&h.root, &oid, "payload").unwrap(), b"original");
+        assert!(reader.tree(&h.root, &oid).unwrap().contains_key("payload"));
         let trace = fs::read(h.root.join("trace")).unwrap();
         let count = processes(&reader);
         match case {
@@ -708,6 +815,13 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         }
         let error = reader.blob(&h.root, &oid, "payload").unwrap_err();
         assert!(error.contains("E_GIT_FACTS"), "{case}: {error}");
+        assert!(
+            reader
+                .tree(&h.root, &oid)
+                .unwrap_err()
+                .contains("E_GIT_FACTS"),
+            "{case}"
+        );
         assert_eq!(processes(&reader), count, "{case}");
         assert_eq!(fs::read(h.root.join("trace")).unwrap(), trace, "{case}");
     }

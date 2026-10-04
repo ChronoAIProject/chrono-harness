@@ -17,6 +17,7 @@ pub struct Reader {
     // Exact immutable endpoint/path -> range of an original successful process. The root,
     // tool and environment belong to this Reader's binding, never a global cache.
     blobs: RefCell<BTreeMap<(String, String), BlobReceipt>>,
+    trees: RefCell<BTreeMap<String, usize>>,
     verified_oids: RefCell<BTreeSet<String>>,
 }
 #[derive(Clone)]
@@ -302,6 +303,7 @@ impl Reader {
             bound: None,
             processes: RefCell::new(vec![]),
             blobs: RefCell::new(BTreeMap::new()),
+            trees: RefCell::new(BTreeMap::new()),
             verified_oids: RefCell::new(BTreeSet::new()),
         }
     }
@@ -472,6 +474,7 @@ impl Reader {
                 }),
                 processes: RefCell::new(vec![]),
                 blobs: RefCell::new(BTreeMap::new()),
+                trees: RefCell::new(BTreeMap::new()),
                 verified_oids: RefCell::new(BTreeSet::new()),
             };
             if let Some(prior) = prior {
@@ -624,6 +627,30 @@ impl Reader {
             },
         );
         Ok(bytes)
+    }
+    pub(crate) fn tree_with_reuse(&self, root: &Path, oid: &str) -> Result<facts::Tree, String> {
+        let eligible = self.can_reuse_oid(oid);
+        if eligible {
+            self.check_root(root)?;
+            let prior = self.trees.borrow().get(oid).copied();
+            if let Some(process) = prior {
+                self.unchanged().map_err(|e| self.error(&e))?;
+                let tree = facts::parse_tree(&self.processes.borrow()[process].stdout_bytes)?;
+                self.check_root(root)?;
+                self.unchanged().map_err(|e| self.error(&e))?;
+                return Ok(tree);
+            }
+        }
+        let raw = self.git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
+        let tree = facts::parse_tree(&raw)?;
+        if eligible {
+            // Keep only the original successful process address. Mutable index
+            // and physical checkout observations never enter this cache.
+            self.trees
+                .borrow_mut()
+                .insert(oid.into(), self.processes.borrow().len() - 1);
+        }
+        Ok(tree)
     }
     pub(crate) fn can_reuse_oid(&self, oid: &str) -> bool {
         self.bound.is_some() && self.verified_oids.borrow().contains(oid)
