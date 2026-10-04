@@ -888,14 +888,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "保护工作，隔离候选。 在授权隔离区实施。dev 流程中 feature、integration 从最新 dev 创建；稳定性、规则、门控改动先在 fresh integration 验证。固定基线与净改动，移动主检出读数不作固定证据。授权删除前立即重验目标身份、锁与声明的可删除条件。"
+            "text": "保护工作，隔离候选。 所有任务改动只在独立 worktree 中实施，含源码、规则、配置、文档和生成投影。dev 流程默认主检出停留在 dev，保持与登记远端 dev 同步；主检出不编辑、暂存、提交或提前合入候选。feature、integration 从最新远端 dev 创建；稳定性、规则、门控改动先在 fresh integration 验证。候选在工作树提交、检查及开 PR，核远端落地后再同步主检出；分叉或未保存工作先保留协调，不覆盖。固定基线与净改动，移动主检出读数不作固定证据。授权删除前立即重验目标身份、锁与声明的可删除条件。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Protect existing work. Use authorized isolated workspaces. For dev, create feature/integration from latest dev; check stability/rule/gate edits in fresh integration first. Pin baseline and net changes; moving checkouts give no fixed evidence. Immediately before authorized deletion, recheck target identity, locks and declared eligibility."
+            "text": "Protect existing work. Make all task changes in separate worktrees, including source, rules, configuration, documentation and generated projections. In the dev workflow, keep the main checkout on dev and synchronized with the registered remote dev; do not edit, stage, commit or merge candidates there before remote landing. Create feature/integration from latest remote dev; check stability/rule/gate edits in fresh integration first. Commit, check and open PRs from the worktree; verify remote landing before synchronizing the main checkout. Preserve and reconcile divergence or unsaved work without overwriting it. Pin baseline and net changes; moving checkouts give no fixed evidence. Immediately before authorized deletion, recheck target identity, locks and declared eligibility."
           }
         }
       ]
