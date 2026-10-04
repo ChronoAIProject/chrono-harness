@@ -101,10 +101,11 @@ Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before
 unlocking it. The producer reuses registration's artifact classifier: declared
 untracked artifact paths are allowed and preserved. Tracked changes are always
-checked separately, including beneath artifact roots. Separate ignored and
-nonignored file queries exclude only explicitly registered artifact directories
-before returning paths; large build outputs therefore do not consume the path
-observation bound. Remaining paths use the original registration classifier.
+checked separately, including beneath artifact roots. One untracked-file inventory
+includes ignored and nonignored files, independent of changes to ignore rules.
+It excludes only explicitly registered artifact directories before returning paths;
+large build outputs therefore do not consume the path observation bound.
+Remaining paths use the original registration classifier.
 Unknown neighbors, literal or case lookalikes, and a file or symlink in place of a
 registered directory remain errors. The output bound is unchanged. Existing paths and branches
 are preserved. A failing checkout hook,

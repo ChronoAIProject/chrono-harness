@@ -299,19 +299,15 @@ pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Resul
 pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let artifacts = facts::artifact_directories(config)?;
     let exclusions = facts::artifact_exclusions(&artifacts);
-    for ignored in [false, true] {
-        let mut args = vec!["ls-files", "--others", "--exclude-standard", "-z"];
-        if ignored {
-            args.push("--ignored");
-        }
-        args.extend(["--", "."]);
-        args.extend(exclusions.iter().map(String::as_str));
-        let observed: Vec<_> = paths(r.literal_inventory(target, &args)?)?
-            .into_iter()
-            .collect();
-        if !chrono_judge_registration::nonartifact_paths(config, &observed).is_empty() {
-            return Err("checkout has unregistered files; preserve it for recovery".into());
-        }
+    // Read both ignored and nonignored files together. An ignore-rule change
+    // between two complementary queries must not make a present file disappear.
+    let mut args = vec!["ls-files", "--others", "-z", "--", "."];
+    args.extend(exclusions.iter().map(String::as_str));
+    let observed: Vec<_> = paths(r.literal_inventory(target, &args)?)?
+        .into_iter()
+        .collect();
+    if !chrono_judge_registration::nonartifact_paths(config, &observed).is_empty() {
+        return Err("checkout has unregistered files; preserve it for recovery".into());
     }
     Ok(())
 }
