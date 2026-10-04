@@ -1,4 +1,4 @@
-use super::automatic::{consuming_operation, native_consumer};
+use super::automatic::{consuming_operation, native_consumer, native_git};
 use super::*;
 use std::{
     process::Stdio,
@@ -762,14 +762,14 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
 
 #[test]
 fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish() {
-    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("cache-git");
-    fs::write(&script,format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-cache\" ] && [ ! -d \"$HOME/partial/output λ\" ]; then\nprintf interrupted > \"$HOME/cache-observed\"\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n",real.display())).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(
+        &h,
+        "cache-interrupt",
+        value!({"output":"partial/output λ","observed":"cache-observed"}),
+    );
     let target = h.parent.join("partial");
     assert_eq!(h.invoke("feature", "partial", &target).0, 0);
     output(&target);
@@ -819,14 +819,9 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
 
 #[test]
 fn cache_retries_reference_failed_and_partial_originals_without_growth() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("cache-git");
-    fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/fail-cache\" ] && [ ! -d \"$HOME/cache-retry/output λ\" ]; then\nprintf 'original cache failure\\n' >&2\nexit 71\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(&h, "cache-fail", value!({"output":"cache-retry/output λ"}));
     let target = h.parent.join("cache-retry");
     assert_eq!(h.invoke("feature", "cache-retry", &target).0, 0);
     fs::write(h.parent.join("fail-cache"), "fail after disposal").unwrap();
@@ -906,15 +901,15 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
 
 #[test]
 fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_source_commit() {
-    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "rebuild");
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("supersession-git");
-    fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-cache\" ] && [ ! -d \"$HOME/superseded/output λ\" ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(
+        &h,
+        "cache-interrupt",
+        value!({"output":"superseded/output λ"}),
+    );
     let target = h.parent.join("superseded");
     assert_eq!(h.invoke("feature", "superseded", &target).0, 0);
     output(&target);
@@ -962,18 +957,14 @@ fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_sourc
 
 #[test]
 fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruption() {
-    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "rebuild");
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let program = h.parent.join("birth-git");
     let ledger = h
         .root
         .join(".chrono-harness/state/automatic-cleanup/ledger.json");
-    fs::write(&program, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-birth\" ] && [ -f '{}' ] && /usr/bin/grep -q '\"kind\": \"birth\"' '{}'; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", ledger.display(), ledger.display(), real.display())).unwrap();
-    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(program));
+    let fixture = native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
     let target = h.parent.join("unsealed");
     let interrupted = CapturedChild::spawn(
@@ -1022,7 +1013,10 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
                 .as_bytes()
         )
     ));
-    fs::write(&program, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-recovery\" ] && [ -f '{}' ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", recovery_path.display(), real.display())).unwrap();
+    let mut settings = json(&fs::read(&fixture).unwrap()).unwrap();
+    settings["mode"] = value!("recovery-interrupt");
+    settings["recovery"] = value!(recovery_path);
+    fs::write(&fixture, serde_json::to_vec(&settings).unwrap()).unwrap();
     fs::write(
         h.parent.join("interrupt-recovery"),
         "after durable reconciliation",
@@ -1189,14 +1183,9 @@ fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
 
 #[test]
 fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let program = h.parent.join("admission-git");
-    fs::write(&program,format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-admission\" ] && [ \"$2 $3\" = 'worktree add' ]; then\nprintf '%s' \"$$\" > \"$HOME/admission-holder\"\nexec >\"$HOME/git-mutation.stdout\" 2>\"$HOME/git-mutation.stderr\"\nkill -KILL \"$PPID\"\nwhile [ ! -f \"$HOME/release-mutation\" ]; do sleep 0.02; done\nfi\nexec '{}' \"$@\"\n",real.display())).unwrap();
-    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(program));
+    native_git(&h, "admission-interrupt", value!({}));
     h.hook("printf native > \"$HOME/native-hook\"\nwhile [ ! -f \"$HOME/release-hook\" ]; do sleep 0.02; done");
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
