@@ -523,6 +523,16 @@ fn ci_impact(
     let mut seeds: BTreeSet<_> = paths.iter().map(|p| format!("file:{p}")).collect();
     let mut extras: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     if let Some(old) = old {
+        // Adopting a new document contract affects every declared owner, even
+        // when legacy rows already contain the newly meaningful metadata.
+        if old.registry["schema_version"] != new.registry["schema_version"] {
+            seeds.extend(
+                old.owner_nodes
+                    .values()
+                    .chain(new.owner_nodes.values())
+                    .cloned(),
+            );
+        }
         for path in changed(&old.files, &new.files) {
             seeds.insert(format!("file:{path}"));
         }

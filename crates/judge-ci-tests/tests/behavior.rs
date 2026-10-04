@@ -875,7 +875,9 @@ fn v2_languages_missing_empty_or_non_string_declarations_are_rejected() {
 fn v2_languages_selected_test_and_initial_adoption_validate_the_pair() {
     let h = language_host(false, "rust", "python");
     let b = h.head();
-    h.write("check.sh", "exit 0\n");
+    let mut fixture = fs::read_to_string(h.root().join("check.sh")).unwrap();
+    fixture.push('\n');
+    h.write("check.sh", &fixture);
     let c = h.commit();
     fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
     h.git(&["checkout", "--orphan", "initial"]);
@@ -921,6 +923,21 @@ fn v2_languages_plan_only_selection_validates_registered_test_owner() {
     let b = h.commit();
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
         v["execution_plans"]["test:suite"]["output_limit_bytes"] = json!(8192);
+    });
+    let c = h.commit();
+    fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
+    assert_eq!(h.calls(), 0);
+}
+
+#[test]
+fn v2_languages_schema_only_adoption_checks_existing_declarations() {
+    let h = language_host(true, "rust", "python");
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["schema_version"] = json!(1);
+    });
+    let b = h.commit();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["schema_version"] = json!(2);
     });
     let c = h.commit();
     fail(&h.check(&b, &c), "E_TEST_LANGUAGE");

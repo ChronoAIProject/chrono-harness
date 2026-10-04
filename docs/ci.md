@@ -188,7 +188,8 @@ validate every proposed field's semantics.
 Projects schema v2 uses the registration owner's strict document schema. Scoped CI
 reuses the projects owner's reciprocal dedicated-pair and language checks for the
 DELTA-affected owners, including selected test groups and plan-only selections.
-Language-only metadata edits participate in impact; script identities use their
+Language-only metadata edits participate in impact; changing the projects schema
+version also seeds both endpoints’ declared owners. Script identities use their
 explicit `script:` nodes. Equal literal language IDs and production `shell` with
 test `python` are accepted. Unrelated pairs are not rejudged. This checks declared
 languages, not file contents or hidden helpers. Legacy projects v1 keeps its
