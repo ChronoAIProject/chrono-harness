@@ -334,13 +334,11 @@ pub(crate) fn execute(
     keep_locked: bool,
 ) -> Result<(), String> {
     let source = &o.root;
-    if fs::canonicalize(r.text(source, &["rev-parse", "--show-toplevel"])?.trim())
-        .map_err(|e| e.to_string())?
-        != *source
-    {
+    let observed = r.checkout_identity(source)?;
+    if fs::canonicalize(&observed.top).map_err(|e| e.to_string())? != *source {
         return Err("host root must be the actual Git checkout root".into());
     }
-    let source_head = r.oid(source, "HEAD")?;
+    let source_head = observed.head;
     report["source_commit"] = value!(source_head);
     report["creation_kind"] = value!(o.kind);
     if r.blob(source, &source_head, &o.config_path)? != bytes {
