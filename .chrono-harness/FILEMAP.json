@@ -96,6 +96,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     },
@@ -148,6 +152,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     },
@@ -2501,6 +2509,10 @@
         {
           "kind": "test-execution",
           "to": "test:distribution-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     },
@@ -2513,18 +2525,30 @@
         {
           "kind": "test-execution",
           "to": "test:distribution-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     },
     {
       "path": ".chrono-harness/release/build.py",
-      "owner": "repository",
+      "owner": "release-build",
       "surface": "product",
       "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
           "to": "test:distribution-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:release-build"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     },
@@ -4141,6 +4165,173 @@
         {
           "kind": "judge-trigger",
           "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics/Cargo.toml",
+      "owner": "diagnostics",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics/Cargo.lock",
+      "owner": "diagnostics",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics/src/lib.rs",
+      "owner": "diagnostics",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics/src/error.rs",
+      "owner": "diagnostics",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics/src/logging.rs",
+      "owner": "diagnostics",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:diagnostics"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics-tests/Cargo.toml",
+      "owner": "diagnostics-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:diagnostics-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics-tests/Cargo.lock",
+      "owner": "diagnostics-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:diagnostics-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/diagnostics-tests/tests/records.rs",
+      "owner": "diagnostics-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:diagnostics-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "docs/diagnostics.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/release/dependency-tests.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/tool.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     }
@@ -6320,6 +6511,206 @@
       "from": "environment:CHRONO_CHECK_HANDOFF_TRACE",
       "kind": "runtime-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:diagnostics"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "project:diagnostics",
+      "kind": "compile",
+      "to": "project:diagnostics-tests"
+    },
+    {
+      "from": "project:diagnostics",
+      "kind": "compile",
+      "to": "project:runner"
+    },
+    {
+      "from": "project:diagnostics",
+      "kind": "test-execution",
+      "to": "test:diagnostics-tests"
+    },
+    {
+      "from": "project:diagnostics-tests",
+      "kind": "test-execution",
+      "to": "test:diagnostics-tests"
+    },
+    {
+      "from": "script:release-build",
+      "kind": "test-execution",
+      "to": "test:release-build-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "tool:git",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "script:release-build"
+    },
+    {
+      "from": "script:release-build-tests",
+      "kind": "test-execution",
+      "to": "test:release-build-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "tool:git",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "script:release-build-tests"
     }
   ],
   "test_costs": [
@@ -6393,6 +6784,14 @@
     },
     {
       "test": "workflow-short",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "diagnostics-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "release-build-tests",
       "cost": "unmeasured"
     }
   ],
@@ -6654,6 +7053,23 @@
         "test.workflow.short"
       ],
       "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:diagnostics-tests": {
+      "operations": [
+        "fmt.diagnostics",
+        "fmt.diagnostics-tests",
+        "build.diagnostics",
+        "test.diagnostics-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:release-build-tests": {
+      "operations": [
+        "test.release-build-tests"
+      ],
+      "timeout_seconds": 120,
       "output_limit_bytes": 1048576
     }
   },
@@ -7029,6 +7445,30 @@
         "outputs": [
           "crates/judge-workflow-tests/target/"
         ]
+      },
+      "fmt.diagnostics": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.diagnostics-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "build.diagnostics": {
+        "resources": [],
+        "outputs": [
+          "crates/diagnostics/target/"
+        ]
+      },
+      "test.diagnostics-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/diagnostics-tests/target/"
+        ]
+      },
+      "test.release-build-tests": {
+        "resources": [],
+        "outputs": []
       }
     }
   }

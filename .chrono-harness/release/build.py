@@ -14,7 +14,7 @@ import sys
 import tarfile
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 
 EVIDENCE_BOUND = 64 * 1024 * 1024
 
@@ -205,7 +205,7 @@ def retain_failure_evidence(output, phase, stdout, stderr):
 
 def preflight(root, required_tools=None, required_manifests=None):
     cfg = json_file(root / '.chrono-harness/release/build.json')
-    if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3', 'chrono-release-build/v4'):
+    if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3', 'chrono-release-build/v4', 'chrono-release-build/v5'):
         raise ValueError('unsupported release build schema')
     manifests = cfg['manifests']
     if not isinstance(manifests, list) or not manifests or len(set(manifests)) != len(manifests):
@@ -395,8 +395,8 @@ def write_json(file, value):
 
 
 def units_plan(root, cfg, operations, staging):
-    if cfg['schema'] != 'chrono-release-build/v4':
-        raise ValueError('independent scopes require release build v4')
+    if cfg['schema'] not in ('chrono-release-build/v4', 'chrono-release-build/v5'):
+        raise ValueError('independent scopes require release build v4 or v5')
     plan = json_file(path(root, staging['release_plan']))
     units = cfg['units']
     builds, tests, ids, directories = {}, {}, set(), []
@@ -431,8 +431,12 @@ def units_plan(root, cfg, operations, staging):
     if set(r['asset'] for r in staging['bindings']) != set(plan['assets']):
         raise ValueError('release v4 retains staging observations for all assets')
     for unit in tests.values():
-        if not isinstance(unit['needs'], list) or sorted(unit['needs']) != sorted(builds):
-            raise ValueError('verification must explicitly depend on the complete build vector')
+        needs = unit['needs']
+        if cfg['schema'] == 'chrono-release-build/v4':
+            if not isinstance(needs, list) or sorted(needs) != sorted(builds):
+                raise ValueError('verification must explicitly depend on the complete build vector')
+        elif not isinstance(needs, list) or any(not isinstance(name, str) or name not in builds for name in needs) or len(set(needs)) != len(needs):
+            raise ValueError('verification dependencies must be unique declared build units')
     collector = cfg['collector']
     if set(collector) != {'id', 'needs', 'package_asset', 'dependency_metadata'} or collector['id'] in ids or sorted(collector['needs']) != sorted(ids) or collector['package_asset'] not in plan['assets']:
         raise ValueError('collector needs exact build/test membership and package asset')
@@ -789,10 +793,33 @@ def import_build(execution, unit, selection, plan):
     return {'receipt_sha256': receipt_sha, 'transport': transport, 'identity': expected[unit['asset']], 'selection': selection}, receipt
 
 
+def selected_staging(staging, assets):
+    return {'release_plan': staging['release_plan'], 'host_config': staging['host_config'],
+            'bindings': [dict(row) for row in staging['bindings'] if row['asset'] in assets]}
+
+
+def verify_consumer(receipt, unit, builds, assets, staging):
+    expected_assets = {builds[name]['asset']: assets[builds[name]['asset']] for name in unit['needs']}
+    expected_selected = {name: expected_assets[builds[name]['asset']]['selection'] for name in unit['needs']}
+    if receipt['assets'] != expected_assets or receipt['selected'] != expected_selected:
+        raise ValueError('selected binary or producer lineage changed after verification: ' + unit['id'])
+    observations = receipt['consumer_staging']['observations']
+    if [o['phase'] for o in observations] != ['staged', 'before-verification', 'after-verification'] or not all(o['matches'] for o in observations):
+        raise ValueError('missing complete before/after release staging observations')
+    test_staging = selected_staging(staging, expected_assets)
+    expected_identities = {r['source']: r['expected'] for r in test_staging['bindings']}
+    expected_identities.update({r['destination']: r['expected'] for r in test_staging['bindings']})
+    for snapshot in observations:
+        files = snapshot['files']
+        if len(files) != len(expected_identities) or {f['path'] for f in files} != set(expected_identities) or any(not same_identity(expected_identities[f['path']], f) for f in files):
+            raise ValueError('verification staging vector mismatch')
+
+
 def check_staging(execution, staging):
-    tracked = execution.run('consumer-tracking', [execution.tools['git'], '--literal-pathspecs', 'ls-files', '-z', '--', *[r['destination'] for r in staging['bindings']]])
-    if tracked:
-        raise ValueError('release consumer destination is tracked by Git')
+    if staging['bindings']:
+        tracked = execution.run('consumer-tracking', [execution.tools['git'], '--literal-pathspecs', 'ls-files', '-z', '--', *[r['destination'] for r in staging['bindings']]])
+        if tracked:
+            raise ValueError('release consumer destination is tracked by Git')
     staging['observations'] = []
     execution.report['consumer_staging'] = staging
     try:
@@ -896,16 +923,19 @@ def scoped_main(root, output, scope):
             build_receipts = {}
             original_receipts = {}
             for id0, build in builds.items():
+                if id0 not in unit['needs']:
+                    continue
                 execution.phase = 'selected-build:' + id0
                 lineage, receipt = import_build(execution, build, selected[id0], plan)
                 execution.report['assets'][build['asset']] = lineage
                 build_receipts[id0] = receipt
                 original_receipts[id0] = (plain_path(root, build['handoff']), receipt)
             producer_versions = {toolchain_fingerprint(r) for r in build_receipts.values()}
-            if len(producer_versions) != 1:
+            if len(producer_versions) > 1 or (not producer_versions and (scope == '--collect' or cfg['schema'] != 'chrono-release-build/v5')):
                 raise ValueError('selected producer toolchain versions differ')
-            if scope != '--collect' and toolchain_fingerprint(execution.report) not in producer_versions:
+            if scope != '--collect' and producer_versions and toolchain_fingerprint(execution.report) not in producer_versions:
                 raise ValueError('verification toolchain differs from selected producers')
+            staging = selected_staging(staging, execution.report['assets'])
             check_staging(execution, staging)
             if scope == '--collect':
                 native_metadata = plain_path(root, cfg['collector']['dependency_metadata'])
@@ -924,8 +954,7 @@ def scoped_main(root, output, scope):
                     if toolchain_fingerprint(receipt) not in producer_versions:
                         raise ValueError('selected verification toolchain differs from producers')
                     original_receipts[id0] = (directory, receipt)
-                    if receipt['assets'] != execution.report['assets']:
-                        raise ValueError('selected binary or producer lineage changed after verification: ' + id0)
+                    verify_consumer(receipt, test, builds, execution.report['assets'], staging)
                     action = next(o for o in operations if o[0] == test['operation'])
                     runs = [p for p in receipt['processes'] if p['phase'] == 'verification']
                     if receipt['action_tool'] != action[1]:
@@ -933,20 +962,11 @@ def scoped_main(root, output, scope):
                     expected_argv = [receipt['toolchain']['tools'][action[1]]['path'], *action[2][1:]]
                     if len(runs) != 1 or runs[0]['operation'] != test['operation'] or runs[0]['argv'] != expected_argv:
                         raise ValueError('verification did not execute exact original registered action')
-                    observations = receipt['consumer_staging']['observations']
-                    if [o['phase'] for o in observations] != ['staged', 'before-verification', 'after-verification'] or not all(o['matches'] for o in observations):
-                        raise ValueError('missing complete before/after release staging observations')
-                    expected_files = {r['source'] for r in staging['bindings']} | {r['destination'] for r in staging['bindings']}
-                    expected_identities = {r['source']:r['expected'] for r in staging['bindings']}
-                    expected_identities.update({r['destination']:r['expected'] for r in staging['bindings']})
-                    for snapshot in observations:
-                        if {f['path'] for f in snapshot['files']} != expected_files or any(not same_identity(expected_identities[f['path']], f) for f in snapshot['files']):
-                            raise ValueError('verification staging vector mismatch')
                     execution.report.setdefault('verifications', {})[id0] = {'receipt_sha256': receipt_sha, 'selection': selected[id0]}
                 for id0, (directory, receipt) in original_receipts.items():
                     expected_sha = execution.report['assets'][builds[id0]['asset']]['receipt_sha256'] if id0 in builds else execution.report['verifications'][id0]['receipt_sha256']
                     retain_original_receipt(execution, id0, directory, receipt, expected_sha)
-                execution.report['platform_started_ns'] = min(r['started_ns'] for r in build_receipts.values())
+                execution.report['platform_started_ns'] = min(r['started_ns'] for _, r in original_receipts.values())
                 if not observe(root, staging, 'before-package'):
                     raise ValueError('changed consumer before package')
                 try:
@@ -979,6 +999,38 @@ def scoped_main(root, output, scope):
     except (ValueError, OSError, KeyError, TypeError, AttributeError, IndexError, tarfile.TarError, subprocess.CalledProcessError) as caught:
         error = caught
     return execution.save(error)
+
+
+def run_local_units(cfg, invoke, outcomes):
+    with ThreadPoolExecutor(max_workers=cfg['local_workers']) as pool:
+        if cfg['schema'] == 'chrono-release-build/v4':
+            for kind in ['build', 'verify']:
+                dependencies = {id0: {'result': r['result'], 'outputs': r['outputs']} for id0, r in outcomes.items()}
+                futures = [pool.submit(invoke, u['id'], dependencies) for u in cfg['units'] if u['kind'] == kind]
+                for future in as_completed(futures):
+                    id0, result = future.result()
+                    outcomes[id0] = result
+            return
+        pending = list(cfg['units'])
+        running = {}
+        while pending or running:
+            for unit in list(pending):
+                if len(running) == cfg['local_workers']:
+                    break
+                if not all(need in outcomes for need in unit['needs']):
+                    continue
+                dependencies = {need: {'result': outcomes[need]['result'], 'outputs': outcomes[need]['outputs']} for need in unit['needs']}
+                running[pool.submit(invoke, unit['id'], dependencies)] = unit['id']
+                pending.remove(unit)
+            if not running:
+                raise ValueError('local release has no ready registered unit')
+            completed, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in completed:
+                expected = running.pop(future)
+                id0, result = future.result()
+                if id0 != expected:
+                    raise ValueError('local release result names a different unit')
+                outcomes[id0] = result
 
 
 def local_main(root, output):
@@ -1059,14 +1111,7 @@ def local_main(root, output):
 
     outcomes = {}
     try:
-        with ThreadPoolExecutor(max_workers=cfg['local_workers']) as pool:
-            futures = [pool.submit(invoke, id0, {}) for id0 in builds]
-            for future in as_completed(futures):
-                id0, result = future.result(); outcomes[id0] = result
-            dependencies = {id0: {'result': r['result'], 'outputs': r['outputs']} for id0, r in outcomes.items()}
-            futures = [pool.submit(invoke, id0, dependencies) for id0 in tests]
-            for future in as_completed(futures):
-                id0, result = future.result(); outcomes[id0] = result
+        run_local_units(cfg, invoke, outcomes)
         dependencies = {id0: {'result': r['result'], 'outputs': r['outputs']} for id0, r in outcomes.items()}
         id0, result = invoke(cfg['collector']['id'], dependencies, True)
         outcomes[id0] = result
@@ -1105,7 +1150,7 @@ def main(root, output, scope=None):
     cfg = json_file(root / '.chrono-harness/release/build.json')
     if scope is not None:
         return scoped_main(root, output, scope)
-    if cfg['schema'] == 'chrono-release-build/v4':
+    if cfg['schema'] in ('chrono-release-build/v4', 'chrono-release-build/v5'):
         return local_main(root, output)
     return legacy_main(root, output)
 

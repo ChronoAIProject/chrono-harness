@@ -34,7 +34,11 @@
     "judge-cargo",
     "judge-cargo-tests",
     "worktree",
-    "worktree-tests"
+    "worktree-tests",
+    "diagnostics",
+    "diagnostics-tests",
+    "release-build",
+    "release-build-tests"
   ],
   "projects": [
     {
@@ -1587,6 +1591,98 @@
         }
       },
       "tests_for": "worktree"
+    },
+    {
+      "id": "diagnostics",
+      "kind": "production",
+      "manifest": "crates/diagnostics/Cargo.toml",
+      "lockfile": "crates/diagnostics/Cargo.lock",
+      "root": "crates/diagnostics",
+      "actions": {
+        "build": {
+          "operation": "build.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "diagnostics-tests"
+    },
+    {
+      "id": "diagnostics-tests",
+      "kind": "test",
+      "manifest": "crates/diagnostics-tests/Cargo.toml",
+      "lockfile": "crates/diagnostics-tests/Cargo.lock",
+      "root": "crates/diagnostics-tests",
+      "actions": {
+        "build": {
+          "operation": "build.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "diagnostics"
     }
   ],
   "scripts": [
@@ -1616,6 +1712,38 @@
           "argv": [
             "-B",
             ".chrono-harness/migrations/scoped-v1-tests.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "release-build",
+      "path": ".chrono-harness/release/build.py",
+      "test_script": "release-build-tests",
+      "actions": {
+        "execute": {
+          "operation": "release.build",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build.py",
+            ".",
+            ".chrono-harness/cache/release-local"
+          ]
+        }
+      }
+    },
+    {
+      "id": "release-build-tests",
+      "path": ".chrono-harness/release/dependency-tests.py",
+      "tests_for": "release-build",
+      "actions": {
+        "execute": {
+          "operation": "test.release-build-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/dependency-tests.py"
           ]
         }
       }
