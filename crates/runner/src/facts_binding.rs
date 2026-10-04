@@ -628,9 +628,9 @@ impl Reader {
     pub(crate) fn can_reuse_oid(&self, oid: &str) -> bool {
         self.bound.is_some() && self.verified_oids.borrow().contains(oid)
     }
-    /// Only explicit resolved registry paths participate; the shared acquisition
-    /// retains framing, object identity, guards and original process receipts.
-    pub(crate) fn registry_blobs(
+    /// Resolved registry or snapshot paths in an already verified immutable
+    /// commit retain framing, guards and original process receipts.
+    pub(crate) fn immutable_blobs(
         &self,
         root: &Path,
         oid: &str,
