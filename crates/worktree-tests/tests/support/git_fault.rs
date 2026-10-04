@@ -48,6 +48,28 @@ fn capture(program: &str, args: &[OsString]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+fn collide_with_intents(suffix: &str) {
+    let directory = Path::new(".chrono-harness/state/worktrees");
+    let mut reports: Vec<_> = fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            let name = path.file_name().unwrap().to_str().unwrap();
+            name.starts_with("start-") && name.ends_with(".json")
+        })
+        .collect();
+    reports.sort();
+    assert!(
+        !reports.is_empty(),
+        "fixture requires the original start report"
+    );
+    for path in reports {
+        let mut collision = path.into_os_string();
+        collision.push(suffix);
+        fs::write(PathBuf::from(collision), "occupied").unwrap();
+    }
+}
+
 fn main() {
     let path = std::env::var_os("CHRONO_TEST_GIT_FIXTURE").expect("explicit Git fixture input");
     let config: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
@@ -56,6 +78,56 @@ fn main() {
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
+        "interruption" => {
+            let stage = home.join("interrupt-stage");
+            if stage.is_file() {
+                let stage = fs::read_to_string(stage).unwrap();
+                let observed = format!(
+                    "{} {}",
+                    args.get(1).map_or("", |v| v.to_str().unwrap()),
+                    args.get(2).map_or("", |v| v.to_str().unwrap())
+                );
+                if stage.trim_end_matches('\n') == observed {
+                    require_success(Command::new(git).args(&args).status().unwrap());
+                    fs::write(home.join("interruption-observed"), "completed").unwrap();
+                    interrupt_parent();
+                    return;
+                }
+            }
+            match config["extra"].as_str().unwrap() {
+                "none" => (),
+                "mark-invoked" => {
+                    fs::write(home.join("unexpected-plan-git"), "invoked").unwrap();
+                }
+                "checkout-collision" => {
+                    if arg(1, "show-ref") && arg(4, "refs/heads/feature/new") {
+                        collide_with_intents(".intent.json");
+                    }
+                }
+                "fetch-collision" => {
+                    if arg(1, "worktree") && arg(2, "list") {
+                        collide_with_intents(".fetch-intent.json");
+                    }
+                    if arg(1, "fetch") {
+                        fs::write(home.join("unexpected-fetch"), "invoked").unwrap();
+                    }
+                }
+                "result-change" => {
+                    let result = home.join("change-result");
+                    if result.is_file()
+                        && arg(1, "update-ref")
+                        && arg(2, "--no-deref")
+                        && arg(3, "-d")
+                    {
+                        require_success(Command::new(git).args(&args).status().unwrap());
+                        let path = fs::read_to_string(result).unwrap();
+                        fs::write(path.trim_end_matches('\n'), "changed").unwrap();
+                        return;
+                    }
+                }
+                extra => panic!("unknown interruption fixture: {extra}"),
+            }
+        }
         "maintenance-remove" => {
             if config["concurrent"] == true {
                 if arg(1, "update-ref") && arg(3, "-d") {

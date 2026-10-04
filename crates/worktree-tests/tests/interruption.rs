@@ -1,12 +1,12 @@
 use super::*;
-use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+use std::os::unix::process::ExitStatusExt;
 
 #[path = "fetch_interruption.rs"]
 mod fetch_interruption;
 
 impl Host {
     fn reject_result_shape(&self, result: Value, diagnostic: &str) {
-        self.interrupting_git("printf invoked > \"$HOME/unexpected-plan-git\" || exit $?");
+        self.interrupting_git("mark-invoked");
         let plan = value!({"schema":"chrono-worktree-maintenance/v1","operation":"recover-interrupted",
             "intent":{"path":".chrono-harness/state/missing.intent.json","sha256":"0".repeat(64)},
             "result":result,"head":git(&self.root,&["rev-parse","HEAD"]),
@@ -27,35 +27,7 @@ impl Host {
     }
 
     fn interrupting_git(&self, extra: &str) {
-        let real = Command::new("/bin/sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap();
-        let real = String::from_utf8(real.stdout)
-            .unwrap()
-            .trim()
-            .replace('\'', "'\\''");
-        let wrapper = self.parent.join("interrupting-git");
-        let body = r#"if [ -f "$HOME/interrupt-stage" ] && [ "$(cat "$HOME/interrupt-stage")" = "$2 $3" ]; then
- REAL "$@" || exit $?
- printf completed > "$HOME/interruption-observed" || exit $?
- kill -KILL "$PPID"
- exit 0
-fi
-EXTRA
-exec REAL "$@"
-"#;
-        fs::write(
-            &wrapper,
-            format!(
-                "#!/bin/sh\n{}",
-                body.replace("EXTRA", extra)
-                    .replace("REAL", &format!("'{real}'"))
-            ),
-        )
-        .unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-        self.policy(|p| p["git"]["program"] = value!(wrapper));
+        native_git(self, "interruption", value!({"extra":extra}));
     }
     fn crash(&self, args: &[&str], stage: &str) {
         fs::write(self.parent.join("interrupt-stage"), stage).unwrap();
@@ -171,7 +143,7 @@ fn interrupted_recovery_rejects_malformed_result_shapes() {
 fn interrupted_start_retains_intent_and_recovers_missing_or_partial_result() {
     for state in ["absent", "empty", "truncated"] {
         let h = Host::new("payload");
-        h.interrupting_git("");
+        h.interrupting_git("none");
         let source_head = git(&h.root, &["rev-parse", "HEAD"]);
         fs::write(h.root.join("payload"), "unsaved original source\n").unwrap();
         let target = h.parent.join("interrupted λ");
@@ -214,7 +186,7 @@ fn interrupted_start_retains_intent_and_recovers_missing_or_partial_result() {
 #[test]
 fn interrupted_reconstruction_preserves_actual_index_and_original_source() {
     let h = Host::new("payload");
-    h.interrupting_git("");
+    h.interrupting_git("none");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "carried content\n").unwrap();
     let candidate = commit(&h.root);
@@ -273,7 +245,7 @@ fn interrupted_reconstruction_preserves_actual_index_and_original_source() {
 #[test]
 fn interrupted_cleanup_preserves_work_and_recovers_its_owned_lock() {
     let h = Host::new("payload");
-    h.interrupting_git("");
+    h.interrupting_git("none");
     let target = h.parent.join("finished");
     assert_eq!(h.invoke("integration", "finished", &target).0, 0);
     let plan = h.cleanup(&target);
@@ -307,7 +279,7 @@ fn interrupted_cleanup_preserves_work_and_recovers_its_owned_lock() {
 fn interrupted_recovery_rejects_terminal_result_and_bound_identity_drift() {
     for fault in ["terminal", "intent", "result", "lock", "tree", "config"] {
         let h = Host::new("payload");
-        h.interrupting_git("");
+        h.interrupting_git("none");
         let target = h.parent.join("interrupted");
         if fault == "terminal" {
             h.hook(value!({"exit":17}));
@@ -355,13 +327,7 @@ fn interrupted_recovery_rejects_terminal_result_and_bound_identity_drift() {
 #[test]
 fn interrupted_intent_publication_never_overwrites_or_creates_checkout_on_failure() {
     let h = Host::new("payload");
-    h.interrupting_git(
-        r#"if [ "$2" = show-ref ] && [ "$5" = refs/heads/feature/new ]; then
- for result in .chrono-harness/state/worktrees/start-*.json; do
-  printf occupied > "$result.intent.json"
- done
-fi"#,
-    );
+    h.interrupting_git("checkout-collision");
     let target = h.parent.join("must remain absent");
     let (code, r, error) = h.invoke("feature", "new", &target);
     assert_ne!(code, 0, "{r} {error}");
