@@ -1,5 +1,5 @@
 //! Explicit capability transfer through the existing process engine.
-//! Descriptors stay CLOEXEC in the owner; only child copies are made inheritable.
+//! Owned copies stay CLOEXEC; inherited flags remain unchanged for native children.
 use std::{
     cell::RefCell,
     io,
@@ -66,8 +66,7 @@ fn inherited() -> Result<Vec<RawFd>, String> {
                 return Err("invalid or duplicate ownership descriptor".into());
             }
             let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-            if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0
-            {
+            if flags < 0 {
                 return Err(format!(
                     "inherited ownership descriptor: {}",
                     io::Error::last_os_error()

@@ -8,6 +8,10 @@ caller values cannot replace it. Receipts retain the carrier separately so input
 preparation, tool binding and operation validation compare the registered business
 environment without treating descriptor allocation as input drift. Observations
 without a carrier omit the field; existing observations remain readable.
+Engine calls leave already inherited descriptors and their flags unchanged, so
+other threads and subsequent native children retain the original capability.
+Engine-owned duplicates remain CLOEXEC until their child launch; closing the final
+inherited or owned descriptor still releases the kernel lease.
 
 FILEMAP v2 owns `execution_plans`: a map from `test:ID` to
 `{operations: [operation-ID, ...], timeout_seconds, output_limit_bytes}`.

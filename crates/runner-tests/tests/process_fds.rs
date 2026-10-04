@@ -15,6 +15,11 @@ fn spec(program: &str, args: Vec<String>) -> CommandSpec {
         output_limit_bytes: 65536,
     }
 }
+fn inherited_count() -> usize {
+    std::env::var("CHRONO_PROCESS_FDS")
+        .map(|value| value.split(',').count())
+        .unwrap_or(0)
+}
 #[test]
 fn scoped_descriptor_survives_bound_env_clear_and_parent_keeps_cloexec() {
     let dir = tempfile::tempdir().unwrap();
@@ -25,8 +30,15 @@ fn scoped_descriptor_survives_bound_env_clear_and_parent_keeps_cloexec() {
         0
     );
     let scope = Scope::new(&[file.as_fd()]).unwrap();
-    let script = "import os,fcntl; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; assert len(fds)==1; assert fcntl.fcntl(fds[0],fcntl.F_GETFD)&fcntl.FD_CLOEXEC==0; os.write(fds[0],b'child-capability'); print(os.environ['CHRONO_PROCESS_FDS'])";
-    let mut command = spec("/usr/bin/python3", vec!["-c".into(), script.into()]);
+    let script = "import os,sys,fcntl; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; assert len(fds)==int(sys.argv[1]); assert all(fcntl.fcntl(fd,fcntl.F_GETFD)&fcntl.FD_CLOEXEC==0 for fd in fds); os.write(fds[-1],b'child-capability'); print(os.environ['CHRONO_PROCESS_FDS'])";
+    let mut command = spec(
+        "/usr/bin/python3",
+        vec![
+            "-c".into(),
+            script.into(),
+            (inherited_count() + 1).to_string(),
+        ],
+    );
     command
         .env
         .insert("CHRONO_PROCESS_FDS".into(), "not-a-descriptor".into());
@@ -52,10 +64,7 @@ fn scoped_descriptor_survives_bound_env_clear_and_parent_keeps_cloexec() {
         "owner descriptor flags must stay local"
     );
     drop(scope);
-    let command = spec(
-        "/bin/sh",
-        vec!["-c".into(), "test -z \"$CHRONO_PROCESS_FDS\"".into()],
-    );
+    let command = spec("/usr/bin/python3", vec!["-c".into(), "import os,sys; value=os.environ.get('CHRONO_PROCESS_FDS'); assert (len(value.split(',')) if value else 0)==int(sys.argv[1])".into(), inherited_count().to_string()]);
     assert_eq!(
         run_process_observed(
             dir.path(),
@@ -73,8 +82,17 @@ fn nested_runner_helper() {
     if std::env::var_os("CHRONO_FD_NESTED").is_none() {
         return;
     }
-    let script = "import os; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; assert len(fds)==1; os.write(fds[0],b'nested-env-clear'); print('nested-forwarded')";
-    let command = spec("/usr/bin/python3", vec!["-c".into(), script.into()]);
+    let inherited = std::env::var("CHRONO_PROCESS_FDS").unwrap();
+    let descriptors: Vec<i32> = inherited.split(',').map(|v| v.parse().unwrap()).collect();
+    let flags: Vec<i32> = descriptors
+        .iter()
+        .map(|fd| unsafe { libc::fcntl(*fd, libc::F_GETFD) })
+        .collect();
+    let script = "import os,sys; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; assert len(fds)==int(sys.argv[1]); os.write(fds[-1],b'nested-env-clear'); print('nested-forwarded')";
+    let command = spec(
+        "/usr/bin/python3",
+        vec!["-c".into(), script.into(), inherited_count().to_string()],
+    );
     let result = run_process_observed(
         Path::new("/"),
         &command,
@@ -83,6 +101,22 @@ fn nested_runner_helper() {
     )
     .unwrap();
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert_eq!(
+        descriptors
+            .iter()
+            .map(|fd| unsafe { libc::fcntl(*fd, libc::F_GETFD) })
+            .collect::<Vec<_>>(),
+        flags,
+        "engine calls must not mutate inherited descriptors used by other threads or native children"
+    );
+    let direct = std::process::Command::new("/usr/bin/python3")
+        .args(["-c", "import os; fds=[int(v) for v in os.environ['CHRONO_PROCESS_FDS'].split(',')]; os.write(fds[-1],b'native-after-engine')"])
+        .output().unwrap();
+    assert!(
+        direct.status.success(),
+        "{}",
+        String::from_utf8_lossy(&direct.stderr)
+    );
     println!("{}", result.stdout);
 }
 #[test]
@@ -108,5 +142,5 @@ fn nested_engine_forwards_opaque_capability_after_environment_clear() {
     file.rewind().unwrap();
     let mut bytes = String::new();
     file.read_to_string(&mut bytes).unwrap();
-    assert_eq!(bytes, "nested-env-clear");
+    assert_eq!(bytes, "nested-env-clearnative-after-engine");
 }
