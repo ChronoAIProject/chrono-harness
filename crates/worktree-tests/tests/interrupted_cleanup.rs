@@ -1292,11 +1292,8 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         serde_json::to_vec_pretty(&cfg).unwrap(),
     )
     .unwrap();
-    let mut body = fs::read_to_string(h.root.join("context-judge.sh")).unwrap();
-    body=body.replace("exec /usr/bin/python3", "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/check-holder.tmp\nmv .chrono-harness/state/check-holder.tmp .chrono-harness/state/check-holder\nwhile [ ! -f .chrono-harness/state/check-release ]; do sleep 0.02; done\nexec /usr/bin/python3");
-    fs::write(h.root.join("context-judge.sh"), &body).unwrap();
     let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
-    judges["judges"][0]["sha256"] = value!(sha256(body.as_bytes()));
+    judges["judges"][0]["argv"] = value!(["hold"]);
     fs::write(
         h.root.join(JUDGES),
         serde_json::to_vec_pretty(&judges).unwrap(),

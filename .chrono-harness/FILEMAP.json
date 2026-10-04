@@ -4334,6 +4334,30 @@
           "to": "test:release-build-tests"
         }
       ]
+    },
+    {
+      "path": "crates/ci-tests/tests/support/transport.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/context_judge.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
