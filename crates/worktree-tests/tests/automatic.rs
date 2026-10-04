@@ -175,10 +175,7 @@ fn entry_receipts(h: &Host, entry: &Value) -> Vec<(PathBuf, Vec<u8>)> {
 fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ'\nprintf managed-output > 'output λ/use'\ngit symbolic-ref --short HEAD\n",
-    );
+    native_consumer(&h, "output-branch");
     let target = h.parent.join("reused");
     let args = ["--path", target.to_str().unwrap(), "--dispose-evidence"];
     let (code, r, e) = h.invoke("feature", "first-task", &target);
@@ -605,11 +602,15 @@ pub(super) fn consuming_operation(h: &Host, body: &str) {
             {"id":"consumer","path":"s.sh","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"sh","argv":["s.sh"]}}},
             {"id":"consumer-tests","path":"st.sh","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"sh","argv":["st.sh"]}}}
         ]),
-        [("s.sh", body.as_bytes()), ("st.sh", b"exit 0\n")],
+        &[("s.sh", body.as_bytes()), ("st.sh", b"exit 0\n")],
     );
 }
 
 pub(super) fn native_consumer(h: &Host, mode: &str) {
+    native_consumer_actions(h, mode, "noop");
+}
+
+pub(super) fn native_consumer_actions(h: &Host, mode: &str, test_mode: &str) {
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["tools"].as_array_mut().unwrap().push(value!({
         "id":"consumer", "program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
@@ -620,16 +621,24 @@ pub(super) fn native_consumer(h: &Host, mode: &str) {
         h,
         value!([
             {"id":"consumer","path":"consumer.rs","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"consumer","argv":[mode]}}},
-            {"id":"consumer-tests","path":"consumer-tests.rs","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"consumer","argv":["noop"]}}}
+            {"id":"consumer-tests","path":"consumer-tests.rs","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"consumer","argv":[test_mode]}}}
         ]),
-        [
+        &[
             ("consumer.rs", include_bytes!("support/consumer.rs")),
-            ("consumer-tests.rs", b"fn main() {}\n"),
+            ("consumer-tests.rs", include_bytes!("support/consumer.rs")),
+            (
+                "native_cargo/Cargo.toml",
+                include_bytes!("support/native_cargo/Cargo.toml"),
+            ),
+            (
+                "native_cargo/src/lib.rs",
+                include_bytes!("support/native_cargo/src/lib.rs"),
+            ),
         ],
     );
 }
 
-fn consuming_scripts(h: &Host, scripts: Value, sources: [(&str, &[u8]); 2]) {
+fn consuming_scripts(h: &Host, scripts: Value, sources: &[(&str, &[u8])]) {
     let mut projects = json(&fs::read(h.root.join(PROJECTS)).unwrap()).unwrap();
     projects["owners"]
         .as_array_mut()
@@ -654,6 +663,7 @@ fn consuming_scripts(h: &Host, scripts: Value, sources: [(&str, &[u8]); 2]) {
     fm["test_costs"] = value!([{"test":"consumer-tests","cost":"unknown"}]);
     fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
     for (path, bytes) in sources {
+        fs::create_dir_all(h.root.join(path).parent().unwrap()).unwrap();
         fs::write(h.root.join(path), bytes).unwrap();
     }
     commit(&h.root);
@@ -1064,10 +1074,7 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
 fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
     let h = Host::new("payload");
     h.automatic("evidence-retain");
-    consuming_operation(
-        &h,
-        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready.tmp\nmv .chrono-harness/state/ready.tmp .chrono-harness/state/ready\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\n",
-    );
+    native_consumer(&h, "unknown-use");
     let target = h.parent.join("unknown-use");
     assert_eq!(h.invoke("feature", "unknown-use", &target).0, 0);
     output(&target);
@@ -1120,10 +1127,7 @@ fn automatic_concurrent_managed_completions_release_both_uses() {
     };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
-    consuming_operation(
-        &h,
-        "mkdir -p .chrono-harness/state\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\nprintf completed\n",
-    );
+    native_consumer(&h, "waiting-completion");
     let target = h.parent.join("parallel-use");
     assert_eq!(h.invoke("feature", "parallel-use", &target).0, 0);
     let mut children = vec![];
@@ -1177,7 +1181,7 @@ fn automatic_concurrent_managed_completions_release_both_uses() {
 fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
     let h = Host::new("payload");
     h.automatic("evidence-retain");
-    consuming_operation(&h, "printf finished\n");
+    native_consumer(&h, "finished");
     let target = h.parent.join("local-use");
     assert_eq!(h.invoke("feature", "local-use", &target).0, 0);
     let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))

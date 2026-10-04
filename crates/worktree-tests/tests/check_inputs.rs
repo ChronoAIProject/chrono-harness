@@ -51,7 +51,7 @@ pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str
     let built = source().join(format!("crates/{project}/target/debug/{name}"));
     install_readonly_file(root, &built, name);
 }
-fn install_readonly_file(root: &Path, built: &Path, name: &str) {
+pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str) {
     let installed = root.join(format!(".chrono-harness/bin/{name}"));
     // These fixtures execute but never modify product binaries. Reuse the built
     // inode under each isolated host path without copying a new executable image.

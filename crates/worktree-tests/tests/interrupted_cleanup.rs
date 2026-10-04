@@ -223,12 +223,19 @@ fn participating_check(h: &Host) {
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
 }
-fn install_inner(root: &Path, body: &str) {
-    use std::os::unix::fs::PermissionsExt;
+fn install_inner(root: &Path, stdout: &str, stderr: &str, exit: i32) {
     super::check_inputs::install(root);
-    let path = root.join(".chrono-harness/bin/inner-check");
-    fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    super::check_inputs::install_readonly_file(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer")),
+        "inner-check",
+    );
+    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        root.join(".chrono-harness/state/inner-check-response.json"),
+        serde_json::to_vec(&value!({"stdout":stdout,"stderr":stderr,"exit":exit})).unwrap(),
+    )
+    .unwrap();
 }
 #[test]
 fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
@@ -238,12 +245,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         h.kernel_cleanup();
         let target = h.parent.join("console");
         assert_eq!(h.invoke("feature", "console", &target).0, 0);
-        install_inner(
-            &target,
-            &format!(
-                "printf 'original stdout\\n'; printf 'original diagnostic\\n' >&2; exit {exit}\n"
-            ),
-        );
+        install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
         let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
@@ -299,7 +301,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     let receipt_path = h.root.join(receipt["path"].as_str().unwrap());
     let original = fs::read(&receipt_path).unwrap();
     assert_eq!(sha256(&original), receipt["sha256"]);
-    install_inner(&b, "printf 'check warning\\n' >&2; printf checked\n");
+    install_inner(&b, "checked", "check warning\n", 0);
     let (code, used, error) = h.auto(
         "use",
         &["--path", b.to_str().unwrap(), "--operation", "use.consumer"],
@@ -1582,36 +1584,10 @@ module.validate(root,Path(c))
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let preparation = r#"mkdir -p .chrono-harness/state/cargo-case/src
-cat > .chrono-harness/state/cargo-case/Cargo.toml <<'TOML'
-[package]
-name="lease-native-fixture"
-version="0.1.0"
-edition="2024"
-TOML
-cat > .chrono-harness/state/cargo-case/src/lib.rs <<'RUST'
-#[test]
-fn native_holder() {
-    std::env::set_current_dir(std::env::var("CHRONO_NATIVE_FIXTURE_ROOT").unwrap()).unwrap();
-    std::fs::write(".chrono-harness/state/native-pid", std::process::id().to_string()).unwrap();
-    std::fs::write(".chrono-harness/state/native-holder", std::env::var("CHRONO_PROCESS_FDS").expect("native capability carrier")).unwrap();
-    while !std::path::Path::new(".chrono-harness/state/native-release").exists() { std::thread::sleep(std::time::Duration::from_millis(10)); }
-    std::fs::write(".chrono-harness/state/native-done", "joined").unwrap();
-}
-RUST
-exec cargo test --offline --manifest-path .chrono-harness/state/cargo-case/Cargo.toml --no-run
-"#;
-    let body = r#"printf '%s' "$$" > .chrono-harness/state/cargo-wrapper
-export CHRONO_NATIVE_FIXTURE_ROOT="$PWD"
-exec cargo test --offline --manifest-path .chrono-harness/state/cargo-case/Cargo.toml -- --nocapture
-"#;
-    consuming_operation(&h, body);
+    super::automatic::native_consumer_actions(&h, "cargo-run", "cargo-prepare");
     // Compile under the separately registered fixture action, with the same
     // managed environment and process bounds as its later Cargo invocation.
     // The native-holder deadline measures launch/lease handoff after preparation.
-    fs::write(h.root.join("st.sh"), preparation).unwrap();
-    commit(&h.root);
-    git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("native-cargo");
     assert_eq!(h.invoke("feature", "native-cargo", &target).0, 0);
     let (code, prepared, error) = h.auto(
@@ -1790,7 +1766,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     reclaim(&h, &target);
     assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
-    install_inner(&target, "printf canonical-linked-check\n");
+    install_inner(&target, "canonical-linked-check", "", 0);
     let checked = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&target)
         .arg("check")
