@@ -4143,6 +4143,30 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/languages.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/languages.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

@@ -111,11 +111,13 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 混合语言宿主按生产单元分别配对。实现语言、测试语言及 Shell／Python 配对由宿主显式登记，配对判官核对这些声明与登记的测试入口，不按目录、扩展名、命令名或代码扫描推断语言及依赖。未登记语言、配对不符或观察到的实际执行不符须报错；声明核验不证明不存在隐藏的跨语言测试逻辑。此合同不要求宿主采用 Rust、特定目录结构或特定测试框架。
 
-本条是目标合同；现有跨语言测试夹具的迁移、语言登记与配对判官执法仍待实现，规范文字不代表当前机器门已启用。
+projects schema v2 要求每个 project／script 显式登记非空 `language`；projects 判官只核 DELTA 影响的专属配对，要求语言 ID 相同，唯一额外准入为生产 `shell`、测试 `python`。这两个保留 ID 由宿主显式选择，sh／bash 可登记为 `shell`；其它 ID 是不作推断、不归一化的字面值。schema v1 保留旧合同，不因升级二进制自动取得语言约束。
+
+配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓与示例的 v2 采用、跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
 ## 3. 登记格式与字段合同
 
-Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
+Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects accept version 1 | 2 and judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前由 AI 对宿主定义的治理／输入范围作负责的 declared-complete 工程声明，补齐该范围的实际输入、依赖、绑定、两端快照、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 判官核验声明引用、身份、快照和观察到的操作；普通 full check 不要求证明所有隐藏输入不存在，也不要求 VM 或 OS 隔离。

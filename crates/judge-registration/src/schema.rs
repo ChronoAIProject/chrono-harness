@@ -426,14 +426,19 @@ fn validate_execution_units(v: &Value) -> Result {
     Ok(())
 }
 pub fn projects(v: &Value) -> Result {
-    common(v, &["owners", "projects", "scripts"])?;
+    common_versions(v, &["owners", "projects", "scripts"], &[1, 2])?;
+    let languages = v["schema_version"] == 2;
     unique(&v["owners"], None)?;
     unique(&v["projects"], Some("id"))?;
     unique(&v["scripts"], Some("id"))?;
     for p in array(&v["projects"])? {
         object(
             p,
-            &["id", "kind", "actions"],
+            if languages {
+                &["id", "kind", "actions", "language"]
+            } else {
+                &["id", "kind", "actions"]
+            },
             &[
                 "test_project",
                 "tests_for",
@@ -444,6 +449,9 @@ pub fn projects(v: &Value) -> Result {
             ],
         )?;
         choice(&p["kind"], &["production", "test"])?;
+        if languages {
+            string(&p["language"]).map_err(|e| format!("project language: {e}"))?;
+        }
         if p.get("test_project").is_some() == p.get("tests_for").is_some() {
             return Err("project requires exactly test_project or tests_for".into());
         }
@@ -462,7 +470,18 @@ pub fn projects(v: &Value) -> Result {
         )?;
     }
     for s in array(&v["scripts"])? {
-        object(s, &["id", "path", "actions"], &["test_script", "tests_for"])?;
+        object(
+            s,
+            if languages {
+                &["id", "path", "actions", "language"]
+            } else {
+                &["id", "path", "actions"]
+            },
+            &["test_script", "tests_for"],
+        )?;
+        if languages {
+            string(&s["language"]).map_err(|e| format!("script language: {e}"))?;
+        }
         path(&s["path"])?;
         actions(&s["actions"])?;
         if s.get("test_script").is_some() == s.get("tests_for").is_some() {

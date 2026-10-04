@@ -502,3 +502,9 @@ group identities as record targets at each endpoint; names, paths and Cargo filt
 do not infer dependency selection. Plans must include their bound terminal action.
 An original unfiltered action may remain available for release without being a
 current independent-unit plan.
+
+## Declared test languages
+
+Projects registry v2 requires a nonempty `language` on every project and standalone script, including each dedicated test owner. The projects judge compares only affected production/test pairs. Equal literal identifiers pass; the sole additional pair is production `shell` with test `python`. Hosts explicitly use these reserved identifiers for Shell and Python. Other host language IDs remain literal, with no path, extension, tool-name or source scan used to infer or normalize them. Missing v2 declarations fail structure validation; mismatched affected pairs fail with `E_TEST_LANGUAGE` before business execution. V1 retains its original contract and rejects the new field.
+
+Language edits live in the original project/script records, so both-endpoint FILEMAP impact includes metadata-only changes and existing explicit test edges. Unaffected historical semantic defects are not rejudged. This validates declared pair languages, not the actual contents or absence of hidden cross-language helpers. Existing route and receipt checks still bind observed operations to registered argv and tools. Full host adoption and migration of foreign test logic remain separate required work.

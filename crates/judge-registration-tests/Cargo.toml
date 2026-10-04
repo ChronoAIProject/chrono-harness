@@ -15,5 +15,9 @@ tempfile = "3"
 name = "registration_contract"
 path = "tests/registration_contract.rs"
 
+[[test]]
+name = "languages"
+path = "tests/languages.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3
