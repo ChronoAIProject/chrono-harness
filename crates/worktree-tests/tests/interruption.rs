@@ -310,7 +310,7 @@ fn interrupted_recovery_rejects_terminal_result_and_bound_identity_drift() {
         h.interrupting_git("");
         let target = h.parent.join("interrupted");
         if fault == "terminal" {
-            h.hook("exit 17");
+            h.hook(value!({"exit":17}));
             assert_ne!(h.invoke("integration", "interrupted", &target).0, 0);
         } else {
             h.crash_start(&target);

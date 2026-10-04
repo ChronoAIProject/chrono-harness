@@ -383,17 +383,7 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
 }
 
 fn blocked_remove(h: &Host, after_effect: bool) {
-    use std::os::unix::fs::PermissionsExt;
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let wrapper = h.parent.join("automatic-git");
-    let effect = if after_effect {
-        format!("'{}' \"$@\" || exit $?;", real.display())
-    } else {
-        String::new()
-    };
-    fs::write(&wrapper,format!("#!/bin/sh\nif [ -f \"$HOME/fail-remove\" ] && [ \"$2\" = worktree ] && [ \"$3\" = remove ]; then\n{effect}\nprintf 'original automatic removal failure\\n' >&2\nexit 71\nfi\nexec '{}' \"$@\"\n",real.display())).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(wrapper));
+    native_git(h, "automatic-remove", value!({"after_effect":after_effect}));
 }
 
 #[test]
@@ -983,7 +973,7 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
 fn automatic_failed_birth_and_missing_state_are_protected() {
     let h = Host::new("payload");
     h.automatic("evidence-retain");
-    h.hook("printf original-birth-failure >&2\nexit 17");
+    h.hook(value!({"stderr":"original-birth-failure","exit":17}));
     let failed = h.parent.join("failed");
     assert_ne!(h.invoke("feature", "failed", &failed).0, 0);
     assert!(failed.exists());

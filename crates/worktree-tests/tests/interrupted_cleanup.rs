@@ -94,32 +94,9 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
 
 #[test]
 fn cache_disposal_checks_new_index_paths_after_immutable_tree_acquisition() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("tree-index-git");
-    fs::write(
-        &script,
-        format!(
-            r#"#!/bin/sh
-if [ -f "$HOME/stage-after-tree" ] && [ "$PWD" = "$HOME/tree-index" ] && [ "$2" = ls-tree ]; then
-    '{}' "$@" || exit $?
-    mkdir -p 'output λ'
-    printf source > 'output λ/staged-source'
-    '{}' add -f -- 'output λ/staged-source' || exit $?
-    exit 0
-fi
-exec '{}' "$@"
-"#,
-            real.display(),
-            real.display(),
-            real.display()
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(&h, "stage-after-tree", value!({}));
     let target = h.parent.join("tree-index");
     assert_eq!(h.invoke("feature", "tree-index", &target).0, 0);
     output(&target);
@@ -142,38 +119,9 @@ exec '{}' "$@"
 
 #[test]
 fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("identity-git");
-    fs::write(
-        &script,
-        format!(
-            r#"#!/bin/sh
-if [ -f "$HOME/identity-fault" ] && [ "$PWD" = "$HOME/observed" ] && [ "$2" = rev-parse ] && [ "$3" = --show-toplevel ] && [ "$4" = --git-common-dir ]; then
-    case "$(cat "$HOME/identity-fault")" in
-        truncated) printf '%s\n' "$PWD"; exit 0 ;;
-        malformed-head) printf '%s\n' "$PWD" "$HOME/source with spaces/.git" "$('{}' rev-parse --absolute-git-dir)" not-an-oid refs/heads/feature/observed; exit 0 ;;
-        foreign-common) printf '%s\n' "$PWD" "$HOME/foreign-common" "$('{}' rev-parse --absolute-git-dir)" "$('{}' rev-parse HEAD)" refs/heads/feature/observed; exit 0 ;;
-        foreign-branch) '{}' "$@" | /usr/bin/sed 's@refs/heads/feature/observed@refs/heads/feature/other@'; exit 0 ;;
-        foreign-metadata) '{}' "$@" | /usr/bin/sed "s@.*/worktrees/observed@$HOME/foreign-common@"; exit 0 ;;
-        failure) printf 'original identity failure\n' >&2; exit 71 ;;
-    esac
-fi
-exec '{}' "$@"
-"#,
-            real.display(),
-            real.display(),
-            real.display(),
-            real.display(),
-            real.display(),
-            real.display()
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(&h, "identity-fault", value!({}));
     let target = h.parent.join("observed");
     assert_eq!(h.invoke("feature", "observed", &target).0, 0);
     output(&target);
@@ -1186,7 +1134,7 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_git(&h, "admission-interrupt", value!({}));
-    h.hook("printf native > \"$HOME/native-hook\"\nwhile [ ! -f \"$HOME/release-hook\" ]; do sleep 0.02; done");
+    h.hook(value!({"writes":[{"path":h.parent.join("native-hook"),"contents":"native"}],"release":h.parent.join("release-hook")}));
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
     let mut start = CapturedChild::spawn(

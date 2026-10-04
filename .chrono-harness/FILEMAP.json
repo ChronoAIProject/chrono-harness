@@ -4221,6 +4221,30 @@
       ]
     },
     {
+      "path": "crates/worktree-tests/tests/support/hook.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/version_probe.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree-tests/tests/support/native_cargo/Cargo.toml",
       "owner": "worktree-tests",
       "surface": "test",

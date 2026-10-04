@@ -45,7 +45,7 @@ fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
     select_config(&h.root, SOURCE_CONFIG);
     let head = commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
-    h.hook("echo selected-hook-failure >&2\nexit 17");
+    h.hook(value!({"stderr":"selected-hook-failure\n","exit":17}));
     let target = h.parent.join("selected recovery");
     let (code, original, _) = h.invoke("feature", "selected-recovery", &target);
     assert_eq!(code, 2);
@@ -104,7 +104,7 @@ fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
 #[test]
 fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
     let h = Host::new("arbitrary/input.go");
-    h.hook("echo original-hook-failure >&2\nexit 17");
+    h.hook(value!({"stderr":"original-hook-failure\n","exit":17}));
     let target = h.parent.join("failed λ");
     let (code, original, _) = h.invoke("feature", "failed", &target);
     assert_ne!(code, 0);
@@ -166,7 +166,7 @@ fn maintenance_recovers_reconciled_conflict_with_explicit_index_tree() {
 fn maintenance_recovery_rejects_identity_lock_receipt_and_unresolved_state() {
     for fault in ["digest", "head", "tree", "lock", "unstaged", "unknown"] {
         let h = Host::new("payload");
-        h.hook("exit 17");
+        h.hook(value!({"exit":17}));
         let target = h.parent.join("failed");
         let (_, original, _) = h.invoke("feature", "failed", &target);
         let mut plan = h.recovery(&original, &target);
@@ -367,7 +367,7 @@ fn raw_checkout_cleanup_preserves_mode_changes_hidden_by_git_configuration() {
 fn raw_checkout_recovery_keeps_lock_until_physical_work_matches_saved_index() {
     use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
-    h.hook("exit 17");
+    h.hook(value!({"exit":17}));
     let target = h.parent.join("unreconciled mode");
     let (code, original, _) = h.invoke("feature", "unreconciled-mode", &target);
     assert_ne!(code, 0);
@@ -548,7 +548,7 @@ fn maintenance_rechecks_work_after_releasing_owned_locks() {
         h.policy(|p| p["git"]["program"] = value!(wrapper));
         let target = h.parent.join("saved");
         if operation == "recover" {
-            h.hook("exit 17");
+            h.hook(value!({"exit":17}));
         }
         let (code, original, _) = h.invoke("feature", "saved", &target);
         assert_eq!(code == 0, operation == "cleanup");

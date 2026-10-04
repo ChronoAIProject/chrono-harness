@@ -679,33 +679,13 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
     for retain in [true, false] {
         let h = Host::new("data.txt");
         bind(&h);
-        let break_retention = if retain {
-            ""
-        } else {
-            "mv .chrono-harness/state/preparation .chrono-harness/state/saved-preparation\nln -s saved-preparation .chrono-harness/state/preparation\n"
-        };
-        let body = format!(
-            "#!/bin/sh\n{break_retention}/usr/bin/python3 -c 'print(\"original-full-version-probe\"*20000)'\n"
-        );
-        fs::create_dir_all(h.root.join("tools")).unwrap();
-        fs::write(h.root.join("tools/gitprobe.sh"), &body).unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(
-            h.root.join("tools/gitprobe.sh"),
-            fs::Permissions::from_mode(0o755),
-        )
-        .unwrap();
+        let program = env!("CARGO_BIN_EXE_chrono-worktree-test-version-probe");
         let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
-        cfg["tools"][0]["program"] = value!("tools/gitprobe.sh");
-        cfg["environment"]["inputs"][0]["location"] = value!("tools/gitprobe.sh");
-        cfg["environment"]["inputs"][0]["sha256"] = value!(sha256(body.as_bytes()));
+        cfg["tools"][0]["program"] = value!(program);
+        cfg["environment"]["inputs"][0]["location"] = value!(program);
+        cfg["environment"]["inputs"][0]["sha256"] = value!(sha256(&fs::read(program).unwrap()));
+        cfg["environment"]["values"]["CHRONO_TEST_PROBE_RETAIN"] = value!(retain.to_string());
         fs::write(h.root.join(CONFIG), serde_json::to_vec(&cfg).unwrap()).unwrap();
-        let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
-        fm["files"]
-            .as_array_mut()
-            .unwrap()
-            .push(file("tools/gitprobe.sh", value!([])));
-        fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
         commit(&h.root);
         git(&h.root, &["push", "-q", "warehouse", "dev"]);
         let dest = h.parent.join(if retain {

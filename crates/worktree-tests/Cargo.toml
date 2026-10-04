@@ -36,5 +36,17 @@ path = "tests/support/git_fault.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "chrono-worktree-test-hook"
+path = "tests/support/hook.rs"
+test = false
+bench = false
+
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-worktree-test-version-probe"
+path = "tests/support/version_probe.rs"
+test = false
+bench = false
