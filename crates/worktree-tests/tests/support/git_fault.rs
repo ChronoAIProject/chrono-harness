@@ -59,7 +59,14 @@ fn main() {
         "maintenance-remove" => {
             if config["concurrent"] == true {
                 if arg(1, "update-ref") && arg(3, "-d") {
-                    let head = fs::read_to_string(home.join("new-head")).unwrap();
+                    let path = home.join("new-head");
+                    let head = match fs::read_to_string(&path) {
+                        Ok(head) => head,
+                        Err(error) => {
+                            eprintln!("fixture head input {}: {error}", path.display());
+                            String::new()
+                        }
+                    };
                     Command::new(git)
                         .args([
                             "update-ref",
