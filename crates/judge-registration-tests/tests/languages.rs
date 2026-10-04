@@ -1,5 +1,13 @@
-use chrono_judge_registration::schema;
+#[path = "../../judge-filemap-tests/tests/support/mod.rs"]
+mod support;
+use chrono_judge_registration::Registrations;
 use serde_json::{Value, json};
+
+fn validate(projects: &Value) -> Result<(), String> {
+    let mut values = support::values();
+    values.insert(support::PROJECTS.into(), projects.clone());
+    Registrations::load(&values, support::CONFIG).map(|_| ())
+}
 
 fn registry(version: u64) -> Value {
     let action = json!({"execute":{"operation":"host.action","tool":"host","argv":[]}});
@@ -24,7 +32,7 @@ fn v2_requires_language_for_every_project_and_script() {
             row["language"] = json!("host-language");
         }
     }
-    schema::projects(&values).unwrap();
+    validate(&values).unwrap();
     for collection in ["projects", "scripts"] {
         for index in 0..2 {
             let mut missing = values.clone();
@@ -33,14 +41,14 @@ fn v2_requires_language_for_every_project_and_script() {
                 .unwrap()
                 .remove("language");
             assert!(
-                schema::projects(&missing)
+                validate(&missing)
                     .unwrap_err()
                     .contains("missing field language")
             );
             for bad in [Value::Null, json!(""), json!(["rust"]), json!(2)] {
                 let mut invalid = values.clone();
                 invalid[collection][index]["language"] = bad;
-                assert!(schema::projects(&invalid).unwrap_err().contains("language"));
+                assert!(validate(&invalid).unwrap_err().contains("language"));
             }
         }
     }
@@ -49,16 +57,16 @@ fn v2_requires_language_for_every_project_and_script() {
 #[test]
 fn v1_keeps_its_original_contract_and_rejects_v2_fields() {
     let mut values = registry(1);
-    schema::projects(&values).unwrap();
+    validate(&values).unwrap();
     values["projects"][0]["language"] = json!("rust");
     assert!(
-        schema::projects(&values)
+        validate(&values)
             .unwrap_err()
             .contains("unknown field language")
     );
     values["schema_version"] = json!(3);
     assert!(
-        schema::projects(&values)
+        validate(&values)
             .unwrap_err()
             .contains("unsupported schema_version")
     );

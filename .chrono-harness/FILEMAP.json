@@ -1511,6 +1511,10 @@
         {
           "kind": "compile",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
         }
       ]
     },
