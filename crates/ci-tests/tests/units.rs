@@ -262,17 +262,22 @@ fn install(root: &Path) {
     fs::create_dir_all(&bin).unwrap();
     // Test the current product outputs; deployed host tools have a separate
     // caller-owned rollout and may intentionally retain an older schema.
+    // Keep writable executable descriptors in a joined copy process so other
+    // concurrently forked test children cannot inherit them before exec.
+    let mut copy = Command::new("/bin/cp");
     for (project, name) in [
         ("runner", "chrono-harness"),
         ("judge-ci", "chrono-judge-ci"),
         ("ci", "chrono-ci"),
     ] {
-        fs::copy(
-            source.join(format!("crates/{project}/target/debug/{name}")),
-            bin.join(name),
-        )
-        .unwrap();
+        copy.arg(source.join(format!("crates/{project}/target/debug/{name}")));
     }
+    let copied = copy.arg(&bin).output().unwrap();
+    assert!(
+        copied.status.success(),
+        "candidate fixture installation: {}",
+        String::from_utf8_lossy(&copied.stderr)
+    );
 }
 
 fn consumer() -> (tempfile::TempDir, String, String) {
