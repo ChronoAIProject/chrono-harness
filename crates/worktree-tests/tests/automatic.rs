@@ -1040,7 +1040,7 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
     h.automatic("evidence-retain");
     consuming_operation(
         &h,
-        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\n",
+        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready.tmp\nmv .chrono-harness/state/ready.tmp .chrono-harness/state/ready\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\n",
     );
     let target = h.parent.join("unknown-use");
     assert_eq!(h.invoke("feature", "unknown-use", &target).0, 0);
