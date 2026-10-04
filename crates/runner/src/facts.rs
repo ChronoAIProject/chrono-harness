@@ -406,6 +406,14 @@ impl Reader {
         })
     }
     pub fn export(&self, root: &Path, oid: &str, t: &Tree, dest: &Path) -> Result<(), String> {
+        if self.can_reuse_oid(oid) {
+            let paths = t
+                .iter()
+                .filter(|(_, entry)| entry.kind == "blob")
+                .map(|(path, _)| path.clone())
+                .collect::<Vec<_>>();
+            self.immutable_blobs(root, oid, &paths)?;
+        }
         for (path, e) in t {
             if e.kind != "blob" {
                 continue;
@@ -444,6 +452,6 @@ impl Reader {
         if !self.can_reuse_oid(oid) {
             return registry_snapshot_with(path, |path| self.blob(root, oid, path));
         }
-        registry_snapshot_with_batches(path, |paths| self.registry_blobs(root, oid, paths))
+        registry_snapshot_with_batches(path, |paths| self.immutable_blobs(root, oid, paths))
     }
 }

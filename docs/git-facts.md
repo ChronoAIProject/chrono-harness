@@ -53,7 +53,11 @@ Registry snapshots and config verification share this acquisition owner while
 keeping their existing parsing, endpoint and acceptance checks.
 The bound Reader and worktree producer share one registry batch transport and
 framing validator. Each supplies its own bounded Git invocation and retains its
-original process receipts. Only explicitly resolved registry paths participate;
+original process receipts. Resolved registry paths and a verified immutable
+snapshot's literal blob paths use this transport; it does not infer dependencies.
+Snapshot export keeps its byte, symlink, read-only file and destination checks,
+and rechecks bound inputs when consuming each original blob range. Unverified
+endpoints and legacy readers retain individual reads. Batch
 metadata determines bounded content partitions, with direct reads for small
 lists or frames exceeding the batch budget. Successful cache entries retain
 their original source coordinates; malformed, failed and drifted acquisitions
