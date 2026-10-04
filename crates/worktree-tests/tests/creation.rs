@@ -1528,6 +1528,45 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
 }
 
 #[test]
+fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
+    let h = Host::new("payload");
+    h.remote_wrapper(
+        r#"if [ "$PWD" = "$HOME/source with spaces" ] && [ "$2" = ls-files ] && [ "$3" = --others ]; then
+ ignored=no
+ for arg in "$@"; do
+  if [ "$arg" = --ignored ]; then ignored=yes; fi
+ done
+ if [ "$ignored" = no ]; then
+  printf 'unregistered-work\n' > .git/info/exclude
+  REAL "$@"
+  result=$?
+  : > .git/info/exclude
+  exit "$result"
+ fi
+fi"#,
+    );
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    let work = h.root.join("unregistered-work");
+    fs::write(&work, "must remain visible and preserved").unwrap();
+    let (code, report, error) =
+        h.reconstruct(reconstruction(&base, &base, value!([])), "changing-ignore");
+    assert_ne!(code, 0, "{} {error}", report["error"]);
+    assert!(report["error"].as_str().unwrap().contains("unregistered"));
+    assert!(!h.parent.join("changing-ignore").exists());
+    assert_eq!(
+        fs::read(&work).unwrap(),
+        b"must remain visible and preserved"
+    );
+
+    fs::remove_file(&work).unwrap();
+    let (code, report, error) = h.reconstruct(
+        reconstruction(&base, &base, value!([])),
+        "changing-ignore-clean",
+    );
+    assert_eq!(code, 0, "{} {error}", report["error"]);
+}
+
+#[test]
 fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
     use std::os::unix::fs::symlink;
     let h = Host::new("tree/input");
