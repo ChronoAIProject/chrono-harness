@@ -25,6 +25,7 @@
         "delta.candidate-judge",
         "delta.local-ci",
         "test.behavior",
+        "test.same-language",
         "evidence.program-state",
         "evidence.failure",
         "policy.evolution",

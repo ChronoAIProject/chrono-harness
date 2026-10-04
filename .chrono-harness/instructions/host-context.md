@@ -4,7 +4,7 @@
 
 产品默认归 assets/instructions/catalog.json、default-manifest.json；本宿主独立拥有 .chrono-harness/instructions/catalog.json、manifest.json 和本上下文。产品资产是编译／测试输入，宿主数据及已存在投影是运行输入；FILEMAP 的 owner、输入、消费者与边仍显式登记。升级二进制或重复 init 不覆盖既有宿主选择；采用新默认须明确编辑宿主数据。
 
-当前指令 schema=2、producer=chrono-instructions、render=atomic-rules/relative-alias/v3。115 个 atom（99 个双语内容叶子、16 个聚合）及原 requires 保留。产品与本宿主根明确选择 21 个叶子及 workflow 五节短流程；完整 core.general/general 仍可用于自定义输出。本宿主 general-en 输出仍含 99 个叶子，repair-skill 仍为原 7 叶子闭包。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 CLAUDE.md；修改宿主源后使用登记入口，不手改投影：
+当前指令 schema=2、producer=chrono-instructions、render=atomic-rules/relative-alias/v3。116 个 atom（100 个双语内容叶子、16 个聚合）。产品与本宿主根明确选择 22 个叶子及 workflow 五节短流程；完整 core.general/general 仍可用于自定义输出。本宿主 general-en 输出含 100 个叶子，repair-skill 仍为原 7 叶子闭包。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 CLAUDE.md；修改宿主源后使用登记入口，不手改投影：
 
 ```sh
 cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-instructions -- generate --host-root .
