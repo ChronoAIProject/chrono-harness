@@ -1227,31 +1227,11 @@ fn delayed_monitor_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
-    let digest = sha256(&fs::read(&python).unwrap());
+    let executable = env!("CARGO_BIN_EXE_chrono-test-delayed-monitor");
+    let digest = sha256(&fs::read(executable).unwrap());
     let spec = chrono_harness::CommandSpec {
-        program: python.to_string_lossy().into(),
-        args: vec![
-            "-S".into(),
-            "-c".into(),
-            r#"import os,time
-with open('ready.tmp','w') as ready:
- ready.write(str(os.getpid()))
-os.replace('ready.tmp','ready')
-start=time.monotonic()
-while not os.path.exists('release'):
- assert time.monotonic()-start<5
- time.sleep(.005)
-delay,overflow=open('release').read().split(',')
-time.sleep(float(delay))
-if overflow=='yes':
- os.write(1,b'x'*8192)
-os.close(1)
-os.close(2)
-os._exit(7)
-"#
-            .into(),
-        ],
+        program: executable.into(),
+        args: vec!["child".into()],
         env: Default::default(),
         timeout_seconds: 1,
         output_limit_bytes: 4096,
@@ -1284,67 +1264,19 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
     let root = tempfile::tempdir().unwrap();
     let exe = std::env::current_exe().unwrap();
     let digest = sha256(&fs::read(&exe).unwrap());
-    let python = chrono_harness::resolve_program(root.path(), "python3", None).unwrap();
-    // Only the nested launcher is suspended. The actual child and root's kernel
-    // exit observer remain runnable. This separate oracle observes real exit,
-    // including the late-exit control that a try_wait-before-timeout fix accepts.
-    let mut controller = std::process::Command::new(python)
-        .args([
-            "-S",
-            "-c",
-            r#"import json,os,select,signal,sys,time
-clock=time.CLOCK_UPTIME_RAW if sys.platform=='darwin' else time.CLOCK_MONOTONIC
-now=lambda:time.clock_gettime(clock)
-open('controller-ready','w').close()
-start=now()
-while not os.path.exists('ready'):
- assert now()-start<5
- time.sleep(.005)
-launcher=json.load(open('launcher'))
-pid=int(open('ready').read())
-if sys.platform=='darwin':
- handle=select.kqueue()
- handle.control([select.kevent(pid,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ONESHOT,fflags=select.KQ_NOTE_EXIT)],0,0)
-else:
- fd=os.pidfd_open(pid)
- handle=select.poll()
- handle.register(fd,select.POLLIN)
-time.sleep(.15)
-stopped=now()
-assert 0<=stopped-launcher['started']<.75, 'fixture missed the original deadline'
-os.kill(launcher['pid'],signal.SIGSTOP)
-try:
- with open('release.tmp','w') as release:
-  release.write(('1.3' if sys.argv[1]=='late' else '.05')+(','+'yes' if sys.argv[1]=='overflow' else ',no'))
- os.replace('release.tmp','release')
- if sys.platform=='darwin':
-  events=handle.control(None,1,3)
-  assert len(events)==1 and events[0].ident==pid and events[0].fflags & select.KQ_NOTE_EXIT
- else:
-  events=handle.poll(3000)
-  assert events and events[0][0]==fd and events[0][1] & select.POLLIN
-  os.close(fd)
- terminal=now()
- if sys.argv[1]=='late':
-  assert terminal-stopped>1
- else:
-  assert 0<=terminal-launcher['started']<1, 'child did not exit inside the deadline'
- time.sleep(max(0,stopped+2.1-now()))
- with open('kernel-terminal.json','w') as result:
-  json.dump(dict(pid=pid,started=launcher['started'],stopped=stopped,terminal=terminal,resumed=now()),result)
-finally:
- os.kill(launcher['pid'],signal.SIGCONT)
-"#,
-            case,
-        ])
-        .current_dir(root.path())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    // Start the timed launch only after the independent observer has completed
-    // interpreter/import setup. The launcher's timestamp remains a conservative
-    // lower bound on the actual timer start; the original one-second checks stay.
+    // Only the nested launcher is suspended. The child and independent kernel
+    // observer remain runnable; the late-exit control rejects a monitor that
+    // merely tests try_wait before checking its deadline.
+    let mut controller =
+        std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-delayed-monitor"))
+            .args(["controller", case])
+            .current_dir(root.path())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+    // The independent observer publishes readiness before the timed launch.
+    // The launcher timestamp conservatively precedes the actual timer start.
     let preparing = std::time::Instant::now();
     while !root.path().join("controller-ready").exists() {
         if preparing.elapsed() >= std::time::Duration::from_secs(5)

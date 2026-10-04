@@ -4111,6 +4111,18 @@
           "to": "project:runner-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner-tests/tests/support/delayed_monitor.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

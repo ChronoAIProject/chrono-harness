@@ -5,11 +5,13 @@ edition = "2024"
 publish = false
 autotests = false
 
+[dependencies]
+serde_json = "1"
+libc = "0.2"
+
 [dev-dependencies]
 chrono-harness = { path = "../runner" }
-serde_json = "1"
 tempfile = "3"
-libc = "0.2"
 
 [[test]]
 name = "cli_contract"
@@ -41,5 +43,11 @@ path = "tests/process_fds.rs"
 [[bin]]
 name = "chrono-test-closed-streams"
 path = "tests/support/closed_streams.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-delayed-monitor"
+path = "tests/support/delayed_monitor.rs"
 test = false
 bench = false
