@@ -51,6 +51,10 @@ acquire their own evidence. Mutable refs, HEAD, index, checkout and untracked
 facts, legacy unbound reads, failures and missing objects are never cached.
 Registry snapshots and config verification share this acquisition owner while
 keeping their existing parsing, endpoint and acceptance checks.
+Successfully parsed tree inventories use the same Reader-local eligibility and
+guards, retaining their original process bytes. Repeated physical checkout checks
+reuse that fixed tree but read the current index and working files anew. Malformed
+trees and post-process input drift do not create reusable tree entries.
 The bound Reader and worktree producer share one registry batch transport and
 framing validator. Each supplies its own bounded Git invocation and retains its
 original process receipts. Resolved registry paths and a verified immutable

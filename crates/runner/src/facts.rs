@@ -332,8 +332,7 @@ impl Reader {
         Ok(parents)
     }
     pub fn tree(&self, root: &Path, oid: &str) -> Result<Tree, String> {
-        let raw = self.git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
-        parse_tree(&raw)
+        self.tree_with_reuse(root, oid)
     }
     pub fn tracked_changes(&self, root: &Path, candidate: &str) -> Result<Vec<String>, String> {
         let tree = self.tree(root, candidate)?;
