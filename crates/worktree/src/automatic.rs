@@ -191,6 +191,10 @@ fn directory_id(path: &Path) -> Result<String, String> {
     }
 }
 fn attachment(r: &mut Runner, target: &Path) -> Result<Attachment, String> {
+    let metadata = r.text(target, &["rev-parse", "--absolute-git-dir"])?;
+    attachment_at(target, Path::new(metadata.trim()))
+}
+fn attachment_at(target: &Path, metadata: &Path) -> Result<Attachment, String> {
     absolute(target, false)?;
     let gitfile = target.join(".git");
     if !fs::symlink_metadata(&gitfile)
@@ -199,10 +203,7 @@ fn attachment(r: &mut Runner, target: &Path) -> Result<Attachment, String> {
     {
         return Err("only an existing linked worktree can enroll".into());
     }
-    let metadata = absolute(
-        Path::new(r.text(target, &["rev-parse", "--absolute-git-dir"])?.trim()),
-        false,
-    )?;
+    let metadata = absolute(metadata, false)?;
     Ok(Attachment {
         gitfile_sha256: sha256(&fs::read(&gitfile).map_err(|e| e.to_string())?),
         gitfile_id: directory_id(&gitfile)?,
@@ -592,7 +593,7 @@ impl Manager {
             }
         }
         absolute(&e.path, false)?;
-        maintenance::identity(
+        let observed = maintenance::identity(
             r,
             &self.policy.coordinator_root,
             &e.path,
@@ -606,7 +607,7 @@ impl Manager {
         if self.target_policy_inputs(r, &e.path, head)? != inputs {
             return Err("enrolled target policy/configuration changed; preserve work for explicit migration".into());
         }
-        if attachment(r, &e.path)? != e.attachment {
+        if attachment_at(&e.path, &observed.metadata)? != e.attachment {
             return Err("enrolled checkout attachment changed".into());
         }
         self.git_locks(e)?;

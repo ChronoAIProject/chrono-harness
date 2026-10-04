@@ -489,7 +489,7 @@ pub(crate) fn identity(
     branch: &str,
     head: &str,
     lock: Option<&str>,
-) -> Result<(), String> {
+) -> Result<start::CheckoutIdentity, String> {
     let inventory = r.inventory(root)?;
     if target == root
         || inventory
@@ -524,11 +524,11 @@ pub(crate) fn identity(
         || fs::canonicalize(&observed.top).map_err(|e| e.to_string())? != target
         || fs::canonicalize(&observed.common).map_err(|e| e.to_string())? != common(r, root)?
         || observed.head != head
-        || r.text(target, &["symbolic-ref", "HEAD"])?.trim() != format!("refs/heads/{branch}")
+        || observed.branch != format!("refs/heads/{branch}")
     {
         return Err("checkout identity or common repository mismatch".into());
     }
-    Ok(())
+    Ok(observed)
 }
 fn field<'a>(v: &'a Value, name: &str) -> Result<&'a str, String> {
     v[name]
