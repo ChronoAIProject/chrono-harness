@@ -4,35 +4,7 @@ use std::os::unix::process::ExitStatusExt;
 const ORIGINAL: &str = ".chrono-harness/state/original-rebind.json";
 const CONTINUATION: &str = ".chrono-harness/state/resume-rebind.json";
 fn wrapper(h: &Host) {
-    h.remote_wrapper(
-        r#"
-if [ -f "$HOME/rebind-stage" ]; then
- stage=$(cat "$HOME/rebind-stage")
- trigger=0; after=0
- case "$stage:$2:$3" in
-  before-preservation:rev-parse:--verify)
-   for intent in .chrono-harness/state/worktrees/*.rebind-intent.json; do
-    [ -f "$intent" ] && [ ! -d .chrono-harness/state/original-metadata ] && trigger=1
-   done ;;
-  before-add:worktree:add) [ "$4" = --detach ] && trigger=1 ;;
-  after-add:worktree:add) [ "$4" = --detach ] && trigger=1 && after=1 ;;
-  after-branch:symbolic-ref:HEAD) [ "$#" = 4 ] && trigger=1 && after=1 ;;
-  after-index:read-tree:*) trigger=1; after=1 ;;
-  before-repair:worktree:repair) trigger=1 ;;
-  after-repair:worktree:repair) trigger=1; after=1 ;;
-  before-unlock:worktree:unlock) trigger=1 ;;
-  after-unlock:worktree:unlock) trigger=1; after=1 ;;
- esac
- if [ "$trigger" = 1 ]; then
-  [ "$after" = 0 ] || REAL "$@" || exit $?
-  printf stopped > "$HOME/rebind-interrupted"
-  if [ -f "$HOME/rebind-fail" ]; then printf '\377original failed rebind\n' >&2; exit 83; fi
-  kill -KILL "$PPID"
-  exit 0
- fi
-fi
-"#,
-    );
+    h.remote_git("rebind-interruption");
 }
 fn invoke(h: &Host, op: &str, path: &str, plan: &Value) -> std::process::Output {
     fs::write(h.root.join(path), serde_json::to_vec(plan).unwrap()).unwrap();
