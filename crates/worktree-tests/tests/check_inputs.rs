@@ -18,31 +18,22 @@ pub(super) fn bind(h: &Host) {
     )
     .unwrap();
     let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
-    judges["judges"] = value!([{"id":"registration","executable":".chrono-harness/bin/context-judge","version":"fixture","sha256":null,"argv":[],"selector":"every-delta","after":[],"modes":["evaluate"]}]);
+    judges["judges"] = value!([{"id":"registration","executable":".chrono-harness/bin/context-judge","version":"fixture","sha256":sha256(&fs::read(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")).unwrap()),"argv":["context"],"selector":"every-delta","after":[],"modes":["evaluate"]}]);
     fs::write(h.root.join(JUDGES), serde_json::to_vec(&judges).unwrap()).unwrap();
     let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
     fm["files"]
         .as_array_mut()
         .unwrap()
-        .push(file("context-judge.sh", value!([])));
+        .push(file("context-judge.rs", value!([])));
     fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
-    // A real configured external judge records the exact schema2 context; it is a transport fixture.
-    fs::write(h.root.join("context-judge.sh"),r#"#!/bin/sh
-if [ "$1" = "--version" ]; then printf "fixture\n"; exit 0; fi
-exec /usr/bin/python3 -c 'import json,sys,pathlib
-r=json.load(sys.stdin)
-c=json.loads(pathlib.Path(r["context"]["path"]).read_bytes())
-assert c["schema_version"]==2 and c["candidate"]==r["candidate"]["commit"]
-print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],judge_id=r["judge_id"],status="pass",findings=[],evidence=[],outputs=dict(context=c))))'
-"#).unwrap();
-    let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
-    judges["judges"][0]["sha256"] =
-        value!(sha256(&fs::read(h.root.join("context-judge.sh")).unwrap()));
-    fs::write(h.root.join(JUDGES), serde_json::to_vec(&judges).unwrap()).unwrap();
+    fs::write(
+        h.root.join("context-judge.rs"),
+        include_bytes!("support/context_judge.rs"),
+    )
+    .unwrap();
     h.policy(|p|{p["schema"]=value!("chrono-worktree-config/v2");p["check_inputs"]=value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}});});
 }
 pub(super) fn install(root: &Path) {
-    use std::os::unix::fs::PermissionsExt;
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
     for (project, name) in [
         ("runner", "chrono-harness"),
@@ -50,19 +41,17 @@ pub(super) fn install(root: &Path) {
     ] {
         install_readonly_executable(root, project, name);
     }
-    fs::copy(
-        root.join("context-judge.sh"),
-        root.join(".chrono-harness/bin/context-judge"),
-    )
-    .unwrap();
-    fs::set_permissions(
-        root.join(".chrono-harness/bin/context-judge"),
-        fs::Permissions::from_mode(0o755),
-    )
-    .unwrap();
+    install_readonly_file(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")),
+        "context-judge",
+    );
 }
 pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
     let built = source().join(format!("crates/{project}/target/debug/{name}"));
+    install_readonly_file(root, &built, name);
+}
+fn install_readonly_file(root: &Path, built: &Path, name: &str) {
     let installed = root.join(format!(".chrono-harness/bin/{name}"));
     // These fixtures execute but never modify product binaries. Reuse the built
     // inode under each isolated host path without copying a new executable image.
@@ -605,25 +594,8 @@ fn full_short_console_projects_warnings_failures_transport_and_blocked_from_orig
     for case in ["warn", "fail", "transport", "blocked"] {
         let h = Host::new("data.txt");
         bind(&h);
-        let status = if case == "warn" { "warn" } else { "fail" };
-        let level = if case == "warn" { "warning" } else { "error" };
-        let script = format!(
-            r#"#!/bin/sh
-if [ "$1" = --version ]; then printf 'fixture\n'; exit 0; fi
-printf actual >> .chrono-harness/state/judge-calls
-exec /usr/bin/python3 -c 'import json,sys
-r=json.load(sys.stdin)
-if "{case}" == "transport":
- print("complete-malformed-original"*20000)
- sys.exit(4)
-findings=[dict(code="IDENTIFIED_"+str(i)+"x"*1000,level="{level}",message="actionable-"+str(i)+"z"*10000,delta_refs=["/delta/0/path","/delta/0"],causes=[]) for i in range(2 if "{case}" == "blocked" else 30)]
-print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],judge_id=r["judge_id"],status="{status}",findings=findings,evidence=[],outputs=dict(original="FULL_ORIGINAL"*50000))))
-sys.exit(0 if "{status}" == "warn" else 1)'
-"#
-        );
-        fs::write(h.root.join("context-judge.sh"), &script).unwrap();
         let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
-        judges["judges"][0]["sha256"] = value!(sha256(script.as_bytes()));
+        judges["judges"][0]["argv"] = value!([case]);
         if case == "blocked" {
             let mut dependent = judges["judges"][0].clone();
             dependent["id"] = value!("dependent");
