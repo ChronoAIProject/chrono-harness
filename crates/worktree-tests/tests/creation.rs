@@ -462,6 +462,25 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     );
     assert_fixed_registry_reads(&report, &h.root, &h.root, &source_head, &source_values);
     assert_fixed_registry_reads(&report, &h.root, &h.root, &latest, &target_values);
+    let identity_reads: Vec<_> = report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| {
+            row["root"] == value!(h.root)
+                && row["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|arg| arg == "--show-toplevel")
+        })
+        .collect();
+    assert_eq!(identity_reads.len(), 1);
+    let source_identity = identity_reads[0]["process"]["stdout"].as_str().unwrap();
+    assert!(
+        source_identity.lines().any(|line| line == source_head),
+        "source root and HEAD must come from the same live observation"
+    );
     assert_eq!(
         report["processes"]
             .as_array()

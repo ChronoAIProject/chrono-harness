@@ -314,11 +314,16 @@ impl Manager {
             return Err("coordinator is not a Git checkout root".into());
         }
         let common = absolute(&observed.common, false)?;
-        let root_common =
-            fs::canonicalize(root.join(r.text(root, &["rev-parse", "--git-common-dir"])?.trim()))
-                .map_err(|e| e.to_string())?;
-        if common != root_common {
-            return Err("coordinator belongs to a different repository".into());
+        // One live checkout observation supplies both roles when the caller is
+        // the coordinator. Distinct checkouts still establish their shared owner.
+        if anchor != root {
+            let root_common = fs::canonicalize(
+                root.join(r.text(root, &["rev-parse", "--git-common-dir"])?.trim()),
+            )
+            .map_err(|e| e.to_string())?;
+            if common != root_common {
+                return Err("coordinator belongs to a different repository".into());
+            }
         }
         let anchor_head = observed.head;
         if fs::read(no_symlink_parents(anchor, config_path)?).map_err(|e| e.to_string())? != bytes

@@ -34,6 +34,12 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
     let source = fs::read(target.join("payload")).unwrap();
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
+    assert!(
+        !report["processes"].as_array().unwrap().iter().any(|row| {
+            row["argv"] == value!(["--no-replace-objects", "rev-parse", "--git-common-dir"])
+        }),
+        "the same invoking/coordinator checkout shares one live common-directory observation"
+    );
     let processes = report["drain"][0]["report"]["processes"]
         .as_array()
         .unwrap();
