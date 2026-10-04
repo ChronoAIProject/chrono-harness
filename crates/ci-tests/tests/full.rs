@@ -107,6 +107,84 @@ fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
     assert_eq!(again, r);
 }
 
+#[cfg(unix)]
+#[test]
+fn repeated_preparation_retains_distinct_ownership_observations_without_rebinding_inputs() {
+    use std::os::fd::AsFd;
+    let h = host("");
+    let bytes = context(&h, &h.candidate);
+    let first = prepare(&h, &bytes).unwrap();
+    let original = fs::read(h.root.join(config().preparation_path)).unwrap();
+    let lease = tempfile::tempfile().unwrap();
+    let _scope = chrono_harness::process_fds::Scope::new(&[lease.as_fd()]).unwrap();
+    assert_eq!(prepare(&h, &bytes).unwrap(), first);
+    assert_eq!(
+        fs::read(h.root.join(config().preparation_path)).unwrap(),
+        original
+    );
+    let attempts: Vec<_> = fs::read_dir(
+        h.root
+            .join(format!("{}preparation", config().artifact_directory)),
+    )
+    .unwrap()
+    .map(|entry| entry.unwrap().path())
+    .filter(|path| {
+        path.file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("native-attempt-")
+    })
+    .collect();
+    assert_eq!(attempts.len(), 1);
+    let retained = fs::read(&attempts[0]).unwrap();
+    assert!(
+        attempts[0]
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains(&sha256(&retained))
+    );
+    let actual: Value = serde_json::from_slice(&retained).unwrap();
+    assert_ne!(
+        actual["git_facts"]["processes"][0]["ownership_fds"],
+        first["git_facts"]["processes"][0]["ownership_fds"]
+    );
+    let mut stable = actual.clone();
+    let mut previous = first.clone();
+    for report in [&mut stable, &mut previous] {
+        for process in report["git_facts"]["processes"].as_array_mut().unwrap() {
+            process.as_object_mut().unwrap().remove("ownership_fds");
+        }
+    }
+    assert_eq!(stable, previous);
+    let mut changed = first;
+    changed["git_facts"]["processes"][0]["exit_code"] = json!(47);
+    write(&h.root, &config().preparation_path, &changed);
+    let changed_bytes = fs::read(h.root.join(config().preparation_path)).unwrap();
+    assert!(
+        prepare(&h, &bytes)
+            .unwrap_err()
+            .contains("output collision")
+    );
+    assert_eq!(
+        fs::read(h.root.join(config().preparation_path)).unwrap(),
+        changed_bytes
+    );
+    assert_eq!(fs::read(attempts[0].as_path()).unwrap(), retained);
+    fs::write(h.root.join(config().preparation_path), b"42").unwrap();
+    assert!(
+        prepare(&h, &bytes)
+            .unwrap_err()
+            .contains("output collision")
+    );
+    assert_eq!(
+        fs::read(h.root.join(config().preparation_path)).unwrap(),
+        b"42"
+    );
+}
+
 #[test]
 fn declaration_init_ownership_customization_and_verify_are_explicit() {
     let d = tempfile::tempdir().unwrap();

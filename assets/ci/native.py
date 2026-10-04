@@ -77,7 +77,9 @@ def process(root, argv, stdin, env, directory, prefix, timeout, limit, credentia
     request = {'argv': argv, 'stdin': list(stdin), 'directory': directory, 'prefix': prefix,
                'timeout_seconds': timeout, 'output_limit_bytes': limit}
     bridge = [NATIVE_PROVIDER['collection']['generator'], 'native-process', '--host-root', str(root), '--config', NATIVE_CONFIG]
-    result = subprocess.run(bridge, cwd=root, input=encoded(request), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    ownership = tuple(int(fd) for fd in os.environ.get('CHRONO_PROCESS_FDS', '').split(',') if fd)
+    result = subprocess.run(bridge, cwd=root, input=encoded(request), env=env,
+                            pass_fds=ownership, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
         raise ValueError(result.stderr.decode(errors='replace').strip())
     output = json.loads(result.stdout)

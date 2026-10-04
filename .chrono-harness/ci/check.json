@@ -283,7 +283,8 @@
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",
-        "runner"
+        "runner",
+        "worktree"
       ],
       "build.worktree": [
         "ci",

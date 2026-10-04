@@ -50,6 +50,48 @@ fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
 fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     migration_host_with_alias_collision(false)
 }
+fn execution_failure(reason: &str, result: &chrono_judge_projects::Results) -> String {
+    let directory = source().join(".chrono-harness/state/migration-tests");
+    let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
+        fs::create_dir_all(&directory)?;
+        let (mut file, path) = tempfile::Builder::new()
+            .prefix("unexpected-execution-")
+            .suffix(".json")
+            .tempfile_in(&directory)?
+            .keep()?;
+        match serde_json::to_writer(&mut file, result) {
+            Ok(()) => Ok(format!("original execution retained at {}", path.display())),
+            Err(error) => Ok(format!(
+                "original execution retention incomplete at {}: {error}",
+                path.display()
+            )),
+        }
+    })()
+    .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
+    let mut summary = format!("{reason}; {retained}");
+    for row in result.executed.iter().chain(&result.blocked) {
+        if row.status == "passed" {
+            continue;
+        }
+        let error: String = row
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .chars()
+            .take(240)
+            .collect();
+        summary.push_str(&format!("\n{}: {} {error}", row.operation, row.status));
+        if let Some(receipt) = &row.receipt {
+            summary.push_str(&format!(
+                " (exit {}, stdout {} bytes, stderr {} bytes)",
+                receipt.process.exit_code,
+                receipt.process.stdout_bytes.len(),
+                receipt.process.stderr_bytes.len()
+            ));
+        }
+    }
+    summary
+}
 fn migration_host_with_alias_collision(
     collision: bool,
 ) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
@@ -359,18 +401,13 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         .executed
         .iter()
         .find(|r| r.operation == "ci.verify")
-        .unwrap_or_else(|| {
-            panic!(
-                "ci.verify blocked: {:?}",
-                result
-                    .executed
-                    .iter()
-                    .filter(|r| r.status != "passed")
-                    .map(|r| (&r.operation, &r.status, &r.error, &r.receipt))
-                    .collect::<Vec<_>>()
-            )
-        });
-    assert_eq!(verify.status, "failed", "ci.verify receipt: {verify:?}");
+        .unwrap_or_else(|| panic!("{}", execution_failure("ci.verify blocked", &result)));
+    assert_eq!(
+        verify.status,
+        "failed",
+        "{}",
+        execution_failure("ci.verify must reject drift", &result)
+    );
     assert!(
         verify
             .receipt
@@ -379,7 +416,8 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
             .process
             .stderr
             .contains("drift"),
-        "ci.verify did not diagnose drift: {verify:?}"
+        "{}",
+        execution_failure("ci.verify did not diagnose drift", &result)
     );
     let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .args([

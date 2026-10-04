@@ -5,11 +5,13 @@ edition = "2024"
 publish = false
 autotests = false
 
+[dependencies]
+serde_json = "1"
+libc = "0.2"
+
 [dev-dependencies]
 chrono-harness = { path = "../runner" }
-serde_json = "1"
 tempfile = "3"
-libc = "0.2"
 
 [[test]]
 name = "cli_contract"
@@ -37,3 +39,9 @@ opt-level = 3
 [[test]]
 name = "process_fds"
 path = "tests/process_fds.rs"
+
+[[bin]]
+name = "chrono-test-process-lifecycle"
+path = "tests/support/process_lifecycle.rs"
+test = false
+bench = false

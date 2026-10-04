@@ -4,12 +4,21 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "chrono-test-project-execution"
+path = "tests/support/execution_child.rs"
+test = false
+bench = false
+
 [dev-dependencies]
 chrono-judge-projects = { path = "../judge-projects" }
 chrono-harness = { path = "../runner" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-filemap = { path = "../judge-filemap" }
-serde_json = "1"
 tempfile = "3"
 chrono-judge-routes = { path = "../judge-routes" }
 

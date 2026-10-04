@@ -755,7 +755,7 @@ print('selected workflow migration compatibility checked')
         // The wrapper forwards original stdin/stdout to the real FILEMAP judge.
         let wrapper = ".chrono-harness/bin/record-filemap";
         let code = format!(
-            "#!{}\nimport pathlib,subprocess,sys\nb=sys.stdin.buffer.read()\npathlib.Path('.chrono-harness/state/filemap-request.json').write_bytes(b)\nr=subprocess.run(['.chrono-harness/bin/chrono-judge-filemap']+sys.argv[1:],input=b,stdout=subprocess.PIPE,stderr=subprocess.PIPE)\nsys.stdout.buffer.write(r.stdout)\nsys.stderr.buffer.write(r.stderr)\nsys.exit(r.returncode)\n",
+            "#!{}\nimport os,pathlib,subprocess,sys\nb=sys.stdin.buffer.read()\npathlib.Path('.chrono-harness/state/filemap-request.json').write_bytes(b)\nfds=tuple(int(fd) for fd in os.environ.get('CHRONO_PROCESS_FDS','').split(',') if fd)\nr=subprocess.run(['.chrono-harness/bin/chrono-judge-filemap']+sys.argv[1:],input=b,pass_fds=fds,stdout=subprocess.PIPE,stderr=subprocess.PIPE)\nsys.stdout.buffer.write(r.stdout)\nsys.stderr.buffer.write(r.stderr)\nsys.exit(r.returncode)\n",
             h.tool.display()
         );
         fs::write(h.root().join(wrapper), &code).unwrap();

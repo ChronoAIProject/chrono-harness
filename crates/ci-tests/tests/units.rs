@@ -398,6 +398,60 @@ fn unit_context(root: &Path, b: &str, c: &str, unit: Option<&str>) -> Value {
     .unwrap()
 }
 
+#[cfg(unix)]
+#[test]
+fn legacy_scoped_operations_accept_inherited_ownership() {
+    use std::os::fd::AsFd;
+    let (host, base, candidate) = consumer();
+    let root = fs::canonicalize(host.path()).unwrap();
+    let lease = tempfile::tempfile().unwrap();
+    let _scope = chrono_harness::process_fds::Scope::new(&[lease.as_fd()]).unwrap();
+    let binary = root.join(".chrono-harness/bin/chrono-harness");
+    let command = chrono_harness::CommandSpec {
+        program: binary.to_str().unwrap().into(),
+        args: vec![
+            "check".into(),
+            "--config".into(),
+            ".chrono-harness/ci/check.json".into(),
+            "--base".into(),
+            base,
+            "--candidate".into(),
+            candidate,
+        ],
+        env: std::env::vars()
+            .filter(|(key, _)| matches!(key.as_str(), "HOME" | "PATH"))
+            .collect(),
+        timeout_seconds: 30,
+        output_limit_bytes: 1048576,
+    };
+    let result = chrono_harness::run_process_observed(
+        &root,
+        &command,
+        &[],
+        &chrono_harness::sha256(&fs::read(binary).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(result.exit_code, 0, "{} {}", result.stdout, result.stderr);
+    assert!(result.failure.is_none());
+    let report: Value = serde_json::from_str(&result.stdout).unwrap();
+    assert_eq!(report["response"]["status"], "passed", "{report}");
+    assert_eq!(
+        report["response"]["evidence"]["executed"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        fs::read(root.join(".chrono-harness/state/calls-a")).unwrap(),
+        b"alpha"
+    );
+    assert_eq!(
+        fs::read(root.join(".chrono-harness/state/calls-b")).unwrap(),
+        b"beta"
+    );
+}
+
 #[test]
 fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     let (host, b, c) = consumer();

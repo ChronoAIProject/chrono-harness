@@ -87,6 +87,7 @@ dependencies = [
  "chrono-judge-projects",
  "chrono-judge-registration",
  "chrono-judge-routes",
+ "serde",
  "serde_json",
  "tempfile",
 ]

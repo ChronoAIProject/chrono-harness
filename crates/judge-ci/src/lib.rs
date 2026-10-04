@@ -1039,6 +1039,8 @@ fn inventory(
     let mut reused = BTreeMap::new();
     let mut environment: BTreeMap<String, String> = std::env::vars().collect();
     environment.extend(p.environment.clone());
+    #[cfg(unix)]
+    environment.remove(chrono_harness::process_fds::ENV);
     let mut environment_policy = object!({"values":p.environment,"inherit":null});
     let mut declarations=object!(p.tools.iter().map(|(id,program)|object!({"id":id,"program":program,"version_argv":["--version"],"expected_version":null})).collect::<Vec<_>>());
     if req.base.is_none() {

@@ -320,11 +320,29 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
             command.env_clear().env("PATH", &shadow);
         }
         let output = command.current_dir("/").args(args).output().unwrap();
-        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        h.retain_command_result(
+            &format!("scoped-check-bound-{bound}-selected-{selected:?}-reordered-{reordered}"),
+            &output,
+        );
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+            panic!(
+                "scoped check returned invalid JSON: {error}; exit {}; stderr {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            )
+        });
         (output.status.code().unwrap(), report)
     };
     let (code, report) = call(&h, false);
-    assert_eq!(code, 0, "{}", report["response"]["results"]);
+    assert_eq!(
+        code,
+        0,
+        "results {}; error {}; judge failure {}; judge exit {}",
+        report["response"]["results"],
+        report["error"],
+        report["judge"]["failure"],
+        report["judge"]["exit_code"]
+    );
     assert_eq!(
         report["response"]["evidence"]["selected"],
         json!(["test:t"])

@@ -1,5 +1,5 @@
 //! Explicit capability transfer through the existing process engine.
-//! Descriptors stay CLOEXEC in the owner; only child copies are made inheritable.
+//! Owned copies stay CLOEXEC; inherited flags remain unchanged for native children.
 use std::{
     cell::RefCell,
     io,
@@ -15,7 +15,13 @@ fn duplicate(fd: RawFd) -> Result<OwnedFd, String> {
     if fd < 3 {
         return Err("ownership descriptor must not alias stdio".into());
     }
-    let copy = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 3) };
+    let copy = unsafe {
+        libc::fcntl(
+            fd,
+            libc::F_DUPFD_CLOEXEC,
+            crate::process_ownership::PRIVATE_FD_MIN,
+        )
+    };
     if copy < 0 {
         return Err(format!(
             "ownership descriptor: {}",
@@ -66,8 +72,7 @@ fn inherited() -> Result<Vec<RawFd>, String> {
                 return Err("invalid or duplicate ownership descriptor".into());
             }
             let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
-            if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0
-            {
+            if flags < 0 {
                 return Err(format!(
                     "inherited ownership descriptor: {}",
                     io::Error::last_os_error()
@@ -83,9 +88,10 @@ pub(crate) struct Transfer {
 }
 impl Transfer {
     pub(crate) fn prepare(command: &mut Command) -> Result<Self, String> {
-        let mut copies = inherited()?
-            .into_iter()
-            .map(duplicate)
+        let inherited = inherited()?;
+        let mut copies = inherited
+            .iter()
+            .map(|fd| duplicate(*fd))
             .collect::<Result<Vec<_>, _>>()?;
         SCOPES.with(|s| -> Result<(), String> {
             for (_, fds) in s.borrow().iter() {
@@ -108,6 +114,16 @@ impl Transfer {
             use std::os::unix::process::CommandExt;
             unsafe {
                 command.pre_exec(move || {
+                    // Only this managed child retires the superseded carriers.
+                    // The parent and its native children keep their original flags.
+                    for fd in &inherited {
+                        let flags = libc::fcntl(*fd, libc::F_GETFD);
+                        if flags < 0
+                            || libc::fcntl(*fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) < 0
+                        {
+                            return Err(io::Error::last_os_error());
+                        }
+                    }
                     for fd in &fds {
                         let flags = libc::fcntl(*fd, libc::F_GETFD);
                         if flags < 0

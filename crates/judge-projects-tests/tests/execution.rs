@@ -3,27 +3,62 @@ use chrono_judge_registration::execution::{Method, Plan};
 use chrono_judge_routes::prepare;
 use serde_json::json;
 use std::collections::BTreeMap;
+#[path = "support/execution_fixture.rs"]
+mod execution_fixture;
+use execution_fixture::Step;
+
+fn stdout(bytes: impl AsRef<[u8]>) -> Step {
+    Step::Stdout(bytes.as_ref().to_vec())
+}
+fn append(path: &str, bytes: &str) -> Step {
+    Step::Append {
+        path: path.into(),
+        bytes: bytes.as_bytes().to_vec(),
+    }
+}
+fn create(path: &str, bytes: &str) -> Step {
+    Step::Create {
+        path: path.into(),
+        bytes: bytes.as_bytes().to_vec(),
+    }
+}
+fn require(path: &str, bytes: &str) -> Step {
+    Step::Require {
+        path: path.into(),
+        bytes: bytes.as_bytes().to_vec(),
+    }
+}
+fn edit_steps(
+    p: &mut chrono_judge_routes::Execution,
+    index: usize,
+    edit: impl FnOnce(&mut Vec<Step>),
+) {
+    let mut steps = serde_json::from_str(&p.operations[index].method.argv[1]).unwrap();
+    edit(&mut steps);
+    p.operations[index].method.argv[1] = serde_json::to_string(&steps).unwrap();
+}
 fn plan(
-    commands: &[(&str, &str)],
+    commands: &[(&str, Vec<Step>)],
     sequences: &[(&str, Vec<&str>)],
 ) -> (tempfile::TempDir, chrono_judge_routes::Execution) {
     let dir = tempfile::tempdir().unwrap();
-    let python = chrono_harness::resolve_program(dir.path(), "python3", None).unwrap();
-    let version = std::process::Command::new(&python)
+    let child = std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-test-project-execution"));
+    let version = std::process::Command::new(&child)
         .arg("--version")
         .output()
         .unwrap();
-    let tools = json!([{"id":"python","program":python,"version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
+    assert!(version.status.success());
+    let tools = json!([{"id":"fixture","program":child,"version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
     let methods = commands
         .iter()
-        .map(|(id, script)| {
+        .map(|(id, steps)| {
             (
                 id.to_string(),
                 vec![Method {
                     owner: "script:consumer".into(),
                     operation: id.to_string(),
-                    tool: "python".into(),
-                    argv: vec!["-c".into(), script.to_string()],
+                    tool: "fixture".into(),
+                    argv: vec!["run".into(), serde_json::to_string(steps).unwrap()],
                 }],
             )
         })
@@ -63,9 +98,9 @@ fn plan(
 fn failing_pass_text_blocks_dependents_and_independent_branch_continues() {
     let (_d, plan) = plan(
         &[
-            ("a", "print('PASS'); raise SystemExit(7)"),
-            ("b", "raise Exception('must not run')"),
-            ("z", "print('independent')"),
+            ("a", vec![stdout("PASS\n"), Step::Exit(7)]),
+            ("b", vec![Step::Exit(97)]),
+            ("z", vec![stdout("independent\n")]),
         ],
         &[
             ("test:dependent", vec!["a", "b"]),
@@ -85,7 +120,7 @@ fn failing_pass_text_blocks_dependents_and_independent_branch_continues() {
 #[test]
 fn output_bound_preserves_bytes_and_cannot_pass() {
     let (_d, plan) = plan(
-        &[("flood", "print('x'*8000)")],
+        &[("flood", vec![stdout(vec![b'x'; 8000])])],
         &[("test:t", vec!["flood"])],
     );
     let result = execute(&plan).unwrap();
@@ -98,15 +133,9 @@ fn output_bound_preserves_bytes_and_cannot_pass() {
 fn real_effects_shared_prerequisite_runs_once_in_order() {
     let (d, plan) = plan(
         &[
-            ("a", "open('order','a').write('a')"),
-            (
-                "b",
-                "assert open('order').read()=='a';open('order','a').write('b')",
-            ),
-            (
-                "c",
-                "assert open('order').read()=='ab';open('order','a').write('c')",
-            ),
+            ("a", vec![append("order", "a")]),
+            ("b", vec![require("order", "a"), append("order", "b")]),
+            ("c", vec![require("order", "ab"), append("order", "c")]),
         ],
         &[("test:b", vec!["a", "b"]), ("test:c", vec!["a", "b", "c"])],
     );
@@ -122,10 +151,7 @@ fn real_effects_shared_prerequisite_runs_once_in_order() {
 #[test]
 fn arbitrary_operation_bytes_remain_evidence_without_protocol_decoding() {
     let (_d, plan) = plan(
-        &[(
-            "raw",
-            "import os;os.write(1,bytes([255]));os.write(2,bytes([254]))",
-        )],
+        &[("raw", vec![stdout([255]), Step::Stderr(vec![254])])],
         &[("test:t", vec!["raw"])],
     );
     let result = execute(&plan).unwrap();
@@ -217,18 +243,12 @@ fn priority_waits_for_dependencies_and_conflicts_without_holding_disjoint_work()
         let (_d, mut p, listener) = barrier_plan(&["a", "b", "c", "x", "y", "z"]);
         p.selected.get_mut("test:c").unwrap().operations = vec!["a".into(), "c".into()];
         p.operations[2].predecessors = std::collections::BTreeSet::from(["a".into()]);
-        p.operations[0].method.argv[1].push_str(";open('a-done','w').write('done')");
-        p.operations[5].method.argv[1].push_str(";open('z-done','w').write('done')");
+        edit_steps(&mut p, 0, |s| s.push(create("a-done", "done")));
+        edit_steps(&mut p, 5, |s| s.push(create("z-done", "done")));
         for index in [1, 2] {
-            p.operations[index].method.argv[1] = format!(
-                "assert open('z-done').read()=='done';{}",
-                p.operations[index].method.argv[1]
-            );
+            edit_steps(&mut p, index, |s| s.insert(0, require("z-done", "done")));
         }
-        p.operations[2].method.argv[1] = format!(
-            "assert open('a-done').read()=='done';{}",
-            p.operations[2].method.argv[1]
-        );
+        edit_steps(&mut p, 2, |s| s.insert(0, require("a-done", "done")));
         let shared = if outputs {
             json!({"resources":[],"outputs":["out/nested/"]})
         } else {
@@ -279,9 +299,9 @@ fn priority_waits_for_dependencies_and_conflicts_without_holding_disjoint_work()
 fn priority_does_not_run_failed_descendants_or_drop_unlisted_work() {
     let (d, p) = plan(
         &[
-            ("a", "raise SystemExit(9)"),
-            ("b", "open('forbidden','x').write('ran')"),
-            ("z", "open('independent','x').write('ran')"),
+            ("a", vec![Step::Exit(9)]),
+            ("b", vec![create("forbidden", "ran")]),
+            ("z", vec![create("independent", "ran")]),
         ],
         &[("test:b", vec!["a", "b"]), ("test:z", vec!["z"])],
     );
@@ -323,12 +343,21 @@ fn barrier_plan(
 ) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let scripts: Vec<_> = ids.iter().map(|id| format!("import socket;s=socket.create_connection(('127.0.0.1',{port}));s.sendall(b'{id}\\n');assert s.recv(1)==b'!';print('{id}')")).collect();
+    let address = listener.local_addr().unwrap().to_string();
     let commands: Vec<_> = ids
         .iter()
-        .zip(&scripts)
-        .map(|(id, s)| (*id, s.as_str()))
+        .map(|id| {
+            (
+                *id,
+                vec![
+                    Step::Rendezvous {
+                        address: address.clone(),
+                        id: (*id).into(),
+                    },
+                    stdout(format!("{id}\n")),
+                ],
+            )
+        })
         .collect();
     let tests: Vec<_> = ids.iter().map(|id| format!("test:{id}")).collect();
     let sequences: Vec<_> = tests
@@ -379,11 +408,8 @@ fn rendezvous_proves_overlap_cap_and_canonical_rows() {
     let (_d, mut p, listener) = barrier_plan(&["a", "b", "c"]);
     // A third launch before either held slot finishes fails an independent
     // process-side witness, even if its socket arrival would otherwise queue.
-    p.operations[1].method.argv[1].push_str(";open('b-completed','w').write('done')");
-    p.operations[2].method.argv[1] = format!(
-        "assert open('b-completed').read()=='done';{}",
-        p.operations[2].method.argv[1]
-    );
+    edit_steps(&mut p, 1, |s| s.push(create("b-completed", "done")));
+    edit_steps(&mut p, 2, |s| s.insert(0, require("b-completed", "done")));
     let p = scheduled(
         p,
         2,
@@ -418,11 +444,8 @@ fn rendezvous_proves_overlap_cap_and_canonical_rows() {
 fn resource_and_nested_output_exclusion_allow_disjoint_ready_work() {
     for outputs in [false, true] {
         let (_d, mut p, listener) = barrier_plan(&["a", "b", "z"]);
-        p.operations[0].method.argv[1].push_str(";open('a-completed','w').write('done')");
-        p.operations[1].method.argv[1] = format!(
-            "assert open('a-completed').read()=='done';{}",
-            p.operations[1].method.argv[1]
-        );
+        edit_steps(&mut p, 0, |s| s.push(create("a-completed", "done")));
+        edit_steps(&mut p, 1, |s| s.insert(0, require("a-completed", "done")));
         let p = scheduled(
             p,
             2,
@@ -452,12 +475,12 @@ fn resource_and_nested_output_exclusion_allow_disjoint_ready_work() {
 fn diamond_runs_shared_work_once_and_waits_for_both_predecessors() {
     let (d, p) = plan(
         &[
-            ("a", "open('a','x').write('a')"),
-            ("b", "assert open('a').read()=='a';open('b','x').write('b')"),
-            ("c", "assert open('a').read()=='a';open('c','x').write('c')"),
+            ("a", vec![create("a", "a")]),
+            ("b", vec![require("a", "a"), create("b", "b")]),
+            ("c", vec![require("a", "a"), create("c", "c")]),
             (
                 "d",
-                "assert open('b').read()=='b';assert open('c').read()=='c';open('d','x').write('d')",
+                vec![require("b", "b"), require("c", "c"), create("d", "d")],
             ),
         ],
         &[
@@ -477,15 +500,22 @@ fn diamond_runs_shared_work_once_and_waits_for_both_predecessors() {
 }
 #[test]
 fn timeout_and_failed_exit_keep_original_bytes_and_only_block_descendants() {
-    for script in [
-        "import os,time;os.write(1,b'original');time.sleep(5)",
-        "import os;os.write(1,b'original');raise SystemExit(9)",
-    ] {
+    for timeout in [true, false] {
         let (_d, mut p) = plan(
             &[
-                ("a", script),
-                ("b", "raise Exception('blocked')"),
-                ("z", "print('sibling')"),
+                (
+                    "a",
+                    vec![
+                        stdout("original"),
+                        if timeout {
+                            Step::SleepMillis(5000)
+                        } else {
+                            Step::Exit(9)
+                        },
+                    ],
+                ),
+                ("b", vec![Step::Exit(97)]),
+                ("z", vec![stdout("sibling\n")]),
             ],
             &[("test:b", vec!["a", "b"]), ("test:z", vec!["z"])],
         );
@@ -506,7 +536,7 @@ fn timeout_and_failed_exit_keep_original_bytes_and_only_block_descendants() {
         let a = &r.executed[0];
         let process = &a.receipt.as_ref().unwrap().process;
         assert_eq!(process.stdout_bytes, b"original");
-        if script.contains("sleep") {
+        if timeout {
             assert_eq!(a.status, "error");
             assert_eq!(process.failure.as_deref(), Some("process timed out"));
         } else {
@@ -518,10 +548,13 @@ fn timeout_and_failed_exit_keep_original_bytes_and_only_block_descendants() {
 #[test]
 fn prelaunch_digest_failure_does_not_stop_sibling() {
     let (_d, mut p) = plan(
-        &[("a", "print('must not run')"), ("z", "print('sibling')")],
+        &[
+            ("a", vec![stdout("must not run\n")]),
+            ("z", vec![stdout("sibling\n")]),
+        ],
         &[("test:a", vec!["a"]), ("test:z", vec!["z"])],
     );
-    let mut bad = p.tools["python"].clone();
+    let mut bad = p.tools["fixture"].clone();
     bad.sha256 = "0".repeat(64);
     p.tools.insert("bad".into(), bad);
     p.operations[0].method.tool = "bad".into();
@@ -539,8 +572,8 @@ fn prelaunch_digest_failure_does_not_stop_sibling() {
 fn missing_policy_keeps_serial_process_order_and_legacy_identity_shape() {
     let (d, p) = plan(
         &[
-            ("a", "open('first','x').write('done')"),
-            ("b", "assert open('first').read()=='done'"),
+            ("a", vec![create("first", "done")]),
+            ("b", vec![require("first", "done")]),
         ],
         &[("test:a", vec!["a"]), ("test:b", vec!["b"])],
     );
@@ -559,13 +592,16 @@ fn missing_policy_keeps_serial_process_order_and_legacy_identity_shape() {
 fn spawn_failure_preserves_cause_and_continues_independent_operation() {
     use std::os::unix::fs::PermissionsExt;
     let (d, mut p) = plan(
-        &[("a", "print('unreachable')"), ("z", "print('sibling')")],
+        &[
+            ("a", vec![stdout("unreachable\n")]),
+            ("z", vec![stdout("sibling\n")]),
+        ],
         &[("test:a", vec!["a"]), ("test:z", vec!["z"])],
     );
     let path = d.path().join("not-executable");
-    std::fs::copy(&p.tools["python"].path, &path).unwrap();
+    std::fs::copy(&p.tools["fixture"].path, &path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-    let mut bad = p.tools["python"].clone();
+    let mut bad = p.tools["fixture"].clone();
     bad.path = path;
     p.tools.insert("bad".into(), bad);
     p.operations[0].method.tool = "bad".into();
@@ -590,9 +626,9 @@ fn spawn_failure_preserves_cause_and_continues_independent_operation() {
 fn concurrent_output_failure_retains_original_bytes_and_sibling_receipt() {
     let (_d, p) = plan(
         &[
-            ("a", "import os;os.write(1,b'x'*8000)"),
-            ("b", "raise Exception('blocked')"),
-            ("z", "print('sibling')"),
+            ("a", vec![stdout(vec![b'x'; 8000])]),
+            ("b", vec![Step::Exit(97)]),
+            ("z", vec![stdout("sibling\n")]),
         ],
         &[("test:b", vec!["a", "b"]), ("test:z", vec!["z"])],
     );
@@ -620,11 +656,11 @@ fn concurrent_output_failure_retains_original_bytes_and_sibling_receipt() {
 fn receipt_mismatch_keeps_real_processes_and_does_not_stop_independent_work() {
     let (d, mut p) = plan(
         &[
-            ("a", "print('original')"),
-            ("b", "raise Exception('blocked')"),
+            ("a", vec![stdout("original\n")]),
+            ("b", vec![Step::Exit(97)]),
             (
                 "z",
-                "open('sibling','x').write('executed');print('sibling')",
+                vec![create("sibling", "executed"), stdout("sibling\n")],
             ),
         ],
         &[("test:b", vec!["a", "b"]), ("test:z", vec!["z"])],
@@ -663,11 +699,17 @@ fn receipt_mismatch_keeps_real_processes_and_does_not_stop_independent_work() {
 #[test]
 fn process_side_slot_witness_detects_an_excess_launch() {
     let (d, mut p, listener) = barrier_plan(&["a", "b", "c"]);
-    p.operations[1].method.argv[1].push_str(";open('b-completed','w').write('done')");
-    p.operations[2].method.argv[1] = format!(
-        "try:\n assert open('b-completed').read()=='done'\nexcept FileNotFoundError:\n open('excess-launch','w').write('observed')\n raise\n{}",
-        p.operations[2].method.argv[1]
-    );
+    edit_steps(&mut p, 1, |s| s.push(create("b-completed", "done")));
+    edit_steps(&mut p, 2, |s| {
+        s.insert(
+            0,
+            Step::RequireWithWitness {
+                path: "b-completed".into(),
+                bytes: b"done".to_vec(),
+                witness: "excess-launch".into(),
+            },
+        )
+    });
     let p = scheduled(
         p,
         3,
@@ -680,9 +722,9 @@ fn process_side_slot_witness_detects_an_excess_launch() {
             first.keys().map(String::as_str).collect::<Vec<_>>(),
             ["a", "b"]
         );
-        // Wait for c's actual failed process observation to become terminal,
-        // while held a/b cannot produce the required marker. This is bounded
-        // by their existing five-second process deadline.
+        // Await c's completely published witness while held a/b cannot produce
+        // its prerequisite. Release and join every process before inspecting
+        // its terminal receipt, keeping the original five-second bound.
         let start = std::time::Instant::now();
         while !d.path().join("excess-launch").exists() {
             assert!(
@@ -707,7 +749,7 @@ fn process_side_slot_witness_detects_an_excess_launch() {
                 .unwrap()
                 .process
                 .stderr
-                .contains("FileNotFoundError")
+                .contains("NotFound")
         );
     });
 }

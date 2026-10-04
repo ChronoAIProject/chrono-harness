@@ -298,6 +298,63 @@ fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
     assert!(observed.iter().any(|a| a == "check-inputs"));
     assert_ne!(h.remote, h.root);
 }
+
+#[cfg(unix)]
+#[test]
+fn real_short_check_with_inherited_ownership_executes_selected_operations() {
+    use std::os::fd::AsFd;
+    let h = ShortHost::new();
+    let lease = tempfile::tempfile().unwrap();
+    let _scope = chrono_harness::process_fds::Scope::new(&[lease.as_fd()]).unwrap();
+    let binary = h.root.join(".chrono-harness/bin/chrono-harness");
+    let command = chrono_harness::CommandSpec {
+        program: binary.to_str().unwrap().into(),
+        args: vec!["check".into()],
+        env: std::env::vars()
+            .filter(|(name, _)| matches!(name.as_str(), "PATH" | "HOME"))
+            .collect(),
+        timeout_seconds: 30,
+        output_limit_bytes: 1048576,
+    };
+    let result = chrono_harness::run_process_observed(
+        &h.root,
+        &command,
+        &[],
+        &sha256(&fs::read(&binary).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(result.exit_code, 0, "{} {}", result.stdout, result.stderr);
+    assert!(result.failure.is_none(), "{result:?}");
+    let path = result
+        .stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("Original report: "))
+        .unwrap();
+    let report: Value = serde_json::from_slice(&fs::read(h.root.join(path)).unwrap()).unwrap();
+    assert_eq!(report["response"]["status"], "passed", "{report}");
+    let executed = report["response"]["evidence"]["executed"]
+        .as_array()
+        .unwrap();
+    assert_eq!(executed.len(), 2, "{report}");
+    assert!(
+        report["response"]["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["status"] == "passed")
+    );
+    let binding = &report["request"]["observations"]["preparation"];
+    let receipt = &binding["receipts"][0];
+    let bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&bytes), receipt["sha256"]);
+    let acquisition: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(acquisition["tool"]["version"]["ownership_fds"].is_string());
+    assert!(acquisition["process"]["ownership_fds"].is_string());
+    assert_eq!(
+        acquisition["process"]["environment"],
+        binding["environment"]["effective"]
+    );
+}
 // Keep original fixture reports before TempDir teardown on an unexpected owner
 // failure. This changes diagnostics only; commands, assertions and bounds stay fixed.
 impl Drop for ShortHost {

@@ -45,6 +45,7 @@ static ALLOCATOR: ForkCheckedAllocator = ForkCheckedAllocator;
 // startup has exceeded five seconds on the shared host. Deliberate timeout
 // cases below keep their separate two-second bound and thirty-second stall.
 const FIXTURE_TIMEOUT_SECONDS: u64 = 30;
+const PROCESS_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-process-lifecycle");
 
 #[test]
 fn published_rfc8785_vectors() {
@@ -809,17 +810,18 @@ fn owned_nested_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
     let spec = chrono_harness::CommandSpec {
-        program: python.to_string_lossy().into_owned(),
-        args: vec!["-c".into(), "import os,time;open('nested.pid','w').write(str(os.getpid()));time.sleep(30);open('escaped','w').write('escaped')".into()],
-        env: Default::default(), timeout_seconds: 30, output_limit_bytes: 4096,
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["nested".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
     };
     let _ = chrono_harness::run_process_observed(
         root,
         &spec,
         &[],
-        &chrono_harness::sha256(&std::fs::read(&python).unwrap()),
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
     );
 }
 
@@ -851,14 +853,15 @@ fn outer_timeout_contains_nested_owned_operation() {
         .unwrap();
         assert_eq!(p.failure.as_deref(), Some("process timed out"), "{p:?}");
         let pid = std::fs::read_to_string(d.path().join("nested.pid")).unwrap();
-        let python = chrono_harness::resolve_program(d.path(), "python3", None).unwrap();
-        // Always clean the exact fixture PID before asserting the regression.
-        let out = std::process::Command::new(python).args(["-c", "import os,sys,signal\np=int(sys.argv[1])\ntry: os.kill(p,0)\nexcept ProcessLookupError: print('joined')\nelse:\n print('survived');os.kill(p,signal.SIGKILL)", &pid]).output().unwrap();
-        assert_eq!(
-            String::from_utf8(out.stdout).unwrap().trim(),
-            "joined",
-            "nested process survived outer completion"
-        );
+        let pid: libc::pid_t = pid.parse().unwrap();
+        let state = unsafe { libc::kill(pid, 0) };
+        let error = std::io::Error::last_os_error();
+        if state == 0 {
+            // Always terminate the exact fixture child before reporting a failure.
+            assert_eq!(unsafe { libc::kill(pid, libc::SIGKILL) }, 0);
+        }
+        assert_eq!(state, -1, "nested process survived outer completion");
+        assert_eq!(error.raw_os_error(), Some(libc::ESRCH));
     }
 }
 
@@ -892,15 +895,14 @@ fn owned_timeout_helper_keeps_unrelated_sibling() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
-    let digest = chrono_harness::sha256(&std::fs::read(&python).unwrap());
+    let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
     std::thread::scope(|scope| {
         let slow = scope.spawn(|| {
             chrono_harness::run_process_observed(
                 root,
                 &chrono_harness::CommandSpec {
-                    program: python.to_string_lossy().into_owned(),
-                    args: vec!["-c".into(), "import time;time.sleep(5)".into()],
+                    program: PROCESS_FIXTURE.into(),
+                    args: vec!["slow".into()],
                     env: Default::default(),
                     timeout_seconds: 1,
                     output_limit_bytes: 4096,
@@ -910,7 +912,19 @@ fn owned_timeout_helper_keeps_unrelated_sibling() {
             )
             .unwrap()
         });
-        let sibling=chrono_harness::run_process_observed(root,&chrono_harness::CommandSpec {program:python.to_string_lossy().into_owned(),args:vec!["-c".into(),"import time;time.sleep(2);open('sibling','w').write('joined');print('original')".into()],env:Default::default(),timeout_seconds:5,output_limit_bytes:4096},&[],&digest).unwrap();
+        let sibling = chrono_harness::run_process_observed(
+            root,
+            &chrono_harness::CommandSpec {
+                program: PROCESS_FIXTURE.into(),
+                args: vec!["sibling".into()],
+                env: Default::default(),
+                timeout_seconds: 5,
+                output_limit_bytes: 4096,
+            },
+            &[],
+            &digest,
+        )
+        .unwrap();
         assert_eq!(
             slow.join().unwrap().failure.as_deref(),
             Some("process timed out")
@@ -964,27 +978,18 @@ fn interrupted_launch_child_owner_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
     let complete = std::env::var("CHRONO_INTERRUPTED_COMPLETE").unwrap();
-    let code = format!(
-        "import os,time\nwith open('ready.tmp','w') as ready:\n ready.write(str(os.getpid()))\nos.replace('ready.tmp','ready')\nstart=time.monotonic()\nwhile not os.path.exists('observing'):\n assert time.monotonic()-start<3\n time.sleep(.01)\nos.kill(os.getppid(),9)\n{}",
-        if complete == "yes" {
-            "open('child-original','w').write('original child bytes');open('completed','w').write('child reached exit')"
-        } else {
-            "time.sleep(30);open('escaped','w').write('escaped')"
-        }
-    );
     let _ = chrono_harness::run_process_observed(
         root,
         &chrono_harness::CommandSpec {
-            program: python.to_string_lossy().into_owned(),
-            args: vec!["-c".into(), code],
+            program: PROCESS_FIXTURE.into(),
+            args: vec!["interrupted-child".into(), complete],
             env: Default::default(),
             timeout_seconds: 30,
             output_limit_bytes: 4096,
         },
         &[],
-        &sha256(&fs::read(python).unwrap()),
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
     );
     panic!("the child must interrupt this launcher");
 }
@@ -1057,34 +1062,8 @@ fn interrupted_launch(complete: bool) -> (tempfile::TempDir, chrono_harness::Pro
     // An independent process binds the child's live kernel identity before the
     // interruption and observes its actual exit. File readiness alone cannot
     // satisfy this oracle, including the abandoned-child cleanup case.
-    let python = chrono_harness::resolve_program(d.path(), "python3", None).unwrap();
-    let observer = std::process::Command::new(python)
-        .args([
-            "-c",
-            r#"import os,select,time,sys
-start=time.monotonic()
-while not os.path.exists('ready'):
- assert time.monotonic()-start<5
- time.sleep(.01)
-pid=int(open('ready').read())
-if sys.platform=='darwin':
- handle=select.kqueue()
- handle.control([select.kevent(pid,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ONESHOT,fflags=select.KQ_NOTE_EXIT)],0,0)
-else:
- fd=os.pidfd_open(pid)
- handle=select.poll()
- handle.register(fd,select.POLLIN)
-open('observing','w').write(str(pid))
-if sys.platform=='darwin':
- events=handle.control(None,1,7)
- assert len(events)==1 and events[0].ident==pid and events[0].fflags & select.KQ_NOTE_EXIT
-else:
- events=handle.poll(7000)
- assert events and events[0][0]==fd and events[0][1] & select.POLLIN
- os.close(fd)
-open('kernel-terminal','w').write(str(pid))
-"#,
-        ])
+    let observer = std::process::Command::new(PROCESS_FIXTURE)
+        .arg("interrupted-observer")
         .current_dir(d.path())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -1150,22 +1129,15 @@ fn owned_launch_burst_helper() {
     };
     check_launch_allocations();
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
-    let digest = sha256(&fs::read(&python).unwrap());
+    let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
     std::thread::scope(|scope| {
         let mut tasks = Vec::new();
         for index in 0..64 {
-            let python = &python;
             let digest = &digest;
             tasks.push(scope.spawn(move || {
                 let spec = chrono_harness::CommandSpec {
-                    program: python.to_string_lossy().into(),
-                    args: vec![
-                        "-c".into(),
-                        format!(
-                            "open('child-{index}','x').write('once');print('original-{index}')"
-                        ),
-                    ],
+                    program: PROCESS_FIXTURE.into(),
+                    args: vec!["burst".into(), index.to_string()],
                     env: Default::default(),
                     timeout_seconds: 30,
                     output_limit_bytes: 4096,
@@ -1227,31 +1199,11 @@ fn delayed_monitor_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
-    let digest = sha256(&fs::read(&python).unwrap());
+    let executable = PROCESS_FIXTURE;
+    let digest = sha256(&fs::read(executable).unwrap());
     let spec = chrono_harness::CommandSpec {
-        program: python.to_string_lossy().into(),
-        args: vec![
-            "-S".into(),
-            "-c".into(),
-            r#"import os,time
-with open('ready.tmp','w') as ready:
- ready.write(str(os.getpid()))
-os.replace('ready.tmp','ready')
-start=time.monotonic()
-while not os.path.exists('release'):
- assert time.monotonic()-start<5
- time.sleep(.005)
-delay,overflow=open('release').read().split(',')
-time.sleep(float(delay))
-if overflow=='yes':
- os.write(1,b'x'*8192)
-os.close(1)
-os.close(2)
-os._exit(7)
-"#
-            .into(),
-        ],
+        program: executable.into(),
+        args: vec!["child".into()],
         env: Default::default(),
         timeout_seconds: 1,
         output_limit_bytes: 4096,
@@ -1284,67 +1236,18 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
     let root = tempfile::tempdir().unwrap();
     let exe = std::env::current_exe().unwrap();
     let digest = sha256(&fs::read(&exe).unwrap());
-    let python = chrono_harness::resolve_program(root.path(), "python3", None).unwrap();
-    // Only the nested launcher is suspended. The actual child and root's kernel
-    // exit observer remain runnable. This separate oracle observes real exit,
-    // including the late-exit control that a try_wait-before-timeout fix accepts.
-    let mut controller = std::process::Command::new(python)
-        .args([
-            "-S",
-            "-c",
-            r#"import json,os,select,signal,sys,time
-clock=time.CLOCK_UPTIME_RAW if sys.platform=='darwin' else time.CLOCK_MONOTONIC
-now=lambda:time.clock_gettime(clock)
-open('controller-ready','w').close()
-start=now()
-while not os.path.exists('ready'):
- assert now()-start<5
- time.sleep(.005)
-launcher=json.load(open('launcher'))
-pid=int(open('ready').read())
-if sys.platform=='darwin':
- handle=select.kqueue()
- handle.control([select.kevent(pid,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ONESHOT,fflags=select.KQ_NOTE_EXIT)],0,0)
-else:
- fd=os.pidfd_open(pid)
- handle=select.poll()
- handle.register(fd,select.POLLIN)
-time.sleep(.15)
-stopped=now()
-assert 0<=stopped-launcher['started']<.75, 'fixture missed the original deadline'
-os.kill(launcher['pid'],signal.SIGSTOP)
-try:
- with open('release.tmp','w') as release:
-  release.write(('1.3' if sys.argv[1]=='late' else '.05')+(','+'yes' if sys.argv[1]=='overflow' else ',no'))
- os.replace('release.tmp','release')
- if sys.platform=='darwin':
-  events=handle.control(None,1,3)
-  assert len(events)==1 and events[0].ident==pid and events[0].fflags & select.KQ_NOTE_EXIT
- else:
-  events=handle.poll(3000)
-  assert events and events[0][0]==fd and events[0][1] & select.POLLIN
-  os.close(fd)
- terminal=now()
- if sys.argv[1]=='late':
-  assert terminal-stopped>1
- else:
-  assert 0<=terminal-launcher['started']<1, 'child did not exit inside the deadline'
- time.sleep(max(0,stopped+2.1-now()))
- with open('kernel-terminal.json','w') as result:
-  json.dump(dict(pid=pid,started=launcher['started'],stopped=stopped,terminal=terminal,resumed=now()),result)
-finally:
- os.kill(launcher['pid'],signal.SIGCONT)
-"#,
-            case,
-        ])
+    // Only the nested launcher is suspended. The child and independent kernel
+    // observer remain runnable; the late-exit control rejects a monitor that
+    // merely tests try_wait before checking its deadline.
+    let mut controller = std::process::Command::new(PROCESS_FIXTURE)
+        .args(["controller", case])
         .current_dir(root.path())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
-    // Start the timed launch only after the independent observer has completed
-    // interpreter/import setup. The launcher's timestamp remains a conservative
-    // lower bound on the actual timer start; the original one-second checks stay.
+    // The independent observer publishes readiness before the timed launch.
+    // The launcher timestamp conservatively precedes the actual timer start.
     let preparing = std::time::Instant::now();
     while !root.path().join("controller-ready").exists() {
         if preparing.elapsed() >= std::time::Duration::from_secs(5)
@@ -1433,16 +1336,11 @@ fn delayed_monitor_preserves_output_bound() {
 #[cfg(unix)]
 #[test]
 fn closed_output_streams_preserve_child_exit_and_timeout() {
-    for (delay, expected_exit) in [(0.05, Some(7)), (20.0, None)] {
+    for (delay, expected_exit) in [(50, Some(7)), (20_000, None)] {
         let root = tempfile::tempdir().unwrap();
         let spec = chrono_harness::CommandSpec {
-            program: "/usr/bin/python3".into(),
-            args: vec![
-                "-c".into(),
-                format!(
-                    "import os,time; os.close(1); os.close(2); time.sleep({delay}); open('completed','x').close(); os._exit(7)"
-                ),
-            ],
+            program: PROCESS_FIXTURE.into(),
+            args: vec!["closed-streams".into(), delay.to_string()],
             env: Default::default(),
             timeout_seconds: 1,
             output_limit_bytes: 4096,
@@ -1456,14 +1354,30 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
         .unwrap();
         assert!(result.stdout_bytes.is_empty());
         assert!(result.stderr_bytes.is_empty());
+        let markers = (
+            fs::read_to_string(root.path().join("started")),
+            fs::read_to_string(root.path().join("completed")),
+        );
         if let Some(exit) = expected_exit {
-            assert_eq!(result.exit_code, exit, "{result:?}");
-            assert!(result.failure.is_none(), "{result:?}");
+            assert_eq!(result.exit_code, exit, "{result:?}; markers={markers:?}");
+            assert!(result.failure.is_none(), "{result:?}; markers={markers:?}");
             assert!(root.path().join("completed").exists());
         } else {
-            assert_eq!(result.failure.as_deref(), Some("process timed out"));
+            assert_eq!(
+                result.failure.as_deref(),
+                Some("process timed out"),
+                "{result:?}; markers={markers:?}"
+            );
             assert!(!root.path().join("completed").exists());
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn unexpected_exec_helper() {
+    if std::env::var_os("CHRONO_UNEXPECTED_EXEC").is_some() {
+        fs::File::create_new("unexpected-exec").unwrap();
     }
 }
 
@@ -1475,7 +1389,7 @@ fn failed_live_identity_registration_helper() {
         return;
     };
     check_launch_allocations();
-    // The independent Python parent fixes this process's descriptor budget.
+    // The independent Rust parent fixes this process's descriptor budget.
     // Leave the ownership transport free, while exhausting the observer's
     // remaining kernel descriptor when it receives the live handoff.
     let mut held = Vec::new();
@@ -1488,9 +1402,13 @@ fn failed_live_identity_registration_helper() {
         }
     }
     let spec = chrono_harness::CommandSpec {
-        program: "/usr/bin/python3".into(),
-        args: vec!["-c".into(), "open('unexpected-exec','x').close()".into()],
-        env: Default::default(),
+        program: std::env::current_exe().unwrap().to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "unexpected_exec_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: [("CHRONO_UNEXPECTED_EXEC".into(), "1".into())].into(),
         timeout_seconds: 30,
         output_limit_bytes: 4096,
     };
@@ -1516,16 +1434,54 @@ fn failed_live_identity_registration_helper() {
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec() {
+    use std::os::unix::process::CommandExt;
     let root = tempfile::tempdir().unwrap();
-    let out = std::process::Command::new("/usr/bin/python3")
+    let descriptors: Vec<i32> = std::env::var("CHRONO_PROCESS_FDS")
+        .ok()
+        .map(|value| value.split(',').map(|fd| fd.parse().unwrap()).collect())
+        .unwrap_or_default();
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
         .args([
-            "-c",
-            "import os,resource,sys\nfor fd in (198,199,200):\n try: os.close(fd)\n except OSError: pass\nresource.setrlimit(resource.RLIMIT_NOFILE,(210,210))\nos.execv(sys.argv[1],[sys.argv[1],'--exact','failed_live_identity_registration_helper','--nocapture'])",
+            "--exact",
+            "failed_live_identity_registration_helper",
+            "--nocapture",
         ])
-        .arg(std::env::current_exe().unwrap())
         .env("CHRONO_FAILED_HANDOFF", root.path())
-        .output()
-        .unwrap();
+        .env_remove("CHRONO_PROCESS_FDS");
+    unsafe {
+        command.pre_exec(move || {
+            // Keep inherited leases open above the fixed allocation budget.
+            // F_DUPFD creates inheritable copies; this helper omits their carrier.
+            for fd in &descriptors {
+                if libc::fcntl(*fd, libc::F_DUPFD, 210) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            for fd in &descriptors {
+                if libc::close(*fd) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            for fd in [198, 199, 200] {
+                if libc::close(fd) < 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() != Some(libc::EBADF) {
+                        return Err(error);
+                    }
+                }
+            }
+            let limit = libc::rlimit {
+                rlim_cur: 210,
+                rlim_max: 210,
+            };
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let out = command.output().unwrap();
     assert!(
         out.status.success(),
         "{} {}",
@@ -1533,4 +1489,36 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(!root.path().join("unexpected-exec").exists());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget() {
+    use std::os::fd::AsFd;
+    let root = tempfile::tempdir().unwrap();
+    let capability = fs::File::open(root.path()).unwrap();
+    let _ownership = chrono_harness::process_fds::Scope::new(&[capability.as_fd()]).unwrap();
+    let executable = std::env::current_exe().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: executable.to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "failed_live_identity_registration_preserves_actual_kernel_error_before_exec".into(),
+            "--nocapture".into(),
+        ],
+        env: Default::default(),
+        timeout_seconds: FIXTURE_TIMEOUT_SECONDS,
+        output_limit_bytes: 4096,
+    };
+    let result = chrono_harness::run_process_observed(
+        root.path(),
+        &spec,
+        &[],
+        &sha256(&fs::read(&executable).unwrap()),
+    )
+    .unwrap();
+    assert!(result.ownership_fds.is_some(), "{result:?}");
+    assert!(result.failure.is_none(), "{result:?}");
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");
 }

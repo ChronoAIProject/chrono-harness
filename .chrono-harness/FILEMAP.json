@@ -4099,6 +4099,50 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "crates/runner-tests/tests/support/process_lifecycle.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/execution_child.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/execution_fixture.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -6236,6 +6280,46 @@
       "from": "project:judge-workflow-tests",
       "kind": "test-execution",
       "to": "test:workflow-short"
+    },
+    {
+      "from": "environment:CHRONO_CI_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "environment:CHRONO_FULL_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "environment:CHRONO_FULL_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "environment:CHRONO_FULL_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "environment:CHRONO_FULL_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "environment:CHRONO_FULL_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:judge-workflow-tests"
+    },
+    {
+      "from": "environment:CHRONO_WORKTREE_TEST_RECEIPTS",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:CHRONO_CHECK_HANDOFF_TRACE",
+      "kind": "runtime-input",
+      "to": "project:worktree-tests"
     }
   ],
   "test_costs": [
@@ -6520,6 +6604,7 @@
       "operations": [
         "fmt.worktree",
         "fmt.worktree-tests",
+        "build.runner",
         "build.ci",
         "build.worktree",
         "test.worktree-tests"

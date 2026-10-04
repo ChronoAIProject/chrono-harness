@@ -1,5 +1,24 @@
 # Registered operation execution
 
+Unix process observations record the engine's actual capability carrier in optional
+`ownership_fds`. The `environment` map and `environment_digest` describe business
+inputs, excluding reserved `CHRONO_PROCESS_FDS`; that child environment variable
+is set from live inherited/scoped descriptors by the process engine. Explicit
+caller values cannot replace it. Receipts retain the carrier separately so input
+preparation, tool binding and operation validation compare the registered business
+environment without treating descriptor allocation as input drift. Observations
+without a carrier omit the field; existing observations remain readable.
+
+Execution plans also exclude the reserved carrier from business tool bindings.
+The generated native CI Python adapter explicitly forwards the inherited
+descriptors to its Rust bridge. Host adapters that launch further consumers must
+forward the same descriptors; forwarding only the environment variable does not
+keep the corresponding kernel ownership alive.
+Engine calls leave already inherited descriptors and their flags unchanged, so
+other threads and subsequent native children retain the original capability.
+Engine-owned duplicates remain CLOEXEC until their child launch; closing the final
+inherited or owned descriptor still releases the kernel lease.
+
 FILEMAP v2 owns `execution_plans`: a map from `test:ID` to
 `{operations: [operation-ID, ...], timeout_seconds, output_limit_bytes}`.
 Sequences are nonempty, ordered and duplicate-free. Actions, tools and argv remain
