@@ -88,6 +88,11 @@ insufficient framing space retain direct reads. Original process bytes and exits
 remain in the report on malformed or failed batches, before checkout effects.
 Only fully validated immutable bytes enter the operation-local cache; live HEAD,
 checkout, policy, attachment and ownership observations remain fresh.
+Successfully parsed trees at fixed OIDs share their original acquisition within
+one operation and root. Cleanup reuses that immutable tree across its guards;
+the index, physical source, policies, locks and usage checks retain their live
+reads. Failed or malformed trees never enter the cache, and a later operation
+acquires its own evidence.
 
 Live checkout identity reads its root, common repository, metadata directory,
 HEAD and full branch name in one bounded Git process. Maintenance consumes that
