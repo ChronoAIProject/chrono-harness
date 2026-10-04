@@ -24,5 +24,11 @@ path = "tests/support/context_judge.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "chrono-worktree-test-consumer"
+path = "tests/support/consumer.rs"
+test = false
+bench = false
+
 [profile.dev.package.sha2]
 opt-level = 3

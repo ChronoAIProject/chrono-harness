@@ -4195,6 +4195,18 @@
           "to": "project:worktree-tests"
         }
       ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/consumer.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

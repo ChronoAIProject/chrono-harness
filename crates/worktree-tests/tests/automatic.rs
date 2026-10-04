@@ -599,15 +599,43 @@ fn automatic_symlink_containment_and_internal_external_target_safety() {
 }
 
 pub(super) fn consuming_operation(h: &Host, body: &str) {
+    consuming_scripts(
+        h,
+        value!([
+            {"id":"consumer","path":"s.sh","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"sh","argv":["s.sh"]}}},
+            {"id":"consumer-tests","path":"st.sh","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"sh","argv":["st.sh"]}}}
+        ]),
+        [("s.sh", body.as_bytes()), ("st.sh", b"exit 0\n")],
+    );
+}
+
+pub(super) fn native_consumer(h: &Host, mode: &str) {
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["tools"].as_array_mut().unwrap().push(value!({
+        "id":"consumer", "program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
+        "resolution":"PATH-once", "version_argv":["--version"], "expected_version":"fixture"
+    }));
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    consuming_scripts(
+        h,
+        value!([
+            {"id":"consumer","path":"consumer.rs","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"consumer","argv":[mode]}}},
+            {"id":"consumer-tests","path":"consumer-tests.rs","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"consumer","argv":["noop"]}}}
+        ]),
+        [
+            ("consumer.rs", include_bytes!("support/consumer.rs")),
+            ("consumer-tests.rs", b"fn main() {}\n"),
+        ],
+    );
+}
+
+fn consuming_scripts(h: &Host, scripts: Value, sources: [(&str, &[u8]); 2]) {
     let mut projects = json(&fs::read(h.root.join(PROJECTS)).unwrap()).unwrap();
     projects["owners"]
         .as_array_mut()
         .unwrap()
         .extend([value!("consumer"), value!("consumer-tests")]);
-    projects["scripts"] = value!([
-        {"id":"consumer","path":"s.sh","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"sh","argv":["s.sh"]}}},
-        {"id":"consumer-tests","path":"st.sh","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"sh","argv":["st.sh"]}}}
-    ]);
+    projects["scripts"] = scripts;
     fs::write(
         h.root.join(PROJECTS),
         serde_json::to_vec(&projects).unwrap(),
@@ -617,7 +645,7 @@ pub(super) fn consuming_operation(h: &Host, body: &str) {
     fm["files"]
         .as_array_mut()
         .unwrap()
-        .extend([file("s.sh", value!([])), file("st.sh", value!([]))]);
+        .extend(sources.iter().map(|(path, _)| file(path, value!([]))));
     fm["project_edges"] = value!([edge(
         "script:consumer",
         "test-execution",
@@ -625,8 +653,9 @@ pub(super) fn consuming_operation(h: &Host, body: &str) {
     )]);
     fm["test_costs"] = value!([{"test":"consumer-tests","cost":"unknown"}]);
     fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
-    fs::write(h.root.join("s.sh"), body).unwrap();
-    fs::write(h.root.join("st.sh"), "exit 0\n").unwrap();
+    for (path, bytes) in sources {
+        fs::write(h.root.join(path), bytes).unwrap();
+    }
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
 }
@@ -639,10 +668,7 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
     };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
-    consuming_operation(
-        &h,
-        "mkdir -p .chrono-harness/state\nprintf ready > .chrono-harness/state/ready\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\nprintf joined-child\n",
-    );
+    native_consumer(&h, "managed-child");
     let target = h.parent.join("in-use");
     assert_eq!(h.invoke("feature", "in-use", &target).0, 0);
     output(&target);

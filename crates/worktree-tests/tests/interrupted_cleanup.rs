@@ -1,4 +1,4 @@
-use super::automatic::consuming_operation;
+use super::automatic::{consuming_operation, native_consumer};
 use super::*;
 use std::{
     process::Stdio,
@@ -286,7 +286,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     let h = Host::new("payload");
     participating_check(&h);
     h.kernel_cleanup();
-    consuming_operation(&h, "printf ordinary-work\n");
+    native_consumer(&h, "ordinary");
     let a = h.parent.join("drifted-a");
     let b = h.parent.join("valid-b");
     assert_eq!(h.invoke("feature", "drifted-a", &a).0, 0);
@@ -344,10 +344,7 @@ fn await_file(path: &Path) {
 fn successful_use_without_finish_reclaims_caches_and_preserves_active_work() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ' .chrono-harness/state\nprintf rebuilt > 'output λ/cache'\nprintf evidence > .chrono-harness/state/evidence\n",
-    );
+    native_consumer(&h, "rebuild-evidence");
     let target = h.parent.join("resumable");
     assert_eq!(h.invoke("feature", "resumable", &target).0, 0);
     let (code, report, error) = h.auto(
@@ -653,15 +650,7 @@ fn reclaim(h: &Host, target: &Path) -> Value {
 fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        r#"mkdir -p .chrono-harness/state
-sh -c 'printf "%s" "$$" > .chrono-harness/state/grandchild; while [ ! -f .chrono-harness/state/release-grandchild ]; do sleep 0.02; done; printf done > .chrono-harness/state/grandchild-done' </dev/null >/dev/null 2>&1 &
-printf '%s' "$$" > .chrono-harness/state/parent
-while [ ! -f .chrono-harness/state/release-parent ]; do sleep 0.02; done
-printf done > .chrono-harness/state/parent-done
-"#,
-    );
+    native_consumer(&h, "parent");
     let target = h.parent.join("descendants");
     assert_eq!(h.invoke("feature", "descendants", &target).0, 0);
     output(&target);
@@ -710,10 +699,7 @@ printf done > .chrono-harness/state/parent-done
 fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready-$$\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\nprintf completed\n",
-    );
+    native_consumer(&h, "shared-holder");
     let target = h.parent.join("concurrent");
     assert_eq!(h.invoke("feature", "concurrent", &target).0, 0);
     output(&target);
@@ -921,10 +907,7 @@ fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_sourc
     use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ'; printf rebuilt > 'output λ/cache'\n",
-    );
+    native_consumer(&h, "rebuild");
     let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
     let script = h.parent.join("supersession-git");
     fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-cache\" ] && [ ! -d \"$HOME/superseded/output λ\" ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
@@ -980,10 +963,7 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
     use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ'; printf rebuilt > 'output λ/cache'\n",
-    );
+    native_consumer(&h, "rebuild");
     let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
     let program = h.parent.join("birth-git");
     let ledger = h
@@ -1175,10 +1155,7 @@ fn kernel_caches_preserve_staged_source_unknown_lease_drift_and_foreign_locks() 
 fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ'\nprintf rebuilt > 'output λ/cache'\nprintf original-error >&2\nexit 23\n",
-    );
+    native_consumer(&h, "rebuild-error");
     let target = h.parent.join("rearm");
     assert_eq!(h.invoke("feature", "rearm", &target).0, 0);
     for generation in [1, 2] {
