@@ -1469,13 +1469,21 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
 
 #[cfg(target_os = "macos")]
 #[test]
+fn unexpected_exec_helper() {
+    if std::env::var_os("CHRONO_UNEXPECTED_EXEC").is_some() {
+        fs::File::create_new("unexpected-exec").unwrap();
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
 fn failed_live_identity_registration_helper() {
     use std::os::fd::AsRawFd;
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
         return;
     };
     check_launch_allocations();
-    // The independent Python parent fixes this process's descriptor budget.
+    // The independent Rust parent fixes this process's descriptor budget.
     // Leave the ownership transport free, while exhausting the observer's
     // remaining kernel descriptor when it receives the live handoff.
     let mut held = Vec::new();
@@ -1488,9 +1496,13 @@ fn failed_live_identity_registration_helper() {
         }
     }
     let spec = chrono_harness::CommandSpec {
-        program: "/usr/bin/python3".into(),
-        args: vec!["-c".into(), "open('unexpected-exec','x').close()".into()],
-        env: Default::default(),
+        program: std::env::current_exe().unwrap().to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "unexpected_exec_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: [("CHRONO_UNEXPECTED_EXEC".into(), "1".into())].into(),
         timeout_seconds: 30,
         output_limit_bytes: 4096,
     };
@@ -1516,18 +1528,54 @@ fn failed_live_identity_registration_helper() {
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec() {
+    use std::os::unix::process::CommandExt;
     let root = tempfile::tempdir().unwrap();
-    let out = std::process::Command::new("/usr/bin/python3")
+    let descriptors: Vec<i32> = std::env::var("CHRONO_PROCESS_FDS")
+        .ok()
+        .map(|value| value.split(',').map(|fd| fd.parse().unwrap()).collect())
+        .unwrap_or_default();
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
         .args([
-            "-c",
-            "import fcntl,os,resource,sys\nleases=os.environ.pop('CHRONO_PROCESS_FDS','')\nheld=[]\nfor value in leases.split(',') if leases else []:\n fd=int(value)\n copy=fcntl.fcntl(fd,fcntl.F_DUPFD,210)\n os.set_inheritable(copy,True)\n held.append(copy)\nfor value in leases.split(',') if leases else []: os.close(int(value))\nfor fd in (198,199,200):\n try: os.close(fd)\n except OSError: pass\nresource.setrlimit(resource.RLIMIT_NOFILE,(210,210))\nos.execv(sys.argv[1],[sys.argv[1],'--exact','failed_live_identity_registration_helper','--nocapture'])",
+            "--exact",
+            "failed_live_identity_registration_helper",
+            "--nocapture",
         ])
-        .arg(std::env::current_exe().unwrap())
         .env("CHRONO_FAILED_HANDOFF", root.path())
-        // Keep inherited leases open above the fixed allocation experiment's
-        // budget. Its independent helper omits the carrier to avoid transfers.
-        .output()
-        .unwrap();
+        .env_remove("CHRONO_PROCESS_FDS");
+    unsafe {
+        command.pre_exec(move || {
+            // Keep inherited leases open above the fixed allocation budget.
+            // F_DUPFD creates inheritable copies; this helper omits their carrier.
+            for fd in &descriptors {
+                if libc::fcntl(*fd, libc::F_DUPFD, 210) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            for fd in &descriptors {
+                if libc::close(*fd) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            for fd in [198, 199, 200] {
+                if libc::close(fd) < 0 {
+                    let error = std::io::Error::last_os_error();
+                    if error.raw_os_error() != Some(libc::EBADF) {
+                        return Err(error);
+                    }
+                }
+            }
+            let limit = libc::rlimit {
+                rlim_cur: 210,
+                rlim_max: 210,
+            };
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let out = command.output().unwrap();
     assert!(
         out.status.success(),
         "{} {}",
