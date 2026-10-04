@@ -542,6 +542,43 @@ impl CapturedChild {
             "CAPTURED_CHILD_WAIT_STATE {}",
             value!({"watched":watched,"processes":processes,"markers":markers})
         );
+        #[cfg(target_os = "macos")]
+        if let Some(trace) = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from) {
+            // Sampling starts only after the existing deadline has failed. It
+            // cannot turn that failure into success or supply a cleanup decision.
+            if trace.is_absolute() {
+                for row in processes
+                    .iter()
+                    .rev()
+                    .filter(|row| {
+                        row["state"]["stdout"]
+                            .as_str()
+                            .is_some_and(|s| s.contains("/.chrono-harness/bin/chrono-"))
+                    })
+                    .take(2)
+                {
+                    let pid = row["pid"].as_u64().unwrap().to_string();
+                    let path = trace.with_extension(format!("{pid}.sample.txt"));
+                    if path.exists() {
+                        continue;
+                    }
+                    let sampled = Command::new("/usr/bin/sample")
+                        .args([&pid, "1", "10", "-file"])
+                        .arg(&path)
+                        .output();
+                    let observation = match sampled {
+                        Ok(out) => {
+                            value!({"exit":out.status.code(),"stdout":String::from_utf8_lossy(&out.stdout),"stderr":String::from_utf8_lossy(&out.stderr)})
+                        }
+                        Err(error) => value!({"error":error.to_string()}),
+                    };
+                    eprintln!(
+                        "CAPTURED_CHILD_STACK {}",
+                        value!({"pid":pid,"path":path,"observation":observation})
+                    );
+                }
+            }
+        }
     }
     pub(super) fn await_file(&mut self, path: &Path) {
         let began = Instant::now();
