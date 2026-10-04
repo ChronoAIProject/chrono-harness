@@ -404,6 +404,22 @@ fn matching_output(root: &Path, path: &str, bytes: &[u8], replace: bool) -> Resu
     }
 }
 
+fn preparation_identity(report: &Value) -> Value {
+    let mut identity = report.clone();
+    if let Some(processes) = identity
+        .get_mut("git_facts")
+        .and_then(|facts| facts.get_mut("processes"))
+        .and_then(Value::as_array_mut)
+    {
+        for process in processes {
+            if let Some(fields) = process.as_object_mut() {
+                fields.remove("ownership_fds");
+            }
+        }
+    }
+    identity
+}
+
 /// The dispatch and automatic units consumers share exact full context parsing.
 pub(crate) fn context_input(bytes: &[u8]) -> Result<Value, String> {
     let ctx: Value = decode(bytes)?;
@@ -561,6 +577,23 @@ pub fn prepare(
         (serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n").into_bytes();
     let replace = c.schema == SHORT_SCHEMA;
     let context_same = matching_output(root, &c.context_path, context, replace)?;
+    if !replace
+        && context_same
+        && let Ok(saved) = fs::read(no_symlink_parents(root, &c.preparation_path)?)
+        && saved != report_bytes
+        && let Ok(previous) = decode::<Value>(&saved)
+        && preparation_identity(&previous) == preparation_identity(&report)
+    {
+        // The original preparation remains authoritative. Preserve this call's
+        // actual carrier observations separately, without replacing either one.
+        chrono_harness::prepared::retain_original(
+            root,
+            &format!("{}preparation/", c.artifact_directory),
+            "native-attempt",
+            &report_bytes,
+        )?;
+        return Ok(previous);
+    }
     let report_same = matching_output(root, &c.preparation_path, &report_bytes, replace)?;
     if !context_same {
         write_file(root, &c.context_path, context)?;

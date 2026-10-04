@@ -8,6 +8,12 @@ caller values cannot replace it. Receipts retain the carrier separately so input
 preparation, tool binding and operation validation compare the registered business
 environment without treating descriptor allocation as input drift. Observations
 without a carrier omit the field; existing observations remain readable.
+
+Execution plans also exclude the reserved carrier from business tool bindings.
+The generated native CI Python adapter explicitly forwards the inherited
+descriptors to its Rust bridge. Host adapters that launch further consumers must
+forward the same descriptors; forwarding only the environment variable does not
+keep the corresponding kernel ownership alive.
 Engine calls leave already inherited descriptors and their flags unchanged, so
 other threads and subsequent native children retain the original capability.
 Engine-owned duplicates remain CLOEXEC until their child launch; closing the final

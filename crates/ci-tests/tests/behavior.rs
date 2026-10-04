@@ -608,8 +608,9 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
     assert_eq!(
         output.status.code(),
         Some(expected_exit),
-        "root {}; argv {argv:?}; stdout {}; stderr {}",
+        "root {}; argv {argv:?}; status {}; stdout {}; stderr {}",
         root.display(),
+        output.status,
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -634,7 +635,7 @@ fn retain_command_result(
         fs::create_dir_all(&destination).unwrap();
         fs::write(destination.join("stdout.bin"), &output.stdout).unwrap();
         fs::write(destination.join("stderr.bin"), &output.stderr).unwrap();
-        fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"joined":true})).unwrap()).unwrap();
+        fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"status":output.status.to_string(),"joined":true})).unwrap()).unwrap();
         retain_context_state(
             &root.join(".chrono-harness/state"),
             &destination.join("original-state"),

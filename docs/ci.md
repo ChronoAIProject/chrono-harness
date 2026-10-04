@@ -101,6 +101,11 @@ native upload root. Native original payload/context/producer/receipt artifacts
 are addressed and validated there, including narrowed custom roots; full v1
 keeps its existing exact-context transport. Full v2 current context/report files
 remain replaceable projections, while their original short evidence is immutable.
+When a repeated full v1 preparation differs only in process ownership descriptor
+numbers, it returns the original preparation and retains the new actual report
+under `preparation/native-attempt-<sha256>.json` within the declared artifact
+directory. Context bytes and every other observation must still agree; changed
+Git results, environment or input identities retain the output-collision error.
 Full independent scopes, frozen rounds and expiry revalidation remain pending.
 
 The host's unit and collection workflows register `macos-26`. Its Git bytes/version

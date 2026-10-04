@@ -246,11 +246,13 @@ fn prepare_inner(
     methods: &BTreeMap<String, Vec<Method>>,
     execute: &BTreeMap<String, String>,
     declarations: &Value,
-    environment: BTreeMap<String, String>,
+    mut environment: BTreeMap<String, String>,
     reused: &BTreeMap<String, Tool>,
     strict: bool,
     scheduling: Option<Scheduling>,
 ) -> Result<Execution, String> {
+    #[cfg(unix)]
+    environment.remove(chrono_harness::process_fds::ENV);
     let (selected, mut operations) = order(selected, plans, methods, execute)?;
     if let Some(policy) = &scheduling {
         policy.validate()?;
