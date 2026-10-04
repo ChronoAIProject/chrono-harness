@@ -443,8 +443,20 @@ fn full_ci_consumer(selected: bool) {
             .args(&argv[1..])
             .output()
             .unwrap();
+        h.retain_command_result("prepared-check", &out);
         let report: Value = serde_json::from_slice(&out.stdout).unwrap();
-        assert_eq!(out.status.code(), Some(expected), "{}", report["findings"]);
+        assert_eq!(
+            out.status.code(),
+            Some(expected),
+            "findings={} transport={:?}",
+            report["findings"],
+            report["judges"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|j| j["transport_failure"].as_str())
+                .collect::<Vec<_>>()
+        );
         fs::remove_file(root.join(".chrono-harness/state/preparation.json")).unwrap();
         report
     };

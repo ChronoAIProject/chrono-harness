@@ -10,14 +10,25 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 pub(crate) struct Runner {
     pub(crate) config: Config,
+    pub(crate) birth_lease: Option<crate::ownership::Lease>,
     environment: BTreeMap<String, String>,
     tool: observation::Tool,
     processes: Vec<Value>,
+    immutable_blobs: BTreeMap<(PathBuf, String, String), Vec<u8>>,
+    immutable_trees: BTreeMap<(PathBuf, String), Arc<facts::Tree>>,
+}
+pub(crate) struct CheckoutIdentity {
+    pub(crate) top: PathBuf,
+    pub(crate) common: PathBuf,
+    pub(crate) metadata: PathBuf,
+    pub(crate) head: String,
+    pub(crate) branch: String,
 }
 impl Runner {
     pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
@@ -107,8 +118,100 @@ impl Runner {
         facts::full_oid(&oid)?;
         Ok(oid)
     }
+    /// Read the current checkout identity in one Git invocation. This is a live
+    /// observation, never an immutable-object cache or a cross-effect snapshot.
+    pub(crate) fn checkout_identity(&mut self, root: &Path) -> Result<CheckoutIdentity, String> {
+        let observed = self.text(
+            root,
+            &[
+                "rev-parse",
+                "--show-toplevel",
+                "--git-common-dir",
+                "--absolute-git-dir",
+                "HEAD",
+                "--symbolic-full-name",
+                "HEAD",
+            ],
+        )?;
+        let fields: Vec<_> = observed.trim_end_matches('\n').split('\n').collect();
+        if fields.len() != 5 || fields.iter().any(|field| field.is_empty()) {
+            return Err("invalid Git checkout identity observation".into());
+        }
+        facts::full_oid(fields[3])?;
+        Ok(CheckoutIdentity {
+            top: root.join(fields[0]),
+            common: root.join(fields[1]),
+            metadata: root.join(fields[2]),
+            head: fields[3].into(),
+            branch: fields[4].into(),
+        })
+    }
+    pub(crate) fn tree(&mut self, root: &Path, oid: &str) -> Result<Arc<facts::Tree>, String> {
+        facts::full_oid(oid)?;
+        let key = (root.to_path_buf(), oid.to_owned());
+        if let Some(tree) = self.immutable_trees.get(&key) {
+            return Ok(tree.clone());
+        }
+        let tree = Arc::new(facts::parse_tree(
+            &self.git(root, &["ls-tree", "-rz", "--full-tree", oid])?,
+        )?);
+        self.immutable_trees.insert(key, tree.clone());
+        Ok(tree)
+    }
     pub(crate) fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
-        self.git(root, &["show", &format!("{oid}:{path}")])
+        facts::full_oid(oid)?;
+        let key = (root.to_path_buf(), oid.to_owned(), path.to_owned());
+        if let Some(bytes) = self.immutable_blobs.get(&key) {
+            return Ok(bytes.clone());
+        }
+        // Keep original successful reads within this operation. Mutable HEAD,
+        // checkout bytes, attachment and policy comparisons still run each time.
+        let bytes = self.git(root, &["show", &format!("{oid}:{path}")])?;
+        self.immutable_blobs.insert(key, bytes.clone());
+        Ok(bytes)
+    }
+    fn registry_blobs(
+        &mut self,
+        root: &Path,
+        oid: &str,
+        paths: &[String],
+    ) -> Result<Vec<(String, Vec<u8>)>, String> {
+        facts::full_oid(oid)?;
+        let pending = paths
+            .iter()
+            .filter(|path| {
+                !self.immutable_blobs.contains_key(&(
+                    root.to_path_buf(),
+                    oid.into(),
+                    (*path).clone(),
+                ))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let acquired = facts::acquire_registry_blobs(
+            oid,
+            &pending,
+            self.config.output_limit_bytes,
+            |args, input| {
+                let process = self.input(root, args, input)?;
+                let index = self.processes.len() - 1;
+                Ok((index, Self::output(process, args)?))
+            },
+            str::to_owned,
+        )?;
+        for blob in acquired {
+            self.immutable_blobs
+                .insert((root.to_path_buf(), oid.into(), blob.path), blob.bytes);
+        }
+        Ok(paths
+            .iter()
+            .map(|path| {
+                (
+                    path.clone(),
+                    self.immutable_blobs[&(root.to_path_buf(), oid.into(), path.clone())].clone(),
+                )
+            })
+            .collect())
     }
     pub(crate) fn inventory(
         &mut self,
@@ -198,7 +301,7 @@ pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Resu
     untracked(r, target, config)
 }
 pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Result<(), String> {
-    let expected = facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", tree])?)?;
+    let expected = r.tree(target, tree)?;
     let index = r.git(target, &["ls-files", "--stage", "-z"])?;
     if !facts::checkout_changes(target, &expected, &index)?.is_empty() {
         return Err(
@@ -210,19 +313,15 @@ pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Resul
 pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let artifacts = facts::artifact_directories(config)?;
     let exclusions = facts::artifact_exclusions(&artifacts);
-    for ignored in [false, true] {
-        let mut args = vec!["ls-files", "--others", "--exclude-standard", "-z"];
-        if ignored {
-            args.push("--ignored");
-        }
-        args.extend(["--", "."]);
-        args.extend(exclusions.iter().map(String::as_str));
-        let observed: Vec<_> = paths(r.literal_inventory(target, &args)?)?
-            .into_iter()
-            .collect();
-        if !chrono_judge_registration::nonartifact_paths(config, &observed).is_empty() {
-            return Err("checkout has unregistered files; preserve it for recovery".into());
-        }
+    // Read both ignored and nonignored files together. An ignore-rule change
+    // between two complementary queries must not make a present file disappear.
+    let mut args = vec!["ls-files", "--others", "-z", "--", "."];
+    args.extend(exclusions.iter().map(String::as_str));
+    let observed: Vec<_> = paths(r.literal_inventory(target, &args)?)?
+        .into_iter()
+        .collect();
+    if !chrono_judge_registration::nonartifact_paths(config, &observed).is_empty() {
+        return Err("checkout has unregistered files; preserve it for recovery".into());
     }
     Ok(())
 }
@@ -235,13 +334,11 @@ pub(crate) fn execute(
     keep_locked: bool,
 ) -> Result<(), String> {
     let source = &o.root;
-    if fs::canonicalize(r.text(source, &["rev-parse", "--show-toplevel"])?.trim())
-        .map_err(|e| e.to_string())?
-        != *source
-    {
+    let observed = r.checkout_identity(source)?;
+    if fs::canonicalize(&observed.top).map_err(|e| e.to_string())? != *source {
         return Err("host root must be the actual Git checkout root".into());
     }
-    let source_head = r.oid(source, "HEAD")?;
+    let source_head = observed.head;
     report["source_commit"] = value!(source_head);
     report["creation_kind"] = value!(o.kind);
     if r.blob(source, &source_head, &o.config_path)? != bytes {
@@ -570,9 +667,12 @@ pub(crate) fn with_report(
     });
     let mut runner = Runner {
         config,
+        birth_lease: None,
         environment,
         tool,
         processes: vec![],
+        immutable_blobs: BTreeMap::new(),
+        immutable_trees: BTreeMap::new(),
     };
     let result = match version_error {
         Some(e) => Err(e),
@@ -592,7 +692,13 @@ pub(crate) fn with_report(
         }
         report["processes"] = value!(runner.processes);
     }
-    if matches!(operation, "finish" | "maintain" | "import" | "use") {
+    // Enrollment ownership spans the separate producer/sealing phases. A later
+    // entrant may reconcile only after this owner and inherited consumers close.
+    drop(runner.birth_lease.take());
+    if matches!(
+        operation,
+        "finish" | "maintain" | "import" | "use" | "check" | "bootstrap"
+    ) {
         if let Some(coordinator) = report["lifecycle_coordinator_root"].as_str() {
             if Path::new(coordinator) != root {
                 crate::automatic::publish_result(Path::new(coordinator), &report)?;
@@ -614,7 +720,9 @@ pub(crate) fn registrations(
     head: &str,
     config_path: &str,
 ) -> Result<(Registrations, String), String> {
-    let snapshot = facts::registry_snapshot_with(config_path, |path| r.blob(root, head, path))?;
+    let snapshot = facts::registry_snapshot_with_batches(config_path, |paths| {
+        r.registry_blobs(root, head, paths)
+    })?;
     let registrations = Registrations::load(&snapshot.values, config_path)?;
     Ok((
         registrations,

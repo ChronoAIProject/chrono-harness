@@ -463,6 +463,112 @@ fn processes(reader: &Reader) -> usize {
 }
 
 #[test]
+fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
+    let h = Host::new("");
+    h.save();
+    fs::create_dir(h.root.join("objects")).unwrap();
+    let mut originals = std::collections::BTreeMap::new();
+    for n in 0..32u8 {
+        let path = format!("objects/{n:02} café\t:key");
+        let bytes = vec![n, 0xff, 0, b'\n'];
+        fs::write(h.root.join(&path), &bytes).unwrap();
+        originals.insert(path, bytes);
+    }
+    fs::write(h.root.join("empty"), b"").unwrap();
+    std::os::unix::fs::symlink("objects/00 café\t:key", h.root.join("alias")).unwrap();
+    let oid = commit(&h);
+    let reader = h.open().unwrap();
+    reader.verify_oid(&h.root, &oid).unwrap();
+    let tree = reader.tree(&h.root, &oid).unwrap();
+    // Already observed paths share their original receipt with the export.
+    let first = originals.keys().next().unwrap();
+    reader.blob(&h.root, &oid, first).unwrap();
+    let before = processes(&reader);
+    let dest = tempfile::tempdir().unwrap();
+    reader.export(&h.root, &oid, &tree, dest.path()).unwrap();
+    for (path, bytes) in &originals {
+        assert_eq!(fs::read(dest.path().join(path)).unwrap(), *bytes);
+        assert!(
+            fs::metadata(dest.path().join(path))
+                .unwrap()
+                .permissions()
+                .readonly()
+        );
+    }
+    assert_eq!(fs::read(dest.path().join("empty")).unwrap(), b"");
+    assert_eq!(
+        fs::read_link(dest.path().join("alias")).unwrap(),
+        PathBuf::from(first)
+    );
+    let acquired = processes(&reader) - before;
+    println!(
+        "SNAPSHOT_EXPORT blobs={} git_processes={acquired}",
+        tree.len()
+    );
+    assert!(
+        acquired <= 3,
+        "small immutable blobs must not launch one Git process per file: {acquired}"
+    );
+    let observed = reader.observation();
+    for process in observed["processes"].as_array().unwrap() {
+        let process: chrono_harness::ProcessResult =
+            serde_json::from_value(process.clone()).unwrap();
+        chrono_harness::observation::process_success(&process).unwrap();
+    }
+    let next = tempfile::tempdir().unwrap();
+    reader.export(&h.root, &oid, &tree, next.path()).unwrap();
+    assert_eq!(
+        reader.observation(),
+        observed,
+        "reuse retains original processes"
+    );
+    fs::write(h.root.join(".git/config.worktree"), "drift").unwrap();
+    let rejected = tempfile::tempdir().unwrap();
+    assert!(
+        reader
+            .export(&h.root, &oid, &tree, rejected.path())
+            .is_err()
+    );
+    assert_eq!(
+        reader.observation(),
+        observed,
+        "cached bytes retain input guards"
+    );
+}
+
+#[test]
+fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
+    let (h, originals, oid) = registry_host(
+        "case \"$*\" in *' cat-file --batch') if [ ! -e retry-ready ]; then printf 'original partial'; printf 'original error' >&2; exit 17; fi;; esac",
+        20,
+    );
+    let reader = h.open().unwrap();
+    reader.verify_oid(&h.root, &oid).unwrap();
+    let tree = reader.tree(&h.root, &oid).unwrap();
+    let dest = tempfile::tempdir().unwrap();
+    let error = reader
+        .export(&h.root, &oid, &tree, dest.path())
+        .unwrap_err();
+    assert!(error.contains("Git facts process exit 17"), "{error}");
+    let observed = reader.observation();
+    let failure = observed["processes"].as_array().unwrap().last().unwrap();
+    assert_eq!(failure["exit_code"], 17);
+    assert_eq!(failure["stdout_sha256"], sha256(b"original partial"));
+    assert_eq!(failure["stderr_sha256"], sha256(b"original error"));
+    fs::write(h.root.join("retry-ready"), b"").unwrap();
+    reader.export(&h.root, &oid, &tree, dest.path()).unwrap();
+    assert!(processes(&reader) > observed["processes"].as_array().unwrap().len());
+    for (path, bytes) in originals {
+        assert_eq!(fs::read(dest.path().join(path)).unwrap(), bytes);
+    }
+    let after = reader.observation();
+    assert_eq!(
+        &after["processes"].as_array().unwrap()[..observed["processes"].as_array().unwrap().len()],
+        observed["processes"].as_array().unwrap()
+    );
+}
+
+#[test]
 fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations() {
     let mut h = Host::new("");
     let mut registries = serde_json::Map::new();
@@ -566,6 +672,112 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
 }
 
 #[test]
+fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
+    let h = Host::new("");
+    h.save();
+    fs::write(h.root.join("payload"), b"original").unwrap();
+    let old = commit(&h);
+    let reader = h.open().unwrap();
+    reader.verify_oid(&h.root, &old).unwrap();
+    let tree = reader.tree(&h.root, &old).unwrap();
+    let original = reader.observation();
+    assert_eq!(reader.tree(&h.root, &old).unwrap(), tree);
+    assert_eq!(
+        reader.observation(),
+        original,
+        "reuse must retain one original tree acquisition"
+    );
+
+    fs::write(h.root.join("payload"), b"changed").unwrap();
+    assert!(
+        reader
+            .tracked_changes(&h.root, &old)
+            .unwrap()
+            .contains(&"payload".into())
+    );
+    let git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    assert!(
+        Command::new(git)
+            .current_dir(&h.root)
+            .args(["add", "payload"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(h.root.join("payload"), b"original").unwrap();
+    assert!(
+        reader
+            .tracked_changes(&h.root, &old)
+            .unwrap()
+            .contains(&"payload".into()),
+        "a staged change is not cancelled by opposite worktree bytes"
+    );
+    let observed = reader.observation();
+    let reads = observed["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["argv"].as_array().unwrap().iter().any(|v| v == "ls-tree"))
+        .count();
+    assert_eq!(reads, 1);
+    let other = Host::new("");
+    let count = processes(&reader);
+    assert!(
+        reader
+            .tree(&other.root, &old)
+            .unwrap_err()
+            .contains("root mismatch")
+    );
+    assert_eq!(processes(&reader), count);
+
+    let fresh = h.open().unwrap();
+    fresh.verify_oid(&h.root, &old).unwrap();
+    let count = processes(&fresh);
+    assert_eq!(fresh.tree(&h.root, &old).unwrap(), tree);
+    assert_eq!(processes(&fresh), count + 1);
+    let before = reader.tree(&h.root, "HEAD").unwrap();
+    fs::write(h.root.join("payload"), b"next commit").unwrap();
+    let new = commit(&h);
+    assert_ne!(
+        reader.tree(&h.root, "HEAD").unwrap()["payload"],
+        before["payload"]
+    );
+    reader.verify_oid(&h.root, &new).unwrap();
+    assert_ne!(
+        reader.tree(&h.root, &new).unwrap()["payload"],
+        tree["payload"]
+    );
+    assert_eq!(reader.tree(&h.root, &old).unwrap(), tree);
+}
+
+#[test]
+fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
+    for drift in [false, true] {
+        let h = Host::new(if drift {
+            "case \"$*\" in *' ls-tree '*) if [ -e fail-tree ]; then printf changed > .git/config.worktree; fi;; esac"
+        } else {
+            "case \"$*\" in *' ls-tree '*) if [ -e fail-tree ]; then printf malformed; exit 0; fi;; esac"
+        });
+        h.save();
+        fs::write(h.root.join("payload"), b"original").unwrap();
+        let oid = commit(&h);
+        let reader = h.open().unwrap();
+        reader.verify_oid(&h.root, &oid).unwrap();
+        fs::write(h.root.join("fail-tree"), b"").unwrap();
+        let count = processes(&reader);
+        assert!(reader.tree(&h.root, &oid).is_err());
+        let original = reader.observation()["processes"][count].clone();
+        fs::remove_file(h.root.join("fail-tree")).unwrap();
+        if drift {
+            fs::remove_file(h.root.join(".git/config.worktree")).unwrap();
+        }
+        assert!(reader.tree(&h.root, &oid).unwrap().contains_key("payload"));
+        assert_eq!(processes(&reader), count + 2);
+        assert_eq!(reader.observation()["processes"][count], original);
+    }
+}
+
+#[test]
 fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() {
     for case in [
         "selector",
@@ -582,6 +794,7 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
         reader.verify_oid(&h.root, &oid).unwrap();
         assert_eq!(reader.blob(&h.root, &oid, "payload").unwrap(), b"original");
+        assert!(reader.tree(&h.root, &oid).unwrap().contains_key("payload"));
         let trace = fs::read(h.root.join("trace")).unwrap();
         let count = processes(&reader);
         match case {
@@ -602,6 +815,13 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         }
         let error = reader.blob(&h.root, &oid, "payload").unwrap_err();
         assert!(error.contains("E_GIT_FACTS"), "{case}: {error}");
+        assert!(
+            reader
+                .tree(&h.root, &oid)
+                .unwrap_err()
+                .contains("E_GIT_FACTS"),
+            "{case}"
+        );
         assert_eq!(processes(&reader), count, "{case}");
         assert_eq!(fs::read(h.root.join("trace")).unwrap(), trace, "{case}");
     }

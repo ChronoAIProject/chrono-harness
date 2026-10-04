@@ -3,6 +3,7 @@ mod artifact_disposal;
 mod automatic;
 mod check_inputs;
 mod maintenance;
+mod ownership;
 mod rebind;
 mod rebind_inputs;
 mod rebind_resume;
@@ -113,7 +114,7 @@ pub fn run(args: &[String]) -> CliOutput {
     }
     let result = if matches!(
         args.first().map(String::as_str),
-        Some("finish" | "maintain" | "import" | "use")
+        Some("finish" | "maintain" | "import" | "use" | "check" | "bootstrap")
     ) {
         automatic::dispatch(args)
     } else if matches!(

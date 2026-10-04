@@ -59,7 +59,8 @@
       ".github/workflows/chrono-ci.yml",
       ".chrono-harness/ci/workflow-inventory.py",
       ".chrono-harness/ci/workflow-inventory-tests.py",
-      ".chrono-harness/ci/workflow-inventory.json"
+      ".chrono-harness/ci/workflow-inventory.json",
+      ".chrono-harness/process_fds.py"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,

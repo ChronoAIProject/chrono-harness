@@ -14,6 +14,7 @@ FILEMAP v2 may additionally declare one `execution_scheduling` policy:
 ```json
 {
   "max_running": 2,
+  "priority": ["build.example", "test.example"],
   "resources": ["shared-inventory"],
   "claims": {
     "build.example": {"resources": [], "outputs": ["example/output/"]},
@@ -32,8 +33,15 @@ before business tool observation or launch. There is no language, directory,
 call-graph or test discovery. All resource claims are exclusive; equal or nested
 output namespaces conflict. The declaration remains responsible for completeness.
 
-Projects alone schedules the routes DAG. It chooses ready work in canonical
-plan order, skips conflicts so disjoint ready work advances, and acquires all
+`priority` optionally lists distinct registered operation IDs in launch order.
+Listed ready operations precede unlisted ready operations; unlisted operations
+retain canonical plan order. Empty or absent priority retains the previous
+serialized identity and ordering. The full policy may include operations outside
+the selected unit; priority does not select them or infer durations or dependencies.
+Unknown, empty and duplicate priority IDs fail before business effects.
+
+Projects alone schedules the routes DAG. It chooses ready work by the registered
+priority followed by canonical plan order, skips conflicts so disjoint ready work advances, and acquires all
 claims together before launch. A pending prerequisite waits; an unsuccessful
 terminal prerequisite blocks only its descendants. Shared operations run once
 per selected invocation. All owned workers join, and executed/blocked report
@@ -44,7 +52,8 @@ the legacy shape. With the policy, its complete declarations enter plan identity
 collection reconstructs and compares them against retained candidate registration
 without executing business or version commands.
 
-Scheduling cap/resource changes affect registered plan consumers. Claim changes
+Scheduling cap/resource/priority changes affect registered plan consumers. Priority
+order is semantic, and changes or removal reach consumers at both endpoints. Claim changes
 also affect explicitly conflicting consumers at both endpoints; output declaration
 changes retain declared output consumers and owners. Removal and reassignment
 use the same union of endpoint records and edges. No selected obligation is
@@ -62,6 +71,19 @@ subtree. PID disappearance, a kill request and successful enclosing exit alone
 never acknowledge completion. Launch generations prevent delayed events or a
 retired inherited context from referring to a reused slot. Native macOS behavior
 is tested; Linux pidfd behavior requires native verification.
+
+The observer also records when it actually receives a child's kernel exit event,
+using the system clock underlying `Instant` (Apple `CLOCK_UPTIME_RAW`, otherwise
+`CLOCK_MONOTONIC`). The monitor fixes its evidence cutoff before starting its
+existing execution timer. If it resumes after the deadline, an observation
+strictly before that cutoff permits an immediate child-status probe. Only an
+actual completed status preserves the child result; missing/late observations,
+clock failures or an incomplete probe still time out without another wait.
+The timestamp bounds observed exit from above; it never infers an earlier exit
+when the observer was delayed too. Cancellation, output limits and ownership
+cleanup remain independent guards. The private mapping identity versions this
+layout, so coupled nested binaries must be upgraded together; incompatible
+inherited owners fail instead of silently reinterpreting shared memory.
 
 An operation timeout cancels only that launch subtree. Nested engines terminate
 their groups and reap their children before the enclosing engine joins its child

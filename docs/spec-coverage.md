@@ -96,7 +96,11 @@ cover different effective configuration/workflow paths with unchanged worktree
 policy, dirty source preservation, missing/unsupported endpoint rejection and a
 changed selected workflow target without checkout creation, selected reconstruction,
 and selected recovery/cleanup with original failed-process evidence. Direct controls
-remain. The next full-SPEC gaps remain full host activation, complete effective
+remain. The worktree producer and bound Reader share the bounded explicit-registry
+batch acquisition. Tests bind each endpoint to original metadata/content bytes and
+retain actual failed or malformed batch output before fetch or checkout creation;
+reader tests retain output partitioning, guard, identity and legacy controls.
+The next full-SPEC gaps remain full host activation, complete effective
 inputs, native full dispatch and lifecycle delivery; parity and formal Rust
 refinement are also unfinished.
 
@@ -513,3 +517,41 @@ local fixtures do not prove those events or periodic idle cleanup. Interrupted
 unknown jobs/state need explicit reconciliation; no general archive, scheduler,
 process scanner or concurrent/power-loss transaction is claimed. See
 [worktree contract](worktree.md#opt-in-automatic-lifecycle-cleanup).
+
+The v2 candidate adds stable kernel admission/enrollment leases, no-finish cache
+recovery, immutable cache retry intents, short-check/bootstrap participation and
+explicit Python/nested-runner forwarding. The local real Cargo test regression
+checks lease retention by a distinct native child after both wrappers die.
+Committed composition, supported native platforms and complete host adoption
+remain acceptance obligations.
+Legacy v1 records remain protected; no retrospective ownership is fabricated.
+
+Automatic retry evidence uses versioned retained-input references, preserving
+immutable receipts in place and storing opaque partial bytes once at the surviving
+coordinator. The dedicated worktree regressions
+`automatic_retries_keep_original_evidence_without_recursive_growth` and
+`cache_retries_reference_failed_and_partial_originals_without_growth` exercise
+repeated real terminal/cache failures, bounded report growth, original-byte
+preservation, transitive drift/missing/symlink refusals and partial-result
+retention without claiming success. Explicit maintenance keeps its prior shape.
+This does not dispose historical evidence, deploy the coordinator or establish
+complete native acceptance.
+
+The runner retains monotonic kernel-exit observations across its anonymous launch
+tree. A resumed monitor can join a child observed terminal before its deadline;
+late or missing evidence never adds execution time. Protocol real-process tests
+suspend only the nested monitor, independently observe child exit, and distinguish
+on-time exit from late exit and output overflow. Cancellation and ownership cleanup
+keep their separate failure paths. The shared layout rejects incompatible owners;
+all participating binaries must be upgraded together. This behavior does not
+establish the cause of other host timeouts or full candidate acceptance.
+
+The registered scheduler accepts optional explicit launch priority while retaining
+dependency readiness, cap, failure propagation, exclusive resources/outputs and
+canonical report order. Real-process rendezvous tests cover reordered launches,
+unlisted work, blocked prerequisites and conflicts; schema tests reject malformed
+IDs and FILEMAP tests cover both-endpoint changes, reordering and removal. Empty
+priority preserves legacy plan identity; nonempty priority is bound by the plan
+and retained comparison. Main explicitly prioritizes its workflow prerequisite
+and long-test chain with cap 2. Timing sufficiency, committed canonical/native
+acceptance, deployment and complete SPEC delivery remain separate obligations.

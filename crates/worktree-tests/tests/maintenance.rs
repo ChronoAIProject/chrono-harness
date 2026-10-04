@@ -70,8 +70,8 @@ fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
     assert_eq!(code, 0, "{recovered} {error}");
     assert_eq!(recovered["status"], "recovered");
     assert_eq!(recovered["registry_digest"], digest);
-    assert_fixed_registry_reads(&recovered, &h.root, &head, &expected);
-    assert_fixed_registry_reads(&recovered, &target, &head, &expected);
+    assert_fixed_registry_reads(&recovered, &h.root, &h.root, &head, &expected);
+    assert_fixed_registry_reads(&recovered, &h.root, &target, &head, &expected);
     assert_eq!(fs::read(&receipt).unwrap(), receipt_bytes);
     let clean = fs::read(target.join("payload")).unwrap();
     fs::write(target.join("payload"), "unsaved recovered work").unwrap();
@@ -94,8 +94,8 @@ fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
     assert_eq!(code, 0, "{cleaned} {error}");
     assert_eq!(cleaned["status"], "cleaned");
     assert_eq!(cleaned["registry_digest"], digest);
-    assert_fixed_registry_reads(&cleaned, &h.root, &head, &expected);
-    assert_fixed_registry_reads(&cleaned, &target, &head, &expected);
+    assert_fixed_registry_reads(&cleaned, &h.root, &h.root, &head, &expected);
+    assert_fixed_registry_reads(&cleaned, &h.root, &target, &head, &expected);
     assert!(!target.exists());
     assert_eq!(cleaned["branch_removal"], "verified-absent");
     assert_eq!(fs::read(receipt).unwrap(), receipt_bytes);

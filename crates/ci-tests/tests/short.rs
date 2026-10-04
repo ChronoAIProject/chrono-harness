@@ -108,11 +108,7 @@ impl ShortHost {
         fs::create_dir(&root).unwrap();
         git(&root, &["clone", "-q", old.path().to_str().unwrap(), "."]);
         install(&root);
-        fs::copy(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
-            root.join(".chrono-harness/bin/chrono-worktree"),
-        )
-        .unwrap();
+        install_tools(&root, &[("worktree", "chrono-worktree")]);
         git(&root, &["config", "user.name", "Fixture"]);
         git(&root, &["config", "user.email", "fixture@example.invalid"]);
         let remote = parent.join("explicit target.git");
@@ -219,6 +215,12 @@ impl ShortHost {
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
         let out = self.command(args).output().unwrap();
+        if out.status.code() != Some(exit) {
+            let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
+                .chain(args.iter().map(|arg| (*arg).to_owned()))
+                .collect::<Vec<_>>();
+            retain_command_result(&self.root, &argv, &Value::Null, &out);
+        }
         assert_eq!(
             out.status.code(),
             Some(exit),
@@ -562,11 +564,7 @@ fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted
     });
     fs::remove_file(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap();
     h.run(&["check"], 2);
-    fs::copy(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
-        h.root.join(".chrono-harness/bin/chrono-worktree"),
-    )
-    .unwrap();
+    install_tools(&h.root, &[("worktree", "chrono-worktree")]);
     fs::write(h.root.join(".chrono-harness/config.json"), "{}").unwrap();
     h.run(&["check"], 2);
 }
@@ -1361,6 +1359,43 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     // A subsequent check must preserve the first original byte for byte.
     h.run(&["check", "--unit", "alpha"], 0);
     assert_eq!(fs::read(retained).unwrap(), original);
+}
+
+#[test]
+fn short_transport_preserves_process_failure_before_decoding_partial_output() {
+    for (body, expected) in [
+        ("printf '{\\n'; exec /bin/sleep 8", "process timed out"),
+        (
+            "chunk=x; while [ ${#chunk} -lt 8192 ]; do chunk=$chunk$chunk; done; printf '%s\\n' \"$chunk\"",
+            "process output limit exceeded",
+        ),
+    ] {
+        let mut h = ShortHost::new();
+        let path = ".chrono-harness/bin/bound-judge";
+        // Drain the request with buffered native IO, then emit the deliberate
+        // transport fault with shell builtins under the original one-second bound.
+        script(
+            &h.root,
+            path,
+            &format!("#!/bin/sh\n/bin/cat >/dev/null\n{body}\n"),
+        );
+        h.modify(".chrono-harness/ci/check.json", |config| {
+            config["judge"]["program"] = json!(path);
+            config["judge"]["args"] = json!([]);
+            config["judge"]["timeout_seconds"] = json!(1);
+            config["judge"]["output_limit_bytes"] = json!(4096);
+        });
+        let report = h.run(&["check", "--unit", "alpha"], 2);
+        assert_eq!(report["judge"]["failure"], expected, "{report}");
+        assert_eq!(report["transport_failure"], expected);
+        assert!(report["response"].is_null());
+        let original: Vec<u8> =
+            serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
+        assert_eq!(report["judge"]["stdout_sha256"], sha256(&original));
+        if expected == "process output limit exceeded" {
+            assert_eq!(original, vec![b'x'; 4096]);
+        }
+    }
 }
 
 fn script(root: &Path, path: &str, body: &str) {

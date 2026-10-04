@@ -1566,6 +1566,23 @@ fn scheduling_requires_complete_unambiguous_explicit_claims() {
     let pr = json!({"projects":[{"id":"t","actions":{"execute":{"operation":"run","tool":"sh","argv":[]}}}],"scripts":[]});
     let artifacts = json!([{"path":"out/"}]);
     assert!(scheduling(&fm, &pr, &artifacts).unwrap().is_some());
+    let mut priority = fm.clone();
+    priority["execution_scheduling"]["priority"] = json!(["run"]);
+    assert!(scheduling(&priority, &pr, &artifacts).unwrap().is_some());
+    for invalid in [
+        json!(["missing"]),
+        json!(["run", "run"]),
+        json!([""]),
+        json!(["\u{0}"]),
+        json!(null),
+        json!("run"),
+    ] {
+        priority["execution_scheduling"]["priority"] = invalid.clone();
+        assert!(
+            scheduling(&priority, &pr, &artifacts).is_err(),
+            "accepted invalid priority {invalid}"
+        );
+    }
     let mut old = fm.clone();
     old.as_object_mut().unwrap().remove("execution_scheduling");
     assert!(scheduling(&old, &pr, &artifacts).unwrap().is_none());

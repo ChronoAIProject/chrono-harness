@@ -147,6 +147,26 @@ fn scoped_v2_cli_binds_git_and_preserves_registered_execution() {
         h.trace().lines().count()
     );
     assert!(h.trace().contains(&h.base) && h.trace().contains(&candidate));
+    let trees = facts["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["argv"].as_array().unwrap().iter().any(|a| a == "ls-tree"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        trees.len(),
+        2,
+        "one original tree acquisition per fixed endpoint"
+    );
+    for oid in [&h.base, &candidate] {
+        assert_eq!(
+            trees
+                .iter()
+                .filter(|p| p["argv"].as_array().unwrap().last() == Some(&json!(oid)))
+                .count(),
+            1
+        );
+    }
 }
 
 #[test]

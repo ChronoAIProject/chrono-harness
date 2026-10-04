@@ -257,11 +257,46 @@ fn json_file(root: &Path, path: &str, value: &Value) {
 }
 
 fn install(root: &Path) {
-    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/bin");
+    install_tools(
+        root,
+        &[
+            ("runner", "chrono-harness"),
+            ("judge-ci", "chrono-judge-ci"),
+            ("ci", "chrono-ci"),
+        ],
+    );
+}
+
+fn install_tools(root: &Path, tools: &[(&str, &str)]) {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
-    for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
-        fs::copy(installed.join(name), bin.join(name)).unwrap();
+    // Test the current product outputs; deployed host tools have a separate
+    // caller-owned rollout and may intentionally retain an older schema.
+    // Fixtures never edit these product binaries; each host keeps its own path
+    // while sharing the built executable image. Byte-mutation fixtures need
+    // private copies. Cross-filesystem copies keep writable descriptors in a
+    // joined child so concurrently forked tests cannot inherit them before exec.
+    let mut copy = Command::new("/bin/cp");
+    let mut copying = false;
+    for (project, name) in tools {
+        let built = source.join(format!("crates/{project}/target/debug/{name}"));
+        match fs::hard_link(&built, bin.join(name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
+                copy.arg(built);
+                copying = true;
+            }
+            Err(error) => panic!("fixture executable {name}: {error}"),
+        }
+    }
+    if copying {
+        let copied = copy.arg(&bin).output().unwrap();
+        assert!(
+            copied.status.success(),
+            "candidate fixture installation: {}",
+            String::from_utf8_lossy(&copied.stderr)
+        );
     }
 }
 

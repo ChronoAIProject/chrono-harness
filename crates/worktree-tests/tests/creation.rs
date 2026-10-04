@@ -14,6 +14,7 @@ const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 mod automatic;
 mod check_inputs;
+mod interrupted_cleanup;
 mod maintenance;
 mod rebind;
 
@@ -22,6 +23,64 @@ struct Host {
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
+}
+fn retain_fixture_state(root: &Path, destination: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+    fs::create_dir_all(destination).unwrap();
+    for row in fs::read_dir(root).unwrap() {
+        let row = row.unwrap();
+        let kind = row.file_type().unwrap();
+        if kind.is_dir() {
+            retain_fixture_state(&row.path(), &destination.join(row.file_name()));
+        } else if kind.is_file() {
+            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+        }
+    }
+}
+impl Drop for Host {
+    fn drop(&mut self) {
+        if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {
+            let destination = Path::new(&directory).join(format!(
+                "fixture-{}",
+                sha256(self.root.as_os_str().as_encoded_bytes())
+            ));
+            retain_fixture_state(
+                &self.root.join(".chrono-harness/state"),
+                &destination.join("coordinator-state"),
+            );
+            for name in [
+                "git-mutation.stdout",
+                "git-mutation.stderr",
+                "admission-holder",
+                "native-hook",
+            ] {
+                let path = self.parent.join(name);
+                if path.is_file() {
+                    fs::copy(path, destination.join(name)).unwrap();
+                }
+            }
+            // Only explicitly enrolled fixtures, never live worker artifacts.
+            if let Ok(bytes) = fs::read(
+                self.root
+                    .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
+            ) {
+                if let Ok(ledger) = json(&bytes) {
+                    for entry in ledger["entries"].as_array().unwrap() {
+                        let target = Path::new(entry["path"].as_str().unwrap());
+                        retain_fixture_state(
+                            &target.join(".chrono-harness/state"),
+                            &destination.join(format!(
+                                "enrollment-{}",
+                                sha256(target.as_os_str().as_encoded_bytes())
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
 impl Host {
     fn new(layout: &str) -> Self {
@@ -63,7 +122,11 @@ impl Host {
         v.get_mut(FM).unwrap()["project_edges"] = value!([]);
         v.get_mut(FM).unwrap()["test_costs"] = value!([]);
         write_values(&root, &v);
-        fs::write(root.join(".gitignore"), ".chrono-harness/state/\n").unwrap();
+        fs::write(
+            root.join(".gitignore"),
+            ".chrono-harness/state/\n.chrono-harness/bin/\n",
+        )
+        .unwrap();
         fs::create_dir_all(root.join(layout).parent().unwrap()).unwrap();
         fs::write(
             root.join(layout),
@@ -132,7 +195,8 @@ impl Host {
             fs::write(directory.join("stdout.bin"), &out.stdout).unwrap();
             fs::write(directory.join("stderr.bin"), &out.stderr).unwrap();
             fs::write(directory.join("binding.json"), serde_json::to_vec_pretty(&value!({
-                "root":self.root,"exit":out.status.code(),"head":git(&self.root, &["rev-parse", "HEAD"]),
+                "root":self.root,"exit":out.status.code(),"status":out.status.to_string(),"joined":true,
+                "head":git(&self.root, &["rev-parse", "HEAD"]),
                 "policy_sha256":sha256(&fs::read(self.root.join(POLICY)).unwrap())
             })).unwrap()).unwrap();
         }
@@ -235,30 +299,103 @@ fn selected_values(root: &Path, oid: &str, effective: &str, workflow: &str) -> V
         .collect()
 }
 
-fn assert_fixed_registry_reads(report: &Value, root: &Path, oid: &str, values: &Values) {
+fn assert_fixed_registry_reads(
+    report: &Value,
+    repository: &Path,
+    root: &Path,
+    oid: &str,
+    values: &Values,
+) {
+    let processes = report["processes"].as_array().unwrap();
+    let config = values
+        .values()
+        .find(|v| v["registries"].is_object())
+        .unwrap();
+    let paths = ["judges", "projects", "filemap", "workflow"]
+        .map(|key| config["registries"][key].as_str().unwrap());
+    let metadata_input = paths
+        .iter()
+        .map(|path| format!("{oid}:{path}\n"))
+        .collect::<String>();
     for (path, expected) in values {
         let argv = value!(["--no-replace-objects", "show", format!("{oid}:{path}")]);
-        let rows: Vec<_> = report["processes"]
-            .as_array()
-            .unwrap()
+        let mut rows: Vec<_> = processes
             .iter()
             .filter(|row| row["root"] == value!(root) && row["argv"] == argv)
             .collect();
+        let batched = rows.is_empty();
+        let mut framed = Vec::new();
+        if batched {
+            let index = paths.iter().position(|p| *p == path).unwrap();
+            let metadata = processes
+                .iter()
+                .find(|row| {
+                    row["root"] == value!(root)
+                        && row["argv"]
+                            == value!(["--no-replace-objects", "cat-file", "--batch-check"])
+                        && row["process"]["stdin_sha256"] == sha256(metadata_input.as_bytes())
+                })
+                .expect("missing exact endpoint/path batch binding");
+            let output = Command::new("git")
+                .current_dir(repository)
+                .args(["show", &format!("{oid}:{path}")])
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            assert_eq!(json(&output.stdout).unwrap(), *expected);
+            let blob = git(repository, &["rev-parse", &format!("{oid}:{path}")]);
+            let header = format!("{blob} blob {}", output.stdout.len());
+            let headers = metadata["process"]["stdout"]
+                .as_str()
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>();
+            assert_eq!(headers.len(), paths.len());
+            assert_eq!(headers[index], header);
+            let input = headers
+                .iter()
+                .map(|line| format!("{}\n", line.split(' ').next().unwrap()))
+                .collect::<String>();
+            rows = processes
+                .iter()
+                .filter(|row| {
+                    row["root"] == value!(root)
+                        && row["argv"] == value!(["--no-replace-objects", "cat-file", "--batch"])
+                        && row["process"]["stdin_sha256"] == sha256(input.as_bytes())
+                })
+                .collect();
+            assert!(!rows.is_empty(), "missing original batch contents");
+            framed.extend_from_slice(format!("{header}\n").as_bytes());
+            framed.extend_from_slice(&output.stdout);
+            framed.push(b'\n');
+            // Metadata is also a real bound process with original bytes.
+            assert_bound_registry_process(report, metadata);
+        }
         assert!(!rows.is_empty(), "missing fixed read {oid}:{path}");
         for row in rows {
-            assert_eq!(row["process"]["exit_code"], 0);
             let bytes: Vec<u8> =
                 serde_json::from_value(row["process"]["stdout_bytes"].clone()).unwrap();
-            assert_eq!(json(&bytes).unwrap(), *expected);
-            assert_eq!(row["process"]["stdout_sha256"], sha256(&bytes));
-            assert_eq!(
-                row["process"]["environment"],
-                report["environment"]["effective"]
-            );
-            assert_eq!(row["process"]["executable"], report["tool"]["path"]);
-            assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
+            if batched {
+                assert!(bytes.windows(framed.len()).any(|part| part == framed));
+            } else {
+                assert_eq!(json(&bytes).unwrap(), *expected);
+            }
+            assert_bound_registry_process(report, row);
         }
     }
+}
+fn assert_bound_registry_process(report: &Value, row: &Value) {
+    assert_eq!(row["process"]["exit_code"], 0);
+    assert!(row["process"]["failure"].is_null());
+    let bytes: Vec<u8> = serde_json::from_value(row["process"]["stdout_bytes"].clone()).unwrap();
+    assert_eq!(row["process"]["stdout_sha256"], sha256(&bytes));
+    assert_eq!(row["process"]["stdout"], String::from_utf8(bytes).unwrap());
+    assert_eq!(
+        row["process"]["environment"],
+        report["environment"]["effective"]
+    );
+    assert_eq!(row["process"]["executable"], report["tool"]["path"]);
+    assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
 }
 
 #[test]
@@ -323,8 +460,39 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
         report["registry_digest"],
         chrono_harness::wire::digest(&value!(target_values)).unwrap()
     );
-    assert_fixed_registry_reads(&report, &h.root, &source_head, &source_values);
-    assert_fixed_registry_reads(&report, &h.root, &latest, &target_values);
+    assert_fixed_registry_reads(&report, &h.root, &h.root, &source_head, &source_values);
+    assert_fixed_registry_reads(&report, &h.root, &h.root, &latest, &target_values);
+    let identity_reads: Vec<_> = report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| {
+            row["root"] == value!(h.root)
+                && row["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|arg| arg == "--show-toplevel")
+        })
+        .collect();
+    assert_eq!(identity_reads.len(), 1);
+    let source_identity = identity_reads[0]["process"]["stdout"].as_str().unwrap();
+    assert!(
+        source_identity.lines().any(|line| line == source_head),
+        "source root and HEAD must come from the same live observation"
+    );
+    assert_eq!(
+        report["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| {
+                row["argv"] == value!(["--no-replace-objects", "cat-file", "--batch"])
+            })
+            .count(),
+        2,
+        "each explicit endpoint must reuse the bounded registry batch reader"
+    );
     assert_eq!(
         report["processes"]
             .as_array()
@@ -350,6 +518,39 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
             fs::read(h.root.join(path)).unwrap(),
             b"unsaved source work\n"
         );
+    }
+}
+
+#[test]
+fn registered_batch_failures_preserve_original_bytes_before_checkout_effects() {
+    use std::os::unix::fs::PermissionsExt;
+    for (exit, output, expected) in [
+        (71, "original partial", "Git cat-file exited 71"),
+        (0, "malformed frame", "batch blob header mismatch"),
+    ] {
+        let h = Host::new("independent/data");
+        let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+        let program = h.parent.join("observed-git");
+        fs::write(&program, format!("#!/bin/sh\ncase \"$*\" in *' cat-file --batch') printf '{output}'; printf 'original batch diagnostic' >&2; exit {exit};; esac\nexec '{}' \"$@\"\n", real.display())).unwrap();
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        h.policy(|p| p["git"]["program"] = value!(program));
+        let target = h.parent.join("refused");
+        let (code, report, error) = h.invoke("feature", "refused", &target);
+        assert_ne!(code, 0, "{report} {error}");
+        assert_eq!(report["status"], "failed");
+        assert!(
+            report["error"].as_str().unwrap().contains(expected),
+            "{report}"
+        );
+        assert!(!target.exists());
+        let processes = report["processes"].as_array().unwrap();
+        assert!(!processes.iter().any(|row| row["argv"][1] == "fetch"));
+        let original = &processes.last().unwrap()["process"];
+        assert_eq!(original["exit_code"], exit);
+        assert_eq!(original["stdout"], output);
+        assert_eq!(original["stdout_bytes"], value!(output.as_bytes()));
+        assert_eq!(original["stdout_sha256"], sha256(output.as_bytes()));
+        assert_eq!(original["stderr"], "original batch diagnostic");
     }
 }
 
@@ -460,38 +661,48 @@ fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() 
         } else {
             SOURCE_CONFIG
         };
-        let row = processes
-            .iter()
-            .find(|row| {
-                row["argv"]
-                    == value!([
-                        "--no-replace-objects",
-                        "show",
-                        format!("{fixed}:{selected_path}")
-                    ])
-            })
-            .unwrap();
-        assert_eq!(row["process"]["executable"], report["tool"]["path"]);
-        assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
-        assert_eq!(
-            row["process"]["environment"],
-            report["environment"]["effective"]
-        );
-        if fault.ends_with("missing") {
-            assert_ne!(row["process"]["exit_code"], 0);
-            assert!(
-                !row["process"]["stderr_bytes"]
-                    .as_array()
-                    .unwrap()
-                    .is_empty()
+        if fault.ends_with("workflow") {
+            assert_fixed_registry_reads(
+                &report,
+                endpoint,
+                &h.root,
+                &fixed,
+                &selected_values(endpoint, &fixed, SOURCE_CONFIG, WORKFLOW),
             );
         } else {
-            assert_eq!(row["process"]["exit_code"], 0);
+            let row = processes
+                .iter()
+                .find(|row| {
+                    row["argv"]
+                        == value!([
+                            "--no-replace-objects",
+                            "show",
+                            format!("{fixed}:{selected_path}")
+                        ])
+                })
+                .unwrap();
+            assert_eq!(row["process"]["executable"], report["tool"]["path"]);
+            assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
             assert_eq!(
-                json(row["process"]["stdout"].as_str().unwrap().as_bytes()).unwrap(),
-                json(git(endpoint, &["show", &format!("{fixed}:{selected_path}")]).as_bytes())
-                    .unwrap()
+                row["process"]["environment"],
+                report["environment"]["effective"]
             );
+            if fault.ends_with("missing") {
+                assert_ne!(row["process"]["exit_code"], 0);
+                assert!(
+                    !row["process"]["stderr_bytes"]
+                        .as_array()
+                        .unwrap()
+                        .is_empty()
+                );
+            } else {
+                assert_eq!(row["process"]["exit_code"], 0);
+                assert_eq!(
+                    json(row["process"]["stdout"].as_str().unwrap().as_bytes()).unwrap(),
+                    json(git(endpoint, &["show", &format!("{fixed}:{selected_path}")]).as_bytes())
+                        .unwrap()
+                );
+            }
         }
         assert_eq!(git(&h.root, &["rev-parse", "HEAD"]), source_head);
     }
@@ -930,6 +1141,7 @@ fn selected_reconstruction_carries_explicit_work_onto_fetched_target() {
     assert_fixed_registry_reads(
         &report,
         &h.root,
+        &h.root,
         &candidate,
         &selected_values(&h.root, &candidate, SOURCE_CONFIG, WORKFLOW),
     );
@@ -1332,6 +1544,45 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
         h.reconstruct(reconstruction(&base, &base, value!([])), "allowed-literal");
     assert_eq!(code, 0, "{} {error}", r["error"]);
     assert_eq!(fs::read(allowed.join("kept")).unwrap(), b"declared");
+}
+
+#[test]
+fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
+    let h = Host::new("payload");
+    h.remote_wrapper(
+        r#"if [ "$PWD" = "$HOME/source with spaces" ] && [ "$2" = ls-files ] && [ "$3" = --others ]; then
+ ignored=no
+ for arg in "$@"; do
+  if [ "$arg" = --ignored ]; then ignored=yes; fi
+ done
+ if [ "$ignored" = no ]; then
+  printf 'unregistered-work\n' > .git/info/exclude
+  REAL "$@"
+  result=$?
+  : > .git/info/exclude
+  exit "$result"
+ fi
+fi"#,
+    );
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    let work = h.root.join("unregistered-work");
+    fs::write(&work, "must remain visible and preserved").unwrap();
+    let (code, report, error) =
+        h.reconstruct(reconstruction(&base, &base, value!([])), "changing-ignore");
+    assert_ne!(code, 0, "{} {error}", report["error"]);
+    assert!(report["error"].as_str().unwrap().contains("unregistered"));
+    assert!(!h.parent.join("changing-ignore").exists());
+    assert_eq!(
+        fs::read(&work).unwrap(),
+        b"must remain visible and preserved"
+    );
+
+    fs::remove_file(&work).unwrap();
+    let (code, report, error) = h.reconstruct(
+        reconstruction(&base, &base, value!([])),
+        "changing-ignore-clean",
+    );
+    assert_eq!(code, 0, "{} {error}", report["error"]);
 }
 
 #[test]

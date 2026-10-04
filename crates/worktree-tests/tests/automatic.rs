@@ -3,7 +3,7 @@ const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
 const STATE: &str = ".chrono-harness/state/automatic-cleanup/ledger.json";
 
 impl Host {
-    fn automatic(&self, disposition: &str) {
+    pub(super) fn automatic(&self, disposition: &str) {
         let mut config = json(&fs::read(self.root.join(CONFIG)).unwrap()).unwrap();
         for artifact in [
             value!({"path":"output λ/","owner":"host","kind":"arbitrary-output","tracked":false}),
@@ -49,12 +49,12 @@ impl Host {
         .unwrap();
         fs::write(
             self.root.join(".gitignore"),
-            ".chrono-harness/state/\noutput λ/\nnested/cache/\n",
+            ".chrono-harness/state/\n.chrono-harness/bin/\noutput λ/\nnested/cache/\n",
         )
         .unwrap();
         self.policy(|p| p["automatic_cleanup"] = value!(AUTO_POLICY));
     }
-    fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
+    pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
         let mut c = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
         c.current_dir(&self.root)
             .env_clear()
@@ -69,10 +69,10 @@ impl Host {
             .args(extra);
         c
     }
-    fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
+    pub(super) fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
         self.received(self.auto_command(command, extra).output().unwrap())
     }
-    fn ledger(&self) -> Value {
+    pub(super) fn ledger(&self) -> Value {
         json(&fs::read(self.root.join(STATE)).unwrap()).unwrap()
     }
 }
@@ -434,8 +434,13 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
         let bytes = fs::read(&receipt).unwrap();
         let next = h.parent.join("next");
         if !after_effect {
-            assert_ne!(h.invoke("feature", "next", &next).0, 0);
-            assert!(!next.exists(), "creation must not erase cleanup failure");
+            let independent = h.parent.join("independent");
+            let (code, admitted, error) = h.invoke("feature", "independent", &independent);
+            assert_eq!(code, 0, "{} {error}", admitted["error"]);
+            assert!(independent.exists());
+            assert!(!admitted["cleanup_failures"].as_array().unwrap().is_empty());
+            assert_eq!(admitted["drain"][0]["report"]["status"], "failed");
+            assert_eq!(fs::read(&receipt).unwrap(), bytes);
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
         let (code, r, e) = h.invoke("feature", "next", &next);
@@ -444,6 +449,111 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
         assert!(next.exists());
         assert_eq!(fs::read(receipt).unwrap(), bytes);
         assert_eq!(h.auto("maintain", &[]).0, 0);
+    }
+}
+
+#[test]
+fn automatic_retries_keep_original_evidence_without_recursive_growth() {
+    for kernel in [false, true] {
+        let h = Host::new("payload");
+        blocked_remove(&h, false);
+        if kernel {
+            h.kernel_cleanup();
+        } else {
+            h.automatic("evidence-retain");
+        }
+        let target = h.parent.join("bounded-retry");
+        assert_eq!(h.invoke("feature", "bounded-retry", &target).0, 0);
+        output(&target);
+        fs::write(h.parent.join("fail-remove"), "retain original failure").unwrap();
+        let (code, failed, error) = h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+        );
+        assert_ne!(code, 0, "{failed} {error}");
+        let report = &failed["drain"][0]["report"];
+        let original_path = h.root.join(report["report_path"].as_str().unwrap());
+        let original = fs::read(&original_path).unwrap();
+        let bound = original.len() * 3;
+        let mut originals = vec![(original_path, original)];
+        for retry in 0..3 {
+            let (code, failed, error) = h.auto("maintain", &[]);
+            assert_ne!(code, 0, "{failed} {error}");
+            let report = &failed["drain"][0]["report"];
+            assert_eq!(report["status"], "failed");
+            assert!(report["processes"].as_array().unwrap().iter().any(|p| {
+                p["process"]["exit_code"] == 71
+                    && p["process"]["stderr"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("original automatic removal failure")
+            }));
+            let path = h.root.join(report["report_path"].as_str().unwrap());
+            let bytes = fs::read(&path).unwrap();
+            // The controlled operation is unchanged across retries. Its report
+            // may grow with current observations, but cannot multiply history.
+            assert!(
+                bytes.len() <= bound,
+                "retry {retry}, kernel={kernel}: {} bytes exceeds current-operation bound {bound}",
+                bytes.len()
+            );
+            let input = &report["prior_report"]["input"];
+            assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+            assert_eq!(input["source_root"], value!(h.root));
+            let retained = fs::read(h.root.join(input["path"].as_str().unwrap())).unwrap();
+            assert_eq!(retained, originals.last().unwrap().1);
+            assert_eq!(input["sha256"], sha256(&retained));
+            assert_eq!(input["byte_length"], retained.len());
+            for (path, bytes) in &originals {
+                assert_eq!(fs::read(path).unwrap(), *bytes);
+            }
+            originals.push((path, bytes));
+        }
+        fs::remove_file(h.parent.join("fail-remove")).unwrap();
+        for fault in ["latest", "ancestor", "absent", "symlink"] {
+            let (path, bytes) = if fault == "latest" {
+                originals.last().unwrap()
+            } else {
+                &originals[0]
+            };
+            match fault {
+                "absent" => fs::remove_file(path).unwrap(),
+                "symlink" => {
+                    fs::remove_file(path).unwrap();
+                    let outside = h.parent.join("same-original-bytes");
+                    fs::write(&outside, bytes).unwrap();
+                    std::os::unix::fs::symlink(&outside, path).unwrap();
+                }
+                _ => {
+                    let mut drifted = bytes.clone();
+                    drifted.push(b' ');
+                    fs::write(path, drifted).unwrap();
+                }
+            }
+            let (code, refused, error) = h.auto("maintain", &[]);
+            assert_ne!(code, 0, "{fault}: {refused} {error}");
+            if matches!(fault, "latest" | "ancestor") {
+                assert!(
+                    refused["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("original lifecycle receipt changed")
+                );
+            }
+            assert!(
+                target.exists(),
+                "{fault}: invalid evidence cannot authorize deletion"
+            );
+            if fault == "symlink" {
+                fs::remove_file(path).unwrap();
+            }
+            fs::write(path, bytes).unwrap();
+        }
+        assert_eq!(h.auto("maintain", &[]).0, 0);
+        assert!(!target.exists());
+        for (path, bytes) in originals {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
     }
 }
 
@@ -488,7 +598,7 @@ fn automatic_symlink_containment_and_internal_external_target_safety() {
     }
 }
 
-fn consuming_operation(h: &Host, body: &str) {
+pub(super) fn consuming_operation(h: &Host, body: &str) {
     let mut projects = json(&fs::read(h.root.join(PROJECTS)).unwrap()).unwrap();
     projects["owners"]
         .as_array_mut()
@@ -926,21 +1036,17 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
 
 #[test]
 fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     consuming_operation(
         &h,
-        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\n",
+        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready.tmp\nmv .chrono-harness/state/ready.tmp .chrono-harness/state/ready\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\n",
     );
     let target = h.parent.join("unknown-use");
     assert_eq!(h.invoke("feature", "unknown-use", &target).0, 0);
     output(&target);
-    let mut wrapper = h
-        .auto_command(
+    let mut wrapper = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command(
             "use",
             &[
                 "--path",
@@ -948,18 +1054,10 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
                 "--operation",
                 "use.consumer",
             ],
-        )
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let began = Instant::now();
-    while !target.join(".chrono-harness/state/ready").exists()
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        thread::sleep(Duration::from_millis(20));
-    }
-    assert!(target.join(".chrono-harness/state/ready").exists());
+        ),
+        &h.root,
+    );
+    wrapper.await_file(&target.join(".chrono-harness/state/ready"));
     let child_pid = fs::read_to_string(target.join(".chrono-harness/state/ready")).unwrap();
     wrapper.kill().unwrap();
     let out = wrapper.wait_with_output().unwrap();

@@ -1,6 +1,6 @@
 //! Explicit directory disposal shared by legacy checkout cleanup and lifecycle cleanup.
 use crate::start::Runner;
-use chrono_harness::{facts, no_symlink_parents};
+use chrono_harness::no_symlink_parents;
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -34,7 +34,7 @@ pub(crate) fn paths(
     if names.is_empty() {
         return Ok(vec![]);
     }
-    let tree = facts::parse_tree(&r.git(target, &["ls-tree", "-rz", "--full-tree", head])?)?;
+    let tree = r.tree(target, head)?;
     // Staged files are also source, including additions within an artifact prefix.
     let index = crate::start::paths(r.git(target, &["ls-files", "-z"])?)?;
     names
@@ -83,21 +83,28 @@ pub(crate) fn dispose(
     report: &mut Value,
     mut before_effect: impl FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
+    let state = |path: &Path, name: &str| match fs::symlink_metadata(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("already-absent"),
+        Err(e) => Err(e.to_string()),
+        Ok(m) if m.is_dir() => Ok("attempted-unverified"),
+        Ok(_) => Err(format!("disposal requires a physical directory: {name}")),
+    };
     for (name, path) in names.iter().zip(paths) {
-        before_effect()?;
         no_symlink_parents(target, name.trim_end_matches('/'))?;
-        let state = match fs::symlink_metadata(path) {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => "already-absent",
-            Err(e) => return Err(e.to_string()),
-            Ok(m) if m.is_dir() => "attempted-unverified",
-            Ok(_) => return Err(format!("disposal requires a physical directory: {name}")),
-        };
+        let mut observed = state(path, name)?;
+        // An absent output has no removal effect. Recheck both ownership and
+        // the physical path before every actual removal.
+        if observed != "already-absent" {
+            before_effect()?;
+            no_symlink_parents(target, name.trim_end_matches('/'))?;
+            observed = state(path, name)?;
+        }
         let measured = report["automatic_cleanup"] == true;
-        let mut effect = json!({"path":name,"status":state});
+        let mut effect = json!({"path":name,"status":observed});
         if measured {
             effect["byte_measure"] = json!("literal-entry-lengths");
             effect["bytes_before"] = json!(bytes(path)?);
-            effect["bytes_after"] = json!(if state == "already-absent" {
+            effect["bytes_after"] = json!(if observed == "already-absent" {
                 Some(0)
             } else {
                 None::<u64>
@@ -107,7 +114,7 @@ pub(crate) fn dispose(
             .as_array_mut()
             .ok_or("missing artifact disposal report")?
             .push(effect);
-        if state == "already-absent" {
+        if observed == "already-absent" {
             continue;
         }
         // Internal links are unlinked; their external targets are never traversed.

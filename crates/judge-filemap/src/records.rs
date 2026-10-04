@@ -53,12 +53,12 @@ fn plan_targets(
     }
     targets
 }
-/// All schema arrays are identity sets except argv/version_argv, whose order is semantic.
+/// Argument vectors, plan sequences and launch priorities preserve semantic order.
 fn normalize(v: &Value, key: &str) -> Value {
     match v {
         Value::Array(a) => {
             let mut a: Vec<_> = a.iter().map(|v| normalize(v, "")).collect();
-            if !matches!(key, "argv" | "version_argv" | "operations") {
+            if !matches!(key, "argv" | "version_argv" | "operations" | "priority") {
                 a.sort_by_cached_key(|v| serde_json::to_string(v).unwrap());
             }
             Value::Array(a)
@@ -259,6 +259,16 @@ pub fn inventory(
                 }
                 let policy: chrono_judge_registration::execution::Scheduling =
                     serde_json::from_value(v.clone()).expect("validated scheduling");
+                if !policy.priority.is_empty() {
+                    add(
+                        scope,
+                        key,
+                        "priority",
+                        path,
+                        &json!({"priority":policy.priority}),
+                        all_targets(),
+                    );
+                }
                 for (operation, claims) in v["claims"].as_object().unwrap() {
                     let affected: BTreeSet<_> = policy
                         .claims

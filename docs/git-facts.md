@@ -51,6 +51,21 @@ acquire their own evidence. Mutable refs, HEAD, index, checkout and untracked
 facts, legacy unbound reads, failures and missing objects are never cached.
 Registry snapshots and config verification share this acquisition owner while
 keeping their existing parsing, endpoint and acceptance checks.
+Successfully parsed tree inventories use the same Reader-local eligibility and
+guards, retaining their original process bytes. Repeated physical checkout checks
+reuse that fixed tree but read the current index and working files anew. Malformed
+trees and post-process input drift do not create reusable tree entries.
+The bound Reader and worktree producer share one registry batch transport and
+framing validator. Each supplies its own bounded Git invocation and retains its
+original process receipts. Resolved registry paths and a verified immutable
+snapshot's literal blob paths use this transport; it does not infer dependencies.
+Snapshot export keeps its byte, symlink, read-only file and destination checks,
+and rechecks bound inputs when consuming each original blob range. Unverified
+endpoints and legacy readers retain individual reads. Batch
+metadata determines bounded content partitions, with direct reads for small
+lists or frames exceeding the batch budget. Successful cache entries retain
+their original source coordinates; malformed, failed and drifted acquisitions
+cannot populate the cache.
 The existing bounded `rev-parse --verify OID^{commit}` and tree observations retain
 their original receipts and return contracts. A hex-shaped ref resolving to a
 different object is read freshly; invalid, missing, malformed or failed identity

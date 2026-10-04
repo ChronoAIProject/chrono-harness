@@ -1,7 +1,7 @@
 use super::*;
 use chrono_harness::prepared::{self, InputRequest, PreparedCheck, Selection};
 
-fn bind(h: &Host) {
+pub(super) fn bind(h: &Host) {
     let git_bin = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
@@ -41,18 +41,14 @@ print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],judge_id
     fs::write(h.root.join(JUDGES), serde_json::to_vec(&judges).unwrap()).unwrap();
     h.policy(|p|{p["schema"]=value!("chrono-worktree-config/v2");p["check_inputs"]=value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}});});
 }
-fn install(root: &Path) {
+pub(super) fn install(root: &Path) {
     use std::os::unix::fs::PermissionsExt;
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
     for (project, name) in [
         ("runner", "chrono-harness"),
         ("worktree", "chrono-worktree"),
     ] {
-        fs::copy(
-            source().join(format!("crates/{project}/target/debug/{name}")),
-            root.join(format!(".chrono-harness/bin/{name}")),
-        )
-        .unwrap();
+        install_readonly_executable(root, project, name);
     }
     fs::copy(
         root.join("context-judge.sh"),
@@ -64,6 +60,30 @@ fn install(root: &Path) {
         fs::Permissions::from_mode(0o755),
     )
     .unwrap();
+}
+pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
+    let built = source().join(format!("crates/{project}/target/debug/{name}"));
+    let installed = root.join(format!(".chrono-harness/bin/{name}"));
+    // These fixtures execute but never modify product binaries. Reuse the built
+    // inode under each isolated host path without copying a new executable image.
+    // Fixtures that edit executable bytes or permissions must use a private copy.
+    match fs::hard_link(&built, &installed) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
+            // A joined child owns writable descriptors, so concurrent test forks
+            // cannot inherit a writable executable and cause ETXTBSY on Linux.
+            let copied = Command::new("/bin/cp")
+                .arg(&built)
+                .arg(&installed)
+                .output()
+                .unwrap();
+            assert!(
+                copied.status.success(),
+                "fixture executable copy: {copied:?}"
+            );
+        }
+        Err(error) => panic!("fixture executable {}: {error}", installed.display()),
+    }
 }
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     let head = git(root, &["rev-parse", "HEAD"]);
@@ -148,6 +168,33 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
         String::from_utf8_lossy(&out.stdout)
     );
     let report = published_full_report(&dest, ".chrono-harness/state/", &out);
+    let producer_path = report["preparation"]["result"]["evidence"]["report_path"]
+        .as_str()
+        .unwrap();
+    let producer = json(&fs::read(dest.join(producer_path)).unwrap()).unwrap();
+    let identity = producer["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
+            row["argv"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|arg| arg == "--show-toplevel")
+        })
+        .unwrap();
+    let original: chrono_harness::ProcessResult =
+        serde_json::from_value(identity["process"].clone()).unwrap();
+    chrono_harness::observation::process_success(&original).unwrap();
+    assert!(
+        original
+            .stdout
+            .lines()
+            .any(|line| line == report["candidate"].as_str().unwrap()),
+        "local preparation must bind root and candidate HEAD in the same original observation"
+    );
+    assert_eq!(original.stdout.lines().next(), dest.to_str());
     let context = &report["preparation"]["result"]["context"];
     let raw: Vec<u8> = serde_json::from_value(context["raw"].clone()).unwrap();
     let ctx = json(&raw).unwrap();
@@ -366,6 +413,25 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .env("CHRONO_WORKFLOW_REVISION", &revision)
         .output()
         .unwrap();
+    if !o.status.success() {
+        // The console points to the complete producer evidence. Preserve that
+        // specific failure before the fixture's temporary host is dropped.
+        for line in String::from_utf8_lossy(&o.stderr).lines() {
+            if let Some(path) = line.strip_prefix("Original acquisition: ") {
+                let original = chrono_harness::no_symlink_parents(&dest, path)
+                    .and_then(|path| fs::read(path).map_err(|error| error.to_string()));
+                match original {
+                    Ok(bytes) => eprintln!(
+                        "ORIGINAL_ACQUISITION path={path} sha256={} bytes={}\n{}",
+                        sha256(&bytes),
+                        bytes.len(),
+                        String::from_utf8_lossy(&bytes)
+                    ),
+                    Err(error) => eprintln!("ORIGINAL_ACQUISITION path={path} read_error={error}"),
+                }
+            }
+        }
+    }
     assert!(
         o.status.success(),
         "{} {}",

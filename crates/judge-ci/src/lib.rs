@@ -122,22 +122,21 @@ fn tree(
     root: &Path,
     oid: &str,
 ) -> Result<BTreeMap<String, (String, String)>, String> {
-    let raw = reader.git(root, &["ls-tree", "-rz", "--full-tree", oid])?;
-    let mut out = BTreeMap::new();
-    for row in raw.split(|b| *b == 0).filter(|v| !v.is_empty()) {
-        let s = std::str::from_utf8(row).map_err(|_| "non UTF-8 tree path")?;
-        let (meta, path) = s.split_once('\t').ok_or("bad tree record")?;
-        let fields: Vec<_> = meta.split(' ').collect();
-        if fields.len() != 3
-            || fields[1] != "blob"
-            || !matches!(fields[0], "100644" | "100755" | "120000")
-        {
-            return Err(format!("unsupported tree entry {path}: {meta}"));
-        }
-        relative_path(path)?;
-        out.insert(path.into(), (fields[0].into(), fields[2].into()));
-    }
-    Ok(out)
+    reader
+        .tree(root, oid)?
+        .into_iter()
+        .map(|(path, entry)| {
+            if entry.kind != "blob"
+                || !matches!(entry.mode.as_str(), "100644" | "100755" | "120000")
+            {
+                return Err(format!(
+                    "unsupported tree entry {path}: {} {} {}",
+                    entry.mode, entry.kind, entry.oid
+                ));
+            }
+            Ok((path, (entry.mode, entry.oid)))
+        })
+        .collect()
 }
 fn policy(c: &CheckConfig) -> Result<Policy, String> {
     if !matches!(

@@ -633,6 +633,8 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 源码增加 opt-in 的 `automatic_cleanup`：宿主在 `.chrono-harness/` 登记版本化政策、准确工件路径／处置、存活协调锚、固定保留分支与可选删分支；未采用的旧配置保持显式维护语义。成功 start/reconstruct 自动登记实际 birth，并在新建前排空已登记终态项；finish 是调用方加入任务并确认完成／落地后的固定交接，运行时观察当前身份、固定保留 OID、产生不可覆盖终态回执并立即调用同一 drain，独立命令为 maintain。登记消费操作通过 use 复用现有进程 owner 与小型持久使用保护，和 finish／删除同步；任意未登记后台写入仍归调用方加入。缓存处置复用现役工件 owner，不推断语言或目录；未解决证据、脏源码及未保留提交保留 checkout，只清准确授权的可重建输出。整树清理继续委托原 Cleanup 保留合同。原失败、部分效果、缺失／中断及漂移均据实保留，未建立空闲定时清理、掉电事务或通用证据归档平台。主宿主政策保留 state/bin，默认 cache-only；真实宿主 terminal 事件与 Git/GitHub 落地归调用方。完整格式与限界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
 
+自动生命周期重试以 `chrono-worktree-retained-input/v1` 引用保留的原始证据，绑定协调宿主、相对 state 路径、摘要、长度及 receipt／原始 bytes 格式。不可变回执直接引用，部分或未封口结果的原字节独立保留；沿合同明确列出的引用核验原件，缺失、改写、绑定错误或符号链接拒绝处置。不得逐层嵌入历史正文导致重试报告递归膨胀，不把保留未知结果改判为成功，不改写既有原件。显式维护的旧报告合同保留；具体字段及消费规则见 worktree 合同。
+
 现役 `chrono-worktree reconstruct` 接收固定旧 base/candidate 和完整逐路径 carry/retire 计划，复用 fresh 创建后重新应用所选 DELTA；成功仅表示已得到暂存树，冲突保留实际失败与锁，旧工作不删除。AI 仍须检查变化是否必要、修复冲突及登记、提交候选，再运行现役统一检查。工具不自动判断语义必要性，也不复制旧检查或 integration 成功。
 
 现役维护入口复用同一宿主工作树配置与登记。`recover` 绑定原失败报告、实际工作树与锁、AI 显式给出的 HEAD 和已解决 index tree；验证后释放原锁，原失败不改写。`cleanup` 按显式路径／分支／HEAD、保留分支及逐项工件处置清理已保存工作。源码现先核所有选中工件为两端登记的非跟踪真实目录，且不含候选树已跟踪路径；在自有锁内单独删除这些工件，再由有时限的 Git 移除 checkout。逐项报告已缺失、尝试未核实或已核实缺失；文件系统删除不继承 Git 子进程时限，调用方须在宿主作业生命周期中运行。工件阶段失败保留锁及源码，协调后用既有恢复入口和显式重试继续；不承诺并发或掉电事务，也不保证任意规模的源码移除均不超时。最后核对实际移除并用期望 OID 删除可选分支；部分失败如实保留，明确允许缺失工作树的计划可继续重试。不从目录、语言、年龄推断回收对象，也不替代相同的 check 入口。`cleanup-fetch` 只清理原失败 start／reconstruct 回执绑定的临时 fetch ref，要求固定本地保留分支包含期望 commit，并以期望 OID 删除、核对缺失及部分效果。源码现已在 checkout／锁操作及 fetch 前分别保留不可覆盖的 intent；`recover-interrupted` 核对当前工作树并解锁，`cleanup-fetch-interrupted` 按固定保留分支清理该 intent 绑定的临时 ref，均保留原结果的缺失或原始字节并标原操作结果未知。调用 AI 须先确认原进程已停止；终态回执仍用普通维护入口，intent 不是操作成功证明。这些入口不重建损坏元数据；显式重建见下款，PR／合并编排仍未完成。格式与边界见 [维护合同](docs/worktree.md#registered-recovery-and-cleanup)。
@@ -812,8 +814,15 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 [来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。
 五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
 
+`automatic_cleanup/v2` 以稳定 admission flock 与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记可重建缓存以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。旧／缺失／漂移身份保留，整树 finish 保留真实交接合同。描述符由原进程 engine 的子副本与登记 Python pass_fds 明确传递，不推断通用继承。本地真实 Cargo test／原生子进程回归验证独立父子进程的租约转交，完整采用仍需已提交组合与支持平台验收；不从父进程退出、PID 缺失、年龄或空闲推断子孙终止。源与宿主政策同时修改，兼容协调者部署、旧生产者排除、已提交组合、支持平台验收、真实宿主切换和 Git/PR/发布仍归调用方。
 现役本地执行扩展由 projects 唯一调度 routes 已合并的 DAG。显式有限 cap 只限操作数，不推断 CPU／语言，不限工具内部线程；前置未终结等待，失败只阻断后继，冲突 ready 项可让位于独立项。回执保留原字节与失败，结果按规范计划顺序输出，线程与已知嵌套 runner 进程由原 runner 引擎收束。FILEMAP 声明缺失／未知／歧义在执行前失败；两端 cap、claim、冲突消费者与输出登记变更进入 DELTA，collection 仅重建核原登记和证据。Unix 匿名继承描述符承载已知 launch tree，超时后有限清理不延长执行额度；不承诺跨调用锁或关闭继承描述符的未登记外部进程树。本宿主 cap 2 与独立输出／workflow inventory 共用 claim 属于宿主政策；未从 owner suites 声称完整 canonical／native 成功、交付或完整 SPEC 验收。
+
+`execution_scheduling.priority` 可显式登记启动优先顺序，只含不重复的已登记操作 ID；空／未知 ID 或类型错误在业务执行前拒绝。就绪项先按该列表、再按未列项的规范计划顺序选择；依赖、失败传播、cap 和资源／输出排斥仍同时生效。优先级不新增选择义务、不推断耗时，也不阻止不冲突的就绪项前进。完整列表进入计划身份及留存核对；缺省或空列表保留旧序列化身份。列表重排、修改和删除按两端登记影响所有计划消费者，报告顺序仍为规范计划顺序。
 
 Unix runner 的中断恢复由同一 process engine 的单个已加入 observer 承载：exec 前固定 child 与 launcher 的活身份，macOS 用 kernel exit event，Linux 用 pidfd；只有两者的实际终结与已登记子树完成才能协调丢失 destructor 的 slot。PID 消失、已发信号或外层 exit 0 都不是完成回执；代际固定阻止旧事件／上下文消费复用 slot。清理仍限原一秒；中断 owner 的存活子进程终止后仍保留清理失败，未知完成不成功。进程 exit 0 后的 receipt／清理失败在 CI 摘要投影为 failed、exit null，原 receipt 保留真实 exit 0、诊断与绑定；collection 保留原失败而不重执行。宿主 cap、计划、选择义务及本地／原生验收仍由原登记与调用方负责。
 
+observer 以与执行时限相同的系统单调时钟记录实际内核退出观察。监控恢复时已过期限，仅当该观察严格早于原期限且立即取得真实子进程退出状态，才保留原退出结果；观察缺失、过晚、时钟失败或仍未退出均不授予额外等待。取消、输出上限与收束失败仍独立生效。时间戳是退出的观察上界，不是内核记录的精确退出时间；observer 自身延迟时不推断更早退出。共享布局身份独立钉版，嵌套执行须配套运行时，不兼容继承描述符直接拒绝。
+
 exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。
+
+已登记 v2 birth 的封口中断由原 worktree owner 在正常入口取得实际排除、核原附件与政策后恢复；保留原缺失／部分结果及独立恢复回执，重复中断重用固定回执，不据恢复制造原成功或 finish。新消费在已发布缓存尝试后开启新代际、保留旧 intent/result；后续回收可绑定当前 HEAD。bootstrap 消费原 managed_command_failed 分类，原非零构建与后续生命周期拒绝及报告引用分别保留。

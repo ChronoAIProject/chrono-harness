@@ -334,6 +334,33 @@ fn exact_argv_and_spaced_cwd_reach_child() {
     assert_eq!(r.stdout.lines().next(), Some(text));
     assert!(r.stdout.contains(dir.path().to_str().unwrap()));
 }
+
+#[test]
+fn input_pipe_delivers_exact_bytes_and_eof_for_empty_and_nonempty_requests() {
+    let dir = tempfile::tempdir().unwrap();
+    for input in [b"".as_slice(), b"\0\xffliteral input\n".as_slice()] {
+        let result = run_process(
+            dir.path(),
+            &CommandSpec {
+                program: "python3".into(),
+                env: Default::default(),
+                args: vec![
+                    "-c".into(),
+                    "import os,stat,sys; assert stat.S_ISFIFO(os.fstat(0).st_mode); data=sys.stdin.buffer.read(); sys.stdout.buffer.write(b'EOF:'+data); sys.stderr.buffer.write(b'joined')".into(),
+                ],
+                timeout_seconds: 15,
+                output_limit_bytes: 4096,
+            },
+            input,
+        )
+        .unwrap();
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.stdout_bytes, [b"EOF:".as_slice(), input].concat());
+        assert_eq!(result.stderr_bytes, b"joined");
+        assert_eq!(result.stdin_sha256, chrono_harness::sha256(input));
+        assert!(result.failure.is_none());
+    }
+}
 #[test]
 fn not_required_is_a_typed_status() {
     assert_eq!(
