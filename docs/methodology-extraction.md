@@ -36,32 +36,33 @@
 | `core.small-projects` | 自身内容叶子 |
 | `core.delta` | `delta.selection`、`delta.candidate-judge`、`delta.local-ci` |
 | `core.evolving-rules` | `policy.evolution`、`policy.mixed-warning` |
-| `core.behavior` | `test.behavior`、`test.determinism`、`ci.actual-events` |
+| `core.behavior` | `test.behavior`、`test.same-language`、`test.determinism`、`ci.actual-events` |
 | `core.candidate` | `candidate.isolation`、`candidate.refresh`、`candidate.landing` |
 | `core.cost` | `cost.measure`、`cost.valid-evidence` |
 | `core.independent-check` | `review.independent`、`review.disclosure` |
 | `core.useful-artifacts` | `artifact.results`、`artifact.no-diary` |
-| `core.general` | 原有 17 个稳定入口，以及 catalog 中逐项列出的 62 个新增便携叶子 |
+| `core.general` | catalog 中显式登记的通用入口及其传递依赖闭包 |
 
 ## 实际消费者边界
 
-读数来自当前候选生成器及真实生成文件，包含框架的 UTF-8 字节。修正前采用固定基线 `47b37400ecdd35b6ddc967c86a5b28d39bf89538` 的 catalog／manifest 数据，由当前生成器重建；不执行历史程序。新宿主使用复制二进制，在本宿主已登记且被忽略的 state 临时目录内、含空格路径与不同调用 cwd 实际 init。原始根 title／locale 行为保持：中文标题仍为“通用工作方法”，初始英文省略可选 title。
+读数来自当前候选二进制与实际生成文件，按包含框架的 UTF-8 字节计量。新宿主使用空上下文并显式选择 locale；本仓根另带宿主维护的块外内容。
 
-| 消费者 | 修正前字节／正文数 | 当前字节／正文数 | 当前结构 |
-| --- | --- | --- | --- |
-| 默认 zh-CN 根（本仓同字节） | 29916 / 98 | 6554 / 20 | workflow 五节同级，63 行 |
-| 默认 en 根 | 32755 / 98 | 6995 / 20 | workflow 五节同级，61 行 |
-| 本仓完整英文 Markdown | 32552 / 98 | 32806 / 98 | general 三部分／12 主题 |
-| 本仓聚焦 skill | 2821 / 7 | 2821 / 7 | 原闭包、原字节 |
-| 本仓另读的 host-context | 18653 / 不适用 | 4575 / 不适用 | 当前操作事实与限制，28 行 |
+| 消费者 | 字节／内容叶子数 | 结构 |
+| --- | --- | --- |
+| 新宿主 zh-CN 根 | 8440 / 22 | workflow 五节同级，67 行 |
+| 新宿主 en 根 | 9232 / 22 | workflow 五节同级，65 行 |
+| 本仓 zh-CN 根 | 8500 / 22 | workflow 五节同级，67 行 |
+| 本仓完整英文 Markdown | 35103 / 100 | general 三部分／12 主题 |
+| 本仓聚焦 skill | 2821 / 7 | 独立诊断闭包，23 行 |
+| 本仓另读的 host-context | 11902 / 不适用 | 当前操作事实与限制，43 行 |
 
-新默认选择／闭包均为 20 个内容叶子；库仍为 114 atom、98 叶子，全部 requires、原 general 布局、locale 框架及其余 113 个 atom 对象与固定基线相同。实际根核对了精确正文一次出现、顺序、五节标题层次和 AGENTS 的字面相对目标 `CLAUDE.md`；本仓英文文档完整保留 98 个正文，skill 摘要不变。登记 generate 改动两个输出，第二次为零改动，输出字节、权限、inode、mtime 不变。
+默认根显式选择 22 个内容叶子。catalog 含 116 个 atom，其中 100 个双语内容叶子、16 个聚合；`test.same-language` 同时属于默认根和 `core.behavior` 的依赖闭包，在两个布局的验证主题中呈现。catalog 也承载产品 SPEC 的通用约束；固定来源处置表不承担这些产品规则的出处。
 
-两个默认 locale 的 init／重复 generate／重复 init 均成功。实际 re-init 还保留了两个已采用 `core.general/general` 的旧 manifest，以及一个自定义英文完整根标题和额外 `core.ownership` Markdown 的 manifest；每项均零改动，manifest 摘要与所有文件字节、权限、inode、mtime 保持。既有宿主不会因安装新二进制或重复 init 自动采用短流程。
+现有宿主的 manifest、catalog 与块外内容由宿主维护，安装新二进制或重复 init 不替换既有选择；采用新规则须明确更新 canonical 数据并生成。AGENTS.md 是字面相对链接 `CLAUDE.md`，不另存一份规则正文。
 
-七项登记 fmt/build/check/test 动作退出 0，现有 61 项行为测试一次全过，未新增文字匹配测试或修改既有测试。测试覆盖图、locale、布局、严格 JSON、所有权、路径、alias、迁移及 IO／回滚。上述实际消费核验仅限当前 macOS arm64；本次未进行最小环境、实时 Codex 注入、其它平台、外部 skill validator 或原生 CI 核验，也不证明翻译等价、普遍确定性或完整 SPEC 已交付。
+专属测试覆盖图、locale、布局、严格 JSON、输出所有权、路径、alias、迁移及 IO／回滚。这里的实际消费读数限于 macOS arm64 的本地生成与初始化；不证明翻译等价、AI 已阅读、实时注入、其它平台或完整 SPEC 交付。
 
-[Codex 官方说明](https://developers.openai.com/codex/guides/agents-md/)的 `project_doc_max_bytes` 默认限制是合并项目指令的 32 KiB；两个短流程根本身低于该值。host-context、块外附文、其它项目指南及个人配置仍按实际消费范围另核。完整 general 库不是默认根，其英文 Markdown 已有 32806 字节，不能继续沿用旧“全部完整英文内容都在默认上限内”的结论；自定义消费需核实际载荷。没有新增预算判官或修改全局配置。
+实际注入上限以消费方设置为准。host-context、块外附文、其它项目指南及个人配置也须计入实际消费范围；完整 general 库不是默认根。内容编辑须复核受影响消费者的完整载荷，不截断规则或修改全局配置。
 
 ## 采用、许可与边界
 
