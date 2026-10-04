@@ -45,6 +45,7 @@ static ALLOCATOR: ForkCheckedAllocator = ForkCheckedAllocator;
 // startup has exceeded five seconds on the shared host. Deliberate timeout
 // cases below keep their separate two-second bound and thirty-second stall.
 const FIXTURE_TIMEOUT_SECONDS: u64 = 30;
+const PROCESS_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-process-lifecycle");
 
 #[test]
 fn published_rfc8785_vectors() {
@@ -809,17 +810,18 @@ fn owned_nested_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
     let spec = chrono_harness::CommandSpec {
-        program: python.to_string_lossy().into_owned(),
-        args: vec!["-c".into(), "import os,time;open('nested.pid','w').write(str(os.getpid()));time.sleep(30);open('escaped','w').write('escaped')".into()],
-        env: Default::default(), timeout_seconds: 30, output_limit_bytes: 4096,
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["nested".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
     };
     let _ = chrono_harness::run_process_observed(
         root,
         &spec,
         &[],
-        &chrono_harness::sha256(&std::fs::read(&python).unwrap()),
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
     );
 }
 
@@ -851,14 +853,15 @@ fn outer_timeout_contains_nested_owned_operation() {
         .unwrap();
         assert_eq!(p.failure.as_deref(), Some("process timed out"), "{p:?}");
         let pid = std::fs::read_to_string(d.path().join("nested.pid")).unwrap();
-        let python = chrono_harness::resolve_program(d.path(), "python3", None).unwrap();
-        // Always clean the exact fixture PID before asserting the regression.
-        let out = std::process::Command::new(python).args(["-c", "import os,sys,signal\np=int(sys.argv[1])\ntry: os.kill(p,0)\nexcept ProcessLookupError: print('joined')\nelse:\n print('survived');os.kill(p,signal.SIGKILL)", &pid]).output().unwrap();
-        assert_eq!(
-            String::from_utf8(out.stdout).unwrap().trim(),
-            "joined",
-            "nested process survived outer completion"
-        );
+        let pid: libc::pid_t = pid.parse().unwrap();
+        let state = unsafe { libc::kill(pid, 0) };
+        let error = std::io::Error::last_os_error();
+        if state == 0 {
+            // Always terminate the exact fixture child before reporting a failure.
+            assert_eq!(unsafe { libc::kill(pid, libc::SIGKILL) }, 0);
+        }
+        assert_eq!(state, -1, "nested process survived outer completion");
+        assert_eq!(error.raw_os_error(), Some(libc::ESRCH));
     }
 }
 
@@ -892,15 +895,14 @@ fn owned_timeout_helper_keeps_unrelated_sibling() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
-    let digest = chrono_harness::sha256(&std::fs::read(&python).unwrap());
+    let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
     std::thread::scope(|scope| {
         let slow = scope.spawn(|| {
             chrono_harness::run_process_observed(
                 root,
                 &chrono_harness::CommandSpec {
-                    program: python.to_string_lossy().into_owned(),
-                    args: vec!["-c".into(), "import time;time.sleep(5)".into()],
+                    program: PROCESS_FIXTURE.into(),
+                    args: vec!["slow".into()],
                     env: Default::default(),
                     timeout_seconds: 1,
                     output_limit_bytes: 4096,
@@ -910,7 +912,19 @@ fn owned_timeout_helper_keeps_unrelated_sibling() {
             )
             .unwrap()
         });
-        let sibling=chrono_harness::run_process_observed(root,&chrono_harness::CommandSpec {program:python.to_string_lossy().into_owned(),args:vec!["-c".into(),"import time;time.sleep(2);open('sibling','w').write('joined');print('original')".into()],env:Default::default(),timeout_seconds:5,output_limit_bytes:4096},&[],&digest).unwrap();
+        let sibling = chrono_harness::run_process_observed(
+            root,
+            &chrono_harness::CommandSpec {
+                program: PROCESS_FIXTURE.into(),
+                args: vec!["sibling".into()],
+                env: Default::default(),
+                timeout_seconds: 5,
+                output_limit_bytes: 4096,
+            },
+            &[],
+            &digest,
+        )
+        .unwrap();
         assert_eq!(
             slow.join().unwrap().failure.as_deref(),
             Some("process timed out")
@@ -964,27 +978,18 @@ fn interrupted_launch_child_owner_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
     let complete = std::env::var("CHRONO_INTERRUPTED_COMPLETE").unwrap();
-    let code = format!(
-        "import os,time\nwith open('ready.tmp','w') as ready:\n ready.write(str(os.getpid()))\nos.replace('ready.tmp','ready')\nstart=time.monotonic()\nwhile not os.path.exists('observing'):\n assert time.monotonic()-start<3\n time.sleep(.01)\nos.kill(os.getppid(),9)\n{}",
-        if complete == "yes" {
-            "open('child-original','w').write('original child bytes');open('completed','w').write('child reached exit')"
-        } else {
-            "time.sleep(30);open('escaped','w').write('escaped')"
-        }
-    );
     let _ = chrono_harness::run_process_observed(
         root,
         &chrono_harness::CommandSpec {
-            program: python.to_string_lossy().into_owned(),
-            args: vec!["-c".into(), code],
+            program: PROCESS_FIXTURE.into(),
+            args: vec!["interrupted-child".into(), complete],
             env: Default::default(),
             timeout_seconds: 30,
             output_limit_bytes: 4096,
         },
         &[],
-        &sha256(&fs::read(python).unwrap()),
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
     );
     panic!("the child must interrupt this launcher");
 }
@@ -1057,34 +1062,8 @@ fn interrupted_launch(complete: bool) -> (tempfile::TempDir, chrono_harness::Pro
     // An independent process binds the child's live kernel identity before the
     // interruption and observes its actual exit. File readiness alone cannot
     // satisfy this oracle, including the abandoned-child cleanup case.
-    let python = chrono_harness::resolve_program(d.path(), "python3", None).unwrap();
-    let observer = std::process::Command::new(python)
-        .args([
-            "-c",
-            r#"import os,select,time,sys
-start=time.monotonic()
-while not os.path.exists('ready'):
- assert time.monotonic()-start<5
- time.sleep(.01)
-pid=int(open('ready').read())
-if sys.platform=='darwin':
- handle=select.kqueue()
- handle.control([select.kevent(pid,filter=select.KQ_FILTER_PROC,flags=select.KQ_EV_ADD|select.KQ_EV_ONESHOT,fflags=select.KQ_NOTE_EXIT)],0,0)
-else:
- fd=os.pidfd_open(pid)
- handle=select.poll()
- handle.register(fd,select.POLLIN)
-open('observing','w').write(str(pid))
-if sys.platform=='darwin':
- events=handle.control(None,1,7)
- assert len(events)==1 and events[0].ident==pid and events[0].fflags & select.KQ_NOTE_EXIT
-else:
- events=handle.poll(7000)
- assert events and events[0][0]==fd and events[0][1] & select.POLLIN
- os.close(fd)
-open('kernel-terminal','w').write(str(pid))
-"#,
-        ])
+    let observer = std::process::Command::new(PROCESS_FIXTURE)
+        .arg("interrupted-observer")
         .current_dir(d.path())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -1150,22 +1129,15 @@ fn owned_launch_burst_helper() {
     };
     check_launch_allocations();
     let root = std::path::Path::new(&root);
-    let python = chrono_harness::resolve_program(root, "python3", None).unwrap();
-    let digest = sha256(&fs::read(&python).unwrap());
+    let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
     std::thread::scope(|scope| {
         let mut tasks = Vec::new();
         for index in 0..64 {
-            let python = &python;
             let digest = &digest;
             tasks.push(scope.spawn(move || {
                 let spec = chrono_harness::CommandSpec {
-                    program: python.to_string_lossy().into(),
-                    args: vec![
-                        "-c".into(),
-                        format!(
-                            "open('child-{index}','x').write('once');print('original-{index}')"
-                        ),
-                    ],
+                    program: PROCESS_FIXTURE.into(),
+                    args: vec!["burst".into(), index.to_string()],
                     env: Default::default(),
                     timeout_seconds: 30,
                     output_limit_bytes: 4096,
@@ -1227,7 +1199,7 @@ fn delayed_monitor_helper() {
         return;
     };
     let root = std::path::Path::new(&root);
-    let executable = env!("CARGO_BIN_EXE_chrono-test-delayed-monitor");
+    let executable = PROCESS_FIXTURE;
     let digest = sha256(&fs::read(executable).unwrap());
     let spec = chrono_harness::CommandSpec {
         program: executable.into(),
@@ -1267,14 +1239,13 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
     // Only the nested launcher is suspended. The child and independent kernel
     // observer remain runnable; the late-exit control rejects a monitor that
     // merely tests try_wait before checking its deadline.
-    let mut controller =
-        std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-delayed-monitor"))
-            .args(["controller", case])
-            .current_dir(root.path())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .unwrap();
+    let mut controller = std::process::Command::new(PROCESS_FIXTURE)
+        .args(["controller", case])
+        .current_dir(root.path())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
     // The independent observer publishes readiness before the timed launch.
     // The launcher timestamp conservatively precedes the actual timer start.
     let preparing = std::time::Instant::now();
@@ -1368,8 +1339,8 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
     for (delay, expected_exit) in [(50, Some(7)), (20_000, None)] {
         let root = tempfile::tempdir().unwrap();
         let spec = chrono_harness::CommandSpec {
-            program: env!("CARGO_BIN_EXE_chrono-test-closed-streams").into(),
-            args: vec![delay.to_string()],
+            program: PROCESS_FIXTURE.into(),
+            args: vec!["closed-streams".into(), delay.to_string()],
             env: Default::default(),
             timeout_seconds: 1,
             output_limit_bytes: 4096,

@@ -4101,19 +4101,7 @@
       ]
     },
     {
-      "path": "crates/runner-tests/tests/support/closed_streams.rs",
-      "owner": "runner-tests",
-      "surface": "test",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "compile",
-          "to": "project:runner-tests"
-        }
-      ]
-    },
-    {
-      "path": "crates/runner-tests/tests/support/delayed_monitor.rs",
+      "path": "crates/runner-tests/tests/support/process_lifecycle.rs",
       "owner": "runner-tests",
       "surface": "test",
       "cost": "unmeasured",

@@ -4,7 +4,7 @@ use std::{
     os::fd::{AsRawFd, FromRawFd},
     path::Path,
     thread,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 fn now() -> f64 {
@@ -23,20 +23,20 @@ fn publish(path: &str, contents: &str) {
     fs::rename(temporary, path).unwrap();
 }
 
-fn await_file(path: &str) {
+fn await_file(path: &str, seconds: f64, interval_ms: u64) {
     let start = now();
     while !Path::new(path).exists() {
         assert!(
-            now() - start < 5.0,
-            "{path} was not published in five seconds"
+            now() - start < seconds,
+            "{path} was not published in {seconds} seconds"
         );
-        thread::sleep(Duration::from_millis(5));
+        thread::sleep(Duration::from_millis(interval_ms));
     }
 }
 
 fn child() {
     publish("ready", &std::process::id().to_string());
-    await_file("release");
+    await_file("release", 5.0, 5);
     let release = fs::read_to_string("release").unwrap();
     let (delay, overflow) = release.split_once(',').unwrap();
     thread::sleep(Duration::from_secs_f64(delay.parse().unwrap()));
@@ -100,11 +100,11 @@ impl Exit {
         }
     }
 
-    fn wait(self, pid: libc::pid_t) {
+    fn wait(self, pid: libc::pid_t, seconds: u32) {
         #[cfg(target_os = "macos")]
         {
             let timeout = libc::timespec {
-                tv_sec: 3,
+                tv_sec: seconds.into(),
                 tv_nsec: 0,
             };
             let mut event: libc::kevent = unsafe { std::mem::zeroed() };
@@ -136,7 +136,8 @@ impl Exit {
                 events: libc::POLLIN,
                 revents: 0,
             };
-            assert_eq!(unsafe { libc::poll(&mut event, 1, 3000) }, 1);
+            let milliseconds = i32::try_from(seconds * 1000).unwrap();
+            assert_eq!(unsafe { libc::poll(&mut event, 1, milliseconds) }, 1);
             assert_ne!(event.revents & libc::POLLIN, 0);
         }
     }
@@ -145,7 +146,7 @@ impl Exit {
 fn controller(case: &str) {
     assert!(matches!(case, "on-time" | "late" | "overflow"));
     File::create_new("controller-ready").unwrap();
-    await_file("ready");
+    await_file("ready", 5.0, 5);
     let launcher: serde_json::Value =
         serde_json::from_slice(&fs::read("launcher").unwrap()).unwrap();
     let started = launcher["started"].as_f64().unwrap();
@@ -168,7 +169,7 @@ fn controller(case: &str) {
             if case == "overflow" { "yes" } else { "no" }
         ),
     );
-    exit.wait(pid);
+    exit.wait(pid, 3);
     let terminal = now();
     if case == "late" {
         assert!(terminal - stopped > 1.0);
@@ -193,11 +194,74 @@ fn controller(case: &str) {
     .unwrap();
 }
 
+fn marker(path: &str) {
+    let time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let mut file = File::create_new(path).unwrap();
+    write!(file, "{}", time.as_nanos()).unwrap();
+}
+
+fn closed_streams(delay: u64) {
+    marker("started");
+    // Closing the runner's pipes must not signal process exit.
+    unsafe {
+        drop(File::from_raw_fd(1));
+        drop(File::from_raw_fd(2));
+    }
+    thread::sleep(Duration::from_millis(delay));
+    marker("completed");
+    std::process::exit(7);
+}
+
+fn interrupted_child(complete: &str) {
+    assert!(matches!(complete, "yes" | "no"));
+    publish("ready", &std::process::id().to_string());
+    await_file("observing", 3.0, 10);
+    assert_eq!(unsafe { libc::kill(libc::getppid(), libc::SIGKILL) }, 0);
+    if complete == "yes" {
+        fs::write("child-original", "original child bytes").unwrap();
+        fs::write("completed", "child reached exit").unwrap();
+    } else {
+        thread::sleep(Duration::from_secs(30));
+        fs::write("escaped", "escaped").unwrap();
+    }
+}
+
+fn interrupted_observer() {
+    await_file("ready", 5.0, 10);
+    let pid = fs::read_to_string("ready").unwrap().parse().unwrap();
+    let exit = Exit::register(pid);
+    fs::write("observing", pid.to_string()).unwrap();
+    exit.wait(pid, 7);
+    fs::write("kernel-terminal", pid.to_string()).unwrap();
+}
+
 fn main() {
     let mut arguments = std::env::args().skip(1);
     match arguments.next().unwrap().as_str() {
         "child" => child(),
         "controller" => controller(&arguments.next().unwrap()),
-        mode => panic!("unknown delayed-monitor fixture mode: {mode}"),
+        "closed-streams" => closed_streams(arguments.next().unwrap().parse().unwrap()),
+        "interrupted-child" => interrupted_child(&arguments.next().unwrap()),
+        "interrupted-observer" => interrupted_observer(),
+        "nested" => {
+            fs::write("nested.pid", std::process::id().to_string()).unwrap();
+            thread::sleep(Duration::from_secs(30));
+            fs::write("escaped", "escaped").unwrap();
+        }
+        "slow" => thread::sleep(Duration::from_secs(5)),
+        "sibling" => {
+            thread::sleep(Duration::from_secs(2));
+            fs::write("sibling", "joined").unwrap();
+            println!("original");
+        }
+        "burst" => {
+            let index: u32 = arguments.next().unwrap().parse().unwrap();
+            File::create_new(format!("child-{index}"))
+                .unwrap()
+                .write_all(b"once")
+                .unwrap();
+            println!("original-{index}");
+        }
+        mode => panic!("unknown process lifecycle fixture mode: {mode}"),
     }
 }
