@@ -144,3 +144,73 @@ fn nested_engine_forwards_opaque_capability_after_environment_clear() {
     file.read_to_string(&mut bytes).unwrap();
     assert_eq!(bytes, "nested-env-clearnative-after-engine");
 }
+
+#[test]
+fn reserved_descriptor_helper() {
+    let Ok(slot) = std::env::var("CHRONO_FD_RESERVED_SLOT") else {
+        return;
+    };
+    let slot: i32 = slot.parse().unwrap();
+    assert!((198..=200).contains(&slot));
+    let dir = tempfile::tempdir().unwrap();
+    let warm = spec("/usr/bin/true", vec![]);
+    let result = run_process_observed(
+        dir.path(),
+        &warm,
+        &[],
+        &sha256(&fs::read(&warm.program).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(result.exit_code, 0);
+    assert!(result.failure.is_none());
+    let file = tempfile::tempfile().unwrap();
+    use std::os::unix::fs::FileExt;
+    file.write_all_at(b"declared-ownership-capability", 0)
+        .unwrap();
+    let mut held = Vec::new();
+    loop {
+        let filler = fs::File::open("/dev/null").unwrap();
+        let fd = filler.as_raw_fd();
+        held.push(filler);
+        if fd >= slot - 2 {
+            assert_eq!(fd, slot - 2);
+            break;
+        }
+    }
+    let _scope = Scope::new(&[file.as_fd()]).unwrap();
+    let command = spec("/usr/bin/python3", vec!["-S".into(), "-c".into(),
+        "import os;fds=[int(x) for x in os.environ['CHRONO_PROCESS_FDS'].split(',')];actual=[os.pread(fd,64,0) for fd in fds];print(fds,actual);assert actual==[b'declared-ownership-capability']".into()]);
+    let result = run_process_observed(
+        dir.path(),
+        &command,
+        &[],
+        &sha256(&fs::read(&command.program).unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        result.exit_code, 0,
+        "slot {slot}: {} {}",
+        result.stdout, result.stderr
+    );
+    assert!(result.failure.is_none(), "{:?}", result.failure);
+}
+
+#[test]
+fn forwarded_capabilities_preserve_identity_across_reserved_descriptor_slots() {
+    for slot in [198, 199, 200] {
+        // Isolate this namespace experiment from the enclosing launch tree.
+        // Inherited lease descriptors remain open; only their carrier is absent.
+        let output = std::process::Command::new("/usr/bin/python3")
+            .args(["-S", "-c", "import os,sys\nfor fd in (198,199,200):\n try: os.close(fd)\n except OSError: pass\nos.execv(sys.argv[1],[sys.argv[1],'--exact','reserved_descriptor_helper','--nocapture'])"])
+            .arg(std::env::current_exe().unwrap())
+            .env("CHRONO_FD_RESERVED_SLOT", slot.to_string())
+            .env_remove("CHRONO_PROCESS_FDS")
+            .output().unwrap();
+        assert!(
+            output.status.success(),
+            "slot {slot}: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

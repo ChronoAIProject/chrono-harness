@@ -15,6 +15,8 @@ const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
 const MAGIC: u64 = 0x4348524f4e4f5033;
 const OBSERVER_FD: i32 = 200;
+// Private copies must not alias the fixed inherited transport descriptors.
+pub(crate) const PRIVATE_FD_MIN: i32 = 202;
 const CAPACITY: usize = 4096;
 
 #[repr(i32)]
@@ -288,7 +290,7 @@ fn descendant(slots: &[Slot; CAPACITY], mut index: usize, ancestor: usize) -> bo
 }
 
 fn high_descriptor(file: File) -> Result<File, String> {
-    let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 202) };
+    let fd = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
     if fd < 0 {
         return Err(std::io::Error::last_os_error().to_string());
     }
@@ -312,11 +314,12 @@ fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, String> {
             {
                 return Err("process ownership context missing".into());
             }
-            let fd = unsafe { libc::fcntl(TREE_FD, libc::F_DUPFD_CLOEXEC, 202) };
+            let fd = unsafe { libc::fcntl(TREE_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
             if fd < 0 {
                 return Err(std::io::Error::last_os_error().to_string());
             }
-            let observer_fd = unsafe { libc::fcntl(OBSERVER_FD, libc::F_DUPFD_CLOEXEC, 202) };
+            let observer_fd =
+                unsafe { libc::fcntl(OBSERVER_FD, libc::F_DUPFD_CLOEXEC, PRIVATE_FD_MIN) };
             if observer_fd < 0 {
                 return Err("process ownership exit observer missing".into());
             }

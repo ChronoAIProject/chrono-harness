@@ -15,7 +15,13 @@ fn duplicate(fd: RawFd) -> Result<OwnedFd, String> {
     if fd < 3 {
         return Err("ownership descriptor must not alias stdio".into());
     }
-    let copy = unsafe { libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 3) };
+    let copy = unsafe {
+        libc::fcntl(
+            fd,
+            libc::F_DUPFD_CLOEXEC,
+            crate::process_ownership::PRIVATE_FD_MIN,
+        )
+    };
     if copy < 0 {
         return Err(format!(
             "ownership descriptor: {}",
