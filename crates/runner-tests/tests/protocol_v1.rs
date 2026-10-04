@@ -1478,18 +1478,12 @@ fn failed_live_identity_registration_helper() {
     // The independent Python parent fixes this process's descriptor budget.
     // Leave the ownership transport free, while exhausting the observer's
     // remaining kernel descriptor when it receives the live handoff.
-    let transferred = std::env::var("CHRONO_PROCESS_FDS")
-        .map(|value| value.split(',').count())
-        .unwrap_or(0);
-    // Reserve one child copy per existing capability before exhausting the
-    // observer. Keep the original 210-descriptor limit and failure stage.
-    let fill_through = 195usize.checked_sub(transferred).unwrap();
     let mut held = Vec::new();
     loop {
         let file = fs::File::open("/dev/null").unwrap();
         let fd = file.as_raw_fd();
         held.push(file);
-        if fd as usize >= fill_through {
+        if fd >= 195 {
             break;
         }
     }
@@ -1530,6 +1524,10 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
         ])
         .arg(std::env::current_exe().unwrap())
         .env("CHRONO_FAILED_HANDOFF", root.path())
+        // Isolate the fixed descriptor-allocation experiment from additional
+        // engine transfers. Existing inherited lease descriptors stay open;
+        // only their carrier is absent in this independent helper.
+        .env_remove("CHRONO_PROCESS_FDS")
         .output()
         .unwrap();
     assert!(
