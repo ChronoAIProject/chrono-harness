@@ -108,11 +108,7 @@ impl ShortHost {
         fs::create_dir(&root).unwrap();
         git(&root, &["clone", "-q", old.path().to_str().unwrap(), "."]);
         install(&root);
-        fs::copy(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
-            root.join(".chrono-harness/bin/chrono-worktree"),
-        )
-        .unwrap();
+        install_tools(&root, &[("worktree", "chrono-worktree")]);
         git(&root, &["config", "user.name", "Fixture"]);
         git(&root, &["config", "user.email", "fixture@example.invalid"]);
         let remote = parent.join("explicit target.git");
@@ -568,11 +564,7 @@ fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted
     });
     fs::remove_file(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap();
     h.run(&["check"], 2);
-    fs::copy(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
-        h.root.join(".chrono-harness/bin/chrono-worktree"),
-    )
-    .unwrap();
+    install_tools(&h.root, &[("worktree", "chrono-worktree")]);
     fs::write(h.root.join(".chrono-harness/config.json"), "{}").unwrap();
     h.run(&["check"], 2);
 }

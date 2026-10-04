@@ -257,6 +257,17 @@ fn json_file(root: &Path, path: &str, value: &Value) {
 }
 
 fn install(root: &Path) {
+    install_tools(
+        root,
+        &[
+            ("runner", "chrono-harness"),
+            ("judge-ci", "chrono-judge-ci"),
+            ("ci", "chrono-ci"),
+        ],
+    );
+}
+
+fn install_tools(root: &Path, tools: &[(&str, &str)]) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
@@ -268,11 +279,7 @@ fn install(root: &Path) {
     // joined child so concurrently forked tests cannot inherit them before exec.
     let mut copy = Command::new("/bin/cp");
     let mut copying = false;
-    for (project, name) in [
-        ("runner", "chrono-harness"),
-        ("judge-ci", "chrono-judge-ci"),
-        ("ci", "chrono-ci"),
-    ] {
+    for (project, name) in tools {
         let built = source.join(format!("crates/{project}/target/debug/{name}"));
         match fs::hard_link(&built, bin.join(name)) {
             Ok(()) => {}
