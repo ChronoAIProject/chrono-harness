@@ -1425,20 +1425,7 @@ fn short_transport_preserves_process_failure_before_decoding_partial_output() {
         ("output-limit", "process output limit exceeded"),
     ] {
         let mut h = ShortHost::new();
-        let path = ".chrono-harness/bin/bound-judge";
-        let built = Path::new(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
-        match fs::hard_link(built, h.root.join(path)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
-                let copied = Command::new("/bin/cp")
-                    .arg(built)
-                    .arg(h.root.join(path))
-                    .output()
-                    .unwrap();
-                assert!(copied.status.success(), "{copied:?}");
-            }
-            Err(error) => panic!("fixture executable copy: {error}"),
-        }
+        let path = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
         h.modify(".chrono-harness/ci/check.json", |config| {
             config["judge"]["program"] = json!(path);
             config["judge"]["args"] = json!([mode]);

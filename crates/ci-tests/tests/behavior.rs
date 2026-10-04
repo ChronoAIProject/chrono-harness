@@ -624,15 +624,19 @@ fn retain_command_result(
     context: &Value,
     output: &std::process::Output,
 ) {
-    if let Ok(directory) = std::env::var("CHRONO_CI_TEST_RECEIPTS") {
-        static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let id = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let destination = Path::new(&directory).join(format!(
-            "context-{}-{}-{id}",
-            std::process::id(),
-            chrono_harness::sha256(root.as_os_str().as_encoded_bytes())
-        ));
-        fs::create_dir_all(&destination).unwrap();
+    let directory = match std::env::var_os("CHRONO_CI_TEST_RECEIPTS") {
+        Some(directory) => std::path::PathBuf::from(directory),
+        None if !output.status.success() => Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.chrono-harness/state/ci-test-failures"),
+        None => return,
+    };
+    {
+        fs::create_dir_all(&directory).unwrap();
+        let destination = tempfile::Builder::new()
+            .prefix("context-")
+            .tempdir_in(&directory)
+            .unwrap()
+            .keep();
         fs::write(destination.join("stdout.bin"), &output.stdout).unwrap();
         fs::write(destination.join("stderr.bin"), &output.stderr).unwrap();
         fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"status":output.status.to_string(),"joined":true})).unwrap()).unwrap();
@@ -656,6 +660,9 @@ fn retain_command_result(
             if path.is_file() {
                 fs::copy(path, destination.join("configuration").join(name)).unwrap();
             }
+        }
+        if !output.status.success() {
+            eprintln!("original CI fixture evidence: {}", destination.display());
         }
     }
 }
