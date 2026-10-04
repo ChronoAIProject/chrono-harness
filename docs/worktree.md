@@ -89,6 +89,14 @@ remain in the report on malformed or failed batches, before checkout effects.
 Only fully validated immutable bytes enter the operation-local cache; live HEAD,
 checkout, policy, attachment and ownership observations remain fresh.
 
+Live checkout identity reads its root, common repository, metadata directory,
+HEAD and full branch name in one bounded Git process. Maintenance consumes that
+same observation for branch and attachment checks, alongside fresh inventory,
+physical identities, policy bytes and coordinator checks. Every disposal guard
+acquires a new observation; none is reused across deletion effects. Malformed
+fields, mismatched identities and failed Git processes still preserve pending
+work and the original failure evidence.
+
 Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before
 unlocking it. The producer reuses registration's artifact classifier: declared

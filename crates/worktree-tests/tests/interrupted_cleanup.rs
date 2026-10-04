@@ -35,13 +35,19 @@ fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error
 if [ -f "$HOME/identity-fault" ] && [ "$PWD" = "$HOME/observed" ] && [ "$2" = rev-parse ] && [ "$3" = --show-toplevel ] && [ "$4" = --git-common-dir ]; then
     case "$(cat "$HOME/identity-fault")" in
         truncated) printf '%s\n' "$PWD"; exit 0 ;;
-        malformed-head) printf '%s\n' "$PWD" "$HOME/source with spaces/.git" not-an-oid; exit 0 ;;
-        foreign-common) printf '%s\n' "$PWD" "$HOME/foreign-common" "$('{}' rev-parse HEAD)"; exit 0 ;;
+        malformed-head) printf '%s\n' "$PWD" "$HOME/source with spaces/.git" "$('{}' rev-parse --absolute-git-dir)" not-an-oid refs/heads/feature/observed; exit 0 ;;
+        foreign-common) printf '%s\n' "$PWD" "$HOME/foreign-common" "$('{}' rev-parse --absolute-git-dir)" "$('{}' rev-parse HEAD)" refs/heads/feature/observed; exit 0 ;;
+        foreign-branch) '{}' "$@" | /usr/bin/sed 's@refs/heads/feature/observed@refs/heads/feature/other@'; exit 0 ;;
+        foreign-metadata) '{}' "$@" | /usr/bin/sed "s@.*/worktrees/observed@$HOME/foreign-common@"; exit 0 ;;
         failure) printf 'original identity failure\n' >&2; exit 71 ;;
     esac
 fi
 exec '{}' "$@"
 "#,
+            real.display(),
+            real.display(),
+            real.display(),
+            real.display(),
             real.display(),
             real.display()
         ),
@@ -54,7 +60,14 @@ exec '{}' "$@"
     output(&target);
     fs::create_dir(h.parent.join("foreign-common")).unwrap();
     let source = fs::read(target.join("payload")).unwrap();
-    for fault in ["truncated", "malformed-head", "foreign-common", "failure"] {
+    for fault in [
+        "truncated",
+        "malformed-head",
+        "foreign-common",
+        "foreign-branch",
+        "foreign-metadata",
+        "failure",
+    ] {
         fs::write(h.parent.join("identity-fault"), fault).unwrap();
         let (code, report, error) = h.auto("maintain", &[]);
         assert_ne!(code, 0, "{fault}: {report} {error}");
@@ -1146,6 +1159,12 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     super::check_inputs::bind(&h);
     h.kernel_cleanup();
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    let trace = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from);
+    if let Some(path) = &trace {
+        assert!(path.is_absolute());
+        cfg["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path);
+        h.policy(|p| p["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path));
+    }
     cfg["canonical_check"]["participation"] =
         value!({"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]});
     fs::write(
@@ -1178,6 +1197,15 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         git(&target, &["ls-files", "--", ".chrono-harness/bin/"]).is_empty(),
         "installed executables must remain untracked host artifacts"
     );
+    if let Some(path) = &trace {
+        fs::write(
+            path.with_extension("handoff.json"),
+            serde_json::to_vec(&value!({
+                "target":target,
+                "start_unix_ns":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos().to_string(),
+            })).unwrap(),
+        ).unwrap();
+    }
     let mut check = CapturedChild::spawn(
         Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)

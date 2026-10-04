@@ -24,7 +24,9 @@ pub(crate) struct Runner {
 pub(crate) struct CheckoutIdentity {
     pub(crate) top: PathBuf,
     pub(crate) common: PathBuf,
+    pub(crate) metadata: PathBuf,
     pub(crate) head: String,
+    pub(crate) branch: String,
 }
 impl Runner {
     pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
@@ -123,20 +125,23 @@ impl Runner {
                 "rev-parse",
                 "--show-toplevel",
                 "--git-common-dir",
-                "--verify",
-                "--end-of-options",
+                "--absolute-git-dir",
+                "HEAD",
+                "--symbolic-full-name",
                 "HEAD",
             ],
         )?;
         let fields: Vec<_> = observed.trim_end_matches('\n').split('\n').collect();
-        if fields.len() != 3 || fields.iter().any(|field| field.is_empty()) {
+        if fields.len() != 5 || fields.iter().any(|field| field.is_empty()) {
             return Err("invalid Git checkout identity observation".into());
         }
-        facts::full_oid(fields[2])?;
+        facts::full_oid(fields[3])?;
         Ok(CheckoutIdentity {
             top: root.join(fields[0]),
             common: root.join(fields[1]),
-            head: fields[2].into(),
+            metadata: root.join(fields[2]),
+            head: fields[3].into(),
+            branch: fields[4].into(),
         })
     }
     pub(crate) fn blob(&mut self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
