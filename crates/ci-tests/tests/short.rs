@@ -1372,18 +1372,21 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
 #[test]
 fn short_transport_preserves_process_failure_before_decoding_partial_output() {
     for (body, expected) in [
+        ("printf '{\\n'; exec /bin/sleep 8", "process timed out"),
         (
-            "import sys,time; sys.stdin.buffer.read(); print('{',flush=True); time.sleep(8)",
-            "process timed out",
-        ),
-        (
-            "import sys; sys.stdin.buffer.read(); print('x'*8192,flush=True)",
+            "chunk=x; while [ ${#chunk} -lt 8192 ]; do chunk=$chunk$chunk; done; printf '%s\\n' \"$chunk\"",
             "process output limit exceeded",
         ),
     ] {
         let mut h = ShortHost::new();
         let path = ".chrono-harness/bin/bound-judge";
-        script(&h.root, path, &format!("#!/usr/bin/python3\n{body}\n"));
+        // Drain the request with buffered native IO, then emit the deliberate
+        // transport fault with shell builtins under the original one-second bound.
+        script(
+            &h.root,
+            path,
+            &format!("#!/bin/sh\n/bin/cat >/dev/null\n{body}\n"),
+        );
         h.modify(".chrono-harness/ci/check.json", |config| {
             config["judge"]["program"] = json!(path);
             config["judge"]["args"] = json!([]);
@@ -1397,6 +1400,9 @@ fn short_transport_preserves_process_failure_before_decoding_partial_output() {
         let original: Vec<u8> =
             serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
         assert_eq!(report["judge"]["stdout_sha256"], sha256(&original));
+        if expected == "process output limit exceeded" {
+            assert_eq!(original, vec![b'x'; 4096]);
+        }
     }
 }
 

@@ -1232,6 +1232,7 @@ fn delayed_monitor_helper() {
     let spec = chrono_harness::CommandSpec {
         program: python.to_string_lossy().into(),
         args: vec![
+            "-S".into(),
             "-c".into(),
             r#"import os,time
 with open('ready.tmp','w') as ready:
@@ -1287,12 +1288,14 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
     // Only the nested launcher is suspended. The actual child and root's kernel
     // exit observer remain runnable. This separate oracle observes real exit,
     // including the late-exit control that a try_wait-before-timeout fix accepts.
-    let controller = std::process::Command::new(python)
+    let mut controller = std::process::Command::new(python)
         .args([
+            "-S",
             "-c",
             r#"import json,os,select,signal,sys,time
 clock=time.CLOCK_UPTIME_RAW if sys.platform=='darwin' else time.CLOCK_MONOTONIC
 now=lambda:time.clock_gettime(clock)
+open('controller-ready','w').close()
 start=now()
 while not os.path.exists('ready'):
  assert now()-start<5
@@ -1339,6 +1342,20 @@ finally:
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
+    // Start the timed launch only after the independent observer has completed
+    // interpreter/import setup. The launcher's timestamp remains a conservative
+    // lower bound on the actual timer start; the original one-second checks stay.
+    let preparing = std::time::Instant::now();
+    while !root.path().join("controller-ready").exists() {
+        if preparing.elapsed() >= std::time::Duration::from_secs(5)
+            || controller.try_wait().unwrap().is_some()
+        {
+            let _ = controller.kill();
+            let original = controller.wait_with_output().unwrap();
+            panic!("controller did not become ready: {original:?}");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let spec = chrono_harness::CommandSpec {
         program: exe.to_string_lossy().into(),
         args: vec![
