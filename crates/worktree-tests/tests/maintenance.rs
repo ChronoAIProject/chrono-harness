@@ -1,3 +1,4 @@
+use super::automatic::native_git;
 use super::*;
 
 impl Host {
@@ -386,32 +387,9 @@ fn raw_checkout_recovery_keeps_lock_until_physical_work_matches_saved_index() {
 
 #[test]
 fn maintenance_cleanup_retains_actual_remove_failure_and_concurrent_branch_update() {
-    use std::os::unix::fs::PermissionsExt;
     for concurrent in [false, true] {
         let h = Host::new("payload");
-        let real_git = Command::new("/bin/sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap();
-        let real_git = String::from_utf8(real_git.stdout)
-            .unwrap()
-            .trim()
-            .to_string();
-        let wrapper = h.parent.join("git-wrapper");
-        let body = if concurrent {
-            format!(
-                "if [ \"$2\" = update-ref ] && [ \"$4\" = -d ]; then\n '{real_git}' update-ref refs/heads/feature/saved \"$(cat \"$HOME/new-head\")\"\nfi\n"
-            )
-        } else {
-            "if [ \"$2\" = worktree ] && [ \"$3\" = remove ]; then echo original-remove-failure >&2; exit 71; fi\n".into()
-        };
-        fs::write(
-            &wrapper,
-            format!("#!/bin/sh\n{body}exec '{real_git}' \"$@\"\n"),
-        )
-        .unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-        h.policy(|p| p["git"]["program"] = value!(wrapper));
+        native_git(&h, "maintenance-remove", value!({"concurrent":concurrent}));
         let target = h.parent.join("saved");
         assert_eq!(h.invoke("feature", "saved", &target).0, 0);
         let plan = h.cleanup(&target);
@@ -484,17 +462,8 @@ fn maintenance_rejects_malformed_plans_before_mutation() {
 
 #[test]
 fn maintenance_recovers_cleanup_lock_after_retention_race() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
-    let real = Command::new("/bin/sh")
-        .args(["-c", "command -v git"])
-        .output()
-        .unwrap();
-    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
-    let wrapper = h.parent.join("git-wrapper");
-    fs::write(&wrapper, format!("#!/bin/sh\nif [ \"$2\" = worktree ] && [ \"$3\" = lock ]; then\n '{real}' \"$@\" || exit $?\n '{real}' update-ref refs/heads/dev \"$(cat \"$HOME/new-head\")\"\n exit $?\nfi\nexec '{real}' \"$@\"\n")).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(wrapper));
+    native_git(&h, "retention-race", value!({}));
     let target = h.parent.join("saved");
     assert_eq!(h.invoke("feature", "saved", &target).0, 0);
     let tree = git(&h.root, &["rev-parse", "HEAD^{tree}"]);
@@ -534,18 +503,9 @@ fn maintenance_recovers_cleanup_lock_after_retention_race() {
 
 #[test]
 fn maintenance_rechecks_work_after_releasing_owned_locks() {
-    use std::os::unix::fs::PermissionsExt;
     for operation in ["cleanup", "recover"] {
         let h = Host::new("payload");
-        let real = Command::new("/bin/sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap();
-        let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
-        let wrapper = h.parent.join("git-wrapper");
-        fs::write(&wrapper, format!("#!/bin/sh\nif [ -f \"$HOME/arm\" ] && [ \"$2\" = worktree ] && [ \"$3\" = unlock ]; then\n '{real}' \"$@\" || exit $?\n printf 'new unsaved work' > \"$4/payload\"\n exit 0\nfi\nexec '{real}' \"$@\"\n")).unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-        h.policy(|p| p["git"]["program"] = value!(wrapper));
+        native_git(&h, "unsaved-after-unlock", value!({}));
         let target = h.parent.join("saved");
         if operation == "recover" {
             h.hook(value!({"exit":17}));
@@ -573,42 +533,12 @@ fn maintenance_rechecks_work_after_releasing_owned_locks() {
 
 impl Host {
     fn failed_fetch(&self, after_fetch: bool) -> Value {
-        use std::os::unix::fs::PermissionsExt;
-        let real = Command::new("/bin/sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap();
-        let real = String::from_utf8(real.stdout)
-            .unwrap()
-            .trim()
-            .replace('\'', "'\\''");
-        let wrapper = self.parent.join("fetch-git-wrapper");
-        let body = r#"if [ "$2" = fetch ] && [ "$(cat "$HOME/fetch-action")" = fetch-block ]; then
- REAL "$@" || exit $?; echo failure-after-fetch >&2; exit 72
-fi
-if [ "$2" = update-ref ] && [ "$4" = -d ]; then
- case "$5" in refs/chrono-harness/fetch/*)
-  case "$(cat "$HOME/fetch-action")" in
-   block) echo original-fetch-ref-removal-failure >&2; exit 71;;
-   race) REAL update-ref "$5" "$(cat "$HOME/fetch-new-head")" || exit $?;;
-   remove-fail) REAL "$@" || exit $?; echo failure-after-ref-removal >&2; exit 73;;
-  esac
- esac
-fi
-exec REAL "$@"
-"#;
-        fs::write(
-            &wrapper,
-            format!("#!/bin/sh\n{}", body.replace("REAL", &format!("'{real}'"))),
-        )
-        .unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+        native_git(self, "fetch-failure", value!({}));
         fs::write(
             self.parent.join("fetch-action"),
             if after_fetch { "fetch-block" } else { "block" },
         )
         .unwrap();
-        self.policy(|p| p["git"]["program"] = value!(wrapper));
         let target = self.parent.join("never-created");
         let (code, original, error) = self.invoke("feature", "fetch-failure", &target);
         assert_ne!(code, 0, "{original} {error}");
@@ -811,30 +741,11 @@ mod interruption;
 #[path = "remote.rs"]
 mod remote;
 
-fn artifact_removal_git(h: &Host, condition: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    let real = Command::new("/bin/sh")
-        .args(["-c", "command -v git"])
-        .output()
-        .unwrap();
-    let real = String::from_utf8(real.stdout).unwrap().trim().to_string();
-    let wrapper = h.parent.join("artifact-git");
-    fs::write(
-        &wrapper,
-        format!("#!/bin/sh\nif [ \"$2\" = worktree ] && [ \"$3\" = remove ]; then\n{condition}\nfi\nexec '{real}' \"$@\"\n"),
-    ).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(wrapper));
-}
-
 #[test]
 fn cleanup_artifact_disposal_precedes_git_removal() {
     use std::os::unix::fs::symlink;
     let h = Host::new("payload");
-    artifact_removal_git(
-        &h,
-        "if [ -e \"$6/.chrono-harness/state/output\" ]; then echo artifacts-reached-git-removal >&2; exit 71; fi",
-    );
+    native_git(&h, "artifact-removal", value!({"fault":"must-be-absent"}));
     let target = h.parent.join("artifact disposal λ");
     assert_eq!(h.invoke("feature", "artifacts", &target).0, 0);
     let outside = h.parent.join("preserved outside");
@@ -898,10 +809,7 @@ fn cleanup_artifact_disposal_rejects_tracked_content_before_any_effect() {
 #[test]
 fn cleanup_artifact_disposal_retains_partial_failure_and_explicit_retry() {
     let h = Host::new("payload");
-    artifact_removal_git(
-        &h,
-        "if [ -e \"$HOME/fail-remove\" ]; then echo original-remove-failure >&2; exit 71; fi",
-    );
+    native_git(&h, "artifact-removal", value!({"fault":"fail-marker"}));
     let target = h.parent.join("partial artifact cleanup");
     assert_eq!(h.invoke("feature", "partial-artifacts", &target).0, 0);
     fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();

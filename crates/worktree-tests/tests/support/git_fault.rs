@@ -56,6 +56,108 @@ fn main() {
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
+        "maintenance-remove" => {
+            if config["concurrent"] == true {
+                if arg(1, "update-ref") && arg(3, "-d") {
+                    let head = fs::read_to_string(home.join("new-head")).unwrap();
+                    Command::new(git)
+                        .args([
+                            "update-ref",
+                            "refs/heads/feature/saved",
+                            head.trim_end_matches('\n'),
+                        ])
+                        .status()
+                        .unwrap();
+                }
+            } else if arg(1, "worktree") && arg(2, "remove") {
+                eprintln!("original-remove-failure");
+                std::process::exit(71);
+            }
+        }
+        "retention-race" => {
+            if arg(1, "worktree") && arg(2, "lock") {
+                require_success(Command::new(git).args(&args).status().unwrap());
+                let head = fs::read_to_string(home.join("new-head")).unwrap();
+                require_success(
+                    Command::new(git)
+                        .args(["update-ref", "refs/heads/dev", head.trim_end_matches('\n')])
+                        .status()
+                        .unwrap(),
+                );
+                return;
+            }
+        }
+        "unsaved-after-unlock" => {
+            if home.join("arm").is_file() && arg(1, "worktree") && arg(2, "unlock") {
+                require_success(Command::new(git).args(&args).status().unwrap());
+                fs::write(Path::new(&args[3]).join("payload"), "new unsaved work").unwrap();
+                return;
+            }
+        }
+        "fetch-failure" => {
+            if arg(1, "fetch") {
+                let action = fs::read_to_string(home.join("fetch-action")).unwrap();
+                if action.trim_end_matches('\n') == "fetch-block" {
+                    require_success(Command::new(git).args(&args).status().unwrap());
+                    eprintln!("failure-after-fetch");
+                    std::process::exit(72);
+                }
+            }
+            if arg(1, "update-ref")
+                && arg(3, "-d")
+                && args.get(4).is_some_and(|v| {
+                    v.to_string_lossy()
+                        .starts_with("refs/chrono-harness/fetch/")
+                })
+            {
+                let action = fs::read_to_string(home.join("fetch-action")).unwrap();
+                match action.trim_end_matches('\n') {
+                    "block" => {
+                        eprintln!("original-fetch-ref-removal-failure");
+                        std::process::exit(71);
+                    }
+                    "race" => {
+                        let head = fs::read_to_string(home.join("fetch-new-head")).unwrap();
+                        require_success(
+                            Command::new(git)
+                                .arg("update-ref")
+                                .arg(&args[4])
+                                .arg(head.trim_end_matches('\n'))
+                                .status()
+                                .unwrap(),
+                        );
+                    }
+                    "remove-fail" => {
+                        require_success(Command::new(git).args(&args).status().unwrap());
+                        eprintln!("failure-after-ref-removal");
+                        std::process::exit(73);
+                    }
+                    _ => (),
+                }
+            }
+        }
+        "artifact-removal" => {
+            if arg(1, "worktree") && arg(2, "remove") {
+                let failure = match config["fault"].as_str().unwrap() {
+                    "must-be-absent"
+                        if Path::new(&args[5])
+                            .join(".chrono-harness/state/output")
+                            .exists() =>
+                    {
+                        Some("artifacts-reached-git-removal")
+                    }
+                    "fail-marker" if home.join("fail-remove").exists() => {
+                        Some("original-remove-failure")
+                    }
+                    "must-be-absent" | "fail-marker" => None,
+                    fault => panic!("unknown artifact removal fixture: {fault}"),
+                };
+                if let Some(message) = failure {
+                    eprintln!("{message}");
+                    std::process::exit(71);
+                }
+            }
+        }
         "batch-failure" => {
             if args.ends_with(&["cat-file".into(), "--batch".into()]) {
                 io::stdout()
