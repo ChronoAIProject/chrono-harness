@@ -171,6 +171,8 @@ Verify delivery. For merges/releases, verify state, landed SHA, artifacts and re
 
 Test behavior. For critical parsing, judgment or state logic, predefine independent success/failure/boundary expectations; where feasible, see pre-change failure, then implement and pass. Use mutation to verify detection when needed. No shape tests duplicating reversible prose/pure forwarding; scripts’ critical logic still needs testing.
 
+Test in the implementation language. Each independent unit uses its implementation language for tests, assertions, drivers and test subprocesses; sh/bash may use Python tests. Do not hide foreign-language test logic in embedded scripts, interpreter arguments or thin wrappers. Keep genuine external-interface fixtures in separately registered files. Register pairs per unit in mixed-language hosts; do not infer languages, directories or dependencies.
+
 Keep verdicts deterministic. Input time, randomness and environment; inject clocks/fix conditions as applicable. Real waits only guard hangs; expiration leaves infrastructure unresolved, no functional verdict. Separate performance from function. Slower machines must not change same-input verdicts; flaky isolation is no root fix.
 
 Target mutation assertions. Predeclare position, failing tests/count. Valid mutations compile, exit nonzero in tests and hit named failures; other red/compile errors do not count. Record results, restoration and recheck; expectations stay independent of implementation. Explain extra/missing failures as overreach, gaps or tautologies, never fit counts afterward. Test accept/reject against reject-all. Check added/deleted test identities; equal counts prove no preserved detection.

@@ -817,6 +817,26 @@
       ]
     },
     {
+      "id": "test.same-language",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "用实现语言写测试。 每个独立单元的测试、断言、驱动及测试子进程使用实现语言；sh／bash 允许用 Python 测试。不得用内嵌脚本、解释器参数或薄包装隐藏另一种语言的测试逻辑。真实外部接口 fixture 独立成文件并显式登记。混合语言宿主逐单元登记配对，不推断语言、目录或依赖。"
+          }
+        },
+        {
+          "locale": "en",
+          "source": {
+            "type": "inline",
+            "text": "Test in the implementation language. Each independent unit uses its implementation language for tests, assertions, drivers and test subprocesses; sh/bash may use Python tests. Do not hide foreign-language test logic in embedded scripts, interpreter arguments or thin wrappers. Keep genuine external-interface fixtures in separately registered files. Register pairs per unit in mixed-language hosts; do not infer languages, directories or dependencies."
+          }
+        }
+      ]
+    },
+    {
       "id": "test.determinism",
       "requires": [],
       "variants": [
@@ -860,6 +880,7 @@
       "id": "core.behavior",
       "requires": [
         "test.behavior",
+        "test.same-language",
         "test.determinism",
         "ci.actual-events"
       ],
@@ -2719,6 +2740,7 @@
           ],
           "atoms": [
             "test.behavior",
+            "test.same-language",
             "test.determinism",
             "test.mutation",
             "test.first-useful-case",
@@ -2857,6 +2879,7 @@
             "delta.candidate-judge",
             "delta.local-ci",
             "test.behavior",
+            "test.same-language",
             "evidence.program-state",
             "evidence.failure"
           ]

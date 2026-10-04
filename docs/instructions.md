@@ -39,7 +39,7 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
       "goal.deliverable", "action.autonomy", "method.entry", "method.host-tools",
       "registry.explicit", "judge.register", "core.small-projects", "candidate.isolation",
       "reuse.search", "owner.canonical",
-      "delta.selection", "delta.candidate-judge", "delta.local-ci", "test.behavior", "evidence.program-state", "evidence.failure",
+      "delta.selection", "delta.candidate-judge", "delta.local-ci", "test.behavior", "test.same-language", "evidence.program-state", "evidence.failure",
       "policy.evolution", "policy.mixed-warning", "candidate.landing", "artifact.results"
     ],"title":"通用工作方法","layout":"workflow"},
     {"id":"general-en","path":"docs/generated/general-methods.en.md","format":"markdown","locale":"en","roots":["core.general"],"title":"General working methods","layout":"general"},
@@ -125,7 +125,7 @@ cargo check --tests --locked --manifest-path crates/instructions-tests/Cargo.tom
 cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
 ```
 
-产品默认内容同时按完整根字节数核消费边界，包括框架而非只数字符或 token；当前空上下文新宿主 zh-CN 根为 6554 字节／20 叶子，en 根为 6995 字节／20 叶子。修正前分别为 29916／32755 字节、98 叶子；原 title／locale 行为保持。本仓另读的 host-context 从 18653 缩为 4575 字节，完整英文 Markdown 从 32552 变为 32806 字节／98 叶子，聚焦 skill 仍为 2821 字节／7 叶子。完整 [实测读数与适用边界](methodology-extraction.md#实际消费者边界) 另列；不把完整库当作默认根预算结论。内容编辑须复核实际受影响消费者，不截尾、不借全局配置扩限。独立选择 `core.ownership` 或 `core.behavior` 的 Markdown 消费者分别包括投影与真实 CI 义务；此合同不新增文字匹配测试框架。
+产品默认根显式选择 22 个内容叶子，包含同语言测试规则及 sh／bash 可用 Python 测试的例外。空上下文新宿主的 zh-CN／en 根分别为 8440／9232 字节，完整英文 Markdown 为 35103 字节／100 叶子；[实际消费者边界](methodology-extraction.md#实际消费者边界) 列出本宿主根、上下文与 skill 的读数。内容编辑须复核完整载荷，不截尾、不借全局配置扩限。独立选择 `core.behavior` 也包含同语言测试要求；指南生成不等于语言配对判官已执法。
 
 专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、布局重排/双语复用/深度/完整覆盖/预写入拒绝、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方；实际消费者读数及外部 skill 格式验证的适用边界见 [迁移说明](methodology-extraction.md#实际消费者边界)，不引入生产依赖，不证明语义。
 
