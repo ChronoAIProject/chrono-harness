@@ -766,14 +766,10 @@ impl ExitObserver {
                             slot.state.store(0, Ordering::Release);
                         }
                     }
-                    // Wake immediately for the next declared launch handoff,
-                    // retaining the same interval for observing exit events.
-                    let mut pending = libc::pollfd {
-                        fd: receiver.as_raw_fd(),
-                        events: libc::POLLIN,
-                        revents: 0,
-                    };
-                    unsafe { libc::poll(&mut pending, 1, 2) };
+                    // Both new handoffs and already registered exits wake the
+                    // observer. A quiet registration socket must not defer an
+                    // available exit until the periodic maintenance interval.
+                    identities.wait(receiver.as_raw_fd());
                 }
             })
             .map_err(|e| e.to_string())?;
@@ -973,6 +969,23 @@ impl ExitIdentities {
 }
 #[cfg(target_os = "linux")]
 struct ExitIdentities(Vec<(File, usize)>);
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+impl ExitIdentities {
+    fn wait(&self, registration: i32) {
+        let mut pending: Vec<_> = std::iter::once(registration)
+            .chain(self.0.iter().map(|(identity, _)| identity.as_raw_fd()))
+            .map(|fd| libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            })
+            .collect();
+        // Readiness is only a wake hint. completed() still obtains the actual
+        // kernel event, checks its identity and records the observation time.
+        // Keep the existing bound for stop, cancellation and slot recycling.
+        unsafe { libc::poll(pending.as_mut_ptr(), pending.len() as _, 2) };
+    }
+}
 #[cfg(target_os = "linux")]
 impl ExitIdentities {
     fn new() -> Result<Self, String> {
