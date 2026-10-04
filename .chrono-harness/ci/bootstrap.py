@@ -26,9 +26,12 @@ def observe_source(root):
         ).decode("utf-8", "surrogateescape").strip()
 
     try:
-        if Path(git("rev-parse", "--show-toplevel")).resolve() != root:
+        source_root, commit = git(
+            "rev-parse", "--show-toplevel", "--verify", "HEAD",
+        ).rsplit("\n", 1)
+        if Path(source_root).resolve() != root:
             raise ValueError("host root is not the Git source root")
-        observed["commit"] = git("rev-parse", "--verify", "HEAD")
+        observed["commit"] = commit
         observed["tree"] = git("rev-parse", "--verify", observed["commit"] + "^{tree}")
         observed["dirty"] = bool(git(
             "status", "--porcelain=v1", "--untracked-files=normal", "--ignore-submodules=none",

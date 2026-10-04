@@ -842,6 +842,7 @@ else:
         command
             .current_dir(std::env::temp_dir())
             .env("PATH", &path)
+            .env("GIT_TRACE2_EVENT", tools.join("git-trace.jsonl"))
             .output()
             .unwrap()
     };
@@ -915,6 +916,7 @@ else:
     git(root.path(), &["commit", "-qm", "bootstrap source"]);
     let commit = git(root.path(), &["rev-parse", "HEAD"]);
     let tree = git(root.path(), &["rev-parse", "HEAD^{tree}"]);
+    fs::write(tools.join("git-trace.jsonl"), "").unwrap();
     let clean = invoke();
     assert!(
         clean.status.success(),
@@ -925,6 +927,16 @@ else:
     assert_eq!(
         evidence()["source"],
         json!({"state":"clean","commit":commit,"tree":tree,"before":observation,"after":observation})
+    );
+    let acquisitions = fs::read_to_string(tools.join("git-trace.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|event| event["event"] == "start")
+        .count();
+    assert_eq!(
+        acquisitions, 8,
+        "each source observation acquires root/HEAD together, fixed tree, dirt and live HEAD"
     );
     // Unstaged, staged and untracked source remain usable without clean attribution.
     for (file, staged) in [

@@ -524,6 +524,7 @@ impl CapturedChild {
             "native-pid",
             "native-holder",
             "check-holder",
+            "bootstrap-holder",
         ]
         .into_iter()
         .map(|name| {
@@ -1742,6 +1743,8 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
         thread::sleep(Duration::from_millis(10));
     }
     if !marker.exists() {
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        child.record_wait_state(&marker);
         let _ = child.kill();
         let original = child.wait_with_output().unwrap();
         panic!("bootstrap handoff failed: {original:?}");
