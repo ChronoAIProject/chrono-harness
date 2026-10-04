@@ -655,11 +655,18 @@ fn run_process_inner(
         };
         let pid = child.id();
         let stdin = child.stdin.take().ok_or("missing process stdin")?;
-        let input = input.to_vec();
-        let writer = scope.spawn(move || {
-            let mut stdin = stdin;
-            stdin.write_all(&input)
-        });
+        let writer = if input.is_empty() {
+            // Preserve the child's input pipe and publish EOF directly; there
+            // are no bytes whose delivery requires a concurrent writer.
+            drop(stdin);
+            None
+        } else {
+            let input = input.to_vec();
+            Some(scope.spawn(move || {
+                let mut stdin = stdin;
+                stdin.write_all(&input)
+            }))
+        };
         let exceeded = Arc::new(AtomicBool::new(false));
         let limit = s.output_limit_bytes;
         #[cfg(unix)]
@@ -787,7 +794,9 @@ fn run_process_inner(
         child.joined = status.is_some();
         let stdout_result = stdout.join();
         let stderr_result = stderr.join();
-        let _ = writer.join();
+        if let Some(writer) = writer {
+            let _ = writer.join();
+        }
         let a = stdout_result
             .map_err(|_| "stdout reader panicked")?
             .map_err(|e| e.to_string())?;
