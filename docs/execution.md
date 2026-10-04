@@ -404,7 +404,7 @@ data, without inventing plans. The built-in host decoder profile is
 `historical_profiles`. Each entry names the original profile path, candidate script
 and dedicated script test, exact malformed legacy records, identity mappings and
 finite ambiguity repairs. Existing workflow `migrations` and `retirements` retain
-the transition and replacement facts. Config additionally supports explicit v2 presence declarations on both endpoints (see [input snapshots](inputs.md)); projects and judges remain v1.
+the transition and replacement facts. Config additionally supports explicit v2 presence declarations on both endpoints (see [input snapshots](inputs.md)); projects support v1/v2 and judges use v1.
 
 Workflow v3 adds an explicit version selector: `from_versions` and `to_versions`
 each contain the five positive integer versions `config`, `filemap`, `projects`,
