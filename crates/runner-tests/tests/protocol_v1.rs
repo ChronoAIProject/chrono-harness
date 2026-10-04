@@ -1433,16 +1433,11 @@ fn delayed_monitor_preserves_output_bound() {
 #[cfg(unix)]
 #[test]
 fn closed_output_streams_preserve_child_exit_and_timeout() {
-    for (delay, expected_exit) in [(0.05, Some(7)), (20.0, None)] {
+    for (delay, expected_exit) in [(50, Some(7)), (20_000, None)] {
         let root = tempfile::tempdir().unwrap();
         let spec = chrono_harness::CommandSpec {
-            program: "/usr/bin/python3".into(),
-            args: vec![
-                "-c".into(),
-                format!(
-                    "import os,time; os.close(1); os.close(2); time.sleep({delay}); open('completed','x').close(); os._exit(7)"
-                ),
-            ],
+            program: env!("CARGO_BIN_EXE_chrono-test-closed-streams").into(),
+            args: vec![delay.to_string()],
             env: Default::default(),
             timeout_seconds: 1,
             output_limit_bytes: 4096,
@@ -1456,12 +1451,20 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
         .unwrap();
         assert!(result.stdout_bytes.is_empty());
         assert!(result.stderr_bytes.is_empty());
+        let markers = (
+            fs::read_to_string(root.path().join("started")),
+            fs::read_to_string(root.path().join("completed")),
+        );
         if let Some(exit) = expected_exit {
-            assert_eq!(result.exit_code, exit, "{result:?}");
-            assert!(result.failure.is_none(), "{result:?}");
+            assert_eq!(result.exit_code, exit, "{result:?}; markers={markers:?}");
+            assert!(result.failure.is_none(), "{result:?}; markers={markers:?}");
             assert!(root.path().join("completed").exists());
         } else {
-            assert_eq!(result.failure.as_deref(), Some("process timed out"));
+            assert_eq!(
+                result.failure.as_deref(),
+                Some("process timed out"),
+                "{result:?}; markers={markers:?}"
+            );
             assert!(!root.path().join("completed").exists());
         }
     }

@@ -37,3 +37,9 @@ opt-level = 3
 [[test]]
 name = "process_fds"
 path = "tests/process_fds.rs"
+
+[[bin]]
+name = "chrono-test-closed-streams"
+path = "tests/support/closed_streams.rs"
+test = false
+bench = false

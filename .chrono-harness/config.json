@@ -367,7 +367,11 @@
       "CHRONO_CI_NEEDS",
       "GITHUB_RUN_ID",
       "GITHUB_RUN_ATTEMPT",
-      "GITHUB_JOB"
+      "GITHUB_JOB",
+      "CHRONO_CI_TEST_RECEIPTS",
+      "CHRONO_FULL_TEST_RECEIPTS",
+      "CHRONO_WORKTREE_TEST_RECEIPTS",
+      "CHRONO_CHECK_HANDOFF_TRACE"
     ],
     "values": {
       "CARGO_TERM_COLOR": "never"
