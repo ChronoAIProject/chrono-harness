@@ -1,10 +1,9 @@
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::time::Duration;
 
 fn main() {
     let mode = std::env::args().nth(1).expect("transport mode");
-    let mut request = Vec::new();
-    io::stdin().lock().read_to_end(&mut request).unwrap();
+    io::copy(&mut io::stdin().lock(), &mut io::sink()).unwrap();
     let mut stdout = io::stdout().lock();
     match mode.as_str() {
         "timeout-partial" => {
