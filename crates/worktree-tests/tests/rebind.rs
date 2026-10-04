@@ -223,12 +223,7 @@ fn metadata_rebind_rejects_owned_or_overlapping_destinations_and_ref_drift() {
 #[test]
 fn metadata_rebind_retains_failed_git_process_and_original_metadata() {
     let h = Host::new("payload");
-    h.remote_wrapper(
-        r#"if [ "$2" = read-tree ]; then
- printf '\377original index preparation failure\n' >&2
- exit 29
-fi"#,
-    );
+    h.remote_git("index-failure");
     let (decl, target, _, gitfile) = declaration(&h, true);
     let plan = inspect(&h, decl);
     let (code, report, _) = h.maintain("rebind", plan);
@@ -253,19 +248,7 @@ fi"#,
 #[test]
 fn metadata_rebind_checkpoint_precedes_effects_and_preserves_partial_results() {
     let h = Host::new("payload");
-    h.remote_wrapper(
-        r#"if [ "$2" = worktree ] && [ "$3" = add ] && [ "$4" = --detach ]; then
- found=0
- for intent in .chrono-harness/state/worktrees/*.rebind-intent.json; do
-  [ -f "$intent" ] && found=1
- done
- [ "$found" = 1 ] || exit 78
- [ -f .chrono-harness/state/original-metadata/metadata/index ] || exit 79
- REAL "$@" || exit $?
- printf 'original failure after donor creation\n' >&2
- exit 31
-fi"#,
-    );
+    h.remote_git("donor-failure");
     let (decl, target, _, gitfile) = declaration(&h, true);
     let plan = inspect(&h, decl);
     let (code, report, _) = h.maintain("rebind", plan);
@@ -321,13 +304,7 @@ fn metadata_rebind_accepts_relative_or_damaged_pointer_with_owned_backlink() {
 #[test]
 fn metadata_rebind_failed_attachment_uses_existing_reconciled_recovery() {
     let h = Host::new("payload");
-    h.remote_wrapper(
-        r#"if [ "$2" = worktree ] && [ "$3" = repair ]; then
- REAL "$@" || exit $?
- printf 'original failure after repair\n' >&2
- exit 32
-fi"#,
-    );
+    h.remote_git("repair-failure");
     let (decl, target, _, _) = declaration(&h, true);
     let plan = inspect(&h, decl);
     let (code, failed, _) = h.maintain("rebind", plan);
@@ -362,9 +339,7 @@ fi"#,
 #[test]
 fn metadata_rebind_detects_backup_mutation_before_success() {
     let h = Host::new("payload");
-    h.remote_wrapper(r#"if [ "$2" = worktree ] && [ "$3" = unlock ] && [ -d .chrono-harness/state/original-metadata/metadata ]; then
- printf 'changed backup' > .chrono-harness/state/original-metadata/metadata/index
-fi"#);
+    h.remote_git("backup-change");
     let (decl, target, _, _) = declaration(&h, true);
     let plan = inspect(&h, decl);
     let (code, report, _) = h.maintain("rebind", plan);
