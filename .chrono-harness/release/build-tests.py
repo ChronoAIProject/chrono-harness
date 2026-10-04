@@ -334,14 +334,22 @@ class ReleaseUnits(unittest.TestCase):
         self.assertEqual([c['tool'] for c in f.calls_read()[len(before):] if c['tool']!='git'],['package'])
     def test_host_retains_all_original_unfiltered_actions_and_explicit_native_edges(self):
         cfg=json.loads((ROOT/BUILD).read_text());projects=json.loads((ROOT/cfg['projects']).read_text());projection=json.loads((ROOT/'.chrono-harness/ci/release.json').read_text())
-        self.assertEqual(len(cfg['manifests']),15);self.assertEqual(len(cfg['verification_operations']),15)
+        self.assertEqual(len(cfg['manifests']),15);self.assertEqual(len(cfg['verification_operations']),17)
+        original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','judge-cargo','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
+        self.assertEqual(set(cfg['verification_operations']),original_operations|{'test.diagnostics-tests','test.release-build-tests'})
         actions={a['operation']:a for p in projects['projects']+projects['scripts'] for a in p['actions'].values()}
         for u in cfg['units']:
             if u['kind']=='verify':
                 self.assertIn(u['operation'],cfg['verification_operations'])
                 action=actions[u['operation']]
-                self.assertEqual(action['argv'],['test','--locked','--manifest-path',next(p['manifest'] for p in projects['projects'] if p['actions'].get('execute',{}).get('operation')==u['operation'])])
-        self.assertEqual(len(projection['jobs']),62)
+                if u['operation']=='test.release-build-tests':
+                    self.assertEqual(action['argv'],['-B','.chrono-harness/release/dependency-tests.py'])
+                else:
+                    self.assertEqual(action['argv'],['test','--locked','--manifest-path',next(p['manifest'] for p in projects['projects'] if p['actions'].get('execute',{}).get('operation')==u['operation'])])
+                if u['operation'] in original_operations:
+                    self.assertEqual(set(u['needs']),{b['id'] for b in cfg['units'] if b['kind']=='build'})
+                else:self.assertEqual(u['needs'],[])
+        self.assertEqual(len(projection['jobs']),66)
         jobs={j['id']:j for j in projection['jobs']}
         for mapping in cfg['native_jobs'].values():
             for u in cfg['units']+[cfg['collector']]:

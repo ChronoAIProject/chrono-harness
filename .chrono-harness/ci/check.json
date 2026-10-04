@@ -48,7 +48,9 @@
       "crates/judge-cargo/target/",
       "crates/judge-cargo-tests/target/",
       "crates/worktree/target/",
-      "crates/worktree-tests/target/"
+      "crates/worktree-tests/target/",
+      "crates/diagnostics/target/",
+      "crates/diagnostics-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -178,6 +180,18 @@
           "test:workflow-short"
         ],
         "report_path": ".chrono-harness/state/units/judge-workflow-short/check.json"
+      },
+      "diagnostics": {
+        "tests": [
+          "test:diagnostics-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/diagnostics/check.json"
+      },
+      "release-build": {
+        "tests": [
+          "test:release-build-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/release-build/check.json"
       }
     },
     "shared_operations": {

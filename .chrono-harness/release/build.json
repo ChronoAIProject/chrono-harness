@@ -1,5 +1,5 @@
 {
-  "schema": "chrono-release-build/v4",
+  "schema": "chrono-release-build/v5",
   "rust_toolchain": "1.95.0",
   "manifests": [
     "crates/runner/Cargo.toml",
@@ -23,7 +23,8 @@
     "rustup": "rustup",
     "cargo": "cargo",
     "rustc": "rustc",
-    "git": "git"
+    "git": "git",
+    "python3": "python3"
   },
   "verification_operations": [
     "test.distribution-tests",
@@ -40,7 +41,9 @@
     "test.judge-filemap-tests",
     "test.judge-routes-tests",
     "test.judge-cost-tests",
-    "test.judge-mixed-tests"
+    "test.judge-mixed-tests",
+    "test.diagnostics-tests",
+    "test.release-build-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -157,6 +160,20 @@
     "rustfmt"
   ],
   "units": [
+    {
+      "id": "verify_release_build_tests",
+      "kind": "verify",
+      "operation": "test.release-build-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_tests"
+    },
+    {
+      "id": "verify_diagnostics_tests",
+      "kind": "verify",
+      "operation": "test.diagnostics-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests"
+    },
     {
       "id": "build_runner",
       "kind": "build",
@@ -655,7 +672,9 @@
       "verify_judge_filemap_tests",
       "verify_judge_routes_tests",
       "verify_judge_cost_tests",
-      "verify_judge_mixed_tests"
+      "verify_judge_mixed_tests",
+      "verify_diagnostics_tests",
+      "verify_release_build_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -693,7 +712,9 @@
       "verify_judge_routes_tests": "linux_verify_judge_routes_tests",
       "verify_judge_cost_tests": "linux_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "linux_verify_judge_mixed_tests",
-      "package": "linux_package"
+      "package": "linux_package",
+      "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
+      "verify_release_build_tests": "linux_verify_release_build_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -726,7 +747,9 @@
       "verify_judge_routes_tests": "macos_verify_judge_routes_tests",
       "verify_judge_cost_tests": "macos_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "macos_verify_judge_mixed_tests",
-      "package": "macos_package"
+      "package": "macos_package",
+      "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
+      "verify_release_build_tests": "macos_verify_release_build_tests"
     }
   },
   "unit_costs": {
@@ -760,7 +783,9 @@
     "verify_judge_routes_tests": "unmeasured",
     "verify_judge_cost_tests": "unmeasured",
     "verify_judge_mixed_tests": "unmeasured",
-    "package": "unmeasured"
+    "package": "unmeasured",
+    "verify_diagnostics_tests": "unmeasured",
+    "verify_release_build_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,

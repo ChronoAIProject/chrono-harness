@@ -35,6 +35,8 @@ Git 差异是输入事实；是否允许脏目录、怎样选测试、分支是�
 SPEC.md                         产品合同
 README.md                       使用、目录导航和实现状态
 crates/                         独立 Cargo 项目的目录分组
+  diagnostics/                  标准日志和显式错误链，独立于 runner
+  diagnostics-tests/            诊断库专属测试
   runner/                       运输、协议与统一 check 入口
   runner-tests/                 runner 专属测试
   inputs/                       显式输入快照与保留内容运输
