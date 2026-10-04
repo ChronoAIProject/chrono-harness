@@ -855,3 +855,242 @@ fn toolchain_binding_rejects_selection_and_inventory_drift_before_cargo() {
     );
     assert!(report["metadata"].is_null() && report["operation"].is_null());
 }
+
+#[cfg(unix)]
+fn sdk_links(f: &mut Fixture) -> serde_json::Value {
+    use std::os::unix::fs::symlink;
+    toolchain_binding(f);
+    let root = f.root();
+    let sdk = root.join(".chrono-harness/state/sdk");
+    fs::create_dir(sdk.join("include")).unwrap();
+    fs::write(sdk.join("include/header"), "registered header").unwrap();
+    symlink("SDKROOT.marker", sdk.join("alias")).unwrap();
+    symlink("alias", sdk.join("chain")).unwrap();
+    symlink("include", sdk.join("headers")).unwrap();
+    json!({
+        "schema":"chrono-input-directory/v2",
+        "root":".chrono-harness/state/sdk",
+        "files":[
+            {"path":"SDKROOT.marker","sha256":sha256(b"declared sdk\n")},
+            {"path":"include/header","sha256":sha256(b"registered header")}
+        ],
+        "symlinks":[
+            {"path":"alias","target":"SDKROOT.marker","kind":"file"},
+            {"path":"chain","target":"alias","kind":"file"},
+            {"path":"headers","target":"include","kind":"directory"}
+        ]
+    })
+}
+
+#[cfg(unix)]
+fn save_sdk_links(f: &mut Fixture, manifest: &serde_json::Value) {
+    let bytes = serde_json::to_vec(manifest).unwrap();
+    fs::write(f.root().join(".chrono-harness/state/sdk.json"), &bytes).unwrap();
+    let input = f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|row| row["id"] == "toolchain.sdk.manifest")
+        .unwrap();
+    input["sha256"] = json!(sha256(&bytes));
+    f.save();
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_links_are_explicit_and_consumed_by_the_real_compiler() {
+    let mut f = Fixture::new();
+    let mut manifest = sdk_links(&mut f);
+    let alias = f.root().join(".chrono-harness/state/sdk/alias");
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink("./SDKROOT.marker", alias).unwrap();
+    manifest["symlinks"][0]["target"] = json!("./SDKROOT.marker");
+    save_sdk_links(&mut f, &manifest);
+    let lib = f.root().join("p/src/lib.rs");
+    let mut source = fs::read_to_string(&lib).unwrap();
+    source.push_str("\nconst _: &str = include_str!(concat!(env!(\"CHRONO_SDK_ROOT\"), \"/chain\"));\nconst _: &str = include_str!(concat!(env!(\"CHRONO_SDK_ROOT\"), \"/headers/header\"));\n");
+    fs::write(lib, source).unwrap();
+    let (exit, report, stderr) = f.call();
+    assert_eq!(exit, 0, "{report} {stderr}");
+    assert_eq!(report["toolchain"]["sdks"][0]["files"], 2);
+    assert_eq!(report["operation"]["exit_code"], 0);
+    assert!(f.root().join(".chrono-harness/state/test-ran").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_links_reject_missing_registration_escape_cycles_and_wrong_kinds() {
+    use std::os::unix::fs::symlink;
+    for case in [
+        "undeclared",
+        "escape",
+        "cycle",
+        "kind",
+        "uncovered",
+        "literal",
+        "v1",
+        "v1-null",
+        "v2-null",
+        "v2-missing",
+    ] {
+        let mut f = Fixture::new();
+        let mut manifest = sdk_links(&mut f);
+        let sdk = f.root().join(".chrono-harness/state/sdk");
+        match case {
+            "undeclared" => {
+                manifest["symlinks"].as_array_mut().unwrap().remove(0);
+            }
+            "escape" | "cycle" | "uncovered" => {
+                let target = match case {
+                    "escape" => "../../../../outside",
+                    "cycle" => "chain",
+                    _ => "unregistered-marker",
+                };
+                fs::write(sdk.join("unregistered-marker"), "unregistered").unwrap();
+                fs::remove_file(sdk.join("alias")).unwrap();
+                symlink(target, sdk.join("alias")).unwrap();
+                manifest["symlinks"][0]["target"] = json!(target);
+            }
+            "kind" => manifest["symlinks"][0]["kind"] = json!("directory"),
+            "literal" => manifest["symlinks"][0]["target"] = json!("./SDKROOT.marker"),
+            "v1" => manifest["schema"] = json!("chrono-input-directory/v1"),
+            "v1-null" => {
+                manifest["schema"] = json!("chrono-input-directory/v1");
+                manifest["symlinks"] = serde_json::Value::Null;
+            }
+            "v2-null" => manifest["symlinks"] = serde_json::Value::Null,
+            "v2-missing" => {
+                manifest.as_object_mut().unwrap().remove("symlinks");
+            }
+            _ => unreachable!(),
+        }
+        save_sdk_links(&mut f, &manifest);
+        let (exit, report, stderr) = f.call();
+        assert_ne!(exit, 0, "{case}: {report} {stderr}");
+        assert!(
+            report["error"].as_str().unwrap().contains("directory"),
+            "{case}: {report}"
+        );
+        assert!(
+            report["metadata"].is_null() && report["operation"].is_null(),
+            "{case}: {report}"
+        );
+        assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_link_drift_preserves_the_successful_consumer_receipt() {
+    let mut f = Fixture::new();
+    let manifest = sdk_links(&mut f);
+    save_sdk_links(&mut f, &manifest);
+    let lib = f.root().join("t/src/lib.rs");
+    let mut source = fs::read_to_string(&lib).unwrap();
+    source.push_str(
+        r#"
+#[test]
+fn change_declared_link() {
+    let sdk = std::path::PathBuf::from(std::env::var("CHRONO_SDK_ROOT").unwrap());
+    std::fs::remove_file(sdk.join("alias")).unwrap();
+    std::os::unix::fs::symlink("./SDKROOT.marker", sdk.join("alias")).unwrap();
+}
+"#,
+    );
+    fs::write(lib, source).unwrap();
+    let (exit, report, stderr) = f.call();
+    assert_ne!(exit, 0, "{report} {stderr}");
+    assert_eq!(report["operation"]["exit_code"], 0, "{report} {stderr}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("directory link target changed"),
+        "{report}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_root_retargeting_preserves_the_successful_consumer_receipt() {
+    use std::os::unix::fs::symlink;
+    let mut f = Fixture::new();
+    let manifest = sdk_links(&mut f);
+    save_sdk_links(&mut f, &manifest);
+    let state = f.root().join(".chrono-harness/state");
+    fs::rename(state.join("sdk"), state.join("sdk-original")).unwrap();
+    symlink("sdk-original", state.join("sdk")).unwrap();
+    f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_SDK_ROOT"] =
+        json!(state.join("sdk-original"));
+    f.save();
+    fs::create_dir_all(state.join("sdk-other/include")).unwrap();
+    for file in ["SDKROOT.marker", "include/header"] {
+        fs::copy(
+            state.join("sdk-original").join(file),
+            state.join("sdk-other").join(file),
+        )
+        .unwrap();
+    }
+    for (path, target) in [
+        ("alias", "SDKROOT.marker"),
+        ("chain", "alias"),
+        ("headers", "include"),
+    ] {
+        symlink(target, state.join("sdk-other").join(path)).unwrap();
+    }
+    let lib = f.root().join("t/src/lib.rs");
+    let mut source = fs::read_to_string(&lib).unwrap();
+    source.push_str(
+        r#"
+#[test]
+fn change_directory_root() {
+    let sdk = std::path::PathBuf::from(std::env::var("CHRONO_SDK_ROOT").unwrap());
+    let declared = sdk.parent().unwrap().join("sdk");
+    std::fs::remove_file(&declared).unwrap();
+    std::os::unix::fs::symlink("sdk-other", &declared).unwrap();
+}
+"#,
+    );
+    fs::write(lib, source).unwrap();
+    let (exit, report, stderr) = f.call();
+    assert_ne!(exit, 0, "{report} {stderr}");
+    assert_eq!(report["operation"]["exit_code"], 0, "{report} {stderr}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("directory root changed"),
+        "{report}"
+    );
+    assert!(state.join("sdk-original/SDKROOT.marker").is_file());
+}
+
+#[cfg(unix)]
+#[test]
+fn v1_directory_file_replacement_by_same_content_alias_preserves_consumer_result() {
+    let mut f = Fixture::new();
+    toolchain_binding(&mut f);
+    let lib = f.root().join("t/src/lib.rs");
+    let mut source = fs::read_to_string(&lib).unwrap();
+    source.push_str(
+        r#"
+#[test]
+fn replace_declared_regular_file() {
+    let sdk = std::path::PathBuf::from(std::env::var("CHRONO_SDK_ROOT").unwrap());
+    std::fs::rename(sdk.join("SDKROOT.marker"), sdk.join("same-content")).unwrap();
+    std::os::unix::fs::symlink("same-content", sdk.join("SDKROOT.marker")).unwrap();
+}
+"#,
+    );
+    fs::write(lib, source).unwrap();
+    let (exit, report, stderr) = f.call();
+    assert_ne!(exit, 0, "{report} {stderr}");
+    assert_eq!(report["operation"]["exit_code"], 0, "{report} {stderr}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("directory inventory contains symlink"),
+        "{report}"
+    );
+}
