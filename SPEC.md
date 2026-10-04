@@ -884,11 +884,11 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 
 ## 16. 宿主指令生成（已实现）
 
-`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由 98 个双语内容叶子和 16 个普通空文本 aggregate 组成，原有 17 个 core 稳定入口及 core.general 全部保留；旧主题入口只组合原职责，新增便携方法由 core.general 显式选择。聚焦 skill 只选择修复产生处及其证据/复用前提（7 个内容叶子）。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
+`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由 100 个双语内容叶子和 16 个普通空文本 aggregate 组成，原有 17 个 core 稳定入口及 core.general 全部保留；旧主题入口只组合原职责，新增便携方法由 core.general 显式选择。聚焦 skill 只选择修复产生处及其证据/复用前提（7 个内容叶子）。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
 
-`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语短流程根及本仓完整英文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
+`core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合同语言测试要求与实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语短流程根及本仓完整英文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
 
-当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。产品默认和本仓根 manifest 显式列出 20 个现有内容叶子，并选用 workflow 的五节同级短流程。完整 general 三部分/12 主题布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 仍选择全部 98 个叶子，聚焦 skill 保持原平铺。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
+当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。产品默认和本仓根 manifest 显式列出 22 个现有内容叶子，并选用 workflow 的五节同级短流程。完整 general 三部分/12 主题布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 仍选择全部 100 个叶子，聚焦 skill 保持原平铺。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
 
 根受管块保留宿主块外原文、sole donor 和预期整份比较语义。Markdown/skill 为带身份 envelope 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退休；不建立历史 ledger 或扫描删除器。
 
