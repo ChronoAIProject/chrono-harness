@@ -1539,21 +1539,7 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
 #[test]
 fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
     let h = Host::new("payload");
-    h.remote_wrapper(
-        r#"if [ "$PWD" = "$HOME/source with spaces" ] && [ "$2" = ls-files ] && [ "$3" = --others ]; then
- ignored=no
- for arg in "$@"; do
-  if [ "$arg" = --ignored ]; then ignored=yes; fi
- done
- if [ "$ignored" = no ]; then
-  printf 'unregistered-work\n' > .git/info/exclude
-  REAL "$@"
-  result=$?
-  : > .git/info/exclude
-  exit "$result"
- fi
-fi"#,
-    );
+    h.remote_git("ignore-race");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     let work = h.root.join("unregistered-work");
     fs::write(&work, "must remain visible and preserved").unwrap();

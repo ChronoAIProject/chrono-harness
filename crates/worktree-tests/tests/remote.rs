@@ -22,27 +22,8 @@ impl Host {
             &["ls-remote", "warehouse", &format!("refs/heads/{branch}")],
         )
     }
-    pub(crate) fn remote_wrapper(&self, body: &str) {
-        use std::os::unix::fs::PermissionsExt;
-        let real = Command::new("/bin/sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap();
-        let real = String::from_utf8(real.stdout)
-            .unwrap()
-            .trim()
-            .replace('\'', "'\\''");
-        let wrapper = self.parent.join("remote git wrapper");
-        fs::write(
-            &wrapper,
-            format!(
-                "#!/bin/sh\n{}\nexec '{real}' \"$@\"\n",
-                body.replace("REAL", &format!("'{real}'"))
-            ),
-        )
-        .unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
-        self.policy(|p| p["git"]["program"] = value!(wrapper));
+    pub(crate) fn remote_git(&self, fault: &str) {
+        native_git(self, "remote", value!({"fault":fault}));
     }
 }
 
@@ -240,9 +221,7 @@ fn remote_cleanup_rejects_endpoint_branch_and_retention_mismatches_before_push()
 #[test]
 fn remote_cleanup_lease_preserves_a_concurrent_remote_update() {
     let h = Host::new("payload");
-    h.remote_wrapper(r#"if [ "$2" = push ]; then
- REAL --git-dir="$HOME/declared upstream.git" update-ref refs/heads/integration/owned "$(cat "$HOME/new-head")" || exit $?
-fi"#);
+    h.remote_git("remote-lease");
     let plan = h.remote_plan("integration/owned");
     fs::write(h.root.join("payload"), "concurrent remote work").unwrap();
     let next = commit(&h.root);
@@ -285,13 +264,7 @@ fi"#);
 #[test]
 fn remote_cleanup_retains_failure_after_deletion_and_allows_observed_retry() {
     let h = Host::new("payload");
-    h.remote_wrapper(
-        r#"if [ "$2" = push ]; then
- REAL "$@" || exit $?
- printf '\377original post-delete failure\n' >&2
- exit 73
-fi"#,
-    );
+    h.remote_git("post-delete");
     let mut plan = h.remote_plan("integration/owned");
     let (code, r, _) = h.maintain("cleanup-remote", plan.clone());
     assert_ne!(code, 0);
@@ -319,14 +292,11 @@ fi"#,
 fn remote_cleanup_does_not_claim_success_after_target_or_plan_changes() {
     for fault in ["target", "plan"] {
         let h = Host::new("payload");
-        let body = if fault == "target" {
-            r#"REAL --git-dir="$HOME/declared upstream.git" update-ref refs/heads/dev "$(cat "$HOME/new-head")" || exit $?"#
+        h.remote_git(if fault == "target" {
+            "remote-target"
         } else {
-            r#"printf 'changed' > .chrono-harness/state/maintenance.json"#
-        };
-        h.remote_wrapper(&format!(
-            "if [ \"$2\" = push ]; then\n REAL \"$@\" || exit $?\n {body}\n exit 0\nfi"
-        ));
+            "remote-plan"
+        });
         let plan = h.remote_plan("feature/owned");
         fs::write(h.root.join("payload"), "next target").unwrap();
         let next = commit(&h.root);
