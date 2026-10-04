@@ -320,6 +320,18 @@ pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Res
             {
                 return Err("E_TEST_PAIR: nonreciprocal/shared dedicated pair".into());
             }
+            if r.projects()["schema_version"] == 2 {
+                let implementation = production["language"].as_str().unwrap();
+                let testing = test["language"].as_str().unwrap();
+                if implementation != testing && !(implementation == "shell" && testing == "python")
+                {
+                    return Err(format!(
+                        "E_TEST_LANGUAGE: {prefix}:{prod_id} declares {implementation:?}, \
+                         but its dedicated test {prefix}:{test_id} declares {testing:?}; \
+                         require the same language or the declared shell-to-python exception"
+                    ));
+                }
+            }
             if !edge(
                 &format!("{prefix}:{prod_id}"),
                 "test-execution",

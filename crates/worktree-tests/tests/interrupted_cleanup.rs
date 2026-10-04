@@ -1,4 +1,4 @@
-use super::automatic::consuming_operation;
+use super::automatic::{consuming_operation, native_consumer, native_git};
 use super::*;
 use std::{
     process::Stdio,
@@ -94,32 +94,9 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
 
 #[test]
 fn cache_disposal_checks_new_index_paths_after_immutable_tree_acquisition() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("tree-index-git");
-    fs::write(
-        &script,
-        format!(
-            r#"#!/bin/sh
-if [ -f "$HOME/stage-after-tree" ] && [ "$PWD" = "$HOME/tree-index" ] && [ "$2" = ls-tree ]; then
-    '{}' "$@" || exit $?
-    mkdir -p 'output λ'
-    printf source > 'output λ/staged-source'
-    '{}' add -f -- 'output λ/staged-source' || exit $?
-    exit 0
-fi
-exec '{}' "$@"
-"#,
-            real.display(),
-            real.display(),
-            real.display()
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(&h, "stage-after-tree", value!({}));
     let target = h.parent.join("tree-index");
     assert_eq!(h.invoke("feature", "tree-index", &target).0, 0);
     output(&target);
@@ -142,38 +119,9 @@ exec '{}' "$@"
 
 #[test]
 fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("identity-git");
-    fs::write(
-        &script,
-        format!(
-            r#"#!/bin/sh
-if [ -f "$HOME/identity-fault" ] && [ "$PWD" = "$HOME/observed" ] && [ "$2" = rev-parse ] && [ "$3" = --show-toplevel ] && [ "$4" = --git-common-dir ]; then
-    case "$(cat "$HOME/identity-fault")" in
-        truncated) printf '%s\n' "$PWD"; exit 0 ;;
-        malformed-head) printf '%s\n' "$PWD" "$HOME/source with spaces/.git" "$('{}' rev-parse --absolute-git-dir)" not-an-oid refs/heads/feature/observed; exit 0 ;;
-        foreign-common) printf '%s\n' "$PWD" "$HOME/foreign-common" "$('{}' rev-parse --absolute-git-dir)" "$('{}' rev-parse HEAD)" refs/heads/feature/observed; exit 0 ;;
-        foreign-branch) '{}' "$@" | /usr/bin/sed 's@refs/heads/feature/observed@refs/heads/feature/other@'; exit 0 ;;
-        foreign-metadata) '{}' "$@" | /usr/bin/sed "s@.*/worktrees/observed@$HOME/foreign-common@"; exit 0 ;;
-        failure) printf 'original identity failure\n' >&2; exit 71 ;;
-    esac
-fi
-exec '{}' "$@"
-"#,
-            real.display(),
-            real.display(),
-            real.display(),
-            real.display(),
-            real.display(),
-            real.display()
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(&h, "identity-fault", value!({}));
     let target = h.parent.join("observed");
     assert_eq!(h.invoke("feature", "observed", &target).0, 0);
     output(&target);
@@ -223,12 +171,19 @@ fn participating_check(h: &Host) {
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
 }
-fn install_inner(root: &Path, body: &str) {
-    use std::os::unix::fs::PermissionsExt;
+fn install_inner(root: &Path, stdout: &str, stderr: &str, exit: i32) {
     super::check_inputs::install(root);
-    let path = root.join(".chrono-harness/bin/inner-check");
-    fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    super::check_inputs::install_readonly_file(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer")),
+        "inner-check",
+    );
+    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        root.join(".chrono-harness/state/inner-check-response.json"),
+        serde_json::to_vec(&value!({"stdout":stdout,"stderr":stderr,"exit":exit})).unwrap(),
+    )
+    .unwrap();
 }
 #[test]
 fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
@@ -238,12 +193,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         h.kernel_cleanup();
         let target = h.parent.join("console");
         assert_eq!(h.invoke("feature", "console", &target).0, 0);
-        install_inner(
-            &target,
-            &format!(
-                "printf 'original stdout\\n'; printf 'original diagnostic\\n' >&2; exit {exit}\n"
-            ),
-        );
+        install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
         let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
@@ -286,7 +236,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     let h = Host::new("payload");
     participating_check(&h);
     h.kernel_cleanup();
-    consuming_operation(&h, "printf ordinary-work\n");
+    native_consumer(&h, "ordinary");
     let a = h.parent.join("drifted-a");
     let b = h.parent.join("valid-b");
     assert_eq!(h.invoke("feature", "drifted-a", &a).0, 0);
@@ -299,7 +249,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     let receipt_path = h.root.join(receipt["path"].as_str().unwrap());
     let original = fs::read(&receipt_path).unwrap();
     assert_eq!(sha256(&original), receipt["sha256"]);
-    install_inner(&b, "printf 'check warning\\n' >&2; printf checked\n");
+    install_inner(&b, "checked", "check warning\n", 0);
     let (code, used, error) = h.auto(
         "use",
         &["--path", b.to_str().unwrap(), "--operation", "use.consumer"],
@@ -344,10 +294,7 @@ fn await_file(path: &Path) {
 fn successful_use_without_finish_reclaims_caches_and_preserves_active_work() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ' .chrono-harness/state\nprintf rebuilt > 'output λ/cache'\nprintf evidence > .chrono-harness/state/evidence\n",
-    );
+    native_consumer(&h, "rebuild-evidence");
     let target = h.parent.join("resumable");
     assert_eq!(h.invoke("feature", "resumable", &target).0, 0);
     let (code, report, error) = h.auto(
@@ -542,6 +489,43 @@ impl CapturedChild {
             "CAPTURED_CHILD_WAIT_STATE {}",
             value!({"watched":watched,"processes":processes,"markers":markers})
         );
+        #[cfg(target_os = "macos")]
+        if let Some(trace) = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from) {
+            // Sampling starts only after the existing deadline has failed. It
+            // cannot turn that failure into success or supply a cleanup decision.
+            if trace.is_absolute() {
+                for row in processes
+                    .iter()
+                    .rev()
+                    .filter(|row| {
+                        row["state"]["stdout"]
+                            .as_str()
+                            .is_some_and(|s| s.contains("/.chrono-harness/bin/chrono-"))
+                    })
+                    .take(2)
+                {
+                    let pid = row["pid"].as_u64().unwrap().to_string();
+                    let path = trace.with_extension(format!("{pid}.sample.txt"));
+                    if path.exists() {
+                        continue;
+                    }
+                    let sampled = Command::new("/usr/bin/sample")
+                        .args([&pid, "1", "10", "-file"])
+                        .arg(&path)
+                        .output();
+                    let observation = match sampled {
+                        Ok(out) => {
+                            value!({"exit":out.status.code(),"stdout":String::from_utf8_lossy(&out.stdout),"stderr":String::from_utf8_lossy(&out.stderr)})
+                        }
+                        Err(error) => value!({"error":error.to_string()}),
+                    };
+                    eprintln!(
+                        "CAPTURED_CHILD_STACK {}",
+                        value!({"pid":pid,"path":path,"observation":observation})
+                    );
+                }
+            }
+        }
     }
     pub(super) fn await_file(&mut self, path: &Path) {
         let began = Instant::now();
@@ -616,15 +600,7 @@ fn reclaim(h: &Host, target: &Path) -> Value {
 fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        r#"mkdir -p .chrono-harness/state
-sh -c 'printf "%s" "$$" > .chrono-harness/state/grandchild; while [ ! -f .chrono-harness/state/release-grandchild ]; do sleep 0.02; done; printf done > .chrono-harness/state/grandchild-done' </dev/null >/dev/null 2>&1 &
-printf '%s' "$$" > .chrono-harness/state/parent
-while [ ! -f .chrono-harness/state/release-parent ]; do sleep 0.02; done
-printf done > .chrono-harness/state/parent-done
-"#,
-    );
+    native_consumer(&h, "parent");
     let target = h.parent.join("descendants");
     assert_eq!(h.invoke("feature", "descendants", &target).0, 0);
     output(&target);
@@ -673,10 +649,7 @@ printf done > .chrono-harness/state/parent-done
 fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/ready-$$\nwhile [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done\nprintf completed\n",
-    );
+    native_consumer(&h, "shared-holder");
     let target = h.parent.join("concurrent");
     assert_eq!(h.invoke("feature", "concurrent", &target).0, 0);
     output(&target);
@@ -737,14 +710,14 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
 
 #[test]
 fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish() {
-    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("cache-git");
-    fs::write(&script,format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-cache\" ] && [ ! -d \"$HOME/partial/output λ\" ]; then\nprintf interrupted > \"$HOME/cache-observed\"\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n",real.display())).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(
+        &h,
+        "cache-interrupt",
+        value!({"output":"partial/output λ","observed":"cache-observed"}),
+    );
     let target = h.parent.join("partial");
     assert_eq!(h.invoke("feature", "partial", &target).0, 0);
     output(&target);
@@ -794,14 +767,9 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
 
 #[test]
 fn cache_retries_reference_failed_and_partial_originals_without_growth() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("cache-git");
-    fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/fail-cache\" ] && [ ! -d \"$HOME/cache-retry/output λ\" ]; then\nprintf 'original cache failure\\n' >&2\nexit 71\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
+    native_git(&h, "cache-fail", value!({"output":"cache-retry/output λ"}));
     let target = h.parent.join("cache-retry");
     assert_eq!(h.invoke("feature", "cache-retry", &target).0, 0);
     fs::write(h.parent.join("fail-cache"), "fail after disposal").unwrap();
@@ -881,18 +849,15 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
 
 #[test]
 fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_source_commit() {
-    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
+    native_consumer(&h, "rebuild");
+    native_git(
         &h,
-        "mkdir -p 'output λ'; printf rebuilt > 'output λ/cache'\n",
+        "cache-interrupt",
+        value!({"output":"superseded/output λ"}),
     );
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let script = h.parent.join("supersession-git");
-    fs::write(&script, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-cache\" ] && [ ! -d \"$HOME/superseded/output λ\" ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", real.display())).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(script));
     let target = h.parent.join("superseded");
     assert_eq!(h.invoke("feature", "superseded", &target).0, 0);
     output(&target);
@@ -940,21 +905,14 @@ fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_sourc
 
 #[test]
 fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruption() {
-    use std::os::unix::{fs::PermissionsExt, process::ExitStatusExt};
+    use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ'; printf rebuilt > 'output λ/cache'\n",
-    );
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let program = h.parent.join("birth-git");
+    native_consumer(&h, "rebuild");
     let ledger = h
         .root
         .join(".chrono-harness/state/automatic-cleanup/ledger.json");
-    fs::write(&program, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-birth\" ] && [ -f '{}' ] && /usr/bin/grep -q '\"kind\": \"birth\"' '{}'; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", ledger.display(), ledger.display(), real.display())).unwrap();
-    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(program));
+    let fixture = native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
     let target = h.parent.join("unsealed");
     let interrupted = CapturedChild::spawn(
@@ -1003,7 +961,10 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
                 .as_bytes()
         )
     ));
-    fs::write(&program, format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-recovery\" ] && [ -f '{}' ]; then\nkill -KILL \"$PPID\"\nfi\nexec '{}' \"$@\"\n", recovery_path.display(), real.display())).unwrap();
+    let mut settings = json(&fs::read(&fixture).unwrap()).unwrap();
+    settings["mode"] = value!("recovery-interrupt");
+    settings["recovery"] = value!(recovery_path);
+    fs::write(&fixture, serde_json::to_vec(&settings).unwrap()).unwrap();
     fs::write(
         h.parent.join("interrupt-recovery"),
         "after durable reconciliation",
@@ -1138,10 +1099,7 @@ fn kernel_caches_preserve_staged_source_unknown_lease_drift_and_foreign_locks() 
 fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    consuming_operation(
-        &h,
-        "mkdir -p 'output λ'\nprintf rebuilt > 'output λ/cache'\nprintf original-error >&2\nexit 23\n",
-    );
+    native_consumer(&h, "rebuild-error");
     let target = h.parent.join("rearm");
     assert_eq!(h.invoke("feature", "rearm", &target).0, 0);
     for generation in [1, 2] {
@@ -1173,15 +1131,10 @@ fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
 
 #[test]
 fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let program = h.parent.join("admission-git");
-    fs::write(&program,format!("#!/bin/sh\nif [ -f \"$HOME/interrupt-admission\" ] && [ \"$2 $3\" = 'worktree add' ]; then\nprintf '%s' \"$$\" > \"$HOME/admission-holder\"\nexec >\"$HOME/git-mutation.stdout\" 2>\"$HOME/git-mutation.stderr\"\nkill -KILL \"$PPID\"\nwhile [ ! -f \"$HOME/release-mutation\" ]; do sleep 0.02; done\nfi\nexec '{}' \"$@\"\n",real.display())).unwrap();
-    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| p["git"]["program"] = value!(program));
-    h.hook("printf native > \"$HOME/native-hook\"\nwhile [ ! -f \"$HOME/release-hook\" ]; do sleep 0.02; done");
+    native_git(&h, "admission-interrupt", value!({}));
+    h.hook(value!({"writes":[{"path":h.parent.join("native-hook"),"contents":"native"}],"release":h.parent.join("release-hook")}));
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
     let mut start = CapturedChild::spawn(
@@ -1292,11 +1245,8 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         serde_json::to_vec_pretty(&cfg).unwrap(),
     )
     .unwrap();
-    let mut body = fs::read_to_string(h.root.join("context-judge.sh")).unwrap();
-    body=body.replace("exec /usr/bin/python3", "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/check-holder.tmp\nmv .chrono-harness/state/check-holder.tmp .chrono-harness/state/check-holder\nwhile [ ! -f .chrono-harness/state/check-release ]; do sleep 0.02; done\nexec /usr/bin/python3");
-    fs::write(h.root.join("context-judge.sh"), &body).unwrap();
     let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
-    judges["judges"][0]["sha256"] = value!(sha256(body.as_bytes()));
+    judges["judges"][0]["argv"] = value!(["hold"]);
     fs::write(
         h.root.join(JUDGES),
         serde_json::to_vec_pretty(&judges).unwrap(),
@@ -1571,36 +1521,10 @@ module.validate(root,Path(c))
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let preparation = r#"mkdir -p .chrono-harness/state/cargo-case/src
-cat > .chrono-harness/state/cargo-case/Cargo.toml <<'TOML'
-[package]
-name="lease-native-fixture"
-version="0.1.0"
-edition="2024"
-TOML
-cat > .chrono-harness/state/cargo-case/src/lib.rs <<'RUST'
-#[test]
-fn native_holder() {
-    std::env::set_current_dir(std::env::var("CHRONO_NATIVE_FIXTURE_ROOT").unwrap()).unwrap();
-    std::fs::write(".chrono-harness/state/native-pid", std::process::id().to_string()).unwrap();
-    std::fs::write(".chrono-harness/state/native-holder", std::env::var("CHRONO_PROCESS_FDS").expect("native capability carrier")).unwrap();
-    while !std::path::Path::new(".chrono-harness/state/native-release").exists() { std::thread::sleep(std::time::Duration::from_millis(10)); }
-    std::fs::write(".chrono-harness/state/native-done", "joined").unwrap();
-}
-RUST
-exec cargo test --offline --manifest-path .chrono-harness/state/cargo-case/Cargo.toml --no-run
-"#;
-    let body = r#"printf '%s' "$$" > .chrono-harness/state/cargo-wrapper
-export CHRONO_NATIVE_FIXTURE_ROOT="$PWD"
-exec cargo test --offline --manifest-path .chrono-harness/state/cargo-case/Cargo.toml -- --nocapture
-"#;
-    consuming_operation(&h, body);
+    super::automatic::native_consumer_actions(&h, "cargo-run", "cargo-prepare");
     // Compile under the separately registered fixture action, with the same
     // managed environment and process bounds as its later Cargo invocation.
     // The native-holder deadline measures launch/lease handoff after preparation.
-    fs::write(h.root.join("st.sh"), preparation).unwrap();
-    commit(&h.root);
-    git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("native-cargo");
     assert_eq!(h.invoke("feature", "native-cargo", &target).0, 0);
     let (code, prepared, error) = h.auto(
@@ -1779,7 +1703,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     reclaim(&h, &target);
     assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
-    install_inner(&target, "printf canonical-linked-check\n");
+    install_inner(&target, "canonical-linked-check", "", 0);
     let checked = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&target)
         .arg("check")

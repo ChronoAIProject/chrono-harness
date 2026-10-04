@@ -111,11 +111,13 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 混合语言宿主按生产单元分别配对。实现语言、测试语言及 Shell／Python 配对由宿主显式登记，配对判官核对这些声明与登记的测试入口，不按目录、扩展名、命令名或代码扫描推断语言及依赖。未登记语言、配对不符或观察到的实际执行不符须报错；声明核验不证明不存在隐藏的跨语言测试逻辑。此合同不要求宿主采用 Rust、特定目录结构或特定测试框架。
 
-本条是目标合同；现有跨语言测试夹具的迁移、语言登记与配对判官执法仍待实现，规范文字不代表当前机器门已启用。
+projects schema v2 要求每个 project／script 显式登记非空 `language`；projects 判官只核 DELTA 影响的专属配对，要求语言 ID 相同，唯一额外准入为生产 `shell`、测试 `python`。这两个保留 ID 由宿主显式选择，sh／bash 可登记为 `shell`；其它 ID 是不作推断、不归一化的字面值。schema v1 保留旧合同，不因升级二进制自动取得语言约束。
+
+配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓与示例的 v2 采用、跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
 ## 3. 登记格式与字段合同
 
-Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects/judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
+Config accepts explicit `schema_version: 1 | 2 | 3 | 4`; projects accept version 1 | 2 and judges use version 1, and current FILEMAP/workflow use version 2. Config v2/v3/v4 require a presence declaration for every external input; v1 retains its original digest-only meaning. Every registry retains `status: "proposed" | "active"`. The candidate reader supports fixed historical v1 data only through its explicit interpretation contract.
 当前五份均为 proposed；`config.enforcement` 为 `not-implemented`。
 启用前由 AI 对宿主定义的治理／输入范围作负责的 declared-complete 工程声明，补齐该范围的实际输入、依赖、绑定、两端快照、二进制 SHA-256 和全部必需判官，再改为 active/enabled。
 判官核验声明引用、身份、快照和观察到的操作；普通 full check 不要求证明所有隐藏输入不存在，也不要求 VM 或 OS 隔离。
@@ -846,7 +848,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 ## 14. Implementation boundaries
 
-§2.2 的同语言测试要求尚未完成登记与判官实现。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。现役 schema 与机器门尚未承载语言配对合同。
+§2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓与示例尚未采用 v2，helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
 §4.2、§7.1 与 §7.2 是新增目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，但尚未统一结构化日志与跨层异常链，也未在现役生成的检查／发布 CI 中采用持久的依赖、判官及增量编译缓存。现有 target、bin、名为 cache 的工件目录及原始 artifact 传输不满足这些新增合同。日志／异常记录、缓存登记与投影须由后续实现及显式迁移接入；本次 SPEC 更新不改变当前 schema、执行入口或声称这些验收已通过。具体待实现项同步见 docs/spec-coverage.md。
 
@@ -858,7 +860,7 @@ Release recipe v3 explicitly declares required Rust components and selects relea
 
 Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency and guarded retained-package/metadata validation; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
 
-The current FILEMAP v2 execution and workflow v2/v3 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2; projects/judges remain v1. Workflow v3 selects an explicitly registered host decoder by exact endpoint schema versions, including config v1→v2 compatibility with unchanged historical input semantics. It does not supply an automatic host config writer. Strict old v1 readers reject the new fields. The shipped host historical decoder remains chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
+The current FILEMAP v2 execution and workflow v2/v3 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2/v3/v4; projects support v1/v2 and judges use v1. Workflow v3 selects an explicitly registered host decoder by exact endpoint schema versions, including config v1→v2 compatibility with unchanged historical input semantics. It does not supply an automatic host config writer. Strict old v1 readers reject the new fields. The shipped host historical decoder remains chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
 
 Scoped judge-ci reuses routes planning and projects execution/receipt logic through an explicit adapter. Current host sequences live only in FILEMAP; historical v1 bindings remain decoder input. Scoped legacy selection/environment limitations remain labelled until full native CI replaces that consumer. ci still owns workflow generation and event preparation, and instructions remains independent. Bootstrap installs both new binaries and uses registered locked build actions with Rust 1.95.0. All costs remain unknown.
 

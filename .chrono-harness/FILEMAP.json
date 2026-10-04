@@ -1511,6 +1511,10 @@
         {
           "kind": "compile",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
         }
       ]
     },
@@ -4141,6 +4145,126 @@
         {
           "kind": "judge-trigger",
           "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/languages.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/languages.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/support/transport.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/context_judge.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/consumer.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/git_fault.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/hook.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/version_probe.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/native_cargo/Cargo.toml",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/native_cargo/src/lib.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
         }
       ]
     }

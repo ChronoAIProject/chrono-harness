@@ -1420,25 +1420,15 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
 
 #[test]
 fn short_transport_preserves_process_failure_before_decoding_partial_output() {
-    for (body, expected) in [
-        ("printf '{\\n'; exec /bin/sleep 8", "process timed out"),
-        (
-            "chunk=x; while [ ${#chunk} -lt 8192 ]; do chunk=$chunk$chunk; done; printf '%s\\n' \"$chunk\"",
-            "process output limit exceeded",
-        ),
+    for (mode, expected) in [
+        ("timeout-partial", "process timed out"),
+        ("output-limit", "process output limit exceeded"),
     ] {
         let mut h = ShortHost::new();
-        let path = ".chrono-harness/bin/bound-judge";
-        // Drain the request with buffered native IO, then emit the deliberate
-        // transport fault with shell builtins under the original one-second bound.
-        script(
-            &h.root,
-            path,
-            &format!("#!/bin/sh\n/bin/cat >/dev/null\n{body}\n"),
-        );
+        let path = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
         h.modify(".chrono-harness/ci/check.json", |config| {
             config["judge"]["program"] = json!(path);
-            config["judge"]["args"] = json!([]);
+            config["judge"]["args"] = json!([mode]);
             config["judge"]["timeout_seconds"] = json!(1);
             config["judge"]["output_limit_bytes"] = json!(4096);
         });

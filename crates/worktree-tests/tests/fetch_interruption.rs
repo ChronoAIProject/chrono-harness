@@ -71,7 +71,7 @@ impl Host {
 fn interrupted_fetch_cleans_ref_and_preserves_absent_or_partial_result() {
     for state in ["absent", "empty", "truncated", "reconstruct"] {
         let h = Host::new("payload");
-        h.interrupting_git("");
+        h.interrupting_git("none");
         if state != "reconstruct" {
             fs::write(h.root.join("payload"), b"unsaved source").unwrap();
         }
@@ -126,7 +126,7 @@ fn interrupted_fetch_cleans_ref_and_preserves_absent_or_partial_result() {
 #[test]
 fn interrupted_fetch_after_deletion_requires_explicit_absence_retry() {
     let h = Host::new("payload");
-    h.interrupting_git("");
+    h.interrupting_git("none");
     h.crash_fetch("update-ref --no-deref");
     let mut plan = h.interrupted_fetch_plan();
     assert_ne!(h.maintain("cleanup-fetch-interrupted", plan.clone()).0, 0);
@@ -151,7 +151,7 @@ fn interrupted_fetch_rejects_identity_drift_symbolic_refs_and_lost_retention() {
         "retention",
     ] {
         let h = Host::new("payload");
-        h.interrupting_git("");
+        h.interrupting_git("none");
         h.crash_fetch("fetch --no-tags");
         let (path, mut intent) = h.fetch_intent();
         let fetch_ref = intent["fetch_ref"].as_str().unwrap().to_string();
@@ -213,14 +213,7 @@ fn interrupted_fetch_terminal_result_requires_ordinary_receipt_cleanup() {
 #[test]
 fn interrupted_fetch_publication_collision_prevents_fetch() {
     let h = Host::new("payload");
-    h.interrupting_git(
-        r#"if [ "$2 $3" = 'worktree list' ]; then
- for result in .chrono-harness/state/worktrees/start-*.json; do
-  printf occupied > "$result.fetch-intent.json" || exit $?
- done
-fi
-if [ "$2" = fetch ]; then printf invoked > "$HOME/unexpected-fetch" || exit $?; fi"#,
-    );
+    h.interrupting_git("fetch-collision");
     let target = h.parent.join("absent destination");
     let (code, r, error) = h.invoke("integration", "collision", &target);
     assert_ne!(code, 0, "{r} {error}");
@@ -233,13 +226,7 @@ if [ "$2" = fetch ]; then printf invoked > "$HOME/unexpected-fetch" || exit $?; 
 #[test]
 fn interrupted_fetch_rechecks_original_evidence_after_removal() {
     let h = Host::new("payload");
-    h.interrupting_git(
-        r#"if [ -f "$HOME/change-result" ] && [ "$2 $3 $4" = 'update-ref --no-deref -d' ]; then
- REAL "$@" || exit $?
- printf changed > "$(cat "$HOME/change-result")" || exit $?
- exit 0
-fi"#,
-    );
+    h.interrupting_git("result-change");
     h.crash_fetch("fetch --no-tags");
     let (_, intent) = h.fetch_intent();
     let plan = h.interrupted_fetch_plan();
