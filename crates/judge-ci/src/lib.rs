@@ -56,6 +56,8 @@ pub struct Policy {
 }
 #[derive(Clone, Debug)]
 struct Snapshot {
+    registry: Value,
+    owner_nodes: BTreeMap<String, String>,
     files: BTreeMap<String, Value>,
     projects: BTreeMap<String, Value>,
     operations: BTreeMap<String, (String, String, Vec<String>)>,
@@ -197,8 +199,14 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
 fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
     let fm = json(&at(reader, root, oid, &p.filemap)?)?;
     let pr = json(&at(reader, root, oid, &p.projects)?)?;
-    if ![object!(1), object!(2)].contains(&fm["schema_version"]) || pr["schema_version"] != 1 {
+    if ![object!(1), object!(2)].contains(&fm["schema_version"])
+        || ![object!(1), object!(2)].contains(&pr["schema_version"])
+    {
         return Err("unsupported registry version".into());
+    }
+    // Legacy scoped v1 retains its original loose shape; v2 adopts the shared schema.
+    if pr["schema_version"] == 2 {
+        chrono_judge_registration::validate_projects(&pr)?;
     }
     let plans = if fm["schema_version"] == 2 {
         if !p.bindings.is_empty() {
@@ -237,6 +245,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         return Err("empty owner registry".into());
     }
     let mut projects = BTreeMap::new();
+    let mut owner_nodes = BTreeMap::new();
     let mut ops = BTreeMap::new();
     let mut nodes = BTreeSet::new();
     if let Some(config) = &p.registration_config {
@@ -281,6 +290,12 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             if projects.insert(name.to_owned(), entry.clone()).is_some() {
                 return Err(format!("duplicate project/script {name}"));
             }
+            let prefix = if pr["schema_version"] == 2 && collection == "scripts" {
+                "script"
+            } else {
+                "project"
+            };
+            owner_nodes.insert(name.to_owned(), format!("{prefix}:{name}"));
             nodes.insert(format!("script:{name}"));
             nodes.insert(format!("project:{name}"));
             for a in entry
@@ -443,6 +458,8 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     };
     let scheduling = chrono_judge_registration::execution::scheduling(&fm, &pr, &artifacts)?;
     let snapshot = Snapshot {
+        registry: pr,
+        owner_nodes,
         files,
         projects,
         operations: ops,
@@ -497,7 +514,7 @@ fn changed<T: PartialEq>(a: &BTreeMap<String, T>, b: &BTreeMap<String, T>) -> BT
 fn ci_impact(
     old: Option<&Snapshot>,
     new: &Snapshot,
-) -> (BTreeSet<String>, BTreeSet<String>, Value) {
+) -> (BTreeSet<String>, BTreeSet<String>, Value, BTreeSet<String>) {
     let paths = if let Some(old) = old {
         changed(&old.tree, &new.tree)
     } else {
@@ -510,7 +527,11 @@ fn ci_impact(
             seeds.insert(format!("file:{path}"));
         }
         for p in changed(&old.projects, &new.projects) {
-            seeds.insert(format!("project:{p}"));
+            for snapshot in [old, new] {
+                if let Some(node) = snapshot.owner_nodes.get(&p) {
+                    seeds.insert(node.clone());
+                }
+            }
         }
         for test in changed(&old.execute, &new.execute) {
             extras
@@ -521,7 +542,7 @@ fn ci_impact(
         for op in changed(&old.operations, &new.operations) {
             for s in [old, new] {
                 if let Some((owner, _, _)) = s.operations.get(&op) {
-                    seeds.insert(format!("project:{owner}"));
+                    seeds.insert(s.owner_nodes[owner].clone());
                 }
                 for (test, ops) in &s.policy.bindings {
                     if ops.contains(&op) {
@@ -662,7 +683,19 @@ fn ci_impact(
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
     let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
-    (paths, selected, explanation)
+    let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
+    if old.is_none() {
+        affected.extend(new.owner_nodes.values().cloned());
+    }
+    // Direct plan/tool selections also carry their explicitly registered test owner.
+    for (test, bindings) in chrono_judge_registration::execution::test_bindings(&new.registry)
+        .expect("snapshot validated test bindings")
+    {
+        if selected.contains(&test) {
+            affected.extend(bindings.into_iter().map(|binding| binding.owner));
+        }
+    }
+    (paths, selected, explanation, affected)
 }
 
 pub fn judge(req: &Request) -> Response {
@@ -1032,7 +1065,10 @@ fn inventory(
         Some(snapshot(reader, root, base, op)?)
     };
     let new = snapshot(reader, root, &req.candidate, p.clone())?;
-    let (paths, mut selected, selection_explanation) = ci_impact(old.as_ref(), &new);
+    let (paths, mut selected, selection_explanation, affected) = ci_impact(old.as_ref(), &new);
+    if new.registry["schema_version"] == 2 {
+        chrono_judge_projects::pair_declarations(&new.registry, &affected)?;
+    }
     let mut blocked = vec![];
     let mut removed = BTreeMap::new();
     let mut conversion = Value::Null;

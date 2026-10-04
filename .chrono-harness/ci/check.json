@@ -178,6 +178,12 @@
           "test:workflow-short"
         ],
         "report_path": ".chrono-harness/state/units/judge-workflow-short/check.json"
+      },
+      "workflow-inventory": {
+        "tests": [
+          "test:workflow-inventory-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/workflow-inventory/check.json"
       }
     },
     "shared_operations": {
@@ -299,11 +305,6 @@
         "judge-workflow-units"
       ],
       "fmt.judge-workflow-tests": [
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
-      "workflow.inventory-tests": [
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"

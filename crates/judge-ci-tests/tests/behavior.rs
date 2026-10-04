@@ -755,3 +755,174 @@ fn filemap_v2_plan_operations_additions_and_removals_keep_obligations() {
         }
     }
 }
+
+// These cases exercise declarations, using the existing external command fixture.
+fn language_host(scripts: bool, implementation: &str, testing: &str) -> Host {
+    let h = Host::new();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["schema_version"] = json!(2);
+        v["status"] = json!("active");
+        let rows = v["projects"].as_array_mut().unwrap();
+        rows[0]["actions"] =
+            json!({"build":{"operation":"build.lib","tool":"sh","argv":["check.sh"]}});
+        rows[0]["language"] = json!(implementation);
+        rows[1]["language"] = json!(testing);
+        rows[1]["tests_for"] = json!("lib");
+        if scripts {
+            rows[0]["path"] = json!("src.txt");
+            rows[0]["test_script"] = json!("suite");
+            rows[1]["path"] = json!("check.sh");
+            v["scripts"] = v["projects"].take();
+            v["projects"] = json!([]);
+        } else {
+            rows[0]["kind"] = json!("production");
+            rows[0]["test_project"] = json!("suite");
+            rows[1]["kind"] = json!("test");
+        }
+    });
+    if scripts {
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            for f in v["files"].as_array_mut().unwrap() {
+                if f["path"] == "src.txt" {
+                    f["edges"][0]["to"] = json!("script:lib");
+                }
+            }
+            v["project_edges"][0]["from"] = json!("script:lib");
+        });
+    }
+    h.commit();
+    h
+}
+
+#[test]
+fn v2_languages_accept_literal_ids_and_shell_python_for_projects_and_scripts() {
+    for scripts in [false, true] {
+        for (implementation, testing) in [("custom/λ", "custom/λ"), ("shell", "python")] {
+            let h = language_host(scripts, implementation, testing);
+            let b = h.head();
+            h.write("src.txt", "two");
+            let c = h.commit();
+            pass(&h.check(&b, &c));
+            assert_eq!(h.calls(), 1);
+        }
+    }
+}
+
+#[test]
+fn v2_languages_reject_mismatches_without_running_operations() {
+    for scripts in [false, true] {
+        for (implementation, testing) in [("rust", "python"), ("python", "shell"), ("Rust", "rust")]
+        {
+            let h = language_host(scripts, implementation, testing);
+            let b = h.head();
+            h.write("src.txt", "two");
+            let c = h.commit();
+            fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
+            assert_eq!(h.calls(), 0);
+        }
+    }
+}
+
+#[test]
+fn v2_languages_do_not_rejudge_unaffected_pairs() {
+    let h = language_host(false, "rust", "python");
+    let b = h.head();
+    h.write("doc.txt", "two");
+    let c = h.commit();
+    let r = h.check(&b, &c);
+    pass(&r);
+    assert_eq!(r.evidence["selected"], json!([]));
+    assert_eq!(h.calls(), 0);
+}
+
+#[test]
+fn v2_languages_metadata_only_change_selects_the_explicit_pair() {
+    for scripts in [false, true] {
+        let h = language_host(scripts, "shell", "shell");
+        let b = h.head();
+        h.change_registry(".chrono-harness/projects.json", |v| {
+            let key = if scripts { "scripts" } else { "projects" };
+            v[key][0]["language"] = json!("python");
+        });
+        let c = h.commit();
+        fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
+        assert_eq!(h.calls(), 0);
+    }
+}
+
+#[test]
+fn v2_languages_missing_empty_or_non_string_declarations_are_rejected() {
+    for scripts in [false, true] {
+        for language in [None, Some(json!("")), Some(json!(42))] {
+            let h = language_host(scripts, "shell", "shell");
+            let b = h.head();
+            h.change_registry(".chrono-harness/projects.json", |v| {
+                let key = if scripts { "scripts" } else { "projects" };
+                if let Some(language) = language {
+                    v[key][1]["language"] = language;
+                } else {
+                    v[key][1].as_object_mut().unwrap().remove("language");
+                }
+            });
+            let c = h.commit();
+            fail(&h.check(&b, &c), "language");
+            assert_eq!(h.calls(), 0);
+        }
+    }
+}
+
+#[test]
+fn v2_languages_selected_test_and_initial_adoption_validate_the_pair() {
+    let h = language_host(false, "rust", "python");
+    let b = h.head();
+    h.write("check.sh", "exit 0\n");
+    let c = h.commit();
+    fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
+    h.git(&["checkout", "--orphan", "initial"]);
+    let initial = h.commit();
+    fail(&judge(&h.request(None, &initial)), "E_TEST_LANGUAGE");
+    assert_eq!(h.calls(), 0);
+}
+
+#[test]
+fn v2_languages_require_reciprocal_dedicated_pairs() {
+    let h = language_host(false, "rust", "rust");
+    let b = h.head();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        v["projects"][1]["tests_for"] = json!("suite");
+    });
+    let c = h.commit();
+    fail(&h.check(&b, &c), "E_TEST_PAIR");
+    assert_eq!(h.calls(), 0);
+}
+
+#[test]
+fn v2_languages_valid_metadata_change_runs_project_and_script_obligations() {
+    for scripts in [false, true] {
+        let h = language_host(scripts, "shell", "shell");
+        let b = h.head();
+        h.change_registry(".chrono-harness/projects.json", |v| {
+            let key = if scripts { "scripts" } else { "projects" };
+            v[key][0]["language"] = json!("custom");
+            v[key][1]["language"] = json!("custom");
+        });
+        let c = h.commit();
+        let r = h.check(&b, &c);
+        pass(&r);
+        assert_eq!(r.evidence["selected"], json!(["test:suite"]));
+        assert_eq!(h.calls(), 1);
+    }
+}
+
+#[test]
+fn v2_languages_plan_only_selection_validates_registered_test_owner() {
+    let h = language_host(false, "rust", "python");
+    explicit_plans(&h);
+    let b = h.commit();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:suite"]["output_limit_bytes"] = json!(8192);
+    });
+    let c = h.commit();
+    fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
+    assert_eq!(h.calls(), 0);
+}

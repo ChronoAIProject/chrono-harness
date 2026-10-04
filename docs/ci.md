@@ -174,7 +174,7 @@ validate every proposed field's semantics.
 | schema | `chrono-ci-check/v1`, explicit Git-binding `chrono-ci-check/v2`, or independent-unit `chrono-ci-check/v3` (see [units](ci-units.md)) |
 | judge | `{program, args, env?, timeout_seconds, output_limit_bytes}`; explicit executable/interpreter plus argv; positive bounds, at most 64 MiB per captured stream |
 | report_path | Safe relative file beneath `.chrono-harness/state/`, also covered by a declared artifact directory |
-| policy.filemap / projects | Explicit relative paths; FILEMAP v1 historical/v2 current, projects v1; registry path migration across an enforced range is unsupported |
+| policy.filemap / projects | Explicit relative paths; FILEMAP v1 historical/v2 current, projects v1 historical/v2 with explicit languages; registry path migration across an enforced range is unsupported |
 | policy.tools | Tool ID → executable path or PATH command; legacy scoped resolution; current registration_config supplies actual version declarations; selected tools bind once per plan |
 | policy.bindings | Historical FILEMAP v1 only; current v2 rejects duplicate bindings and consumes FILEMAP.execution_plans |
 | policy.registration_config | Optional full config path; current host uses its candidate historical decoder and tool declarations |
@@ -184,6 +184,15 @@ validate every proposed field's semantics.
 | policy.required_inputs | Explicit regular tracked inputs required by this profile |
 | policy.adoption_base | Null or exact full base OID whose missing prior CI profile is deliberately accepted |
 | policy.operation_timeout_seconds / operation_output_limit_bytes | Positive legacy fallback operation process bounds |
+
+Projects schema v2 uses the registration owner's strict document schema. Scoped CI
+reuses the projects owner's reciprocal dedicated-pair and language checks for the
+DELTA-affected owners, including selected test groups and plan-only selections.
+Language-only metadata edits participate in impact; script identities use their
+explicit `script:` nodes. Equal literal language IDs and production `shell` with
+test `python` are accepted. Unrelated pairs are not rejudged. This checks declared
+languages, not file contents or hidden helpers. Legacy projects v1 keeps its
+existing scoped interpretation; adopting v2 does not enable full governance.
 
 Scoped v2 changes Git acquisition, preserving the selection, execution and
 operation-environment contracts below. Its explicit `facts_config` binds the Git

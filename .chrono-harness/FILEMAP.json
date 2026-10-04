@@ -3866,7 +3866,7 @@
     },
     {
       "path": ".chrono-harness/ci/workflow-inventory.py",
-      "owner": "judge-workflow-tests",
+      "owner": "workflow-inventory",
       "surface": "judge-policy",
       "cost": "unmeasured",
       "edges": [
@@ -3885,36 +3885,40 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-inventory-tests"
         }
       ]
     },
     {
       "path": ".chrono-harness/ci/workflow-inventory-tests.py",
-      "owner": "judge-workflow-tests",
+      "owner": "workflow-inventory-tests",
       "surface": "test",
       "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:judge-workflow-tests"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:workflow-units"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:workflow-short"
-        },
-        {
-          "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-inventory-tests"
         }
       ]
     },
     {
       "path": ".chrono-harness/ci/workflow-inventory.json",
-      "owner": "judge-workflow-tests",
+      "owner": "workflow-inventory",
       "surface": "judge-policy",
       "cost": "unmeasured",
       "edges": [
@@ -3929,6 +3933,10 @@
         {
           "kind": "test-execution",
           "to": "test:workflow-short"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
         }
       ]
     },
@@ -4073,6 +4081,14 @@
         {
           "kind": "test-execution",
           "to": "test:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory-tests"
         }
       ]
     },
@@ -6444,6 +6460,71 @@
       "from": "environment:CHRONO_CHECK_HANDOFF_TRACE",
       "kind": "runtime-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "from": "script:workflow-inventory",
+      "kind": "test-execution",
+      "to": "test:workflow-inventory-tests"
+    },
+    {
+      "from": "script:workflow-inventory-tests",
+      "kind": "test-execution",
+      "to": "test:workflow-inventory-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory-tests"
     }
   ],
   "test_costs": [
@@ -6517,6 +6598,10 @@
     },
     {
       "test": "workflow-short",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "workflow-inventory-tests",
       "cost": "unmeasured"
     }
   ],
@@ -6670,7 +6755,6 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "workflow.inventory-tests",
         "workflow.inventory",
         "test.workflow.core"
       ],
@@ -6751,7 +6835,6 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "workflow.inventory-tests",
         "workflow.inventory",
         "test.workflow.units"
       ],
@@ -6773,9 +6856,15 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "workflow.inventory-tests",
         "workflow.inventory",
         "test.workflow.short"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:workflow-inventory-tests": {
+      "operations": [
+        "workflow.inventory-tests"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -7147,12 +7236,8 @@
         ]
       },
       "workflow.inventory-tests": {
-        "resources": [
-          "workflow-test-inventory"
-        ],
-        "outputs": [
-          "crates/judge-workflow-tests/target/"
-        ]
+        "resources": [],
+        "outputs": []
       }
     }
   }
