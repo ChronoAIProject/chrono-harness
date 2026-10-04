@@ -23,6 +23,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 8 seven judges/mixed | partial | all seven bounded producers; W full-chain consumers | full host input closure and activation |
 | 9 report/cost | partial | runner `full.rs`; G `full_report_*`: all required fields, executable list with observed/configured distinction, findings and named-output sources, null/unresolved reasons, pass/warn/fail/error exits and legacy explicit stored/stdout agreement | complete toolchain/input coverage and optional measurements; declared cost reporting is implemented; bounded routes tools and projects test evidence are supplied; unknown or conflicting results do not establish complete governance |
 | 10 lifecycle | partial | W freshness and integration producer/consumer with completed reports; independent worktree producer and dedicated real Git tests cover fetched target creation, adopted policy, explicit reconstruction, conflict/failure preservation and registered recover/cleanup/cleanup-fetch, explicit leased remote retirement, retained-intent interrupted checkout and fetch consumers, and explicit metadata rebind without old receipts plus retained-intent continuation | AI reconciliation of conflicting/ambiguous recovery state and PR/merge/landing orchestration |
+| 10.1 automatic report/evidence cleanup | partial: existing cache-only lifecycle protection | registered artifact disposal, kernel leases and retained-input references protect current work and bound automatic retry embedding; main host still retains state/bin | producer-owned output inventory, bounded retention/budgets, explicit reference acquisition/release, deduplicated content, automatic evidence/fixture reclamation and legacy migration; ordinary-entry and interrupted/concurrent behavior remain pending |
 | 11 script/plugin | partial | direct argv external transport; R real Python child fixtures | plugin/full external closure; real script pairing and routes have bounded full-chain evidence |
 | 12 bootstrap/initial | partial | registered bootstrap; explicit root profile and candidate registration inventory with no fabricated base; public macOS arm64 host verifies generated v2 first push and ordinary DELTA | full source/toolchain provenance, cross-platform initial profiles and activation migration |
 | 13 acceptance | partial | row map below | all pending row obligations remain |
@@ -80,6 +81,16 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 44 incompatible compilation inputs | pending: SPEC §4.2 contract only | partition incompatible toolchain/target/profile/features/input domains and rebuild before use |
 | 45 missing/corrupt/unavailable cache | pending: SPEC §4.2 contract only | retain original error and same-entry recovery; real build/binding failure remains nonzero |
 | 46 concurrent jobs/reruns and later test failure | pending: SPEC §4.2 contract only | isolated live outputs, joined cache producers and truthful build/test/evidence states |
+| 47 released/expired successful report and fixture | pending: SPEC §10.1 contract only | normal entries reclaim without manual finish; retain bounded truthful result/disposal summaries |
+| 48 historical reference cycle without a retention root | pending: SPEC §10.1 contract only | explicit reference closure does not turn historical mutual references into permanent roots |
+| 49 duplicate reports/stdout/downloads | pending: SPEC §10.1 contract only | verify byte identity and share one content entity while preserving each operation and error relationship |
+| 50 failed/cancelled fixture and useful regression | pending: SPEC §10.1 contract only | preserve current recovery inputs and useful minimal regression data; reclaim released excess without rewriting failure |
+| 51 nested fixture SDK/compilation/incremental outputs | pending: SPEC §10.1 contract only | original producer enrolls outputs and lifecycle; state placement does not imply permanent retention |
+| 52 interrupted publication/disposal | pending: SPEC §10.1 contract only | normal-entry intent/lease recovery retains actual partial effects and unknown original outcomes |
+| 53 storage/count budget exceeded by protected work | pending: SPEC §10.1 contract only | preserve live/current roots, report actual usage/reasons and apply registered overflow behavior |
+| 54 new reference/identity drift/unjoined child during cleanup | pending: SPEC §10.1 contract only | synchronize publication/reference/disposal and immediately recheck exclusion and identity |
+| 55 disposed original with retained summary; repeated cleanup | pending: SPEC §10.1 contract only | explicit disposal fact and insufficient-evidence outcome; cleanup records themselves remain bounded |
+| 56 legacy oversized/unregistered/duplicate evidence | pending: SPEC §10.1 contract only | owner-led migration verifies original references and disposition; unknown objects remain visible and retained |
 
 The registered execution increment adds routes/projects, FILEMAP v2, retained endpoint inputs and the finite chrono-ci-check/v1 / FILEMAP v1 decoder. See [the execution contract and exact boundary](execution.md). Dedicated routes tests check ordered plans, actual argv/environment/tool bindings, receipt tampering, PATH shadow and byte replacement. Dedicated projects tests run the actual runner/registration/filemap/routes/projects chain on committed project/script hosts, cover exclusive pairs, manifest-free/custom-action hosts, explicit output isolation, retained input failures, real exits/effects, blocked dependents, docs nonexecution and mapped replacements. Its migration consumer uses real old repository registrations and actual ci.verify, including workflow drift and restoration. Existing test identities remain; the historical pseudo-script rejection reads the fixed old tree. Maintained regressions also cover retained inherited-environment changes through the full chain (including absent/empty, overridden and disconnected controls), registered intermediate workspace rejection before operations, both protocols' embedded invalid UTF-8, arbitrary operation bytes, and migration version failure diagnostics. The host interpreter binding is explicit macOS data; the failed original native run and the verified repaired native results are recorded in [CI documentation](ci.md).
 
@@ -514,6 +525,26 @@ and group results belong to their recorded source; native group checks, release
 platform checks/publication and full main/examples activation remain caller work.
 This changes product source and host policy together; the added validation cost is
 three inventory checks plus directly affected owner tests and exhaustive group runs.
+
+## Automatic report and evidence cleanup (target)
+
+SPEC §10.1 adds bounded automatic retention for reports, logs, fixtures, downloaded
+and extracted artifacts, caches and historical session records. New adoption must
+enable an explicit host policy. Producers own the output inventory; consumers
+explicitly acquire/release references and use protection. Current operation,
+recovery and delivery roles, useful retained work and finite retention windows
+define roots. Historical reference cycles do not keep every original forever.
+Normal entry/exit and interrupted-session recovery reuse existing natural owners
+and maintenance, rather than requiring manual deletion, a remembered finish,
+an idle scanner or a separate cleanup platform.
+
+This is a target contract, not a deployed retention change. The current cache-only
+policy retains state/bin; bounded automatic retry embedding does not implement
+content deduplication, reference retirement, storage/count budgets, fixture-output
+enrollment or automatic evidence reclamation. Legacy migration, live/concurrent
+consumer protection, truthful original/error retention and bounded cleanup
+records need their own behavioral verification before activation. The prior
+one-off disk inventory/compression is not implementation or acceptance evidence.
 
 ## Registered automatic lifecycle cleanup
 
