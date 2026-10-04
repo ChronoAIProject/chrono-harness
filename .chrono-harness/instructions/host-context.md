@@ -29,6 +29,8 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 详细历史与限定仍在可选 docs/ 下，来源／许可资料不是必读政策。指令生成不证明 AI 遵守或翻译等价；成本仍 unmeasured。Git 生命周期按当前任务授权，不从本文推断提交、推送或启用门已获授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
 
+本宿主默认主检出保持在 dev 并与登记远端 origin/dev 同步；所有任务改动、生成投影、暂存、提交及候选检查都在独立 worktree。开工前抓取固定远端 dev，从该提交创建工作树；主检出不提前合入、提交或推送候选。通过工作分支／PR 核远端实际落地后，再同步主检出的 dev；分叉、未保存工作或活动写入先保留协调，不覆盖。主宿主登记 state 的程序协调写入仍归现役生命周期 owner。产品默认与本宿主的 candidate.isolation 双语原子同时采用此约定，并经登记 generate 入口投影；验证成本为指令专属测试及受影响 DELTA／原生 CI，不以文本生成证明全程工作树隔离已被机器强制执行。
+
 本宿主现将同一个 judge-workflow-tests 项目显式绑定为 core、full_units、full_short 三个 test_groups／CI 单元；成员由当前 inventory 动态核定，原 test ID、生产／测试项目配对、未过滤 execute／release 操作、历史测试正文与限制保留。注册所有者统一解析组 ID、本项目 action 与终端操作；FILEMAP 完整登记各组边、计划、成本及共享前置。宿主 workflow-inventory guard 从真实未过滤／过滤 libtest 列表核非空、无忽略、互斥且全集相等；长期核当前集合，不冻结历史数量。当前变化同时含产品合同与宿主政策，验证成本包括受影响 owner 专属测试、三组完整执行及独立库存核验。原生时限充分性、发布平台／公开分发和 main/examples full 启用仍归调用方后续验证；本地通过不证明激活。
 
 本宿主在 worktree.json 显式采用 cleanup.json 的 automatic_cleanup。协调锚明确选择现有 Git owner inventory 的 main worktree；state 固定在该存活宿主的 .chrono-harness/state/automatic-cleanup/，不扫描同级目录。当前政策逐项采用已登记输出目录，保留 bin 与 state，默认仅回收已 finish 且无 managed use 的缓存，未解决证据不删除 checkout；不允许 finish 自行处置证据。调用方负责加入后台任务与实际落地，并从协调宿主运行固定 `.chrono-harness/bin/chrono-worktree finish --path <工作树>`；独立重试为 `.chrono-harness/bin/chrono-worktree maintain`，消费登记操作为 `.chrono-harness/bin/chrono-worktree use --operation <操作> --path <工作树>`。start/reconstruct 已接入同一 drain 与新生登记，不是定时空闲清理。旧工作树只按明确 `import --path <工作树>` 迁移；旧配置缺 automatic_cleanup 仍 opt-out。源与宿主政策同改，验证成本为 worktree owner 全套真实 Git 用例、受影响登记及指令生成／专属验证；落地与真实宿主 finish 事件仍由调用方交付。
