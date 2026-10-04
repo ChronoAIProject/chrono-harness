@@ -48,11 +48,7 @@ pub(super) fn install(root: &Path) {
         ("runner", "chrono-harness"),
         ("worktree", "chrono-worktree"),
     ] {
-        fs::copy(
-            source().join(format!("crates/{project}/target/debug/{name}")),
-            root.join(format!(".chrono-harness/bin/{name}")),
-        )
-        .unwrap();
+        install_readonly_executable(root, project, name);
     }
     fs::copy(
         root.join("context-judge.sh"),
@@ -64,6 +60,30 @@ pub(super) fn install(root: &Path) {
         fs::Permissions::from_mode(0o755),
     )
     .unwrap();
+}
+pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
+    let built = source().join(format!("crates/{project}/target/debug/{name}"));
+    let installed = root.join(format!(".chrono-harness/bin/{name}"));
+    // These fixtures execute but never modify product binaries. Reuse the built
+    // inode under each isolated host path without copying a new executable image.
+    // Fixtures that edit executable bytes or permissions must use a private copy.
+    match fs::hard_link(&built, &installed) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
+            // A joined child owns writable descriptors, so concurrent test forks
+            // cannot inherit a writable executable and cause ETXTBSY on Linux.
+            let copied = Command::new("/bin/cp")
+                .arg(&built)
+                .arg(&installed)
+                .output()
+                .unwrap();
+            assert!(
+                copied.status.success(),
+                "fixture executable copy: {copied:?}"
+            );
+        }
+        Err(error) => panic!("fixture executable {}: {error}", installed.display()),
+    }
 }
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     let head = git(root, &["rev-parse", "HEAD"]);

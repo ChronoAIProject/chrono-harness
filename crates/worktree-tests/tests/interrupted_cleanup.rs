@@ -1173,7 +1173,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     )
     .unwrap();
     let mut body = fs::read_to_string(h.root.join("context-judge.sh")).unwrap();
-    body=body.replace("exec /usr/bin/python3", "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/check-holder\nwhile [ ! -f .chrono-harness/state/check-release ]; do sleep 0.02; done\nexec /usr/bin/python3");
+    body=body.replace("exec /usr/bin/python3", "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/check-holder.tmp\nmv .chrono-harness/state/check-holder.tmp .chrono-harness/state/check-holder\nwhile [ ! -f .chrono-harness/state/check-release ]; do sleep 0.02; done\nexec /usr/bin/python3");
     fs::write(h.root.join("context-judge.sh"), &body).unwrap();
     let mut judges = json(&fs::read(h.root.join(JUDGES)).unwrap()).unwrap();
     judges["judges"][0]["sha256"] = value!(sha256(body.as_bytes()));
@@ -1577,11 +1577,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     fs::create_dir_all(h.root.join(".chrono-harness/bin")).unwrap();
-    fs::copy(
-        source().join("crates/worktree/target/debug/chrono-worktree"),
-        h.root.join(".chrono-harness/bin/chrono-worktree"),
-    )
-    .unwrap();
+    super::check_inputs::install_readonly_executable(&h.root, "worktree", "chrono-worktree");
     assert_eq!(
         fs::read_to_string(h.root.join(AUTO_POLICY)).unwrap().trim(),
         git(&h.root, &["show", &format!("HEAD:{AUTO_POLICY}")])
