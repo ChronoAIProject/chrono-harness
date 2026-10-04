@@ -238,10 +238,15 @@ impl Host {
             String::from_utf8_lossy(&out.stderr).into(),
         )
     }
-    fn hook(&self, body: &str) {
+    fn hook(&self, settings: Value) {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
-        fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        fs::copy(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"), &p).unwrap();
+        fs::write(
+            p.with_extension("json"),
+            serde_json::to_vec(&settings).unwrap(),
+        )
+        .unwrap();
         fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
     }
 }
@@ -523,17 +528,12 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
 
 #[test]
 fn registered_batch_failures_preserve_original_bytes_before_checkout_effects() {
-    use std::os::unix::fs::PermissionsExt;
     for (exit, output, expected) in [
         (71, "original partial", "Git cat-file exited 71"),
         (0, "malformed frame", "batch blob header mismatch"),
     ] {
         let h = Host::new("independent/data");
-        let real = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-        let program = h.parent.join("observed-git");
-        fs::write(&program, format!("#!/bin/sh\ncase \"$*\" in *' cat-file --batch') printf '{output}'; printf 'original batch diagnostic' >&2; exit {exit};; esac\nexec '{}' \"$@\"\n", real.display())).unwrap();
-        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
-        h.policy(|p| p["git"]["program"] = value!(program));
+        automatic::native_git(&h, "batch-failure", value!({"stdout":output,"exit":exit}));
         let target = h.parent.join("refused");
         let (code, report, error) = h.invoke("feature", "refused", &target);
         assert_ne!(code, 0, "{report} {error}");
@@ -906,7 +906,7 @@ fn retains_actual_failed_fetch_and_version_observations() {
 #[test]
 fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
     let h = Host::new("payload");
-    h.hook("echo recoverable > recovery-file\necho hook-failure >&2\nexit 37");
+    h.hook(value!({"writes":[{"path":"recovery-file","contents":"recoverable\n"}],"stderr":"hook-failure\n","exit":37}));
     let target = h.parent.join("target");
     let (code, r, _) = h.invoke("integration", "task", &target);
     assert_ne!(code, 0, "{r}");
@@ -929,7 +929,7 @@ fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
 #[test]
 fn successful_hook_with_dirty_checkout_cannot_report_created() {
     let h = Host::new("payload");
-    h.hook("echo changed > payload\nexit 0");
+    h.hook(value!({"writes":[{"path":"payload","contents":"changed\n"}]}));
     let target = h.parent.join("target");
     let (code, r, _) = h.invoke("feature", "task", &target);
     assert_ne!(code, 0, "{r}");
@@ -945,7 +945,7 @@ fn successful_hook_with_dirty_checkout_cannot_report_created() {
 fn raw_checkout_creation_rejects_hidden_mode_from_successful_hook() {
     let h = Host::new("payload");
     git(&h.root, &["config", "core.filemode", "false"]);
-    h.hook("chmod +x payload\nexit 0");
+    h.hook(value!({"executable":["payload"]}));
     let target = h.parent.join("hidden hook change");
     let (code, report, error) = h.invoke("feature", "hidden-hook", &target);
     assert_ne!(code, 0, "{report} {error}");
@@ -971,20 +971,10 @@ fn strict_cli_and_configuration_fail_without_creating_a_worktree() {
 
 #[test]
 fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
-    use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
-    let script = h.parent.join("wrong-git");
     let marker = h.parent.join("must-not-exist");
-    fs::write(
-        &script,
-        "#!/bin/sh\nprintf executed > \"$HOME/must-not-exist\"\n",
-    )
-    .unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
-    h.policy(|p| {
-        p["git"]["program"] = value!(script);
-        p["git"]["sha256"] = value!("0".repeat(64));
-    });
+    automatic::native_git(&h, "mark-executed", value!({}));
+    h.policy(|p| p["git"]["sha256"] = value!("0".repeat(64)));
     let (code, report, error) = h.invoke("feature", "task", &h.parent.join("target"));
     assert_ne!(code, 0);
     assert!(report.is_null());
@@ -1054,7 +1044,7 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
 #[test]
 fn registered_artifacts_from_checkout_hooks_are_preserved() {
     let h = Host::new("payload");
-    h.hook("mkdir -p .chrono-harness/state\necho generated > .chrono-harness/state/hook-result\n");
+    h.hook(value!({"writes":[{"path":".chrono-harness/state/hook-result","contents":"generated\n","create_parents":true}]}));
     let target = h.parent.join("target");
     let (code, report, error) = h.invoke("feature", "task", &target);
     assert_eq!(code, 0, "{report} {error}");
@@ -1382,7 +1372,7 @@ fn source_mutation_during_reconstruction_fails_and_preserves_recovery_work() {
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "old work").unwrap();
     let candidate = commit(&h.root);
-    h.hook("echo concurrent-work > \"$HOME/source with spaces/payload\"\n");
+    h.hook(value!({"writes":[{"path":h.parent.join("source with spaces/payload"),"contents":"concurrent-work\n"}]}));
     let (code, r, _) = h.reconstruct(
         reconstruction(
             &base,
