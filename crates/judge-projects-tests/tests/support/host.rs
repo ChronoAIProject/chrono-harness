@@ -2,9 +2,26 @@
 use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
-use std::{fs, process::Command};
+use std::{cell::RefCell, fs, path::Path, process::Command};
+struct CommandEvidence {
+    label: String,
+    binding: Value,
+    output: std::process::Output,
+}
+impl CommandEvidence {
+    fn write(&self, destination: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(destination)?;
+        fs::write(destination.join("stdout.bin"), &self.output.stdout)?;
+        fs::write(destination.join("stderr.bin"), &self.output.stderr)?;
+        fs::write(
+            destination.join("binding.json"),
+            serde_json::to_vec_pretty(&self.binding).map_err(std::io::Error::other)?,
+        )
+    }
+}
 pub struct Host {
     dir: tempfile::TempDir,
+    last_result: RefCell<Option<CommandEvidence>>,
     pub base: String,
     pub candidate: String,
     pub values: Values,
@@ -149,6 +166,7 @@ impl Host {
         let candidate = commit(&root);
         Self {
             dir,
+            last_result: RefCell::new(None),
             base,
             candidate,
             values: v,
@@ -225,24 +243,49 @@ impl Host {
         (out.status.code().unwrap(), v)
     }
     pub fn retain_command_result(&self, label: &str, out: &std::process::Output) {
+        let evidence = CommandEvidence {
+            label: label.into(),
+            binding: json!({
+                "root": self.root(), "base": self.base, "candidate": self.candidate,
+                "exit": out.status.code(), "status": out.status.to_string(), "joined": true,
+                "test": std::thread::current().name(), "label": label
+            }),
+            output: out.clone(),
+        };
         let Ok(directory) = std::env::var("CHRONO_FULL_TEST_RECEIPTS") else {
+            self.last_result.replace(Some(evidence));
             return;
         };
         static NUMBER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let number = NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let destination = std::path::Path::new(&directory)
             .join(format!("{}-{number}-{label}", std::process::id()));
-        fs::create_dir_all(&destination).unwrap();
-        fs::write(destination.join("stdout.bin"), &out.stdout).unwrap();
-        fs::write(destination.join("stderr.bin"), &out.stderr).unwrap();
-        fs::write(
-            destination.join("binding.json"),
-            serde_json::to_vec_pretty(&json!({
-                "root": self.root(), "base": self.base, "candidate": self.candidate,
-                "exit": out.status.code(), "status": out.status.to_string(), "joined": true
-            }))
-            .unwrap(),
-        )
-        .unwrap();
+        evidence.write(&destination).unwrap();
+    }
+}
+impl Drop for Host {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        let Some(evidence) = self.last_result.get_mut().take() else {
+            return;
+        };
+        let retained = (|| -> std::io::Result<_> {
+            let parent = source().join(".chrono-harness/state/test-failures");
+            fs::create_dir_all(&parent)?;
+            let destination = tempfile::Builder::new()
+                .prefix(&format!("{}-{}-", std::process::id(), evidence.label))
+                .tempdir_in(parent)?
+                .keep();
+            evidence.write(&destination)?;
+            Ok(destination)
+        })();
+        use std::io::Write;
+        let message = match retained {
+            Ok(path) => format!("original failed-test command evidence: {}", path.display()),
+            Err(error) => format!("failed to retain original test command evidence: {error}"),
+        };
+        let _ = writeln!(std::io::stderr().lock(), "{message}");
     }
 }
