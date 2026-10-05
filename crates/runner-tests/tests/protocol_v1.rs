@@ -1208,6 +1208,16 @@ fn delayed_monitor_helper() {
         timeout_seconds: 1,
         output_limit_bytes: 4096,
     };
+    // Complete this launcher's first owned process handoff before recording the
+    // short experiment's conservative start. The probe uses the same executable,
+    // ownership engine and bounds, and leaves no child or readiness marker.
+    let mut readiness = spec.clone();
+    readiness.args = vec!["exit".into(), "0".into()];
+    let ready = chrono_harness::run_process_observed(root, &readiness, &[], &digest).unwrap();
+    assert_eq!(ready.exit_code, 0, "{ready:?}");
+    assert!(ready.failure.is_none(), "{ready:?}");
+    assert!(ready.stdout_bytes.is_empty(), "{ready:?}");
+    assert!(ready.stderr_bytes.is_empty(), "{ready:?}");
     let mut now: libc::timespec = unsafe { std::mem::zeroed() };
     #[cfg(target_vendor = "apple")]
     let clock = libc::CLOCK_UPTIME_RAW;
