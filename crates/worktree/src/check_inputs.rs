@@ -125,7 +125,7 @@ fn produce(
             let (registrations, digest) =
                 start::registrations(r, root, &candidate, &req.host_config)?;
             start::registered_policy(&registrations, path, &r.config.report_directory)?;
-            start::cleanliness(r, root, registrations.config())?;
+            start::cleanliness_at(r, root, &candidate, registrations.config())?;
             let target_branch = registrations.workflow()["target_branch"]
                 .as_str()
                 .ok_or("local input target branch missing")?
@@ -287,7 +287,7 @@ fn produce(
             if r.oid(root, "HEAD")? != candidate {
                 return Err("HEAD advanced during local preparation".into());
             }
-            start::cleanliness(r, root, registrations.config())?;
+            start::cleanliness_at(r, root, &candidate, registrations.config())?;
             req.validate()?;
             report["registry_digest"] = json!(digest);
             report["base"] = json!(base);
