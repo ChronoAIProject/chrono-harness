@@ -771,6 +771,15 @@ fn run_process_inner(
             #[cfg(not(unix))]
             std::thread::park_timeout(Duration::from_millis(10));
         };
+        // Record the child's original terminal signal before cleanup can kill
+        // the owned group. Engine cancellation and bounds keep their own cause.
+        #[cfg(unix)]
+        if failure.is_none() {
+            use std::os::unix::process::ExitStatusExt;
+            if let Some(signal) = status.as_ref().and_then(ExitStatusExt::signal) {
+                failure = Some(format!("process terminated by signal {signal} (pid {pid})"));
+            }
+        }
         #[cfg(unix)]
         if !child.ownership.drain() {
             let original = failure
@@ -1273,7 +1282,15 @@ fn execute_check(
         judge.program = path.to_str().ok_or("judge path UTF-8")?.into();
         run_process_observed(&root, &judge, &input, &file_identity(&path)?.0)
     } else {
-        run_process(&root, &c.judge, &input)
+        // Preserve the legacy environment contract and retain original process
+        // evidence when an unprepared invocation fails after launch.
+        run_process_inner(
+            &root,
+            &c.judge,
+            &input,
+            None,
+            Duration::from_secs(c.judge.timeout_seconds),
+        )
     };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});

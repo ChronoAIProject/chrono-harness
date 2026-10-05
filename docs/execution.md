@@ -282,6 +282,15 @@ failure; dependent operations are reported blocked. Selected, executed, blocked,
 removed and replacement obligations remain separate. Candidate dirt is checked
 before and after operations.
 
+An observed Unix signal termination records its signal number and child PID in
+`failure`, while retaining the legacy `exit_code: -1` and original stream bytes.
+Prepared and explicit legacy check reports retain the launched process on failure.
+Transport reports that process failure before attempting response JSON decoding.
+Normal numeric exits keep their existing meaning; engine cancellation, timeout
+and output-limit failures retain their original cause instead of being
+reclassified by the cleanup signal. A signal observation does not identify who
+sent it or why.
+
 Projects validates affected reciprocal exclusive project/test and script/test
 pairs, explicit pair execution edges, registered file ownership and isolation of
 declared generated-output directories. A production project has registered files
