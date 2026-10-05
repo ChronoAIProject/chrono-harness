@@ -405,6 +405,44 @@ impl CapturedChild {
     }
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn record_wait_state(&self, watched: &Path) {
+        #[cfg(target_os = "macos")]
+        {
+            let load = Command::new("/usr/sbin/sysctl")
+                .args(["-n", "vm.loadavg"])
+                .output()
+                .map(|out| String::from_utf8_lossy(&out.stdout).into_owned());
+            let observed = Command::new("/bin/ps")
+                .args(["-axo", "pid,ppid,pcpu,pmem,comm"])
+                .output();
+            let mut rows = Vec::new();
+            if let Ok(out) = &observed {
+                for line in String::from_utf8_lossy(&out.stdout).lines().skip(1) {
+                    let fields: Vec<_> = line.split_whitespace().collect();
+                    if fields.len() < 5 {
+                        continue;
+                    }
+                    let cpu = fields[2].parse::<f64>().unwrap_or_default();
+                    let command = fields[4..].join(" ");
+                    let name = Path::new(&command).file_name().unwrap().to_string_lossy();
+                    rows.push((
+                        cpu,
+                        value!({"pid":fields[0],"ppid":fields[1],
+                        "cpu_percent":cpu,"memory_percent":fields[3],"program":name}),
+                    ));
+                }
+            }
+            rows.sort_by(|a, b| b.0.total_cmp(&a.0));
+            rows.truncate(16);
+            eprintln!(
+                "CAPTURED_HOST_RESOURCES {}",
+                value!({
+                    "at_unix_ns":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos().to_string(),
+                    "load":load.map_err(|e|e.to_string()),
+                    "ps_exit":observed.as_ref().ok().and_then(|out|out.status.code()),
+                    "top_cpu":rows.into_iter().map(|(_,row)|row).collect::<Vec<_>>()
+                })
+            );
+        }
         // Observe this fixture's declared child before teardown. These reads are
         // failure diagnostics, never a cleanup or completion decision.
         let mut pending = vec![self.child.id()];
