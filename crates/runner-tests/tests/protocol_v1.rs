@@ -1482,6 +1482,7 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
         });
     }
     let out = command.output().unwrap();
+    eprintln!("isolated helper stdout={} stderr={}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     assert!(
         out.status.success(),
         "{} {}",
@@ -1518,6 +1519,7 @@ fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget()
     )
     .unwrap();
     assert!(result.ownership_fds.is_some(), "{result:?}");
+    eprintln!("owned helper stdout={} stderr={}", result.stdout, result.stderr);
     assert!(result.failure.is_none(), "{result:?}");
     assert_eq!(result.exit_code, 0, "{result:?}");
     assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");

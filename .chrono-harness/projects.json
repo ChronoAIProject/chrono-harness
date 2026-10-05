@@ -124,7 +124,13 @@
             "test",
             "--locked",
             "--manifest-path",
-            "crates/runner-tests/Cargo.toml"
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "protocol_v1",
+            "fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget",
+            "--",
+            "--exact",
+            "--nocapture"
           ]
         }
       }

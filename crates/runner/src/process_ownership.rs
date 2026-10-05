@@ -659,6 +659,8 @@ impl ExitObserver {
             .spawn(move || {
                 let shared = unsafe { &*(memory as *const Shared) };
                 let mut wake = BTreeMap::new();
+                let diagnostic = std::env::var_os("CHRONO_FAILED_HANDOFF").is_some();
+                let mut emitted = false;
                 while !stopping.load(Ordering::Acquire) {
                     // Receive only explicit launch handoffs. The reply descriptor is
                     // specific to this child, so sibling registrations cannot steal it.
@@ -675,6 +677,12 @@ impl ExitObserver {
                         msg.msg_control = control.as_mut_ptr().cast();
                         msg.msg_controllen = std::mem::size_of_val(&control) as _;
                         let n = unsafe { libc::recvmsg(receiver.as_raw_fd(), &mut msg, 0) };
+                        let received_error = std::io::Error::last_os_error();
+                        if diagnostic && !emitted && (n >= 0 || received_error.raw_os_error() != Some(libc::EAGAIN)) {
+                            emitted = true;
+                            let occupied: Vec<_> = (190..220).filter(|fd| unsafe { libc::fcntl(*fd, libc::F_GETFD) } >= 0).collect();
+                            eprintln!("handoff diagnostic recv={n} errno={:?} flags={} control={} data={data:?} occupied={occupied:?}", received_error.raw_os_error(), msg.msg_flags, msg.msg_controllen);
+                        }
                         if n < 0 {
                             break;
                         }
