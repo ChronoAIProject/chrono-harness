@@ -2918,6 +2918,18 @@
       ]
     },
     {
+      "path": ".chrono-harness/tests/worktree-tools.json",
+      "owner": "worktree-tests",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree-tests/tests/creation.rs",
       "owner": "worktree-tests",
       "surface": "test",

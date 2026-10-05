@@ -2,7 +2,7 @@ use super::*;
 use chrono_harness::prepared::{self, InputRequest, PreparedCheck, Selection};
 
 pub(super) fn bind(h: &Host) {
-    let git_bin = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let git_bin = fixture_git();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     cfg["schema_version"] = value!(4);

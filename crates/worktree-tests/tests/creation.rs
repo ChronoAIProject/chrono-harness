@@ -12,6 +12,16 @@ const POLICY: &str = ".chrono-harness/worktree.json";
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
+fn fixture_git() -> PathBuf {
+    let registry = source().join(".chrono-harness/tests/worktree-tools.json");
+    let tools = json(&fs::read(&registry).expect("registered worktree test tools")).unwrap();
+    assert_eq!(tools["schema"], "chrono-worktree-test-tools/v1");
+    let program = tools["platforms"][platform()]["git"]
+        .as_str()
+        .expect("Git must be explicitly registered for this test platform");
+    assert!(Path::new(program).is_absolute());
+    chrono_harness::resolve_program(&source(), program, None).unwrap()
+}
 mod automatic;
 mod check_inputs;
 mod interrupted_cleanup;
@@ -133,7 +143,7 @@ impl Host {
             "literal host input; no dependency inference\n",
         )
         .unwrap();
-        let policy = value!({"schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"warehouse","git":{"program":"git","expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{"HOME":parent,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null","GIT_TERMINAL_PROMPT":"0"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"});
+        let policy = value!({"schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"warehouse","git":{"program":fixture_git(),"expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{"HOME":parent,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null","GIT_TERMINAL_PROMPT":"0"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"});
         fs::write(
             root.join(POLICY),
             serde_json::to_vec_pretty(&policy).unwrap(),
@@ -261,7 +271,7 @@ fn select_config(root: &Path, target: &str) {
     let old = entry["platforms"][platform()].as_str().unwrap_or(CONFIG);
     let mut config = json(&fs::read(root.join(old)).unwrap()).unwrap();
     if config["schema_version"] != 3 {
-        let git = chrono_harness::resolve_program(root, "git", None).unwrap();
+        let git = fixture_git();
         let version = Command::new(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
         config["schema_version"] = value!(3);
