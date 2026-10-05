@@ -4315,6 +4315,18 @@
           "to": "project:judge-workflow-tests"
         }
       ]
+    },
+    {
+      "path": "crates/ci-tests/tests/support/provider.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

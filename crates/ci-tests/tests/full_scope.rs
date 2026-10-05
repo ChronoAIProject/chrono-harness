@@ -66,10 +66,10 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
         let root = d.path();
         let mut c = scoped_config(&scope);
         c.runner = "$CHRONO_BASE".into();
-        fs::write(root.join(&c.runner), "#!/bin/sh\nprintf '%s\\n' \"$@\"\nprintf '\\377scope-consumer-failure' >&2\nexit 23\n").unwrap();
-        fs::set_permissions(root.join(&c.runner), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::copy(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), root.join(&c.runner)).unwrap();
         let yaml = full::render(&c, SOURCE).unwrap();
         let out = Command::new("/bin/bash").current_dir(root).env("PATH", root)
+            .env("CHRONO_TEST_RECORDING", "scope")
             .env("CHRONO_BASE", "base fixed").env("CHRONO_CANDIDATE", "candidate fixed")
             .args(["-e", "-c", &script(&yaml, "Canonical full harness check")]).output().unwrap();
         assert_eq!(out.status.code(), Some(23));
