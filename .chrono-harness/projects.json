@@ -38,7 +38,9 @@
     "workflow-inventory",
     "workflow-inventory-tests",
     "release-build",
-    "release-build-tests"
+    "release-build-tests",
+    "diagnostics",
+    "diagnostics-tests"
   ],
   "projects": [
     {
@@ -1706,6 +1708,100 @@
         "release-build-tests": "unit_tests",
         "release-build-integration": "integration_test"
       }
+    },
+    {
+      "id": "diagnostics",
+      "kind": "production",
+      "manifest": "crates/diagnostics/Cargo.toml",
+      "lockfile": "crates/diagnostics/Cargo.lock",
+      "root": "crates/diagnostics",
+      "actions": {
+        "build": {
+          "operation": "build.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "diagnostics-tests",
+      "language": "rust"
+    },
+    {
+      "id": "diagnostics-tests",
+      "kind": "test",
+      "manifest": "crates/diagnostics-tests/Cargo.toml",
+      "lockfile": "crates/diagnostics-tests/Cargo.lock",
+      "root": "crates/diagnostics-tests",
+      "actions": {
+        "build": {
+          "operation": "build.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "diagnostics",
+      "language": "rust"
     }
   ],
   "scripts": [

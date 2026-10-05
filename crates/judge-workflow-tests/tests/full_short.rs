@@ -191,6 +191,7 @@ fn adopt_short_host(
         &[
             "clone",
             "--bare",
+            "--no-local",
             "-q",
             root.to_str().unwrap(),
             remote.to_str().unwrap(),

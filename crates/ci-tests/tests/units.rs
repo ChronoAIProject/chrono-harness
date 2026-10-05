@@ -770,9 +770,18 @@ fn download_recovery_shares_original_time_and_output_budgets() {
             _ => data["second_http_status"] = json!(401),
         }
         fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
-        assert!(!gather_cli(host.path()).status.success(), "{mode}");
+        let result = gather_cli(host.path());
+        assert!(!result.status.success(), "{mode}");
         let report = gathered(host.path());
         let attempts = alpha_downloads(&report);
+        if attempts.len() != expected_attempts {
+            retain_command_result(
+                host.path(),
+                &["gather".into()],
+                &json!({"case":mode,"expected_attempts":expected_attempts}),
+                &result,
+            );
+        }
         assert_eq!(
             attempts.len(),
             expected_attempts,

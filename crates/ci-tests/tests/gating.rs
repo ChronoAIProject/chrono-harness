@@ -657,7 +657,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         &root,
         &["clone", "-q", "--no-checkout", "--depth=2", &remote, "."],
     );
-    let before = Command::new("git")
+    let before = Command::new(fixture_git())
         .current_dir(&root)
         .args(["cat-file", "-e", &format!("{}^{{commit}}", h.host.base)])
         .status()
@@ -675,7 +675,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         PROVIDER,
         ".github/workflows/collection.yml",
     ] {
-        let bytes = Command::new("git")
+        let bytes = Command::new(fixture_git())
             .current_dir(&root)
             .args(["show", &format!("HEAD:{path}")])
             .output()
@@ -1032,7 +1032,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         root.join(".chrono-harness/bin/chrono-worktree"),
     )
     .unwrap();
-    let git_bin = chrono_harness::resolve_program(&root, "git", None).unwrap();
+    let git_bin = fixture_git();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg: Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/config.json")).unwrap())
@@ -1095,9 +1095,17 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         .command(&["check", "--collect"], &initial, &initial_needs)
         .output()
         .unwrap();
+    retain_command_result(
+        &h.host.root,
+        &["check".into(), "--collect".into()],
+        &json!({"detection":initial,"needs":initial_needs}),
+        &out,
+    );
     assert!(
         out.status.success(),
-        "{}",
+        "status {}; stdout {}; stderr {}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
     h.payload["before"] = json!(h.host.base);
@@ -1412,7 +1420,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     let original = git(&source, &["rev-parse", "HEAD"]);
     // Fixed baseline data is exported; no other branch or active worktree is read.
     let dir = tempfile::tempdir().unwrap();
-    let archive = Command::new("git")
+    let archive = Command::new(fixture_git())
         .current_dir(&source)
         .args(["archive", &original])
         .output()
@@ -1474,7 +1482,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     }
     // The copied registration belongs to the source host. This fixture owns
     // its actual Git invocation and binds it before fixing the candidate.
-    let program = chrono_harness::resolve_program(dir.path(), "git", None).unwrap();
+    let program = fixture_git();
     let version = Command::new(&program).arg("--version").output().unwrap();
     assert!(version.status.success());
     let config_path = ".chrono-harness/config.json";

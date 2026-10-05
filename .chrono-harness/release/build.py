@@ -203,6 +203,96 @@ def retain_failure_evidence(output, phase, stdout, stderr):
             'bytes': used, 'bound_bytes': EVIDENCE_BOUND}
 
 
+def failure_evidence_plan(root, cfg, staging):
+    if 'failure_evidence' not in cfg:
+        return {}
+    declaration = cfg['failure_evidence']
+    if cfg['schema'] != 'chrono-release-build/v5' or not isinstance(declaration, dict):
+        raise ValueError('failure evidence requires a v5 operation-to-directory mapping')
+    if not declaration:
+        return declaration
+    artifacts = json_file(plain_path(root, staging['host_config']))['artifacts']
+    for operation, directories in declaration.items():
+        if operation not in cfg['verification_operations'] or not isinstance(directories, list) or not directories:
+            raise ValueError('failure evidence needs a registered verification and directory list')
+        selected = []
+        for directory in directories:
+            if not isinstance(directory, str) or not directory.endswith('/') or '\0' in directory:
+                raise ValueError('failure evidence needs literal relative directories ending in /')
+            relative = directory[:-1]
+            try:
+                plain_path(root, relative)
+            except (ValueError, OSError) as error:
+                raise ValueError('invalid failure evidence directory: ' + directory) from error
+            owners = [a for a in artifacts if a['path'].endswith('/') and directory.startswith(a['path'])]
+            if len(owners) != 1 or owners[0]['tracked'] is not False:
+                raise ValueError('failure evidence needs one declared untracked artifact owner')
+            if any(overlaps(relative, other) for other in selected):
+                raise ValueError('failure evidence directories must not overlap')
+            selected.append(relative)
+    return declaration
+
+
+def retain_registered_failure_evidence(root, output, phase, directories, bound):
+    root, output = root.resolve(strict=True), output.resolve(strict=True)
+    sources, files, used = [], [], 0
+    destination = output / 'failure-evidence' / 'registered' / phase
+    record = None
+    try:
+        for directory in directories:
+            source = plain_path(root, directory[:-1])
+            try:
+                info = source.lstat()
+            except FileNotFoundError:
+                sources.append({'source': directory, 'status': 'absent'})
+                continue
+            if not stat.S_ISDIR(info.st_mode):
+                sources.append({'source': directory, 'status': 'unavailable', 'reason': 'not a regular directory'})
+                continue
+            sources.append({'source': directory, 'status': 'observed'})
+            pending = [source]
+            while pending:
+                current = pending.pop()
+                relative = current.relative_to(root).as_posix()
+                info = current.lstat()
+                if stat.S_ISDIR(info.st_mode):
+                    pending.extend(sorted(current.iterdir(), reverse=True))
+                    continue
+                record = {'source': relative, 'status': 'omitted'}
+                if not stat.S_ISREG(info.st_mode) or current.resolve() != current:
+                    record['reason'] = 'not a regular retained file'
+                elif info.st_size > bound - used:
+                    record.update(reason='bounded evidence limit', bytes=info.st_size)
+                else:
+                    with current.open('rb') as stream:
+                        raw = stream.read(bound - used + 1)
+                        after = os.fstat(stream.fileno())
+                    if (len(raw) != info.st_size or
+                            (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns) !=
+                            (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)):
+                        record.update(reason='source changed during retention', bytes=len(raw))
+                    else:
+                        target = destination / relative
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        with target.open('xb') as stream:
+                            if stream.write(raw) != len(raw):
+                                raise OSError('short registered failure evidence write')
+                        used += len(raw)
+                        record.update(status='retained', path=target.relative_to(output).as_posix(),
+                                      bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+                files.append(record)
+    except (OSError, ValueError) as error:
+        if record is not None and record not in files:
+            record.update(status='unavailable', reason=str(error))
+            files.append(record)
+        partial = any(row['status'] == 'retained' for row in files)
+        return ({'status': 'partial' if partial else 'unavailable', 'reason': str(error),
+                 'sources': sources, 'files': files, 'bytes': used, 'bound_bytes': bound}, error)
+    complete = all(row['status'] in ('observed', 'absent') for row in sources) and all(row['status'] == 'retained' for row in files)
+    return ({'status': 'retained' if complete else 'partial', 'sources': sources,
+             'files': files, 'bytes': used, 'bound_bytes': bound}, None)
+
+
 def preflight(root, required_tools=None, required_manifests=None):
     cfg = json_file(root / '.chrono-harness/release/build.json')
     if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3', 'chrono-release-build/v4', 'chrono-release-build/v5'):
@@ -250,7 +340,9 @@ def preflight(root, required_tools=None, required_manifests=None):
         if not isinstance(argv, list) or any(not isinstance(a, str) or '\0' in a for a in argv):
             raise ValueError('invalid operation argv: ' + operation)
         operations.append((operation, action['tool'], [tools.get(action['tool'], cfg['tools'][action['tool']]), *argv]))
-    return cfg, tools, operations, staging_plan(root, cfg)
+    staging = staging_plan(root, cfg)
+    failure_evidence_plan(root, cfg, staging)
+    return cfg, tools, operations, staging
 
 
 def legacy_main(root, output):
@@ -397,6 +489,7 @@ def write_json(file, value):
 def units_plan(root, cfg, operations, staging):
     if cfg['schema'] not in ('chrono-release-build/v4', 'chrono-release-build/v5'):
         raise ValueError('independent scopes require release build v4 or v5')
+    failure_evidence_plan(root, cfg, staging)
     plan = json_file(path(root, staging['release_plan']))
     units = cfg['units']
     builds, tests, ids, directories = {}, {}, set(), []
@@ -519,6 +612,18 @@ class UnitExecution:
                 auxiliary_errors.append(('native marker retention', error))
             if nested is not None:
                 record['failure_evidence'] = nested
+            directories = self.cfg.get('failure_evidence', {}).get(operation, [])
+            if directories:
+                try:
+                    remaining = EVIDENCE_BOUND - (nested or {}).get('bytes', 0)
+                    registered, retention_error = retain_registered_failure_evidence(
+                        self.root, self.output, phase, directories, remaining)
+                    if retention_error is not None:
+                        auxiliary_errors.append(('registered failure evidence', retention_error))
+                except (OSError, UnicodeError, ValueError) as error:
+                    registered = {'status': 'unavailable', 'reason': str(error)}
+                    auxiliary_errors.append(('registered failure evidence', error))
+                record['registered_failure_evidence'] = registered
         for component, error in auxiliary_errors:
             self.secondary_failure(component, error)
         if original is not None:
