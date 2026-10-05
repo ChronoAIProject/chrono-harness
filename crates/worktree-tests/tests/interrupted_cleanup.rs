@@ -1242,6 +1242,8 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         assert!(path.is_absolute());
         cfg["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path);
         h.policy(|p| p["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path));
+        cfg["environment"]["values"]["CHRONO_CHECK_HANDOFF_TRACE"] = value!(path);
+        h.policy(|p| p["environment"]["values"]["CHRONO_CHECK_HANDOFF_TRACE"] = value!(path));
     }
     cfg["canonical_check"]["participation"] =
         value!({"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]});
@@ -1435,6 +1437,13 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
     for route in ["bootstrap", "workflow-inventory", "scoped-v1-tests"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
+        if let Some(path) = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from) {
+            assert!(path.is_absolute());
+            h.policy(|p| {
+                p["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path);
+                p["environment"]["values"]["CHRONO_CHECK_HANDOFF_TRACE"] = value!(path);
+            });
+        }
         let script = if route == "scoped-v1-tests" {
             source().join(".chrono-harness/migrations/scoped-v1-tests.py")
         } else {
@@ -1609,6 +1618,13 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     let h = Host::new("payload");
     participating_check(&h);
     h.kernel_cleanup();
+    if let Some(path) = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from) {
+        assert!(path.is_absolute());
+        h.policy(|p| {
+            p["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path);
+            p["environment"]["values"]["CHRONO_CHECK_HANDOFF_TRACE"] = value!(path);
+        });
+    }
     super::automatic::native_consumer_actions(&h, "noop", "bootstrap-holder");
     let ci = h.root.join(".chrono-harness/ci");
     fs::create_dir_all(&ci).unwrap();
