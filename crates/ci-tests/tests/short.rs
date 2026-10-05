@@ -365,9 +365,12 @@ impl Drop for ShortHost {
         if !std::thread::panicking() {
             return;
         }
-        let Some(directory) = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY") else {
-            return;
-        };
+        let directory = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.chrono-harness/state/ci-test-failures")
+            });
         fn copy(source: &Path, destination: &Path) -> std::io::Result<()> {
             fs::create_dir_all(destination)?;
             for entry in fs::read_dir(source)? {
@@ -381,13 +384,51 @@ impl Drop for ShortHost {
             }
             Ok(())
         }
-        let target =
-            PathBuf::from(directory).join(sha256(self.root.as_os_str().as_encoded_bytes()));
+        let target = directory.join(sha256(self.root.as_os_str().as_encoded_bytes()));
         match copy(&self.root.join(".chrono-harness/state"), &target) {
             Ok(()) => eprintln!("Original failed fixture reports: {}", target.display()),
             Err(error) => eprintln!("Failed fixture report retention failed: {error}"),
         }
     }
+}
+
+#[test]
+fn failed_short_fixture_retains_original_state_before_removing_host() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("failed fixture");
+    let original = b"{\"failure\":\"timeout\",\"raw\":[255,0,10]}\n";
+    let report = ".chrono-harness/state/preparation/acquisition.json";
+    fs::create_dir_all(root.join(".chrono-harness/state/preparation")).unwrap();
+    fs::write(root.join(report), original).unwrap();
+    let evidence = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.chrono-harness/state/ci-test-failures")
+        })
+        .join(sha256(root.as_os_str().as_encoded_bytes()));
+    assert!(!evidence.exists());
+    let host = ShortHost {
+        _dir: directory,
+        root: root.clone(),
+        remote: root.join("remote"),
+        base: String::new(),
+        candidate: String::new(),
+    };
+    let failed = std::panic::catch_unwind(move || {
+        let _host = host;
+        panic!("fixture consumer failed before reading its original report");
+    });
+    assert!(failed.is_err());
+    assert!(
+        !root.exists(),
+        "fixture teardown must still remove the host"
+    );
+    assert_eq!(
+        fs::read(evidence.join("preparation/acquisition.json")).unwrap(),
+        original
+    );
+    fs::remove_dir_all(evidence).unwrap();
 }
 
 #[test]
