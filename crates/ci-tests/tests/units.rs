@@ -563,6 +563,24 @@ fn install_mock_transport(root: &Path, mode: &str, c: &str) {
         ".chrono-harness/state/mock.json",
         &json!({"candidate":c,"mode":mode}),
     );
+    // Establish the external fixture's readiness before measuring transport
+    // deadlines. The probe has no artifact-download or failure-injection effects.
+    let args = vec![
+        env!("CARGO_BIN_EXE_chrono-ci-test-transport").to_string(),
+        "--version".to_string(),
+    ];
+    let ready = Command::new(&args[0])
+        .arg(&args[1])
+        .current_dir(root)
+        .env_clear()
+        .env("CHRONO_CI_TEST_PROVIDER", "units")
+        .output()
+        .unwrap();
+    if !ready.status.success() || ready.stdout != b"chrono-ci-test-provider/v1\n" {
+        retain_command_result(root, &args, &json!({"fixture":"provider-ready"}), &ready);
+    }
+    assert!(ready.status.success(), "{:?}", ready.stderr);
+    assert_eq!(ready.stdout, b"chrono-ci-test-provider/v1\n");
 }
 
 fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
