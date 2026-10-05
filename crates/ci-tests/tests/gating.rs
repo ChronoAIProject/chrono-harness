@@ -711,7 +711,6 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         fs::write(root.join(path), bytes.stdout).unwrap();
     }
     install(&root);
-    install_parent_provider(&root);
     let output = root.join(".chrono-harness/state/out");
     fs::create_dir_all(output.parent().unwrap()).unwrap();
     let mut c = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
@@ -1054,6 +1053,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         fs::copy(source.join(path), root.join(path)).unwrap();
     }
     install(&root);
+    install_parent_provider(&root);
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
         root.join(".chrono-harness/bin/chrono-worktree"),
