@@ -427,6 +427,20 @@ class UnitFailureRetention(unittest.TestCase):
         self.assertTrue(report['secondary_failures'])
         self.assertIn(b'registered failure evidence',diagnostic)
 
+    def test_registered_failure_copy_keeps_completed_evidence_before_later_io_error(self):
+        blocked=self.output/'failure-evidence/registered/verification/state/b'
+        blocked.parent.mkdir(parents=True);blocked.write_bytes(b'blocked directory')
+        setup='Path("state/a").mkdir(parents=True);Path("state/b").mkdir();Path("state/a/report").write_bytes(b"first");Path("state/b/report").write_bytes(b"second");'
+        report,_=self.failed_child(b'original error\n',{'original.verify':['state/a/','state/b/']},setup)
+        retained=report['processes'][0]['registered_failure_evidence']
+        self.assertEqual(retained['status'],'partial')
+        rows={row['source']:row for row in retained['files']}
+        self.assertEqual(rows['state/a/report']['status'],'retained')
+        self.assertEqual((self.output/rows['state/a/report']['path']).read_bytes(),b'first')
+        self.assertEqual(rows['state/a/report']['sha256'],hashlib.sha256(b'first').hexdigest())
+        self.assertEqual(rows['state/b/report']['status'],'unavailable')
+        self.assertTrue(report['secondary_failures'])
+
     def test_registered_failure_capture_reports_bound_and_rejects_links(self):
         self.recipe.EVIDENCE_BOUND=4
         setup='Path("state").mkdir();Path("state/a-large").write_bytes(b"12345678");Path("state/b-small").write_bytes(b"ok");Path("outside").write_bytes(b"outside");Path("state/c-link").symlink_to("../outside");'
@@ -440,6 +454,27 @@ class UnitFailureRetention(unittest.TestCase):
         self.assertEqual(rows['state/c-link']['status'],'omitted')
         self.assertNotIn('path',rows['state/c-link'])
         self.assertEqual((self.output/rows['state/b-small']['path']).read_bytes(),b'ok')
+
+    def test_registered_and_native_failure_evidence_share_the_existing_bound(self):
+        self.recipe.EVIDENCE_BOUND=10
+        with tempfile.TemporaryDirectory(prefix='chrono-native-publication-failure-') as retained:
+            for name in ['stdout','stderr','process.json']:(Path(retained)/name).write_bytes(b'xx')
+            setup='Path("state").mkdir();Path("state/report").write_bytes(b"12345678");'
+            report,_=self.failed_child(b'original native publication process evidence: '+retained.encode()+b'\n',{'original.verify':['state/']},setup)
+        process=report['processes'][0]
+        self.assertEqual(process['failure_evidence']['bytes'],6)
+        registered=process['registered_failure_evidence']
+        self.assertEqual(registered['bound_bytes'],4)
+        self.assertEqual(registered['bytes'],0)
+        self.assertEqual(registered['status'],'partial')
+
+    def test_registered_failure_directory_alias_is_not_followed(self):
+        setup='Path("outside").mkdir();Path("outside/report").write_bytes(b"not selected");Path("state").symlink_to("outside",target_is_directory=True);'
+        report,_=self.failed_child(b'original error\n',{'original.verify':['state/']},setup)
+        retained=report['processes'][0]['registered_failure_evidence']
+        self.assertEqual(retained['status'],'unavailable')
+        self.assertIn('symlink',retained['reason'])
+        self.assertFalse((self.output/'failure-evidence').exists())
 
     def test_child_failure_survives_stream_write_failure_with_actual_bytes(self):
         (self.output/'processes/0.stderr').mkdir(parents=True)

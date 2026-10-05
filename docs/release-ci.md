@@ -48,4 +48,6 @@ v5 verification 另须声明布尔值 `rust_toolchain`。为 true 时安装并�
 
 collector 不安装工具链、不构建、不跑测试。它核 exact build/test 成员、当前依赖结果和选中原始 run/attempt；允许兼容的成功前置来自较早 producing attempt，但最新 failure/cancelled/skipped 不能用旧 pass 掩盖。更换选中 producer 或字节使不对应的测试 receipt 失效。collector 核原始过程退出／流、原始 argv、全部资产观察与生产 lineage 后，运行被验证向量中的 `chrono-distribution pack`，再核实际最终清单、15 项包字节／mode、源及平台。最终 artifact 含完整原始 receipt／过程流和明确选定 artifact-ID 引用；独立 job 的失败 artifact 仍保留。
 
+v5 可在 `failure_evidence` 中按验证 operation 显式登记失败目录列表。路径为以 `/` 结尾的字面相对目录，必须属于宿主唯一的 untracked artifact，单个操作的目录不能重复或嵌套；未登记目录不采集。验证子进程失败后，生产者将这些目录的普通文件及原字节摘要写入该单元的发布 artifact，保留明确的目录缺失、非普通文件、容量省略和复制错误。登记采集与原生 fixture 证据共用现有 64 MiB 内容上限，原 stdout/stderr、退出码及原业务失败不被辅助采集失败覆盖。该配置不从测试名称、语言或输出文本推断路径；v2/v3/v4 不接受此字段。此机制只运输已产生的登记证据，不证明所有异常都已使用标准错误链。
+
 专属 owner 验证包括任意非 Rust 字面命令、原生元数据、独立 sibling、隔离本地调度、真实 distribution pack、非 UTF-8 原始失败、缺失／损坏／重封装错误 receipt、路径／mode、变更字节、当前失败与 carried attempt。测试不认证实际原生平台时限、普遍环境同判或公开采用。提交后的 canonical check、原生两平台执行及必要的重试、发布和 main/examples 采用仍须分别验证。

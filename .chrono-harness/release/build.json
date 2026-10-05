@@ -848,5 +848,14 @@
   "limits": {
     "unit_seconds": 2700,
     "platform_seconds": 2700
+  },
+  "failure_evidence": {
+    "test.judge-projects-tests": [
+      ".chrono-harness/state/migration-tests/",
+      ".chrono-harness/state/test-failures/"
+    ],
+    "test.ci-tests": [
+      ".chrono-harness/state/ci-test-failures/"
+    ]
   }
 }
