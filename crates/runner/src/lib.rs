@@ -855,7 +855,7 @@ fn run_process_inner(
     if let Some(path) = timing_path {
         let path =
             PathBuf::from(path).with_extension(format!("{}.process.jsonl", std::process::id()));
-        let row = value!({"pid":std::process::id(),"start_unix_ns":timing_wall,
+        let row = serde_json::json!({"pid":std::process::id(),"start_unix_ns":timing_wall,
             "argv":s.args,"program":s.program,"marks_us":timing_marks,
             "success":result.as_ref().is_ok_and(|r| r.exit_code == 0 && r.failure.is_none())});
         let written = fs::OpenOptions::new()
