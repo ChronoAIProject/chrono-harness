@@ -3,7 +3,6 @@ use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
-
 struct CommandEvidence {
     label: String,
     binding: Value,
