@@ -1508,6 +1508,19 @@ fn script(root: &Path, path: &str, body: &str) {
     fs::set_permissions(root.join(path), fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+fn native_transport_ready(root: &Path) -> &'static str {
+    let program = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
+    let output = Command::new(program)
+        .arg("--version")
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(output.stdout, b"chrono-ci-test-transport 1\n");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    program
+}
+
 fn retained_receipt(root: &Path, prefix: &str) -> (String, Vec<u8>, Value) {
     let dir = root.join(".chrono-harness/state/preparation");
     let entry = fs::read_dir(dir)
@@ -1840,23 +1853,10 @@ fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
 fn short_console_failed_blocked_and_transport_diagnostics_are_bounded_and_visible() {
     for case in ["failed", "blocked", "transport"] {
         let mut h = ShortHost::new();
-        let body = format!(
-            r#"#!/bin/sh
-printf judge >> .chrono-harness/state/judge-calls
-exec /usr/bin/python3 -c 'import json,sys
-r=json.load(sys.stdin)
-case="{case}"
-if case=="transport":
- print("original-malformed-transport"*10000)
-else:
- results=[dict(id="identified-operation-"+str(i)+"x"*1000,status=case,cause="actionable-cause-"+str(i)+"z"*10000,exit_code=9 if case=="failed" else None) for i in range(30)]
- print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],status=case,results=results,evidence=dict(original="complete-original-evidence"))))
-sys.exit(9)'
-"#
-        );
-        script(&h.root, ".chrono-harness/bin/diagnostic-judge", &body);
+        let program = native_transport_ready(&h.root);
         h.modify(".chrono-harness/ci/check.json", |c| {
-            c["judge"]["program"] = json!(".chrono-harness/bin/diagnostic-judge")
+            c["judge"]["program"] = json!(program);
+            c["judge"]["args"] = json!(["diagnostic", case]);
         });
         let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
         assert_eq!(
@@ -1964,35 +1964,29 @@ fn native_short_version_failure_retains_probe_in_selected_unit_upload_directory(
 #[test]
 fn short_console_does_not_revalidate_deep_accepted_evidence_or_change_verdict() {
     let mut h = ShortHost::new();
-    script(
-        &h.root,
-        ".chrono-harness/bin/deep-judge",
-        r#"#!/bin/sh
-printf judge >> .chrono-harness/state/judge-calls
-exec /usr/bin/python3 -c 'import json,sys
-r=json.load(sys.stdin)
-e={}
-for i in range(125): e=dict(nested=e)
-print(json.dumps(dict(protocol=r["protocol"],request_id=r["request_id"],status="passed",results=[dict(id="deep",status="passed",cause="actual result",exit_code=0)],evidence=e)))'
-"#,
-    );
+    let program = native_transport_ready(&h.root);
     h.modify(".chrono-harness/ci/check.json", |c| {
-        c["judge"]["program"] = json!(".chrono-harness/bin/deep-judge")
+        c["judge"]["program"] = json!(program);
+        c["judge"]["args"] = json!(["deep"]);
     });
     let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
     // The original acquisition/judge decoder accepted this evidence. Rendering
     // must not add another verdict-bearing depth limit around its report.
     let bytes = fs::read(h.root.join(".chrono-harness/state/alpha/check.json")).unwrap();
-    let consumed = Command::new("/usr/bin/python3").args(["-c", "import json,sys; r=json.load(open(sys.argv[1])); assert r['response']['status']=='passed' and r['judge']['exit_code']==0 and 'transport_failure' not in r; print(r['retained_report'])", h.root.join(".chrono-harness/state/alpha/check.json").to_str().unwrap()]).output().unwrap();
+    let mut decoder = serde_json::Deserializer::from_slice(&bytes);
+    decoder.disable_recursion_limit();
+    let mut values = decoder.into_iter::<Value>();
+    let report = values.next().unwrap().unwrap();
+    assert!(values.next().is_none());
+    assert_eq!(report["response"]["status"], "passed");
+    assert_eq!(report["judge"]["exit_code"], 0);
     assert!(
-        consumed.status.success(),
-        "{}",
-        String::from_utf8_lossy(&consumed.stderr)
+        !report
+            .as_object()
+            .unwrap()
+            .contains_key("transport_failure")
     );
-    let retained = String::from_utf8(consumed.stdout)
-        .unwrap()
-        .trim()
-        .to_owned();
+    let retained = report["retained_report"].as_str().unwrap().to_owned();
     assert_eq!(fs::read(h.root.join(&retained)).unwrap(), bytes);
     assert_eq!(
         out.status.code(),

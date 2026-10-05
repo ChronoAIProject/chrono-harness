@@ -21,6 +21,61 @@ fn provider_observation(phase: &str) {
     writeln!(file, "{row}").unwrap();
 }
 
+fn diagnostic(mode: &str) {
+    use serde_json::{Value, json};
+
+    let mut calls = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(".chrono-harness/state/judge-calls")
+        .unwrap();
+    calls.write_all(b"judge").unwrap();
+    let request: Value = serde_json::from_reader(io::stdin().lock()).unwrap();
+    let mut stdout = io::stdout().lock();
+    if mode == "deep" {
+        let mut evidence = json!({});
+        for _ in 0..125 {
+            evidence = json!({"nested": evidence});
+        }
+        let response = json!({
+            "protocol": request["protocol"], "request_id": request["request_id"],
+            "status": "passed", "results": [{"id": "deep", "status": "passed",
+                "cause": "actual result", "exit_code": 0}], "evidence": evidence,
+        });
+        serde_json::to_writer(&mut stdout, &response).unwrap();
+        writeln!(stdout).unwrap();
+        return;
+    }
+    let case = std::env::args().nth(2).expect("diagnostic case");
+    if case == "transport" {
+        writeln!(stdout, "{}", "original-malformed-transport".repeat(10000)).unwrap();
+    } else {
+        assert!(matches!(case.as_str(), "failed" | "blocked"));
+        let results: Vec<_> = (0..30)
+            .map(|i| {
+                json!({
+                    "id": format!("identified-operation-{i}{}", "x".repeat(1000)),
+                    "status": case,
+                    "cause": format!("actionable-cause-{i}{}", "z".repeat(10000)),
+                    "exit_code": if case == "failed" { Some(9) } else { None },
+                })
+            })
+            .collect();
+        serde_json::to_writer(
+            &mut stdout,
+            &json!({
+                "protocol": request["protocol"], "request_id": request["request_id"],
+                "status": case, "results": results,
+                "evidence": {"original": "complete-original-evidence"},
+            }),
+        )
+        .unwrap();
+        writeln!(stdout).unwrap();
+    }
+    stdout.flush().unwrap();
+    std::process::exit(9);
+}
+
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
@@ -54,6 +109,14 @@ fn main() {
         _ => {}
     }
     let mode = std::env::args().nth(1).expect("transport mode");
+    if mode == "--version" {
+        println!("chrono-ci-test-transport 1");
+        return;
+    }
+    if matches!(mode.as_str(), "diagnostic" | "deep") {
+        diagnostic(&mode);
+        return;
+    }
     io::copy(&mut io::stdin().lock(), &mut io::sink()).unwrap();
     let mut stdout = io::stdout().lock();
     match mode.as_str() {
