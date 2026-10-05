@@ -50,7 +50,29 @@ fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
 fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     migration_host_with_alias_collision(false)
 }
-fn execution_failure(reason: &str, result: &chrono_judge_projects::Results) -> String {
+fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    let kind = fs::symlink_metadata(from)?.file_type();
+    if kind.is_file() {
+        fs::copy(from, to)?;
+    } else if kind.is_dir() {
+        fs::create_dir(to)?;
+        for entry in fs::read_dir(from)? {
+            let entry = entry?;
+            copy_nested_receipts(&entry.path(), &to.join(entry.file_name()))?;
+        }
+    } else {
+        return Err(std::io::Error::other(format!(
+            "unsupported nested receipt entry: {}",
+            from.display()
+        )));
+    }
+    Ok(())
+}
+fn execution_failure(
+    root: &std::path::Path,
+    reason: &str,
+    result: &chrono_judge_projects::Results,
+) -> String {
     let directory = source().join(".chrono-harness/state/migration-tests");
     let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
         fs::create_dir_all(&directory)?;
@@ -59,13 +81,26 @@ fn execution_failure(reason: &str, result: &chrono_judge_projects::Results) -> S
             .suffix(".json")
             .tempfile_in(&directory)?
             .keep()?;
-        match serde_json::to_writer(&mut file, result) {
-            Ok(()) => Ok(format!("original execution retained at {}", path.display())),
-            Err(error) => Ok(format!(
+        let mut summary = match serde_json::to_writer(&mut file, result) {
+            Ok(()) => format!("original execution retained at {}", path.display()),
+            Err(error) => format!(
                 "original execution retention incomplete at {}: {error}",
                 path.display()
-            )),
-        }
+            ),
+        };
+        // The inner CI owner has already recorded its real process result and
+        // inputs. Preserve those bytes before this temporary host is dropped.
+        let nested = root.join(".chrono-harness/state/ci-test-failures");
+        let destination = path.with_extension("ci-test-failures");
+        let evidence = match copy_nested_receipts(&nested, &destination) {
+            Ok(()) => format!("nested CI evidence retained at {}", destination.display()),
+            Err(error) => format!(
+                "nested CI evidence retention incomplete at {}: {error}",
+                destination.display()
+            ),
+        };
+        summary.push_str(&format!("; {evidence}"));
+        Ok(summary)
     })()
     .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
     let mut summary = format!("{reason}; {retained}");
@@ -401,12 +436,12 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         .executed
         .iter()
         .find(|r| r.operation == "ci.verify")
-        .unwrap_or_else(|| panic!("{}", execution_failure("ci.verify blocked", &result)));
+        .unwrap_or_else(|| panic!("{}", execution_failure(&root, "ci.verify blocked", &result)));
     assert_eq!(
         verify.status,
         "failed",
         "{}",
-        execution_failure("ci.verify must reject drift", &result)
+        execution_failure(&root, "ci.verify must reject drift", &result)
     );
     assert!(
         verify
@@ -417,7 +452,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
             .stderr
             .contains("drift"),
         "{}",
-        execution_failure("ci.verify did not diagnose drift", &result)
+        execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
     let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .args([
