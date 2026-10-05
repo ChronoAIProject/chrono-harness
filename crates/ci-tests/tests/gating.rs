@@ -1095,9 +1095,17 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         .command(&["check", "--collect"], &initial, &initial_needs)
         .output()
         .unwrap();
+    retain_command_result(
+        &h.host.root,
+        &["check".into(), "--collect".into()],
+        &json!({"detection":initial,"needs":initial_needs}),
+        &out,
+    );
     assert!(
         out.status.success(),
-        "{}",
+        "status {}; stdout {}; stderr {}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
     h.payload["before"] = json!(h.host.base);
