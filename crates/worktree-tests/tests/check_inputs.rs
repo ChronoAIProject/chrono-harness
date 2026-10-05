@@ -74,6 +74,37 @@ pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str) {
         Err(error) => panic!("fixture executable {}: {error}", installed.display()),
     }
 }
+#[test]
+fn fixture_executable_identity_survives_neighbor_teardown() {
+    use std::os::unix::fs::MetadataExt;
+
+    let built = Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    for directory in [first.path(), second.path()] {
+        fs::create_dir_all(directory.join(".chrono-harness/bin")).unwrap();
+        install_readonly_file(directory, built, "consumer");
+    }
+    let first_path = first.path().join(".chrono-harness/bin/consumer");
+    let second_path = second.path().join(".chrono-harness/bin/consumer");
+    let identity = |path: &Path| {
+        let metadata = fs::metadata(path).unwrap();
+        (metadata.dev(), metadata.ino())
+    };
+    assert_ne!(identity(&first_path), identity(built));
+    assert_ne!(identity(&second_path), identity(built));
+    assert_ne!(identity(&first_path), identity(&second_path));
+    assert_eq!(fs::read(&first_path).unwrap(), fs::read(built).unwrap());
+    assert_eq!(fs::read(&second_path).unwrap(), fs::read(built).unwrap());
+    drop(first);
+    let output = Command::new(&second_path)
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(output.stdout, b"fixture\n");
+    assert!(output.stderr.is_empty());
+}
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     let head = git(root, &["rev-parse", "HEAD"]);
     let req = InputRequest {
