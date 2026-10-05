@@ -13,6 +13,9 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+mod directory;
+use directory::{Binding as DirectoryBinding, bind as directory_binding};
+
 type Result<T = ()> = std::result::Result<T, String>;
 
 #[derive(Clone, Deserialize)]
@@ -130,10 +133,6 @@ pub(crate) struct Check {
     directories: Vec<DirectoryBinding>,
 }
 
-struct DirectoryBinding {
-    root: PathBuf,
-    files: Vec<(PathBuf, String)>,
-}
 fn error(s: impl std::fmt::Display) -> String {
     format!("E_CARGO_INPUT: {s}")
 }
@@ -276,111 +275,6 @@ fn inventory(root: &Path) -> Result<BTreeSet<PathBuf>> {
     Ok(files)
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DirectoryManifest {
-    schema: String,
-    root: String,
-    files: Vec<DirectoryFile>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DirectoryFile {
-    path: String,
-    sha256: String,
-}
-
-fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
-    chrono_harness::relative_path(relative)?;
-    let mut path = root.to_path_buf();
-    for component in Path::new(relative).components() {
-        path.push(component);
-        match fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(error(format!(
-                    "directory inventory contains symlink: {}",
-                    path.display()
-                )));
-            }
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return Err(error(format!(
-                    "directory inventory file is missing: {}",
-                    path.display()
-                )));
-            }
-            Err(e) => return Err(error(e)),
-        }
-    }
-    if !path.is_file() {
-        return Err(error(format!(
-            "directory inventory entry is not a file: {}",
-            path.display()
-        )));
-    }
-    Ok(path)
-}
-
-fn directory_binding(
-    root: &Path,
-    declaration: &DirectoryInventory,
-    manifest: &Path,
-) -> Result<(DirectoryBinding, DirectoryEvidence)> {
-    if declaration.root.is_empty() || declaration.manifest.is_empty() {
-        return Err(error("directory inventory root/manifest is empty"));
-    }
-    let directory = if Path::new(&declaration.root).is_absolute() {
-        PathBuf::from(&declaration.root)
-    } else {
-        root.join(&declaration.root)
-    };
-    let directory = fs::canonicalize(&directory).map_err(error)?;
-    if !directory.is_dir() {
-        return Err(error(format!(
-            "directory inventory root is not a directory: {}",
-            directory.display()
-        )));
-    }
-    let value = json(&fs::read(manifest).map_err(error)?)?;
-    let parsed: DirectoryManifest = serde_json::from_value(value).map_err(error)?;
-    if parsed.schema != "chrono-input-directory/v1" || parsed.root != declaration.root {
-        return Err(error("directory inventory manifest schema/root mismatch"));
-    }
-    let mut seen = BTreeSet::new();
-    let mut files = Vec::new();
-    for entry in parsed.files {
-        chrono_harness::wire::is_digest(&entry.sha256)
-            .then_some(())
-            .ok_or_else(|| error("directory inventory digest is invalid"))?;
-        if !seen.insert(entry.path.clone()) {
-            return Err(error("directory inventory contains a duplicate path"));
-        }
-        let path = regular_path(&directory, &entry.path)?;
-        let actual = file_identity(&path).map_err(error)?.0;
-        if actual != entry.sha256 {
-            return Err(error(format!(
-                "directory inventory digest differs: {}",
-                path.display()
-            )));
-        }
-        files.push((path, entry.sha256));
-    }
-    if files.is_empty() {
-        return Err(error("directory inventory must contain a file"));
-    }
-    Ok((
-        DirectoryBinding {
-            root: directory,
-            files,
-        },
-        DirectoryEvidence {
-            root: declaration.root.clone(),
-            manifest: declaration.manifest.clone(),
-            files: seen.len(),
-        },
-    ))
-}
 pub(crate) fn prepare(
     root: &Path,
     r: &Registrations,
@@ -979,20 +873,7 @@ impl Check {
             }
         }
         for directory in &self.directories {
-            if !directory.root.is_dir() {
-                return Err(error(format!(
-                    "toolchain directory disappeared: {}",
-                    directory.root.display()
-                )));
-            }
-            for (path, digest) in &directory.files {
-                if file_identity(path).map_err(error)?.0 != *digest {
-                    return Err(error(format!(
-                        "toolchain directory input changed during guarded operation: {}",
-                        path.display()
-                    )));
-                }
-            }
+            directory.unchanged()?;
         }
         for p in self
             .contract

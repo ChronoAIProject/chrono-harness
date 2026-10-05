@@ -2710,6 +2710,18 @@
       ]
     },
     {
+      "path": "crates/judge-cargo/src/inputs/directory.rs",
+      "owner": "judge-cargo",
+      "surface": "judge-implementation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-cargo/src/guard.rs",
       "owner": "judge-cargo",
       "surface": "judge-implementation",
