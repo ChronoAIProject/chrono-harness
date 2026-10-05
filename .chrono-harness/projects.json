@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "proposed",
   "owners": [
     "repository",
@@ -34,7 +34,11 @@
     "judge-cargo",
     "judge-cargo-tests",
     "worktree",
-    "worktree-tests"
+    "worktree-tests",
+    "workflow-inventory",
+    "workflow-inventory-tests",
+    "release-build",
+    "release-build-tests"
   ],
   "projects": [
     {
@@ -75,7 +79,8 @@
             "crates/runner/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "runner-tests",
@@ -127,7 +132,8 @@
             "crates/runner-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "instructions",
@@ -199,7 +205,8 @@
             "."
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "instructions-tests",
@@ -251,7 +258,8 @@
             "crates/instructions-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-ci",
@@ -291,7 +299,8 @@
             "crates/judge-ci/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-ci-tests",
@@ -343,7 +352,8 @@
             "crates/judge-ci-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "ci",
@@ -405,7 +415,8 @@
             ".chrono-harness/ci/release.json"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "ci-tests",
@@ -457,7 +468,8 @@
             "crates/ci-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-registration",
@@ -497,7 +509,8 @@
             "crates/judge-registration/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-registration-tests",
@@ -549,7 +562,8 @@
             "crates/judge-registration-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-filemap",
@@ -589,7 +603,8 @@
             "crates/judge-filemap/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-filemap-tests",
@@ -641,7 +656,8 @@
             "crates/judge-filemap-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-routes",
@@ -681,7 +697,8 @@
             "crates/judge-routes/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-routes-tests",
@@ -733,7 +750,8 @@
             "crates/judge-routes-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-projects",
@@ -773,7 +791,8 @@
             "crates/judge-projects/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-projects-tests",
@@ -825,7 +844,8 @@
             "crates/judge-projects-tests/Cargo.toml"
           ]
         }
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "judge-cost",
@@ -865,7 +885,8 @@
           ]
         }
       },
-      "test_project": "judge-cost-tests"
+      "test_project": "judge-cost-tests",
+      "language": "rust"
     },
     {
       "id": "judge-cost-tests",
@@ -917,7 +938,8 @@
           ]
         }
       },
-      "tests_for": "judge-cost"
+      "tests_for": "judge-cost",
+      "language": "rust"
     },
     {
       "id": "judge-mixed",
@@ -957,7 +979,8 @@
           ]
         }
       },
-      "test_project": "judge-mixed-tests"
+      "test_project": "judge-mixed-tests",
+      "language": "rust"
     },
     {
       "id": "judge-mixed-tests",
@@ -1009,7 +1032,8 @@
           ]
         }
       },
-      "tests_for": "judge-mixed"
+      "tests_for": "judge-mixed",
+      "language": "rust"
     },
     {
       "id": "judge-workflow",
@@ -1049,7 +1073,8 @@
           ]
         }
       },
-      "test_project": "judge-workflow-tests"
+      "test_project": "judge-workflow-tests",
+      "language": "rust"
     },
     {
       "id": "judge-workflow-tests",
@@ -1193,24 +1218,6 @@
             "consumer",
             "full_units::full_short::"
           ]
-        },
-        "inventory": {
-          "operation": "workflow.inventory",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/workflow-inventory.py",
-            ".",
-            ".chrono-harness/ci/workflow-inventory.json"
-          ]
-        },
-        "inventory_tests": {
-          "operation": "workflow.inventory-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/workflow-inventory-tests.py"
-          ]
         }
       },
       "tests_for": "judge-workflow",
@@ -1218,7 +1225,8 @@
         "judge-workflow-tests": "execute_core",
         "workflow-units": "execute_units",
         "workflow-short": "execute_short"
-      }
+      },
+      "language": "rust"
     },
     {
       "id": "inputs",
@@ -1258,7 +1266,8 @@
           ]
         }
       },
-      "test_project": "inputs-tests"
+      "test_project": "inputs-tests",
+      "language": "rust"
     },
     {
       "id": "inputs-tests",
@@ -1310,7 +1319,8 @@
           ]
         }
       },
-      "tests_for": "inputs"
+      "tests_for": "inputs",
+      "language": "rust"
     },
     {
       "id": "distribution",
@@ -1350,7 +1360,8 @@
           ]
         }
       },
-      "test_project": "distribution-tests"
+      "test_project": "distribution-tests",
+      "language": "rust"
     },
     {
       "id": "distribution-tests",
@@ -1402,7 +1413,8 @@
           ]
         }
       },
-      "tests_for": "distribution"
+      "tests_for": "distribution",
+      "language": "rust"
     },
     {
       "id": "judge-cargo",
@@ -1442,7 +1454,8 @@
           ]
         }
       },
-      "test_project": "judge-cargo-tests"
+      "test_project": "judge-cargo-tests",
+      "language": "rust"
     },
     {
       "id": "judge-cargo-tests",
@@ -1494,7 +1507,8 @@
           ]
         }
       },
-      "tests_for": "judge-cargo"
+      "tests_for": "judge-cargo",
+      "language": "rust"
     },
     {
       "id": "worktree",
@@ -1534,7 +1548,8 @@
           ]
         }
       },
-      "test_project": "worktree-tests"
+      "test_project": "worktree-tests",
+      "language": "rust"
     },
     {
       "id": "worktree-tests",
@@ -1586,7 +1601,66 @@
           ]
         }
       },
-      "tests_for": "worktree"
+      "tests_for": "worktree",
+      "language": "rust"
+    },
+    {
+      "id": "release-build",
+      "language": "python",
+      "actions": {
+        "execute": {
+          "operation": "release.build",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build.py",
+            ".",
+            ".chrono-harness/cache/release"
+          ]
+        }
+      },
+      "kind": "production",
+      "test_project": "release-build-tests"
+    },
+    {
+      "id": "release-build-tests",
+      "language": "python",
+      "tests_for": "release-build",
+      "actions": {
+        "execute": {
+          "operation": "test.release-build-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py"
+          ]
+        },
+        "unit_tests": {
+          "operation": "release.tests.units",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py",
+            "--group",
+            "unit"
+          ]
+        },
+        "integration_test": {
+          "operation": "release.tests.integration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py",
+            "--group",
+            "integration"
+          ]
+        }
+      },
+      "kind": "test",
+      "test_groups": {
+        "release-build-tests": "unit_tests",
+        "release-build-integration": "integration_test"
+      }
     }
   ],
   "scripts": [
@@ -1603,7 +1677,8 @@
             ".chrono-harness/migrations/scoped-v1.py"
           ]
         }
-      }
+      },
+      "language": "python"
     },
     {
       "id": "scoped-v1-tests",
@@ -1616,6 +1691,41 @@
           "argv": [
             "-B",
             ".chrono-harness/migrations/scoped-v1-tests.py"
+          ]
+        }
+      },
+      "language": "python"
+    },
+    {
+      "id": "workflow-inventory",
+      "language": "python",
+      "path": ".chrono-harness/ci/workflow-inventory.py",
+      "test_script": "workflow-inventory-tests",
+      "actions": {
+        "execute": {
+          "operation": "workflow.inventory",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory.py",
+            ".",
+            ".chrono-harness/ci/workflow-inventory.json"
+          ]
+        }
+      }
+    },
+    {
+      "id": "workflow-inventory-tests",
+      "language": "python",
+      "path": ".chrono-harness/ci/workflow-inventory-tests.py",
+      "tests_for": "workflow-inventory",
+      "actions": {
+        "execute": {
+          "operation": "workflow.inventory-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory-tests.py"
           ]
         }
       }

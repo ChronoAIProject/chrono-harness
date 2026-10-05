@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+import platform
 import subprocess
 import sys
 
@@ -41,9 +42,11 @@ def request():
 
 class DecoderTests(unittest.TestCase):
     def test_adopted_host_interpreter_matches_registered_version(self):
-        # Host policy validation belongs to the host's registered script suite;
-        # portable product fixtures independently adopt their executing platform.
-        cfg = json.loads((ROOT / ".chrono-harness/config.json").read_text())
+        # Each test platform names its host input explicitly; the native Linux
+        # fixture does not activate the main checkout's macOS policy there.
+        hosts = json.loads((SOURCE.parent / "test-hosts.json").read_text())
+        config = hosts[platform.system() + "/" + platform.machine()]
+        cfg = json.loads((ROOT / config).read_text())
         tool = next(t for t in cfg["tools"] if t["id"] == "python3")
         self.assertTrue(Path(tool["program"]).is_absolute())
         observed = subprocess.run([tool["program"], *tool["version_argv"]],

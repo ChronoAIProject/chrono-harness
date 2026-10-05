@@ -178,6 +178,24 @@
           "test:workflow-short"
         ],
         "report_path": ".chrono-harness/state/units/judge-workflow-short/check.json"
+      },
+      "workflow-inventory": {
+        "tests": [
+          "test:workflow-inventory-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/workflow-inventory/check.json"
+      },
+      "release-build": {
+        "tests": [
+          "test:release-build-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/release-build/check.json"
+      },
+      "release-build-integration": {
+        "tests": [
+          "test:release-build-integration"
+        ],
+        "report_path": ".chrono-harness/state/units/release-build-integration/check.json"
       }
     },
     "shared_operations": {
@@ -303,15 +321,14 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "workflow.inventory-tests": [
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "workflow.inventory": [
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
+      ],
+      "build.distribution": [
+        "distribution",
+        "release-build-integration"
       ]
     },
     "facts_config": ".chrono-harness/config.json"

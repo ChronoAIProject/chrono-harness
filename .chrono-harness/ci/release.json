@@ -1718,7 +1718,11 @@
         "linux_verify_judge_filemap_tests",
         "linux_verify_judge_routes_tests",
         "linux_verify_judge_cost_tests",
-        "linux_verify_judge_mixed_tests"
+        "linux_verify_judge_mixed_tests",
+        "linux_verify_scoped_v1_tests",
+        "linux_verify_workflow_inventory_tests",
+        "linux_verify_release_build_tests",
+        "linux_verify_release_build_integration"
       ],
       "downloads": [
         {
@@ -1840,6 +1844,22 @@
         {
           "job": "linux_verify_judge_mixed_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests/"
+        },
+        {
+          "job": "linux_verify_scoped_v1_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests/"
+        },
+        {
+          "job": "linux_verify_workflow_inventory_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests/"
+        },
+        {
+          "job": "linux_verify_release_build_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_tests/"
+        },
+        {
+          "job": "linux_verify_release_build_integration",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
         }
       ],
       "always": true,
@@ -3553,7 +3573,11 @@
         "macos_verify_judge_filemap_tests",
         "macos_verify_judge_routes_tests",
         "macos_verify_judge_cost_tests",
-        "macos_verify_judge_mixed_tests"
+        "macos_verify_judge_mixed_tests",
+        "macos_verify_scoped_v1_tests",
+        "macos_verify_workflow_inventory_tests",
+        "macos_verify_release_build_tests",
+        "macos_verify_release_build_integration"
       ],
       "downloads": [
         {
@@ -3675,10 +3699,176 @@
         {
           "job": "macos_verify_judge_mixed_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests/"
+        },
+        {
+          "job": "macos_verify_scoped_v1_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests/"
+        },
+        {
+          "job": "macos_verify_workflow_inventory_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests/"
+        },
+        {
+          "job": "macos_verify_release_build_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_tests/"
+        },
+        {
+          "job": "macos_verify_release_build_integration",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
         }
       ],
       "always": true,
       "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
+    },
+    {
+      "id": "linux_verify_scoped_v1_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_scoped_v1_tests",
+        "--unit",
+        "verify_scoped_v1_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_scoped_v1_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_scoped_v1_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_workflow_inventory_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_workflow_inventory_tests",
+        "--unit",
+        "verify_workflow_inventory_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_workflow_inventory_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_workflow_inventory_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_release_build_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_tests",
+        "--unit",
+        "verify_release_build_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_release_build_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_scoped_v1_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_scoped_v1_tests",
+        "--unit",
+        "verify_scoped_v1_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_scoped_v1_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_scoped_v1_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_workflow_inventory_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_workflow_inventory_tests",
+        "--unit",
+        "verify_workflow_inventory_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_workflow_inventory_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_workflow_inventory_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_release_build_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_tests",
+        "--unit",
+        "verify_release_build_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_release_build_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_release_build_integration",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_integration",
+        "--unit",
+        "verify_release_build_integration"
+      ],
+      "artifact_name": "chrono-release-linux-verify_release_build_integration",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_integration/",
+      "needs": [
+        "linux_build_distribution"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_release_build_integration",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_integration",
+        "--unit",
+        "verify_release_build_integration"
+      ],
+      "artifact_name": "chrono-release-macos-verify_release_build_integration",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_integration/",
+      "needs": [
+        "macos_build_distribution"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        }
+      ]
     }
   ],
   "download_artifact_action": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
