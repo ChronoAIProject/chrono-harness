@@ -369,11 +369,13 @@ class UnitFailureRetention(unittest.TestCase):
 
     def tearDown(self):retain_failed_fixture(self,self.root)
 
-    def failed_child(self,stderr):
+    def failed_child(self,stderr,evidence=None,setup=''):
+        cfg={'rust_toolchain':'1.95.0','limits':{'unit_seconds':2700,'platform_seconds':2700}}
+        if evidence is not None:cfg['failure_evidence']=evidence
         execution=self.recipe.UnitExecution(self.root,self.output,
-            {'rust_toolchain':'1.95.0','limits':{'unit_seconds':2700,'platform_seconds':2700}}, {}, {'id':'verify'})
+            cfg, {}, {'id':'verify'})
         stdout=b'original stdout\xff\n'
-        code='import sys;from pathlib import Path;stdout='+repr(stdout)+';stderr='+repr(stderr)+';Path("child.stdout").write_bytes(stdout);Path("child.stderr").write_bytes(stderr);sys.stdout.buffer.write(stdout);sys.stderr.buffer.write(stderr);sys.exit(73)'
+        code='import sys;from pathlib import Path;'+setup+'stdout='+repr(stdout)+';stderr='+repr(stderr)+';Path("child.stdout").write_bytes(stdout);Path("child.stderr").write_bytes(stderr);sys.stdout.buffer.write(stdout);sys.stderr.buffer.write(stderr);sys.exit(73)'
         stdout_capture=io.TextIOWrapper(io.BytesIO(),encoding='utf-8')
         stderr_capture=io.TextIOWrapper(io.BytesIO(),encoding='utf-8')
         with contextlib.redirect_stdout(stdout_capture),contextlib.redirect_stderr(stderr_capture):
@@ -398,6 +400,46 @@ class UnitFailureRetention(unittest.TestCase):
                 self.assertEqual(retained['status'],'unavailable')
                 self.assertEqual(bytes(retained['bytes']),raw)
         return execution.report,stderr_capture.buffer.getvalue()
+
+    def test_registered_nested_failure_bytes_survive_in_the_release_artifact(self):
+        raw=b'nested original failure\xff\x00\n'
+        setup='Path("state/nested").mkdir(parents=True);Path("state/nested/process.bin").write_bytes('+repr(raw)+');Path("unregistered.bin").write_bytes(b"not selected");'
+        report,_=self.failed_child(b'outer failure\n',{'original.verify':['state/nested/','state/absent/']},setup)
+        retained=report['processes'][0]['registered_failure_evidence']
+        self.assertEqual(retained['status'],'retained')
+        self.assertEqual(retained['bound_bytes'],self.recipe.EVIDENCE_BOUND)
+        self.assertEqual(retained['sources'][1],{'source':'state/absent/','status':'absent'})
+        files=retained['files'];self.assertEqual(len(files),1)
+        self.assertEqual(files[0]['source'],'state/nested/process.bin')
+        self.assertEqual(files[0]['sha256'],hashlib.sha256(raw).hexdigest())
+        self.assertEqual((self.output/files[0]['path']).read_bytes(),raw)
+        self.assertEqual(retained['bytes'],len(raw))
+        self.assertFalse(any(p.name=='unregistered.bin' for p in self.output.rglob('*')))
+        shutil.rmtree(self.root/'state')
+        self.assertEqual((self.output/files[0]['path']).read_bytes(),raw)
+
+    def test_registered_failure_copy_error_preserves_original_child_exit(self):
+        (self.output/'failure-evidence').mkdir()
+        (self.output/'failure-evidence/registered').write_bytes(b'blocked output')
+        setup='Path("state").mkdir();Path("state/report").write_bytes(b"nested");'
+        report,diagnostic=self.failed_child(b'original error\n',{'original.verify':['state/']},setup)
+        self.assertEqual(report['processes'][0]['registered_failure_evidence']['status'],'unavailable')
+        self.assertTrue(report['secondary_failures'])
+        self.assertIn(b'registered failure evidence',diagnostic)
+
+    def test_registered_failure_capture_reports_bound_and_rejects_links(self):
+        self.recipe.EVIDENCE_BOUND=4
+        setup='Path("state").mkdir();Path("state/a-large").write_bytes(b"12345678");Path("state/b-small").write_bytes(b"ok");Path("outside").write_bytes(b"outside");Path("state/c-link").symlink_to("../outside");'
+        report,_=self.failed_child(b'original error\n',{'original.verify':['state/']},setup)
+        retained=report['processes'][0]['registered_failure_evidence']
+        self.assertEqual(retained['status'],'partial')
+        self.assertEqual(retained['bytes'],2)
+        rows={row['source']:row for row in retained['files']}
+        self.assertEqual(rows['state/a-large']['status'],'omitted')
+        self.assertEqual(rows['state/a-large']['reason'],'bounded evidence limit')
+        self.assertEqual(rows['state/c-link']['status'],'omitted')
+        self.assertNotIn('path',rows['state/c-link'])
+        self.assertEqual((self.output/rows['state/b-small']['path']).read_bytes(),b'ok')
 
     def test_child_failure_survives_stream_write_failure_with_actual_bytes(self):
         (self.output/'processes/0.stderr').mkdir(parents=True)

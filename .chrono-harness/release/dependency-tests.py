@@ -58,6 +58,32 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(tests['test_none']['needs'], [])
         self.assertEqual(tests['test_a']['needs'], ['build_a'])
 
+    def test_failure_evidence_requires_explicit_owned_nonoverlapping_directories(self):
+        self.write('host.json', {'artifacts': [{'path': 'state/', 'tracked': False}]})
+        self.cfg['failure_evidence'] = {'test.none': ['state/nested/']}
+        self.plan_units()
+        for value in [None, [], {'missing': ['state/']}, {'test.none': 'state/'},
+                      {'test.none': ['state']}, {'test.none': ['source/']},
+                      {'test.none': ['state/', 'state/nested/']},
+                      {'test.none': ['../state/']}, {'test.none': ['state/', 'state/']}]:
+            with self.subTest(value=value):
+                self.cfg['failure_evidence'] = value
+                with self.assertRaisesRegex(ValueError, 'failure evidence'):
+                    self.plan_units()
+        self.cfg['failure_evidence'] = {'test.none': ['state/nested/']}
+        self.write('host.json', {'artifacts': [{'path': 'state/', 'tracked': True}]})
+        with self.assertRaisesRegex(ValueError, 'failure evidence'):
+            self.plan_units()
+
+    def test_failure_evidence_does_not_reinterpret_v4(self):
+        self.cfg['schema'] = 'chrono-release-build/v4'
+        self.cfg['failure_evidence'] = {}
+        for unit in self.cfg['units'][2:]:
+            del unit['rust_toolchain']
+            unit['needs'] = ['build_a', 'build_b']
+        with self.assertRaisesRegex(ValueError, 'failure evidence'):
+            self.plan_units()
+
     def test_registered_recipe_has_a_valid_explicit_plan(self):
         root = HERE.parent.parent
         cfg, _, operations, staging = RECIPE.preflight(root, {'git'}, set())
