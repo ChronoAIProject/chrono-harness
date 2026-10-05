@@ -13,6 +13,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import zipfile
 
 SCRIPT = Path(__file__).with_name('build.py')
 ROOT = SCRIPT.parent.parent.parent
@@ -37,59 +38,8 @@ def retain_failed_fixture(test, directory):
         shutil.copytree(directory,target,symlinks=True)
         print('Original failed fixture: '+str(target),file=sys.stderr)
 
-TOOLS = r'''#!/usr/bin/env python3
-import json, os, sys, shutil, subprocess
-from pathlib import Path
-name=Path(sys.argv[0]).name
-with open(os.environ['CALLS'],'a') as f:f.write(json.dumps({'tool':name,'argv':sys.argv[1:],'cwd':str(Path.cwd())})+'\n')
-fault=os.environ.get('FAULT','')
-if name=='git':
- if 'clone' in sys.argv:
-  shutil.copytree(sys.argv[-2],sys.argv[-1],ignore=shutil.ignore_patterns('handoffs','products','consumer','__pycache__'))
- elif 'checkout' in sys.argv:pass
- elif 'status' in sys.argv:
-  if fault=='dirty':print(' M tracked')
- elif 'ls-files' in sys.argv:
-  if fault=='tracked':sys.stdout.buffer.write(b'consumer/a\0')
- else:print(('b' if 'HEAD^{tree}' in sys.argv else 'a')*40)
-elif name=='rustup' and sys.argv[1:2]==['which']:print(Path.cwd()/'tools'/sys.argv[-1])
-elif name=='rustc':print('rustc 1.95.0 fixture')
-elif name=='cargo':
- if '--version' in sys.argv:print('cargo fixture')
- elif sys.argv[1]=='build':
-  if fault=='build':sys.stderr.buffer.write(b'build failure\xfe');sys.exit(41)
-  cfg=json.loads(Path('.chrono-harness/release/build.json').read_text())
-  plan=json.loads(Path('.chrono-harness/release/plan.json').read_text())
-  u=next(u for u in cfg['units'] if u.get('manifest')==sys.argv[-1])
-  target=Path(plan['assets'][u['asset']]);target.parent.mkdir(parents=True,exist_ok=True)
-  target.write_bytes(Path('producer-'+u['asset']).read_bytes());target.chmod(0o755)
-elif name=='probe':
- for p in ['consumer/a','consumer/distribution']:assert Path(p).stat().st_mode&0o111
- subprocess.run(['consumer/a'],check=True)
- if fault=='destination-change':Path('consumer/a').write_bytes(b'changed')
- if fault=='destination-mode':Path('consumer/a').chmod(0o644)
- if fault=='destination-missing':Path('consumer/a').unlink()
- if fault=='source-change':Path('products/a').write_bytes(b'changed')
- sys.stdout.buffer.write(b'original verification\xff\n');sys.stderr.buffer.write(b'original diagnostic\xfe\n')
- if fault=='verify':sys.exit(73)
-'''
-PACK = r'''#!/usr/bin/env python3
-import hashlib,json,os,platform,shutil,sys
-from pathlib import Path
-with open(os.environ['CALLS'],'a') as f:f.write(json.dumps({'tool':'package','argv':sys.argv[1:],'cwd':str(Path.cwd())})+'\n')
-if os.environ.get('FAULT')=='pack':sys.stderr.buffer.write(b'pack failure\xfe');sys.exit(41)
-p=Path(sys.argv[sys.argv.index('--output')+1]);assert not p.exists();p.mkdir()
-plan=json.loads(Path(sys.argv[sys.argv.index('--plan')+1]).read_text())
-platform0={'Darwin':'macos','Linux':'linux'}[platform.system()]+'-'+{'arm64':'aarch64','aarch64':'aarch64','x86_64':'x86_64'}[platform.machine()]
-assets={}
-for name,source in plan['assets'].items():
- file=name+'-'+platform0;shutil.copy2(source,p/file);raw=(p/file).read_bytes()
- assets[name]={'file':file,'size':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
-(p/'release.json').write_text(json.dumps({'schema':'chrono-release/v1','version':plan['version'],'source_commit':'a'*40,'source_tree':'b'*40,'platforms':{platform0:assets}}))
-if os.environ.get('FAULT')=='package-extra':(p/'undeclared').write_bytes(b'wrong')
-if os.environ.get('FAULT')=='package-mode':(p/next(iter(assets.values()))['file']).chmod(0o644)
-if os.environ.get('FAULT')=='package-change':(p/next(iter(assets.values()))['file']).write_bytes(b'changed')
-'''
+TOOLS = (Path(__file__).parent / 'fixtures/unit-tools.py').read_text()
+PACK = (Path(__file__).parent / 'fixtures/unit-pack.py').read_text()
 
 class Fixture:
     def __init__(self):
@@ -116,7 +66,7 @@ class Fixture:
         for n in ['git','cargo','rustc','rustup','probe']:
             p=self.root/('tools/'+n);p.parent.mkdir(exist_ok=True);p.write_text(TOOLS);p.chmod(0o755)
         for m in self.cfg['manifests']:(self.root/m).write_text('manifest')
-        (self.root/'producer-a').write_bytes(b'#!/bin/sh\nprintf "actual produced bytes\\n"\n')
+        (self.root/'producer-a').write_bytes((Path(__file__).parent/'fixtures/unit-consumer.py').read_bytes())
         (self.root/'producer-distribution').write_text(PACK)
         self.outcomes={};self.receipts={};self.invocations=0
 
@@ -297,9 +247,11 @@ class ReleaseUnits(unittest.TestCase):
         self.assertFalse((f.root/'escape').exists())
     def test_large_executable_remains_a_streamed_external_mode_preserving_archive(self):
         f=self.f;producer=f.root/'producer-a'
-        with producer.open('ab') as stream:
-            stream.write(b'exit 0\n')
-            for _ in range(65):stream.write(b'\0'*(1024*1024))
+        main=producer.read_bytes()
+        with zipfile.ZipFile(producer,'a',compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr('__main__.py',main)
+            with archive.open('payload','w') as stream:
+                for _ in range(65):stream.write(b'\0'*(1024*1024))
         f.ready();p,out=f.run('package');self.passed(p)
         r=json.loads((out/'receipt.json').read_text());observed=r['package']['assets']['a']
         self.assertGreater(observed['size'],64*1024*1024);self.assertEqual(observed['mode'],0o755)
@@ -334,14 +286,32 @@ class ReleaseUnits(unittest.TestCase):
         self.assertEqual([c['tool'] for c in f.calls_read()[len(before):] if c['tool']!='git'],['package'])
     def test_host_retains_all_original_unfiltered_actions_and_explicit_native_edges(self):
         cfg=json.loads((ROOT/BUILD).read_text());projects=json.loads((ROOT/cfg['projects']).read_text());projection=json.loads((ROOT/'.chrono-harness/ci/release.json').read_text())
-        self.assertEqual(len(cfg['manifests']),15);self.assertEqual(len(cfg['verification_operations']),15)
-        actions={a['operation']:a for p in projects['projects']+projects['scripts'] for a in p['actions'].values()}
+        tests=[p for p in projects['projects'] if p['kind']=='test']+[p for p in projects['scripts'] if 'tests_for' in p]
+        actual=set(cfg['verification_operations'])
+        self.assertEqual(len(actual),len(cfg['verification_operations']))
+        covered=set()
+        owners={}
+        for owner in tests:
+            full=owner['actions']['execute']['operation']
+            groups={owner['actions'][action]['operation'] for action in owner.get('test_groups',{}).values()}
+            selected=actual&({full}|groups)
+            self.assertTrue(selected=={full} or (groups and selected==groups),owner['id'])
+            covered.update(selected)
+            owners.update({operation:owner for operation in selected})
+        self.assertEqual(actual,covered)
+        builds={u['id'] for u in cfg['units'] if u['kind']=='build'}
         for u in cfg['units']:
             if u['kind']=='verify':
-                self.assertIn(u['operation'],cfg['verification_operations'])
-                action=actions[u['operation']]
-                self.assertEqual(action['argv'],['test','--locked','--manifest-path',next(p['manifest'] for p in projects['projects'] if p['actions'].get('execute',{}).get('operation')==u['operation'])])
-        self.assertEqual(len(projection['jobs']),62)
+                owner=owners[u['operation']]
+                action=next(a for a in owner['actions'].values() if a['operation']==u['operation'])
+                if owner['language']=='rust':
+                    self.assertEqual(action['argv'],['test','--locked','--manifest-path',owner['manifest']])
+                    self.assertEqual(set(u['needs']),builds)
+                else:
+                    self.assertEqual(owner['language'],'python')
+                    if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution'])
+                    else:self.assertEqual(u['needs'],[])
+        self.assertEqual(len(projection['jobs']),sum(len(mapping) for mapping in cfg['native_jobs'].values()))
         jobs={j['id']:j for j in projection['jobs']}
         for mapping in cfg['native_jobs'].values():
             for u in cfg['units']+[cfg['collector']]:
@@ -375,7 +345,8 @@ else:
                 source=Path(temporary)/mode/'.chrono-harness/release';source.mkdir(parents=True)
                 recipe=source/'build.py';recipe.write_bytes(SCRIPT.read_bytes())
                 script=source/'build-tests.py';script.write_bytes(Path(__file__).read_bytes())
-                before={p.name:sha(p) for p in source.iterdir()}
+                shutil.copytree(Path(__file__).parent/'fixtures',source/'fixtures')
+                before={p.name:sha(p) if p.is_file() else 'directory' for p in source.iterdir()}
                 process=subprocess.run([sys.executable,'-c',child,mode,str(script)],env=env,capture_output=True)
                 sys.stdout.buffer.write(process.stdout);sys.stderr.buffer.write(process.stderr)
                 self.assertEqual(process.returncode,0,process.stderr.decode(errors='replace'))
@@ -479,4 +450,35 @@ class UnitFailureRetention(unittest.TestCase):
         self.assertIsNone(execution.report['failure']['exit_code'])
         self.assertFalse((self.output/'receipt.json').is_file())
 
-if __name__=='__main__':unittest.main()
+GROUP='all'
+INTEGRATION_TEST='__main__.ReleaseUnits.test_real_distribution_packs_the_accepted_original_asset_vector'
+
+def cases(suite):
+    for item in suite:
+        if isinstance(item,unittest.TestSuite):yield from cases(item)
+        else:yield item
+
+def load_tests(loader, standard_tests, pattern):
+    suite=unittest.TestSuite([standard_tests])
+    for name in ['recipe-tests.py','dependency-tests.py']:
+        path=Path(__file__).with_name(name)
+        spec=importlib.util.spec_from_file_location(name.removesuffix('.py').replace('-','_'),path)
+        module=importlib.util.module_from_spec(spec)
+        exec(compile(path.read_bytes(),str(path),'exec'),module.__dict__)
+        suite.addTests(loader.loadTestsFromModule(module))
+    tests=list(cases(suite))
+    identities=[test.id() for test in tests]
+    if len(set(identities))!=len(identities) or identities.count(INTEGRATION_TEST)!=1:
+        raise ValueError('release test groups require unique members and the registered integration case')
+    selected=[test for test in tests if GROUP=='all' or (test.id()==INTEGRATION_TEST)==(GROUP=='integration')]
+    if not selected or any(getattr(test,'__unittest_skip__',False) or getattr(getattr(test,test._testMethodName),'__unittest_skip__',False) for test in selected):
+        raise ValueError('registered release group must be nonempty and unskipped')
+    return unittest.TestSuite(selected)
+
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--group',choices=['all','unit','integration'],default='all')
+    options,remaining=parser.parse_known_args()
+    GROUP=options.group
+    unittest.main(argv=[sys.argv[0],*remaining])
