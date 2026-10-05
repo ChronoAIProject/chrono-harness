@@ -1278,15 +1278,7 @@ fn parent_collection_recovers_download_without_reexecuting_units_or_relaxing_ide
         attempts[0]["download"]["artifact"],
         attempts[1]["download"]["artifact"]
     );
-    let collected: Value = serde_json::from_slice(
-        &fs::read(
-            h.host
-                .root
-                .join(".chrono-harness/state/collection/check.json"),
-        )
-        .unwrap(),
-    )
-    .unwrap();
+    let collected = published_report(&h.host.root, None, &out);
     assert_eq!(collected["response"]["evidence"]["executed"], json!([]));
     fs::write(
         h.host

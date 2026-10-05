@@ -663,10 +663,10 @@ fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact()
     );
     assert_ne!(first, second);
     assert_eq!(
-        fs::read(first.join("partial-only")).unwrap(),
+        fs::read(host.path().join(first).join("partial-only")).unwrap(),
         b"failed original bytes"
     );
-    assert!(!second.join("partial-only").exists());
+    assert!(!host.path().join(second).join("partial-only").exists());
     assert_eq!(
         &attempts[0]["argv"].as_array().unwrap()[1..8],
         &attempts[1]["argv"].as_array().unwrap()[1..8]
