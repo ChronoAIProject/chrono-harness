@@ -9,13 +9,13 @@
   },
   "binaries": {
     "execute": [
-      "consumer"
+      "creation"
     ],
     "execute_core": [
-      "consumer"
+      "creation"
     ],
     "execute_adoption": [
-      "consumer"
+      "creation"
     ]
   },
   "tools": {
