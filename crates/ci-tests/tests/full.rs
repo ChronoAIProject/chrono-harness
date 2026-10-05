@@ -270,7 +270,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
         .args(["-e", "-c", &script(&yaml, "Canonical full harness check")])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(23));
+    assert_eq!(out.status.code(), Some(23), "{out:?}");
     assert_eq!(out.stderr, b"original-failure\n");
     assert_eq!(
         String::from_utf8(out.stdout)

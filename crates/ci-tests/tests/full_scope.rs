@@ -72,7 +72,7 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
             .env("CHRONO_TEST_RECORDING", "scope")
             .env("CHRONO_BASE", "base fixed").env("CHRONO_CANDIDATE", "candidate fixed")
             .args(["-e", "-c", &script(&yaml, "Canonical full harness check")]).output().unwrap();
-        assert_eq!(out.status.code(), Some(23));
+        assert_eq!(out.status.code(), Some(23), "scope {scope}: {out:?}");
         assert_eq!(out.stderr, b"\xffscope-consumer-failure");
         let expected = local_argv(&c, &scope, "base fixed", "candidate fixed");
         assert_eq!(full::argv(&c, "base fixed", "candidate fixed"), expected);
