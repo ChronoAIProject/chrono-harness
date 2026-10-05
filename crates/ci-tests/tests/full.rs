@@ -18,8 +18,8 @@ fn config() -> FullConfig {
     }))
     .unwrap()
 }
-fn host(body: &str) -> Host {
-    let mut h = Host::new(body);
+fn host(mode: &str) -> Host {
+    let mut h = Host::new(mode);
     let c = config();
     write(&h.root, SOURCE, &serde_json::to_value(&c).unwrap());
     fs::write(h.root.join(".gitignore"), ".chrono-harness/state/\n").unwrap();
@@ -78,7 +78,7 @@ fn failure(error: &str) -> Value {
 
 #[test]
 fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
-    let h = host("");
+    let h = host("pass");
     let bytes = context(&h, &h.candidate);
     let out = prepare_cli(&h, &bytes, "workflow_dispatch");
     assert!(
@@ -111,7 +111,7 @@ fn cli_preserves_context_bytes_and_separate_observations_from_another_cwd() {
 #[test]
 fn repeated_preparation_retains_distinct_ownership_observations_without_rebinding_inputs() {
     use std::os::fd::AsFd;
-    let h = host("");
+    let h = host("pass");
     let bytes = context(&h, &h.candidate);
     let first = prepare(&h, &bytes).unwrap();
     let original = fs::read(h.root.join(config().preparation_path)).unwrap();
@@ -270,7 +270,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
         .args(["-e", "-c", &script(&yaml, "Canonical full harness check")])
         .output()
         .unwrap();
-    assert_eq!(out.status.code(), Some(23));
+    assert_eq!(out.status.code(), Some(23), "{out:?}");
     assert_eq!(out.stderr, b"original-failure\n");
     assert_eq!(
         String::from_utf8(out.stdout)
@@ -286,7 +286,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
 
 #[test]
 fn generated_preparation_step_keeps_original_failure_in_artifacts() {
-    let h = host("");
+    let h = host("pass");
     let c = config();
     fs::create_dir_all(h.root.join(".chrono-harness/bin")).unwrap();
     fs::copy(
@@ -356,7 +356,7 @@ fn generated_preparation_step_keeps_original_failure_in_artifacts() {
 
 #[test]
 fn malformed_context_and_events_fail_without_invented_defaults() {
-    let h = host("");
+    let h = host("pass");
     let original = context(&h, &h.candidate);
     for (key, value) in [
         ("schema_version", json!(1)),
@@ -384,7 +384,7 @@ fn candidate_source_policy_checkout_and_workflow_are_bound_before_publication() 
     for case in [
         "policy", "source", "checkout", "workflow", "digest", "version", "legacy",
     ] {
-        let mut h = host("");
+        let mut h = host("pass");
         if case == "policy" {
             let mut v = read(&h.root, FACTS);
             v["protocol"]["timeout_seconds"] = json!(11);
@@ -442,7 +442,7 @@ fn candidate_source_policy_checkout_and_workflow_are_bound_before_publication() 
 
 #[test]
 fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
-    let h = host("");
+    let h = host("pass");
     let (_remote, base) = h.remote();
     let bytes = context(&h, &base);
     let r = prepare(&h, &bytes).unwrap();
@@ -465,7 +465,7 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
         fs::read(h.root.join(config().preparation_path)).unwrap(),
         saved
     );
-    let mut distinct = host("");
+    let mut distinct = host("pass");
     let workflow = distinct.candidate.clone();
     fs::write(
         distinct.root.join("later.txt"),
@@ -486,11 +486,8 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
         distinct_report["candidate"],
         distinct_report["workflow_source_revision"]
     );
-    for body in [
-        "case \"$*\" in *--batch-check*) printf '\\377broken' >&2; exit 29;; esac",
-        "case \"$*\" in *' fetch '*) printf '\\376fetch-failure' >&2; exit 31;; esac",
-    ] {
-        let h = host(body);
+    for mode in ["full-probe-failure", "full-fetch-failure"] {
+        let h = host(mode);
         let (_remote, base) = h.remote();
         let error = prepare(&h, &context(&h, &base)).unwrap_err();
         let e = failure(&error);
@@ -513,7 +510,7 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
 #[test]
 fn context_report_and_symlink_collisions_preserve_original_bytes() {
     for target in [config().context_path, config().preparation_path] {
-        let h = host("");
+        let h = host("pass");
         let path = h.root.join(&target);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, b"old evidence").unwrap();
@@ -571,7 +568,7 @@ fn committed_cli_rejects_component_output_collisions_before_publication() {
             "preparation process output",
         ),
     ] {
-        let mut h = host("");
+        let mut h = host("pass");
         let original_workflow = fs::read(h.root.join(config().workflow_path)).unwrap();
         let mut source = read(&h.root, SOURCE);
         source[field] = json!(path);
@@ -695,7 +692,7 @@ fn current_source_cli_rejects_component_ownership_before_publication() {
             "distinct ownership",
         ),
     ] {
-        let h = host("");
+        let h = host("pass");
         let mut source = read(&h.root, SOURCE);
         source[field] = json!(value);
         write(&h.root, source_path, &source);
@@ -750,7 +747,7 @@ fn committed_cli_preserves_separate_component_spellings_and_customization() {
             json!({"kind":"collect","manifest":".chrono-harness/state/full/./context.json.distinct"}),
         ),
     ] {
-        let mut h = host("");
+        let mut h = host("pass");
         let mut c = config();
         c.scope = scope.map(|value| serde_json::from_value(value).unwrap());
         c.name = "host custom λ".into();

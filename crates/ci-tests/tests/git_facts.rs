@@ -53,9 +53,6 @@ fn commit(root: &Path, amend: bool) -> String {
     git(root, &args);
     git(root, &["rev-parse", "HEAD"])
 }
-fn quote(path: &Path) -> String {
-    format!("'{}'", path.to_str().unwrap().replace('\'', "'\\''"))
-}
 struct Host {
     _dir: tempfile::TempDir,
     _inputs: tempfile::TempDir,
@@ -66,7 +63,7 @@ struct Host {
     candidate: String,
 }
 impl Host {
-    fn new(body: &str) -> Self {
+    fn new(mode: &str) -> Self {
         let dir = tempfile::Builder::new()
             .prefix("event host λ ")
             .tempdir()
@@ -82,20 +79,11 @@ impl Host {
         let real = chrono_harness::resolve_program(&root, "git", None).unwrap();
         let version = Command::new(&real).arg("--version").output().unwrap();
         assert!(version.status.success());
-        let script = format!(
-            "#!/bin/sh\n[ \"$BOUND_EVENT_VALUE\" = declared ] || exit 81\n[ -z \"$CHRONO_EVENT_AMBIENT\" ] || exit 82\nprintf '%s\\n' \"$*\" >> \"$EVENT_TRACE\" || exit $?\n{body}\nexec {} \"$@\"\n",
-            quote(&real)
-        );
-        fs::write(&program, script).unwrap();
-        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
+        let helper = env!("CARGO_BIN_EXE_chrono-ci-test-git");
+        fs::copy(helper, &program).unwrap();
         let shadow = external.join("ambient-bin");
         fs::create_dir(&shadow).unwrap();
-        fs::write(
-            shadow.join("git"),
-            "#!/bin/sh\necho ambient-git >&2\nexit 83\n",
-        )
-        .unwrap();
-        fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::copy(helper, shadow.join("git")).unwrap();
         let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut source = read(&repo, ".chrono-harness/ci/units.json")["collection"].clone();
         source["schema"] = "chrono-github-ci/v3".into();
@@ -108,6 +96,7 @@ impl Host {
                 "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
             "environment":{"inherit":[],"values":{"PATH":std::env::var("PATH").unwrap(),
                 "BOUND_EVENT_VALUE":"declared","EVENT_TRACE":trace,
+                "EVENT_REAL_GIT":real,"EVENT_GIT_MODE":mode,
                 "GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
                 "inputs":[{"id":"event-git-bytes","presence":"present","location":program,
                     "sha256":sha256(&fs::read(&program).unwrap())}]},
@@ -176,7 +165,7 @@ fn bytes(p: &Value, stream: &str) -> Vec<u8> {
 
 #[test]
 fn event_binding_is_versioned_explicit_and_generation_preserves_customization() {
-    let h = Host::new("");
+    let h = Host::new("pass");
     let c = h.config();
     assert!(generate(&h.root, SOURCE, false).unwrap());
     assert!(!generate(&h.root, SOURCE, true).unwrap());
@@ -217,7 +206,7 @@ fn event_binding_is_versioned_explicit_and_generation_preserves_customization() 
 
 #[test]
 fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
-    let h = Host::new("");
+    let h = Host::new("pass");
     let payload = json!({"before":h.candidate,"after":h.candidate,"created":false});
     let report = prepare_cli(&h, "push", &payload);
     let facts = &report["git_facts"];
@@ -285,7 +274,7 @@ fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
 #[test]
 fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
     for event in ["push", "pull_request"] {
-        let mut h = Host::new("");
+        let mut h = Host::new("pass");
         let chosen = ".chrono-harness/native event.json";
         write(&h.root, chosen, &read(&h.root, FACTS));
         let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
@@ -341,7 +330,7 @@ fn native_platform_policy_serves_real_push_and_pr_cli_acquisition() {
 
 #[test]
 fn missing_commit_is_fetched_and_reprobed_through_bound_git() {
-    let h = Host::new("");
+    let h = Host::new("pass");
     let (_remote, base) = h.remote();
     let r = h.push(&base).unwrap();
     let p = processes(&r["git_facts"]);
@@ -371,9 +360,7 @@ fn missing_commit_is_fetched_and_reprobed_through_bound_git() {
 
 #[test]
 fn failed_probe_preserves_original_bytes_and_never_fetches() {
-    let h = Host::new(
-        "case \"$*\" in *--batch-check*) /bin/cat >/dev/null; printf '\\377original-probe\\n' >&2; exit 73;; esac",
-    );
+    let h = Host::new("probe-failure");
     let error = h.push(&h.candidate).unwrap_err();
     let facts = observed(&error);
     let failed = processes(&facts)
@@ -389,12 +376,8 @@ fn failed_probe_preserves_original_bytes_and_never_fetches() {
 
 #[test]
 fn malformed_or_wrong_type_probe_does_not_trigger_fetch() {
-    for body in [
-        "case \"$*\" in *--batch-check*) /bin/cat >/dev/null; printf 'not-the-request missing\\n'; exit 0;; esac",
-        "case \"$*\" in *--batch-check*) read oid; printf '%s blob\\n' \"$oid\"; exit 0;; esac",
-        "case \"$*\" in *--batch-check*) read oid; printf '%s commit\\nextra\\n' \"$oid\"; exit 0;; esac",
-    ] {
-        let h = Host::new(body);
+    for mode in ["malformed-probe", "wrong-type-probe", "extra-probe-output"] {
+        let h = Host::new(mode);
         let error = h.push(&h.candidate).unwrap_err();
         assert!(processes(&observed(&error)).iter().any(is_probe));
         assert!(!h.trace().contains(" fetch "));
@@ -403,7 +386,7 @@ fn malformed_or_wrong_type_probe_does_not_trigger_fetch() {
 
 #[test]
 fn absent_probe_and_failed_fetch_both_remain_observable() {
-    let h = Host::new("");
+    let h = Host::new("pass");
     git(
         &h.root,
         &[
@@ -431,7 +414,7 @@ fn absent_probe_and_failed_fetch_both_remain_observable() {
 
 #[test]
 fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
-    let mut h = Host::new("");
+    let mut h = Host::new("pass");
     let mut c = read(&h.root, SOURCE);
     c["initial_inventory"] = json!({"path":".chrono-harness/ci/root.json","profile":{
         "schema":"chrono-initial-check/v1","host_config":FACTS,"timeout_seconds":10,"stdout_limit_bytes":1048576,
@@ -493,7 +476,7 @@ fn binding_source_and_executable_failures_precede_network_observation() {
         "legacy-binding",
         "checkout",
     ] {
-        let mut h = Host::new("");
+        let mut h = Host::new("pass");
         let mut facts = read(&h.root, FACTS);
         match case {
             "source-drift" => facts["environment"]["values"]["NEW"] = "changed".into(),
@@ -535,7 +518,7 @@ fn binding_source_and_executable_failures_precede_network_observation() {
 
 #[test]
 fn legacy_event_profile_remains_unbound() {
-    let h = Host::new("");
+    let h = Host::new("pass");
     let mut source = read(&h.root, SOURCE);
     source["schema"] = "chrono-github-ci/v1".into();
     source.as_object_mut().unwrap().remove("facts_config");
@@ -554,7 +537,7 @@ fn legacy_event_profile_remains_unbound() {
 
 #[test]
 fn relative_host_root_uses_the_same_bound_checkout() {
-    let h = Host::new("");
+    let h = Host::new("pass");
     write(
         &h.root,
         ".chrono-harness/state/relative-payload.json",
