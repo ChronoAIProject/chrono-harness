@@ -2003,13 +2003,13 @@ fn migration_local_short_lane() -> (Host, tempfile::TempDir, std::path::PathBuf)
         .unwrap()
         .join("python-migration");
     let python = fs::canonicalize(&h.tool).unwrap();
-    let bytes = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec '{}' \"$@\"\n",
-        tools.path().join("business-launches").display(),
-        python.display()
+    native_tools::install(&wrapper);
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_REAL_PYTHON",
+        &python,
+        &["judge:projects"],
     );
-    fs::write(&wrapper, &bytes).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
     h.tool = wrapper.clone();
     let cfg = h.values.get_mut(CONFIG).unwrap();
     cfg["tools"]
@@ -2025,7 +2025,7 @@ fn migration_local_short_lane() -> (Host, tempfile::TempDir, std::path::PathBuf)
         .find(|i| i["id"] == "interpreter")
         .unwrap();
     input["location"] = json!(wrapper);
-    input["sha256"] = json!(sha256(bytes.as_bytes()));
+    input["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
     cfg["protocol"]["timeout_seconds"] = json!(180);
     cfg["execution_units"] = json!({"units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/one/check.json"},"two":{"tests":["test:decoder-tests"],"report_path":".chrono-harness/state/two/check.json"}},"shared_operations":{},"collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864},"report_path":".chrono-harness/state/collection/check.json"});
     // This real local birth baseline is readable by worktree's registration

@@ -1,5 +1,5 @@
 use super::*;
-use std::{os::unix::fs::PermissionsExt, process::Command};
+use std::process::Command;
 
 pub(super) fn bound_host() -> Host {
     bind_host(host())
@@ -9,19 +9,11 @@ pub(super) fn bind_host(mut h: Host) -> Host {
     let state = root.join(".chrono-harness/state");
     fs::create_dir_all(&state).unwrap();
     let selected = state.join("selected Git λ");
-    let trace = state.join("git-trace");
     let real = chrono_harness::resolve_program(&root, "git", None).unwrap();
-    let quote = |p: &std::path::Path| format!("'{}'", p.to_str().unwrap().replace('\'', "'\\''"));
-    fs::write(&selected, format!("#!/bin/sh\n[ \"$FACTS_SENTINEL\" = declared ] || exit 81\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",quote(&trace),quote(&real))).unwrap();
-    fs::set_permissions(&selected, fs::Permissions::from_mode(0o755)).unwrap();
+    native_tools::install(&selected);
     let shadow = state.join("shadow");
     fs::create_dir(&shadow).unwrap();
-    fs::write(
-        shadow.join("git"),
-        "#!/bin/sh\necho ambient-git-must-not-run >&2\nexit 83\n",
-    )
-    .unwrap();
-    fs::set_permissions(shadow.join("git"), fs::Permissions::from_mode(0o755)).unwrap();
+    native_tools::install(&shadow.join("git"));
     let version = Command::new(&real).arg("--version").output().unwrap();
     assert!(version.status.success());
     h.tool = fs::canonicalize(&h.tool).unwrap();
@@ -122,6 +114,12 @@ pub(super) fn bind_host(mut h: Host) -> Host {
         .unwrap()
         .push(policy);
     fs::write(root.join("policy.json"), "{\"limit\":1}").unwrap();
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_REAL_GIT",
+        &real,
+        &["judge:registration", "judge:projects"],
+    );
     h.save();
     h.base = h.candidate.clone();
     fs::write(root.join("policy.json"), "{\"limit\":2}").unwrap();
@@ -192,8 +190,12 @@ fn bound_context(h: &Host, kind: &str, digest: Option<&str>, execute: bool) -> (
                 .iter()
                 .any(|i| i["id"] == "git-bytes")
             {
+                let bytes = fs::read(&selected).unwrap();
+                let digest = sha256(&bytes);
+                let blob = format!(".chrono-harness/state/fixture-{digest}");
+                fs::write(root.join(&blob), &bytes).unwrap();
                 retained[endpoint]["files"]["git-bytes"] =
-                    json!({"bytes":fs::read(&selected).unwrap()});
+                    json!({"blob":blob,"sha256":digest,"length":bytes.len()});
             }
         }
     };

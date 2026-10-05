@@ -5,6 +5,12 @@ edition = "2024"
 publish = false
 autotests = false
 
+[[bin]]
+name = "chrono-workflow-test-tool"
+path = "tests/support/native_tool.rs"
+test = false
+bench = false
+
 [dev-dependencies]
 chrono-judge-workflow = { path = "../judge-workflow" }
 chrono-harness = { path = "../runner" }
