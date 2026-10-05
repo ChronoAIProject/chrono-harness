@@ -1482,7 +1482,11 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
         });
     }
     let out = command.output().unwrap();
-    eprintln!("isolated helper stdout={} stderr={}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    eprintln!(
+        "isolated helper stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(
         out.status.success(),
         "{} {}",
@@ -1497,33 +1501,37 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
 fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget() {
     use std::os::fd::AsFd;
     for attempt in 0..64 {
-    eprintln!("handoff diagnostic attempt={attempt}");
-    let root = tempfile::tempdir().unwrap();
-    let capability = fs::File::open(root.path()).unwrap();
-    let _ownership = chrono_harness::process_fds::Scope::new(&[capability.as_fd()]).unwrap();
-    let executable = std::env::current_exe().unwrap();
-    let spec = chrono_harness::CommandSpec {
-        program: executable.to_str().unwrap().into(),
-        args: vec![
-            "--exact".into(),
-            "failed_live_identity_registration_preserves_actual_kernel_error_before_exec".into(),
-            "--nocapture".into(),
-        ],
-        env: Default::default(),
-        timeout_seconds: FIXTURE_TIMEOUT_SECONDS,
-        output_limit_bytes: 4096,
-    };
-    let result = chrono_harness::run_process_observed(
-        root.path(),
-        &spec,
-        &[],
-        &sha256(&fs::read(&executable).unwrap()),
-    )
-    .unwrap();
-    assert!(result.ownership_fds.is_some(), "{result:?}");
-    eprintln!("owned helper stdout={} stderr={}", result.stdout, result.stderr);
-    assert!(result.failure.is_none(), "{result:?}");
-    assert_eq!(result.exit_code, 0, "{result:?}");
-    assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");
+        eprintln!("handoff diagnostic attempt={attempt}");
+        let root = tempfile::tempdir().unwrap();
+        let capability = fs::File::open(root.path()).unwrap();
+        let _ownership = chrono_harness::process_fds::Scope::new(&[capability.as_fd()]).unwrap();
+        let executable = std::env::current_exe().unwrap();
+        let spec = chrono_harness::CommandSpec {
+            program: executable.to_str().unwrap().into(),
+            args: vec![
+                "--exact".into(),
+                "failed_live_identity_registration_preserves_actual_kernel_error_before_exec"
+                    .into(),
+                "--nocapture".into(),
+            ],
+            env: Default::default(),
+            timeout_seconds: FIXTURE_TIMEOUT_SECONDS,
+            output_limit_bytes: 4096,
+        };
+        let result = chrono_harness::run_process_observed(
+            root.path(),
+            &spec,
+            &[],
+            &sha256(&fs::read(&executable).unwrap()),
+        )
+        .unwrap();
+        assert!(result.ownership_fds.is_some(), "{result:?}");
+        eprintln!(
+            "owned helper stdout={} stderr={}",
+            result.stdout, result.stderr
+        );
+        assert!(result.failure.is_none(), "{result:?}");
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");
     }
 }
