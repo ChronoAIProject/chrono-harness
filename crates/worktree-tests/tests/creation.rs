@@ -273,13 +273,19 @@ impl Host {
     fn hook(&self, settings: Value) {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
-        fs::copy(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"), &p).unwrap();
+        let copied = Command::new("/bin/cp")
+            .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
+            .arg(&p)
+            .output()
+            .unwrap();
+        assert!(copied.status.success(), "native hook copy: {copied:?}");
         fs::write(
             p.with_extension("json"),
             serde_json::to_vec(&settings).unwrap(),
         )
         .unwrap();
-        fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
+        check_inputs::ready_version_program(&self.root, &p, b"fixture\n");
     }
 }
 
