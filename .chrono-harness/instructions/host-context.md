@@ -12,7 +12,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 现役 FILEMAP v2 是唯一执行计划源。routes 合并显式所选操作、核规范调用并绑定工具；projects 核独立配对、输出隔离与实际回执。scoped CI 复用该执行链，仍保留专用选择／环境边界。ci.verify 属于真实 ci/ci-tests 配对；有限历史转换及方法替换由登记的 candidate decoder 消费原字节，不执行旧判官。
 
-本宿主采用 chrono-ci-check/v3 的 22 个显式单元，并在 units.json 显式采用 chrono-job-gating/v1：一个完整 Git DELTA detector、22 个 job-level if 独立单元和一个 always() aggregate，共用一份 parent workflow；只要求 aggregate 的 chrono / collection。当前宿主采用 config schema4；short check 固定读取 .chrono-harness/config.json 的 canonical_check.profile 和 inputs.local/ci action。候选仍须已提交、检出干净；CHRONO_CHECK_SOURCE 未设或 local 选择登记的 worktree 生产者，ci 选择登记的 CI 事件生产者，不猜范围或回退。启动构建 runner、judge-ci、ci 和本地生产者 worktree；业务构建仍归独立单元计划。当前入口：
+本宿主采用 chrono-ci-check/v3 的 23 个显式单元，并在 units.json 显式采用 chrono-job-gating/v1：一个完整 Git DELTA detector、23 个 job-level if 独立单元和一个 always() aggregate，共用一份 parent workflow；只要求 aggregate 的 chrono / collection。当前宿主采用 config schema4；short check 固定读取 .chrono-harness/config.json 的 canonical_check.profile 和 inputs.local/ci action。候选仍须已提交、检出干净；CHRONO_CHECK_SOURCE 未设或 local 选择登记的 worktree 生产者，ci 选择登记的 CI 事件生产者，不猜范围或回退。启动构建 runner、judge-ci、ci 和本地生产者 worktree；业务构建仍归独立单元计划。当前入口：
 
 ```sh
 /usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
@@ -42,10 +42,12 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 本次有界修复在 worktree 原所有者协调已持久登记但未封口的 v2 birth；实际 EX 排除及原附件／政策验证后，普通入口保留原缺失／部分结果并发布可重复中断恢复回执，不制造原成功 birth 或 finish。已发布缓存尝试后新消费开启新代际，旧 intent/result 保留。bootstrap 与 check 同用 managed_command_failed 区分原命令失败及后续生命周期拒绝。宿主 cap 2 的 canonical 验证仍归调用方；本次独立 owner suites 顺序执行且不改 libtest 默认线程。产品与宿主政策同改，成本包含实际进程／Git 回归、完整 worktree/CI/runner/instructions 与登记生成，原失败不被覆盖。
 
-本宿主 projects v2 显式登记 30 个 Rust 项目与两对 Python 脚本。workflow-inventory 及其 Python 测试分别持有脚本身份；Python 单元测试归独立 CI 单元，只使用临时目录。三个 Rust workflow 测试组继续运行真实 inventory 校验，Python 单元测试按自身 DELTA 登记独立选择。语言判官核声明配对，不证明其余嵌入式跨语言测试已全部迁移。
+本宿主 projects v2 显式登记 30 个 Rust 项目与三对 Python 脚本。workflow-inventory 及其 Python 测试分别持有脚本身份；Python 单元测试归独立 CI 单元，只使用临时目录。三个 Rust workflow 测试组继续运行真实 inventory 校验，Python 单元测试按自身 DELTA 登记独立选择。语言判官核声明配对，不证明其余嵌入式跨语言测试已全部迁移。
 
-发布配方采用 v5。独立 Python 项目 release-build 与其唯一测试项目 release-build-tests 没有 Cargo manifest/lock/target；两个显式测试组分别为普通 Python 单元和依赖 build.distribution 的真实打包集成。发布验证按显式 needs 及 rust_toolchain 布尔选择取得资产和编译工具链；四个 Python 单元不安装 Rust，15 个原始 Rust 验证仍执行未过滤 Cargo action。普通 CI 共 22 个业务单元，原生发布每个平台 15 个 build、19 个 verification 和一个 collector。产品／测试、宿主采用与生成投影同时受影响，完整候选、本地与原生验证及公开采用仍分别验收。
+发布配方采用 v5。独立 Python 项目 release-build 与其唯一测试项目 release-build-tests 没有 Cargo manifest/lock/target；两个显式测试组分别为普通 Python 单元和依赖 build.distribution 的真实打包集成。发布验证按显式 needs 及 rust_toolchain 布尔选择取得资产和编译工具链；五个 Python 单元不安装 Rust，15 个原始 Rust 验证仍执行未过滤 Cargo action。普通 CI 共 23 个业务单元，原生发布每个平台 15 个 build、20 个 verification 和一个 collector。产品／测试、宿主采用与生成投影同时受影响，完整候选、本地与原生验证及公开采用仍分别验收。
 
 解码器专属 Python 测试在 migrations/test-hosts.json 显式选择平台测试输入：本机与 macOS CI 核主宿主 config.json 的固定解释器，Linux 原生发布核独立测试 fixture 的固定解释器。未知平台不回退、不从实测版本生成预期；Linux fixture 不表示主宿主 full 治理已采用。全部解码及版本断言在两个登记平台执行。
 
 worktree-tests 的 core 与 adoption 两个测试组分别对应 worktree、worktree-adoption CI 单元。adoption 显式列出六个已采用宿主入口的进程交接与租约集成用例，core 排除这些同名成员；原测试 ID、断言、时限与默认 libtest 线程设置不变。登记的 worktree.inventory 复用独立 Python inventory 所有者，以 worktree-inventory.json 核验真实未过滤列表和两组列表非空、无忽略、无重叠且全集相等。两组沿相同工作树测试 target 与 inventory 资源互斥；未过滤 execute 及发布验证仍保留。分组提供独立检查与重跑边界，不宣称消除所有时序失败。
+
+宿主 bootstrap.py 与其 Python 测试独立登记为 host-bootstrap / host-bootstrap-tests。专属测试通过显式 Python SDK／操作 fixture 检查配置选择、安装字节与摘要、Git 源状态、工具链安装及失败传播；独立 host-bootstrap CI 与两平台发布验证直接执行 Python，不安装 Rust。Rust worktree 的宿主入口与租约集成测试仍验证真实跨程序边界。其余跨语言测试迁移、完整候选原生验收及公开采用仍需完成。

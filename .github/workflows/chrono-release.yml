@@ -2834,7 +2834,7 @@ jobs:
           if-no-files-found: error
   linux_package:
     if: ${{ always() && github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_judge_cargo_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_scoped_v1_tests","linux_verify_workflow_inventory_tests","linux_verify_release_build_tests","linux_verify_release_build_integration"]
+    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_judge_cargo_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_scoped_v1_tests","linux_verify_workflow_inventory_tests","linux_verify_release_build_tests","linux_verify_release_build_integration","linux_verify_host_bootstrap_tests"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -3094,6 +3094,13 @@ jobs:
           artifact-ids: ${{ needs.linux_verify_release_build_integration.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
+      - name: Download selected original artifact from linux_verify_host_bootstrap_tests
+        if: ${{ always() && needs.linux_verify_host_bootstrap_tests.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_verify_host_bootstrap_tests.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -5936,7 +5943,7 @@ jobs:
           if-no-files-found: error
   macos_package:
     if: ${{ always() && github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_judge_cargo_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_scoped_v1_tests","macos_verify_workflow_inventory_tests","macos_verify_release_build_tests","macos_verify_release_build_integration"]
+    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_judge_cargo_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_scoped_v1_tests","macos_verify_workflow_inventory_tests","macos_verify_release_build_tests","macos_verify_release_build_integration","macos_verify_host_bootstrap_tests"]
     runs-on: "macos-14"
     timeout-minutes: 45
     outputs:
@@ -6196,6 +6203,13 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_release_build_integration.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
+      - name: Download selected original artifact from macos_verify_host_bootstrap_tests
+        if: ${{ always() && needs.macos_verify_host_bootstrap_tests.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_verify_host_bootstrap_tests.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6559,4 +6573,86 @@ jobs:
         with:
           name: "chrono-release-macos-verify_release_build_integration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_release_build_integration/"
+          if-no-files-found: error
+  linux_verify_host_bootstrap_tests:
+    if: ${{ github.event.deleted != true }}
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_tests"
+        run: |
+          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_host_bootstrap_tests' '--unit' 'verify_host_bootstrap_tests'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-linux-verify_host_bootstrap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/"
+          if-no-files-found: error
+  macos_verify_host_bootstrap_tests:
+    if: ${{ github.event.deleted != true }}
+    runs-on: "macos-14"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_tests"
+        run: |
+          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_host_bootstrap_tests' '--unit' 'verify_host_bootstrap_tests'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-macos-verify_host_bootstrap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/"
           if-no-files-found: error
