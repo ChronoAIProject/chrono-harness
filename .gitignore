@@ -35,3 +35,5 @@ crates/inputs-tests/target/
 
 /crates/worktree/target/
 /crates/worktree-tests/target/
+/crates/diagnostics/target/
+/crates/diagnostics-tests/target/

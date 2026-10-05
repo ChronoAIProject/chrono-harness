@@ -138,6 +138,14 @@
     {
       "path": "crates/worktree-tests/target/",
       "disposition": "dispose"
+    },
+    {
+      "path": "crates/diagnostics/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/diagnostics-tests/target/",
+      "disposition": "dispose"
     }
   ]
 }
