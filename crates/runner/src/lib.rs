@@ -598,6 +598,14 @@ fn run_process_inner(
     expected: Option<&str>,
     timeout: Duration,
 ) -> Result<ProcessResult, String> {
+    let timing_path = s.env.get("CHRONO_CHECK_HANDOFF_TRACE");
+    let timing_start = Instant::now();
+    let timing_wall = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .to_string();
+    let mut timing_marks = Vec::new();
     validate_command(s)?;
     if expected.is_some() && !Path::new(&s.program).is_absolute() {
         return Err("bound executable must be absolute; no ambient PATH resolution".into());
@@ -616,6 +624,7 @@ fn run_process_inner(
     if expected.is_some_and(|v| v != hash) {
         return Err("prelaunch executable digest mismatch".into());
     }
+    timing_marks.push(("validated", timing_start.elapsed().as_micros()));
     let mut command = Command::new(&executable);
     if expected.is_some() {
         command.env_clear();
@@ -645,12 +654,14 @@ fn run_process_inner(
     let ownership = process_ownership::Launch::prepare()?;
     #[cfg(unix)]
     ownership.configure(&mut command);
-    std::thread::scope(|scope| {
+    timing_marks.push(("prepared", timing_start.elapsed().as_micros()));
+    let result = std::thread::scope(|scope| {
         let child = command.spawn().map_err(|e| {
             #[cfg(unix)]
             let e = ownership.spawn_error(e);
             format!("{}: {e}", executable.display())
         })?;
+        timing_marks.push(("spawned", timing_start.elapsed().as_micros()));
         let mut child = OwnedProcess {
             child,
             #[cfg(unix)]
@@ -727,6 +738,7 @@ fn run_process_inner(
             exceeded.clone(),
             monitor,
         );
+        timing_marks.push(("monitor_ready", timing_start.elapsed().as_micros()));
         // Read the shared clock first: this evidence cutoff cannot extend the
         // existing monitor deadline, including a delay between the two reads.
         #[cfg(unix)]
@@ -771,6 +783,7 @@ fn run_process_inner(
             #[cfg(not(unix))]
             std::thread::park_timeout(Duration::from_millis(10));
         };
+        timing_marks.push(("observed", timing_start.elapsed().as_micros()));
         #[cfg(unix)]
         if !child.ownership.drain() {
             let original = failure
@@ -796,11 +809,13 @@ fn run_process_inner(
             }
         }
         child.joined = status.is_some();
+        timing_marks.push(("drained", timing_start.elapsed().as_micros()));
         let stdout_result = stdout.join();
         let stderr_result = stderr.join();
         if let Some(writer) = writer {
             let _ = writer.join();
         }
+        timing_marks.push(("readers_joined", timing_start.elapsed().as_micros()));
         let a = stdout_result
             .map_err(|_| "stdout reader panicked")?
             .map_err(|e| e.to_string())?;
@@ -835,7 +850,24 @@ fn run_process_inner(
             executable,
             sha256: hash,
         })
-    })
+    });
+    timing_marks.push(("finished", timing_start.elapsed().as_micros()));
+    if let Some(path) = timing_path {
+        let path =
+            PathBuf::from(path).with_extension(format!("{}.process.jsonl", std::process::id()));
+        let row = value!({"pid":std::process::id(),"start_unix_ns":timing_wall,
+            "argv":s.args,"program":s.program,"marks_us":timing_marks,
+            "success":result.as_ref().is_ok_and(|r| r.exit_code == 0 && r.failure.is_none())});
+        let written = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut file| writeln!(file, "{row}"));
+        if let Err(error) = written {
+            eprintln!("process timing observation failed: {error}");
+        }
+    }
+    result
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
     validate_response_protocol(r, id, exit, PROTOCOL)

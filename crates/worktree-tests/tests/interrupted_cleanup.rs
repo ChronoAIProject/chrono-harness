@@ -1242,6 +1242,8 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         assert!(path.is_absolute());
         cfg["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path);
         h.policy(|p| p["environment"]["values"]["GIT_TRACE2_EVENT"] = value!(path));
+        cfg["environment"]["values"]["CHRONO_CHECK_HANDOFF_TRACE"] = value!(path);
+        h.policy(|p| p["environment"]["values"]["CHRONO_CHECK_HANDOFF_TRACE"] = value!(path));
     }
     cfg["canonical_check"]["participation"] =
         value!({"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]});

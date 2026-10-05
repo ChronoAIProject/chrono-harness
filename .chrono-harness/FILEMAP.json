@@ -6480,6 +6480,11 @@
       "from": "environment:CHRONO_CHECK_HANDOFF_TRACE",
       "kind": "runtime-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "from": "environment:CHRONO_CHECK_HANDOFF_TRACE",
+      "kind": "runtime-input",
+      "to": "project:runner"
     }
   ],
   "test_costs": [
