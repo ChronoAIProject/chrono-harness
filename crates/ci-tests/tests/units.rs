@@ -536,10 +536,18 @@ fn install_mock_transport(root: &Path, mode: &str, c: &str) {
 }
 
 fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
+    gather_host_config(mode, |_| {})
+}
+
+fn gather_host_config(
+    mode: &str,
+    configure: impl FnOnce(&mut Value),
+) -> (tempfile::TempDir, String, String) {
     let (host, b, _) = consumer();
     let root = host.path();
     let mut cfg = config_value();
     cfg["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+    configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
     generate(root, ".chrono-harness/ci/units.json", false).unwrap();
     git(root, &["add", "."]);
@@ -586,6 +594,210 @@ fn gather_cli(root: &Path) -> std::process::Output {
         .env("GH_TOKEN", "fixture-credential-must-not-be-persisted")
         .output()
         .unwrap()
+}
+
+fn download_retry() -> Value {
+    json!({"max_attempts":3,"delay_seconds":1,"http_statuses":[429,500,502,503,504]})
+}
+
+fn failed_downloads(root: &Path, count: u64, status: u64) {
+    let path = root.join(".chrono-harness/state/mock.json");
+    let mut data: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    data["download_failures"] = json!(count);
+    data["http_status"] = json!(status);
+    fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
+}
+
+fn gathered(root: &Path) -> Value {
+    serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/state/collection/gather.json")).unwrap(),
+    )
+    .unwrap()
+}
+
+fn alpha_downloads(report: &Value) -> Vec<&Value> {
+    report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["argv"][1] == "run" && p["argv"][3] == "101")
+        .collect()
+}
+
+#[test]
+fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact() {
+    let (host, b, c) = gather_host_config("success", |cfg| {
+        cfg["gather"]["download_retry"] = download_retry();
+    });
+    failed_downloads(host.path(), 1, 503);
+    let result = gather_cli(host.path());
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let report = gathered(host.path());
+    let attempts = alpha_downloads(&report);
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(attempts[0]["exit_code"], 23);
+    assert_eq!(attempts[1]["exit_code"], 0);
+    let stderr: Vec<u8> = serde_json::from_value(attempts[0]["stderr_bytes"].clone()).unwrap();
+    assert!(String::from_utf8_lossy(&stderr).contains("HTTP 503:"));
+    let first = Path::new(
+        attempts[0]["argv"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .as_str()
+            .unwrap(),
+    );
+    let second = Path::new(
+        attempts[1]["argv"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap()
+            .as_str()
+            .unwrap(),
+    );
+    assert_ne!(first, second);
+    assert_eq!(
+        fs::read(host.path().join(first).join("partial-only")).unwrap(),
+        b"failed original bytes"
+    );
+    assert!(!host.path().join(second).join("partial-only").exists());
+    assert_eq!(
+        &attempts[0]["argv"].as_array().unwrap()[1..8],
+        &attempts[1]["argv"].as_array().unwrap()[1..8]
+    );
+    execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
+}
+
+#[test]
+fn download_recovery_is_opt_in_and_exhaustion_or_unlisted_status_stays_failed() {
+    for (enabled, failures, status, expected_attempts) in
+        [(false, 1, 503, 1), (true, 1, 401, 1), (true, 9, 503, 3)]
+    {
+        let (host, _, _) = gather_host_config("success", |cfg| {
+            if enabled {
+                cfg["gather"]["download_retry"] = download_retry();
+            }
+        });
+        failed_downloads(host.path(), failures, status);
+        let result = gather_cli(host.path());
+        assert!(!result.status.success());
+        let report = gathered(host.path());
+        assert_eq!(alpha_downloads(&report).len(), expected_attempts);
+        assert!(
+            !host
+                .path()
+                .join(".chrono-harness/state/collection/manifest.json")
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn download_recovery_does_not_accept_invalid_evidence_after_transport_recovers() {
+    let (host, _, _) = gather_host_config("wrong-source", |cfg| {
+        cfg["gather"]["download_retry"] = download_retry();
+    });
+    failed_downloads(host.path(), 1, 503);
+    assert!(!gather_cli(host.path()).status.success());
+    let report = gathered(host.path());
+    assert_eq!(alpha_downloads(&report).len(), 2);
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("different workflow source")
+    );
+    assert!(
+        !host
+            .path()
+            .join(".chrono-harness/state/collection/manifest.json")
+            .exists()
+    );
+}
+
+#[test]
+fn download_recovery_configuration_rejects_ambiguous_or_unbounded_policy() {
+    let mut valid = config_value();
+    valid["gather"]["download_retry"] = download_retry();
+    let c: chrono_ci::units::Config = serde_json::from_value(valid.clone()).unwrap();
+    chrono_ci::units::validate(&c).unwrap();
+    for (key, value) in [
+        ("max_attempts", json!(0)),
+        ("max_attempts", json!(11)),
+        ("delay_seconds", json!(0)),
+        ("delay_seconds", json!(60)),
+        ("http_statuses", json!([])),
+        ("http_statuses", json!([503, 503])),
+        ("http_statuses", json!([200])),
+        ("unknown", json!(true)),
+    ] {
+        let mut invalid = valid.clone();
+        invalid["gather"]["download_retry"][key] = value;
+        let parsed = serde_json::from_value::<chrono_ci::units::Config>(invalid);
+        assert!(
+            parsed.is_err() || chrono_ci::units::validate(&parsed.unwrap()).is_err(),
+            "{key}"
+        );
+    }
+    valid["gather"]["download_retry"] = Value::Null;
+    assert!(serde_json::from_value::<chrono_ci::units::Config>(valid).is_err());
+}
+
+#[test]
+fn download_recovery_shares_original_time_and_output_budgets() {
+    for (mode, expected_attempts) in [("deadline", 1), ("output", 2), ("ambiguous-status", 1)] {
+        let (host, _, _) = gather_host_config("success", |cfg| {
+            cfg["gather"]["download_retry"] = download_retry();
+            if mode == "deadline" {
+                cfg["gather"]["timeout_seconds"] = json!(2);
+            }
+            if mode == "output" {
+                cfg["gather"]["output_limit_bytes"] = json!(1024);
+            }
+        });
+        failed_downloads(host.path(), 9, 503);
+        let path = host.path().join(".chrono-harness/state/mock.json");
+        let mut data: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        match mode {
+            "deadline" => data["download_pause_ms"] = json!(1500),
+            "output" => data["download_padding"] = json!(900),
+            _ => data["second_http_status"] = json!(401),
+        }
+        fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
+        assert!(!gather_cli(host.path()).status.success(), "{mode}");
+        let report = gathered(host.path());
+        let attempts = alpha_downloads(&report);
+        assert_eq!(
+            attempts.len(),
+            expected_attempts,
+            "{mode}: {}",
+            report["error"]
+        );
+        if mode == "output" {
+            assert!(attempts.last().unwrap()["failure"].is_string());
+            for stream in ["stdout_bytes", "stderr_bytes"] {
+                assert!(
+                    attempts
+                        .iter()
+                        .map(|p| p[stream].as_array().unwrap().len())
+                        .sum::<usize>()
+                        <= 1024
+                );
+            }
+        }
+        assert!(
+            !host
+                .path()
+                .join(".chrono-harness/state/collection/manifest.json")
+                .exists()
+        );
+    }
 }
 
 #[test]

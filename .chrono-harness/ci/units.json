@@ -362,7 +362,18 @@
     "poll_seconds": 30,
     "manifest_path": ".chrono-harness/state/collection/manifest.json",
     "download_directory": ".chrono-harness/state/collection/downloads/",
-    "report_path": ".chrono-harness/state/collection/gather.json"
+    "report_path": ".chrono-harness/state/collection/gather.json",
+    "download_retry": {
+      "max_attempts": 3,
+      "delay_seconds": 2,
+      "http_statuses": [
+        429,
+        500,
+        502,
+        503,
+        504
+      ]
+    }
   },
   "job_gating": {
     "schema": "chrono-job-gating/v1",

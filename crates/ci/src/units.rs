@@ -94,6 +94,20 @@ pub struct Workflow {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct DownloadRetry {
+    pub max_attempts: u32,
+    pub delay_seconds: u64,
+    pub http_statuses: Vec<u16>,
+}
+
+fn download_retry_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<DownloadRetry>, D::Error> {
+    DownloadRetry::deserialize(d).map(Some)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Gather {
     pub program: String,
     pub inherit_environment: Vec<String>,
@@ -106,6 +120,12 @@ pub struct Gather {
     pub manifest_path: String,
     pub download_directory: String,
     pub report_path: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "download_retry_present"
+    )]
+    pub download_retry: Option<DownloadRetry>,
 }
 
 impl Config {
@@ -315,6 +335,19 @@ pub fn validate(c: &Config) -> Result<(), String> {
         || c.gather.poll_seconds > 60
     {
         return Err("invalid bounded unit collection wait".into());
+    }
+    if let Some(retry) = &c.gather.download_retry {
+        let statuses: BTreeSet<_> = retry.http_statuses.iter().copied().collect();
+        if !(1..=10).contains(&retry.max_attempts)
+            || retry.delay_seconds == 0
+            || retry.delay_seconds > 60
+            || retry.delay_seconds >= c.gather.timeout_seconds
+            || statuses.is_empty()
+            || statuses.len() != retry.http_statuses.len()
+            || statuses.iter().any(|status| !(400..=599).contains(status))
+        {
+            return Err("invalid bounded artifact download retry policy".into());
+        }
     }
     for path in [&c.gather.manifest_path, &c.gather.report_path] {
         chrono_harness::units::artifact_path(path)?;
