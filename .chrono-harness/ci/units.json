@@ -301,6 +301,34 @@
       ],
       "context_path": ".chrono-harness/state/units/workflow-inventory/context.json",
       "artifact_directory": ".chrono-harness/state/"
+    },
+    "release-build": {
+      "workflow_path": ".github/workflows/chrono-ci-release-build.yml",
+      "name": "chrono / release-build",
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/release-build/context.json",
+      "artifact_directory": ".chrono-harness/state/"
+    },
+    "release-build-integration": {
+      "workflow_path": ".github/workflows/chrono-ci-release-build-integration.yml",
+      "name": "chrono / release-build-integration",
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/release-build-integration/context.json",
+      "artifact_directory": ".chrono-harness/state/"
     }
   },
   "gather": {

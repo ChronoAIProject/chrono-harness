@@ -1601,6 +1601,64 @@
       },
       "tests_for": "worktree",
       "language": "rust"
+    },
+    {
+      "id": "release-build",
+      "language": "python",
+      "actions": {
+        "execute": {
+          "operation": "release.build",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build.py",
+            ".",
+            ".chrono-harness/cache/release"
+          ]
+        }
+      },
+      "kind": "production",
+      "test_project": "release-build-tests"
+    },
+    {
+      "id": "release-build-tests",
+      "language": "python",
+      "tests_for": "release-build",
+      "actions": {
+        "execute": {
+          "operation": "test.release-build-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py"
+          ]
+        },
+        "unit_tests": {
+          "operation": "release.tests.units",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py",
+            "--group",
+            "unit"
+          ]
+        },
+        "integration_test": {
+          "operation": "release.tests.integration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py",
+            "--group",
+            "integration"
+          ]
+        }
+      },
+      "kind": "test",
+      "test_groups": {
+        "release-build-tests": "unit_tests",
+        "release-build-integration": "integration_test"
+      }
     }
   ],
   "scripts": [
