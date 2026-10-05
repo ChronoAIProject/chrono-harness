@@ -716,7 +716,8 @@ impl ExitObserver {
                             );
                         }
                         if ack == 0 {
-                            wake.entry(generation * CAPACITY * 2 + index * 2).or_insert(reply);
+                            wake.entry(generation * CAPACITY * 2 + index * 2)
+                                .or_insert(reply);
                         }
                     }
                     identities.retain(|cookie| {
