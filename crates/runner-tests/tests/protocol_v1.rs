@@ -1496,6 +1496,8 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
 #[test]
 fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget() {
     use std::os::fd::AsFd;
+    for attempt in 0..64 {
+    eprintln!("handoff diagnostic attempt={attempt}");
     let root = tempfile::tempdir().unwrap();
     let capability = fs::File::open(root.path()).unwrap();
     let _ownership = chrono_harness::process_fds::Scope::new(&[capability.as_fd()]).unwrap();
@@ -1523,4 +1525,5 @@ fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget()
     assert!(result.failure.is_none(), "{result:?}");
     assert_eq!(result.exit_code, 0, "{result:?}");
     assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");
+    }
 }
