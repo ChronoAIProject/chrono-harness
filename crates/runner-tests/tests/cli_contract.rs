@@ -243,7 +243,10 @@ fn exit_status_mismatch_fails() {
 }
 #[test]
 fn bounds_cover_timeout_and_output() {
-    for script in ["import time;time.sleep(8)", "print('x'*8192)"] {
+    for (script, cause) in [
+        ("import time;time.sleep(8)", "process timed out"),
+        ("print('x'*8192)", "process output limit exceeded"),
+    ] {
         let (_dir, p) = fixture(script);
         let mut cfg: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
         cfg["judge"]["timeout_seconds"] = 1.into();
@@ -252,6 +255,16 @@ fn bounds_cover_timeout_and_output() {
         let r = run(&p);
         assert_eq!(r.exit_code, 2);
         assert!(start.elapsed().as_secs() < 5);
+        let report: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
+        assert_eq!(report["transport_failure"], cause);
+        assert_eq!(report["judge"]["failure"], cause);
+        let bytes: Vec<u8> =
+            serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
+        assert!(bytes.len() <= 4096);
+        assert_eq!(
+            report["judge"]["stdout_sha256"],
+            chrono_harness::sha256(&bytes)
+        );
     }
 }
 #[test]
@@ -724,4 +737,35 @@ fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
             fs::remove_file(&marker).unwrap();
         }
     }
+}
+
+#[test]
+fn scoped_signal_termination_reports_the_process_failure_before_empty_json() {
+    let (dir, path) = fixture("");
+    let mut config: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    config["schema"] = json!("chrono-ci-check/v3");
+    config["judge"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-test-process-lifecycle"));
+    config["judge"]["args"] = json!(["terminated", "empty"]);
+    config["policy"]["units"] =
+        json!({"one":{"tests":["test:one"],"report_path":".chrono-harness/state/one/check.json"}});
+    fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+    let result = dispatch(&[
+        "check",
+        "--config",
+        &path,
+        "--base",
+        &"a".repeat(40),
+        "--candidate",
+        &"b".repeat(40),
+        "--unit",
+        "one",
+    ]);
+    assert_eq!(result.exit_code, 2, "{result:?}");
+    let report: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
+    let pid = fs::read_to_string(dir.path().join("terminated.pid")).unwrap();
+    let expected = format!("process terminated by signal 9 (pid {pid})");
+    assert_eq!(report["transport_failure"], expected);
+    assert_eq!(report["judge"]["failure"], expected);
+    assert_eq!(report["judge"]["exit_code"], -1);
+    assert_eq!(report["judge"]["stdout_bytes"], json!([]));
 }

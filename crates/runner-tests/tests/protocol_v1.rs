@@ -1522,3 +1522,79 @@ fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget()
     assert_eq!(result.exit_code, 0, "{result:?}");
     assert!(result.stdout.contains("1 passed; 0 failed"), "{result:?}");
 }
+
+#[test]
+fn signal_termination_preserves_actual_pid_and_streams_without_reclassifying_normal_exits() {
+    let dir = tempfile::tempdir().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["terminated".into(), "streams".into()],
+        env: Default::default(),
+        timeout_seconds: FIXTURE_TIMEOUT_SECONDS,
+        output_limit_bytes: 4096,
+    };
+    let identity = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
+    let result = chrono_harness::run_process_observed(dir.path(), &spec, &[], &identity).unwrap();
+    let pid = fs::read_to_string(dir.path().join("terminated.pid")).unwrap();
+    assert!(pid.parse::<u32>().unwrap() > 0);
+    assert_eq!(result.exit_code, -1);
+    assert_eq!(
+        result.failure,
+        Some(format!("process terminated by signal 9 (pid {pid})"))
+    );
+    assert_eq!(result.stdout_bytes, b"original stdout\xff");
+    assert_eq!(result.stderr_bytes, b"original stderr\xfe");
+    assert_eq!(result.stdout_sha256, sha256(&result.stdout_bytes));
+    assert_eq!(result.stderr_sha256, sha256(&result.stderr_bytes));
+    for code in [0, 7] {
+        let mut ordinary = spec.clone();
+        ordinary.args = vec!["exit".into(), code.to_string()];
+        let result =
+            chrono_harness::run_process_observed(dir.path(), &ordinary, &[], &identity).unwrap();
+        assert_eq!(result.exit_code, code);
+        assert_eq!(result.failure, None);
+    }
+}
+
+#[test]
+fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
+    let (dir, request, mut binding) = fixture("");
+    fs::copy(PROCESS_FIXTURE, dir.path().join("judge")).unwrap();
+    binding.sha256 = Some(sha256(&fs::read(PROCESS_FIXTURE).unwrap()));
+    binding.argv = vec!["terminated".into(), "empty".into()];
+    let failure = wire::invoke_detailed(
+        &request,
+        &binding,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        4096,
+    )
+    .unwrap_err();
+    let pid = fs::read_to_string(dir.path().join("terminated.pid")).unwrap();
+    let expected = format!("process terminated by signal 9 (pid {pid})");
+    assert!(failure.message.contains(&expected), "{failure:?}");
+    let process = failure.process.unwrap();
+    assert_eq!(process.failure.as_deref(), Some(expected.as_str()));
+    assert_eq!(process.exit_code, -1);
+    assert!(process.stdout_bytes.is_empty());
+
+    let (dir, request, mut binding) = initial_fixture("");
+    fs::copy(PROCESS_FIXTURE, dir.path().join("judge")).unwrap();
+    binding.sha256 = Some(sha256(&fs::read(PROCESS_FIXTURE).unwrap()));
+    binding.argv = vec!["terminated".into(), "empty".into()];
+    let failure = chrono_harness::initial::invoke(
+        &request,
+        &binding,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        4096,
+    )
+    .unwrap_err();
+    let pid = fs::read_to_string(dir.path().join("terminated.pid")).unwrap();
+    let expected = format!("process terminated by signal 9 (pid {pid})");
+    assert!(failure.message.contains(&expected), "{failure:?}");
+    let process = failure.process.unwrap();
+    assert_eq!(process.failure.as_deref(), Some(expected.as_str()));
+    assert_eq!(process.exit_code, -1);
+    assert!(process.stdout_bytes.is_empty());
+}

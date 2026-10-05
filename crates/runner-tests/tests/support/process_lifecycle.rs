@@ -235,9 +235,25 @@ fn interrupted_observer() {
     fs::write("kernel-terminal", pid.to_string()).unwrap();
 }
 
+fn terminated(with_streams: bool) {
+    fs::write("terminated.pid", std::process::id().to_string()).unwrap();
+    if with_streams {
+        let mut stdout = std::io::stdout();
+        stdout.write_all(b"original stdout\xff").unwrap();
+        stdout.flush().unwrap();
+        let mut stderr = std::io::stderr();
+        stderr.write_all(b"original stderr\xfe").unwrap();
+        stderr.flush().unwrap();
+    }
+    assert_eq!(unsafe { libc::kill(libc::getpid(), libc::SIGKILL) }, 0);
+    unreachable!("SIGKILL must terminate the fixture");
+}
+
 fn main() {
     let mut arguments = std::env::args().skip(1);
     match arguments.next().unwrap().as_str() {
+        "terminated" => terminated(arguments.next().as_deref() == Some("streams")),
+        "exit" => std::process::exit(arguments.next().unwrap().parse().unwrap()),
         "child" => child(),
         "controller" => controller(&arguments.next().unwrap()),
         "closed-streams" => closed_streams(arguments.next().unwrap().parse().unwrap()),
