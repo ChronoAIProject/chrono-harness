@@ -703,14 +703,15 @@ impl ExitObserver {
                         } else if index < CAPACITY
                             && shared.slots[index].generation.load(Ordering::Acquire) == generation
                         {
-                            identities
-                                .register(
-                                    pid as i32,
-                                    launcher as i32,
-                                    generation * CAPACITY * 2 + index * 2,
-                                )
-                                .err()
-                                .map_or(0, |e| e.raw_os_error().unwrap_or(-2))
+                            let cookie = generation * CAPACITY * 2 + index * 2;
+                            if wake.contains_key(&cookie) {
+                                0
+                            } else {
+                                identities
+                                    .register(pid as i32, launcher as i32, cookie)
+                                    .err()
+                                    .map_or(0, |e| e.raw_os_error().unwrap_or(-2))
+                            }
                         } else {
                             -1
                         };
@@ -723,7 +724,7 @@ impl ExitObserver {
                             );
                         }
                         if ack == 0 {
-                            wake.insert(generation * CAPACITY * 2 + index * 2, reply);
+                            wake.entry(generation * CAPACITY * 2 + index * 2).or_insert(reply);
                         }
                     }
                     identities.retain(|cookie| {
@@ -821,73 +822,83 @@ fn register_exit(
         *(libc::CMSG_DATA(header).cast::<i32>()) = reply;
         let start = handoff_clock()?;
         loop {
-            if libc::sendmsg(observer, &msg, libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL) >= 0 {
-                break;
+            loop {
+                if libc::sendmsg(observer, &msg, libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL) >= 0 {
+                    break;
+                }
+                let failure = LaunchFailure::last_os(LaunchStage::HandoffSend);
+                if !matches!(failure.errno, libc::EAGAIN | libc::EINTR | libc::ENOBUFS)
+                    || handoff_clock()?.saturating_sub(start) >= 1_000_000_000
+                {
+                    return Err(failure);
+                }
+                // ENOBUFS may succeed once kernel buffers become available, just as
+                // finite anonymous transport can exert backpressure under ordinary
+                // concurrent launches. No child has exec'd; retain one handoff and
+                // the existing one-second bound instead of losing its registration.
+                let pause = libc::timespec {
+                    tv_sec: 0,
+                    tv_nsec: 1_000_000,
+                };
+                libc::nanosleep(&pause, std::ptr::null_mut());
             }
-            let failure = LaunchFailure::last_os(LaunchStage::HandoffSend);
-            if !matches!(failure.errno, libc::EAGAIN | libc::EINTR | libc::ENOBUFS)
-                || handoff_clock()?.saturating_sub(start) >= 1_000_000_000
-            {
-                return Err(failure);
-            }
-            // ENOBUFS may succeed once kernel buffers become available, just as
-            // finite anonymous transport can exert backpressure under ordinary
-            // concurrent launches. No child has exec'd; retain one handoff and
-            // the existing one-second bound instead of losing its registration.
-            let pause = libc::timespec {
-                tv_sec: 0,
-                tv_nsec: 1_000_000,
+            let mut poll = libc::pollfd {
+                fd: acknowledgement,
+                events: libc::POLLIN,
+                revents: 0,
             };
-            libc::nanosleep(&pause, std::ptr::null_mut());
-        }
-        let mut poll = libc::pollfd {
-            fd: acknowledgement,
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        let mut ack = 0i32;
-        let polled = libc::poll(
-            &mut poll,
-            1,
-            (1000u128.saturating_sub(handoff_clock()?.saturating_sub(start) / 1_000_000)) as i32,
-        );
-        if polled < 0 {
-            return Err(LaunchFailure::last_os(LaunchStage::HandoffPoll));
-        }
-        if polled != 1 {
-            return Err(LaunchFailure::owner(
-                LaunchStage::HandoffPoll,
-                LaunchReason::Unavailable,
-            ));
-        }
-        let received = libc::read(
-            acknowledgement,
-            (&mut ack as *mut i32).cast(),
-            std::mem::size_of_val(&ack),
-        );
-        if received < 0 {
-            return Err(LaunchFailure::last_os(LaunchStage::HandoffRead));
-        }
-        if received != std::mem::size_of_val(&ack) as isize {
-            return Err(LaunchFailure::owner(
-                LaunchStage::HandoffRead,
-                LaunchReason::Unavailable,
-            ));
-        }
-        if ack == -1 {
-            return Err(LaunchFailure::owner(
-                LaunchStage::Registration,
-                LaunchReason::IdentityRetired,
-            ));
-        }
-        if ack == -2 {
-            return Err(LaunchFailure::owner(
-                LaunchStage::Registration,
-                LaunchReason::MissingErrno,
-            ));
-        }
-        if ack != 0 {
-            return Err(LaunchFailure::os(LaunchStage::Registration, ack));
+            let mut ack = 0i32;
+            let polled = libc::poll(
+                &mut poll,
+                1,
+                (1000u128.saturating_sub(handoff_clock()?.saturating_sub(start) / 1_000_000))
+                    .min(10) as i32,
+            );
+            if polled < 0 {
+                return Err(LaunchFailure::last_os(LaunchStage::HandoffPoll));
+            }
+            if polled != 1 {
+                // Descriptor delivery can fail at the receiver after sendmsg succeeds.
+                // Retry the same identity and reply endpoint within the original bound;
+                // the observer acknowledges already registered identities idempotently.
+                if handoff_clock()?.saturating_sub(start) < 1_000_000_000 {
+                    continue;
+                }
+                return Err(LaunchFailure::owner(
+                    LaunchStage::HandoffPoll,
+                    LaunchReason::Unavailable,
+                ));
+            }
+            let received = libc::read(
+                acknowledgement,
+                (&mut ack as *mut i32).cast(),
+                std::mem::size_of_val(&ack),
+            );
+            if received < 0 {
+                return Err(LaunchFailure::last_os(LaunchStage::HandoffRead));
+            }
+            if received != std::mem::size_of_val(&ack) as isize {
+                return Err(LaunchFailure::owner(
+                    LaunchStage::HandoffRead,
+                    LaunchReason::Unavailable,
+                ));
+            }
+            if ack == -1 {
+                return Err(LaunchFailure::owner(
+                    LaunchStage::Registration,
+                    LaunchReason::IdentityRetired,
+                ));
+            }
+            if ack == -2 {
+                return Err(LaunchFailure::owner(
+                    LaunchStage::Registration,
+                    LaunchReason::MissingErrno,
+                ));
+            }
+            if ack != 0 {
+                return Err(LaunchFailure::os(LaunchStage::Registration, ack));
+            }
+            break;
         }
     }
     Ok(())
