@@ -299,6 +299,8 @@ class ReleaseUnits(unittest.TestCase):
             covered.update(selected)
             owners.update({operation:owner for operation in selected})
         self.assertEqual(actual,covered)
+        original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','judge-cargo','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
+        self.assertTrue(original_operations <= actual)
         builds={u['id'] for u in cfg['units'] if u['kind']=='build'}
         for u in cfg['units']:
             if u['kind']=='verify':
@@ -306,7 +308,8 @@ class ReleaseUnits(unittest.TestCase):
                 action=next(a for a in owner['actions'].values() if a['operation']==u['operation'])
                 if owner['language']=='rust':
                     self.assertEqual(action['argv'],['test','--locked','--manifest-path',owner['manifest']])
-                    self.assertEqual(set(u['needs']),builds)
+                    if u['operation'] in original_operations:self.assertEqual(set(u['needs']),builds)
+                    elif u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
                 else:
                     self.assertEqual(owner['language'],'python')
                     if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution'])

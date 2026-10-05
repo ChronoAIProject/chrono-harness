@@ -48,7 +48,9 @@
       "crates/judge-cargo/target/",
       "crates/judge-cargo-tests/target/",
       "crates/worktree/target/",
-      "crates/worktree-tests/target/"
+      "crates/worktree-tests/target/",
+      "crates/diagnostics/target/",
+      "crates/diagnostics-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -202,6 +204,12 @@
           "test:worktree-adoption"
         ],
         "report_path": ".chrono-harness/state/units/worktree-adoption/check.json"
+      },
+      "diagnostics": {
+        "tests": [
+          "test:diagnostics-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/diagnostics/check.json"
       }
     },
     "shared_operations": {

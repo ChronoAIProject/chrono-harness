@@ -235,6 +235,21 @@
         "workflow-short"
       ],
       "reason": "Explicit check/release source dispatch, shared output ownership and native workflow generation"
+    },
+    {
+      "id": "standard-diagnostics",
+      "paths": [
+        "crates/diagnostics/Cargo.toml",
+        "crates/diagnostics/Cargo.lock",
+        "crates/diagnostics/src/lib.rs",
+        "crates/diagnostics/src/error.rs",
+        "crates/diagnostics/src/logging.rs"
+      ],
+      "tests": [
+        "diagnostics-tests",
+        "runner-tests"
+      ],
+      "reason": "Structured log records, explicit typed error chains and CLI channel preservation"
     }
   ],
   "semantic_changes_require_integration": true,
@@ -259,7 +274,8 @@
       "judge-cargo-tests",
       "worktree-tests",
       "workflow-units",
-      "workflow-short"
+      "workflow-short",
+      "diagnostics-tests"
     ],
     "bind": [
       "base",

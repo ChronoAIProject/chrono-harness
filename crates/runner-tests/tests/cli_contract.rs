@@ -4,6 +4,33 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+#[cfg(unix)]
+fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
+    use std::os::unix::ffi::OsStringExt;
+    let binary = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../runner/target/debug/chrono-harness");
+    let output = std::process::Command::new(binary)
+        .arg(std::ffi::OsString::from_vec(vec![0xff]))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let text = std::str::from_utf8(&output.stderr).unwrap();
+    assert_eq!(text.lines().count(), 1);
+    let record: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(record["schema"], "chrono-log/v1");
+    assert_eq!(record["event"], "cli.invalid_argument");
+    assert_eq!(record["error"]["schema"], "chrono-error/v1");
+    assert_eq!(record["error"]["error"]["code"], "E_USAGE");
+    assert_eq!(record["error"]["error"]["source"], serde_json::Value::Null);
+    assert_eq!(record["error"]["error"]["context"]["argument_index"], 0);
+    assert_eq!(
+        record["error"]["error"]["context"]["argument_bytes"],
+        json!([255])
+    );
+}
+
+#[test]
 fn standard_sha256_vectors_match_memory_stream_and_file() {
     use std::io::{Cursor, Read};
     struct Chunks(Cursor<Vec<u8>>);
