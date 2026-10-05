@@ -1604,7 +1604,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     let h = Host::new("payload");
     participating_check(&h);
     h.kernel_cleanup();
-    consuming_operation(&h, "exit 0\n");
+    super::automatic::native_consumer_actions(&h, "noop", "bootstrap-holder");
     let ci = h.root.join(".chrono-harness/ci");
     fs::create_dir_all(&ci).unwrap();
     fs::copy(
@@ -1619,13 +1619,13 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     .unwrap();
     let cfg_path = ".chrono-harness/ci/probe.json";
     let git_program = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
-    let bootstrap = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0","tools":{"sh":"/bin/sh"},"operations":["test.consumer"],"install":[],"entrypoint":{"tool":"python3","script":".chrono-harness/ci/bootstrap.py"},"participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":git_program,"config":POLICY}});
+    let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
+    let bootstrap = value!({"schema":"chrono-bootstrap/v1","projects":PROJECTS,"rust_toolchain":"1.95.0","tools":{"consumer":consumer},"operations":["test.consumer"],"install":[],"entrypoint":{"tool":"python3","script":".chrono-harness/ci/bootstrap.py"},"participation":{"coordinator_root":"git-main-worktree","program":".chrono-harness/bin/chrono-worktree","git":git_program,"config":POLICY}});
     fs::write(
         h.root.join(cfg_path),
         serde_json::to_vec_pretty(&bootstrap).unwrap(),
     )
     .unwrap();
-    fs::write(h.root.join("st.sh"),"mkdir -p 'output λ' .chrono-harness/state\nprintf rebuilt > 'output λ/cache'\nprintf ready > .chrono-harness/state/bootstrap-holder\nwhile [ ! -f .chrono-harness/state/bootstrap-release ]; do sleep 0.02; done\n").unwrap();
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["tools"].as_array_mut().unwrap().push(value!({"id":"python3","program":"/usr/bin/python3","resolution":"PATH-once","version_argv":["--version"],"expected_version":"Python 3.9.6"}));
     fs::write(
@@ -1669,16 +1669,9 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     );
     let tools = h.parent.join("bootstrap-tools");
     fs::create_dir(&tools).unwrap();
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::symlink;
     for name in ["rustup", "cargo", "rustc"] {
-        let text = if name == "rustup" {
-            "#!/bin/sh\nexit 0\n".into()
-        } else {
-            format!("#!/bin/sh\nprintf '{} 1.95.0 (fixture)\\n'\n", name)
-        };
-        let path = tools.join(name);
-        fs::write(&path, text).unwrap();
-        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        symlink(consumer, tools.join(name)).unwrap();
     }
     let path = std::env::join_paths(
         std::iter::once(tools).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
@@ -1740,10 +1733,19 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert_eq!(checked.stdout, b"canonical-linked-check");
     // A real nonzero build followed by owner reopening refusal retains both outcomes.
     let original_policy = fs::read(h.root.join(AUTO_POLICY)).unwrap();
-    fs::write(target.join("st.sh"), format!(
-        "printf 'original build stdout\\n'; printf 'original build stderr\\n' >&2; printf drift > '{}'; exit 7\n",
-        h.root.join(AUTO_POLICY).display()
-    )).unwrap();
+    let mut projects = json(&fs::read(target.join(PROJECTS)).unwrap()).unwrap();
+    let test = projects["scripts"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|script| script["id"] == "consumer-tests")
+        .unwrap();
+    test["actions"]["execute"]["argv"] = value!(["bootstrap-error", h.root.join(AUTO_POLICY)]);
+    fs::write(
+        target.join(PROJECTS),
+        serde_json::to_vec(&projects).unwrap(),
+    )
+    .unwrap();
     commit(&target);
     let refused = Command::new("/usr/bin/python3")
         .current_dir(&target)

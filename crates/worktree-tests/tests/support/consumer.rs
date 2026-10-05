@@ -130,6 +130,19 @@ fn main() -> ExitCode {
             exec(python);
         }
         "python-holder" => python_holder(),
+        "bootstrap-holder" => {
+            fs::create_dir_all("output λ").unwrap();
+            fs::write("output λ/cache", "rebuilt").unwrap();
+            mark("bootstrap-holder", "ready");
+            wait("bootstrap-release");
+        }
+        "bootstrap-error" => {
+            io::stdout().write_all(b"original build stdout\n").unwrap();
+            io::stderr().write_all(b"original build stderr\n").unwrap();
+            fs::write(std::env::args_os().nth(2).unwrap(), "drift").unwrap();
+            io::stdout().flush().unwrap();
+            return ExitCode::from(7);
+        }
         "cargo-prepare" | "cargo-run" => {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
