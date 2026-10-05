@@ -1462,8 +1462,10 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
         .unwrap();
         match route {
             "bootstrap" => {
+                let config = target.join(".chrono-harness/ci/python-bootstrap.json");
+                fs::create_dir_all(config.parent().unwrap()).unwrap();
                 fs::write(
-                    state.join("python-bootstrap.json"),
+                    config,
                     serde_json::to_vec(&value!({
                         "schema":"chrono-bootstrap/v1",
                         "projects":".chrono-harness/projects.json",

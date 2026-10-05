@@ -11,7 +11,7 @@ spec.loader.exec_module(module)
 root = Path.cwd()
 
 if route == "bootstrap":
-    sys.argv = [str(source), str(root), ".chrono-harness/state/python-bootstrap.json"]
+    sys.argv = [str(source), str(root), ".chrono-harness/ci/python-bootstrap.json"]
     module.main()
 elif route == "workflow-inventory":
     module.validate(root, Path(".chrono-harness/state/list-config.json"))
