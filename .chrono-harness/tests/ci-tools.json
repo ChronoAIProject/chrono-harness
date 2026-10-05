@@ -1,0 +1,7 @@
+{
+  "schema": "chrono-ci-test-tools/v1",
+  "platforms": {
+    "linux-x86_64": { "git": "/usr/bin/git" },
+    "macos-aarch64": { "git": "/Applications/Xcode.app/Contents/Developer/usr/bin/git" }
+  }
+}

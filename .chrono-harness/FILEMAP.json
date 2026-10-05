@@ -4718,6 +4718,30 @@
       "surface": "documentation",
       "cost": "unmeasured",
       "edges": []
+    },
+    {
+      "path": ".chrono-harness/tests/ci-tools.json",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/support/tools.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

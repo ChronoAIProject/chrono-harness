@@ -1,3 +1,6 @@
+#[path = "support/tools.rs"]
+mod tools;
+use tools::fixture_git;
 #[path = "full.rs"]
 mod full;
 use chrono_ci::{Config, generate, init, load, prepare};
@@ -5,7 +8,6 @@ use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{
     fs,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -22,7 +24,7 @@ fn read(root: &Path, path: &str) -> Value {
     serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap()
 }
 fn git(root: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = Command::new(fixture_git())
         .arg("-C")
         .arg(root)
         .args(args)
@@ -76,7 +78,7 @@ impl Host {
         let external = fs::canonicalize(inputs.path()).unwrap();
         let program = external.join("chosen git");
         let trace = external.join("process.trace");
-        let real = chrono_harness::resolve_program(&root, "git", None).unwrap();
+        let real = fixture_git();
         let version = Command::new(&real).arg("--version").output().unwrap();
         assert!(version.status.success());
         let helper = env!("CARGO_BIN_EXE_chrono-ci-test-git");

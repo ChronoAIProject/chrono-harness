@@ -31,6 +31,13 @@ incomplete and returns nonzero when evaluated; workflow has [bounded certificati
 
 ## This repository
 
+CI fixtures select their Git executable from the explicit OS/architecture entries
+in `.chrono-harness/tests/ci-tools.json`. Setup commands and bound Git consumers
+use that same native executable; fault adapters retain its selected path in their
+registered inputs. Missing platform registrations fail without an ambient PATH
+fallback. This test configuration does not change a consuming host's Git policy
+or certify complete Git input closure.
+
 Run from the repository root. This macOS host explicitly binds `/usr/bin/python3` with the exact `Python 3.9.6` contract for bootstrap and migration (also in the scoped tool map). Bootstrap requires that interpreter, Git, and rustup; it
 installs Rust 1.95.0 if unavailable, independently ensures its rustfmt component
 (including on a preinstalled minimal toolchain), and builds the explicitly listed bootstrap
