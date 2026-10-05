@@ -261,6 +261,51 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     assert_eq!(ctx["base"], git(&h.root, &["rev-parse", "HEAD"]));
 }
 #[test]
+fn local_preparation_rejects_clean_replacement_after_candidate_head_observation() {
+    let h = Host::new("payload");
+    bind(&h);
+    let dest = h.parent.join("moving-head");
+    let fixture = super::automatic::native_git(
+        &h,
+        "local-check-head-drift",
+        value!({"target":dest,"replacement":"not-armed"}),
+    );
+    let (exit, birth, err) = h.invoke("integration", "moving-head", &dest);
+    assert_eq!(exit, 0, "{} {err}", birth["error"]);
+    install(&dest);
+    let candidate = git(&dest, &["rev-parse", "HEAD"]);
+    fs::write(dest.join("payload"), "replacement commit").unwrap();
+    commit(&dest);
+    let replacement = git(&dest, &["rev-parse", "HEAD"]);
+    git(&dest, &["reset", "--hard", &candidate]);
+    let mut config = json(&fs::read(&fixture).unwrap()).unwrap();
+    config["replacement"] = value!(replacement);
+    fs::write(&fixture, serde_json::to_vec(&config).unwrap()).unwrap();
+    fs::write(h.parent.join("arm-head-drift"), "armed").unwrap();
+
+    let (out, prepared) = inputs(&dest);
+    assert!(h.parent.join("head-drift-applied").is_file());
+    assert_eq!(git(&dest, &["rev-parse", "HEAD"]), replacement);
+    assert_eq!(
+        fs::read_to_string(dest.join("payload")).unwrap(),
+        "replacement commit"
+    );
+    assert!(
+        !out.status.success(),
+        "a clean replacement must not validate the original candidate"
+    );
+    assert!(prepared.is_none());
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains("checkout differs from requested clean snapshot"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+            .chars()
+            .take(1800)
+            .collect::<String>()
+    );
+}
+#[test]
 fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures() {
     let h = Host::new("any/file");
     bind(&h);

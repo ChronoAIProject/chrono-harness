@@ -102,6 +102,12 @@ acquires a new observation; none is reused across deletion effects. Malformed
 fields, mismatched identities and failed Git processes still preserve pending
 work and the original failure evidence.
 
+Local check preparation compares the index and physical files with its fixed
+candidate both before and after fetching the base. Its final live HEAD check
+does not select a different snapshot for the following file comparison. A clean
+replacement commit cannot validate the original candidate; untracked-file
+checks remain live. These observations do not form an atomic Git transaction.
+
 Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before
 unlocking it. The producer reuses registration's artifact classifier: declared

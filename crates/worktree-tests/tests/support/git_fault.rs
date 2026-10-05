@@ -395,6 +395,32 @@ fn main() {
                 std::process::exit(i32::try_from(config["exit"].as_u64().unwrap()).unwrap());
             }
         }
+        "local-check-head-drift" => {
+            let target = Path::new(config["target"].as_str().unwrap());
+            if std::env::current_dir().unwrap() == target && home.join("arm-head-drift").is_file() {
+                if arg(1, "update-ref") && arg(2, "-d") {
+                    fs::write(home.join("local-fetch-complete"), "observed").unwrap();
+                }
+                if arg(1, "rev-parse")
+                    && args.last().is_some_and(|arg| arg == "HEAD")
+                    && home.join("local-fetch-complete").is_file()
+                    && !home.join("head-drift-applied").exists()
+                {
+                    let observed = Command::new(git).args(&args).output().unwrap();
+                    require_success(observed.status);
+                    require_success(
+                        Command::new(git)
+                            .args(["reset", "--hard", config["replacement"].as_str().unwrap()])
+                            .stdout(Stdio::null())
+                            .status()
+                            .unwrap(),
+                    );
+                    fs::write(home.join("head-drift-applied"), "committed replacement").unwrap();
+                    io::stdout().write_all(&observed.stdout).unwrap();
+                    return;
+                }
+            }
+        }
         "mark-executed" => {
             fs::write(home.join("must-not-exist"), "executed").unwrap();
             return;
