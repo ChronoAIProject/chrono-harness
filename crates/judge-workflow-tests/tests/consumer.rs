@@ -9,7 +9,7 @@ mod native_tools;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::sha256;
-use host::Host;
+use host::{FixtureProbe, Host, install_program};
 use serde_json::{Value, json};
 use std::fs;
 use support::*;
@@ -30,17 +30,14 @@ fn host() -> Host {
             ],
         ),
     ] {
-        let bytes =
-            fs::read(source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}")))
-                .expect("build registered judge first");
+        let digest = install_program(
+            &h.root(),
+            &format!("judge-{id}"),
+            &format!("chrono-judge-{id}"),
+            FixtureProbe::JudgeEof,
+        );
         let path = format!(".chrono-harness/bin/chrono-judge-{id}");
-        fs::write(h.root().join(&path), &bytes).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(h.root().join(&path), fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        h.values.get_mut(JUDGES).unwrap()["judges"].as_array_mut().unwrap().push(json!({"id":id,"executable":path,"version":"0.1.0","sha256":sha256(&bytes),"argv":["--protocol","chrono-judge/v1"],"selector":"every-delta","after":deps,"modes":["evaluate"]}));
+        h.values.get_mut(JUDGES).unwrap()["judges"].as_array_mut().unwrap().push(json!({"id":id,"executable":path,"version":"0.1.0","sha256":digest,"argv":["--protocol","chrono-judge/v1"],"selector":"every-delta","after":deps,"modes":["evaluate"]}));
     }
     h.values.get_mut(JUDGES).unwrap()["migration_validator"] = "workflow".into();
     for f in h.values.get_mut(FM).unwrap()["files"]
