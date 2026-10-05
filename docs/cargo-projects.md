@@ -285,7 +285,7 @@ The object contains:
 
 | Field | Contract |
 | --- | --- |
-| `sysroot` | `{root, manifest}`; `root` is the exact selected directory, `manifest` is an input whose bytes use `chrono-input-directory/v1`, and `RUSTFLAGS` must be exactly `--sysroot=<canonical root>` |
+| `sysroot` | `{root, manifest}`; `root` is the exact selected directory, `manifest` is an input whose bytes use `chrono-input-directory/v1` or `v2`, and `RUSTFLAGS` must be exactly `--sysroot=<canonical root>` |
 | `backend` | Nonempty or empty explicit input-ID list for backend files; IDs must be present and connected when listed |
 | `linker` | `{tool, input, environment}` with a distinct registered tool, a present input ID, and an environment variable selecting the canonical linker path |
 | `sdks` | Directory inventories with `{root, manifest, environment}`; each environment variable must select that exact canonical root |
@@ -293,8 +293,23 @@ The object contains:
 
 Each directory manifest lists every retained regular file and its SHA-256 under
 `chrono-input-directory/v1`; empty inventories, duplicate paths, symlinks and
-identity mismatches fail before Cargo. The guard rechecks all directory files,
-declared inputs and selected paths after the consumer. Recursive Cargo
+identity mismatches fail before Cargo. `chrono-input-directory/v2` retains those
+file entries and requires a `symlinks` array. Each link explicitly declares
+`path`, the literal relative `target`, and `kind` (`file` or `directory`). Link
+paths have physical parents. Targets may traverse other declared aliases and
+relative parent components inside the inventory root. File targets must have a
+registered digest; directory targets must contain registered files. Undeclared
+aliases, root escapes, duplicate paths, wrong target kinds, cycles while resolving
+a target and more than 64 followed links fail. A v1 manifest rejects the `symlinks` field, including
+null. Directory inventories remain explicit subsets, not discovered dependencies
+or proof that the SDK has no other inputs.
+
+The guard rechecks the original root path's canonical destination, all directory
+files and literal link targets, declared inputs and selected paths after the
+consumer. Resolving to the same file does not make different literal link targets
+equal. An otherwise successful consumer that changes a declared alias or redirects
+the directory root fails with its original operation result preserved.
+Recursive Cargo
 configuration may not provide a second linker or sysroot selection source.
 V5 reports `chrono-cargo-run/v3` with toolchain evidence and the observed linker
 tool; v2/v3/v4 retain their original meanings and reject the v5 field.
