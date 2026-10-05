@@ -38,7 +38,9 @@
     "workflow-inventory",
     "workflow-inventory-tests",
     "release-build",
-    "release-build-tests"
+    "release-build-tests",
+    "host-bootstrap",
+    "host-bootstrap-tests"
   ],
   "projects": [
     {
@@ -1781,6 +1783,49 @@
           "argv": [
             "-B",
             ".chrono-harness/ci/workflow-inventory-tests.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "host-bootstrap",
+      "language": "python",
+      "path": ".chrono-harness/ci/bootstrap.py",
+      "test_script": "host-bootstrap-tests",
+      "actions": {
+        "execute": {
+          "operation": "host.bootstrap",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            "."
+          ]
+        },
+        "core": {
+          "operation": "host.bootstrap-core",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-core.json"
+          ]
+        }
+      }
+    },
+    {
+      "id": "host-bootstrap-tests",
+      "language": "python",
+      "path": ".chrono-harness/ci/bootstrap-tests.py",
+      "tests_for": "host-bootstrap",
+      "actions": {
+        "execute": {
+          "operation": "host.bootstrap-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap-tests.py"
           ]
         }
       }

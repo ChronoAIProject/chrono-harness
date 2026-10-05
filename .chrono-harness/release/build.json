@@ -45,7 +45,8 @@
     "migration.scoped-v1-tests",
     "workflow.inventory-tests",
     "release.tests.units",
-    "release.tests.integration"
+    "release.tests.integration",
+    "host.bootstrap-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -675,6 +676,14 @@
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_integration",
       "rust_toolchain": false
+    },
+    {
+      "id": "verify_host_bootstrap_tests",
+      "kind": "verify",
+      "operation": "host.bootstrap-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
+      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -713,7 +722,8 @@
       "verify_scoped_v1_tests",
       "verify_workflow_inventory_tests",
       "verify_release_build_tests",
-      "verify_release_build_integration"
+      "verify_release_build_integration",
+      "verify_host_bootstrap_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -755,7 +765,8 @@
       "verify_scoped_v1_tests": "linux_verify_scoped_v1_tests",
       "verify_workflow_inventory_tests": "linux_verify_workflow_inventory_tests",
       "verify_release_build_tests": "linux_verify_release_build_tests",
-      "verify_release_build_integration": "linux_verify_release_build_integration"
+      "verify_release_build_integration": "linux_verify_release_build_integration",
+      "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -792,7 +803,8 @@
       "verify_scoped_v1_tests": "macos_verify_scoped_v1_tests",
       "verify_workflow_inventory_tests": "macos_verify_workflow_inventory_tests",
       "verify_release_build_tests": "macos_verify_release_build_tests",
-      "verify_release_build_integration": "macos_verify_release_build_integration"
+      "verify_release_build_integration": "macos_verify_release_build_integration",
+      "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests"
     }
   },
   "unit_costs": {
@@ -830,7 +842,8 @@
     "verify_scoped_v1_tests": "unmeasured",
     "verify_workflow_inventory_tests": "unmeasured",
     "verify_release_build_tests": "unmeasured",
-    "verify_release_build_integration": "unmeasured"
+    "verify_release_build_integration": "unmeasured",
+    "verify_host_bootstrap_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
