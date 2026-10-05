@@ -322,11 +322,12 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
         fs::read(&source).unwrap()
     );
     let result = Command::new(second.path().join(relative))
-        .arg("--version")
+        .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
-    assert!(result.status.success(), "{:?}", result.stderr);
-    assert_eq!(result.stdout, b"chrono-judge-ci 0.1.0\n");
+    assert_eq!(result.status.code(), Some(2));
+    assert!(result.stdout.is_empty());
+    assert!(result.stderr.starts_with(b"E_REQUEST: "));
 }
 
 fn consumer() -> (tempfile::TempDir, String, String) {
@@ -551,12 +552,12 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     assert!(!host.path().join(".chrono-harness/state/calls-b").exists());
 }
 
+fn configure_mock_transport(config: &mut Value) {
+    config["gather"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
+    config["gather"]["environment"]["CHRONO_CI_TEST_PROVIDER"] = json!("units");
+}
+
 fn install_mock_transport(root: &Path, mode: &str, c: &str) {
-    fs::copy(
-        env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
-        root.join(".chrono-harness/bin/mock-gh"),
-    )
-    .unwrap();
     json_file(
         root,
         ".chrono-harness/state/mock.json",
@@ -575,7 +576,7 @@ fn gather_host_config(
     let (host, b, _) = consumer();
     let root = host.path();
     let mut cfg = config_value();
-    cfg["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+    configure_mock_transport(&mut cfg);
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
     generate(root, ".chrono-harness/ci/units.json", false).unwrap();

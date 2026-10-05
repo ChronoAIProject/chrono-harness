@@ -857,7 +857,7 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         c["environment"]["credential_environment"] = json!(["GH_TOKEN"]);
     });
     h.modify(".chrono-harness/ci/units.json", |c| {
-        c["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+        configure_mock_transport(c);
         c["gather"]["wait_seconds"] = json!(1);
         c["gather"]["poll_seconds"] = json!(1);
     });
@@ -1153,7 +1153,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
         c["gather"]["manifest_path"] = json!(format!("{prefix}collection/manifest.json"));
         c["gather"]["report_path"] = json!(format!("{prefix}collection/gather.json"));
         c["gather"]["download_directory"] = json!(format!("{prefix}collection/downloads/"));
-        c["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+        configure_mock_transport(c);
         c["gather"]["wait_seconds"] = json!(1);
         c["gather"]["poll_seconds"] = json!(1);
     });

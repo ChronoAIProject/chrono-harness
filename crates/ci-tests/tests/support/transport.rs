@@ -6,9 +6,14 @@ use std::path::Path;
 use std::time::Duration;
 
 fn main() {
+    if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
+        match provider.as_str() {
+            "units" => return provider::units(&std::env::args().skip(1).collect::<Vec<_>>()),
+            _ => panic!("unknown provider fixture: {provider}"),
+        }
+    }
     let executable = std::env::args_os().next().unwrap();
     match Path::new(&executable).file_name().unwrap().as_bytes() {
-        b"mock-gh" => return provider::units(&std::env::args().skip(1).collect::<Vec<_>>()),
         b"parent-gh" => return provider::parent(&std::env::args().skip(1).collect::<Vec<_>>()),
         b"$CHRONO_BASE" => {
             let mut stdout = io::stdout().lock();
