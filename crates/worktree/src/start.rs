@@ -297,7 +297,15 @@ pub(crate) fn paths(bytes: Vec<u8>) -> Result<BTreeSet<String>, String> {
 }
 pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let head = r.oid(target, "HEAD")?;
-    exact_checkout(r, target, &head)?;
+    cleanliness_at(r, target, &head, config)
+}
+pub(crate) fn cleanliness_at(
+    r: &mut Runner,
+    target: &Path,
+    candidate: &str,
+    config: &Value,
+) -> Result<(), String> {
+    exact_checkout(r, target, candidate)?;
     untracked(r, target, config)
 }
 pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Result<(), String> {
