@@ -240,6 +240,84 @@ fn execute_operation(plan: &Execution, op: &chrono_judge_routes::Operation) -> O
         error,
     }
 }
+fn dedicated_pair<'a>(
+    registry: &Value,
+    collection: &'a [Value],
+    prefix: &str,
+    test_field: &str,
+    row: &'a Value,
+) -> Result<(&'a Value, &'a Value), String> {
+    let (production, test) = if let Some(test) = row[test_field].as_str() {
+        (
+            row,
+            collection
+                .iter()
+                .find(|p| p["id"] == test)
+                .ok_or("E_TEST_PAIR: missing dedicated test")?,
+        )
+    } else {
+        let prod = row["tests_for"]
+            .as_str()
+            .ok_or("E_TEST_PAIR: tests_for missing")?;
+        (
+            collection
+                .iter()
+                .find(|p| p["id"] == prod)
+                .ok_or("E_TEST_PAIR: missing production")?,
+            row,
+        )
+    };
+    let prod_id = production["id"].as_str().unwrap();
+    let test_id = test["id"].as_str().unwrap();
+    if production[test_field] != test["id"]
+        || test["tests_for"] != production["id"]
+        || prod_id == test_id
+        || collection
+            .iter()
+            .filter(|p| p[test_field] == test["id"])
+            .count()
+            != 1
+        || collection
+            .iter()
+            .filter(|p| p["tests_for"] == production["id"])
+            .count()
+            != 1
+        || prefix == "project" && (production["kind"] != "production" || test["kind"] != "test")
+    {
+        return Err("E_TEST_PAIR: nonreciprocal/shared dedicated pair".into());
+    }
+    if registry["schema_version"] == 2 {
+        let implementation = production["language"].as_str().unwrap();
+        let testing = test["language"].as_str().unwrap();
+        if implementation != testing && !(implementation == "shell" && testing == "python") {
+            return Err(format!(
+                "E_TEST_LANGUAGE: {prefix}:{prod_id} declares {implementation:?}, \
+             but its dedicated test {prefix}:{test_id} declares {testing:?}; \
+             require the same language or the declared shell-to-python exception"
+            ));
+        }
+    }
+    Ok((production, test))
+}
+
+/// Check only affected explicit owner pairs; filesystem and output isolation stay in `pairs`.
+pub fn pair_declarations(registry: &Value, owners: &BTreeSet<String>) -> Result<(), String> {
+    chrono_judge_registration::validate_projects(registry)?;
+    for (key, prefix, test_field) in [
+        ("projects", "project", "test_project"),
+        ("scripts", "script", "test_script"),
+    ] {
+        let collection = registry[key].as_array().unwrap();
+        for row in collection {
+            let id = row["id"].as_str().unwrap();
+            if owners.contains(&format!("{prefix}:{id}")) {
+                dedicated_pair(registry, collection, prefix, test_field, row)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Result<(), String> {
     let projects = r.projects()["projects"].as_array().unwrap();
     let scripts = r.projects()["scripts"].as_array().unwrap();
@@ -280,58 +358,10 @@ pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Res
             if !owners.contains(&format!("{prefix}:{id}")) {
                 continue;
             }
-            let (production, test) = if let Some(test) = row[test_field].as_str() {
-                (
-                    row,
-                    collection
-                        .iter()
-                        .find(|p| p["id"] == test)
-                        .ok_or("E_TEST_PAIR: missing dedicated test")?,
-                )
-            } else {
-                let prod = row["tests_for"]
-                    .as_str()
-                    .ok_or("E_TEST_PAIR: tests_for missing")?;
-                (
-                    collection
-                        .iter()
-                        .find(|p| p["id"] == prod)
-                        .ok_or("E_TEST_PAIR: missing production")?,
-                    row,
-                )
-            };
+            let (production, test) =
+                dedicated_pair(r.projects(), collection, prefix, test_field, row)?;
             let prod_id = production["id"].as_str().unwrap();
             let test_id = test["id"].as_str().unwrap();
-            if production[test_field] != test["id"]
-                || test["tests_for"] != production["id"]
-                || prod_id == test_id
-                || collection
-                    .iter()
-                    .filter(|p| p[test_field] == test["id"])
-                    .count()
-                    != 1
-                || collection
-                    .iter()
-                    .filter(|p| p["tests_for"] == production["id"])
-                    .count()
-                    != 1
-                || prefix == "project"
-                    && (production["kind"] != "production" || test["kind"] != "test")
-            {
-                return Err("E_TEST_PAIR: nonreciprocal/shared dedicated pair".into());
-            }
-            if r.projects()["schema_version"] == 2 {
-                let implementation = production["language"].as_str().unwrap();
-                let testing = test["language"].as_str().unwrap();
-                if implementation != testing && !(implementation == "shell" && testing == "python")
-                {
-                    return Err(format!(
-                        "E_TEST_LANGUAGE: {prefix}:{prod_id} declares {implementation:?}, \
-                         but its dedicated test {prefix}:{test_id} declares {testing:?}; \
-                         require the same language or the declared shell-to-python exception"
-                    ));
-                }
-            }
             if !edge(
                 &format!("{prefix}:{prod_id}"),
                 "test-execution",

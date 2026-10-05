@@ -115,7 +115,7 @@ chrono-harness 保留 Rust 实现、登记格式、实际操作合同、回归�
 
 projects schema v2 要求每个 project／script 显式登记非空 `language`；projects 判官只核 DELTA 影响的专属配对，要求语言 ID 相同，唯一额外准入为生产 `shell`、测试 `python`。这两个保留 ID 由宿主显式选择，sh／bash 可登记为 `shell`；其它 ID 是不作推断、不归一化的字面值。schema v1 保留旧合同，不因升级二进制自动取得语言约束。
 
-配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓与示例的 v2 采用、跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
+配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。Python workflow-inventory 及其专属 Python 测试独立登记并由独立 CI 单元执行。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
 ## 3. 登记格式与字段合同
 
@@ -850,7 +850,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 ## 14. Implementation boundaries
 
-§2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓与示例尚未采用 v2，helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
+§2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
 §4.2、§7.1 与 §7.2 是新增目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，但尚未统一结构化日志与跨层异常链，也未在现役生成的检查／发布 CI 中采用持久的依赖、判官及增量编译缓存。现有 target、bin、名为 cache 的工件目录及原始 artifact 传输不满足这些新增合同。日志／异常记录、缓存登记与投影须由后续实现及显式迁移接入；本次 SPEC 更新不改变当前 schema、执行入口或声称这些验收已通过。具体待实现项同步见 docs/spec-coverage.md。
 
