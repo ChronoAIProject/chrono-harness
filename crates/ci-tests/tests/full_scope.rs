@@ -274,8 +274,8 @@ fn independent_sources_regenerate_only_their_owned_projection_and_keep_customiza
     assert_eq!(fs::read(root.join(&unit.workflow_path)).unwrap(), saved);
 }
 
-fn scoped_host(scope: &Value, selector: bool, body: &str) -> (Host, FullConfig, &'static str) {
-    let mut h = Host::new(body);
+fn scoped_host(scope: &Value, selector: bool, mode: &str) -> (Host, FullConfig, &'static str) {
+    let mut h = Host::new(mode);
     let c = scoped_config(scope);
     let path = if scope["kind"] == "unit" {
         ".chrono-harness/providers/unit.json"
@@ -343,7 +343,7 @@ fn scoped_prepare_cli(h: &Host, path: &str, bytes: &[u8], extra: &[&str]) -> std
 fn committed_unit_and_collector_cli_prepare_preserve_caller_bytes_and_canonical_argv() {
     for scope in scopes() {
         for selector in [false, true] {
-            let (h, c, path) = scoped_host(&scope, selector, "");
+            let (h, c, path) = scoped_host(&scope, selector, "pass");
             let source = fs::read(h.root.join(path)).unwrap();
             let bytes = context(&h, &h.candidate);
             let out = scoped_prepare_cli(&h, path, &bytes, &[]);
@@ -422,7 +422,7 @@ fn scoped_prepare_keeps_fixed_source_checkout_workflow_and_selector_controls() {
             "nested-selector",
         ] {
             let selector = matches!(case, "selected-config" | "selector" | "nested-selector");
-            let (mut h, c, path) = scoped_host(&scope, selector, "");
+            let (mut h, c, path) = scoped_host(&scope, selector, "pass");
             match case {
                 "source" => {
                     let mut drift = read(&h.root, path);
@@ -484,11 +484,7 @@ fn scoped_prepare_keeps_fixed_source_checkout_workflow_and_selector_controls() {
 #[test]
 fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
     for scope in scopes() {
-        let (h, c, path) = scoped_host(
-            &scope,
-            false,
-            "case \"$*\" in *--batch-check*) printf '\\377scope-probe-failure' >&2; exit 29;; esac",
-        );
+        let (h, c, path) = scoped_host(&scope, false, "scope-probe-failure");
         let (_remote, base) = h.remote();
         let out = scoped_prepare_cli(&h, path, &context(&h, &base), &[]);
         assert_eq!(out.status.code(), Some(1));
