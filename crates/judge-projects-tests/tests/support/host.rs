@@ -3,6 +3,39 @@ use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+
+// Original command bytes are retained separately; assertion messages must not
+// embed nested reports and their byte arrays into the outer check response.
+pub fn failure_summary(report: &Value) -> Value {
+    fn field(value: &Value) -> String {
+        let text = value
+            .as_str()
+            .map_or_else(|| value.to_string(), str::to_owned);
+        let mut chars = text.chars();
+        let mut prefix: String = chars.by_ref().take(1024).collect();
+        if chars.next().is_some() {
+            prefix.push_str(" [truncated; original retained]");
+        }
+        prefix
+    }
+    fn process(value: &Value) -> Value {
+        json!({"exit_code":field(&value["exit_code"]),
+            "failure":field(&value["failure"]),"stderr":field(&value["stderr"])})
+    }
+    json!({
+        "status":field(&report["status"]),
+        "error":field(&report["error"]),
+        "transport_failure":field(&report["transport_failure"]),
+        "findings":field(&report["findings"]),
+        "results":field(&report["response"]["results"]),
+        "judge":process(&report["judge"]),
+        "judges":report["judges"].as_array().into_iter().flatten().take(16)
+            .map(|judge| json!({"id":field(&judge["id"]),
+                "transport_failure":field(&judge["transport_failure"]),
+                "process":process(&judge["process"])})).collect::<Vec<_>>(),
+    })
+}
+
 struct CommandEvidence {
     label: String,
     binding: Value,
