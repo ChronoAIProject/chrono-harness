@@ -273,24 +273,18 @@ fn install_tools(root: &Path, tools: &[(&str, &str)]) {
     fs::create_dir_all(&bin).unwrap();
     // Test the current product outputs; deployed host tools have a separate
     // caller-owned rollout and may intentionally retain an older schema.
-    // Fixtures never edit these product binaries; each host keeps its own path
-    // while sharing the built executable image. Byte-mutation fixtures need
-    // private copies. Cross-filesystem copies keep writable descriptors in a
-    // joined child so concurrently forked tests cannot inherit them before exec.
+    // Each temporary host owns its executable inode and pathname. A joined copy
+    // child keeps writable descriptors out of concurrently forked test children.
     let mut copy = Command::new("/bin/cp");
-    let mut copying = false;
     for (project, name) in tools {
         let built = source.join(format!("crates/{project}/target/debug/{name}"));
-        match fs::hard_link(&built, bin.join(name)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
-                copy.arg(built);
-                copying = true;
-            }
-            Err(error) => panic!("fixture executable {name}: {error}"),
-        }
+        assert!(matches!(
+            fs::symlink_metadata(bin.join(name)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound
+        ));
+        copy.arg(built);
     }
-    if copying {
+    if !tools.is_empty() {
         let copied = copy.arg(&bin).output().unwrap();
         assert!(
             copied.status.success(),
