@@ -1388,19 +1388,6 @@ fn failed_live_identity_registration_helper() {
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
         return;
     };
-    unsafe extern "C" fn retain_parent_exec_pipe_briefly() {
-        let pause = libc::timespec {
-            tv_sec: 0,
-            tv_nsec: 20_000_000,
-        };
-        unsafe {
-            libc::nanosleep(&pause, std::ptr::null_mut());
-        }
-    }
-    assert_eq!(
-        unsafe { libc::pthread_atfork(None, None, Some(retain_parent_exec_pipe_briefly)) },
-        0
-    );
     check_launch_allocations();
     // The independent Rust parent fixes this process's descriptor budget.
     // Leave the ownership transport free, while exhausting the observer's
