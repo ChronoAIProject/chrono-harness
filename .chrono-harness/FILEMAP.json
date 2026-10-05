@@ -4197,6 +4197,18 @@
       ]
     },
     {
+      "path": "crates/ci-tests/tests/support/git.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree-tests/tests/support/context_judge.rs",
       "owner": "worktree-tests",
       "surface": "test",
