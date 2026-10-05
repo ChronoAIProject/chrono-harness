@@ -254,17 +254,17 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
     let root = d.path();
     let mut c = config();
     c.runner = "$CHRONO_BASE".into();
-    fs::write(
-        root.join("$CHRONO_BASE"),
-        "#!/bin/sh\nprintf '%s\\n' \"$@\"\necho original-failure >&2\nexit 23\n",
+    fs::copy(
+        env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
+        root.join(&c.runner),
     )
     .unwrap();
-    fs::set_permissions(root.join("$CHRONO_BASE"), fs::Permissions::from_mode(0o755)).unwrap();
     c.check_config = ".chrono-harness/'$HOME`literal`.json".into();
     let yaml = full::render(&c, SOURCE).unwrap();
     let out = Command::new("/bin/bash")
         .current_dir(root)
         .env("PATH", root)
+        .env("CHRONO_TEST_RECORDING", "full")
         .env("CHRONO_BASE", "base fixed")
         .env("CHRONO_CANDIDATE", "candidate fixed")
         .args(["-e", "-c", &script(&yaml, "Canonical full harness check")])

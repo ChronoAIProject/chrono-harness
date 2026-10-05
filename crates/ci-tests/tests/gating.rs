@@ -154,43 +154,16 @@ impl GatedHost {
         c
     }
     fn mock(&self, d: &Value, mode: &str) {
-        use std::os::unix::fs::PermissionsExt;
         json_file(
             &self.host.root,
             ".chrono-harness/state/parent-data.json",
             &json!({"detection":d, "mode":mode}),
         );
-        let script = r#"#!/usr/bin/env python3
-import json,pathlib,shutil,sys
-root=pathlib.Path.cwd();data=json.loads((root/'.chrono-harness/state/parent-data.json').read_text());d=data['detection'];mode=data['mode'];args=sys.argv[1:];provider=json.loads((root/'.chrono-harness/ci/units.json').read_text())
-with (root/'.chrono-harness/state/parent-calls').open('a') as f:f.write(json.dumps(args)+'\n')
-if args[0]=='run':
- unit=args[args.index('--name')+1].split('chrono-unit-',1)[1].rsplit('-',2)[0]
- if mode=='missing-artifact':sys.exit(7)
- dest=pathlib.Path(args[args.index('--dir')+1]);shutil.copytree(root/'.chrono-harness/state/mock-artifacts'/unit,dest,dirs_exist_ok=True)
-elif '/contents/' in args[1]:
- path=args[1].split('/contents/',1)[1].split('?',1)[0]
- sys.stdout.buffer.write(b'wrong workflow' if mode=='wrong-source' else (root/path).read_bytes())
-elif '/jobs?' in args[1]:
- rows=[dict(id=200,run_id=101,run_attempt=2,name='Detect registered DELTA',status='completed',conclusion='success',head_sha=d['candidate'])]
- for i,unit in enumerate(sorted(provider['units'])):
-  if mode=='skipped-jobs-omitted' and unit not in d['required_units']:continue
-  rows.append(dict(id=201+i,run_id=101,run_attempt=3 if mode=='job-attempt' or (mode in ['retry','carried','latest-failure'] and unit=='alpha') else 2,name=provider['units'][unit]['name'],head_sha=d['candidate'],status='completed',conclusion='success' if unit in d['required_units'] else 'skipped'))
- if mode=='carried':
-  rows[0]['run_attempt']=3
-  rows.append(dict(rows[-2],id=301,run_attempt=2))
- if mode=='latest-failure':rows[1]['conclusion']='failure'
- if mode=='aggregate-only':
-  for row in rows:row['run_attempt']=3
- if mode=='missing-job':rows=rows[:1]+rows[2:]
- print(json.dumps([dict(jobs=rows)]))
-elif '/actions/runs/' in args[1]:
- print(json.dumps(dict(id=999 if mode=='wrong-run' else 101,run_attempt=3 if mode in ['changed-attempt','retry','carried','latest-failure','aggregate-only'] else 2,status='in_progress',head_sha=d['candidate'],event=d['event'],path=provider['collection']['workflow_path'],repository=dict(full_name='owner/host'))))
-else:sys.exit(8)
-"#;
-        let executable = self.host.root.join(".chrono-harness/bin/parent-gh");
-        fs::write(&executable, script).unwrap();
-        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::copy(
+            env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
+            self.host.root.join(".chrono-harness/bin/parent-gh"),
+        )
+        .unwrap();
     }
     fn produce(&self, unit: &str) {
         let output = self
