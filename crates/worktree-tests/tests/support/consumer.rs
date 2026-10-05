@@ -130,6 +130,11 @@ fn main() -> ExitCode {
             exec(python);
         }
         "python-holder" => python_holder(),
+        "detached-holder" => {
+            mark("detached", std::process::id().to_string());
+            wait("release");
+            mark("detached-done", "done");
+        }
         "bootstrap-holder" => {
             fs::create_dir_all("output λ").unwrap();
             fs::write("output λ/cache", "rebuilt").unwrap();

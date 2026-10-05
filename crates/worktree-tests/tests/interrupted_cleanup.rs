@@ -1,4 +1,4 @@
-use super::automatic::{consuming_operation, native_consumer, native_git};
+use super::automatic::{native_consumer, native_git};
 use super::*;
 use std::{
     process::Stdio,
@@ -1189,22 +1189,27 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
 fn returned_use_without_token_still_protects_detached_python_child() {
     let h = Host::new("payload");
     h.kernel_cleanup();
-    let helper = source().join(".chrono-harness");
-    let body = format!(
-        r#"mkdir -p .chrono-harness/state
-/usr/bin/python3 -B - <<'PY'
-import os, subprocess, sys
-sys.path.insert(0, {helper:?})
-from process_fds import inherited_fds
-child = subprocess.Popen(['/bin/sh','-c','printf "%s" "$$" > .chrono-harness/state/detached; while [ ! -f .chrono-harness/state/release ]; do sleep 0.02; done; printf done > .chrono-harness/state/detached-done'], pass_fds=inherited_fds(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-PY
-"#,
-        helper = helper.to_str().unwrap()
-    );
-    consuming_operation(&h, &body);
+    native_consumer(&h, "python-consumer");
     let target = h.parent.join("returned");
     assert_eq!(h.invoke("feature", "returned", &target).0, 0);
     output(&target);
+    let state = target.join(".chrono-harness/state");
+    fs::create_dir_all(&state).unwrap();
+    fs::write(
+        state.join("python-consumer.py"),
+        include_bytes!("support/python_consumer.py"),
+    )
+    .unwrap();
+    fs::write(
+        state.join("python-consumer.json"),
+        serde_json::to_vec(&value!({
+            "script":source().join(".chrono-harness/process_fds.py"),
+            "route":"detached", "tools":state,
+            "child":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer")
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let (code, report, error) = h.auto(
         "use",
         &[
