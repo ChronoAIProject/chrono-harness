@@ -93,7 +93,9 @@ fn main() -> ExitCode {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
             let mut cargo = Command::new("cargo");
-            cargo.args(["test", "--offline", "--manifest-path"]);
+            // Keep compiler invocations in the managed process's original stderr
+            // so a preparation failure identifies the launched Cargo stage.
+            cargo.args(["test", "--offline", "--verbose", "--manifest-path"]);
             cargo.arg(fixture.join("Cargo.toml"));
             if mode == "cargo-prepare" {
                 fs::create_dir_all(fixture.join("src")).unwrap();
