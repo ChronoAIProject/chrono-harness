@@ -8,8 +8,59 @@ use support::*;
 mod host;
 use host::Host;
 
+// Original command bytes are retained separately; assertion messages must not
+// embed nested reports and their byte arrays into the outer check response.
+pub fn failure_summary(report: &Value) -> Value {
+    fn field(value: &Value) -> String {
+        let text = value
+            .as_str()
+            .map_or_else(|| value.to_string(), str::to_owned);
+        let mut chars = text.chars();
+        let mut prefix: String = chars.by_ref().take(1024).collect();
+        if chars.next().is_some() {
+            prefix.push_str(" [truncated; original retained]");
+        }
+        prefix
+    }
+    fn process(value: &Value) -> Value {
+        json!({"exit_code":field(&value["exit_code"]),
+            "failure":field(&value["failure"]),"stderr":field(&value["stderr"])})
+    }
+    json!({
+        "status":field(&report["status"]),
+        "error":field(&report["error"]),
+        "transport_failure":field(&report["transport_failure"]),
+        "findings":field(&report["findings"]),
+        "results":field(&report["response"]["results"]),
+        "judge":process(&report["judge"]),
+        "judges":report["judges"].as_array().into_iter().flatten().take(16)
+            .map(|judge| json!({"id":field(&judge["id"]),
+                "transport_failure":field(&judge["transport_failure"]),
+                "process":process(&judge["process"])})).collect::<Vec<_>>(),
+    })
+}
+
+#[test]
+fn failure_diagnostics_keep_transport_cause_without_nested_output_amplification() {
+    let report = json!({
+        "status":"error",
+        "transport_failure":"process timed out",
+        "judges":[{"id":"registration","transport_failure":"process timed out",
+            "process":{"exit_code":-1,"failure":"process timed out",
+                "stdout":"x".repeat(1_000_000),"stdout_bytes":vec![255u8;1_000_000],
+                "stderr":"λ".repeat(50_000)}}],
+    });
+    let summary = failure_summary(&report).to_string();
+    assert!(summary.len() < 8192);
+    assert!(summary.contains("process timed out"));
+    assert!(summary.contains("registration"));
+    assert!(summary.contains("original retained"));
+    assert!(!summary.contains("stdout_bytes"));
+    assert_eq!(report["judges"][0]["process"]["stdout_bytes"][999_999], 255);
+}
+
 fn check_pass(code: i32, v: &Value) {
-    assert_eq!(code, 0, "{}", v.get("findings").unwrap_or(v));
+    assert_eq!(code, 0, "{}", failure_summary(v));
     assert_eq!(v["tests"]["tests"]["test:t"], "passed");
 }
 #[test]
@@ -59,7 +110,7 @@ fn docs_and_unrelated_historical_pair_defect_launch_zero_operations() {
     fs::write(h.root().join("doc.txt"), "docs changed").unwrap();
     h.candidate = commit(&h.root());
     let (code, v) = h.run(|_| {});
-    assert_eq!(code, 0, "{}", v["findings"]);
+    assert_eq!(code, 0, "{}", failure_summary(&v));
     assert_eq!(v["tests"]["executed"], json!([]));
     assert!(!h.root().join(".chrono-harness/state/order").exists());
 }
@@ -334,15 +385,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         (output.status.code().unwrap(), report)
     };
     let (code, report) = call(&h, false);
-    assert_eq!(
-        code,
-        0,
-        "results {}; error {}; judge failure {}; judge exit {}",
-        report["response"]["results"],
-        report["error"],
-        report["judge"]["failure"],
-        report["judge"]["exit_code"]
-    );
+    assert_eq!(code, 0, "{}", failure_summary(&report));
     assert_eq!(
         report["response"]["evidence"]["selected"],
         json!(["test:t"])
@@ -418,7 +461,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         fs::write(root.join("doc.txt"), "unrelated documentation\n").unwrap();
         h.candidate = commit(&root);
         let (code, report) = call(&h, false);
-        assert_eq!(code, 0, "{}", report["response"]["results"]);
+        assert_eq!(code, 0, "{}", failure_summary(&report));
         assert_eq!(report["response"]["evidence"]["executed"], json!([]));
         assert!(!root.join(".chrono-harness/state/order").exists());
         // Substituting the effective full target for the registered scoped entry
@@ -486,7 +529,7 @@ fn mapped_removed_obligation_requires_successful_replacement_and_preserves_old_m
         h.save();
         let (code, v) = h.run(|_| {});
         if mapping {
-            assert_eq!(code, 0, "{}", v["findings"]);
+            assert_eq!(code, 0, "{}", failure_summary(&v));
             assert_eq!(v["tests"]["removed"]["test:t"], "test:replacement");
             assert_eq!(v["tests"]["tests"]["test:replacement"], "passed");
         } else {
@@ -567,7 +610,7 @@ fn finite_old_ambiguity_mapping_reaches_real_execution_without_dropping_either_m
     h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([{"id":"chrono-ci-check/v1","filemap_version":1,"profile_path":"profile.json","script":"s","test":"st","mappings":[{"from":"script:t","to":"script:st"}],"legacy_records":[],"ambiguities":[{"node":"test:t","definitions":["project:t","script:t"],"replacement":"test:t"}]}]);
     h.save();
     let (code, v) = h.run(|_| {});
-    assert_eq!(code, 0, "{}", v["findings"]);
+    assert_eq!(code, 0, "{}", failure_summary(&v));
     assert_eq!(v["tests"]["tests"]["test:t"], "passed");
     assert_eq!(v["tests"]["tests"]["test:st"], "passed");
     assert_eq!(
@@ -640,9 +683,10 @@ fn retained_present_to_absent_selects_and_executes_failing_consumer() {
     let h = environment_host(true, false);
     let (code, v) = h.run(|i| i["base"]["environment"]["DECLARED_ABSENT"] = json!("old"));
     assert_eq!(
-        code, 1,
+        code,
+        1,
         "changed effective input must execute consumer: {}",
-        v["findings"]
+        failure_summary(&v)
     );
     assert_eq!(v["tests"]["selected"], json!(["test:t"]));
     assert_eq!(
@@ -664,7 +708,12 @@ fn retained_present_to_absent_selects_and_executes_failing_consumer() {
 fn retained_absent_to_empty_selects_and_executes_failing_consumer() {
     let h = environment_host(true, false);
     let (code, v) = h.run(|i| i["base"]["environment"]["DECLARED_EMPTY"] = Value::Null);
-    assert_eq!(code, 1, "absent differs from empty: {}", v["findings"]);
+    assert_eq!(
+        code,
+        1,
+        "absent differs from empty: {}",
+        failure_summary(&v)
+    );
     assert_eq!(
         v["tests"]["executed"][1]["receipt"]["process"]["exit_code"],
         9
@@ -687,7 +736,7 @@ fn unchanged_disconnected_and_overridden_environment_do_not_execute() {
                 i["base"]["environment"]["DECLARED_ABSENT"] = json!("old");
             }
         });
-        assert_eq!(code, 0, "{}", v["findings"]);
+        assert_eq!(code, 0, "{}", failure_summary(&v));
         assert_eq!(v["tests"]["executed"], json!([]));
         assert!(!h.root().join(".chrono-harness/state/order").exists());
     }
@@ -1044,7 +1093,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
                 json!({"blob":cargo_blob,"sha256":cargo_digest,"length":cargo_bytes.len()});
         }
     });
-    assert_eq!(code, 0, "{full:#}");
+    assert_eq!(code, 0, "{}", failure_summary(&full));
     assert_eq!(
         full["tests"]["tests"],
         json!({"test:t":"passed","test:opaque":"passed"})
@@ -1072,8 +1121,9 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
             ])
             .output()
             .unwrap();
+        h.retain_command_result(&format!("group-unit-{unit}"), &out);
         let report: Value = serde_json::from_slice(&out.stdout).unwrap();
-        assert!(out.status.success(), "{report:#}");
+        assert!(out.status.success(), "{}", failure_summary(&report));
         assert_eq!(report["response"]["evidence"]["selected"], json!([own]));
         assert!(h.root().join(".chrono-harness/state").join(unit).is_file());
         assert!(!h.root().join(".chrono-harness/state").join(other).exists());
@@ -1098,13 +1148,15 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         ])
         .output()
         .unwrap();
+    h.retain_command_result("group-missing-collection", &out);
     let report: Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert!(!out.status.success(), "{report:#}");
+    assert!(!out.status.success(), "{}", failure_summary(&report));
     assert!(
         report
             .to_string()
             .contains("missing required CI unit report"),
-        "{report:#}"
+        "{}",
+        failure_summary(&report)
     );
 }
 
@@ -1127,14 +1179,15 @@ fn group_terminal_operation_and_producer_edge_are_required_before_effects() {
         }
         h.save();
         let (exit, report) = h.run(|_| {});
-        assert_ne!(exit, 0, "{report:#}");
+        assert_ne!(exit, 0, "{}", failure_summary(&report));
         assert!(
             report.to_string().contains(if omit_edge {
                 "E_TEST_PAIR"
             } else {
                 "omits its execute action"
             }),
-            "{report:#}"
+            "{}",
+            failure_summary(&report)
         );
         assert!(!h.root().join(".chrono-harness/state/order").exists());
     }
