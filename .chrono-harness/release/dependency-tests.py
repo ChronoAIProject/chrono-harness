@@ -143,6 +143,7 @@ class RecipeTests(unittest.TestCase):
     def test_ready_units_do_not_wait_for_unrelated_builds(self):
         # The blocking build can complete only after both independent verifiers run.
         release = threading.Event()
+        build_started = threading.Event()
         lock = threading.Lock()
         seen, active, peak = set(), 0, 0
         outcomes = {}
@@ -153,7 +154,10 @@ class RecipeTests(unittest.TestCase):
                 peak = max(peak, active)
                 seen.add(name)
             try:
+                if name == 'build_a':
+                    self.assertTrue(build_started.wait(5), 'independent builds did not overlap')
                 if name == 'build_b':
+                    build_started.set()
                     self.assertTrue(release.wait(5), 'unrelated build blocked ready verification')
                 if name == 'test_none':
                     self.assertEqual(dependencies, {})

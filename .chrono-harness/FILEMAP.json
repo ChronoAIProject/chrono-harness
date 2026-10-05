@@ -4411,6 +4411,38 @@
           "to": "test:release-build-tests"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/migrations/test-hosts.json",
+      "owner": "scoped-v1-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/migrations/fixtures/linux-host.json",
+      "owner": "scoped-v1-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

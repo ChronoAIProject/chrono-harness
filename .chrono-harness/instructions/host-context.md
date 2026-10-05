@@ -45,3 +45,5 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 本宿主 projects v2 显式登记 30 个 Rust 项目与两对 Python 脚本。workflow-inventory 及其 Python 测试分别持有脚本身份；Python 单元测试归独立 CI 单元，只使用临时目录。三个 Rust workflow 测试组继续运行真实 inventory 校验，Python 单元测试按自身 DELTA 登记独立选择。语言判官核声明配对，不证明其余嵌入式跨语言测试已全部迁移。
 
 发布配方采用 v5。独立 Python 项目 release-build 与其唯一测试项目 release-build-tests 没有 Cargo manifest/lock/target；两个显式测试组分别为普通 Python 单元和依赖 build.distribution 的真实打包集成。发布验证按显式 needs 及 rust_toolchain 布尔选择取得资产和编译工具链；四个 Python 单元不安装 Rust，15 个原始 Rust 验证仍执行未过滤 Cargo action。普通 CI 共 21 个业务单元，原生发布每个平台 15 个 build、19 个 verification 和一个 collector。产品／测试、宿主采用与生成投影同时受影响，完整候选、本地与原生验证及公开采用仍分别验收。
+
+解码器专属 Python 测试在 migrations/test-hosts.json 显式选择平台测试输入：本机与 macOS CI 核主宿主 config.json 的固定解释器，Linux 原生发布核独立测试 fixture 的固定解释器。未知平台不回退、不从实测版本生成预期；Linux fixture 不表示主宿主 full 治理已采用。全部解码及版本断言在两个登记平台执行。
