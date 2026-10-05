@@ -1,6 +1,8 @@
 """Invoke real Python consumers through their existing interfaces."""
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
 import sys
 
 source = Path(sys.argv[1])
@@ -17,5 +19,12 @@ elif route == "workflow-inventory":
     module.validate(root, Path(".chrono-harness/state/list-config.json"))
 elif route == "scoped-v1-tests":
     module.blob("opaque-declared-input")
+elif route == "detached":
+    config = json.loads(Path(".chrono-harness/state/python-consumer.json").read_text())
+    subprocess.Popen(
+        [config["child"], "detached-holder"],
+        pass_fds=module.inherited_fds(), stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+    )
 else:
     raise ValueError("unknown registered Python consumer: " + route)
