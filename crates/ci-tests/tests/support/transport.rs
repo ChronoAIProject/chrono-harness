@@ -5,10 +5,31 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
+fn provider_observation(phase: &str) {
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(".chrono-harness/state/mock-launches.jsonl")
+        .unwrap();
+    let row = serde_json::json!({
+        "phase": phase,
+        "pid": std::process::id(),
+        "unix_ns": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos().to_string(),
+        "argv": std::env::args().skip(1).collect::<Vec<_>>()
+    });
+    writeln!(file, "{row}").unwrap();
+}
+
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
-            "units" => return provider::units(&std::env::args().skip(1).collect::<Vec<_>>()),
+            "units" => {
+                provider_observation("entered");
+                provider::units(&std::env::args().skip(1).collect::<Vec<_>>());
+                provider_observation("returned");
+                return;
+            }
             _ => panic!("unknown provider fixture: {provider}"),
         }
     }

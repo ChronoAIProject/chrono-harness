@@ -800,7 +800,17 @@ fn download_recovery_shares_original_time_and_output_budgets() {
             _ => data["second_http_status"] = json!(401),
         }
         fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
+        let started = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string();
         let result = gather_cli(host.path());
+        let returned = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string();
         assert!(!result.status.success(), "{mode}");
         let report = gathered(host.path());
         let attempts = alpha_downloads(&report);
@@ -808,7 +818,8 @@ fn download_recovery_shares_original_time_and_output_budgets() {
             retain_command_result(
                 host.path(),
                 &["gather".into()],
-                &json!({"case":mode,"expected_attempts":expected_attempts}),
+                &json!({"case":mode,"expected_attempts":expected_attempts,
+                    "started_unix_ns":started,"returned_unix_ns":returned}),
                 &result,
             );
         }
