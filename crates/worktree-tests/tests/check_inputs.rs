@@ -53,26 +53,22 @@ pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str
 }
 pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str) {
     let installed = root.join(format!(".chrono-harness/bin/{name}"));
-    // These fixtures execute but never modify product binaries. Reuse the built
-    // inode under each isolated host path without copying a new executable image.
-    // Fixtures that edit executable bytes or permissions must use a private copy.
-    match fs::hard_link(&built, &installed) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
-            // A joined child owns writable descriptors, so concurrent test forks
-            // cannot inherit a writable executable and cause ETXTBSY on Linux.
-            let copied = Command::new("/bin/cp")
-                .arg(&built)
-                .arg(&installed)
-                .output()
-                .unwrap();
-            assert!(
-                copied.status.success(),
-                "fixture executable copy: {copied:?}"
-            );
-        }
-        Err(error) => panic!("fixture executable {}: {error}", installed.display()),
-    }
+    assert_eq!(
+        fs::symlink_metadata(&installed).unwrap_err().kind(),
+        std::io::ErrorKind::NotFound,
+        "fixture executable destination must be absent"
+    );
+    // Each host owns its executable identity. A joined child owns writable
+    // descriptors, so concurrent test forks cannot inherit writable executables.
+    let copied = Command::new("/bin/cp")
+        .arg(built)
+        .arg(&installed)
+        .output()
+        .unwrap();
+    assert!(
+        copied.status.success(),
+        "fixture executable copy: {copied:?}"
+    );
 }
 #[test]
 fn fixture_executable_identity_survives_neighbor_teardown() {
