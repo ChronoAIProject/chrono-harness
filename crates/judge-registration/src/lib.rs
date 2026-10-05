@@ -22,6 +22,11 @@ use std::{
     fs,
     path::Path,
 };
+/// Validate the explicit projects document without requiring a full-governance host.
+pub fn validate_projects(projects: &Value) -> std::result::Result<(), String> {
+    schema::projects(projects)
+}
+
 type Result<T> = std::result::Result<T, String>;
 fn read(path: &Path) -> Result<Value> {
     json(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)

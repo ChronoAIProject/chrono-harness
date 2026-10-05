@@ -1,5 +1,5 @@
 {
-  "schema": "chrono-release-build/v4",
+  "schema": "chrono-release-build/v5",
   "rust_toolchain": "1.95.0",
   "manifests": [
     "crates/runner/Cargo.toml",
@@ -23,7 +23,8 @@
     "rustup": "rustup",
     "cargo": "cargo",
     "rustc": "rustc",
-    "git": "git"
+    "git": "git",
+    "python3": "python3"
   },
   "verification_operations": [
     "test.distribution-tests",
@@ -40,7 +41,11 @@
     "test.judge-filemap-tests",
     "test.judge-routes-tests",
     "test.judge-cost-tests",
-    "test.judge-mixed-tests"
+    "test.judge-mixed-tests",
+    "migration.scoped-v1-tests",
+    "workflow.inventory-tests",
+    "release.tests.units",
+    "release.tests.integration"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -298,7 +303,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_distribution_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_distribution_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_worktree_tests",
@@ -321,7 +327,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_worktree_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_worktree_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_runner_tests",
@@ -344,7 +351,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_runner_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_runner_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_inputs_tests",
@@ -367,7 +375,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_inputs_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_inputs_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_ci_tests",
@@ -390,7 +399,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_ci_tests",
@@ -413,7 +423,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_registration_tests",
@@ -436,7 +447,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_projects_tests",
@@ -459,7 +471,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_projects_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_projects_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_workflow_tests",
@@ -482,7 +495,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_cargo_tests",
@@ -505,7 +519,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_instructions_tests",
@@ -528,7 +543,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_instructions_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_instructions_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_filemap_tests",
@@ -551,7 +567,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_filemap_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_filemap_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_routes_tests",
@@ -574,7 +591,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_routes_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_routes_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_cost_tests",
@@ -597,7 +615,8 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cost_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cost_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_judge_mixed_tests",
@@ -620,7 +639,42 @@
         "build_judge_cargo",
         "build_worktree"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests"
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_scoped_v1_tests",
+      "kind": "verify",
+      "operation": "migration.scoped-v1-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_workflow_inventory_tests",
+      "kind": "verify",
+      "operation": "workflow.inventory-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_release_build_tests",
+      "kind": "verify",
+      "operation": "release.tests.units",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_release_build_integration",
+      "kind": "verify",
+      "operation": "release.tests.integration",
+      "needs": [
+        "build_distribution"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_integration",
+      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -655,7 +709,11 @@
       "verify_judge_filemap_tests",
       "verify_judge_routes_tests",
       "verify_judge_cost_tests",
-      "verify_judge_mixed_tests"
+      "verify_judge_mixed_tests",
+      "verify_scoped_v1_tests",
+      "verify_workflow_inventory_tests",
+      "verify_release_build_tests",
+      "verify_release_build_integration"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -693,7 +751,11 @@
       "verify_judge_routes_tests": "linux_verify_judge_routes_tests",
       "verify_judge_cost_tests": "linux_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "linux_verify_judge_mixed_tests",
-      "package": "linux_package"
+      "package": "linux_package",
+      "verify_scoped_v1_tests": "linux_verify_scoped_v1_tests",
+      "verify_workflow_inventory_tests": "linux_verify_workflow_inventory_tests",
+      "verify_release_build_tests": "linux_verify_release_build_tests",
+      "verify_release_build_integration": "linux_verify_release_build_integration"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -726,7 +788,11 @@
       "verify_judge_routes_tests": "macos_verify_judge_routes_tests",
       "verify_judge_cost_tests": "macos_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "macos_verify_judge_mixed_tests",
-      "package": "macos_package"
+      "package": "macos_package",
+      "verify_scoped_v1_tests": "macos_verify_scoped_v1_tests",
+      "verify_workflow_inventory_tests": "macos_verify_workflow_inventory_tests",
+      "verify_release_build_tests": "macos_verify_release_build_tests",
+      "verify_release_build_integration": "macos_verify_release_build_integration"
     }
   },
   "unit_costs": {
@@ -760,7 +826,11 @@
     "verify_judge_routes_tests": "unmeasured",
     "verify_judge_cost_tests": "unmeasured",
     "verify_judge_mixed_tests": "unmeasured",
-    "package": "unmeasured"
+    "package": "unmeasured",
+    "verify_scoped_v1_tests": "unmeasured",
+    "verify_workflow_inventory_tests": "unmeasured",
+    "verify_release_build_tests": "unmeasured",
+    "verify_release_build_integration": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,

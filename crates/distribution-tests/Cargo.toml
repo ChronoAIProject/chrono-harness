@@ -15,9 +15,5 @@ tempfile = "3"
 name = "installation"
 path = "tests/installation.rs"
 
-[[test]]
-name = "release_recipe"
-path = "tests/release_recipe.rs"
-
 [profile.dev.package.sha2]
 opt-level = 3

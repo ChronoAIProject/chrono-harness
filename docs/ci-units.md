@@ -30,6 +30,20 @@ and check report; the existing detector and always-run aggregate remain the nati
 entry and sole required branch-protection check. The grouping has no native timing
 or activation acceptance until the caller runs the committed candidate there.
 
+The worktree test project has separate `worktree` and `worktree-adoption` units.
+Its adoption action explicitly names six host-entry integration tests for the
+participating check, detached Python consumer, short check, registered Python
+consumers, native Cargo child and standalone bootstrap. The core action excludes
+those same names. Both retain their original test IDs, assertions, deadlines and
+default libtest threads. The unfiltered action remains the release verifier.
+`worktree.inventory` uses the same independent Python inventory owner with
+`.chrono-harness/ci/worktree-inventory.json` to require nonempty, disjoint,
+complete coverage of the current unfiltered test list. Both groups retain the
+same build prerequisites and declare their shared target and inventory resource;
+their local operations cannot write that target concurrently. Independent native
+jobs retain separate checkouts, reports and reruns. This grouping does not certify
+that every host can satisfy a timing bound under arbitrary external load.
+
 Providers without `job_gating` retain their original separate-workflow behavior
 and evidence contracts. Installing a new binary or running init does not opt
 an existing host in. This source correction has no published release or native
