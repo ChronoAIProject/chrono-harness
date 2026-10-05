@@ -1426,7 +1426,7 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
 
 #[test]
 fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::symlink;
     for route in ["bootstrap", "workflow-inventory", "scoped-v1-tests"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
@@ -1435,58 +1435,83 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
         } else {
             source().join(format!(".chrono-harness/ci/{route}.py"))
         };
+        let consumer = env!("CARGO_BIN_EXE_chrono-worktree-test-consumer");
         let tools = h.parent.join("python-tools");
         fs::create_dir(&tools).unwrap();
         for name in ["rustup", "cargo", "rustc"] {
-            let body = if name == "rustup" {
-                "#!/bin/sh\nexit 0\n".into()
-            } else {
-                format!("#!/bin/sh\nprintf '{} 1.95.0 (fixture)\\n'\n", name)
-            };
-            let path = tools.join(name);
-            fs::write(&path, body).unwrap();
-            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+            symlink(consumer, tools.join(name)).unwrap();
         }
-        let holder = "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/python-holder\nwhile [ ! -f .chrono-harness/state/python-release ]; do sleep 0.02; done\nprintf joined > .chrono-harness/state/python-done\n";
         if route == "scoped-v1-tests" {
-            let path = tools.join("git");
-            fs::write(&path, format!("#!/bin/sh\n{holder}")).unwrap();
-            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+            symlink(consumer, tools.join("git")).unwrap();
         }
-        let setup = match route {
-            "bootstrap" => {
-                r#"import json
-(root/'.chrono-harness/ci').mkdir(exist_ok=True)
-(root/'.chrono-harness/ci/probe.json').write_text(json.dumps(dict(schema='chrono-bootstrap/v1',projects='.chrono-harness/projects.json',rust_toolchain='1.95.0',tools=dict(sh='/bin/sh'),operations=['test.consumer'],install=[])))
-sys.argv=[str(script),str(root),'.chrono-harness/ci/probe.json']
-module.main()
-"#
-            }
-            "workflow-inventory" => {
-                r#"import json
-p='.chrono-harness/state/list-projects.json'; c='.chrono-harness/state/list-config.json'
-actions={key:dict(operation=key,tool='sh',argv=['st.sh']) for key in ['all','left','right']}
-groups=dict(left='left',right='right')
-(root/p).write_text(json.dumps(dict(projects=[dict(id='probe',test_groups=groups,actions=actions)])))
-(root/c).write_text(json.dumps(dict(schema='chrono-workflow-inventory/v1',projects=p,project='probe',groups=groups,unfiltered_action='all',tools=dict(sh='/bin/sh'),binaries={key:['cases'] for key in actions},report_directory='.chrono-harness/state/listing',timeout_seconds=30,output_limit_bytes=65536)))
-module.validate(root,Path(c))
-"#
-            }
-            _ => "module.blob('opaque-declared-input')\n",
-        };
-        let body = format!(
-            "mkdir -p .chrono-harness/state\nprintf '%s' \"$$\" > .chrono-harness/state/python-wrapper\nexport PATH='{}':\"$PATH\"\nexec /usr/bin/python3 -B - <<'PY'\nimport importlib.util,sys\nfrom pathlib import Path\nroot=Path.cwd();script=Path({:?})\nspec=importlib.util.spec_from_file_location('consumer',script);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\n{}\nPY\n",
-            tools.display(),
-            script.to_str().unwrap(),
-            setup
-        );
-        consuming_operation(&h, &body);
-        fs::write(h.root.join("st.sh"), holder).unwrap();
-        commit(&h.root);
-        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        super::automatic::native_consumer_actions(&h, "python-consumer", "python-holder");
         let target = h.parent.join(format!("python-{route}"));
         assert_eq!(h.invoke("feature", route, &target).0, 0);
         output(&target);
+        let state = target.join(".chrono-harness/state");
+        fs::create_dir_all(&state).unwrap();
+        fs::write(
+            state.join("python-consumer.py"),
+            include_bytes!("support/python_consumer.py"),
+        )
+        .unwrap();
+        fs::write(
+            state.join("python-consumer.json"),
+            serde_json::to_vec(&value!({"script":script,"route":route,"tools":tools})).unwrap(),
+        )
+        .unwrap();
+        match route {
+            "bootstrap" => {
+                fs::write(
+                    state.join("python-bootstrap.json"),
+                    serde_json::to_vec(&value!({
+                        "schema":"chrono-bootstrap/v1",
+                        "projects":".chrono-harness/projects.json",
+                        "rust_toolchain":"1.95.0",
+                        "tools":{"consumer":consumer},
+                        "operations":["test.consumer"],"install":[]
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+            }
+            "workflow-inventory" => {
+                let groups = value!({"left":"left","right":"right"});
+                let mut actions = serde_json::Map::new();
+                for key in ["all", "left", "right"] {
+                    actions.insert(
+                        key.into(),
+                        value!({
+                            "operation":key,"tool":"consumer","argv":["python-holder"]
+                        }),
+                    );
+                }
+                fs::write(
+                    state.join("list-projects.json"),
+                    serde_json::to_vec(&value!({"projects":[{
+                        "id":"probe","test_groups":groups,"actions":actions
+                    }]}))
+                    .unwrap(),
+                )
+                .unwrap();
+                fs::write(
+                    state.join("list-config.json"),
+                    serde_json::to_vec(&value!({
+                        "schema":"chrono-workflow-inventory/v1",
+                        "projects":".chrono-harness/state/list-projects.json",
+                        "project":"probe","groups":groups,"unfiltered_action":"all",
+                        "tools":{"consumer":consumer},
+                        "binaries":{"all":["cases"],"left":["cases"],"right":["cases"]},
+                        "report_directory":".chrono-harness/state/listing",
+                        "timeout_seconds":30,"output_limit_bytes":65536
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+            }
+            "scoped-v1-tests" => (),
+            _ => unreachable!(),
+        }
         let mut owner = wrapper(&h, &target);
         owner.await_file(&target.join(".chrono-harness/state/python-holder"));
         let python =
