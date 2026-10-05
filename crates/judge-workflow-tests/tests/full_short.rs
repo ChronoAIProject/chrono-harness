@@ -466,7 +466,7 @@ fn make_local_lane(
             "fixture readiness {name}: {ready:?}"
         );
         assert!(
-            ready.stderr.starts_with(b"E_REQUEST: "),
+            ready.stderr.starts_with(b"E_PROTOCOL: "),
             "fixture readiness {name}: {ready:?}"
         );
     }
