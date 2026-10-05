@@ -422,6 +422,54 @@ fn make_local_lane(
     kind: &str,
 ) -> (Host, tempfile::TempDir, std::path::PathBuf) {
     let root = h.root();
+    // Finish first execution of the declared fixture images before birth starts
+    // the freshness clock. These probes do not execute any business operation.
+    for name in ["chrono-harness", "chrono-ci", "chrono-worktree"] {
+        let ready = Command::new(root.join(format!(".chrono-harness/bin/{name}")))
+            .current_dir(&root)
+            .env_clear()
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert!(
+            ready.status.success(),
+            "fixture readiness {name}: {ready:?}"
+        );
+        assert_eq!(ready.stdout, format!("{name} 0.1.0\n").as_bytes());
+        assert!(
+            ready.stderr.is_empty(),
+            "fixture readiness {name}: {ready:?}"
+        );
+    }
+    for judge in h.values[JUDGES]["judges"].as_array().unwrap() {
+        let name = judge["executable"].as_str().unwrap();
+        let ready = Command::new(root.join(name))
+            .current_dir(&root)
+            .env_clear()
+            .args(
+                judge["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap()),
+            )
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(
+            ready.status.code(),
+            Some(2),
+            "fixture readiness {name}: {ready:?}"
+        );
+        assert!(
+            ready.stdout.is_empty(),
+            "fixture readiness {name}: {ready:?}"
+        );
+        assert!(
+            ready.stderr.starts_with(b"E_REQUEST: "),
+            "fixture readiness {name}: {ready:?}"
+        );
+    }
     // Produce the fixed endpoint snapshots before starting the real branch
     // clock. Its short freshness window measures producer behavior, not fixture
     // snapshot setup competing with the other registered tests.
@@ -977,6 +1025,16 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
     let freshness_seconds = 30.0;
     let (h, tools, lane) = local_short_lane(Some(freshness_seconds));
     let (e, one) = short(&lane, &["check", "--unit", "one"], None);
+    if e != 0 {
+        let retained = source()
+            .join(".chrono-harness/state/workflow-test-failures")
+            .join(sha256(lane.as_os_str().as_encoded_bytes()));
+        copy_tree(&lane.join(".chrono-harness/state"), &retained);
+        eprintln!(
+            "unexpected initial freshness failure retained at {}",
+            retained.display()
+        );
+    }
     passed(e, &one);
     let old_context = one["request"]["context"]["path"].as_str().unwrap();
     let original = fs::read(old_context).unwrap();

@@ -168,7 +168,7 @@ fn main() -> ExitCode {
                     include_bytes!("native_cargo/src/lib.rs"),
                 )
                 .unwrap();
-                cargo.arg("--no-run");
+                cargo.args(["--", "--list"]);
             } else {
                 mark("cargo-wrapper", std::process::id().to_string());
                 cargo.env("CHRONO_NATIVE_FIXTURE_ROOT", root);

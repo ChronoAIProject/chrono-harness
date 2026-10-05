@@ -177,6 +177,7 @@ fn install_inner(root: &Path, stdout: &str, stderr: &str, exit: i32) {
         root,
         Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer")),
         "inner-check",
+        b"fixture\n",
     );
     fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
     fs::write(
@@ -1554,7 +1555,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let h = Host::new("payload");
     h.kernel_cleanup();
     super::automatic::native_consumer_actions(&h, "cargo-run", "cargo-prepare");
-    // Compile under the separately registered fixture action, with the same
+    // Compile and list the native tests under the registered fixture action, with the same
     // managed environment and process bounds as its later Cargo invocation.
     // The native-holder deadline measures launch/lease handoff after preparation.
     let target = h.parent.join("native-cargo");
@@ -1572,6 +1573,13 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     assert_eq!(prepared["status"], "used");
     assert_eq!(prepared["managed_process"]["exit_code"], 0);
     assert_eq!(prepared["managed_process"]["failure"], Value::Null);
+    assert!(
+        prepared["managed_process"]["stdout"]
+            .as_str()
+            .unwrap()
+            .contains("native_holder: test"),
+        "native test executable was not prepared: {prepared}"
+    );
     assert!(!target.join(".chrono-harness/state/native-holder").exists());
     output(&target);
     let mut owner = wrapper(&h, &target);

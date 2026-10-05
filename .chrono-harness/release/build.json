@@ -856,6 +856,12 @@
     ],
     "test.ci-tests": [
       ".chrono-harness/state/ci-test-failures/"
+    ],
+    "test.worktree-tests": [
+      ".chrono-harness/state/worktree-test-failures/"
+    ],
+    "test.judge-workflow-tests": [
+      ".chrono-harness/state/workflow-test-failures/"
     ]
   }
 }

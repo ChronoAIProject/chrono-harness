@@ -45,13 +45,31 @@ pub(super) fn install(root: &Path) {
         root,
         Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")),
         "context-judge",
+        b"fixture\n",
     );
 }
 pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
     let built = source().join(format!("crates/{project}/target/debug/{name}"));
-    install_readonly_file(root, &built, name);
+    install_readonly_file(root, &built, name, format!("{name} 0.1.0\n").as_bytes());
 }
-pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str) {
+pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
+    let ready = Command::new(program)
+        .current_dir(root)
+        .env_clear()
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(
+        ready.status.success(),
+        "fixture readiness {program:?}: {ready:?}"
+    );
+    assert_eq!(ready.stdout, expected, "fixture readiness {program:?}");
+    assert!(
+        ready.stderr.is_empty(),
+        "fixture readiness {program:?}: {ready:?}"
+    );
+}
+pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, version: &[u8]) {
     let installed = root.join(format!(".chrono-harness/bin/{name}"));
     assert_eq!(
         fs::symlink_metadata(&installed).unwrap_err().kind(),
@@ -69,6 +87,7 @@ pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str) {
         copied.status.success(),
         "fixture executable copy: {copied:?}"
     );
+    ready_version_program(root, &installed, version);
 }
 #[test]
 fn fixture_executable_identity_survives_neighbor_teardown() {
@@ -79,7 +98,7 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     let second = tempfile::tempdir().unwrap();
     for directory in [first.path(), second.path()] {
         fs::create_dir_all(directory.join(".chrono-harness/bin")).unwrap();
-        install_readonly_file(directory, built, "consumer");
+        install_readonly_file(directory, built, "consumer", b"fixture\n");
     }
     let first_path = first.path().join(".chrono-harness/bin/consumer");
     let second_path = second.path().join(".chrono-harness/bin/consumer");
