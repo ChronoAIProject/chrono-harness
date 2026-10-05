@@ -599,7 +599,7 @@ pub(super) fn consuming_operation(h: &Host, body: &str) {
 pub(super) fn native_git(h: &Host, mode: &str, mut parameters: Value) -> PathBuf {
     let input = h.parent.join("git-fixture.json");
     parameters["mode"] = value!(mode);
-    parameters["git"] = value!(chrono_harness::resolve_program(&h.root, "git", None).unwrap());
+    parameters["git"] = value!(fixture_git());
     fs::write(&input, serde_json::to_vec(&parameters).unwrap()).unwrap();
     h.policy(|policy| {
         policy["git"]["program"] = value!(env!("CARGO_BIN_EXE_chrono-worktree-test-git"));

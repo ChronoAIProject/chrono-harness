@@ -97,23 +97,26 @@ fn workflow(r: &Value) -> &Value {
         .unwrap()["response"]["outputs"]["workflow"]
 }
 fn passed(exit: i32, r: &Value) {
-    assert_eq!(
-        exit,
-        0,
-        "findings={} tests={} transport={:?}",
-        r["findings"],
-        r["tests"],
-        r["judges"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|j| j["transport_failure"].as_str())
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(exit, 0, "{}", report_diagnostics(r));
     assert!(
         matches!(r["status"].as_str(), Some("pass" | "warn")),
-        "{r:#}"
+        "{}",
+        report_diagnostics(r)
     )
+}
+fn report_diagnostics(r: &Value) -> Value {
+    json!({
+        "status": r["status"], "report_path": r["report_path"],
+        "findings": r["findings"], "stderr": r["stderr"],
+        "judges": r["judges"].as_array().into_iter().flatten().map(|j| json!({
+            "id": j["id"], "state": j["state"], "exit_code": j["exit_code"],
+            "transport_failure": j["transport_failure"],
+            "process_failure": j["process"]["failure"],
+            "executable": j["process"]["executable"],
+            "stdout_bytes": j["process"]["stdout_bytes"].as_array().map(Vec::len),
+            "stderr_bytes": j["process"]["stderr_bytes"].as_array().map(Vec::len)
+        })).collect::<Vec<_>>()
+    })
 }
 fn certificate(h: &Host) -> (Value, String) {
     let bytes = fs::read(h.root().join(".chrono-harness/state/integration.json")).unwrap();
@@ -640,7 +643,7 @@ fn retired_judge_needs_declaration_but_never_needs_its_old_binary() {
         .retain(|j| j["id"] != "obsolete");
     h.save();
     let (e, r) = run(&h, "integration", None, |_| {});
-    assert_eq!(e, 1);
+    assert_eq!(e, 1, "{}", report_diagnostics(&r));
     assert!(r["findings"].to_string().contains("E_RETIREMENT"));
     h.values.get_mut(WORKFLOW).unwrap()["retirements"] = json!([{"kind":"judge","id":"obsolete","replacement":null,"reason":"retire unavailable old implementation"}]);
     h.save();

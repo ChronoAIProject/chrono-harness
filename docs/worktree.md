@@ -102,6 +102,12 @@ acquires a new observation; none is reused across deletion effects. Malformed
 fields, mismatched identities and failed Git processes still preserve pending
 work and the original failure evidence.
 
+Local check preparation compares the index and physical files with its fixed
+candidate both before and after fetching the base. Its final live HEAD check
+does not select a different snapshot for the following file comparison. A clean
+replacement commit cannot validate the original candidate; untracked-file
+checks remain live. These observations do not form an atomic Git transaction.
+
 Creation uses a new branch and a worktree lock tied to this invocation. Actual
 Git inventory, HEAD, branch, root and checkout cleanliness are checked before
 unlocking it. The producer reuses registration's artifact classifier: declared
@@ -864,7 +870,12 @@ or pretending it adopted the new automatic policy. Disposal paths must already
 be declared at both endpoints. Its observation is `import`, with no historical
 birth claim. It does not enumerate old hosts. Caller-owned Git/GitHub,
 publication, immediate existing-host reclamation and evidence settlement remain
-outside this producer. Local real-Git fixtures exercise full checkout removal;
+outside this producer. This repository's worktree fixtures select their Git
+executable from `.chrono-harness/tests/worktree-tools.json` for each explicitly
+registered OS/architecture. The fixture then records its real executable identity
+and version through the existing binding checks; the product's host Git policy
+remains independent. Missing test-platform registration fails without a PATH
+fallback. Local real-Git fixtures exercise full checkout removal;
 actual main-host finish/landing is the caller's acceptance event after adoption.
 
 ### Kernel ownership and unfinished cache recovery (v2)

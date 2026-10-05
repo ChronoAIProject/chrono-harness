@@ -2918,6 +2918,18 @@
       ]
     },
     {
+      "path": ".chrono-harness/tests/worktree-tools.json",
+      "owner": "worktree-tests",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree-tests/tests/creation.rs",
       "owner": "worktree-tests",
       "surface": "test",
@@ -4198,6 +4210,18 @@
     },
     {
       "path": "crates/worktree-tests/tests/support/consumer.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/python_consumer.py",
       "owner": "worktree-tests",
       "surface": "test",
       "cost": "unmeasured",
