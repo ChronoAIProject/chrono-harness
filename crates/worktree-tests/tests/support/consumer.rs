@@ -25,7 +25,26 @@ fn exec(mut command: Command) -> ! {
     panic!("fixture exec failed: {}", command.exec());
 }
 
+fn python_holder() {
+    mark("python-holder", std::process::id().to_string());
+    wait("python-release");
+    mark("python-done", "joined");
+}
+
 fn main() -> ExitCode {
+    let invocation = std::env::args_os().next().unwrap();
+    match Path::new(&invocation).file_name().and_then(|s| s.to_str()) {
+        Some("rustup") => return ExitCode::SUCCESS,
+        Some(name @ ("cargo" | "rustc")) => {
+            println!("{name} 1.95.0 (fixture)");
+            return ExitCode::SUCCESS;
+        }
+        Some("git") => {
+            python_holder();
+            return ExitCode::SUCCESS;
+        }
+        _ => (),
+    }
     let mode = std::env::args().nth(1).expect("consumer mode");
     match mode.as_str() {
         "--version" => println!("fixture"),
@@ -89,6 +108,28 @@ fn main() -> ExitCode {
             wait("release");
             print!("completed");
         }
+        "python-consumer" => {
+            let config: serde_json::Value = serde_json::from_slice(
+                &fs::read(Path::new(STATE).join("python-consumer.json")).unwrap(),
+            )
+            .unwrap();
+            let tools = std::path::PathBuf::from(config["tools"].as_str().unwrap());
+            let path = std::env::join_paths(
+                std::iter::once(tools)
+                    .chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+            )
+            .unwrap();
+            mark("python-wrapper", std::process::id().to_string());
+            let mut python = Command::new("/usr/bin/python3");
+            python.env("PATH", path).args([
+                "-B",
+                ".chrono-harness/state/python-consumer.py",
+                config["script"].as_str().unwrap(),
+                config["route"].as_str().unwrap(),
+            ]);
+            exec(python);
+        }
+        "python-holder" => python_holder(),
         "cargo-prepare" | "cargo-run" => {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
