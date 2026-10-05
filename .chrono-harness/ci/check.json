@@ -178,6 +178,30 @@
           "test:workflow-short"
         ],
         "report_path": ".chrono-harness/state/units/judge-workflow-short/check.json"
+      },
+      "workflow-inventory": {
+        "tests": [
+          "test:workflow-inventory-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/workflow-inventory/check.json"
+      },
+      "release-build": {
+        "tests": [
+          "test:release-build-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/release-build/check.json"
+      },
+      "release-build-integration": {
+        "tests": [
+          "test:release-build-integration"
+        ],
+        "report_path": ".chrono-harness/state/units/release-build-integration/check.json"
+      },
+      "worktree-adoption": {
+        "tests": [
+          "test:worktree-adoption"
+        ],
+        "report_path": ".chrono-harness/state/units/worktree-adoption/check.json"
       }
     },
     "shared_operations": {
@@ -187,7 +211,8 @@
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",
-        "worktree"
+        "worktree",
+        "worktree-adoption"
       ],
       "build.inputs": [
         "inputs",
@@ -284,14 +309,16 @@
         "judge-workflow-short",
         "judge-workflow-units",
         "runner",
-        "worktree"
+        "worktree",
+        "worktree-adoption"
       ],
       "build.worktree": [
         "ci",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",
-        "worktree"
+        "worktree",
+        "worktree-adoption"
       ],
       "fmt.judge-workflow": [
         "judge-workflow",
@@ -303,15 +330,26 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "workflow.inventory-tests": [
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "workflow.inventory": [
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
+      ],
+      "build.distribution": [
+        "distribution",
+        "release-build-integration"
+      ],
+      "fmt.worktree": [
+        "worktree",
+        "worktree-adoption"
+      ],
+      "fmt.worktree-tests": [
+        "worktree",
+        "worktree-adoption"
+      ],
+      "worktree.inventory": [
+        "worktree",
+        "worktree-adoption"
       ]
     },
     "facts_config": ".chrono-harness/config.json"

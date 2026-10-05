@@ -997,6 +997,10 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
         }
       ]
     },
@@ -1795,6 +1799,10 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
         }
       ]
     },
@@ -1819,6 +1827,10 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
         }
       ]
     },
@@ -2473,18 +2485,6 @@
       ]
     },
     {
-      "path": "crates/distribution-tests/tests/release_recipe.rs",
-      "owner": "distribution-tests",
-      "surface": "test",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "compile",
-          "to": "project:distribution-tests"
-        }
-      ]
-    },
-    {
       "path": "assets/distribution/bootstrap.py",
       "owner": "distribution",
       "surface": "product",
@@ -2505,6 +2505,10 @@
         {
           "kind": "test-execution",
           "to": "test:distribution-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
         }
       ]
     },
@@ -2516,19 +2520,23 @@
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:distribution-tests"
+          "to": "test:release-build-tests"
         }
       ]
     },
     {
       "path": ".chrono-harness/release/build.py",
-      "owner": "repository",
+      "owner": "release-build",
       "surface": "product",
       "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:distribution-tests"
+          "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build"
         }
       ]
     },
@@ -3207,7 +3215,7 @@
         },
         {
           "kind": "test-execution",
-          "to": "test:distribution-tests"
+          "to": "test:release-build-tests"
         }
       ]
     },
@@ -3878,7 +3886,7 @@
     },
     {
       "path": ".chrono-harness/ci/workflow-inventory.py",
-      "owner": "judge-workflow-tests",
+      "owner": "workflow-inventory",
       "surface": "judge-policy",
       "cost": "unmeasured",
       "edges": [
@@ -3897,36 +3905,48 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-inventory-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
         }
       ]
     },
     {
       "path": ".chrono-harness/ci/workflow-inventory-tests.py",
-      "owner": "judge-workflow-tests",
+      "owner": "workflow-inventory-tests",
       "surface": "test",
       "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:judge-workflow-tests"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:workflow-units"
-        },
-        {
-          "kind": "test-execution",
-          "to": "test:workflow-short"
-        },
-        {
-          "kind": "test-execution",
           "to": "test:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-inventory-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
         }
       ]
     },
     {
       "path": ".chrono-harness/ci/workflow-inventory.json",
-      "owner": "judge-workflow-tests",
+      "owner": "workflow-inventory",
       "surface": "judge-policy",
       "cost": "unmeasured",
       "edges": [
@@ -3941,18 +3961,26 @@
         {
           "kind": "test-execution",
           "to": "test:workflow-short"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
         }
       ]
     },
     {
       "path": ".chrono-harness/release/build-tests.py",
-      "owner": "repository",
+      "owner": "release-build-tests",
       "surface": "test",
       "cost": "unmeasured",
       "edges": [
         {
           "kind": "test-execution",
-          "to": "test:distribution-tests"
+          "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
         }
       ]
     },
@@ -4085,6 +4113,18 @@
         {
           "kind": "test-execution",
           "to": "test:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
         }
       ]
     },
@@ -4293,6 +4333,166 @@
       ]
     },
     {
+      "path": ".chrono-harness/release/recipe-tests.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/dependency-tests.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/tool.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/recipe-tool.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/recipe-consumer.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/unit-tools.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/unit-pack.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/release/fixtures/unit-consumer.py",
+      "owner": "release-build-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:release-build-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/migrations/test-hosts.json",
+      "owner": "scoped-v1-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/migrations/fixtures/linux-host.json",
+      "owner": "scoped-v1-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-workflow-tests/tests/support/native_tool.rs",
       "owner": "judge-workflow-tests",
       "surface": "test",
@@ -4325,6 +4525,42 @@
         {
           "kind": "compile",
           "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/worktree-inventory.json",
+      "owner": "workflow-inventory",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-adoption"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/fixtures/inventory-listing.py",
+      "owner": "workflow-inventory-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:workflow-inventory-tests"
         }
       ]
     }
@@ -6504,6 +6740,176 @@
       "from": "environment:CHRONO_CHECK_HANDOFF_TRACE",
       "kind": "runtime-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "from": "script:workflow-inventory",
+      "kind": "test-execution",
+      "to": "test:workflow-inventory-tests"
+    },
+    {
+      "from": "script:workflow-inventory-tests",
+      "kind": "test-execution",
+      "to": "test:workflow-inventory-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:workflow-inventory-tests"
+    },
+    {
+      "from": "project:release-build",
+      "kind": "test-execution",
+      "to": "test:release-build-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "tool:git",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "project:release-build-tests",
+      "kind": "test-execution",
+      "to": "test:release-build-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "project:release-build-tests"
+    },
+    {
+      "from": "tool:git",
+      "kind": "runtime-input",
+      "to": "project:release-build-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:release-build-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:release-build-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:release-build"
+    },
+    {
+      "from": "project:release-build",
+      "kind": "test-execution",
+      "to": "test:release-build-integration"
+    },
+    {
+      "from": "project:release-build-tests",
+      "kind": "test-execution",
+      "to": "test:release-build-integration"
+    },
+    {
+      "from": "project:distribution",
+      "kind": "test-execution",
+      "to": "test:release-build-integration"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "test-execution",
+      "to": "test:worktree-adoption"
+    },
+    {
+      "from": "project:worktree-tests",
+      "kind": "test-execution",
+      "to": "test:worktree-adoption"
     }
   ],
   "test_costs": [
@@ -6577,6 +6983,22 @@
     },
     {
       "test": "workflow-short",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "workflow-inventory-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "release-build-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "release-build-integration",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "worktree-adoption",
       "cost": "unmeasured"
     }
   ],
@@ -6730,7 +7152,6 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "workflow.inventory-tests",
         "workflow.inventory",
         "test.workflow.core"
       ],
@@ -6791,7 +7212,8 @@
         "build.runner",
         "build.ci",
         "build.worktree",
-        "test.worktree-tests"
+        "worktree.inventory",
+        "test.worktree.core"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -6811,7 +7233,6 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "workflow.inventory-tests",
         "workflow.inventory",
         "test.workflow.units"
       ],
@@ -6833,9 +7254,43 @@
         "build.judge-workflow",
         "build.worktree",
         "build.inputs",
-        "workflow.inventory-tests",
         "workflow.inventory",
         "test.workflow.short"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:workflow-inventory-tests": {
+      "operations": [
+        "workflow.inventory-tests"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:release-build-tests": {
+      "operations": [
+        "release.tests.units"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:release-build-integration": {
+      "operations": [
+        "build.distribution",
+        "release.tests.integration"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:worktree-adoption": {
+      "operations": [
+        "fmt.worktree",
+        "fmt.worktree-tests",
+        "build.runner",
+        "build.ci",
+        "build.worktree",
+        "worktree.inventory",
+        "test.worktree.adoption"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -6864,7 +7319,8 @@
       "test.workflow.core"
     ],
     "resources": [
-      "workflow-test-inventory"
+      "workflow-test-inventory",
+      "worktree-test-inventory"
     ],
     "claims": {
       "build.ci": {
@@ -7191,12 +7647,6 @@
           "crates/judge-workflow-tests/target/"
         ]
       },
-      "test.worktree-tests": {
-        "resources": [],
-        "outputs": [
-          "crates/worktree-tests/target/"
-        ]
-      },
       "workflow.inventory": {
         "resources": [
           "workflow-test-inventory"
@@ -7207,11 +7657,40 @@
         ]
       },
       "workflow.inventory-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "release.tests.units": {
+        "resources": [],
+        "outputs": []
+      },
+      "release.tests.integration": {
+        "resources": [],
+        "outputs": []
+      },
+      "test.worktree.core": {
         "resources": [
-          "workflow-test-inventory"
+          "worktree-test-inventory"
         ],
         "outputs": [
-          "crates/judge-workflow-tests/target/"
+          "crates/worktree-tests/target/"
+        ]
+      },
+      "test.worktree.adoption": {
+        "resources": [
+          "worktree-test-inventory"
+        ],
+        "outputs": [
+          "crates/worktree-tests/target/"
+        ]
+      },
+      "worktree.inventory": {
+        "resources": [
+          "worktree-test-inventory"
+        ],
+        "outputs": [
+          "crates/worktree-tests/target/",
+          ".chrono-harness/state/"
         ]
       }
     }

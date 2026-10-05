@@ -16,19 +16,7 @@ spec.loader.exec_module(inventory)
 class Coverage(unittest.TestCase):
     def fixture(self, root, mode):
         script = root / "list.py"
-        script.write_text("""import sys
-mode, action = sys.argv[1:3]
-if mode == 'failed' and action == 'right':
- print('original failure', file=sys.stderr); sys.exit(7)
-names = {'all':['a','b'], 'left':['a'], 'right':['b']}[action]
-if '--ignored' in sys.argv: names = ['a'] if mode == 'ignored' else []
-elif mode == 'empty' and action == 'right': names = []
-elif mode == 'overlap' and action == 'right': names = ['a','b']
-elif mode == 'omit' and action == 'all': names = ['a','b','c']
-print('Running tests/cases.rs (target/cases-123abc)', file=sys.stderr)
-for name in names: print(name+': test')
-print(str(len(names))+' tests, 0 benchmarks')
-""")
+        script.write_bytes((Path(__file__).resolve().parent / "fixtures/inventory-listing.py").read_bytes())
         groups = {"t": "left", "opaque": "right"}
         actions = {key: {"operation": key, "tool": "python", "argv": [str(script), mode, key]}
                    for key in ["all", "left", "right"]}
