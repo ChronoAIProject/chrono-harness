@@ -260,14 +260,19 @@ fn install(root: &Path) {
     install_tools(
         root,
         &[
-            ("runner", "chrono-harness"),
-            ("judge-ci", "chrono-judge-ci"),
-            ("ci", "chrono-ci"),
+            ("runner", "chrono-harness", ToolProbe::Version),
+            ("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof),
+            ("ci", "chrono-ci", ToolProbe::Version),
         ],
     );
 }
 
-fn install_tools(root: &Path, tools: &[(&str, &str)]) {
+enum ToolProbe {
+    Version,
+    JudgeEof,
+}
+
+fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
@@ -276,7 +281,7 @@ fn install_tools(root: &Path, tools: &[(&str, &str)]) {
     // Each temporary host owns its executable inode and pathname. A joined copy
     // child keeps writable descriptors out of concurrently forked test children.
     let mut copy = Command::new("/bin/cp");
-    for (project, name) in tools {
+    for (project, name, _) in tools {
         let built = source.join(format!("crates/{project}/target/debug/{name}"));
         assert!(matches!(
             fs::symlink_metadata(bin.join(name)),
@@ -292,6 +297,35 @@ fn install_tools(root: &Path, tools: &[(&str, &str)]) {
             String::from_utf8_lossy(&copied.stderr)
         );
     }
+    // Finish fixture setup before fault injection and bounded check execution.
+    // Each caller declares the program's real readiness protocol.
+    for (_, name, probe) in tools {
+        let mut command = Command::new(bin.join(name));
+        command
+            .current_dir(root)
+            .env_clear()
+            .stdin(std::process::Stdio::null());
+        if matches!(probe, ToolProbe::Version) {
+            command.arg("--version");
+        }
+        let argv: Vec<_> = std::iter::once(command.get_program())
+            .chain(command.get_args())
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        let output = command.output().unwrap();
+        let ready = match probe {
+            ToolProbe::Version => output.status.success(),
+            ToolProbe::JudgeEof => {
+                output.status.code() == Some(2)
+                    && output.stdout.is_empty()
+                    && output.stderr.starts_with(b"E_REQUEST: ")
+            }
+        };
+        if !ready {
+            retain_command_result(root, &argv, &json!({"fixture":"tool-ready"}), &output);
+        }
+        assert!(ready, "fixture {name} readiness: {output:?}");
+    }
 }
 
 #[test]
@@ -302,7 +336,7 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
         .join("../../crates/judge-ci/target/debug/chrono-judge-ci");
     let first = fixture();
     let second = fixture();
-    let tools = [("judge-ci", "chrono-judge-ci")];
+    let tools = [("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof)];
     install_tools(first.path(), &tools);
     install_tools(second.path(), &tools);
     let relative = ".chrono-harness/bin/chrono-judge-ci";

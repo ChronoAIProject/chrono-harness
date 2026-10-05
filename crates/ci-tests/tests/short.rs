@@ -108,7 +108,10 @@ impl ShortHost {
         fs::create_dir(&root).unwrap();
         git(&root, &["clone", "-q", old.path().to_str().unwrap(), "."]);
         install(&root);
-        install_tools(&root, &[("worktree", "chrono-worktree")]);
+        install_tools(
+            &root,
+            &[("worktree", "chrono-worktree", ToolProbe::Version)],
+        );
         git(&root, &["config", "user.name", "Fixture"]);
         git(&root, &["config", "user.email", "fixture@example.invalid"]);
         let remote = parent.join("explicit target.git");
@@ -621,7 +624,10 @@ fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted
     });
     fs::remove_file(h.root.join(".chrono-harness/bin/chrono-worktree")).unwrap();
     h.run(&["check"], 2);
-    install_tools(&h.root, &[("worktree", "chrono-worktree")]);
+    install_tools(
+        &h.root,
+        &[("worktree", "chrono-worktree", ToolProbe::Version)],
+    );
     fs::write(h.root.join(".chrono-harness/config.json"), "{}").unwrap();
     h.run(&["check"], 2);
 }
@@ -956,6 +962,16 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         .env("GITHUB_REPOSITORY", "owner/host")
         .output()
         .unwrap();
+    if rejected.status.code() != Some(2)
+        || !String::from_utf8_lossy(&rejected.stderr).contains("registered acquisition timeout")
+    {
+        retain_command_result(
+            &h.root,
+            &["check".into(), "--collect".into()],
+            &json!({"fixture":"acquisition-bound-rejection", "event_path":event, "candidate":h.candidate}),
+            &rejected,
+        );
+    }
     assert_eq!(rejected.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&rejected.stderr).contains("registered acquisition timeout"),

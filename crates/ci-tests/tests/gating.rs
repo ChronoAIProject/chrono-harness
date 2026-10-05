@@ -1193,11 +1193,18 @@ fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_paren
             .join(".chrono-harness/state/mock-artifacts/alpha"),
     );
     h.mock(&d, "retry");
+    let retry_needs = needs(&h, &d);
     let out = h
-        .command(&["check", "--collect"], &d, &needs(&h, &d))
+        .command(&["check", "--collect"], &d, &retry_needs)
         .env("GITHUB_RUN_ATTEMPT", "3")
         .output()
         .unwrap();
+    retain_command_result(
+        &h.host.root,
+        &["check".into(), "--collect".into()],
+        &json!({"detection":d,"needs":retry_needs,"attempt":3}),
+        &out,
+    );
     assert!(
         out.status.success(),
         "{} {}",
