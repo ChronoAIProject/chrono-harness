@@ -300,6 +300,41 @@ fn install_tools(root: &Path, tools: &[(&str, &str)]) {
     }
 }
 
+#[test]
+fn fixture_executable_identity_survives_neighbor_teardown() {
+    use std::os::unix::fs::MetadataExt;
+
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/judge-ci/target/debug/chrono-judge-ci");
+    let first = fixture();
+    let second = fixture();
+    let tools = [("judge-ci", "chrono-judge-ci")];
+    install_tools(first.path(), &tools);
+    install_tools(second.path(), &tools);
+    let relative = ".chrono-harness/bin/chrono-judge-ci";
+    let original = fs::metadata(&source).unwrap();
+    let one = fs::metadata(first.path().join(relative)).unwrap();
+    let two = fs::metadata(second.path().join(relative)).unwrap();
+    assert_ne!((one.dev(), one.ino()), (original.dev(), original.ino()));
+    assert_ne!((two.dev(), two.ino()), (original.dev(), original.ino()));
+    assert_ne!((one.dev(), one.ino()), (two.dev(), two.ino()));
+    assert_eq!(
+        fs::read(first.path().join(relative)).unwrap(),
+        fs::read(&source).unwrap()
+    );
+    drop(first);
+    assert_eq!(
+        fs::read(second.path().join(relative)).unwrap(),
+        fs::read(&source).unwrap()
+    );
+    let result = Command::new(second.path().join(relative))
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(result.stdout, b"chrono-judge-ci 0.1.0\n");
+}
+
 fn consumer() -> (tempfile::TempDir, String, String) {
     let d = fixture();
     let root = d.path();
