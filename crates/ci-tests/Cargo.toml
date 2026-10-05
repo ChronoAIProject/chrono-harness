@@ -5,10 +5,12 @@ edition = "2024"
 publish = false
 autotests = false
 
+[dependencies]
+serde_json = "1"
+
 [dev-dependencies]
 chrono-ci = { path = "../ci" }
 chrono-harness = { path = "../runner" }
-serde_json = "1"
 tempfile = "3"
 
 [[test]]

@@ -523,30 +523,11 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
 }
 
 fn install_mock_transport(root: &Path, mode: &str, c: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    let code = r#"#!/usr/bin/env python3
-import json,pathlib,sys,shutil
-root=pathlib.Path.cwd();data=json.loads((root/'.chrono-harness/state/mock.json').read_text());args=sys.argv[1:]
-def run(unit):
- return dict(id=101 if unit=='alpha' else 102,run_attempt=1,status='completed',conclusion='success',head_sha=data['candidate'],event='push',path='.github/workflows/'+unit+'.yml')
-if args[0]=='run':
- unit='alpha' if args[2]=='101' else 'beta';dest=pathlib.Path(args[args.index('--dir')+1]);shutil.copytree(root/'.chrono-harness/state/mock-artifacts'/unit,dest,dirs_exist_ok=True)
-elif '/actions/workflows/' in args[1]:
- unit='alpha' if '/alpha.yml/' in args[1] else 'beta';rows=[run(unit)]
- if data['mode']=='duplicate':rows.append(dict(rows[0],id=201))
- print(json.dumps([dict(workflow_runs=rows)]))
-elif '/contents/' in args[1]:
- path=args[1].split('/contents/',1)[1].split('?',1)[0]
- sys.stdout.buffer.write(b'wrong workflow' if data['mode']=='wrong-source' else (root/path).read_bytes())
-elif '/actions/runs/' in args[1]:
- item=run('alpha' if args[1].endswith('/101') else 'beta')
- if data['mode']=='changed-attempt':item['run_attempt']=2
- print(json.dumps(item))
-else:sys.exit(7)
-"#;
-    let executable = root.join(".chrono-harness/bin/mock-gh");
-    fs::write(&executable, code).unwrap();
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::copy(
+        env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
+        root.join(".chrono-harness/bin/mock-gh"),
+    )
+    .unwrap();
     json_file(
         root,
         ".chrono-harness/state/mock.json",
