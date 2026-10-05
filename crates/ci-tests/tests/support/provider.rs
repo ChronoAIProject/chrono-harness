@@ -44,6 +44,25 @@ pub fn units(args: &[String]) {
     };
     if args[0] == "run" {
         let unit = if args[2] == "101" { "alpha" } else { "beta" };
+        if unit == "alpha" && data["download_failures"].is_u64() {
+            let counter = ".chrono-harness/state/mock-download-attempts";
+            let attempt = fs::read_to_string(counter)
+                .ok()
+                .map(|s| s.parse::<u64>().unwrap())
+                .unwrap_or(0)
+                + 1;
+            fs::write(counter, attempt.to_string()).unwrap();
+            if attempt <= data["download_failures"].as_u64().unwrap() {
+                let destination = Path::new(option(args, "--dir"));
+                fs::create_dir_all(destination).unwrap();
+                fs::write(destination.join("partial-only"), b"failed original bytes").unwrap();
+                eprintln!(
+                    "error downloading artifact: HTTP {}: fixture transport failure",
+                    data["http_status"]
+                );
+                std::process::exit(23);
+            }
+        }
         copy_tree(
             &PathBuf::from(".chrono-harness/state/mock-artifacts").join(unit),
             Path::new(option(args, "--dir")),
