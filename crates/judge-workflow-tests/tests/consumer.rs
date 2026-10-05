@@ -4,6 +4,8 @@ mod full_units;
 mod git_facts;
 #[path = "../../judge-projects-tests/tests/support/host.rs"]
 mod host;
+#[path = "support/native_tools.rs"]
+mod native_tools;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::sha256;

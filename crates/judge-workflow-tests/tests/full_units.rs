@@ -8,28 +8,12 @@ fn rust_host() -> (Host, tempfile::TempDir) {
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let root = h.root();
     let wrapper = tool_root.join("cargo-fixture");
-    let marker = tool_root.join("business-launches");
     let cargo = chrono_harness::resolve_program(&root, "cargo", None).unwrap();
-    let quote = |p: &Path| format!("'{}'", p.to_str().unwrap().replace('\'', "'\\''"));
-    let bytes = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nif [ \"$1\" = fixture-prepare ]; then printf s >> .chrono-harness/state/order; exit 0; fi\nif [ -f .chrono-harness/state/fail ] && [ \"$3\" = t2/Cargo.toml ]; then exit 7; fi\nexec {} \"$@\"\n",
-        quote(&marker),
-        quote(&cargo)
-    );
-    fs::write(&wrapper, &bytes).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    native_tools::install(&wrapper);
     // The declared Git producer remains available independently of all unit roots.
     let git_tool = tool_root.join("facts-git");
     let real_git = chrono_harness::resolve_program(&root, "git", None).unwrap();
-    fs::write(
-        &git_tool,
-        format!(
-            "#!/bin/sh\n[ \"$FACTS_SENTINEL\" = declared ] || exit 81\nexec {} \"$@\"\n",
-            quote(&real_git)
-        ),
-    )
-    .unwrap();
-    fs::set_permissions(&git_tool, fs::Permissions::from_mode(0o755)).unwrap();
+    native_tools::install(&git_tool);
     h.tool = wrapper.clone();
     let cfg = h.values.get_mut(CONFIG).unwrap();
     for t in cfg["tools"].as_array_mut().unwrap() {
@@ -67,7 +51,7 @@ fn rust_host() -> (Host, tempfile::TempDir) {
     for i in cfg["environment"]["inputs"].as_array_mut().unwrap() {
         if i["id"] == "interpreter" {
             i["location"] = json!(wrapper);
-            i["sha256"] = json!(sha256(bytes.as_bytes()));
+            i["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
         }
         if i["id"] == "git-bytes" {
             i["location"] = json!(git_tool);
@@ -80,6 +64,18 @@ fn rust_host() -> (Host, tempfile::TempDir) {
     for id in ["p", "t", "p2", "t2"] {
         cfg["artifacts"].as_array_mut().unwrap().push(json!({"path":format!("{id}/target/"),"owner":id,"kind":"cargo-output","tracked":false}));
     }
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_REAL_CARGO",
+        &cargo,
+        &["judge:projects"],
+    );
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_REAL_GIT",
+        &real_git,
+        &["judge:registration", "judge:projects"],
+    );
     let projects = h.values.get_mut(PROJECTS).unwrap();
     projects["owners"] = json!(["host", "p", "t", "p2", "t2"]);
     projects["scripts"] = json!([]);
@@ -1240,14 +1236,13 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let wrapper = tool_root.join("python-migration");
     let python = fs::canonicalize(&h.tool).unwrap();
-    let launches = tool_root.join("business-launches");
-    let bytes = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec '{}' \"$@\"\n",
-        launches.display(),
-        python.display()
+    native_tools::install(&wrapper);
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_REAL_PYTHON",
+        &python,
+        &["judge:projects"],
     );
-    fs::write(&wrapper, &bytes).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
     h.tool = wrapper.clone();
     h.values.get_mut(CONFIG).unwrap()["tools"]
         .as_array_mut()
@@ -1262,7 +1257,7 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         .find(|i| i["id"] == "interpreter")
         .unwrap();
     input["location"] = json!(wrapper);
-    input["sha256"] = json!(sha256(bytes.as_bytes()));
+    input["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
     h.values.get_mut(CONFIG).unwrap()["protocol"]["timeout_seconds"] = json!(180);
     h.values.get_mut(CONFIG).unwrap()["execution_units"] = json!({"units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/unit-one.json"},"two":{"tests":["test:decoder-tests"],"report_path":".chrono-harness/state/unit-two.json"}},"shared_operations":{},"collection_limits":{"manifest_bytes":1048576,"report_bytes":67108864},"report_path":".chrono-harness/state/collected.json"});
     let mut migration = h.values[WORKFLOW]["migrations"][0].clone();
