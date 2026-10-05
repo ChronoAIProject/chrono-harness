@@ -7,6 +7,32 @@ use std::collections::BTreeMap;
 mod execution_fixture;
 use execution_fixture::Step;
 
+fn assert_passed(result: &chrono_judge_projects::Results) {
+    assert!(
+        result.passed(),
+        "operation results: {}",
+        json!({
+            "tests": result.tests,
+            "operations": result.executed.iter().chain(&result.blocked).map(|row| {
+                json!({
+                    "operation": row.operation,
+                    "status": row.status,
+                    "error": row.error,
+                    "process": row.receipt.as_ref().map(|receipt| {
+                        let process = &receipt.process;
+                        json!({
+                            "exit_code": process.exit_code,
+                            "failure": process.failure,
+                            "stdout": process.stdout,
+                            "stderr": process.stderr,
+                        })
+                    }),
+                })
+            }).collect::<Vec<_>>(),
+        })
+    );
+}
+
 fn stdout(bytes: impl AsRef<[u8]>) -> Step {
     Step::Stdout(bytes.as_ref().to_vec())
 }
@@ -140,7 +166,7 @@ fn real_effects_shared_prerequisite_runs_once_in_order() {
         &[("test:b", vec!["a", "b"]), ("test:c", vec!["a", "b", "c"])],
     );
     let result = execute(&plan).unwrap();
-    assert!(result.passed());
+    assert_passed(&result);
     assert_eq!(
         std::fs::read_to_string(d.path().join("order")).unwrap(),
         "abc"
@@ -155,7 +181,7 @@ fn arbitrary_operation_bytes_remain_evidence_without_protocol_decoding() {
         &[("test:t", vec!["raw"])],
     );
     let result = execute(&plan).unwrap();
-    assert!(result.passed());
+    assert_passed(&result);
     let process = &result.executed[0].receipt.as_ref().unwrap().process;
     assert_eq!(process.stdout_bytes, vec![255]);
     assert_eq!(process.stderr_bytes, vec![254]);
@@ -225,7 +251,7 @@ fn priority_controls_actual_launches_and_preserves_canonical_results() {
             release(stream);
         }
         let result = worker.join().unwrap();
-        assert!(result.passed());
+        assert_passed(&result);
         assert_eq!(
             result
                 .executed
@@ -430,7 +456,7 @@ fn rendezvous_proves_overlap_cap_and_canonical_rows() {
         release(c);
         release(first.remove("a").unwrap());
         let r = worker.join().unwrap();
-        assert!(r.passed());
+        assert_passed(&r);
         assert_eq!(
             r.executed
                 .iter()
@@ -494,7 +520,7 @@ fn diamond_runs_shared_work_once_and_waits_for_both_predecessors() {
         json!({"a":{"resources":[],"outputs":[]},"b":{"resources":[],"outputs":[]},"c":{"resources":[],"outputs":[]},"d":{"resources":[],"outputs":[]}}),
     );
     let r = execute(&p).unwrap();
-    assert!(r.passed());
+    assert_passed(&r);
     assert_eq!(r.executed.len(), 4);
     assert_eq!(std::fs::read_to_string(d.path().join("d")).unwrap(), "d");
 }
@@ -584,7 +610,7 @@ fn missing_policy_keeps_serial_process_order_and_legacy_identity_shape() {
             .is_none()
     );
     let r = execute(&p).unwrap();
-    assert!(r.passed());
+    assert_passed(&r);
     assert!(d.path().join("first").exists());
 }
 
