@@ -351,6 +351,7 @@ pub(super) struct CapturedChild {
     stdout: PathBuf,
     stderr: PathBuf,
     joined: bool,
+    release_before_drop: Option<PathBuf>,
 }
 impl CapturedChild {
     pub(super) fn spawn(command: &mut Command, root: &Path) -> Self {
@@ -376,7 +377,11 @@ impl CapturedChild {
             stdout,
             stderr,
             joined: false,
+            release_before_drop: None,
         }
+    }
+    fn release_on_drop(&mut self, path: PathBuf) {
+        self.release_before_drop = Some(path);
     }
     pub(super) fn kill(&mut self) -> std::io::Result<()> {
         self.child.kill()
@@ -558,6 +563,36 @@ impl CapturedChild {
 impl Drop for CapturedChild {
     fn drop(&mut self) {
         if !self.joined {
+            if let Some(path) = &self.release_before_drop {
+                match fs::write(path, "fixture teardown") {
+                    Ok(()) => {
+                        // The consumer keeps its lease after a wrapper dies.
+                        // Release its declared protocol before destroying the
+                        // temporary host, including setup assertions that fail
+                        // before the consumer's process-group guard exists.
+                        let began = Instant::now();
+                        loop {
+                            match self.try_wait() {
+                                Ok(Some(_)) => break,
+                                Ok(None) if began.elapsed() < Duration::from_secs(10) => {
+                                    thread::sleep(Duration::from_millis(10));
+                                }
+                                Ok(None) => {
+                                    eprintln!(
+                                        "fixture release did not join its wrapper within 10 seconds"
+                                    );
+                                    break;
+                                }
+                                Err(error) => {
+                                    eprintln!("fixture release observation failed: {error}");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(error) => eprintln!("fixture release {} failed: {error}", path.display()),
+                }
+            }
             let _ = self.kill();
             let status = self.wait();
             eprintln!(
@@ -654,8 +689,10 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
     let target = h.parent.join("concurrent");
     assert_eq!(h.invoke("feature", "concurrent", &target).0, 0);
     output(&target);
+    let state = target.join(".chrono-harness/state");
     let mut first = wrapper(&h, &target);
-    let second = CapturedChild::spawn(
+    first.release_on_drop(state.join("release"));
+    let mut second = CapturedChild::spawn(
         &mut h.auto_command(
             "use",
             &[
@@ -667,6 +704,7 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
         ),
         &h.root,
     );
+    second.release_on_drop(state.join("release"));
     let began = Instant::now();
     while h.ledger()["entries"][0]["uses"].as_array().unwrap().len() != 2
         && began.elapsed() < Duration::from_secs(10)
@@ -677,7 +715,6 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
         h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
         2
     );
-    let state = target.join(".chrono-harness/state");
     while fs::read_dir(&state)
         .map(|rows| {
             rows.filter_map(Result::ok)
@@ -707,6 +744,40 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
     assert_eq!(report["managed_process"]["stdout"], "completed");
     reclaim(&h, &target);
     assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
+}
+
+#[test]
+fn fixture_setup_panic_releases_and_joins_a_live_managed_consumer() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "managed-child");
+    let target = h.parent.join("setup-panic");
+    assert_eq!(h.invoke("feature", "setup-panic", &target).0, 0);
+    output(&target);
+    let state = target.join(".chrono-harness/state");
+    let mut child = wrapper(&h, &target);
+    child.release_on_drop(state.join("release"));
+    child.await_file(&state.join("ready"));
+    assert_eq!(
+        h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
+        1
+    );
+    let stdout = child.stdout.clone();
+    let interrupted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+        let _child = child;
+        panic!("intentional fixture setup interruption");
+    }));
+    assert!(interrupted.is_err());
+    let joined = json(&fs::read(stdout.with_extension("joined.json")).unwrap()).unwrap();
+    assert_eq!(joined["joined"], true);
+    assert_eq!(joined["status"], "ExitStatus(unix_wait_status(0))");
+    let report = json(&fs::read(&stdout).unwrap()).unwrap();
+    assert_eq!(report["managed_process"]["stdout"], "joined-child");
+    assert_eq!(report["managed_process"]["exit_code"], 0);
+    assert!(report["managed_process"]["failure"].is_null());
+    assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
+    reclaim(&h, &target);
+    assert!(target.join("payload").exists());
 }
 
 #[test]
