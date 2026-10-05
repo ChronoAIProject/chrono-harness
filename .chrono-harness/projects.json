@@ -36,7 +36,9 @@
     "worktree",
     "worktree-tests",
     "workflow-inventory",
-    "workflow-inventory-tests"
+    "workflow-inventory-tests",
+    "release-build",
+    "release-build-tests"
   ],
   "projects": [
     {
