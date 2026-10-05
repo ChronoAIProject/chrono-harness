@@ -750,6 +750,57 @@ fn download_recovery_configuration_rejects_ambiguous_or_unbounded_policy() {
 }
 
 #[test]
+fn download_recovery_shares_original_time_and_output_budgets() {
+    for (mode, expected_attempts) in [("deadline", 1), ("output", 2), ("ambiguous-status", 1)] {
+        let (host, _, _) = gather_host_config("success", |cfg| {
+            cfg["gather"]["download_retry"] = download_retry();
+            if mode == "deadline" {
+                cfg["gather"]["timeout_seconds"] = json!(2);
+            }
+            if mode == "output" {
+                cfg["gather"]["output_limit_bytes"] = json!(1024);
+            }
+        });
+        failed_downloads(host.path(), 9, 503);
+        let path = host.path().join(".chrono-harness/state/mock.json");
+        let mut data: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        match mode {
+            "deadline" => data["download_pause_ms"] = json!(1500),
+            "output" => data["download_padding"] = json!(900),
+            _ => data["second_http_status"] = json!(401),
+        }
+        fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
+        assert!(!gather_cli(host.path()).status.success(), "{mode}");
+        let report = gathered(host.path());
+        let attempts = alpha_downloads(&report);
+        assert_eq!(
+            attempts.len(),
+            expected_attempts,
+            "{mode}: {}",
+            report["error"]
+        );
+        if mode == "output" {
+            assert!(attempts.last().unwrap()["failure"].is_string());
+            for stream in ["stdout_bytes", "stderr_bytes"] {
+                assert!(
+                    attempts
+                        .iter()
+                        .map(|p| p[stream].as_array().unwrap().len())
+                        .sum::<usize>()
+                        <= 1024
+                );
+            }
+        }
+        assert!(
+            !host
+                .path()
+                .join(".chrono-harness/state/collection/manifest.json")
+                .exists()
+        );
+    }
+}
+
+#[test]
 fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
     let (host, b, c) = gather_host("success");
     let result = gather_cli(host.path());

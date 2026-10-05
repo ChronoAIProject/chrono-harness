@@ -1,6 +1,6 @@
 //! GitHub transports fixed unit artifacts; the scoped judge decides their acceptance.
 use super::*;
-use chrono_harness::{CommandSpec, file_identity, run_process_observed, sha256};
+use chrono_harness::{CommandSpec, ProcessResult, file_identity, run_process_observed_for, sha256};
 use std::{
     collections::BTreeMap,
     time::{Duration, Instant},
@@ -53,14 +53,33 @@ impl<'a> Transport<'a> {
     }
 
     fn run(&mut self, args: &[String]) -> Result<Vec<u8>, String> {
+        let p = self.process(
+            args,
+            Duration::from_secs(self.config.timeout_seconds),
+            self.config.output_limit_bytes,
+        )?;
+        if p.failure.is_some() || p.exit_code != 0 {
+            return Err(
+                "GitHub transport failed; original bounded process evidence retained".into(),
+            );
+        }
+        Ok(p.stdout_bytes)
+    }
+
+    fn process(
+        &mut self,
+        args: &[String],
+        remaining: Duration,
+        output_limit: usize,
+    ) -> Result<ProcessResult, String> {
         let spec = CommandSpec {
             program: self.executable.clone(),
             args: args.to_vec(),
             env: self.environment.clone(),
             timeout_seconds: self.config.timeout_seconds,
-            output_limit_bytes: self.config.output_limit_bytes,
+            output_limit_bytes: output_limit,
         };
-        let p = run_process_observed(self.root, &spec, &[], &self.digest)?;
+        let p = run_process_observed_for(self.root, &spec, &[], &self.digest, remaining)?;
         // Credentials are explicitly omitted, while the original nonsecret process bytes and environment digest remain.
         let env: BTreeMap<_, _> = p
             .environment
@@ -71,12 +90,92 @@ impl<'a> Transport<'a> {
             "environment":env,"omitted_credentials":self.config.credential_environment,"original_environment_digest":p.environment_digest,
             "stdin_sha256":p.stdin_sha256,"stdout_bytes":p.stdout_bytes,"stderr_bytes":p.stderr_bytes,
             "stdout_sha256":p.stdout_sha256,"stderr_sha256":p.stderr_sha256,"exit_code":p.exit_code,"failure":p.failure}));
-        if p.failure.is_some() || p.exit_code != 0 {
-            return Err(
-                "GitHub transport failed; original bounded process evidence retained".into(),
-            );
+        Ok(p)
+    }
+
+    fn download(
+        &mut self,
+        run: u64,
+        repository: &str,
+        artifact: &str,
+        directory: &str,
+    ) -> Result<String, String> {
+        let deadline = Instant::now()
+            .checked_add(Duration::from_secs(self.config.timeout_seconds))
+            .ok_or("artifact download deadline overflow")?;
+        let absolute = no_symlink_parents(self.root, directory)?;
+        if absolute.exists() {
+            return Err("artifact download destination exists; retain original acquisition".into());
         }
-        Ok(p.stdout_bytes)
+        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
+        let policy = self.config.download_retry.clone();
+        let attempts = policy.as_ref().map_or(1, |p| p.max_attempts);
+        let mut stdout_remaining = self.config.output_limit_bytes;
+        let mut stderr_remaining = self.config.output_limit_bytes;
+        for attempt in 1..=attempts {
+            let destination = if policy.is_some() {
+                let path = format!("{directory}/attempt-{attempt}");
+                fs::create_dir(no_symlink_parents(self.root, &path)?).map_err(|e| e.to_string())?;
+                path
+            } else {
+                directory.into()
+            };
+            let output_limit = stdout_remaining.min(stderr_remaining);
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() || output_limit == 0 {
+                return Err(
+                    "artifact download budget exhausted; original attempts retained".into(),
+                );
+            }
+            let args = vec![
+                "run".into(),
+                "download".into(),
+                run.to_string(),
+                "--repo".into(),
+                repository.into(),
+                "--name".into(),
+                artifact.into(),
+                "--dir".into(),
+                no_symlink_parents(self.root, &destination)?
+                    .to_str()
+                    .ok_or("download path UTF-8")?
+                    .into(),
+            ];
+            let p = self.process(&args, remaining, output_limit)?;
+            stdout_remaining = stdout_remaining.saturating_sub(p.stdout_bytes.len());
+            stderr_remaining = stderr_remaining.saturating_sub(p.stderr_bytes.len());
+            let success = p.failure.is_none() && p.exit_code == 0;
+            let status = download_http_status(&p.stderr_bytes);
+            let delay = policy
+                .as_ref()
+                .map(|p| Duration::from_secs(p.delay_seconds));
+            let retry = !success
+                && p.failure.is_none()
+                && attempt < attempts
+                && policy.as_ref().is_some_and(|policy| {
+                    status.is_some_and(|s| policy.http_statuses.contains(&s))
+                })
+                && stdout_remaining > 0
+                && stderr_remaining > 0
+                && delay.is_some_and(|d| d < deadline.saturating_duration_since(Instant::now()));
+            if policy.is_some() {
+                self.observations
+                    .last_mut()
+                    .ok_or("download observation missing")?["download"] = json!({"artifact":artifact,"attempt":attempt,"max_attempts":attempts,
+                        "directory":destination,"http_status":status,
+                        "action":if success {"completed"} else if retry {"retry"} else {"failed"}});
+            }
+            if success {
+                return Ok(destination);
+            }
+            if !retry {
+                return Err(
+                    "GitHub transport failed; original bounded process evidence retained".into(),
+                );
+            }
+            std::thread::sleep(delay.ok_or("retry delay missing")?);
+        }
+        Err("artifact download attempts exhausted; original attempts retained".into())
     }
 
     fn api(&mut self, endpoint: &str, paginate: bool) -> Result<Value, String> {
@@ -86,6 +185,28 @@ impl<'a> Transport<'a> {
         }
         chrono_harness::json(&self.run(&args)?)
     }
+}
+
+/// The registered CLI protocol uses one unambiguous `HTTP nnn:` status in stderr.
+fn download_http_status(stderr: &[u8]) -> Option<u16> {
+    let mut status = None;
+    for token in stderr
+        .windows(9)
+        .filter(|s| s.starts_with(b"HTTP ") && s[8] == b':')
+    {
+        let digits = &token[5..8];
+        if !digits.iter().all(u8::is_ascii_digit) {
+            continue;
+        }
+        let current = digits
+            .iter()
+            .fold(0_u16, |n, digit| n * 10 + u16::from(digit - b'0'));
+        if status.is_some_and(|prior| prior != current) {
+            return None;
+        }
+        status = Some(current);
+    }
+    status
 }
 
 fn parent_run(
@@ -414,29 +535,15 @@ fn inner(
             .ok_or("unit run attempt missing")?;
         let w = &c.units[&unit];
         let destination = format!("{download_prefix}{unit}/{id}/{attempt}");
-        let absolute = no_symlink_parents(root, &destination)?;
-        if absolute.exists() {
-            return Err("unit download destination exists; retain original results and select a fresh collection output".into());
-        }
-        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
-        transport.run(&[
-            "run".into(),
-            "download".into(),
-            id.to_string(),
-            "--repo".into(),
-            repository.into(),
-            "--name".into(),
-            if c.job_gating.is_some() {
-                run["production"]["artifact"]
-                    .as_str()
-                    .ok_or("original artifact name missing")?
-                    .into()
-            } else {
-                format!("chrono-unit-{unit}-{id}-{attempt}")
-            },
-            "--dir".into(),
-            absolute.to_str().ok_or("download path UTF-8")?.into(),
-        ])?;
+        let artifact = if c.job_gating.is_some() {
+            run["production"]["artifact"]
+                .as_str()
+                .ok_or("original artifact name missing")?
+                .to_owned()
+        } else {
+            format!("chrono-unit-{unit}-{id}-{attempt}")
+        };
+        let destination = transport.download(id, repository, &artifact, &destination)?;
         let downloaded = |input: &str| -> Result<String, String> {
             let relative = input
                 .strip_prefix(&w.artifact_directory)
@@ -729,26 +836,12 @@ pub(super) fn acquire_seed(
             return Err("original detector seed missing/ambiguous/expired".into());
         }
         let artifact = artifacts[0].clone();
-        let absolute = no_symlink_parents(root, &directory)?;
-        if absolute.exists() {
-            return Err("seed download exists; retain original acquisition".into());
-        }
-        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
-        transport.run(&[
-            "run".into(),
-            "download".into(),
-            id.to_string(),
-            "--repo".into(),
-            repository.into(),
-            "--name".into(),
-            name,
-            "--dir".into(),
-            absolute.to_str().ok_or("seed directory UTF8")?.into(),
-        ])?;
+        let directory =
+            transport.download(id, repository, &name, directory.trim_end_matches('/'))?;
         let read = |file: &str| {
             chrono_harness::units::read_bounded(
                 root,
-                &format!("{directory}{file}"),
+                &format!("{directory}/{file}"),
                 64 * 1024 * 1024,
             )
         };

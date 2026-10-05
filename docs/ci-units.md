@@ -555,6 +555,26 @@ Put a `chrono-github-units/v1` source under `.chrono-harness/ci/`. It contains:
   `output_limit_bytes`, overall `wait_seconds`, `poll_seconds`, and explicit
   `manifest_path`, `download_directory`, `report_path`.
 
+Optional `gather.download_retry` explicitly declares `max_attempts` (1–10),
+`delay_seconds` (1–60, less than `timeout_seconds`), and a nonempty, duplicate-free
+`http_statuses` list of HTTP error codes (400–599). Omission preserves one download
+attempt and the existing destination layout; null and unknown fields fail.
+For example, a host can select three attempts, a two-second delay and statuses
+`[429, 500, 502, 503, 504]`. This policy applies to unit artifacts and shared native
+seeds, without changing API query handling or rerunning any business unit.
+
+Retries require a nonzero process exit, no process-bound failure, and one
+unambiguous `HTTP nnn:` status in the registered CLI's stderr that appears in
+the whitelist. All attempts and delays share the original download deadline;
+each output stream shares its original byte limit. An exhausted budget,
+unlisted or ambiguous status, timeout or output overflow stops acquisition.
+Each configured attempt writes a separate `attempt-N` directory. Original
+process evidence, partial files and the actual retry/completed/failed action
+remain available, including after successful recovery. Only the successful
+directory supplies report inputs; fixed artifact identity, digests, workflow
+source, run/attempt and final judge checks still apply. Exhausted recovery
+produces no accepted manifest and cannot make a failed unit pass.
+
 The bootstrap list is a literal argv. Register only the tools each unit needs;
 the generator never infers packages, language setup or build dependencies. Each
 unit's report and context must be inside its uploaded artifact directory.

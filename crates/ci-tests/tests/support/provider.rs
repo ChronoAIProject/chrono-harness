@@ -60,6 +60,15 @@ pub fn units(args: &[String]) {
                     "error downloading artifact: HTTP {}: fixture transport failure",
                     data["http_status"]
                 );
+                if let Some(bytes) = data["download_padding"].as_u64() {
+                    io::stderr().write_all(&vec![b'x'; bytes as usize]).unwrap();
+                }
+                if let Some(status) = data["second_http_status"].as_u64() {
+                    eprintln!("HTTP {status}: second status");
+                }
+                if let Some(millis) = data["download_pause_ms"].as_u64() {
+                    std::thread::sleep(std::time::Duration::from_millis(millis));
+                }
                 std::process::exit(23);
             }
         }
@@ -114,6 +123,19 @@ pub fn parent(args: &[String]) {
         let unit = artifact.rsplitn(3, '-').nth(2).unwrap();
         if mode == "missing-artifact" {
             std::process::exit(7);
+        }
+        if mode == "download-unavailable-once" && unit == "alpha" {
+            let marker = Path::new(".chrono-harness/state/parent-download-failure");
+            if !marker.exists() {
+                fs::write(marker, b"original failure").unwrap();
+                fs::write(
+                    Path::new(option(args, "--dir")).join("partial-only"),
+                    b"partial",
+                )
+                .unwrap();
+                eprintln!("HTTP 503: Egress is over the account limit.");
+                std::process::exit(23);
+            }
         }
         copy_tree(
             &PathBuf::from(".chrono-harness/state/mock-artifacts").join(unit),

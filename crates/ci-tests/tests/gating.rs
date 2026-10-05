@@ -1231,6 +1231,80 @@ fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_paren
 }
 
 #[test]
+fn parent_collection_recovers_download_without_reexecuting_units_or_relaxing_identity() {
+    let mut h = GatedHost::new();
+    let mut provider: Value =
+        serde_json::from_slice(&fs::read(h.host.root.join(PROVIDER)).unwrap()).unwrap();
+    provider["gather"]["download_retry"] =
+        json!({"max_attempts":3,"delay_seconds":1,"http_statuses":[503]});
+    json_file(&h.host.root, PROVIDER, &provider);
+    generate(&h.host.root, PROVIDER, false).unwrap();
+    h.change(&["a.txt"]);
+    let d = h.detection();
+    h.units(&d);
+    h.mock(&d, "download-unavailable-once");
+    let out = h
+        .command(&["check", "--collect"], &d, &needs(&h, &d))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let gather: Value = serde_json::from_slice(
+        &fs::read(
+            h.host
+                .root
+                .join(".chrono-harness/state/collection/gather.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let attempts: Vec<_> = gather["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| {
+            p["download"]["artifact"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("chrono-unit-alpha-"))
+        })
+        .collect();
+    assert_eq!(attempts.len(), 2);
+    assert_eq!(attempts[0]["download"]["action"], "retry");
+    assert_eq!(attempts[1]["download"]["action"], "completed");
+    assert_eq!(
+        attempts[0]["download"]["artifact"],
+        attempts[1]["download"]["artifact"]
+    );
+    let collected: Value = serde_json::from_slice(
+        &fs::read(
+            h.host
+                .root
+                .join(".chrono-harness/state/collection/check.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(collected["response"]["evidence"]["executed"], json!([]));
+    fs::write(
+        h.host
+            .root
+            .join(".chrono-harness/state/mock-artifacts/alpha/check.json"),
+        b"{}",
+    )
+    .unwrap();
+    assert!(
+        !h.command(&["check", "--collect"], &d, &needs(&h, &d))
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+}
+
+#[test]
 fn carried_api_attempts_and_aggregate_only_reruns_use_original_artifact_outputs() {
     let mut h = GatedHost::new();
     h.change(&["a.txt", "b.txt"]);
