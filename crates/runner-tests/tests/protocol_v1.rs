@@ -1,7 +1,6 @@
 use chrono_harness::{json, sha256, wire};
 use serde_json::json as value;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 
 // Isolated launch helpers reject allocator use between fork and exec, including
 // error paths. This observes real child execution, independent of its diagnostics.
@@ -46,6 +45,7 @@ static ALLOCATOR: ForkCheckedAllocator = ForkCheckedAllocator;
 // cases below keep their separate two-second bound and thirty-second stall.
 const FIXTURE_TIMEOUT_SECONDS: u64 = 30;
 const PROCESS_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-process-lifecycle");
+const PROTOCOL_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-protocol-judge");
 
 #[test]
 fn published_rfc8785_vectors() {
@@ -67,14 +67,20 @@ fn published_rfc8785_vectors() {
         b"[0,0.000001,1e+21]"
     );
 }
-fn fixture(script: &str) -> (tempfile::TempDir, wire::Request, wire::Binding) {
+fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::Binding) {
     let dir = tempfile::Builder::new()
         .prefix("v1 host spaces ")
-        .tempdir()
+        .tempdir_in(std::path::Path::new(PROTOCOL_FIXTURE).parent().unwrap())
         .unwrap();
     let path = dir.path().join("judge");
-    fs::write(&path, format!("#!/usr/bin/python3\n{script}\n")).unwrap();
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    // The protocol requires a regular file. A same-filesystem link names the
+    // completed build without opening executable bytes for writing.
+    fs::hard_link(PROTOCOL_FIXTURE, &path).unwrap();
+    fs::write(
+        dir.path().join("judge-case.json"),
+        serde_json::to_vec(&case).unwrap(),
+    )
+    .unwrap();
     let mut r: wire::Request = serde_json::from_value(value!({
         "protocol":"chrono-judge/v1", "request_id":"", "judge_id":"fixture", "mode":"evaluate",
         "base":{"commit":"a".repeat(40),"tree":"c".repeat(40),"root":dir.path()},
@@ -100,16 +106,20 @@ fn fixture(script: &str) -> (tempfile::TempDir, wire::Request, wire::Binding) {
     };
     (dir, r, binding)
 }
-const RESPONSE: &str = "import json,sys\nr=json.load(sys.stdin)\ns={'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],'status':'pass','findings':[],'evidence':[],'outputs':{}}\n";
 
+fn replace_judge(directory: &std::path::Path, executable: &str) {
+    let path = directory.join("judge");
+    fs::remove_file(&path).unwrap();
+    fs::hard_link(executable, path).unwrap();
+}
 fn initial_fixture(
-    script: &str,
+    case: serde_json::Value,
 ) -> (
     tempfile::TempDir,
     chrono_harness::initial::Request,
     wire::Binding,
 ) {
-    let (dir, old, mut binding) = fixture(script);
+    let (dir, old, mut binding) = fixture(case);
     binding.selector = "every-initial".into();
     binding.modes = vec!["inventory".into()];
     let mut request = chrono_harness::initial::Request {
@@ -133,15 +143,20 @@ fn initial_fixture(
 
 #[test]
 fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
-    for tail in [
-        "print(json.dumps(s))",
-        "print('invalid json')",
-        "s['protocol']='chrono-judge/v1'; print(json.dumps(s))",
-        "print(json.dumps(s)); sys.exit(3)",
+    for (name, mut case) in [
+        ("pass", value!({})),
+        (
+            "invalid-json",
+            value!({"kind":"raw", "consume_request":true, "stdout":b"invalid json\n"}),
+        ),
+        (
+            "wrong-protocol",
+            value!({"fields":{"protocol":"chrono-judge/v1"}}),
+        ),
+        ("nonzero", value!({"exit":3})),
     ] {
-        let (dir, request, binding) = initial_fixture(&format!(
-            "{RESPONSE}assert 'base' not in r and 'delta' not in r\n{tail}"
-        ));
+        case["initial_only"] = value!(true);
+        let (dir, request, binding) = initial_fixture(case);
         let result = chrono_harness::initial::invoke(
             &request,
             &binding,
@@ -149,7 +164,7 @@ fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
             FIXTURE_TIMEOUT_SECONDS,
             8192,
         );
-        if tail == "print(json.dumps(s))" {
+        if name == "pass" {
             let (response, process) = result.unwrap();
             assert_eq!(response.status, wire::Status::Pass);
             assert_eq!(process.exit_code, 0);
@@ -166,9 +181,7 @@ fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
 
 #[test]
 fn initial_transport_rejects_wrong_mode_digest_and_base_placeholder_before_launch() {
-    let (dir, request, original) = initial_fixture(&format!(
-        "{RESPONSE}open('ran','w').write('yes')\nprint(json.dumps(s))"
-    ));
+    let (dir, request, original) = initial_fixture(value!({"marker":"ran"}));
     for case in ["mode", "digest", "base", "request"] {
         let mut binding = original.clone();
         let mut request = request.clone();
@@ -201,19 +214,16 @@ fn configure_bound_fixture(
     timeout: bool,
 ) {
     let response = value!({"protocol":protocol,"request_id":request_id,"judge_id":"fixture",
-        "status":"pass","findings":[],"evidence":[],"outputs":{}})
-    .to_string();
-    assert!(!response.contains('\''));
-    let tail = if timeout {
-        "exec /bin/sleep 30".into()
-    } else {
-        format!("printf '%s' '{}' >&2", "x".repeat(4096))
-    };
-    let script = format!(
-        "#!/bin/sh\nprintf '%s\\n' '{response}'\nprintf 'diagnostic-before-bound\\n' >&2\n{tail}\n"
-    );
-    fs::write(dir.join("judge"), &script).unwrap();
-    binding.sha256 = Some(sha256(script.as_bytes()));
+        "status":"pass","findings":[],"evidence":[],"outputs":{}});
+    fs::write(
+        dir.join("judge-case.json"),
+        serde_json::to_vec(&value!({
+            "kind":"bound", "response":response, "timeout":timeout
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    binding.sha256 = Some(sha256(&fs::read(dir.join("judge")).unwrap()));
 }
 fn assert_bound_evidence(failure: wire::TransportFailure, timeout: bool) {
     let expected = if timeout {
@@ -253,7 +263,7 @@ fn assert_bound_evidence(failure: wire::TransportFailure, timeout: bool) {
 #[test]
 fn bounded_delta_transport_retains_process_evidence() {
     for timeout in [true, false] {
-        let (dir, request, mut binding) = fixture("");
+        let (dir, request, mut binding) = fixture(value!({}));
         configure_bound_fixture(
             dir.path(),
             &mut binding,
@@ -272,7 +282,7 @@ fn bounded_delta_transport_retains_process_evidence() {
 #[test]
 fn bounded_initial_transport_retains_process_evidence() {
     for timeout in [true, false] {
-        let (dir, request, mut binding) = initial_fixture("");
+        let (dir, request, mut binding) = initial_fixture(value!({}));
         configure_bound_fixture(
             dir.path(),
             &mut binding,
@@ -287,49 +297,73 @@ fn bounded_initial_transport_retains_process_evidence() {
         assert_bound_evidence(failure, timeout);
     }
 }
-fn invoke(script: &str) -> Result<wire::Response, String> {
-    let (_dir, r, b) = fixture(script);
+fn invoke(case: serde_json::Value) -> Result<wire::Response, String> {
+    let (_dir, r, b) = fixture(case);
     wire::invoke(&r, &b, &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192).map(|v| v.0)
 }
 #[test]
 fn four_statuses_exact_exits_and_identity() {
     for (status, exit) in [("pass", 0), ("warn", 0), ("fail", 1), ("error", 2)] {
         let findings = if status == "pass" {
-            "[]"
+            value!([])
         } else {
-            "[{'code':'FIXTURE','level':'error' if s['status'] in ['fail','error'] else 'warning','message':'actual fixture result','delta_refs':['/fixture'],'causes':[]}]"
+            value!([{"code":"FIXTURE", "level":if ["fail","error"].contains(&status) {"error"} else {"warning"},
+                "message":"actual fixture result", "delta_refs":["/fixture"], "causes":[]}])
         };
-        let script = format!(
-            "{RESPONSE}s['status']='{status}'\ns['findings']={findings}\nprint(json.dumps(s))\nsys.exit({exit})"
-        );
-        assert_eq!(invoke(&script).unwrap().status.exit_code(), exit);
-        assert!(invoke(&script.replace(&format!("sys.exit({exit})"), "sys.exit(9)")).is_err());
+        let mut case = value!({"fields":{"status":status,"findings":findings},"exit":exit});
+        assert_eq!(invoke(case.clone()).unwrap().status.exit_code(), exit);
+        case["exit"] = value!(9);
+        assert!(invoke(case).is_err());
     }
-    for change in [
-        "s['request_id']='wrong'",
-        "s['judge_id']='wrong'",
-        "s['protocol']='wrong'",
-        "s['status']='unknown'",
-        "s['extra']=True",
+    for (field, value) in [
+        ("request_id", value!("wrong")),
+        ("judge_id", value!("wrong")),
+        ("protocol", value!("wrong")),
+        ("status", value!("unknown")),
+        ("extra", value!(true)),
     ] {
-        assert!(invoke(&format!("{RESPONSE}{change}\nprint(json.dumps(s))")).is_err());
+        let mut case = value!({"fields":{}});
+        case["fields"][field] = value;
+        assert!(invoke(case).is_err());
     }
 }
+
 #[test]
 fn malformed_stdout_crash_and_bounds() {
-    for tail in [
-        "pass",
-        "print('no json')",
-        "print('{}')",
-        "print(json.dumps(s));print('{}')",
-        "print('{\"protocol\":1,\"protocol\":2}')",
-        "sys.stdout.buffer.write(b'\\xff')",
-        "sys.exit(9)",
-        "print('x'*10000)",
+    for (name, case) in [
+        (
+            "empty",
+            value!({"kind":"raw", "consume_request":true,"stdout":[]}),
+        ),
+        (
+            "invalid-json",
+            value!({"kind":"raw", "consume_request":true,"stdout":b"no json\n"}),
+        ),
+        (
+            "missing-fields",
+            value!({"kind":"raw", "consume_request":true,"stdout":b"{}\n"}),
+        ),
+        ("extra-json", value!({"suffix":b"{}\n"})),
+        (
+            "duplicate-keys",
+            value!({"kind":"raw", "consume_request":true,"stdout":b"{\"protocol\":1,\"protocol\":2}\n"}),
+        ),
+        (
+            "invalid-utf8",
+            value!({"kind":"raw", "consume_request":true,"stdout":[255]}),
+        ),
+        (
+            "crash",
+            value!({"kind":"raw", "consume_request":true,"stdout":[],"exit":9}),
+        ),
+        (
+            "output-limit",
+            value!({"kind":"raw", "consume_request":true,"stdout":format!("{}\n", "x".repeat(10000)).as_bytes()}),
+        ),
     ] {
-        assert!(invoke(&format!("{RESPONSE}{tail}")).is_err(), "{tail}");
+        assert!(invoke(case).is_err(), "{name}");
     }
-    let (_dir, r, b) = fixture("import time\ntime.sleep(60)");
+    let (_dir, r, b) = fixture(value!({"kind":"sleep","seconds":60}));
     assert!(
         wire::invoke(&r, &b, &Default::default(), 1, 8192)
             .unwrap_err()
@@ -338,10 +372,9 @@ fn malformed_stdout_crash_and_bounds() {
 }
 #[test]
 fn evidence_exists_and_is_bound_to_bytes() {
-    let (dir, r, b) = fixture(&format!(
-        "{RESPONSE}s['evidence']=[{{'path':'.chrono-harness/state/proof','sha256':'{}','kind':'fixture'}}]\nprint(json.dumps(s))",
-        sha256(b"proof")
-    ));
+    let (dir, r, b) = fixture(value!({"fields":{"evidence":[{
+        "path":".chrono-harness/state/proof", "sha256":sha256(b"proof"), "kind":"fixture"
+    }]}}));
     let call = || wire::invoke(&r, &b, &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192);
     assert!(call().is_err());
     fs::create_dir_all(dir.path().join(".chrono-harness/state")).unwrap();
@@ -353,21 +386,26 @@ fn evidence_exists_and_is_bound_to_bytes() {
 #[test]
 fn digest_checked_before_launch_environment_cleared_and_literal_argv() {
     let literal = "literal $HOME `whoami` ' \"";
-    let (dir, r, mut b) = fixture(&format!(
-        "{RESPONSE}import os\nassert 'HOME' not in os.environ\nassert os.environ['EXPLICIT']=='yes'\nassert sys.argv[1]=={}\nassert os.getcwd()==os.path.realpath(r['candidate']['root'])\nprint(json.dumps(s))",
-        serde_json::to_string(literal).unwrap()
-    ));
+    let (dir, r, mut b) = fixture(value!({"kind":"environment", "argument":literal}));
     b.argv = vec![literal.into()];
     let env = std::collections::BTreeMap::from([("EXPLICIT".into(), "yes".into())]);
     let outcome = wire::invoke(&r, &b, &env, FIXTURE_TIMEOUT_SECONDS, 8192);
     assert!(outcome.is_ok(), "{outcome:?}");
-    fs::write(dir.path().join("judge"), "#!/bin/sh\ntouch launched\n").unwrap();
+    let replacement_digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
+    assert_ne!(b.sha256.as_deref(), Some(replacement_digest.as_str()));
+    replace_judge(dir.path(), PROCESS_FIXTURE);
+    b.argv = vec!["marker".into(), "launched".into()];
     assert!(
         wire::invoke(&r, &b, &env, FIXTURE_TIMEOUT_SECONDS, 8192)
             .unwrap_err()
             .contains("digest")
     );
     assert!(!dir.path().join("launched").exists());
+    // The substituted native executable can actually produce the forbidden
+    // effect; an invalid executable must not make the negative check vacuous.
+    b.sha256 = Some(replacement_digest);
+    assert!(wire::invoke(&r, &b, &env, FIXTURE_TIMEOUT_SECONDS, 8192).is_err());
+    assert_eq!(fs::read(dir.path().join("launched")).unwrap(), b"yes");
 }
 #[test]
 fn endpoint_argv_placeholders_replace_only_complete_arguments() {
@@ -385,8 +423,7 @@ fn endpoint_argv_placeholders_replace_only_complete_arguments() {
         "é 😀",
         "$HOME ${base} `whoami` $(touch expanded) ; & | > < * ? ' \" \\",
     ];
-    let script = format!("{RESPONSE}s['outputs']['argv']=sys.argv[1:]\nprint(json.dumps(s))");
-    let (dir, r, mut b) = fixture(&script);
+    let (dir, r, mut b) = fixture(value!({"kind":"argv"}));
     b.argv = vec!["{candidate}".into(), "{base}".into()];
     b.argv.extend(literals.iter().map(|s| s.to_string()));
     b.argv.push("{base}".into());
@@ -401,7 +438,7 @@ fn endpoint_argv_placeholders_replace_only_complete_arguments() {
 }
 #[test]
 fn request_identity_is_deterministic_and_binds_facts() {
-    let (_dir, mut r, _b) = fixture("");
+    let (_dir, mut r, _b) = fixture(value!({}));
     let old = r.request_id.clone();
     r.seal().unwrap();
     assert_eq!(r.request_id, old);
@@ -413,7 +450,7 @@ fn request_identity_is_deterministic_and_binds_facts() {
 
 #[test]
 fn request_identity_matches_original_projection_for_scopes_and_opaque_evidence() {
-    let (_dir, mut request, _binding) = fixture("");
+    let (_dir, mut request, _binding) = fixture(value!({}));
     request.observations = value!({
         "opaque":{"😀":"escaped \\\"\n", "דּ":[-0.0, 1e-27, 1e30, null, true]},
         "bytes":(0..=255).collect::<Vec<u8>>()
@@ -444,7 +481,7 @@ fn request_identity_matches_original_projection_for_scopes_and_opaque_evidence()
 
 #[test]
 fn canonical_request_preserves_number_boundaries_unicode_and_original_streams() {
-    let (_dir, mut request, _binding) = fixture("");
+    let (_dir, mut request, _binding) = fixture(value!({}));
     // Independent RFC vectors and the fixed generic JCS implementation remain
     // the oracle, including values outside the exact-integer fast path.
     let mut numbers = vec![
@@ -504,8 +541,7 @@ fn canonical_request_preserves_number_boundaries_unicode_and_original_streams() 
 
 #[test]
 fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
-    let script = format!("{RESPONSE}open('ran','w').write('yes')\nprint(json.dumps(s))");
-    let (dir, request, binding) = fixture(&script);
+    let (dir, request, binding) = fixture(value!({"marker":"ran"}));
     for field in ["protocol", "mode"] {
         let mut bad = request.clone();
         match field {
@@ -535,10 +571,7 @@ fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
 
 #[test]
 fn dag_forwards_only_direct_predecessors_and_named_outputs() {
-    let script = format!(
-        "{RESPONSE}expected={{'a':[], 'b':['a'], 'c':['b'], 'independent':[]}}\nassert [p['judge_id'] for p in r['prior_results']]==expected[r['judge_id']]\nif r['judge_id']=='a': s['outputs']={{'impact':{{'seeds':['file:example'],'edges':[],'tests':[],'retired_tests':[]}},'named':42}}\nif r['judge_id']=='b':\n assert r['impact']['seeds']==['file:example']\n assert r['prior_results'][0]['outputs']['named']==42\nif r['judge_id']=='c': assert r['impact'] is None\nprint(json.dumps(s))"
-    );
-    let (_dir, mut r, b) = fixture(&script);
+    let (_dir, mut r, b) = fixture(value!({"kind":"dag"}));
     r.impact = serde_json::Value::Null;
     let binding = |id: &str, after: &[&str]| {
         let mut v = b.clone();
@@ -566,10 +599,7 @@ fn dag_forwards_only_direct_predecessors_and_named_outputs() {
 }
 #[test]
 fn dag_blocks_dependents_and_continues_independent_branch() {
-    let script = format!(
-        "{RESPONSE}assert r['judge_id']!='blocked'\nif r['judge_id']=='bad':\n s['status']='error'\n s['findings']=[{{'code':'E_FIXTURE','level':'error','message':'known error','delta_refs':['/fixture'],'causes':[]}}]\nprint(json.dumps(s))\nsys.exit(2 if r['judge_id']=='bad' else 0)"
-    );
-    let (_dir, r, b) = fixture(&script);
+    let (_dir, r, b) = fixture(value!({"kind":"blocked-dag"}));
     let binding = |id: &str, after: &[&str]| {
         let mut v = b.clone();
         v.id = id.into();
@@ -603,7 +633,7 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
 
 #[test]
 fn invalid_response_retains_actual_process_exit_in_report() {
-    let (_dir, r, b) = fixture("import sys\nprint('invalid JSON')\nsys.exit(9)");
+    let (_dir, r, b) = fixture(value!({"kind":"raw", "stdout":b"invalid JSON\n", "exit":9}));
     let (status, records) =
         chrono_harness::full::execute(&r, &[b], &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192)
             .unwrap();
@@ -615,11 +645,10 @@ fn invalid_response_retains_actual_process_exit_in_report() {
 
 #[test]
 fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
-    for (bytes, accepted) in [("bytes([239,191,189])", true), ("bytes([255])", false)] {
-        let script = format!(
-            "{RESPONSE}s['outputs']['note']='MARKER'\nsys.stdout.buffer.write(json.dumps(s).encode().replace(b'MARKER',{bytes}))"
-        );
-        let (_dir, r, b) = fixture(&script);
+    for (bytes, accepted) in [(vec![239, 191, 189], true), (vec![255], false)] {
+        let (_dir, r, b) = fixture(value!({
+            "fields":{"outputs":{"note":"MARKER"}}, "replace_marker":bytes
+        }));
         let (status, records) = chrono_harness::full::execute(
             &r,
             &[b],
@@ -649,10 +678,7 @@ fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
 
 #[test]
 fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() {
-    let script = format!(
-        "{RESPONSE}import hashlib\nif r['judge_id']=='consumer':\n o=r['observations']['judges']\n assert len(o)==1 and o[0]['id']=='producer'\n p=o[0]['process']\n assert o[0]['request_digest']==p['stdin_sha256']\n assert hashlib.sha256(bytes(p['stdout_bytes'])).hexdigest()==p['stdout_sha256']\n assert json.loads(bytes(p['stdout_bytes']))==r['prior_results'][0]\n assert o[0]['request_id']==r['prior_results'][0]['request_id']\n assert p['exit_code']==0 and p['failure'] is None\nprint(json.dumps(s))"
-    );
-    let (_dir, req, mut producer) = fixture(&script);
+    let (_dir, req, mut producer) = fixture(value!({"kind":"prior-process"}));
     producer.id = "producer".into();
     let mut consumer = producer.clone();
     consumer.id = "consumer".into();
@@ -734,10 +760,7 @@ fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
 
 #[test]
 fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
-    let script = format!(
-        "{RESPONSE}import hashlib\nfor row in r['observations']['judges']:\n p=row['process']\n assert p['encoding']=='chrono-retained-process/v1'\n assert 'stdout_bytes' not in p and 'stderr_bytes' not in p\n out=bytes.fromhex(p['stdout_hex']); err=bytes.fromhex(p['stderr_hex'])\n assert hashlib.sha256(out).hexdigest()==p['stdout_sha256']\n assert hashlib.sha256(err).hexdigest()==p['stderr_sha256']\n assert err==bytes(range(256))\n assert json.loads(out)==row['response']\nsys.stderr.buffer.write(bytes(range(256)))\nprint(json.dumps(s))"
-    );
-    let (_dir, mut req, mut first) = fixture(&script);
+    let (_dir, mut req, mut first) = fixture(value!({"kind":"retained-process"}));
     req.candidate.root = fs::canonicalize(&req.candidate.root).unwrap();
     req.base.root = req.candidate.root.clone();
     req.scope = Some(chrono_harness::units::Scope::Unit { unit: "one".into() });
@@ -1568,8 +1591,8 @@ fn signal_termination_preserves_actual_pid_and_streams_without_reclassifying_nor
 
 #[test]
 fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
-    let (dir, request, mut binding) = fixture("");
-    fs::copy(PROCESS_FIXTURE, dir.path().join("judge")).unwrap();
+    let (dir, request, mut binding) = fixture(value!({}));
+    replace_judge(dir.path(), PROCESS_FIXTURE);
     binding.sha256 = Some(sha256(&fs::read(PROCESS_FIXTURE).unwrap()));
     binding.argv = vec!["terminated".into(), "empty".into()];
     let failure = wire::invoke_detailed(
@@ -1588,8 +1611,8 @@ fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
     assert_eq!(process.exit_code, -1);
     assert!(process.stdout_bytes.is_empty());
 
-    let (dir, request, mut binding) = initial_fixture("");
-    fs::copy(PROCESS_FIXTURE, dir.path().join("judge")).unwrap();
+    let (dir, request, mut binding) = initial_fixture(value!({}));
+    replace_judge(dir.path(), PROCESS_FIXTURE);
     binding.sha256 = Some(sha256(&fs::read(PROCESS_FIXTURE).unwrap()));
     binding.argv = vec!["terminated".into(), "empty".into()];
     let failure = chrono_harness::initial::invoke(

@@ -51,3 +51,5 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 worktree-tests 的 core 与 adoption 两个测试组分别对应 worktree、worktree-adoption CI 单元。adoption 显式列出六个已采用宿主入口的进程交接与租约集成用例，core 排除这些同名成员；原测试 ID、断言、时限与默认 libtest 线程设置不变。登记的 worktree.inventory 复用独立 Python inventory 所有者，以 worktree-inventory.json 核验真实未过滤列表和两组列表非空、无忽略、无重叠且全集相等。两组沿相同工作树测试 target 与 inventory 资源互斥；未过滤 execute 及发布验证仍保留。分组提供独立检查与重跑边界，不宣称消除所有时序失败。
 
 标准日志与错误记录归独立 diagnostics / diagnostics-tests 配对，独立 CI 单元使用同一 check 入口。runner 的无效 UTF-8 参数路径采用此库；库保留 typed source、相关失败、JSON Lines、显式线程上下文与 sink 原错误。其它产品路径、原生错误适配、应急发布、持久证据身份、子进程上下文及其它语言适配仍未完成，不宣称 SPEC §7.1／§7.2 全面启用。diagnostics 专属发布验证显式登记空 needs 与 rust_toolchain=true，独立启动且核验 Rust 工具链。原 15 个 Rust 发布验证的完整构建依赖及未过滤操作保留。
+
+runner-tests 的协议 transport fixture 由同项目独立 Rust 测试二进制执行；用例参数是临时 JSON 数据，判定与子进程断言归 Rust。初始／DELTA 响应、四态退出、原始字节、直接前置及保留进程身份、超时和输出上限控制保留，FILEMAP 显式登记编译输入。此范围不包含其它文件中的脚本 fixture，也不宣称全仓语言迁移完成。

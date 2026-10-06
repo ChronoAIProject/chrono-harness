@@ -252,6 +252,7 @@ fn terminated(with_streams: bool) {
 fn main() {
     let mut arguments = std::env::args().skip(1);
     match arguments.next().unwrap().as_str() {
+        "marker" => fs::write(arguments.next().unwrap(), "yes").unwrap(),
         "terminated" => terminated(arguments.next().as_deref() == Some("streams")),
         "exit" => std::process::exit(arguments.next().unwrap().parse().unwrap()),
         "child" => child(),
