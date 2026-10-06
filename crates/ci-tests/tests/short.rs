@@ -1117,7 +1117,6 @@ fn copy_artifacts(source: &Path, target: &Path) {
 
 #[test]
 fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity() {
-    use std::os::unix::fs::PermissionsExt;
     let adopted: Value = serde_json::from_slice(
         &fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/config.json"))
             .unwrap(),
@@ -1131,11 +1130,30 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     );
     let mut h = ShortHost::new();
     let real_git = fixture_git();
-    let wrapper = h.root.join("declared-git.sh");
-    fs::write(&wrapper,format!("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = fetch ]; then\n  [ -z \"${{UNREGISTERED_TRANSPORT_INPUT+x}}\" ] || exit 71\n  printf '%s' \"${{SSH_AUTH_SOCK-ABSENT}}\" > .chrono-harness/state/git-agent-observed\nfi\ndone\nexec '{}' \"$@\"\n", real_git.display())).unwrap();
-    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+    let wrapper = h.root.join("declared-git");
+    let copied = Command::new("/bin/cp")
+        .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
+        .arg(&wrapper)
+        .output()
+        .unwrap();
+    assert!(
+        copied.status.success(),
+        "native Git fixture copy: {copied:?}"
+    );
+    json_file(
+        &h.root,
+        "declared-git.json",
+        &json!({"program":real_git,"observation":".chrono-harness/state/git-agent-observed"}),
+    );
     let hash = sha256(&fs::read(&wrapper).unwrap());
-    h.modify(".chrono-harness/FILEMAP.json",|fm|fm["files"].as_array_mut().unwrap().push(json!({"path":"declared-git.sh","owner":"host","surface":"product","cost":"unmeasured","edges":[]})));
+    h.modify(".chrono-harness/FILEMAP.json", |fm| {
+        for path in ["declared-git", "declared-git.json"] {
+            fm["files"].as_array_mut().unwrap().push(json!({
+                "path":path,"owner":"host","surface":"product",
+                "cost":"unmeasured","edges":[]
+            }));
+        }
+    });
     h.modify(".chrono-harness/config.json", |c| {
         c["environment"]["inherit"]
             .as_array_mut()

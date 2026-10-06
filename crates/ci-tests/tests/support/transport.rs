@@ -76,6 +76,29 @@ fn diagnostic(mode: &str) {
     std::process::exit(9);
 }
 
+fn declared_git() -> ! {
+    use std::os::unix::process::CommandExt;
+
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read("declared-git.json").unwrap()).unwrap();
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments.iter().any(|arg| arg == "fetch") {
+        if std::env::var_os("UNREGISTERED_TRANSPORT_INPUT").is_some() {
+            std::process::exit(71);
+        }
+        let value = std::env::var_os("SSH_AUTH_SOCK").unwrap_or_else(|| "ABSENT".into());
+        std::fs::write(
+            config["observation"].as_str().unwrap(),
+            value.as_os_str().as_bytes(),
+        )
+        .unwrap();
+    }
+    let error = std::process::Command::new(config["program"].as_str().unwrap())
+        .args(arguments)
+        .exec();
+    panic!("declared Git execution: {error}");
+}
+
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
@@ -90,6 +113,7 @@ fn main() {
     }
     let executable = std::env::args_os().next().unwrap();
     match Path::new(&executable).file_name().unwrap().as_bytes() {
+        b"declared-git" => declared_git(),
         b"parent-gh" => return provider::parent(&std::env::args().skip(1).collect::<Vec<_>>()),
         b"$CHRONO_BASE" => {
             let mut stdout = io::stdout().lock();
