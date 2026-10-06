@@ -288,7 +288,7 @@ The host adds just this optional provider block, with its own tool acquisition:
   "detector": {
     "runs_on": "macos-26",
     "timeout_minutes": 45,
-    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-core.json"],
+    "bootstrap": ["/usr/bin/python3", ".chrono-harness/ci/bootstrap.py", ".", ".chrono-harness/ci/bootstrap-detector.json"],
     "sparse_checkout": [".chrono-harness/", "crates/", "assets/", ".github/workflows/chrono-ci.yml", ".gitignore"]
   }
 }
@@ -316,6 +316,14 @@ product-source inputs need materialization for a source bootstrap. The sparse
 paths above are this Rust product host's choices; a released-binary consumer can
 materialize just its host registration/installer/workflow paths. The detector
 never discovers host SDKs, imports, directories or language boundaries.
+
+This host's detector bootstrap registers only `build.ci` and installs `chrono-ci`,
+the executable called by its detection step. Cargo builds that project's library
+dependencies in its own target. The detector has no standalone runner, judge-ci
+or worktree executable consumer. Unit and collection jobs use the separate core
+bootstrap because their canonical check invokes those tools, including the
+registered worktree lifecycle participant. Both recipes use the same bootstrap
+implementation and existing project actions; the provider does not infer them.
 
 PR endpoints are event base/head. Default push endpoints are the complete event
 before/after, including multiple commits. Explicit `push_baselines` and branch
