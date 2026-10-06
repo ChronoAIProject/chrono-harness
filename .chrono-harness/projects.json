@@ -849,9 +849,41 @@
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
+        },
+        "execute_core": {
+          "operation": "test.projects.core",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "--test",
+            "execution",
+            "--test",
+            "languages"
+          ]
+        },
+        "execute_migration": {
+          "operation": "test.projects.migration",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml",
+            "--test",
+            "migration"
+          ]
         }
       },
-      "language": "rust"
+      "language": "rust",
+      "test_groups": {
+        "judge-projects-tests": "execute_core",
+        "judge-projects-migration": "execute_migration"
+      }
     },
     {
       "id": "judge-cost",
@@ -1959,6 +1991,15 @@
             ".chrono-harness/ci/workflow-inventory.py",
             ".",
             ".chrono-harness/ci/worktree-inventory.json"
+          ]
+        },
+        "projects": {
+          "operation": "projects.inventory",
+          "tool": "python3",
+          "argv": [
+            ".chrono-harness/ci/workflow-inventory.py",
+            ".",
+            ".chrono-harness/ci/projects-inventory.json"
           ]
         }
       }

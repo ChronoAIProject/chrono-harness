@@ -44,6 +44,25 @@ their local operations cannot write that target concurrently. Independent native
 jobs retain separate checkouts, reports and reruns. This grouping does not certify
 that every host can satisfy a timing bound under arbitrary external load.
 
+The projects test project has separate `judge-projects` and
+`judge-projects-migration` units. The core action runs the `consumer`, `execution`
+and `languages` binaries; the migration action runs the `migration` binary,
+including the real historical-host repair and its nested CI suite. Both retain
+the existing assertions, fixture deadlines and default libtest concurrency.
+`projects.inventory` uses the same Python owner and
+`.chrono-harness/ci/projects-inventory.json` to compare their union with the
+current unfiltered inventory. New or omitted binaries fail inventory validation;
+the registration does not freeze a historical test count.
+
+Each group has its own 900-second operation bound, checkout, check report and
+rerun; this replaces the single combined operation in ordinary CI. It does not
+claim the same aggregate time budget or a reduction in total work. The original
+unfiltered `execute` action remains available for release, and nested tests are
+not omitted or replaced by stored results. The groups share their declared
+target and inventory resource in a local checkout, so local execution remains
+exclusive. Native timing and complete candidate acceptance require the actual
+registered checks.
+
 Providers without `job_gating` retain their original separate-workflow behavior
 and evidence contracts. Installing a new binary or running init does not opt
 an existing host in. This source correction has no published release or native

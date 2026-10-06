@@ -5237,6 +5237,26 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/ci/projects-inventory.json",
+      "owner": "workflow-inventory",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:workflow-inventory"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -7849,6 +7869,16 @@
       "from": "project:cache-tests",
       "kind": "test-execution",
       "to": "test:cache-tests"
+    },
+    {
+      "from": "project:judge-projects",
+      "kind": "test-execution",
+      "to": "test:judge-projects-migration"
+    },
+    {
+      "from": "project:judge-projects-tests",
+      "kind": "test-execution",
+      "to": "test:judge-projects-migration"
     }
   ],
   "test_costs": [
@@ -7951,6 +7981,10 @@
     {
       "test": "cache-tests",
       "cost": "unmeasured"
+    },
+    {
+      "test": "judge-projects-migration",
+      "cost": "unmeasured"
     }
   ],
   "execution_plans": {
@@ -8046,7 +8080,8 @@
         "build.judge-projects",
         "build.judge-ci",
         "build.ci",
-        "test.judge-projects-tests"
+        "projects.inventory",
+        "test.projects.core"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -8269,6 +8304,23 @@
       ],
       "timeout_seconds": 600,
       "output_limit_bytes": 1048576
+    },
+    "test:judge-projects-migration": {
+      "operations": [
+        "fmt.judge-projects",
+        "fmt.judge-projects-tests",
+        "build.runner",
+        "build.judge-registration",
+        "build.judge-filemap",
+        "build.judge-routes",
+        "build.judge-projects",
+        "build.judge-ci",
+        "build.ci",
+        "projects.inventory",
+        "test.projects.migration"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
     }
   },
   "execution_scheduling": {
@@ -8295,7 +8347,8 @@
     ],
     "resources": [
       "workflow-test-inventory",
-      "worktree-test-inventory"
+      "worktree-test-inventory",
+      "projects-test-inventory"
     ],
     "claims": {
       "build.ci": {
@@ -8574,12 +8627,6 @@
           "crates/judge-mixed-tests/target/"
         ]
       },
-      "test.judge-projects-tests": {
-        "resources": [],
-        "outputs": [
-          "crates/judge-projects-tests/target/"
-        ]
-      },
       "test.judge-registration-tests": {
         "resources": [],
         "outputs": [
@@ -8710,6 +8757,31 @@
         "resources": [],
         "outputs": [
           "crates/cache-tests/target/"
+        ]
+      },
+      "test.projects.core": {
+        "resources": [
+          "projects-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-projects-tests/target/"
+        ]
+      },
+      "test.projects.migration": {
+        "resources": [
+          "projects-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-projects-tests/target/"
+        ]
+      },
+      "projects.inventory": {
+        "resources": [
+          "projects-test-inventory"
+        ],
+        "outputs": [
+          "crates/judge-projects-tests/target/",
+          ".chrono-harness/state/"
         ]
       }
     }

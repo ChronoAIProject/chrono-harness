@@ -31,6 +31,7 @@ jobs:
       unit_judge-filemap: ${{ steps.detect.outputs.unit_judge-filemap }}
       unit_judge-mixed: ${{ steps.detect.outputs.unit_judge-mixed }}
       unit_judge-projects: ${{ steps.detect.outputs.unit_judge-projects }}
+      unit_judge-projects-migration: ${{ steps.detect.outputs.unit_judge-projects-migration }}
       unit_judge-registration: ${{ steps.detect.outputs.unit_judge-registration }}
       unit_judge-routes: ${{ steps.detect.outputs.unit_judge-routes }}
       unit_judge-workflow: ${{ steps.detect.outputs.unit_judge-workflow }}
@@ -1913,6 +1914,151 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+  unit_judge-projects-migration:
+    outputs:
+      production: ${{ steps.production.outputs.production }}
+    name: "chrono / judge-projects-migration"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-projects-migration == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-projects-migration' --plan-output '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-ci
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects-tests.migration
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_8_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_8_restore }}
+          fail-on-cache-miss: false
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        id: chrono_cache_work
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-projects-migration'
+      - name: Bind original unit artifact production
+        id: production
+        shell: bash
+        run: |
+          '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-projects-migration' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-projects-tests.migration
+        id: cache_4_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects-migration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects-tests.migration"]'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-projects-migration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+          include-hidden-files: true
   unit_judge-registration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3422,7 +3568,7 @@ jobs:
           include-hidden-files: true
   aggregate:
     name: "chrono / collection"
-    needs: ["detect","unit_cache","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
+    needs: ["detect","unit_cache","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-projects-migration","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
     if: ${{ always() }}
     runs-on: "macos-26"
     timeout-minutes: 45

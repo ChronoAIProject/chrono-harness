@@ -379,6 +379,20 @@
       ],
       "context_path": ".chrono-harness/state/units/cache/context.json",
       "artifact_directory": ".chrono-harness/state/"
+    },
+    "judge-projects-migration": {
+      "workflow_path": ".github/workflows/chrono-ci-judge-projects-migration.yml",
+      "name": "chrono / judge-projects-migration",
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/judge-projects-migration/context.json",
+      "artifact_directory": ".chrono-harness/state/"
     }
   },
   "gather": {
@@ -502,7 +516,9 @@
         "Save registered cache check.cache": "cache-save",
         "Restore registered cache check.cache-tests": "cache-restore",
         "Save registered cache check.cache-tests": "cache-save",
-        "Preserve detector evidence": "evidence-upload"
+        "Preserve detector evidence": "evidence-upload",
+        "Restore registered cache check.judge-projects-tests.migration": "cache-restore",
+        "Save registered cache check.judge-projects-tests.migration": "cache-save"
       },
       "summary_environment": "GITHUB_STEP_SUMMARY",
       "comparisons": {
@@ -1212,6 +1228,31 @@
         "save_caches": [
           "check.cache",
           "check.cache-tests"
+        ]
+      },
+      "unit_judge-projects-migration": {
+        "need": "The registered historical-host migration group executes the actual current CI plan in an isolated native checkout.",
+        "output_use": "Restore this group's explicitly registered compilation outputs before bootstrap, inventory and the unchanged migration tests.",
+        "prepare": [
+          "/usr/bin/python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "check.unit_judge-projects-migration",
+        "caches": [
+          "check.ci",
+          "check.judge-ci",
+          "check.judge-filemap",
+          "check.judge-projects",
+          "check.judge-projects-tests.migration",
+          "check.judge-registration",
+          "check.judge-routes",
+          "check.runner",
+          "check.worktree"
+        ],
+        "save_caches": [
+          "check.judge-projects-tests.migration"
         ]
       }
     }
