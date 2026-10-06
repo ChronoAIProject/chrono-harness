@@ -1130,7 +1130,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     );
     let mut h = ShortHost::new();
     let real_git = fixture_git();
-    let wrapper = h.root.join("declared-git");
+    let wrapper = h.root.join(".chrono-harness/bin/declared-git");
     let copied = Command::new("/bin/cp")
         .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
         .arg(&wrapper)
@@ -1147,12 +1147,10 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     );
     let hash = sha256(&fs::read(&wrapper).unwrap());
     h.modify(".chrono-harness/FILEMAP.json", |fm| {
-        for path in ["declared-git", "declared-git.json"] {
-            fm["files"].as_array_mut().unwrap().push(json!({
-                "path":path,"owner":"host","surface":"product",
-                "cost":"unmeasured","edges":[]
-            }));
-        }
+        fm["files"].as_array_mut().unwrap().push(json!({
+            "path":"declared-git.json","owner":"host","surface":"product",
+            "cost":"unmeasured","edges":[]
+        }));
     });
     h.modify(".chrono-harness/config.json", |c| {
         c["environment"]["inherit"]
