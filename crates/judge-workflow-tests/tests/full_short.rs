@@ -1059,6 +1059,26 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
             .to_string()
     );
     fs::write(&timing_path, serde_json::to_vec(&timing).unwrap()).unwrap();
+    // Successful libtest output is captured and its temporary lane is removed.
+    // Keep the measured phases and original producer clocks for either result.
+    let observations = source()
+        .join(".chrono-harness/state/workflow-test-observations")
+        .join(sha256(lane.as_os_str().as_encoded_bytes()));
+    fs::create_dir_all(&observations).unwrap();
+    fs::copy(&timing_path, observations.join("freshness-setup.json")).unwrap();
+    let origin_path = lane.join(".chrono-harness/state/origin.json");
+    let origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
+    fs::copy(origin_path, observations.join("origin.json")).unwrap();
+    fs::copy(
+        lane.join(origin["birth_report"].as_str().unwrap()),
+        observations.join("birth.json"),
+    )
+    .unwrap();
+    fs::copy(
+        lane.join(".chrono-harness/state/local/context.json"),
+        observations.join("context.json"),
+    )
+    .unwrap();
     println!("FRESHNESS_PHASES {timing}");
     if e != 0 {
         let retained = source()
