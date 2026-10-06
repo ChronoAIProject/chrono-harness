@@ -392,6 +392,8 @@ fn cli_rejects_unknown_actions_and_ambiguous_options() {
 #[test]
 fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
     let (root, mut config) = fixture();
+    config["caches"]["other"]["consumers"] = json!(["check.one"]);
+    fs::write(root.path().join("unavailable-other-input"), b"other source").unwrap();
     config["artifacts"]["target"]["path"] = json!("outputs with spaces/target");
     register_artifacts(root.path(), &config);
     fs::write(
@@ -441,17 +443,12 @@ fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
         }
         assert!(values.insert(name, value.join("\n")).is_none());
     }
-    assert_eq!(values.len(), 3);
+    assert_eq!(values.len(), 6);
+    assert_eq!(values["cache_0_key"], prepared["caches"]["other"]["key"]);
+    assert_eq!(values["cache_1_key"], prepared["caches"]["project"]["key"]);
+    assert_eq!(values["cache_1_paths"], "outputs with spaces/target");
     assert_eq!(
-        values["cache_70726f6a656374_key"],
-        prepared["caches"]["project"]["key"]
-    );
-    assert_eq!(
-        values["cache_70726f6a656374_paths"],
-        "outputs with spaces/target"
-    );
-    assert_eq!(
-        values["cache_70726f6a656374_restore"],
+        values["cache_1_restore"],
         prepared["caches"]["project"]["restore_keys"][0]
     );
     assert_eq!(prepared["execution"], "not-started");

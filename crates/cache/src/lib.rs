@@ -571,14 +571,14 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     let plan = prepare(root, &c, options["--consumer"])?;
     if let Some(output) = options.get("--github-output") {
         let mut text = String::new();
-        for (id, cache) in plan["caches"]
+        let selected: BTreeMap<_, _> = plan["caches"]
             .as_object()
             .ok_or("E_CACHE_OUTPUT: caches object")?
-        {
-            let prefix = format!(
-                "cache_{}",
-                id.bytes().map(|b| format!("{b:02x}")).collect::<String>()
-            );
+            .iter()
+            .collect();
+        // The provider uses the same lexical ordering of the exact selected set.
+        for (index, cache) in selected.values().enumerate() {
+            let prefix = format!("cache_{index}");
             let paths = cache["artifacts"]
                 .as_object()
                 .ok_or("E_CACHE_OUTPUT: artifacts object")?

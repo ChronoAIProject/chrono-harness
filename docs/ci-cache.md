@@ -127,6 +127,11 @@ It is not a second Cargo build implementation.
 
 The provider obtains output keys from `chrono-cache plan --github-output`, uses
 native restoration before the original work, and saves after successful work.
+The planner and provider sort the consumer's exact cache set lexically and use
+`cache_0_key`, `cache_0_paths`, `cache_0_restore` (then `cache_1_*`, etc.) as
+job-local output names. These compact references do not rename cache identities
+or keys. Planner and provider must implement the same output contract; registry
+validation rejects mismatched selected sets before projection.
 It does not skip the canonical check or replace build/test results with cache
 status. Cache backend failures currently use GitHub's original action outcomes
 and remain nonfatal to the following build. Completed compilation after a later

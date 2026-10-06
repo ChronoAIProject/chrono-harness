@@ -3,7 +3,11 @@ use super::{action, output_preflight, scalar, shell, write_file};
 use chrono_harness::{decode, no_symlink_parents, relative_path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 pub const SCHEMA: &str = "chrono-github-release/v1";
 pub const UNITS_SCHEMA: &str = "chrono-github-release/v2";
@@ -227,6 +231,20 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
 
 pub fn render(c: &Config) -> Result<String, String> {
     validate(c)?;
+    // Reuse only identical, explicitly registered downloads. Aliases retain one
+    // execution per consumer job and do not add or remove dependency edges.
+    let mut counts = BTreeMap::new();
+    for download in c.jobs.iter().flat_map(|job| &job.downloads) {
+        *counts
+            .entry((download.job.as_str(), download.directory.as_str()))
+            .or_insert(0) += 1;
+    }
+    let mut shared_downloads: BTreeMap<_, _> = counts
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .enumerate()
+        .map(|(index, (key, _))| (key, (format!("chrono_release_download_{index}"), false)))
+        .collect();
     let mut output = format!("{MARKER}name: {}\non:\n", scalar(&c.name));
     if !c.push_branches.is_empty() {
         output.push_str(&format!(
@@ -240,7 +258,7 @@ pub fn render(c: &Config) -> Result<String, String> {
     for job in &c.jobs {
         if c.schema == UNITS_SCHEMA {
             let mut body = String::new();
-            render_unit(&mut body, c, job)?;
+            render_unit(&mut body, c, job, &mut shared_downloads)?;
             output.push_str(&super::cache::project(
                 c.persistent_cache.as_ref(),
                 &job.id,
@@ -294,7 +312,12 @@ pub fn render(c: &Config) -> Result<String, String> {
     Ok(output)
 }
 
-fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String> {
+fn render_unit<'a>(
+    output: &mut String,
+    c: &Config,
+    job: &'a Job,
+    shared_downloads: &mut BTreeMap<(&'a str, &'a str), (String, bool)>,
+) -> Result<(), String> {
     output.push_str(&format!(
         "  {}:\n    if: ${{{{ {}github.event.deleted != true }}}}\n",
         job.id,
@@ -334,8 +357,20 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
         checkout = c.checkout_action
     ));
     for download in &job.downloads {
+        let prefix =
+            match shared_downloads.get_mut(&(download.job.as_str(), download.directory.as_str())) {
+                Some((anchor, emitted)) if *emitted => {
+                    output.push_str(&format!("      - *{anchor}\n"));
+                    continue;
+                }
+                Some((anchor, emitted)) => {
+                    *emitted = true;
+                    format!("      - &{anchor}\n        name:")
+                }
+                None => "      - name:".to_string(),
+            };
         output.push_str(&format!(
-            r#"      - name: Download selected original artifact from {producer}
+            r#"{prefix} Download selected original artifact from {producer}
         if: ${{{{ always() && needs.{producer}.outputs.artifact_id != '' }}}}
         uses: {action}
         with:

@@ -461,6 +461,12 @@ on:
     }
 }
 fn output_preflight(root: &Path, path: &str, expected: &str, marker: &str) -> Result<bool, String> {
+    if path.starts_with(".github/workflows/") && expected.len() > 500_000 {
+        return Err(format!(
+            "GitHub workflow exceeds 500 KB: {path} ({} bytes); split the registered workflow",
+            expected.len()
+        ));
+    }
     let target = no_symlink_parents(root, path)?;
     match fs::read(&target) {
         Ok(bytes) => {

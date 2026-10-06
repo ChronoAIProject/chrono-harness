@@ -1,5 +1,7 @@
 # 显式发布工作流生成
 
+重复的 v2 下载步骤以 YAML 锚点和别名共享配置；只有生产 job 与目的目录完全相同的登记才复用。每个消费者 job 仍独立执行自己的下载，使用原 artifact ID、条件与目录，`needs`、原命令、时限、并发及证据采集不变。此复用不推断依赖，也不减少实际下载次数。生成器在写入工作流或首次采用配置前检查输出字节数，以 500,000 字节作为 GitHub 500 KB 限额的保守上限；超限失败并保留已有文件。
+
 `chrono-ci` 的 `init`、`generate`、`verify` 按配置中明确的 schema 选择生成合同。既有 `chrono-github-ci/v1`、v2、v3 仍生成检查工作流；`chrono-github-release/v1` 生成原生发布构建工作流。生成器不发现项目、语言、平台或待发布资产，不执行构建或发布。
 
 发布源包含 `schema`、`workflow_path`、`name`、`push_branches`、固定提交的 `checkout_action`／`upload_artifact_action` 和非空 `jobs`。每个 job 明确登记 `id`、`runs_on`、`timeout_minutes`、`command`（完整 argv）、`artifact_name`、`artifact_directory`（以 `/` 结尾的相对目录）。job ID、产物名必须分别唯一；目录不是 glob，参数不作 shell 展开。拒绝未知／重复字段、无效路径、空命令和配置值内的 GitHub 表达式。空 `push_branches` 表示只允许手动触发。

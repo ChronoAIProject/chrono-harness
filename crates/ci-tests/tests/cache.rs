@@ -22,6 +22,8 @@ fn adoption(job: &str) -> Value {
 fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
+    value["persistent_cache"]["jobs"]["unit_example"]["caches"] =
+        json!(["core.target", "a.target"]);
     let config = serde_json::from_value(value).unwrap();
     let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
     let yaml = &rendered[".github/workflows/chrono-ci.yml"];
@@ -58,15 +60,23 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         .unwrap();
     assert!(seed_result.status.success());
     assert_eq!(seed_result.stdout, b"literal ' argument $(printf unsafe)");
-    assert!(job.contains("steps.chrono_cache_plan.outputs.cache_636f72652e746172676574_key"));
+    assert!(job.contains("steps.chrono_cache_plan.outputs.cache_0_key"));
+    let core = job
+        .split("Restore registered cache core.target")
+        .nth(1)
+        .unwrap()
+        .split("      - name:")
+        .next()
+        .unwrap();
+    assert!(core.contains("steps.chrono_cache_plan.outputs.cache_1_key"));
     assert!(job.contains("steps.chrono_cache_work.outcome == 'success'"));
     assert!(job.contains("continue-on-error: true"));
     assert_eq!(yaml.matches("Prepare registered caches").count(), 1);
-    assert_eq!(yaml.matches("Save registered cache").count(), 1);
+    assert_eq!(yaml.matches("Save registered cache").count(), 2);
 }
 
 #[test]
-fn registered_cache_ids_fit_native_step_limits_without_truncating_output_names() {
+fn registered_cache_ids_fit_native_step_limits_without_truncating_cache_identity() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
     let id = "a".repeat(128);
@@ -83,13 +93,66 @@ fn registered_cache_ids_fit_native_step_limits_without_truncating_output_names()
             );
         }
     }
-    let key = format!(
-        "cache_{}",
-        id.bytes().map(|b| format!("{b:02x}")).collect::<String>()
-    );
-    assert!(yaml.contains(&format!("steps.chrono_cache_plan.outputs.{key}_key")));
+    assert!(yaml.contains("steps.chrono_cache_plan.outputs.cache_0_key"));
+    assert!(yaml.contains(&format!("Restore registered cache {id}")));
     assert_eq!(yaml.matches("Restore registered cache").count(), 1);
     assert_eq!(yaml.matches("Save registered cache").count(), 1);
+}
+
+#[test]
+fn actual_host_projections_fit_native_workflow_size() {
+    let units = serde_json::from_value(source(".chrono-harness/ci/units.json")).unwrap();
+    let release = serde_json::from_value(source(".chrono-harness/ci/release.json")).unwrap();
+    let mut outputs = chrono_ci::units::render(&units, ".chrono-harness/ci/units.json").unwrap();
+    outputs.insert(
+        "release".into(),
+        chrono_ci::release::render(&release).unwrap(),
+    );
+    for (name, output) in outputs {
+        assert!(
+            output.len() <= 500_000,
+            "{name}: {} bytes exceed native workflow size",
+            output.len()
+        );
+    }
+    let yaml = chrono_ci::release::render(&release).unwrap();
+    let expanded: Value = serde_yaml_ng::from_str(&yaml).unwrap();
+    assert_eq!(
+        expanded["jobs"].as_object().unwrap().len(),
+        release.jobs.len()
+    );
+    for job in &release.jobs {
+        let actual = &expanded["jobs"][&job.id];
+        if !job.needs.is_empty() {
+            assert_eq!(actual["needs"], json!(job.needs));
+        }
+        let downloads: Vec<_> = actual["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|step| {
+                step["uses"]
+                    .as_str()
+                    .is_some_and(|v| v.starts_with("actions/download-artifact@"))
+            })
+            .collect();
+        assert_eq!(downloads.len(), job.downloads.len(), "{}", job.id);
+        for (step, download) in downloads.into_iter().zip(&job.downloads) {
+            assert_eq!(step["with"]["path"], download.directory);
+            assert_eq!(
+                step["with"]["artifact-ids"],
+                format!("${{{{ needs.{}.outputs.artifact_id }}}}", download.job)
+            );
+            assert_eq!(step["with"]["merge-multiple"], true);
+            assert_eq!(
+                step["if"],
+                format!(
+                    "${{{{ always() && needs.{}.outputs.artifact_id != '' }}}}",
+                    download.job
+                )
+            );
+        }
+    }
 }
 
 #[test]
