@@ -100,6 +100,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.detect/plan.json' --report-directory '.chrono-harness/state/cache/check.detect/' --steps-env CHRONO_CACHE_STEPS --work 'detect' --bootstrap chrono_cache_bootstrap --save-caches '["detect.ci"]'
       - name: Preserve detector evidence
@@ -226,6 +227,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_cache/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.cache","check.cache-tests"]'
       - name: Preserve actual check evidence
@@ -344,6 +346,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.ci-tests"]'
       - name: Preserve actual check evidence
@@ -470,6 +473,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_diagnostics/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.diagnostics","check.diagnostics-tests"]'
       - name: Preserve actual check evidence
@@ -596,6 +600,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_distribution/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_distribution/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.distribution","check.distribution-tests"]'
       - name: Preserve actual check evidence
@@ -688,6 +693,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_host-bootstrap/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_host-bootstrap/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
@@ -877,6 +883,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_inputs/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.inputs-tests"]'
       - name: Preserve actual check evidence
@@ -1003,6 +1010,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_instructions/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_instructions/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.instructions","check.instructions-tests"]'
       - name: Preserve actual check evidence
@@ -1192,6 +1200,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cargo/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cargo","check.judge-cargo-tests"]'
       - name: Preserve actual check evidence
@@ -1301,6 +1310,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-ci-tests"]'
       - name: Preserve actual check evidence
@@ -1445,6 +1455,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cost/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-cost-tests"]'
       - name: Preserve actual check evidence
@@ -1598,6 +1609,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-filemap/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-filemap-tests"]'
       - name: Preserve actual check evidence
@@ -1751,6 +1763,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-mixed/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-mixed","check.judge-mixed-tests"]'
       - name: Preserve actual check evidence
@@ -1904,6 +1917,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects","check.judge-projects-tests"]'
       - name: Preserve actual check evidence
@@ -2049,6 +2063,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects-migration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects-tests.migration"]'
       - name: Preserve actual check evidence
@@ -2175,6 +2190,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-registration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-registration","check.judge-registration-tests"]'
       - name: Preserve actual check evidence
@@ -2301,6 +2317,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-routes/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-routes","check.judge-routes-tests"]'
       - name: Preserve actual check evidence
@@ -2490,6 +2507,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow","check.judge-workflow-tests"]'
       - name: Preserve actual check evidence
@@ -2671,6 +2689,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-short/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-short"]'
       - name: Preserve actual check evidence
@@ -2852,6 +2871,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-units/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-units"]'
       - name: Preserve actual check evidence
@@ -2944,6 +2964,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_release-build/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_release-build/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
@@ -3045,6 +3066,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_release-build-integration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
@@ -3154,6 +3176,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_runner/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_runner/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.runner-tests"]'
       - name: Preserve actual check evidence
@@ -3246,6 +3269,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_scoped-v1/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_scoped-v1/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
@@ -3338,6 +3362,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_workflow-inventory/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_workflow-inventory/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
@@ -3447,6 +3472,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_worktree/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_worktree/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests"]'
       - name: Preserve actual check evidence
@@ -3556,6 +3582,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_worktree-adoption/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests.worktree-adoption"]'
       - name: Preserve actual check evidence
@@ -3676,6 +3703,7 @@ jobs:
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.aggregate/plan.json' --report-directory '.chrono-harness/state/cache/check.aggregate/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --bootstrap chrono_cache_bootstrap --save-caches '["check.ci","check.judge-ci","check.runner","check.worktree"]'
       - name: Preserve actual check evidence

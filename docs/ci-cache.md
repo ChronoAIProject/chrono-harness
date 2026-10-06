@@ -196,7 +196,7 @@ must be a literal host state path, with hidden-file upload explicitly enabled;
 missing files fail that upload instead of claiming preservation. This host chooses
 `.chrono-harness/state/` to include bootstrap, plans and probe originals. Without
 this adoption, detector files remain temporary runner state.
-No extra job or API request is introduced by the transport report. Exact/compatible restoration is reported
+The transport report runs in the existing job. Without a registered backend it makes no API request. Exact/compatible restoration is reported
 only from a successful action with a matching key. Empty outputs are
 `miss-or-unavailable`. Native save success is `unconfirmed` with
 `W_CACHE_SAVE_UNCONFIRMED`: the pinned action can catch backend exceptions and
@@ -204,14 +204,40 @@ exit successfully. This report cannot claim a saved archive, compiler reuse or
 verified executable identity from action outcomes. A cache excluded from this
 job's save selection reports `not-requested` when no save was observed; an actual
 save outside that selection remains visible with `W_CACHE_UNREGISTERED_SAVE`.
-Original backend logs remain
-necessary for those investigations. Failed report production is visible as its
+Backend and action logs remain necessary to attribute a particular save or diagnose archive contents. Failed report production is visible as its
 own action outcome and does not replace the original check result.
 
-Cache backend failures remain nonfatal to the following build. Confirmed backend
-saves, explicit corrupt-cache recovery and preserving arbitrary project compilation
+Cache backend failures remain nonfatal to the following build. Native acceptance of backend observations, explicit corrupt-cache recovery and preserving arbitrary project compilation
 after a later test failure remain unfinished. Saving does not include `.chrono-harness/state`, release
 handoffs, selected test results, installed `bin`, Git metadata or lifecycle locks.
+
+`chrono-cache/v2` optionally registers `backend` with `kind: github`, a concrete
+`need` and `output_use`, a bounded `command`, explicit `inherit` and
+`credential_environment` lists, and `repository_environment` / `ref_environment`
+names. Exactly one complete command argument is `{endpoint}`. The host uses
+`gh api --paginate --slurp {endpoint}` with a 30-second, 4-MiB bound. The command
+receives `repos/{repository}/actions/caches?ref={encoded-ref}&per_page=100` and
+returns an array of GitHub response pages. The policy is retained in the plan
+but is outside build cache identity; planning never queries the backend.
+
+The existing report step queries once per batch only when a native save succeeded
+and is still unconfirmed. Otherwise it records `not-required` without launching a
+query. The generated report step supplies `GH_TOKEN`; cache workflows permit
+`actions: read`. The subprocess inherits only declared variables. Retained process
+evidence includes the executable digest, command, raw stdout/stderr, original
+exit/failure and environment digest; declared credential values are omitted from
+the retained environment. Commands must not print credentials into raw streams.
+
+An exact key and ref with one observed backend entry changes save status to
+`backend-entry-observed`, with availability `confirmed: true` and
+`creator: unestablished`. This confirms an entry observed at query time, not which
+action created it, archive integrity, compiler reuse or current executable identity.
+Multiple archive identities are `ambiguous`; missing matches are `not-observed`,
+not proof of absence, because pagination is not an atomic inventory. Query failure,
+timeout, truncated/malformed responses and conflicting identities retain the original
+failure, emit `W_CACHE_BACKEND_UNAVAILABLE` and leave saves unconfirmed. Failed or
+skipped native saves and the original business verdict are never replaced by backend
+presence. Query cost remains in the registered `cache-report` step category.
 
 The host registry binds actual compiler/Cargo files and version, OS/architecture,
 registered linker/SDK observations, declared flag absence, manifests/locks and

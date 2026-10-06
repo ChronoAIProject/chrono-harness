@@ -7248,5 +7248,34 @@
         "pointer": "/execution_plans/test:judge-projects-migration/operations"
       }
     ]
+  },
+  "backend": {
+    "kind": "github",
+    "need": "Native cache save actions can finish successfully without an available backend archive",
+    "output_use": "Expose exact key/ref availability and retain original query failures in existing cache reports",
+    "command": {
+      "program": "gh",
+      "args": [
+        "api",
+        "--paginate",
+        "--slurp",
+        "{endpoint}"
+      ],
+      "env": {
+        "GH_PROMPT_DISABLED": "1"
+      },
+      "timeout_seconds": 30,
+      "output_limit_bytes": 4194304
+    },
+    "inherit": [
+      "PATH",
+      "HOME",
+      "GH_TOKEN"
+    ],
+    "credential_environment": [
+      "GH_TOKEN"
+    ],
+    "repository_environment": "GITHUB_REPOSITORY",
+    "ref_environment": "GITHUB_REF"
   }
 }

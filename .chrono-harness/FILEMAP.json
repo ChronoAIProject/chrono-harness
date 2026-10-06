@@ -5257,6 +5257,38 @@
           "to": "test:judge-projects-migration"
         }
       ]
+    },
+    {
+      "path": "crates/cache/src/backend.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache-tests/tests/backend.rs",
+      "owner": "cache-tests",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [

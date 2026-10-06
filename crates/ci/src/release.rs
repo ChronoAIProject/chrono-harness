@@ -253,8 +253,12 @@ pub fn render(c: &Config) -> Result<String, String> {
         ));
     }
     output.push_str(
-        "  workflow_dispatch:\n    inputs:\n      source:\n        description: Source revision to check out\n        required: true\n        type: string\npermissions:\n  contents: read\njobs:\n",
+        "  workflow_dispatch:\n    inputs:\n      source:\n        description: Source revision to check out\n        required: true\n        type: string\npermissions:\n  contents: read\n",
     );
+    if c.persistent_cache.is_some() {
+        output.push_str("  actions: read\n");
+    }
+    output.push_str("jobs:\n");
     for job in &c.jobs {
         if c.schema == UNITS_SCHEMA {
             let mut body = String::new();

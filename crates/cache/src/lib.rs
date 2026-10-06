@@ -1,6 +1,8 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
+mod backend;
 mod probe;
 mod report;
+pub use backend::Config as Backend;
 use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, wire};
 pub use report::transport_report;
 use serde::{Deserialize, Serialize};
@@ -28,6 +30,8 @@ pub struct Config {
     pub consumer_operations: BTreeMap<String, Vec<OperationSource>>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub require_primary_checkout: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<Backend>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -164,6 +168,12 @@ pub fn validate(c: &Config) -> Result<(), String> {
     }
     if c.schema == SCHEMA && !c.consumer_operations.is_empty() {
         return Err("E_CACHE_CONFIG: consumer operation contracts require chrono-cache/v2".into());
+    }
+    if let Some(backend) = &c.backend {
+        if c.schema != CONSUMER_SCHEMA {
+            return Err("E_CACHE_CONFIG: backend observations require chrono-cache/v2".into());
+        }
+        backend::validate(backend)?;
     }
     if c.schema == CONSUMER_SCHEMA {
         let consumers: BTreeSet<_> = c.caches.values().flat_map(|c| &c.consumers).collect();
@@ -700,6 +710,9 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         "input_completeness_proven":false,"execution":"not-started"});
     if let Some(contract) = operation_contract {
         plan["consumer_operations"] = contract;
+    }
+    if let Some(backend) = &c.backend {
+        plan["backend"] = json!(backend);
     }
     Ok(plan)
 }

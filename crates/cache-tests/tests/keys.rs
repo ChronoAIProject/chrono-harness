@@ -1,3 +1,6 @@
+#[path = "backend.rs"]
+mod backend;
+
 use chrono_cache::{Config, prepare};
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};

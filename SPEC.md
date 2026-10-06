@@ -662,6 +662,14 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 对任意路径、文本、OS／工具错误、外部响应及其它开放或无限输入集合，按类型、结构、语义不变量和能力边界定义通用处理规则，不逐个样本、消息片段、文件名或测试 case 打补丁。只有已登记的有限协议值／错误码可以枚举；未知成员进入统一且保留原始输入／异常的规则，不把未知当通过。新特殊分支必须具有独立语义和明确适用边界，不能只覆盖曾出现的一个失败文本。检查使用等价类、成功／失败／边界预期及必要反例；通过有限样本不宣称无限集合已穷举。
 
+### 7.3 自检的发现能力（目标合同）
+
+Harness 自身的检查、观测、缓存与资源报告也按独立生产／测试单元登记。修复已知盲点时，专属测试须先构造实际异常或等价的受控故障，验证异常确实进入原始报告及面向消费者的失败、警告或未知状态；只验证正常路径通过不足以验收发现能力。适用时先确认旧实现不能通过该回归。诊断故障由实际生产者保留，不能因业务步骤成功、检查器没有输出或查询不可用而报告正常。
+
+发现与修复分别验收：暴露错误不等于已消除原因，一次重跑通过不关闭历史失败。修复保持原功能与测试义务，并核对应异常的报告、恢复行为及未解决边界。已知遗漏须补入真实所有者的回归和登记；不推断依赖，不宣称可以自动发现所有未知缺陷。
+
+观测优先复用现有执行、原始证据、报告与同一 check 入口。新增探测须登记实际消费者、所需读数、界限及成本；无适用操作则不启动探测，不以自检之名新增没有消费者的全仓扫描或常驻任务。测试和观测只能说明已验证范围的发现能力，不能从“没有告警”推出整个系统健康。
+
 ## 8. 默认判官、规则表面与警告
 
 当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed、workflow 已实现有界合同，宿主绑定仍 proposed，不存在默认隐形 gate。
@@ -903,7 +911,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 §2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
-§4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。生成成功不证明实际恢复、保存或增量复用；v2 消费者引用原操作登记，恢复前拒绝生产操作已退出计划的缓存订阅，消费者增减不使未变产物失效。当前报告保存 action 原始读数；save 步骤成功仍报未确认，不能冒充后端保存成功。启动构建成功的显式子集可在后续检查失败并结束后保存；原生验收、后端保存确认、损坏恢复、任意项目的测试失败后独立保存、完整适用输入及 linked worktree 全程租约仍未完成。现有 target、bin、名为 cache 的目录和 artifact 传输本身不满足缓存合同。具体实现边界与待实现项见 docs/ci-cache.md 和 docs/spec-coverage.md。
+§4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。生成成功不证明实际恢复、保存或增量复用；v2 消费者引用原操作登记，恢复前拒绝生产操作已退出计划的缓存订阅，消费者增减不使未变产物失效。当前报告保存 action 原始读数；save 步骤成功本身仍报未确认。v2 可显式登记有界 GitHub 后端查询，在已有 report 步骤只核待确认保存；精确 key/ref 的单一后端条目可报告可用性已观察，不能归因到本次 action 或证明归档内容。分页非原子快照，未观察到不证明不存在；歧义、查询失败、超时与截断保留原始读数及未确认状态，业务失败不改判。无待确认保存不发请求；查询成本计入原 cache-report 分类，凭据值不进入保留环境。启动构建成功的显式子集可在后续检查失败并结束后保存；完整原生验收、后端观察验收、损坏恢复、任意项目的测试失败后独立保存、完整适用输入及 linked worktree 全程租约仍未完成。现有 target、bin、名为 cache 的目录和 artifact 传输本身不满足缓存合同。具体实现边界与待实现项见 docs/ci-cache.md 和 docs/spec-coverage.md。
 
 The native release recipe v2 emits `chrono-native-build/v3` evidence with explicit passed/failed status and ordered actual process records for source observation, installation, versions, builds, registered verification and packaging. Ordinary child failures retain original bytes, hashes and exits before the CLI returns failure; unstarted processes and unknown source identity are not invented. Preflight rejects an existing output or invalid registration without starting work. Native workflow artifact upload is attempted on success and failure; report or directory presence alone is not release success. Hard termination, storage failure recovery, complete build provenance and input closure are not certified by this evidence. The recipe contract remains host-owned under `.chrono-harness/release/`; see [docs/distribution.md](docs/distribution.md).
 

@@ -232,6 +232,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         "native-steps",
         steps_raw.as_bytes()
     )?);
+    if let Some(backend) = plan.get("backend") {
+        let config: super::Backend =
+            serde_json::from_value(backend.clone()).map_err(|e| format!("E_CACHE_BACKEND: {e}"))?;
+        super::backend::apply(root, directory, &config, &mut report)?;
+    }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     let original = retain_for_upload(root, directory, "cache-transport", &raw)?;
     for warning in report["warnings"].as_array().into_iter().flatten() {
