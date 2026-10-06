@@ -50,7 +50,9 @@
       "crates/worktree/target/",
       "crates/worktree-tests/target/",
       "crates/diagnostics/target/",
-      "crates/diagnostics-tests/target/"
+      "crates/diagnostics-tests/target/",
+      "crates/cache/target/",
+      "crates/cache-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -216,6 +218,12 @@
           "test:host-bootstrap-tests"
         ],
         "report_path": ".chrono-harness/state/units/host-bootstrap/check.json"
+      },
+      "cache": {
+        "tests": [
+          "test:cache-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/cache/check.json"
       }
     },
     "shared_operations": {

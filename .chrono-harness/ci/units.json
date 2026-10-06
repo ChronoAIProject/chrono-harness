@@ -372,6 +372,20 @@
       ],
       "context_path": ".chrono-harness/state/units/host-bootstrap/context.json",
       "artifact_directory": ".chrono-harness/state/"
+    },
+    "cache": {
+      "workflow_path": ".github/workflows/chrono-ci-cache.yml",
+      "name": "chrono / cache",
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "bootstrap": [
+        "/usr/bin/python3",
+        ".chrono-harness/ci/bootstrap.py",
+        ".",
+        ".chrono-harness/ci/bootstrap-core.json"
+      ],
+      "context_path": ".chrono-harness/state/units/cache/context.json",
+      "artifact_directory": ".chrono-harness/state/"
     }
   },
   "gather": {

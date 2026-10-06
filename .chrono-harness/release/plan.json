@@ -16,6 +16,7 @@
     "chrono-inputs": "crates/inputs/target/release/chrono-inputs",
     "chrono-distribution": "crates/distribution/target/release/chrono-distribution",
     "chrono-judge-cargo": "crates/judge-cargo/target/release/chrono-judge-cargo",
-    "chrono-worktree": "crates/worktree/target/release/chrono-worktree"
+    "chrono-worktree": "crates/worktree/target/release/chrono-worktree",
+    "chrono-cache": "crates/cache/target/release/chrono-cache"
   }
 }

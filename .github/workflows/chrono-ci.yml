@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 45
     outputs:
       detection: ${{ steps.detect.outputs.detection }}
+      unit_cache: ${{ steps.detect.outputs.unit_cache }}
       unit_ci: ${{ steps.detect.outputs.unit_ci }}
       unit_diagnostics: ${{ steps.detect.outputs.unit_diagnostics }}
       unit_distribution: ${{ steps.detect.outputs.unit_distribution }}
@@ -65,6 +66,47 @@ jobs:
           CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
           '.chrono-harness/bin/chrono-ci' detect --host-root . --config '.chrono-harness/ci/units.json' --github-output "$GITHUB_OUTPUT"
+  unit_cache:
+    outputs:
+      production: ${{ steps.production.outputs.production }}
+    name: "chrono / cache"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_cache == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+      - name: Canonical harness check
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'cache'
+      - name: Bind original unit artifact production
+        id: production
+        shell: bash
+        run: |
+          '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'cache' --github-output "$GITHUB_OUTPUT"
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+          include-hidden-files: true
   unit_ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1051,7 +1093,7 @@ jobs:
           include-hidden-files: true
   aggregate:
     name: "chrono / collection"
-    needs: ["detect","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
+    needs: ["detect","unit_cache","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
     if: ${{ always() }}
     runs-on: "macos-26"
     timeout-minutes: 45

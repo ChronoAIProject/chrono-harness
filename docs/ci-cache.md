@@ -1,6 +1,9 @@
-# Explicit CI cache keys
+# Explicit cache keys
 
-`chrono-ci cache-plan --host-root H --config .chrono-harness/cache.json
+`chrono-cache` is an independent Rust product with its own `cache-tests` project,
+CI unit and central release asset. It does not compile with the CI generator.
+
+`chrono-cache plan --host-root H --config .chrono-harness/cache.json
 --consumer ID` prepares keys for one explicitly registered consumer. This is an
 internal provider entry; the daily check remains `chrono-harness check`.
 
@@ -10,7 +13,7 @@ generated check and release workflows have not yet adopted persistent caching.
 SPEC §4.2's transport, lifecycle protection, incremental-build adoption and native
 cold/warm/failure/concurrent acceptance remain required work.
 
-The `chrono-ci-cache/v1` registration belongs to the host's `.chrono-harness/`
+The `chrono-cache/v1` registration belongs to the host's `.chrono-harness/`
 directory. It explicitly declares:
 
 - A namespace and an `artifact_registry` path. Host cache artifacts reference
@@ -37,7 +40,7 @@ Producer and consumer IDs are declarations here; the execution provider must
 resolve them against its registered operations before restoring or building.
 
 The compatibility digest binds the namespace, cache identity, owner, producer,
-artifact declarations and their selected registry records, plus observations of
+consumer set, restore policy, artifact declarations and their selected registry records, plus observations of
 the declared compatibility inputs. The source digest binds the declared source
 input observations. Keys are `chrono-v1-<compatibility digest>-<source digest>`.
 Reordering input IDs does not change the digest. Changes to unrelated cache
@@ -63,7 +66,7 @@ check, not a claim that arbitrary contents of a cache have been proved safe or
 that all rebuild inputs are known. Restoring and saving must additionally hold
 the adopted lifecycle protection until joined producers and saving are complete.
 
-The returned `chrono-ci-cache-plan/v1` includes selected entries and input
+The returned `chrono-cache-plan/v1` includes selected entries and input
 observations. Its status is `prepared-unrestored`, execution is `not-started`, and
 `input_completeness_proven` is false. These are plan facts, not passing judgments,
 cache hit states, successful builds or parity evidence. Cache backend results,

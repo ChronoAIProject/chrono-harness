@@ -4,7 +4,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
-pub mod cache;
 mod check_inputs;
 mod event_git;
 pub mod full;
@@ -798,9 +797,6 @@ fn store_context(
     Ok(())
 }
 pub fn dispatch(args: &[String]) -> Result<String, String> {
-    if args.first().map(String::as_str) == Some("cache-plan") {
-        return cache::dispatch(args);
-    }
     if args.first().map(String::as_str) == Some("native-process") {
         return check_inputs::native_process(args);
     }
