@@ -605,6 +605,25 @@ still running when it observes itself. Native failure, transport acceptance and
 the final judge keep their existing rules; resource observations cannot turn a
 failed check green or prove that a successful dependency is necessary.
 
+Optional `comparisons` registers warning rules keyed by a host-owned ID. Each
+rule names distinct registered `category` and `reference_category`, a positive
+finite `factor`, and nonnegative integer `minimum_seconds`. For each completed
+observed job, a warning is produced when the category's measured seconds are at
+least the minimum and strictly greater than `factor * reference_seconds`.
+Equal values stay within the threshold; a measured zero reference is usable.
+The host adopts `bootstrap-vs-check` with factor 1 and a 60-second minimum to
+expose startup work that exceeds the same job's canonical check.
+
+Only the two explicitly named categories participate. Missing categories,
+unknown timestamps and unfinished jobs produce `unavailable` with a reason;
+skipped jobs are `not-applicable`. Other categories cannot silently substitute
+for a missing reference. Completed failed jobs retain their measured cost.
+Deduplicated job identity and attempt remain attached to every comparison, and
+the Actions summary lists `W_CI_RESOURCE_COMPARISON` findings with their measured
+values. These are host policy warnings, not proof that the work is redundant or
+that an optimization saved resources. They neither change admission nor add
+requests, jobs or executions. Omission preserves the existing report format.
+
 Optional `summary_environment` names an explicitly inherited variable containing
 an existing appendable summary file. The host adopts `GITHUB_STEP_SUMMARY` in its
 input environment to show the same category totals and unknowns on the Actions

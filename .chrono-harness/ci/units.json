@@ -411,7 +411,15 @@
         "Bind original unit artifact production": "evidence-binding",
         "Preserve actual check evidence": "evidence-upload"
       },
-      "summary_environment": "GITHUB_STEP_SUMMARY"
+      "summary_environment": "GITHUB_STEP_SUMMARY",
+      "comparisons": {
+        "bootstrap-vs-check": {
+          "category": "bootstrap",
+          "reference_category": "canonical-check",
+          "factor": 1.0,
+          "minimum_seconds": 60
+        }
+      }
     }
   },
   "job_gating": {

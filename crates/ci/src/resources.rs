@@ -12,6 +12,18 @@ pub struct Config {
     /// Optional presentation sink supplied by the explicitly inherited CI environment.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary_environment: Option<String>,
+    /// Host-owned comparisons of completed categories within the same observed job.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub comparisons: BTreeMap<String, Comparison>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Comparison {
+    pub category: String,
+    pub reference_category: String,
+    pub factor: f64,
+    pub minimum_seconds: u64,
 }
 
 impl Config {
@@ -31,6 +43,23 @@ impl Config {
             name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
         }) {
             return Err("invalid resource summary environment name".into());
+        }
+        let categories: BTreeSet<_> = self.step_categories.values().collect();
+        for (id, rule) in &self.comparisons {
+            if id.is_empty()
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+                || !categories.contains(&rule.category)
+                || !categories.contains(&rule.reference_category)
+                || rule.category == rule.reference_category
+                || !rule.factor.is_finite()
+                || rule.factor <= 0.0
+            {
+                return Err(format!(
+                    "invalid resource comparison {id}: declare distinct known categories and a positive finite factor"
+                ));
+            }
         }
         Ok(())
     }
@@ -96,6 +125,32 @@ pub(crate) fn publish_summary(config: &Config, report: &Value, original: &str) -
                 ));
             }
         }
+        if let Some(rows) = report["comparisons"].as_array() {
+            let warnings: Vec<_> = rows
+                .iter()
+                .filter(|row| row["status"] == "exceeded")
+                .collect();
+            let unavailable = rows
+                .iter()
+                .filter(|row| row["status"] == "unavailable")
+                .count();
+            body.push_str(&format!("\nRegistered cost comparisons: {} warnings; {unavailable} unavailable. These flag measured overhead for review; they do not establish unnecessary work or a failed check.\n", warnings.len()));
+            if !warnings.is_empty() {
+                body.push_str("\n| Rule | Job / ID / attempt | Category seconds | Reference seconds | Factor |\n| --- | --- | ---: | ---: | ---: |\n");
+                for row in warnings {
+                    body.push_str(&format!(
+                        "| {} | {} / {} / {} | {} | {} | {} |\n",
+                        text(row["rule_id"].as_str().unwrap_or("unknown")),
+                        text(row["job_name"].as_str().unwrap_or("unknown")),
+                        row["job_id"],
+                        row["run_attempt"],
+                        number(&row["category_seconds"]),
+                        number(&row["reference_seconds"]),
+                        row["rule"]["factor"]
+                    ));
+                }
+            }
+        }
         body.push_str(&format!("\nUnclassified steps: {}. Observation issues: {}.\n\nOriginal report in the collected artifact: `{}`. It identifies each job, step, missing value and source response.\n\n",
             number(&report["unclassified_steps"]), report["issues"].as_array().map(|v|v.len().to_string()).unwrap_or("unknown".into()),text(original)));
         if let Some(reason) = report["reason"].as_str() {
@@ -107,6 +162,68 @@ pub(crate) fn publish_summary(config: &Config, report: &Value, original: &str) -
         Ok(()) => json!({"status":"written","environment":key}),
         Err(error) => json!({"status":"unavailable","environment":key,"reason":error}),
     })
+}
+
+fn compare(config: &Config, jobs: &[Value]) -> Vec<Value> {
+    let mut evaluations = vec![];
+    for job in jobs {
+        for (id, rule) in &config.comparisons {
+            let mut row = json!({"rule_id":id,"rule":rule,"job_id":job["job_id"],
+                "job_name":job["name"],"run_attempt":job["run_attempt"],
+                "status":"unavailable","reason":null,"code":null,
+                "category_seconds":null,"reference_seconds":null});
+            let measure = |category: &str| -> Result<f64, &'static str> {
+                let steps: Vec<_> = job["steps"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|step| step["category"] == category)
+                    .collect();
+                if steps.is_empty() {
+                    return Err("category-not-observed");
+                }
+                if steps.iter().any(|step| step["status"] == "unknown") {
+                    return Err("category-measurement-incomplete");
+                }
+                let measured: Vec<_> = steps
+                    .iter()
+                    .filter_map(|step| step["seconds"].as_f64())
+                    .collect();
+                if measured.is_empty() {
+                    return Err("category-skipped");
+                }
+                Ok(measured.iter().sum())
+            };
+            let result = if job["conclusion"] == "skipped" {
+                row["status"] = json!("not-applicable");
+                Err("job-skipped")
+            } else if job["status"] != "completed" {
+                Err("job-not-completed")
+            } else {
+                measure(&rule.category).and_then(|category| {
+                    row["category_seconds"] = json!(category);
+                    measure(&rule.reference_category).map(|reference| (category, reference))
+                })
+            };
+            match result {
+                Ok((category, reference)) => {
+                    row["reference_seconds"] = json!(reference);
+                    let threshold = reference * rule.factor;
+                    if !threshold.is_finite() {
+                        row["reason"] = json!("comparison-threshold-overflow");
+                    } else if category >= rule.minimum_seconds as f64 && category > threshold {
+                        row["status"] = json!("exceeded");
+                        row["code"] = json!("W_CI_RESOURCE_COMPARISON");
+                    } else {
+                        row["status"] = json!("within-threshold");
+                    }
+                }
+                Err(reason) => row["reason"] = json!(reason),
+            }
+            evaluations.push(row);
+        }
+    }
+    evaluations
 }
 
 #[derive(Default, Serialize)]
@@ -255,5 +372,8 @@ pub(crate) fn observe(
         "categories":categories,"jobs":observations,"issues":issues,
         "unmeasured":["queue-time","billing-minutes","workflow-wall-time","cpu-time","peak-memory","disk-bytes","compile-test-split-within-check","steps-after-snapshot"]
     }).as_object().unwrap().clone());
+    if !config.comparisons.is_empty() {
+        report["comparisons"] = json!(compare(config, report["jobs"].as_array().unwrap()));
+    }
     report
 }
