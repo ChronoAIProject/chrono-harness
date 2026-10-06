@@ -256,7 +256,6 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
-        "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -287,7 +286,6 @@
         "judge-mixed",
         "judge-projects",
         "judge-registration",
-        "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -318,7 +316,6 @@
         "judge-mixed",
         "judge-projects",
         "judge-registration",
-        "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",

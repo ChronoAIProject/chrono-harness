@@ -308,8 +308,13 @@ class ReleaseUnits(unittest.TestCase):
                 action=next(a for a in owner['actions'].values() if a['operation']==u['operation'])
                 if owner['language']=='rust':
                     self.assertEqual(action['argv'],['test','--locked','--manifest-path',owner['manifest']])
-                    if u['operation'] in original_operations:self.assertEqual(set(u['needs']),builds)
-                    elif u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
+                    self.assertEqual(len(u['needs']),len(set(u['needs'])))
+                    self.assertTrue(set(u['needs']) <= builds)
+                    contract=cfg.get('verification_consumers',{}).get(u['id'])
+                    if contract is not None:
+                        assets={b['asset'] for b in cfg['units'] if b['id'] in u['needs']}
+                        self.assertEqual(assets,set(contract['release_assets']))
+                    if u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
                 else:
                     self.assertEqual(owner['language'],'python')
                     if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution'])

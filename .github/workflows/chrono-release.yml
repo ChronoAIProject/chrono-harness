@@ -2124,7 +2124,6 @@ jobs:
           include-hidden-files: true
   linux_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2146,111 +2145,6 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Download selected original artifact from linux_build_runner
-        if: ${{ always() && needs.linux_build_runner.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_runner.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_runner/"
-      - name: Download selected original artifact from linux_build_instructions
-        if: ${{ always() && needs.linux_build_instructions.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_instructions.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - name: Download selected original artifact from linux_build_judge_ci
-        if: ${{ always() && needs.linux_build_judge_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-      - name: Download selected original artifact from linux_build_ci
-        if: ${{ always() && needs.linux_build_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - name: Download selected original artifact from linux_build_judge_registration
-        if: ${{ always() && needs.linux_build_judge_registration.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_registration.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - name: Download selected original artifact from linux_build_judge_filemap
-        if: ${{ always() && needs.linux_build_judge_filemap.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_filemap.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - name: Download selected original artifact from linux_build_judge_routes
-        if: ${{ always() && needs.linux_build_judge_routes.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_routes.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - name: Download selected original artifact from linux_build_judge_projects
-        if: ${{ always() && needs.linux_build_judge_projects.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_projects.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - name: Download selected original artifact from linux_build_judge_cost
-        if: ${{ always() && needs.linux_build_judge_cost.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_cost.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - name: Download selected original artifact from linux_build_judge_mixed
-        if: ${{ always() && needs.linux_build_judge_mixed.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_mixed.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - name: Download selected original artifact from linux_build_judge_workflow
-        if: ${{ always() && needs.linux_build_judge_workflow.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_workflow.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - name: Download selected original artifact from linux_build_inputs
-        if: ${{ always() && needs.linux_build_inputs.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_inputs.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
-      - name: Download selected original artifact from linux_build_distribution
-        if: ${{ always() && needs.linux_build_distribution.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_distribution.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_distribution/"
-      - name: Download selected original artifact from linux_build_judge_cargo
-        if: ${{ always() && needs.linux_build_judge_cargo.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_cargo.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
-      - name: Download selected original artifact from linux_build_worktree
-        if: ${{ always() && needs.linux_build_worktree.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_worktree/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -2420,7 +2314,6 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2442,111 +2335,6 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Download selected original artifact from linux_build_runner
-        if: ${{ always() && needs.linux_build_runner.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_runner.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_runner/"
-      - name: Download selected original artifact from linux_build_instructions
-        if: ${{ always() && needs.linux_build_instructions.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_instructions.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - name: Download selected original artifact from linux_build_judge_ci
-        if: ${{ always() && needs.linux_build_judge_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-      - name: Download selected original artifact from linux_build_ci
-        if: ${{ always() && needs.linux_build_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - name: Download selected original artifact from linux_build_judge_registration
-        if: ${{ always() && needs.linux_build_judge_registration.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_registration.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - name: Download selected original artifact from linux_build_judge_filemap
-        if: ${{ always() && needs.linux_build_judge_filemap.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_filemap.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - name: Download selected original artifact from linux_build_judge_routes
-        if: ${{ always() && needs.linux_build_judge_routes.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_routes.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - name: Download selected original artifact from linux_build_judge_projects
-        if: ${{ always() && needs.linux_build_judge_projects.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_projects.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - name: Download selected original artifact from linux_build_judge_cost
-        if: ${{ always() && needs.linux_build_judge_cost.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_cost.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - name: Download selected original artifact from linux_build_judge_mixed
-        if: ${{ always() && needs.linux_build_judge_mixed.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_mixed.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - name: Download selected original artifact from linux_build_judge_workflow
-        if: ${{ always() && needs.linux_build_judge_workflow.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_workflow.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - name: Download selected original artifact from linux_build_inputs
-        if: ${{ always() && needs.linux_build_inputs.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_inputs.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
-      - name: Download selected original artifact from linux_build_distribution
-        if: ${{ always() && needs.linux_build_distribution.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_distribution.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_distribution/"
-      - name: Download selected original artifact from linux_build_judge_cargo
-        if: ${{ always() && needs.linux_build_judge_cargo.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_judge_cargo.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
-      - name: Download selected original artifact from linux_build_worktree
-        if: ${{ always() && needs.linux_build_worktree.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_worktree/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -5271,7 +5059,6 @@ jobs:
           include-hidden-files: true
   macos_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
     runs-on: "macos-14"
     timeout-minutes: 45
     outputs:
@@ -5293,111 +5080,6 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Download selected original artifact from macos_build_runner
-        if: ${{ always() && needs.macos_build_runner.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_runner.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_runner/"
-      - name: Download selected original artifact from macos_build_instructions
-        if: ${{ always() && needs.macos_build_instructions.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_instructions.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - name: Download selected original artifact from macos_build_judge_ci
-        if: ${{ always() && needs.macos_build_judge_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-      - name: Download selected original artifact from macos_build_ci
-        if: ${{ always() && needs.macos_build_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - name: Download selected original artifact from macos_build_judge_registration
-        if: ${{ always() && needs.macos_build_judge_registration.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_registration.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - name: Download selected original artifact from macos_build_judge_filemap
-        if: ${{ always() && needs.macos_build_judge_filemap.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_filemap.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - name: Download selected original artifact from macos_build_judge_routes
-        if: ${{ always() && needs.macos_build_judge_routes.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_routes.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - name: Download selected original artifact from macos_build_judge_projects
-        if: ${{ always() && needs.macos_build_judge_projects.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_projects.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - name: Download selected original artifact from macos_build_judge_cost
-        if: ${{ always() && needs.macos_build_judge_cost.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_cost.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - name: Download selected original artifact from macos_build_judge_mixed
-        if: ${{ always() && needs.macos_build_judge_mixed.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_mixed.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - name: Download selected original artifact from macos_build_judge_workflow
-        if: ${{ always() && needs.macos_build_judge_workflow.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_workflow.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - name: Download selected original artifact from macos_build_inputs
-        if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_inputs.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
-      - name: Download selected original artifact from macos_build_distribution
-        if: ${{ always() && needs.macos_build_distribution.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_distribution.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_distribution/"
-      - name: Download selected original artifact from macos_build_judge_cargo
-        if: ${{ always() && needs.macos_build_judge_cargo.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_cargo.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
-      - name: Download selected original artifact from macos_build_worktree
-        if: ${{ always() && needs.macos_build_worktree.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_worktree/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -5567,7 +5249,6 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
     runs-on: "macos-14"
     timeout-minutes: 45
     outputs:
@@ -5589,111 +5270,6 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Download selected original artifact from macos_build_runner
-        if: ${{ always() && needs.macos_build_runner.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_runner.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_runner/"
-      - name: Download selected original artifact from macos_build_instructions
-        if: ${{ always() && needs.macos_build_instructions.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_instructions.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - name: Download selected original artifact from macos_build_judge_ci
-        if: ${{ always() && needs.macos_build_judge_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-      - name: Download selected original artifact from macos_build_ci
-        if: ${{ always() && needs.macos_build_ci.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_ci.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - name: Download selected original artifact from macos_build_judge_registration
-        if: ${{ always() && needs.macos_build_judge_registration.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_registration.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - name: Download selected original artifact from macos_build_judge_filemap
-        if: ${{ always() && needs.macos_build_judge_filemap.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_filemap.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - name: Download selected original artifact from macos_build_judge_routes
-        if: ${{ always() && needs.macos_build_judge_routes.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_routes.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - name: Download selected original artifact from macos_build_judge_projects
-        if: ${{ always() && needs.macos_build_judge_projects.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_projects.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - name: Download selected original artifact from macos_build_judge_cost
-        if: ${{ always() && needs.macos_build_judge_cost.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_cost.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - name: Download selected original artifact from macos_build_judge_mixed
-        if: ${{ always() && needs.macos_build_judge_mixed.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_mixed.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - name: Download selected original artifact from macos_build_judge_workflow
-        if: ${{ always() && needs.macos_build_judge_workflow.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_workflow.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - name: Download selected original artifact from macos_build_inputs
-        if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_inputs.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
-      - name: Download selected original artifact from macos_build_distribution
-        if: ${{ always() && needs.macos_build_distribution.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_distribution.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_distribution/"
-      - name: Download selected original artifact from macos_build_judge_cargo
-        if: ${{ always() && needs.macos_build_judge_cargo.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_judge_cargo.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
-      - name: Download selected original artifact from macos_build_worktree
-        if: ${{ always() && needs.macos_build_worktree.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_worktree/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash

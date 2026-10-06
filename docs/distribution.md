@@ -6,7 +6,9 @@
 
 本库 `.chrono-harness/release/build.json` 现采用 `chrono-release-build/v5` 的显式独立单元；v2/v3 保留原有顺序配方。旧顺序配方显式列独立构建 manifest、Rust 工具链、工具绑定、项目登记路径和有序 `verification_operations`。操作 ID 仍从登记项目或独立 scripts 的 actions 取得原始 argv，在显式 ROOT 中逐项执行，再调用唯一 `pack` 实现；不扫描项目、不复制测试命令。v2 保持原有无暂存语义，并拒绝 `consumer_staging` 字段（包括 null）。
 
-v5 的验证单元通过 `needs` 显式选择所需构建，可以为空；只导入所选资产、原始回执并观察对应暂存路径。空列表不读取构建回执、不执行空 pathspec 的 Git 跟踪查询。collector 仍必须收齐全部构建和验证，核对各验证实际消费的精确依赖与资产；平台跨度从最早单元开始计算。本地遵守登记的 `local_workers`、单元和平台时限。v4 保留每个验证依赖完整构建向量的合同。独立 Python 发布配方单元测试不依赖产品二进制；Rust diagnostics 专属测试同样登记为零构建依赖，并明确启用 Rust 工具链。
+v5 的验证单元通过 `needs` 显式选择所需构建，可以为空；只导入所选资产、原始回执并观察对应暂存路径。空列表不读取构建回执、不执行空 pathspec 的 Git 跟踪查询。collector 仍必须收齐全部构建和验证，核对各验证实际消费的精确依赖与资产；平台跨度从最早单元开始计算。本地遵守登记的 `local_workers`、单元和平台时限。v4 保留每个验证依赖完整构建向量的合同。独立 Python 发布配方单元测试不依赖产品二进制；Rust diagnostics、instructions 与 routes 专属测试登记为零发布二进制依赖，并明确启用 Rust 工具链。instructions 测试直接调用库及 dispatch；routes 测试调用库并使用临时工具夹具。两者的 Cargo 路径依赖照常编译，发布验证不下载或暂存未消费的工具。对应生产二进制仍由独立 build 单元构建并交 collector 打包。
+
+`verification_consumers` 是 v5 的可选消费合同：以验证单元 ID 为键，每项登记非空 `need` 与显式 `release_assets` 列表。空列表表示不消费发布二进制，Cargo 的库源码依赖不写成发布资产。预检拒绝未知单元／资产、重复资产、缺少说明及与 `needs` 不符的前置；不推断消费关系。单元与 collector 回执保留 `dependency_contracts`，`declared` 只表示登记一致。有发布资产但未采用消费合同时，保留 `unverified` 并输出 `W_RELEASE_CONSUMPTION_UNVERIFIED`，不能因此认定资产多余。库调用与实际二进制调用仍须分别用真实消费者验证。
 
 v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以运行迁移消费者内登记的 format 操作。v3 必须声明 `consumer_staging.release_plan`、`host_config` 和非空 `bindings`。每项显式选择 release plan 的资产名与测试消费者目的路径；目的必须属于宿主唯一的 `tracked: false` artifact，不能重复、互相嵌套或与任何发布源路径重叠。拒绝路径越界及路径组件中的 symlink。源码身份读取后、构建前，实际 `git ls-files` 拒绝已跟踪的目的路径；这项读数属于运行证据，失败会产生失败报告。其它结构预检失败不启动子进程。
 

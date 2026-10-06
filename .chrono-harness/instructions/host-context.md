@@ -23,7 +23,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 .chrono-harness/bin/chrono-harness check --collect
 ```
 
-本地固定取得登记 remote 的 workflow target 与 clean HEAD。单元、共享操作及报告位置归 .chrono-harness/ci/check.json，parent／job 与启动参数归 units.json；无值汇总沿同一 check 入口消费登记的 manifest，CI owner 从显式报告路径及独立执行物 pins 生产 manifest，不重执行业务。生成的 scoped CI check 步骤使用同一短命令，在命令内调用现役事件准备／原生报告收集，不增加手工 prepare。integration push 保留观察的 origin dev tip 规则，detector 一次固定给所有依赖 job；汇总核 exact parent/current attempt 与最新 job 状态；实际原始 producer／artifact attempt 归 generated production output，API carried attempt 不充当生产证据，支持成功前置不重跑。已退休的 generated workflows 保留历史语义，旧 provider 未显式采用 job_gating 时行为不变。现役 topology 的原生 Actions 已有验证；workflow-inventory、release-build 与 worktree-adoption 的组合仍需完整候选的原生验证。现役 scoped 宿主采用未启用 proposed full 治理。full-v3/v4 独立单元短入口及七判官原始证据汇总已有源实现；chrono-github-units/v2 通过显式 full_contexts／上传映射连接现有自动事件及 gather。本宿主仍采用 scoped 检查，projects v2 的受影响配对与语言规则复用 projects 所有者；未启用 full；full unscoped 可以从 start/reconstruct 自动发布的目的地 origin receipt 生产 schema2 context，无历史证据时具名失败。macOS 宿主显式绑定 /usr/bin/python3、Python 3.9.6；工具链版本及操作来自登记，不能以本地默认值替代。具体合同与既有原生证据可选择读取 docs/ci.md、docs/ci-units.md。
+本地固定取得登记 remote 的 workflow target 与 clean HEAD。单元、共享操作及报告位置归 .chrono-harness/ci/check.json，parent／job 与启动参数归 units.json；无值汇总沿同一 check 入口消费登记的 manifest，CI owner 从显式报告路径及独立执行物 pins 生产 manifest，不重执行业务。生成的 scoped CI check 步骤使用同一短命令，在命令内调用现役事件准备／原生报告收集，不增加手工 prepare。本宿主不触发 integration push 检查；PR／dev push 的范围由 detector 一次固定给所有依赖 job；汇总核 exact parent/current attempt 与最新 job 状态；实际原始 producer／artifact attempt 归 generated production output，API carried attempt 不充当生产证据，支持成功前置不重跑。已退休的 generated workflows 保留历史语义，旧 provider 未显式采用 job_gating 时行为不变。现役 topology 的原生 Actions 已有验证；workflow-inventory、release-build 与 worktree-adoption 的组合仍需完整候选的原生验证。现役 scoped 宿主采用未启用 proposed full 治理。full-v3/v4 独立单元短入口及七判官原始证据汇总已有源实现；chrono-github-units/v2 通过显式 full_contexts／上传映射连接现有自动事件及 gather。本宿主仍采用 scoped 检查，projects v2 的受影响配对与语言规则复用 projects 所有者；未启用 full；full unscoped 可以从 start/reconstruct 自动发布的目的地 origin receipt 生产 schema2 context，无历史证据时具名失败。macOS 宿主显式绑定 /usr/bin/python3、Python 3.9.6；工具链版本及操作来自登记，不能以本地默认值替代。具体合同与既有原生证据可选择读取 docs/ci.md、docs/ci-units.md。
 
 五份 full 治理登记仍 proposed，enforcement=not-implemented，input_closure=incomplete；Cargo/编译器/SDK、配置及其它适用输入、执行物绑定仍有未解决项。本宿主尚未采用 Cargo guarded policy；schema4 的 scoped/provider 绑定当前 /usr/bin/git 版本与字节，24 个单元及汇总 workflow 登记 runs_on=macos-26。开发工具目录未显式绑定；macos-26 原生 scoped 匹配已在合并的 PR104 验证，完整宿主启用与 full 原生 CI 仍未完成。chrono-inputs 只捕获声明文件／变量的两端快照，不补依赖、不改预期摘要、不启用治理。普通 full check 在登记要求及所选义务通过后表示 DELTA 满足现役登记合同；declared-complete 是 AI 对宿主范围负责的工程声明，现役 registration 仍报告 completeness_proven:false。已知缺输入、必需依赖未解决、缺绑定／快照和漂移仍须失败，不要求普遍隐藏输入证明或 VM。详见 docs/inputs.md、docs/cargo-projects.md、docs/git-facts.md。
 
@@ -46,13 +46,13 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 本宿主 projects v2 显式登记 32 个 Rust 项目与三对 Python 脚本。workflow-inventory 及其 Python 测试分别持有脚本身份；Python 单元测试归独立 CI 单元，只使用临时目录。三个 Rust workflow 测试组继续运行真实 inventory 校验，Python 单元测试按自身 DELTA 登记独立选择。语言判官核声明配对，不证明其余嵌入式跨语言测试已全部迁移。
 
-发布配方采用 v5。独立 Python 项目 release-build 与其唯一测试项目 release-build-tests 没有 Cargo manifest/lock/target；两个显式测试组分别为普通 Python 单元和依赖 build.distribution 的真实打包集成。发布验证按显式 needs 及 rust_toolchain 布尔选择取得资产和编译工具链；五个 Python 单元不安装 Rust，15 个原始 Rust 验证仍执行未过滤 Cargo action。普通 CI 共 24 个业务单元，原生发布每个平台 15 个 build、21 个 verification 和一个 collector。产品／测试、宿主采用与生成投影同时受影响，完整候选、本地与原生验证及公开采用仍分别验收。
+发布配方采用 v5。独立 Python 项目 release-build 与其唯一测试项目 release-build-tests 没有 Cargo manifest/lock/target；两个显式测试组分别为普通 Python 单元和依赖 build.distribution 的真实打包集成。发布验证按显式 needs 及 rust_toolchain 布尔选择取得资产和编译工具链；五个 Python 单元不安装 Rust，15 个原始 Rust 验证仍执行未过滤 Cargo action。instructions 与 routes 验证不消费发布二进制，needs 显式为空；其生产二进制仍由独立 build 单元构建并参与打包。routes 的普通执行计划保留自身编译与全部测试，其 Cargo 库依赖由 Cargo 编译，不另行构建未调用的 runner、registration、filemap 可执行文件。普通 CI 共 24 个业务单元，原生发布每个平台 15 个 build、21 个 verification 和一个 collector。产品／测试、宿主采用与生成投影同时受影响，完整候选、本地与原生验证及公开采用仍分别验收。
 
 解码器专属 Python 测试在 migrations/test-hosts.json 显式选择平台测试输入：本机与 macOS CI 核主宿主 config.json 的固定解释器，Linux 原生发布核独立测试 fixture 的固定解释器。未知平台不回退、不从实测版本生成预期；Linux fixture 不表示主宿主 full 治理已采用。全部解码及版本断言在两个登记平台执行。
 
 worktree-tests 的 core 与 adoption 两个测试组分别对应 worktree、worktree-adoption CI 单元。adoption 显式列出六个已采用宿主入口的进程交接与租约集成用例，core 排除这些同名成员；原测试 ID、断言、时限与默认 libtest 线程设置不变。登记的 worktree.inventory 复用独立 Python inventory 所有者，以 worktree-inventory.json 核验真实未过滤列表和两组列表非空、无忽略、无重叠且全集相等。两组沿相同工作树测试 target 与 inventory 资源互斥；未过滤 execute 及发布验证仍保留。分组提供独立检查与重跑边界，不宣称消除所有时序失败。
 
-标准日志与错误记录归独立 diagnostics / diagnostics-tests 配对，独立 CI 单元使用同一 check 入口。runner 的无效 UTF-8 参数路径采用此库；库保留 typed source、相关失败、JSON Lines、显式线程上下文与 sink 原错误。其它产品路径、原生错误适配、应急发布、持久证据身份、子进程上下文及其它语言适配仍未完成，不宣称 SPEC §7.1／§7.2 全面启用。diagnostics 专属发布验证显式登记空 needs 与 rust_toolchain=true，独立启动且核验 Rust 工具链。原 15 个 Rust 发布验证的完整构建依赖及未过滤操作保留。
+标准日志与错误记录归独立 diagnostics / diagnostics-tests 配对，独立 CI 单元使用同一 check 入口。runner 的无效 UTF-8 参数路径采用此库；库保留 typed source、相关失败、JSON Lines、显式线程上下文与 sink 原错误。其它产品路径、原生错误适配、应急发布、持久证据身份、子进程上下文及其它语言适配仍未完成，不宣称 SPEC §7.1／§7.2 全面启用。diagnostics 专属发布验证显式登记空 needs 与 rust_toolchain=true，独立启动且核验 Rust 工具链。Rust 发布验证的 needs 按实际二进制消费逐项登记；全部原始未过滤操作保留。
 
 宿主 bootstrap.py 与其 Python 测试独立登记为 host-bootstrap / host-bootstrap-tests。专属测试通过显式 Python SDK／操作 fixture 检查配置选择、安装字节与摘要、Git 源状态、工具链安装及失败传播。测试直接由 Python 执行，不经 Cargo 转发；独立 host-bootstrap CI 单元使用宿主共同的 harness bootstrap，两个平台的专属发布验证显式登记空 needs 与 rust_toolchain=false。Rust worktree 的宿主入口与租约集成测试仍验证真实跨程序边界。其余跨语言测试迁移、完整候选原生验收及公开采用仍需完成。
 
@@ -60,3 +60,5 @@ runner-tests 的协议 transport fixture 由同项目独立 Rust 测试二进制
 
 
 worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附件租约下采用两端已提交的新政策；旧登记保留，后续操作核不可覆盖迁移链。迁移不清理、不设完成；未知 birth／租约、待执行终态及地址搬迁保持拒绝。候选本地／原生和实际宿主采用仍须验证，不从源码新增声称已迁移。
+
+发布 v5 在 verification_consumers 登记 instructions／routes 的真实库调用用途与空发布资产列表；预检拒绝消费合同与 needs 冲突，未说明的非空发布前置在原始回执与 stderr 报 W_RELEASE_CONSUMPTION_UNVERIFIED。declared 只表示登记一致，不能证明必要性或说明真实；其余消费核验及统一 CI 资源分项仍未完成。
