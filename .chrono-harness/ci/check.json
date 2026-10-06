@@ -210,6 +210,12 @@
           "test:diagnostics-tests"
         ],
         "report_path": ".chrono-harness/state/units/diagnostics/check.json"
+      },
+      "host-bootstrap": {
+        "tests": [
+          "test:host-bootstrap-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/host-bootstrap/check.json"
       }
     },
     "shared_operations": {
