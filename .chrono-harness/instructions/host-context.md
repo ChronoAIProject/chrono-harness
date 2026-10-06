@@ -69,4 +69,4 @@ worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附
 
 缓存候选采用 chrono-cache/v2，在 cache.json 用 JSON 指针引用各消费者的 bootstrap、FILEMAP 计划或发布操作；缺引用及退出计划的生产者恢复前报错，消费者增减不改变未变生产输入的缓存身份。detector 只订阅 ci target，routes 不订阅未调用的 registration／filemap target。生成器在原工作结束后记录缓存动作原始读数；原生保存步骤成功仍报 W_CACHE_SAVE_UNCONFIRMED，后端确认、损坏恢复、完整原生与成本验收尚未完成。显式启动缓存子集可在后续测试失败后保存，取消不保存，不把缓存读数当测试结果。宿主登记 cache-prepare／restore／save 分类及准备、恢复相对检查的阈值告警，成本比较不证明浪费。
 
-本宿主用显式 save_caches 将四个共享启动缓存的保存归既有 aggregate；单元仍恢复并重建，保留其余所选缓存的保存。未请求保存与实际异常保存分别报告，取消或生产者未成功不制造保存结果。detector 的 evidence_directory 选择 .chrono-harness/state/，在原 job 内 always 上传原始探测、计划与启动证据；缺文件报错。成本比较另覆盖 bootstrap／缓存准备、保存相对 delta-detection，以及缓存保存相对 canonical-check；只提示实测成本，不证明冗余或节省。完整本地／原生验收及缓存剩余合同仍须分别验证。
+本宿主用显式 save_caches 将四个共享启动缓存的保存归既有 aggregate，其余缓存各归实际生产单元。每个缓存 ID 在同一 provider 中至多登记一个保存 job；generate／verify 发现冲突报 E_CACHE_SAVE_OWNERSHIP 并点名双方，允许显式全只读。单元仍恢复、重建及检查，不增加 job 或前置等待；指定保存者未运行或生产者未成功时，本轮不产生新归档。未请求保存与实际异常保存分别报告，取消不制造保存结果。detector 的 evidence_directory 选择 .chrono-harness/state/，在原 job 内 always 上传原始探测、计划与启动证据；缺文件报错。成本比较另覆盖 bootstrap／缓存准备、保存相对 delta-detection，以及缓存保存相对 canonical-check；只提示实测成本，不证明冗余或节省。完整本地／原生验收及缓存剩余合同仍须分别验证。

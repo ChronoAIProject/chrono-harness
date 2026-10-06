@@ -59,6 +59,7 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     }
     action(&c.restore_action, "actions/cache/restore")?;
     action(&c.save_action, "actions/cache/save")?;
+    let mut saving_jobs = BTreeMap::new();
     for (job, consumer) in &c.jobs {
         let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
         if let Some(directory) = &consumer.evidence_directory {
@@ -100,6 +101,13 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
                 .any(|id| !saves.contains(id))
         {
             return Err(format!("invalid persistent cache consumer for job {job}"));
+        }
+        for cache in saves {
+            if let Some(previous) = saving_jobs.insert(cache, job) {
+                return Err(format!(
+                    "E_CACHE_SAVE_OWNERSHIP: cache {cache} has multiple saving jobs: {previous}, {job}; select one writer with save_caches"
+                ));
+            }
         }
     }
     Ok(())

@@ -645,7 +645,6 @@
           "check.runner-tests",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.runner-tests"
         ]
@@ -668,7 +667,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.instructions",
           "check.instructions-tests"
@@ -691,7 +689,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.judge-ci-tests"
         ]
@@ -714,10 +711,8 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
-          "check.ci-tests",
-          "check.judge-registration"
+          "check.ci-tests"
         ]
       },
       "unit_judge-registration": {
@@ -738,7 +733,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.judge-registration",
           "check.judge-registration-tests"
@@ -765,13 +759,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.judge-filemap",
-          "check.judge-filemap-tests",
-          "check.judge-projects",
-          "check.judge-registration",
-          "check.judge-routes"
+          "check.judge-filemap-tests"
         ]
       },
       "unit_judge-routes": {
@@ -792,7 +782,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.judge-routes",
           "check.judge-routes-tests"
@@ -819,13 +808,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
-          "check.judge-filemap",
           "check.judge-projects",
-          "check.judge-projects-tests",
-          "check.judge-registration",
-          "check.judge-routes"
+          "check.judge-projects-tests"
         ]
       },
       "unit_scoped-v1": {
@@ -844,7 +829,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": []
       },
       "unit_judge-cost": {
@@ -867,12 +851,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.judge-cost",
-          "check.judge-cost-tests",
-          "check.judge-filemap",
-          "check.judge-registration"
+          "check.judge-cost-tests"
         ]
       },
       "unit_judge-mixed": {
@@ -896,13 +877,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
-          "check.judge-cost",
-          "check.judge-filemap",
           "check.judge-mixed",
-          "check.judge-mixed-tests",
-          "check.judge-registration"
+          "check.judge-mixed-tests"
         ]
       },
       "unit_judge-workflow": {
@@ -930,15 +907,7 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
-          "check.inputs",
-          "check.judge-cost",
-          "check.judge-filemap",
-          "check.judge-mixed",
-          "check.judge-projects",
-          "check.judge-registration",
-          "check.judge-routes",
           "check.judge-workflow",
           "check.judge-workflow-tests"
         ]
@@ -968,17 +937,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.inputs",
-          "check.inputs-tests",
-          "check.judge-cost",
-          "check.judge-filemap",
-          "check.judge-mixed",
-          "check.judge-projects",
-          "check.judge-registration",
-          "check.judge-routes",
-          "check.judge-workflow"
+          "check.inputs-tests"
         ]
       },
       "unit_distribution": {
@@ -999,7 +960,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.distribution",
           "check.distribution-tests"
@@ -1030,17 +990,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.judge-cargo",
-          "check.judge-cargo-tests",
-          "check.judge-cost",
-          "check.judge-filemap",
-          "check.judge-mixed",
-          "check.judge-projects",
-          "check.judge-registration",
-          "check.judge-routes",
-          "check.judge-workflow"
+          "check.judge-cargo-tests"
         ]
       },
       "unit_worktree": {
@@ -1060,7 +1012,6 @@
           "check.worktree",
           "check.worktree-tests"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.worktree-tests"
         ]
@@ -1090,16 +1041,7 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
-          "check.inputs",
-          "check.judge-cost",
-          "check.judge-filemap",
-          "check.judge-mixed",
-          "check.judge-projects",
-          "check.judge-registration",
-          "check.judge-routes",
-          "check.judge-workflow",
           "check.judge-workflow-tests.judge-workflow-units"
         ]
       },
@@ -1128,16 +1070,7 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
-          "check.inputs",
-          "check.judge-cost",
-          "check.judge-filemap",
-          "check.judge-mixed",
-          "check.judge-projects",
-          "check.judge-registration",
-          "check.judge-routes",
-          "check.judge-workflow",
           "check.judge-workflow-tests.judge-workflow-short"
         ]
       },
@@ -1157,7 +1090,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": []
       },
       "unit_release-build": {
@@ -1176,7 +1108,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": []
       },
       "unit_release-build-integration": {
@@ -1196,10 +1127,7 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
-        "save_caches": [
-          "check.distribution"
-        ]
+        "save_caches": []
       },
       "unit_worktree-adoption": {
         "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
@@ -1218,7 +1146,6 @@
           "check.worktree",
           "check.worktree-tests.worktree-adoption"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.worktree-tests.worktree-adoption"
         ]
@@ -1241,7 +1168,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.diagnostics",
           "check.diagnostics-tests"
@@ -1263,7 +1189,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": []
       },
       "unit_cache": {
@@ -1284,7 +1209,6 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [],
         "save_caches": [
           "check.cache",
           "check.cache-tests"

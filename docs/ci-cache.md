@@ -148,11 +148,16 @@ The provider obtains output keys from `chrono-cache plan --github-output`, retai
 the plan and original probe outputs, and restores before the original work.
 By default it saves all selected caches after successful work. Optional
 `save_caches` selects the caches this job may save; an empty list is restore-only.
-Unknown or duplicate entries are rejected. This host assigns saving the four
-shared startup caches to the existing aggregate job; unit jobs still restore and
-rebuild them, then save their remaining selected outputs. This avoids competing
-startup saves without adding a job or changing the original checks. If the chosen
-writer does not complete its producer, that run supplies no new archive.
+Unknown or duplicate entries are rejected. Across one provider configuration,
+each cache ID has at most one saving job. Generation and verification reject
+conflicting writers with `E_CACHE_SAVE_OWNERSHIP`, identifying the cache and both
+jobs. Other consumers explicitly select restore-only for that cache; a pipeline
+may intentionally have no writer. Separate cache identities keep independently
+registered production domains separate, including different release platforms.
+This host assigns the four shared startup caches to the existing aggregate and
+each remaining cache to its registered production unit. Consumers still restore,
+rebuild and check without extra jobs or prerequisite waits. If the chosen writer
+is skipped or does not complete its producer, that run supplies no new archive.
 An explicit `save_after_bootstrap`
 subset may instead use the separate bootstrap step's success after the original
 work has ended, preserving reusable startup compilation after later test failure.

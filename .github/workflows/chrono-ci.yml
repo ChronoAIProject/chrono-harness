@@ -337,14 +337,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -352,7 +344,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.ci-tests","check.judge-registration"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.ci-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -878,62 +870,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
-      - name: Save registered cache check.judge-cost
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-mixed
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
-      - name: Save registered cache check.judge-projects
-        id: cache_7_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_7_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_7_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_8_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
-      - name: Save registered cache check.judge-workflow
-        id: cache_10_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_10_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_10_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -941,7 +877,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_inputs/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.inputs-tests","check.judge-cost","check.judge-filemap","check.judge-mixed","check.judge-projects","check.judge-registration","check.judge-routes","check.judge-workflow"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_inputs/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.inputs-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1249,62 +1185,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
-      - name: Save registered cache check.judge-cost
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-mixed
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
-      - name: Save registered cache check.judge-projects
-        id: cache_7_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_7_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_7_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_8_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
-      - name: Save registered cache check.judge-workflow
-        id: cache_10_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_10_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_10_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -1312,7 +1192,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cargo/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cargo","check.judge-cargo-tests","check.judge-cost","check.judge-filemap","check.judge-mixed","check.judge-projects","check.judge-registration","check.judge-routes","check.judge-workflow"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cargo/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cargo","check.judge-cargo-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1558,22 +1438,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -1581,7 +1445,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cost/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-cost-tests","check.judge-filemap","check.judge-registration"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cost/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-cost-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1727,30 +1591,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
-      - name: Save registered cache check.judge-projects
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -1758,7 +1598,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-filemap/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-filemap-tests","check.judge-projects","check.judge-registration","check.judge-routes"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-filemap/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-filemap-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1888,22 +1728,6 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-mixed' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache check.judge-cost
-        id: cache_2_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Save registered cache check.judge-mixed
         id: cache_4_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
@@ -1920,14 +1744,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -1935,7 +1751,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-mixed/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-filemap","check.judge-mixed","check.judge-mixed-tests","check.judge-registration"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-mixed/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-mixed","check.judge-mixed-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2065,14 +1881,6 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-projects' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache check.judge-filemap
-        id: cache_2_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Save registered cache check.judge-projects
         id: cache_3_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
@@ -2089,22 +1897,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -2112,7 +1904,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-projects","check.judge-projects-tests","check.judge-registration","check.judge-routes"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects","check.judge-projects-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2530,62 +2322,6 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache check.inputs
-        id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
-      - name: Save registered cache check.judge-cost
-        id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-mixed
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-projects
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_7_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_7_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_7_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_8_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
       - name: Save registered cache check.judge-workflow
         id: cache_9_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
@@ -2609,7 +2345,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.judge-cost","check.judge-filemap","check.judge-mixed","check.judge-projects","check.judge-registration","check.judge-routes","check.judge-workflow","check.judge-workflow-tests"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow","check.judge-workflow-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2775,70 +2511,6 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow-short' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache check.inputs
-        id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
-      - name: Save registered cache check.judge-cost
-        id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-mixed
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-projects
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_7_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_7_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_7_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_8_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
-      - name: Save registered cache check.judge-workflow
-        id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
       - name: Save registered cache check.judge-workflow-tests.judge-workflow-short
         id: cache_10_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_10_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_10_key }}
@@ -2854,7 +2526,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-short/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.judge-cost","check.judge-filemap","check.judge-mixed","check.judge-projects","check.judge-registration","check.judge-routes","check.judge-workflow","check.judge-workflow-tests.judge-workflow-short"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-short/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-short"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3020,70 +2692,6 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow-units' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache check.inputs
-        id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
-      - name: Save registered cache check.judge-cost
-        id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
-      - name: Save registered cache check.judge-filemap
-        id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
-      - name: Save registered cache check.judge-mixed
-        id: cache_5_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_5_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-      - name: Save registered cache check.judge-projects
-        id: cache_6_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_6_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_6_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
-      - name: Save registered cache check.judge-registration
-        id: cache_7_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_7_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_7_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
-      - name: Save registered cache check.judge-routes
-        id: cache_8_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
-      - name: Save registered cache check.judge-workflow
-        id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
       - name: Save registered cache check.judge-workflow-tests.judge-workflow-units
         id: cache_10_save
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_10_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_10_key }}
@@ -3099,7 +2707,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-units/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.judge-cost","check.judge-filemap","check.judge-mixed","check.judge-projects","check.judge-registration","check.judge-routes","check.judge-workflow","check.judge-workflow-tests.judge-workflow-units"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-units/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-units"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3285,14 +2893,6 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'release-build-integration' --github-output "$GITHUB_OUTPUT"
-      - name: Save registered cache check.distribution
-        id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
-        continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
         continue-on-error: true
@@ -3300,7 +2900,7 @@ jobs:
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
         run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_release-build-integration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.distribution"]'
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_release-build-integration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -398,3 +398,65 @@ fn release_init_and_generation_resolve_cache_consumers_before_writing() {
     assert!(chrono_ci::generate(root.path(), ".chrono-harness/ci/release.json", false).is_err());
     assert_eq!(before, fs::read(&workflow).unwrap());
 }
+
+#[test]
+fn one_registered_cache_has_at_most_one_saving_job() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    value["persistent_cache"]["jobs"]["aggregate"] =
+        value["persistent_cache"]["jobs"]["unit_example"].clone();
+    value["persistent_cache"]["jobs"]["aggregate"]["consumer"] = json!("host.aggregate");
+    for explicit in [false, true] {
+        let mut conflicting = value.clone();
+        if explicit {
+            for job in ["aggregate", "unit_example"] {
+                conflicting["persistent_cache"]["jobs"][job]["save_caches"] =
+                    json!(["core.target"]);
+            }
+        }
+        let config = serde_json::from_value(conflicting).unwrap();
+        let error = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json")
+            .expect_err("duplicate cache writers must be rejected before projection");
+        for detail in [
+            "E_CACHE_SAVE_OWNERSHIP",
+            "core.target",
+            "aggregate",
+            "unit_example",
+        ] {
+            assert!(error.contains(detail), "{error}");
+        }
+    }
+    value["persistent_cache"]["jobs"]["unit_example"]["save_caches"] = json!([]);
+    let config = serde_json::from_value(value.clone()).unwrap();
+    let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    for job in ["aggregate", "unit_example"] {
+        let steps = yaml["jobs"][job]["steps"].as_array().unwrap();
+        assert!(steps.iter().any(|s| s["id"] == "cache_0_restore"));
+        assert_eq!(
+            steps.iter().any(|s| s["id"] == "cache_0_save"),
+            job == "aggregate"
+        );
+        assert!(steps.iter().any(|s| s["name"] == "Canonical harness check"));
+    }
+    // An explicitly restore-only pipeline needs no writer; it still checks.
+    value["persistent_cache"]["jobs"]["aggregate"]["save_caches"] = json!([]);
+    let config = serde_json::from_value(value).unwrap();
+    let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    assert!(!rendered[".github/workflows/chrono-ci.yml"].contains("Save registered cache"));
+    let read_only: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    let checks = |job: &Value| -> Vec<Value> {
+        job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s["name"] == "Canonical harness check")
+            .cloned()
+            .collect()
+    };
+    for (id, original) in yaml["jobs"].as_object().unwrap() {
+        assert_eq!(checks(&read_only["jobs"][id]), checks(original));
+    }
+}
