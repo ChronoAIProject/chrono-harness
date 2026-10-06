@@ -248,17 +248,23 @@ fn script(workflow: &str, name: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+fn executable_alias(source: impl AsRef<Path>, destination: impl AsRef<Path>) {
+    // Execute the completed build through its fixture name without reopening
+    // executable bytes for writing while other test threads launch children.
+    std::os::unix::fs::symlink(fs::canonicalize(source).unwrap(), destination).unwrap();
+}
+
 #[test]
 fn generated_bash_preserves_literal_arguments_and_original_exit() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let mut c = config();
     c.runner = "$CHRONO_BASE".into();
-    fs::copy(
+    executable_alias(
         env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
         root.join(&c.runner),
-    )
-    .unwrap();
+    );
     c.check_config = ".chrono-harness/'$HOME`literal`.json".into();
     let yaml = full::render(&c, SOURCE).unwrap();
     let out = Command::new("/bin/bash")
@@ -289,11 +295,10 @@ fn generated_preparation_step_keeps_original_failure_in_artifacts() {
     let h = host("pass");
     let c = config();
     fs::create_dir_all(h.root.join(".chrono-harness/bin")).unwrap();
-    fs::copy(
+    executable_alias(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"),
         h.root.join(&c.generator),
-    )
-    .unwrap();
+    );
     let payload = h.root.join(".chrono-harness/state/payload.json");
     write(
         &h.root,

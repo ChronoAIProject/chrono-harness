@@ -67,7 +67,7 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
         let root = d.path();
         let mut c = scoped_config(&scope);
         c.runner = "$CHRONO_BASE".into();
-        fs::copy(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), root.join(&c.runner)).unwrap();
+        executable_alias(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), root.join(&c.runner));
         let yaml = full::render(&c, SOURCE).unwrap();
         let out = Command::new("/bin/bash").current_dir(root).env("PATH", root)
             .env("CHRONO_TEST_RECORDING", "scope")
