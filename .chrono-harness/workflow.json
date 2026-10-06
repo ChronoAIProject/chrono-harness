@@ -213,7 +213,9 @@
         "crates/worktree/src/recovery.rs",
         "crates/worktree/src/fetch_recovery.rs",
         "crates/worktree/src/rebind.rs",
-        "crates/worktree/src/rebind_inputs.rs"
+        "crates/worktree/src/rebind_inputs.rs",
+        "crates/worktree/src/automatic.rs",
+        "crates/worktree/src/automatic/migration.rs"
       ],
       "tests": [
         "worktree-tests"

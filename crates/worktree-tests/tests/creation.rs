@@ -26,6 +26,7 @@ mod automatic;
 mod check_inputs;
 mod interrupted_cleanup;
 mod maintenance;
+mod policy_migration;
 mod rebind;
 
 struct Host {

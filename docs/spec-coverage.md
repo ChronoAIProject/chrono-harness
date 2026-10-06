@@ -581,3 +581,13 @@ The host bootstrap has an explicit Python production/test script pair and separa
 The mixed-judge stale-cost consumer uses a registered Rust fixture that invokes the actual cost judge, checks its exit and corrupts only the candidate-tree binding. The original mixed-judge rejection and empty-output assertions remain; this does not complete remaining foreign-language fixture migrations.
 
 Runner CLI and Git-input tests use native Rust child binaries with explicit JSON case data. The same tests retain protocol/status disagreement, raw UTF-8 and stream hashes, pipe/EOF, invocation paths, actual child exits, Git input drift and malformed batch observations. Git clean-filter configuration invokes a registered Rust fixture through Git’s command interface; the filter behavior resides in Rust. CLI response cases invoke the compiled helper directly; required executable aliases use completed build bytes without writable launch descriptors: independent file clones on macOS, regular hardlinks on other supported Unix platforms. Git instrumentation occupies a sibling directory outside the snapshot under test; tool-drift cases replace their own link before writing changed bytes. This scope does not establish language migration for other project owners, native acceptance or public adoption.
+
+
+Explicit cleanup-policy migration has candidate source under the worktree owner.
+It retains original enrollment/birth evidence and appends a separately bound policy
+transition after exclusive kernel admission and committed endpoint validation.
+Dedicated Rust cases cover new outputs, live lease exclusion, policy drift,
+retained-input corruption, interrupted adoption and retained terminal evidence.
+Canonical local checks, native acceptance, compatible binary deployment and actual
+host migration are not yet completed for this candidate. It performs no disposal
+or terminal handoff and does not relocate coordinator/state/policy addresses.

@@ -55,3 +55,6 @@ worktree-tests 的 core 与 adoption 两个测试组分别对应 worktree、work
 宿主 bootstrap.py 与其 Python 测试独立登记为 host-bootstrap / host-bootstrap-tests。专属测试通过显式 Python SDK／操作 fixture 检查配置选择、安装字节与摘要、Git 源状态、工具链安装及失败传播。测试直接由 Python 执行，不经 Cargo 转发；独立 host-bootstrap CI 单元使用宿主共同的 harness bootstrap，两个平台的专属发布验证显式登记空 needs 与 rust_toolchain=false。Rust worktree 的宿主入口与租约集成测试仍验证真实跨程序边界。其余跨语言测试迁移、完整候选原生验收及公开采用仍需完成。
 
 runner-tests 的协议 transport fixture 由同项目独立 Rust 测试二进制执行；用例参数是临时 JSON 数据，判定与子进程断言归 Rust。初始／DELTA 响应、四态退出、原始字节、直接前置及保留进程身份、超时和输出上限控制保留，FILEMAP 显式登记编译输入。此范围不包含其它文件中的脚本 fixture，也不宣称全仓语言迁移完成。
+
+
+worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附件租约下采用两端已提交的新政策；旧登记保留，后续操作核不可覆盖迁移链。迁移不清理、不设完成；未知 birth／租约、待执行终态及地址搬迁保持拒绝。候选本地／原生和实际宿主采用仍须验证，不从源码新增声称已迁移。

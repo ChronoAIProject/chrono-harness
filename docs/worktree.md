@@ -807,6 +807,7 @@ chrono-worktree use --path /exact/worktree --operation test.example
 chrono-worktree finish --path /exact/worktree
 chrono-worktree maintain
 chrono-worktree import --path /exact/existing-worktree
+chrono-worktree migrate --path /exact/enrolled-worktree
 ```
 
 `use` consumes exactly one registered project/script operation and its tool,
@@ -877,6 +878,37 @@ and version through the existing binding checks; the product's host Git policy
 remains independent. Missing test-platform registration fails without a PATH
 fallback. Local real-Git fixtures exercise full checkout removal;
 actual main-host finish/landing is the caller's acceptance event after adoption.
+
+### Explicit policy migration
+
+`migrate --path /exact/enrolled-worktree` adopts the coordinator's current,
+committed cleanup policy and worktree configuration for one existing v2 kernel
+enrollment. Run it from the surviving coordinator after committing matching
+inputs in the target. It requires the original admission and exclusive enrollment
+leases, the same physical Git attachment, validated birth evidence, no foreign
+Git locks, and artifact registration at both endpoints. Policy input addresses,
+coordinator, state directory and ownership protocol stay fixed; relocating those
+identities is outside this transition. Legacy or missing kernel ownership and
+pending terminal disposal remain protected. Policy changes do not migrate entries
+implicitly.
+
+The original enrollment, birth policy hash, birth receipt, uses and prior cleanup
+attempts retain their identities. A separate immutable transition records old and
+new input bindings, retained original bytes and observed commits. The ledger
+appends its receipt only after checking the new bindings again. Normal use,
+cleanup and finish validate this chain and use its final binding. A missing or
+changed receipt or retained input refuses subsequent use/disposal. Deploy a
+compatible lifecycle binary before adopting a transition; older readers reject
+the new nonempty migration field instead of interpreting it as an old binding.
+
+Migration performs no disposal, Git update or terminal handoff. It preserves
+source, outputs and task status. Active entries begin a new cache generation;
+retained entries remain retained and need a new explicit finish before further
+terminal disposal. Quiescent interrupted uses retain their reconciliation records.
+A repeated request with unchanged policy bindings adds no history. An immutable
+transition published before interrupted ledger adoption is reused on retry; its
+existence alone does not claim successful adoption. Unknown or unsealed birth
+outcomes must be reconciled under their original policy before migration.
 
 ### Kernel ownership and unfinished cache recovery (v2)
 
