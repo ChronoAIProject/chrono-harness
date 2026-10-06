@@ -16,6 +16,7 @@ fn main() {
     let root = executable.parent().unwrap();
     let case: Value =
         serde_json::from_slice(&fs::read(root.join("git-case.json")).unwrap()).unwrap();
+    let root = Path::new(case["root"].as_str().unwrap());
     let args: Vec<_> = std::env::args().skip(1).collect();
     let joined = args.join(" ");
     writeln!(

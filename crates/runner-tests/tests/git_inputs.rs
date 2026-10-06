@@ -5,6 +5,7 @@ use std::{fs, path::PathBuf, process::Command};
 struct Host {
     _temporary: tempfile::TempDir,
     root: PathBuf,
+    tool: PathBuf,
     config: Value,
 }
 impl Host {
@@ -17,7 +18,11 @@ impl Host {
                     .unwrap(),
             )
             .unwrap();
-        let root = fs::canonicalize(temporary.path()).unwrap();
+        fs::create_dir(temporary.path().join("host")).unwrap();
+        fs::create_dir(temporary.path().join("tools")).unwrap();
+        let root = fs::canonicalize(temporary.path().join("host")).unwrap();
+        let tools = fs::canonicalize(temporary.path().join("tools")).unwrap();
+        let tool = tools.join("git-wrapper");
         fs::create_dir(root.join(".chrono-harness")).unwrap();
         let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
         let result = Command::new(&git)
@@ -28,14 +33,11 @@ impl Host {
         assert!(result.status.success());
         let version = Command::new(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
-        fs::hard_link(
-            env!("CARGO_BIN_EXE_chrono-test-git-input"),
-            root.join("git-wrapper"),
-        )
-        .unwrap();
+        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-git-input"), &tool).unwrap();
         case["git"] = json!(git);
+        case["root"] = json!(root);
         fs::write(
-            root.join("git-case.json"),
+            tools.join("git-case.json"),
             serde_json::to_vec(&case).unwrap(),
         )
         .unwrap();
@@ -45,8 +47,8 @@ impl Host {
                 "schema":"chrono-git-inputs/v1","inputs":["git-config","no-extra-config"]}},
             "tools":[{"id":"git","program":"git-wrapper","resolution":"PATH-once",
                 "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
-            "environment":{"inherit":[],"values":{"PATH":root,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
-                "inputs":[{"id":"git-binary","location":"git-wrapper","presence":"present","sha256":sha256(&fs::read(root.join("git-wrapper")).unwrap())},
+            "environment":{"inherit":[],"values":{"PATH":tools,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+                "inputs":[{"id":"git-binary","location":tool,"presence":"present","sha256":sha256(&fs::read(&tool).unwrap())},
                     {"id":"git-config","location":".git/config","presence":"present","sha256":sha256(&fs::read(root.join(".git/config")).unwrap())},
                     {"id":"no-extra-config","location":".git/config.worktree","presence":"absent"}]},
             "protocol":{"timeout_seconds":30,"stdout_limit_bytes":1048576}
@@ -54,6 +56,7 @@ impl Host {
         Self {
             _temporary: temporary,
             root,
+            tool,
             config,
         }
     }
@@ -800,8 +803,8 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
             "selector" => fs::write(h.root.join(SELECTOR), b"{}").unwrap(),
             "config" => fs::write(h.root.join(CONFIG), b"{}").unwrap(),
             "tool" => {
-                fs::remove_file(h.root.join("git-wrapper")).unwrap();
-                fs::write(h.root.join("git-wrapper"), b"changed").unwrap();
+                fs::remove_file(&h.tool).unwrap();
+                fs::write(&h.tool, b"changed").unwrap();
             }
             "guard-present" => fs::write(h.root.join(".git/config"), b"changed").unwrap(),
             "guard-absent" => fs::write(h.root.join(".git/config.worktree"), b"changed").unwrap(),
@@ -1409,8 +1412,8 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
             "selector" => fs::write(h.root.join(SELECTOR), b"{}").unwrap(),
             "config" => fs::write(h.root.join(CONFIG), b"{}").unwrap(),
             "tool" => {
-                fs::remove_file(h.root.join("git-wrapper")).unwrap();
-                fs::write(h.root.join("git-wrapper"), b"changed").unwrap();
+                fs::remove_file(&h.tool).unwrap();
+                fs::write(&h.tool, b"changed").unwrap();
             }
             "guard-present" => fs::write(h.root.join(".git/config"), b"changed").unwrap(),
             "guard-absent" => fs::write(h.root.join(".git/config.worktree"), b"changed").unwrap(),
