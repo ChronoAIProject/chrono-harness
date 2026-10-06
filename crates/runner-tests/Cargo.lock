@@ -65,6 +65,7 @@ dependencies = [
  "chrono-harness",
  "libc",
  "serde_json",
+ "sha2",
  "tempfile",
 ]
 
