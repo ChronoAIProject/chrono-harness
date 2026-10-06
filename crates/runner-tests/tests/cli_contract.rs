@@ -83,14 +83,13 @@ fn standard_sha256_vectors_match_memory_stream_and_file() {
 fn fixture(case: Value) -> (TempDir, String) {
     let dir = tempfile::tempdir_in(std::path::Path::new(CHILD).parent().unwrap()).unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/ci")).unwrap();
-    native_executable::install(CHILD, dir.path().join("cli-child")).unwrap();
     fs::write(
         dir.path().join("cli-case.json"),
         serde_json::to_vec(&case).unwrap(),
     )
     .unwrap();
     let path = dir.path().join(".chrono-harness/ci/check.json");
-    fs::write(&path,serde_json::to_vec(&json!({"schema":"chrono-ci-check/v1","judge":{"program":dir.path().join("cli-child"),"args":["judge"],"timeout_seconds":15,"output_limit_bytes":4096},"policy":{},"report_path":".chrono-harness/state/check.json"})).unwrap()).unwrap();
+    fs::write(&path,serde_json::to_vec(&json!({"schema":"chrono-ci-check/v1","judge":{"program":CHILD,"args":["judge"],"timeout_seconds":15,"output_limit_bytes":4096},"policy":{},"report_path":".chrono-harness/state/check.json"})).unwrap()).unwrap();
     let name = path.to_str().unwrap().to_string();
     (dir, name)
 }
@@ -288,7 +287,15 @@ fn bounds_cover_timeout_and_output() {
         assert_eq!(r.exit_code, 2);
         assert!(start.elapsed().as_secs() < 5);
         let report: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
-        assert_eq!(report["transport_failure"], cause);
+        assert_eq!(
+            report["transport_failure"],
+            cause,
+            "elapsed={:?}, exit={}, stdout_bytes={}, stderr_bytes={}",
+            start.elapsed(),
+            report["judge"]["exit_code"],
+            report["judge"]["stdout_bytes"].as_array().unwrap().len(),
+            report["judge"]["stderr_bytes"].as_array().unwrap().len()
+        );
         assert_eq!(report["judge"]["failure"], cause);
         let bytes: Vec<u8> =
             serde_json::from_value(report["judge"]["stdout_bytes"].clone()).unwrap();
