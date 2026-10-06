@@ -28,6 +28,9 @@ pub struct Consumer {
     pub prepare: Vec<String>,
     pub consumer: String,
     pub caches: Vec<String>,
+    /// Omitted preserves all-cache saving; an empty list is restore-only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_caches: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub save_after_bootstrap: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -57,6 +60,7 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     action(&c.restore_action, "actions/cache/restore")?;
     action(&c.save_action, "actions/cache/save")?;
     for (job, consumer) in &c.jobs {
+        let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
         if let Some(directory) = &consumer.evidence_directory {
             relative_path(directory.trim_end_matches('/'))?;
             if ![".chrono-harness/state/", ".chrono-harness/cache/"]
@@ -82,6 +86,8 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
             || consumer.caches.is_empty()
             || consumer.caches.iter().any(|s| !name(s))
             || consumer.caches.iter().collect::<BTreeSet<_>>().len() != consumer.caches.len()
+            || saves.iter().collect::<BTreeSet<_>>().len() != saves.len()
+            || saves.iter().any(|id| !consumer.caches.contains(id))
             || consumer
                 .save_after_bootstrap
                 .iter()
@@ -91,7 +97,7 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
             || consumer
                 .save_after_bootstrap
                 .iter()
-                .any(|id| !consumer.caches.contains(id))
+                .any(|id| !saves.contains(id))
         {
             return Err(format!("invalid persistent cache consumer for job {job}"));
         }
@@ -191,10 +197,14 @@ pub(crate) fn project(
     // Compact references keep large native workflows within the provider limit.
     // Registry validation guarantees the same selected set as the planner.
     let selected: BTreeSet<_> = consumer.caches.iter().collect();
+    let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
     for (index, id) in selected.into_iter().enumerate() {
         let key = format!("cache_{index}");
         let step = &key;
         prefix.push_str(&format!("      - name: Restore registered cache {id}\n        id: {step}_restore\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n          restore-keys: ${{{{ steps.chrono_cache_plan.outputs.{key}_restore }}}}\n          fail-on-cache-miss: false\n", c.restore_action));
+        if !saves.contains(id) {
+            continue;
+        }
         let producer_step = if consumer.save_after_bootstrap.contains(id) {
             "chrono_cache_bootstrap"
         } else {
@@ -207,7 +217,17 @@ pub(crate) fn project(
     } else {
         " --bootstrap chrono_cache_bootstrap"
     };
-    suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        continue-on-error: true\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));
+    let saves_arg = consumer
+        .save_caches
+        .as_ref()
+        .map(|saves| {
+            format!(
+                " --save-caches {}",
+                shell(&serde_json::to_string(saves).unwrap())
+            )
+        })
+        .unwrap_or_default();
+    suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        continue-on-error: true\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}{saves_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));
     let marker = format!("      - name: {before}\n");
     let work_marker = format!("      - name: {work}\n");
     if body.matches(&marker).count() != 1 || body.matches(&work_marker).count() != 1 {

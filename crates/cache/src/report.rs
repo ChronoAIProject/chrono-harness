@@ -1,7 +1,12 @@
 //! Observe native action outputs without promoting action success to cache success.
 use chrono_harness::{decode, no_symlink_parents, prepared, sha256};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, fs, io::Write, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    io::Write,
+    path::Path,
+};
 
 pub(crate) fn retain_for_upload(
     root: &Path,
@@ -39,6 +44,16 @@ pub fn transport_report(
     work: &str,
     bootstrap: Option<&str>,
 ) -> Result<Value, String> {
+    transport_report_with_saves(plan, steps, work, bootstrap, None)
+}
+
+fn transport_report_with_saves(
+    plan: &Value,
+    steps: &Value,
+    work: &str,
+    bootstrap: Option<&str>,
+    saves: Option<&[String]>,
+) -> Result<Value, String> {
     if !matches!(
         plan["schema"].as_str(),
         Some("chrono-cache-plan/v1" | "chrono-cache-plan/v2")
@@ -51,6 +66,13 @@ pub fn transport_report(
         .ok_or("E_CACHE_REPORT: caches missing")?
         .iter()
         .collect();
+    if let Some(saves) = saves {
+        if saves.iter().collect::<BTreeSet<_>>().len() != saves.len()
+            || saves.iter().any(|id| !selected.contains_key(id))
+        {
+            return Err("E_CACHE_REPORT: save selection must contain unique planned caches".into());
+        }
+    }
     let mut caches = BTreeMap::new();
     let mut warnings = Vec::new();
     for (index, (id, cache)) in selected.into_iter().enumerate() {
@@ -81,13 +103,24 @@ pub fn transport_report(
             Some("skipped") => "not-attempted",
             _ => "unavailable",
         };
+        let save_requested = saves.is_none_or(|saves| saves.contains(id));
+        let save_observed = matches!(
+            save["outcome"].as_str(),
+            Some("success" | "failure" | "cancelled")
+        );
         let saved = match save["outcome"].as_str() {
+            None | Some("skipped") if !save_requested => "not-requested",
             Some("success") => "unconfirmed",
             Some("failure" | "cancelled") => "error",
             Some("skipped") => "not-attempted",
             _ => "unavailable",
         };
         for (condition, code, message) in [
+            (
+                !save_requested && save_observed,
+                "W_CACHE_UNREGISTERED_SAVE",
+                "native save was observed for a cache outside this job's registered save selection",
+            ),
             (
                 restored == "incompatible",
                 "W_CACHE_RESTORE_INCOMPATIBLE",
@@ -108,7 +141,7 @@ pub fn transport_report(
             json!({"owner":cache["owner"],"producer":cache["producer"],
             "requested_key":requested,
             "restore":{"status":restored,"matched_key":matched,"observation":restore},
-            "save":{"status":saved,"confirmed":false,"observation":save},
+            "save":{"status":saved,"requested":save_requested,"confirmed":false,"observation":save},
             "current_executable_verification":"not-observed-by-cache-report"}),
         );
     }
@@ -131,6 +164,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 "--work",
                 "--bootstrap",
                 "--report-directory",
+                "--save-caches",
             ]
             .contains(&pair[0].as_str())
             || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
@@ -165,11 +199,18 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         std::env::var(required("--steps-env")?).map_err(|e| format!("E_CACHE_REPORT: {e}"))?;
     let plan = decode(&plan_raw)?;
     let steps = decode(steps_raw.as_bytes())?;
-    let mut report = transport_report(
+    let saves: Option<Vec<String>> = options
+        .get("--save-caches")
+        .map(|raw| {
+            serde_json::from_str(raw).map_err(|e| format!("E_CACHE_REPORT: save selection: {e}"))
+        })
+        .transpose()?;
+    let mut report = transport_report_with_saves(
         &plan,
         &steps,
         required("--work")?,
         options.get("--bootstrap").copied(),
+        saves.as_deref(),
     )?;
     report["plan"] = json!({"path":plan_path,"sha256":sha256(&plan_raw)});
     report["plan_upload"] = json!(retain_for_upload(root, directory, "plan", &plan_raw)?);

@@ -501,7 +501,8 @@
         "Restore registered cache check.cache": "cache-restore",
         "Save registered cache check.cache": "cache-save",
         "Restore registered cache check.cache-tests": "cache-restore",
-        "Save registered cache check.cache-tests": "cache-save"
+        "Save registered cache check.cache-tests": "cache-save",
+        "Preserve detector evidence": "evidence-upload"
       },
       "summary_environment": "GITHUB_STEP_SUMMARY",
       "comparisons": {
@@ -522,6 +523,30 @@
           "reference_category": "canonical-check",
           "factor": 1.0,
           "minimum_seconds": 30
+        },
+        "bootstrap-vs-detection": {
+          "category": "bootstrap",
+          "reference_category": "delta-detection",
+          "factor": 1.0,
+          "minimum_seconds": 30
+        },
+        "cache-prepare-vs-detection": {
+          "category": "cache-prepare",
+          "reference_category": "delta-detection",
+          "factor": 1.0,
+          "minimum_seconds": 30
+        },
+        "cache-save-vs-detection": {
+          "category": "cache-save",
+          "reference_category": "delta-detection",
+          "factor": 1.0,
+          "minimum_seconds": 10
+        },
+        "cache-save-vs-check": {
+          "category": "cache-save",
+          "reference_category": "canonical-check",
+          "factor": 1.0,
+          "minimum_seconds": 10
         }
       }
     }
@@ -543,7 +568,8 @@
         "assets/",
         ".github/workflows/chrono-ci.yml",
         ".gitignore"
-      ]
+      ],
+      "evidence_directory": ".chrono-harness/state/"
     }
   },
   "persistent_cache": {
@@ -568,6 +594,9 @@
         ],
         "save_after_bootstrap": [
           "detect.ci"
+        ],
+        "save_caches": [
+          "detect.ci"
         ]
       },
       "aggregate": {
@@ -591,6 +620,12 @@
           "check.judge-ci",
           "check.runner",
           "check.worktree"
+        ],
+        "save_caches": [
+          "check.ci",
+          "check.judge-ci",
+          "check.runner",
+          "check.worktree"
         ]
       },
       "unit_runner": {
@@ -610,11 +645,9 @@
           "check.runner-tests",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.runner-tests"
         ]
       },
       "unit_instructions": {
@@ -635,11 +668,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.instructions",
+          "check.instructions-tests"
         ]
       },
       "unit_judge-ci": {
@@ -659,11 +691,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-ci-tests"
         ]
       },
       "unit_ci": {
@@ -684,11 +714,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.ci-tests",
+          "check.judge-registration"
         ]
       },
       "unit_judge-registration": {
@@ -709,11 +738,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-registration",
+          "check.judge-registration-tests"
         ]
       },
       "unit_judge-filemap": {
@@ -737,11 +765,13 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-filemap",
+          "check.judge-filemap-tests",
+          "check.judge-projects",
+          "check.judge-registration",
+          "check.judge-routes"
         ]
       },
       "unit_judge-routes": {
@@ -762,11 +792,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-routes",
+          "check.judge-routes-tests"
         ]
       },
       "unit_judge-projects": {
@@ -790,11 +819,13 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-filemap",
+          "check.judge-projects",
+          "check.judge-projects-tests",
+          "check.judge-registration",
+          "check.judge-routes"
         ]
       },
       "unit_scoped-v1": {
@@ -813,12 +844,8 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ]
+        "save_after_bootstrap": [],
+        "save_caches": []
       },
       "unit_judge-cost": {
         "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
@@ -840,11 +867,12 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-cost",
+          "check.judge-cost-tests",
+          "check.judge-filemap",
+          "check.judge-registration"
         ]
       },
       "unit_judge-mixed": {
@@ -868,11 +896,13 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-cost",
+          "check.judge-filemap",
+          "check.judge-mixed",
+          "check.judge-mixed-tests",
+          "check.judge-registration"
         ]
       },
       "unit_judge-workflow": {
@@ -900,11 +930,17 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.inputs",
+          "check.judge-cost",
+          "check.judge-filemap",
+          "check.judge-mixed",
+          "check.judge-projects",
+          "check.judge-registration",
+          "check.judge-routes",
+          "check.judge-workflow",
+          "check.judge-workflow-tests"
         ]
       },
       "unit_inputs": {
@@ -932,11 +968,17 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.inputs",
+          "check.inputs-tests",
+          "check.judge-cost",
+          "check.judge-filemap",
+          "check.judge-mixed",
+          "check.judge-projects",
+          "check.judge-registration",
+          "check.judge-routes",
+          "check.judge-workflow"
         ]
       },
       "unit_distribution": {
@@ -957,11 +999,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.distribution",
+          "check.distribution-tests"
         ]
       },
       "unit_judge-cargo": {
@@ -989,11 +1030,17 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.judge-cargo",
+          "check.judge-cargo-tests",
+          "check.judge-cost",
+          "check.judge-filemap",
+          "check.judge-mixed",
+          "check.judge-projects",
+          "check.judge-registration",
+          "check.judge-routes",
+          "check.judge-workflow"
         ]
       },
       "unit_worktree": {
@@ -1013,11 +1060,9 @@
           "check.worktree",
           "check.worktree-tests"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.worktree-tests"
         ]
       },
       "unit_judge-workflow-units": {
@@ -1045,11 +1090,17 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.inputs",
+          "check.judge-cost",
+          "check.judge-filemap",
+          "check.judge-mixed",
+          "check.judge-projects",
+          "check.judge-registration",
+          "check.judge-routes",
+          "check.judge-workflow",
+          "check.judge-workflow-tests.judge-workflow-units"
         ]
       },
       "unit_judge-workflow-short": {
@@ -1077,11 +1128,17 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.inputs",
+          "check.judge-cost",
+          "check.judge-filemap",
+          "check.judge-mixed",
+          "check.judge-projects",
+          "check.judge-registration",
+          "check.judge-routes",
+          "check.judge-workflow",
+          "check.judge-workflow-tests.judge-workflow-short"
         ]
       },
       "unit_workflow-inventory": {
@@ -1100,12 +1157,8 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ]
+        "save_after_bootstrap": [],
+        "save_caches": []
       },
       "unit_release-build": {
         "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
@@ -1123,12 +1176,8 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ]
+        "save_after_bootstrap": [],
+        "save_caches": []
       },
       "unit_release-build-integration": {
         "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
@@ -1147,11 +1196,9 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.distribution"
         ]
       },
       "unit_worktree-adoption": {
@@ -1171,11 +1218,9 @@
           "check.worktree",
           "check.worktree-tests.worktree-adoption"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.worktree-tests.worktree-adoption"
         ]
       },
       "unit_diagnostics": {
@@ -1196,11 +1241,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.diagnostics",
+          "check.diagnostics-tests"
         ]
       },
       "unit_host-bootstrap": {
@@ -1219,12 +1263,8 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ]
+        "save_after_bootstrap": [],
+        "save_caches": []
       },
       "unit_cache": {
         "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
@@ -1244,11 +1284,10 @@
           "check.runner",
           "check.worktree"
         ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+        "save_after_bootstrap": [],
+        "save_caches": [
+          "check.cache",
+          "check.cache-tests"
         ]
       }
     }

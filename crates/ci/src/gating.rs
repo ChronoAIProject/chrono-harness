@@ -23,6 +23,9 @@ pub struct Detector {
     pub bootstrap: Vec<String>,
     /// Literal source/registration paths chosen by the host, not unit inference.
     pub sparse_checkout: Vec<String>,
+    /// Explicit retained originals; omitted preserves the previous detector.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_directory: Option<String>,
 }
 
 pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
@@ -43,6 +46,17 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
     detector.timeout_minutes = g.detector.timeout_minutes;
     detector.bootstrap = g.detector.bootstrap.clone();
     super::validate_policy(&detector, c.schema == units::FULL_SCHEMA)?;
+    if let Some(directory) = &g.detector.evidence_directory {
+        relative_path(directory.trim_end_matches('/'))?;
+        if !directory.starts_with(".chrono-harness/state/")
+            || !directory.ends_with('/')
+            || directory.contains(['\0', '\n', '\r', '*', '?', '[', ']'])
+            || directory.contains("${{")
+            || !c.collection.include_hidden_files
+        {
+            return Err("detector evidence requires a literal host state directory and explicit hidden-file upload".into());
+        }
+    }
     if g.detector.sparse_checkout.is_empty() {
         return Err("detector requires explicit source/registration checkout paths".into());
     }
@@ -275,6 +289,9 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
             shell(path)
         );
         text.push_str(&format!("      - name: Publish shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ steps.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n      - name: Upload detector original context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, a.seed_artifact, scalar(&a.seed_directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
+    }
+    if let Some(directory) = &g.detector.evidence_directory {
+        text.push_str(&format!("      - name: Preserve detector evidence\n        if: ${{{{ always() }}}}\n        uses: {}\n        with:\n          name: chrono-detector-evidence-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, scalar(directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
     }
     for id in c.units.keys() {
         text.push_str(&job(c, path, Some(id))?);

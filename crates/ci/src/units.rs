@@ -635,6 +635,7 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
         c.job_gating = Some(super::gating::Config {
             schema: super::gating::SCHEMA.into(),
             detector: super::gating::Detector {
+                evidence_directory: None,
                 runs_on: c.collection.runs_on.clone(),
                 timeout_minutes: c.collection.timeout_minutes,
                 bootstrap: c.collection.bootstrap.clone(),

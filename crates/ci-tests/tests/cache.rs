@@ -19,6 +19,96 @@ fn adoption(job: &str) -> Value {
 }
 
 #[test]
+fn explicit_save_ownership_keeps_restores_and_original_checks_in_read_only_consumers() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    value["persistent_cache"]["jobs"]["unit_example"]["save_caches"] = json!([]);
+    let config = serde_json::from_value(value.clone()).unwrap();
+    let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    assert!(steps.iter().any(|s| s["id"] == "cache_0_restore"));
+    assert!(!steps.iter().any(|s| s["id"] == "cache_0_save"));
+    assert!(steps.iter().any(|s| {
+        s["run"]
+            .as_str()
+            .is_some_and(|s| s.contains("'check' '--unit' 'example'"))
+    }));
+    assert!(steps.iter().any(|s| {
+        s["run"]
+            .as_str()
+            .is_some_and(|s| s.contains("--save-caches '[]'"))
+    }));
+    for saves in [json!(["unknown"]), json!(["core.target", "core.target"])] {
+        value["persistent_cache"]["jobs"]["unit_example"]["save_caches"] = saves;
+        let config = serde_json::from_value(value.clone()).unwrap();
+        assert!(chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err());
+    }
+    value["persistent_cache"]["jobs"]["unit_example"]["save_caches"] = json!([]);
+    value["persistent_cache"]["jobs"]["unit_example"]["save_after_bootstrap"] =
+        json!(["core.target"]);
+    let config = serde_json::from_value(value).unwrap();
+    assert!(chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err());
+}
+
+#[test]
+fn detector_retains_declared_originals_after_cache_reporting_even_when_work_fails() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("detect");
+    value["collection"]["include_hidden_files"] = json!(true);
+    let baseline = chrono_ci::units::render(
+        &serde_json::from_value(value.clone()).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    value["job_gating"]["detector"]["evidence_directory"] = json!(".chrono-harness/state/");
+    let config = serde_json::from_value(value.clone()).unwrap();
+    let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    let old: Value = serde_yaml_ng::from_str(&baseline[".github/workflows/chrono-ci.yml"]).unwrap();
+    assert_eq!(
+        yaml["jobs"].as_object().unwrap().len(),
+        old["jobs"].as_object().unwrap().len()
+    );
+    assert_eq!(yaml["jobs"]["unit_example"], old["jobs"]["unit_example"]);
+    assert_eq!(yaml["jobs"]["aggregate"], old["jobs"]["aggregate"]);
+    let steps = yaml["jobs"]["detect"]["steps"].as_array().unwrap();
+    let upload = steps.last().unwrap();
+    assert_eq!(upload["if"], "${{ always() }}");
+    assert_eq!(
+        upload["uses"],
+        value["collection"]["upload_artifact_action"]
+    );
+    assert_eq!(upload["with"]["path"], ".chrono-harness/state/");
+    assert_eq!(upload["with"]["if-no-files-found"], "error");
+    assert_eq!(upload["with"]["include-hidden-files"], true);
+    assert_eq!(
+        steps[steps.len() - 2]["name"],
+        "Record original cache transport observations"
+    );
+    for directory in [
+        "../outside/",
+        ".chrono-harness/",
+        ".chrono-harness/state",
+        ".chrono-harness/state/*/",
+        ".chrono-harness/state/${{ github.token }}/",
+    ] {
+        value["job_gating"]["detector"]["evidence_directory"] = json!(directory);
+        let config = serde_json::from_value(value.clone()).unwrap();
+        assert!(
+            chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err(),
+            "{directory}"
+        );
+    }
+    value["job_gating"]["detector"]["evidence_directory"] = json!(".chrono-harness/state/");
+    value["collection"]["include_hidden_files"] = json!(false);
+    let config = serde_json::from_value(value).unwrap();
+    assert!(chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err());
+}
+
+#[test]
 fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");

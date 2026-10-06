@@ -420,6 +420,79 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
         probe,
         serde_json::from_slice::<Value>(&fs::read(root.path().join(copied)).unwrap()).unwrap()
     );
+    for (steps, expected, warning) in [
+        (json!({"work":{"outcome":"failure"}}), "not-requested", None),
+        (
+            json!({"cache_0_save":{"outcome":"success"},"work":{"outcome":"success"}}),
+            "unconfirmed",
+            Some("W_CACHE_UNREGISTERED_SAVE"),
+        ),
+    ] {
+        let out = Command::new(&binary)
+            .args([
+                "report",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--plan",
+                &plan_path,
+                "--report-directory",
+                ".chrono-harness/state/cache/check.one/",
+                "--steps-env",
+                "CACHE_TEST_STEPS",
+                "--work",
+                "work",
+                "--save-caches",
+                "[]",
+            ])
+            .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let row: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(
+            row["observation"]["caches"]["project"]["save"]["status"],
+            expected
+        );
+        assert_eq!(
+            row["observation"]["caches"]["project"]["save"]["requested"],
+            false
+        );
+        if let Some(code) = warning {
+            assert!(
+                row["observation"]["warnings"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|w| w["code"] == code)
+            );
+        }
+    }
+    for saves in [r#"["unknown"]"#, r#"["project","project"]"#] {
+        let out = Command::new(&binary)
+            .args([
+                "report",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--plan",
+                &plan_path,
+                "--report-directory",
+                directory,
+                "--steps-env",
+                "CACHE_TEST_STEPS",
+                "--work",
+                "work",
+                "--save-caches",
+                saves,
+            ])
+            .env("CACHE_TEST_STEPS", "{}")
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+    }
 }
 
 #[test]

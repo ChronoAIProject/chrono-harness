@@ -146,10 +146,17 @@ It is not a second Cargo build implementation.
 
 The provider obtains output keys from `chrono-cache plan --github-output`, retains
 the plan and original probe outputs, and restores before the original work.
-By default it saves after successful work. An explicit `save_after_bootstrap`
+By default it saves all selected caches after successful work. Optional
+`save_caches` selects the caches this job may save; an empty list is restore-only.
+Unknown or duplicate entries are rejected. This host assigns saving the four
+shared startup caches to the existing aggregate job; unit jobs still restore and
+rebuild them, then save their remaining selected outputs. This avoids competing
+startup saves without adding a job or changing the original checks. If the chosen
+writer does not complete its producer, that run supplies no new archive.
+An explicit `save_after_bootstrap`
 subset may instead use the separate bootstrap step's success after the original
 work has ended, preserving reusable startup compilation after later test failure.
-Unknown or duplicate subset entries fail projection; cancellation prevents saves.
+Unknown, duplicate or non-saving subset entries fail projection; cancellation prevents saves.
 This subset is a host declaration, not proof that each later build succeeded.
 Restored compilation candidates still require the original build entry.
 The planner and provider sort the consumer's exact cache set lexically and use
@@ -162,12 +169,21 @@ status. A final `chrono-cache report` step records the native action outputs,
 requested and matched keys, original work/bootstrap outcomes and immutable source
 reports. `evidence_directory` may place originals within the existing release
 upload directory; ordinary checks retain them under the uploaded host state.
-No extra job or API request is introduced. Exact/compatible restoration is reported
+The detector's optional `evidence_directory` retains originals through the same
+pinned upload action in its existing job, including after failure. The directory
+must be a literal host state path, with hidden-file upload explicitly enabled;
+missing files fail that upload instead of claiming preservation. This host chooses
+`.chrono-harness/state/` to include bootstrap, plans and probe originals. Without
+this adoption, detector files remain temporary runner state.
+No extra job or API request is introduced by the transport report. Exact/compatible restoration is reported
 only from a successful action with a matching key. Empty outputs are
 `miss-or-unavailable`. Native save success is `unconfirmed` with
 `W_CACHE_SAVE_UNCONFIRMED`: the pinned action can catch backend exceptions and
 exit successfully. This report cannot claim a saved archive, compiler reuse or
-verified executable identity from action outcomes. Original backend logs remain
+verified executable identity from action outcomes. A cache excluded from this
+job's save selection reports `not-requested` when no save was observed; an actual
+save outside that selection remains visible with `W_CACHE_UNREGISTERED_SAVE`.
+Original backend logs remain
 necessary for those investigations. Failed report production is visible as its
 own action outcome and does not replace the original check result.
 

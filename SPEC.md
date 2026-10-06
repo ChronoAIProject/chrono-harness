@@ -731,7 +731,7 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categories` 分类现有 jobs 响应，将步骤读数、分类汇总、未知值与来源摘要写入原始 gather 报告；显式 `summary_environment` 可将简表写入已继承的 GitHub summary 文件。不新增 CI job、API 请求或业务执行。时间只计唯一 job ID 下有效已完成步骤；相同分页行去重，冲突身份排除并报告。范围包含观察到的旧 attempt，不冒充完整运行史；缺步骤、未分类、未完成、无响应均显式保留。汇总尚在运行，后续步骤无读数；检查步骤内部编译／测试拆分、排队、峰值及计费仍未知。它不改变准入判词或推断依赖必要性。其余单元消费核验、完整资源分项与普遍冗余诊断仍未完成。
 
-该资源登记可在 `comparisons` 按规则 ID 声明两个不同的已登记类别、正有限倍数与非负秒数下限。对同一已完成 job，两个类别的全部实际执行步骤读数完整时，前者达到下限且严格超过后者乘倍数即产生 `W_CI_RESOURCE_COMPARISON`；报告保留规则、job／attempt 与两个实测值，摘要呈现告警。缺类别、缺读数或 job 未完成须具名报告无法比较，跳过 job 不适用；未知不得填零。规则只提示需要审查的成本，不证明冗余或节省，不改变原检查结果。本宿主以倍数 1、下限 60 秒登记 bootstrap 与同 job canonical-check 的比较；缓存准备与传输也须计入优化评估，不能只凭命中或构建变快声称总资源下降。
+该资源登记可在 `comparisons` 按规则 ID 声明两个不同的已登记类别、正有限倍数与非负秒数下限。对同一已完成 job，两个类别的全部实际执行步骤读数完整时，前者达到下限且严格超过后者乘倍数即产生 `W_CI_RESOURCE_COMPARISON`；报告保留规则、job／attempt 与两个实测值，摘要呈现告警。缺类别、缺读数或 job 未完成须具名报告无法比较，跳过 job 不适用；未知不得填零。规则只提示需要审查的成本，不证明冗余或节省，不改变原检查结果。本宿主以倍数 1、下限 60 秒登记 bootstrap 与同 job canonical-check 的比较；detector 以 delta-detection 为参照，bootstrap／缓存准备下限 30 秒、缓存保存下限 10 秒，另以 10 秒下限比较保存与 canonical-check。检测 job 没有 canonical-check，不能把缺少参照的比较当作成本正常。缓存准备与传输也须计入优化评估，不能只凭命中或构建变快声称总资源下降。
 
 ## 10. dev、integration 与过期分支
 
