@@ -486,6 +486,14 @@ fn make_local_lane(
     // Real birth producer in an isolated fixture; no hand-filled successful birth.
     git(&root, &["checkout", "-q", "dev"]);
     let lane = tools.path().join("local-lane");
+    let timestamp = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string()
+    };
+    let mut timing = json!({"start_requested_ns": timestamp()});
     let out = Command::new(root.join(".chrono-harness/bin/chrono-worktree"))
         .current_dir(&root)
         .args([
@@ -503,6 +511,7 @@ fn make_local_lane(
         ])
         .output()
         .unwrap();
+    timing["start_returned_ns"] = json!(timestamp());
     assert!(
         out.status.success(),
         "{} {}",
@@ -528,17 +537,26 @@ fn make_local_lane(
         fs::create_dir_all(target.parent().unwrap()).unwrap();
         fs::hard_link(root.join(path), target).unwrap();
     }
+    timing["executables_linked_ns"] = json!(timestamp());
     // The candidate is already a real descendant of the declared fork. Reuse
     // its fixed commit and snapshots instead of rebuilding them after birth.
     git(&lane, &["reset", "--hard", &h.candidate]);
+    timing["candidate_reset_ns"] = json!(timestamp());
     copy_tree(
         &root.join(".chrono-harness/state"),
         &lane.join(".chrono-harness/state"),
     );
+    timing["state_copied_ns"] = json!(timestamp());
     let origin_path = lane.join(".chrono-harness/state/origin.json");
     let mut origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
     origin["retained_inputs"] = json!(".chrono-harness/state/inputs.json");
     fs::write(&origin_path, serde_json::to_vec(&origin).unwrap()).unwrap();
+    timing["origin_bound_ns"] = json!(timestamp());
+    fs::write(
+        lane.join(".chrono-harness/state/freshness-setup.json"),
+        serde_json::to_vec(&timing).unwrap(),
+    )
+    .unwrap();
     (h, tools, lane)
 }
 #[test]
@@ -1024,7 +1042,24 @@ else:
 fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
     let freshness_seconds = 30.0;
     let (h, tools, lane) = local_short_lane(Some(freshness_seconds));
+    let requested_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+        .to_string();
     let (e, one) = short(&lane, &["check", "--unit", "one"], None);
+    let timing_path = lane.join(".chrono-harness/state/freshness-setup.json");
+    let mut timing: Value = chrono_harness::json(&fs::read(&timing_path).unwrap()).unwrap();
+    timing["first_check_requested_ns"] = json!(requested_at);
+    timing["first_check_returned_ns"] = json!(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string()
+    );
+    fs::write(&timing_path, serde_json::to_vec(&timing).unwrap()).unwrap();
+    println!("FRESHNESS_PHASES {timing}");
     if e != 0 {
         let retained = source()
             .join(".chrono-harness/state/workflow-test-failures")
