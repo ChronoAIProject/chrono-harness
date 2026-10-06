@@ -312,6 +312,46 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(len([p for p in receipt['processes'] if p['phase'] == 'toolchain-install']), 1)
         RECIPE.verify_toolchain(receipt, self.cfg)
 
+    def test_incremental_is_explicit_consumed_and_verified_for_rust_units(self):
+        self.cfg['rust_incremental'] = True
+        self.cfg['units'][2]['rust_toolchain'] = True
+        self.create_host()
+        for name, phase in [('build_a', 'build'), ('test_none', 'verification')]:
+            output, receipt = self.invoke_unit(name, {}, {'CARGO_INCREMENTAL': '0'})
+            self.assertEqual(receipt['environment']['CARGO_INCREMENTAL'], '1')
+            process = next(p for p in receipt['processes'] if p['phase'] == phase)
+            observed = (output / process['stdout']['path']).read_text().splitlines()[-1]
+            self.assertEqual(json.loads(observed), {'CARGO_INCREMENTAL': '1'})
+            RECIPE.verify_toolchain(receipt, self.cfg)
+            for value in [None, '0', 1]:
+                altered = deepcopy(receipt)
+                altered['environment']['CARGO_INCREMENTAL'] = value
+                with self.assertRaisesRegex(ValueError, 'incremental environment'):
+                    RECIPE.verify_toolchain(altered, self.cfg)
+                self.assertNotEqual(RECIPE.toolchain_fingerprint(receipt), RECIPE.toolchain_fingerprint(altered))
+
+    def test_incremental_policy_does_not_apply_to_non_rust_verification(self):
+        self.cfg['rust_incremental'] = True
+        self.create_host()
+        output, receipt = self.invoke_unit('test_none', {}, {'CARGO_INCREMENTAL': '0'})
+        self.assertEqual(receipt['environment']['CARGO_INCREMENTAL'], '0')
+        process = next(p for p in receipt['processes'] if p['phase'] == 'verification')
+        observed = (output / process['stdout']['path']).read_text().splitlines()[-1]
+        self.assertEqual(json.loads(observed), {'CARGO_INCREMENTAL': '0'})
+        RECIPE.verify_toolchain(receipt, self.cfg)
+
+    def test_incremental_rejects_nonboolean_and_legacy_adoption(self):
+        self.cfg['rust_toolchain'] = '1.94.0'
+        for value in [None, 0, 1, 'true', [], {}]:
+            with self.subTest(value=value):
+                self.cfg['rust_incremental'] = value
+                with self.assertRaisesRegex(ValueError, 'rust_incremental'):
+                    RECIPE.UnitExecution(self.root, self.root / 'output', self.cfg, {}, self.cfg['units'][0])
+        self.cfg['rust_incremental'] = True
+        self.cfg['schema'] = 'chrono-release-build/v4'
+        with self.assertRaisesRegex(ValueError, 'rust_incremental'):
+            RECIPE.UnitExecution(self.root, self.root / 'output', self.cfg, {}, self.cfg['units'][0])
+
 
 if __name__ == '__main__':
     unittest.main()

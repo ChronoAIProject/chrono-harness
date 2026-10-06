@@ -398,7 +398,8 @@
       "CHRONO_CHECK_HANDOFF_TRACE"
     ],
     "values": {
-      "CARGO_TERM_COLOR": "never"
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_INCREMENTAL": "1"
     },
     "inputs": [
       {

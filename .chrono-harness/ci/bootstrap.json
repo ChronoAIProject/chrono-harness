@@ -88,5 +88,6 @@
   "entrypoint": {
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
-  }
+  },
+  "rust_incremental": true
 }

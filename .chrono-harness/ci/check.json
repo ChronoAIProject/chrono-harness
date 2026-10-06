@@ -71,7 +71,8 @@
     "operation_output_limit_bytes": 1048576,
     "environment": {
       "RUSTUP_TOOLCHAIN": "1.95.0",
-      "CARGO_TERM_COLOR": "never"
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_INCREMENTAL": "1"
     },
     "registration_config": ".chrono-harness/config.json",
     "units": {

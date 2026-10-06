@@ -10,8 +10,23 @@ internal provider entry; the daily check remains `chrono-harness check`.
 The current implementation prepares a plan only. It does not restore or save a
 cache, invoke a build, verify a restored executable or report a cache hit. The
 generated check and release workflows have not yet adopted persistent caching.
-SPEC §4.2's transport, lifecycle protection, incremental-build adoption and native
+SPEC §4.2's transport, lifecycle protection and native
 cold/warm/failure/concurrent acceptance remain required work.
+
+This host explicitly sets `CARGO_INCREMENTAL=1` for its canonical check actions.
+Both bootstrap registrations and the v5 release recipe set
+`rust_incremental: true`; their existing build invocations receive the matching
+environment value, including release builds and Rust verification units. The
+release recipe's explicit `rust_toolchain` selection keeps that setting scoped
+to Rust consumers. Non-Rust units retain their own environment.
+
+Bootstrap and release receipts record the value passed to children. Release
+import and collection compare it with the registered choice and include it in
+the producer toolchain fingerprint. Omitted settings preserve the previous
+environment behavior; malformed settings fail before launching build tools.
+These observations do not establish cache transport, actual compiler reuse,
+complete build inputs, or native acceptance. Rust profile, flags, compiler and
+SDK identities still belong in the persistent cache compatibility contract.
 
 The `chrono-cache/v1` registration belongs to the host's `.chrono-harness/`
 directory. It explicitly declares:

@@ -59,3 +59,5 @@ runner-tests 的协议 transport fixture 由同项目独立 Rust 测试二进制
 
 worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附件租约下采用两端已提交的新政策；旧登记保留，后续操作核不可覆盖迁移链。迁移不清理、不设完成；未知 birth／租约、待执行终态及地址搬迁保持拒绝。候选本地／原生和实际宿主采用仍须验证，不从源码新增声称已迁移。
 缓存键规划归独立 cache / cache-tests Rust 配对，使用 chrono-cache plan 内部入口；日常检查仍使用同一 harness check。缓存项目显式登记专属 CI、16 项中央发布资产中的独立 build 与仅依赖 build_cache 的验证单元；原 15 个 Rust 验证保留原有构建前置。当前只准备键与输入观察，没有采用实际恢复／保存，也不报告缓存命中或成功构建。详见 docs/ci-cache.md。
+
+宿主的 scoped/full 执行环境显式登记 CARGO_INCREMENTAL=1；两份 bootstrap 登记与 v5 发布配方采用 rust_incremental=true，debug/test 与 release 仍走原构建命令。Python 启动／发布所有者记录传给子进程的值；发布导入与汇总核登记值及工具链指纹，非 Rust 验证不采用该 Rust 配置。增量配置不表示持久缓存恢复／保存已实现，也不证明编译器实际复用、完整输入闭包或原生验收。

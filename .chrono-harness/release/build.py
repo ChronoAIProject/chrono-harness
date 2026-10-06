@@ -297,6 +297,7 @@ def preflight(root, required_tools=None, required_manifests=None):
     cfg = json_file(root / '.chrono-harness/release/build.json')
     if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3', 'chrono-release-build/v4', 'chrono-release-build/v5'):
         raise ValueError('unsupported release build schema')
+    incremental_environment(cfg)
     manifests = cfg['manifests']
     if not isinstance(manifests, list) or not manifests or len(set(manifests)) != len(manifests):
         raise ValueError('release manifests must be nonempty and unique')
@@ -553,17 +554,27 @@ def units_plan(root, cfg, operations, staging):
     return plan, builds, tests
 
 
+def incremental_environment(cfg):
+    if 'rust_incremental' not in cfg:
+        return {}
+    if cfg.get('schema') != 'chrono-release-build/v5' or type(cfg['rust_incremental']) is not bool:
+        raise ValueError('rust_incremental requires a boolean in a v5 recipe')
+    return {'CARGO_INCREMENTAL': '1' if cfg['rust_incremental'] else '0'}
+
+
 class UnitExecution:
     def __init__(self, root, output, cfg, tools, unit):
         self.root, self.output, self.cfg, self.tools = root, output, cfg, tools
+        incremental = incremental_environment(cfg)
         self.env = dict(os.environ)
         if cfg.get('schema') != 'chrono-release-build/v5' or uses_rust_toolchain(cfg, unit):
             self.env.update(RUSTUP_TOOLCHAIN=cfg['rust_toolchain'], CARGO_PROFILE_RELEASE_STRIP='symbols')
+            self.env.update(incremental)
         self.phase = 'source-identity'
         self.child_failure = None
         self.report = {'schema': 'chrono-release-unit/v1', 'unit': unit, 'status': 'failed',
                        'started_ns': time.time_ns(), 'finished_ns': None, 'context': None,
-                       'lineage': None, 'environment': {k: self.env.get(k) for k in ['PATH', 'RUSTUP_TOOLCHAIN', 'CARGO_PROFILE_RELEASE_STRIP', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET', 'CARGO_TARGET_DIR', 'RUSTFLAGS']}, 'processes': [], 'failure': None, 'selected': {}, 'assets': {}}
+                       'lineage': None, 'environment': {k: self.env.get(k) for k in ['PATH', 'RUSTUP_TOOLCHAIN', 'CARGO_INCREMENTAL', 'CARGO_PROFILE_RELEASE_STRIP', 'SDKROOT', 'MACOSX_DEPLOYMENT_TARGET', 'CARGO_TARGET_DIR', 'RUSTFLAGS']}, 'processes': [], 'failure': None, 'selected': {}, 'assets': {}}
 
     def secondary_failure(self, component, error):
         self.report.setdefault('secondary_failures', []).append(
@@ -852,6 +863,7 @@ def verify_tool_identities(identities, required):
 
 
 def verify_toolchain(receipt, cfg):
+    incremental = incremental_environment(cfg)
     required = {'git'}
     if receipt['unit']['kind'] == 'verify':
         projects = receipt.get('action_tool')
@@ -864,6 +876,8 @@ def verify_toolchain(receipt, cfg):
         tools = receipt.get('execution_tools')
         verify_tool_identities(tools, required)
         return {'tools': tools}
+    if any(receipt.get('environment', {}).get(key) != value for key, value in incremental.items()):
+        raise ValueError('selected receipt incremental environment differs from recipe')
     value = receipt.get('toolchain', {})
     required.update({'rustup', 'cargo', 'rustc'})
     if not value.get('versions', {}).get('rustc', '').startswith('rustc ' + cfg['rust_toolchain'] + ' ') or set(value.get('tools', {})) != required:
@@ -888,7 +902,7 @@ def verify_toolchain(receipt, cfg):
 
 def toolchain_fingerprint(receipt):
     value = receipt['toolchain']
-    return json.dumps({'versions': value['versions'], 'tools': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['tools'].items() if n in {'git', 'rustup', 'cargo', 'rustc'}}, 'active_compilers': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['active_compilers'].items()}}, sort_keys=True)
+    return json.dumps({'versions': value['versions'], 'incremental': receipt.get('environment', {}).get('CARGO_INCREMENTAL'), 'tools': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['tools'].items() if n in {'git', 'rustup', 'cargo', 'rustc'}}, 'active_compilers': {n: {k: i[k] for k in ['sha256', 'size', 'mode']} for n, i in value['active_compilers'].items()}}, sort_keys=True)
 
 
 def import_build(execution, unit, selection, plan):

@@ -911,5 +911,6 @@
     "test.judge-workflow-tests": [
       ".chrono-harness/state/workflow-test-failures/"
     ]
-  }
+  },
+  "rust_incremental": true
 }
