@@ -100,6 +100,10 @@
         {
           "kind": "test-execution",
           "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },
@@ -176,6 +180,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },
@@ -2569,6 +2577,10 @@
         {
           "kind": "test-execution",
           "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },
@@ -3557,6 +3569,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },
@@ -4924,6 +4940,125 @@
       ]
     },
     {
+      "path": "docs/ci-cache.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "crates/cache/Cargo.toml",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache/Cargo.lock",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache/src/lib.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache/src/main.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache-tests/Cargo.toml",
+      "owner": "cache-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache-tests/Cargo.lock",
+      "owner": "cache-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "build-input",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache-tests/tests/keys.rs",
+      "owner": "cache-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
       "path": "crates/worktree/src/automatic/migration.rs",
       "owner": "worktree",
       "surface": "product",
@@ -4948,6 +5083,118 @@
       ]
     },
     {
+      "path": "crates/cache/src/probe.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache-tests/tests/support/probe.rs",
+      "owner": "cache-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci/src/cache.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/cache.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/cache.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:cache-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-cache.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
       "path": ".chrono-harness/ci/bootstrap-detector.json",
       "owner": "repository",
       "surface": "membership",
@@ -4968,6 +5215,26 @@
         {
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache/src/report.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
         }
       ]
     }
@@ -7477,6 +7744,111 @@
       "from": "environment:TMPDIR",
       "kind": "runtime-input",
       "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:cache"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:SDKROOT",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "environment:CARGO_TERM_COLOR",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:cache"
+    },
+    {
+      "from": "project:cache",
+      "kind": "compile",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "project:cache",
+      "kind": "runtime-input",
+      "to": "project:cache-tests"
+    },
+    {
+      "from": "project:cache",
+      "kind": "test-execution",
+      "to": "test:cache-tests"
+    },
+    {
+      "from": "project:cache-tests",
+      "kind": "test-execution",
+      "to": "test:cache-tests"
     }
   ],
   "test_costs": [
@@ -7574,6 +7946,10 @@
     },
     {
       "test": "host-bootstrap-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "cache-tests",
       "cost": "unmeasured"
     }
   ],
@@ -7882,6 +8258,16 @@
         "host.bootstrap-tests"
       ],
       "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:cache-tests": {
+      "operations": [
+        "fmt.cache",
+        "fmt.cache-tests",
+        "build.cache",
+        "test.cache-tests"
+      ],
+      "timeout_seconds": 600,
       "output_limit_bytes": 1048576
     }
   },
@@ -8305,6 +8691,26 @@
       "host.bootstrap-tests": {
         "resources": [],
         "outputs": []
+      },
+      "fmt.cache": {
+        "resources": [],
+        "outputs": []
+      },
+      "fmt.cache-tests": {
+        "resources": [],
+        "outputs": []
+      },
+      "build.cache": {
+        "resources": [],
+        "outputs": [
+          "crates/cache/target/"
+        ]
+      },
+      "test.cache-tests": {
+        "resources": [],
+        "outputs": [
+          "crates/cache-tests/target/"
+        ]
       }
     }
   }

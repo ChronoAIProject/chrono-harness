@@ -162,6 +162,15 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         "          fetch-depth: 2\n          filter: blob:none\n"
     };
     body = body.replacen("          fetch-depth: 0\n", checkout, 1);
+    body = super::cache::project(
+        c.persistent_cache.as_ref(),
+        &unit.map(job_id).unwrap_or("aggregate".into()),
+        body,
+        "Bootstrap registered tools",
+        "Canonical harness check",
+        None,
+        Some("Preserve actual check evidence"),
+    )?;
     Ok(format!(
         "  {}:\n{body}",
         unit.map(job_id).unwrap_or("aggregate".into())
@@ -249,6 +258,15 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         generator = shell(&c.collection.generator),
         config = shell(path)
     );
+    text = super::cache::project(
+        c.persistent_cache.as_ref(),
+        "detect",
+        text,
+        "Bootstrap registered detector tools",
+        "Detect required units from fixed Git endpoints",
+        Some("detect"),
+        None,
+    )?;
     if let Some(a) = &c.native_adoption {
         let command = format!(
             "{} {} publish --config {}",

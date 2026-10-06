@@ -87,6 +87,30 @@ class Bootstrap(unittest.TestCase):
     def observation(self, commit, tree, dirty):
         return {"commit": commit, "tree": tree, "dirty": dirty, "error": None}
 
+    def test_registered_incremental_reaches_child_and_result(self):
+        self.declare("environment", "built-tool", "CARGO_INCREMENTAL")
+        for declared, ambient, expected in [(True, "0", "1"), (False, "1", "0"), (None, "0", "0")]:
+            with self.subTest(declared=declared):
+                config = dict(self.config)
+                if declared is not None:
+                    config["rust_incremental"] = declared
+                self.write_json(self.ci / "bootstrap.json", config)
+                self.environment["CARGO_INCREMENTAL"] = ambient
+                self.succeeded(self.invoke())
+                child = json.loads((self.root / ".chrono-harness/bin/tool").read_bytes())
+                self.assertEqual(child["CARGO_INCREMENTAL"], expected)
+                self.assertEqual(self.evidence()["environment"]["CARGO_INCREMENTAL"], expected)
+
+    def test_invalid_incremental_declared_value_stops_before_tools(self):
+        for value in [None, 0, 1, "true", [], {}]:
+            with self.subTest(value=value):
+                self.write_json(self.ci / "bootstrap.json", dict(self.config, rust_incremental=value))
+                result = self.invoke()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"rust_incremental must be a boolean", result.stderr)
+                self.assertFalse((self.tools / "calls.json").exists())
+                self.assertFalse(self.state_path.exists())
+
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
         self.assertEqual(json.dumps(self.evidence()["source"], sort_keys=True),

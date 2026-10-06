@@ -50,7 +50,9 @@
       "crates/worktree/target/",
       "crates/worktree-tests/target/",
       "crates/diagnostics/target/",
-      "crates/diagnostics-tests/target/"
+      "crates/diagnostics-tests/target/",
+      "crates/cache/target/",
+      "crates/cache-tests/target/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -70,7 +72,8 @@
     "operation_output_limit_bytes": 1048576,
     "environment": {
       "RUSTUP_TOOLCHAIN": "1.95.0",
-      "CARGO_TERM_COLOR": "never"
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_INCREMENTAL": "1"
     },
     "registration_config": ".chrono-harness/config.json",
     "units": {
@@ -217,6 +220,12 @@
           "test:host-bootstrap-tests"
         ],
         "report_path": ".chrono-harness/state/units/host-bootstrap/check.json"
+      },
+      "cache": {
+        "tests": [
+          "test:cache-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/cache/check.json"
       }
     },
     "shared_operations": {

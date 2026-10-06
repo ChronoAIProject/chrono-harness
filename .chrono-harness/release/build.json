@@ -16,7 +16,8 @@
     "crates/inputs/Cargo.toml",
     "crates/distribution/Cargo.toml",
     "crates/judge-cargo/Cargo.toml",
-    "crates/worktree/Cargo.toml"
+    "crates/worktree/Cargo.toml",
+    "crates/cache/Cargo.toml"
   ],
   "projects": ".chrono-harness/projects.json",
   "tools": {
@@ -47,7 +48,8 @@
     "release.tests.units",
     "release.tests.integration",
     "test.diagnostics-tests",
-    "host.bootstrap-tests"
+    "host.bootstrap-tests",
+    "test.cache-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -156,6 +158,13 @@
         "destinations": [
           "crates/worktree/target/debug/chrono-worktree",
           ".chrono-harness/bin/chrono-worktree"
+        ]
+      },
+      {
+        "asset": "chrono-cache",
+        "destinations": [
+          "crates/cache/target/debug/chrono-cache",
+          ".chrono-harness/bin/chrono-cache"
         ]
       }
     ]
@@ -531,6 +540,24 @@
       "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
       "rust_toolchain": false
+    },
+    {
+      "id": "build_cache",
+      "kind": "build",
+      "manifest": "crates/cache/Cargo.toml",
+      "asset": "chrono-cache",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_cache"
+    },
+    {
+      "id": "verify_cache_tests",
+      "kind": "verify",
+      "operation": "test.cache-tests",
+      "needs": [
+        "build_cache"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_cache_tests",
+      "rust_toolchain": true
     }
   ],
   "collector": {
@@ -571,7 +598,9 @@
       "verify_release_build_tests",
       "verify_release_build_integration",
       "verify_diagnostics_tests",
-      "verify_host_bootstrap_tests"
+      "verify_host_bootstrap_tests",
+      "build_cache",
+      "verify_cache_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -615,7 +644,9 @@
       "verify_release_build_tests": "linux_verify_release_build_tests",
       "verify_release_build_integration": "linux_verify_release_build_integration",
       "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
-      "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests"
+      "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
+      "build_cache": "linux_build_cache",
+      "verify_cache_tests": "linux_verify_cache_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -654,7 +685,9 @@
       "verify_release_build_tests": "macos_verify_release_build_tests",
       "verify_release_build_integration": "macos_verify_release_build_integration",
       "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
-      "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests"
+      "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
+      "build_cache": "macos_build_cache",
+      "verify_cache_tests": "macos_verify_cache_tests"
     }
   },
   "unit_costs": {
@@ -694,7 +727,9 @@
     "verify_release_build_tests": "unmeasured",
     "verify_release_build_integration": "unmeasured",
     "verify_diagnostics_tests": "unmeasured",
-    "verify_host_bootstrap_tests": "unmeasured"
+    "verify_host_bootstrap_tests": "unmeasured",
+    "build_cache": "unmeasured",
+    "verify_cache_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -739,7 +774,7 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project\u2019s Rust fixture executables.",
       "release_assets": [
         "chrono-harness"
       ]
@@ -845,7 +880,7 @@
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host\u2019s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture\u2019s actual cost invocation.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -879,6 +914,13 @@
     "verify_host_bootstrap_tests": {
       "need": "The original host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; it calls no released production executable.",
       "release_assets": []
+    },
+    "verify_cache_tests": {
+      "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",
+      "release_assets": [
+        "chrono-cache"
+      ]
     }
-  }
+  },
+  "rust_incremental": true
 }

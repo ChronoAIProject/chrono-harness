@@ -6,12 +6,12 @@
     "cargo": "cargo"
   },
   "operations": [
-    "build.ci"
+    "build.cache"
   ],
   "install": [
     {
-      "source": "crates/ci/target/debug/chrono-ci",
-      "destination": ".chrono-harness/bin/chrono-ci"
+      "source": "crates/cache/target/debug/chrono-cache",
+      "destination": ".chrono-harness/bin/chrono-cache"
     }
   ],
   "participation": {

@@ -93,6 +93,8 @@ def main():
     if config_path.is_absolute() or ".." in config_path.parts or config_path.parts[:2] != (".chrono-harness", "ci"):
         raise ValueError("bootstrap config must be an explicit host CI path")
     config = json.loads((root / config_path).read_text())
+    if "rust_incremental" in config and type(config["rust_incremental"]) is not bool:
+        raise ValueError("rust_incremental must be a boolean")
     participate(root, config_path, config)
     source_before = observe_source(root)
     if config["schema"] != "chrono-bootstrap/v1":
@@ -113,6 +115,8 @@ def main():
     if fmt_probe.returncode:
         subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], pass_fds=PASS_FDS, check=True)
     env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
+    if "rust_incremental" in config:
+        env["CARGO_INCREMENTAL"] = "1" if config["rust_incremental"] else "0"
     versions = {}
     for tool in ["cargo", "rustc"]:
         versions[tool] = subprocess.check_output([tool, "--version"], env=env, pass_fds=PASS_FDS, text=True).strip()
@@ -148,7 +152,7 @@ def main():
     }
     state = root / ".chrono-harness/state"
     state.mkdir(parents=True, exist_ok=True)
-    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "installed": installed}, indent=2) + "\n")
+    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}, indent=2) + "\n")
 
 
 if __name__ == "__main__":
