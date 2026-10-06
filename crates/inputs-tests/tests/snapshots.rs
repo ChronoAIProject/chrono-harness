@@ -696,22 +696,25 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     fs::create_dir_all(&state).unwrap();
     let program = state.join("snapshot Git λ");
     let trace = state.join("git-trace");
-    let real = chrono_harness::resolve_program(&root, "git", None).unwrap();
+    let real =
+        fs::canonicalize(chrono_harness::resolve_program(&root, "git", None).unwrap()).unwrap();
     let version = Command::new(&real).arg("--version").output().unwrap();
     assert!(version.status.success());
-    let quoted = |p: &Path| format!("'{}'", p.to_str().unwrap().replace('\'', "'\\''"));
-    fs::write(&program, format!("#!/bin/sh\n[ \"$SNAPSHOT_GIT\" = declared ] || exit 81\n[ -z \"$SHOULD_NOT_LEAK\" ] || exit 82\nprintf '%s\\n' \"$*\" >> {}\nexec {} \"$@\"\n",quoted(&trace),quoted(&real))).unwrap();
+    fs::copy(env!("CARGO_BIN_EXE_chrono-inputs-test-git"), &program).unwrap();
     fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
     let config = values.get_mut(CONFIG).unwrap();
     config["schema_version"] = value!(3);
     config["facts_git"] = value!({"tool":"chosen-git","input":"git-input"});
     config["tools"].as_array_mut().unwrap().push(value!({"id":"chosen-git","program":program,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}));
     config["environment"]["values"]["SNAPSHOT_GIT"] = value!("declared");
+    config["environment"]["values"]["SNAPSHOT_REAL_GIT"] = value!(real);
+    config["environment"]["values"]["SNAPSHOT_TRACE"] = value!(trace);
     for input in config["environment"]["inputs"].as_array_mut().unwrap() {
         input["presence"] = value!("present");
         input["location"] = value!(fs::canonicalize(input["location"].as_str().unwrap()).unwrap());
     }
     config["environment"]["inputs"].as_array_mut().unwrap().push(value!({"id":"git-input","location":program,"presence":"present","sha256":sha256(&fs::read(&program).unwrap())}));
+    config["environment"]["inputs"].as_array_mut().unwrap().push(value!({"id":"real-git-input","location":real,"presence":"present","sha256":sha256(&fs::read(&real).unwrap())}));
     config["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
@@ -732,11 +735,14 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
                 "input:data",
                 "input:same-bytes",
                 "input:git-input",
+                "input:real-git-input",
                 "input:absent",
                 "environment:DECLARED_EMPTY",
                 "environment:DECLARED_ABSENT",
                 "environment:FIXED",
-                "environment:SNAPSHOT_GIT"
+                "environment:SNAPSHOT_GIT",
+                "environment:SNAPSHOT_REAL_GIT",
+                "environment:SNAPSHOT_TRACE"
             ]
         }]
     });
@@ -749,11 +755,14 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
         "input:data",
         "input:same-bytes",
         "input:git-input",
+        "input:real-git-input",
         "input:absent",
         "environment:DECLARED_EMPTY",
         "environment:DECLARED_ABSENT",
         "environment:FIXED",
         "environment:SNAPSHOT_GIT",
+        "environment:SNAPSHOT_REAL_GIT",
+        "environment:SNAPSHOT_TRACE",
     ] {
         edges.push(value!({
             "from": input,
@@ -900,7 +909,8 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
         .unwrap_err();
         assert!(error.contains("E_COMPOSE_HEADER"), "{error}");
     }
-    fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::copy(env!("CARGO_BIN_EXE_chrono-inputs-test-zero"), &program).unwrap();
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).unwrap();
     let (exit, _, error) = invoke(
         &root,
         &[

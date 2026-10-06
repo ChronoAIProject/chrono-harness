@@ -12,6 +12,18 @@ chrono-judge-registration = { path = "../judge-registration" }
 serde_json = "1"
 tempfile = "3"
 
+[[bin]]
+name = "chrono-inputs-test-git"
+path = "tests/support/git.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-inputs-test-zero"
+path = "tests/support/zero.rs"
+test = false
+bench = false
+
 [[test]]
 name = "snapshots"
 path = "tests/snapshots.rs"
