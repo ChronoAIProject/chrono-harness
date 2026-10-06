@@ -1,3 +1,6 @@
+#[path = "support/native_executable.rs"]
+mod native_executable;
+
 use chrono_harness::{CommandSpec, Status, dispatch, run_process};
 use serde_json::{Value, json};
 
@@ -80,7 +83,7 @@ fn standard_sha256_vectors_match_memory_stream_and_file() {
 fn fixture(case: Value) -> (TempDir, String) {
     let dir = tempfile::tempdir_in(std::path::Path::new(CHILD).parent().unwrap()).unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/ci")).unwrap();
-    fs::hard_link(CHILD, dir.path().join("cli-child")).unwrap();
+    native_executable::install(CHILD, dir.path().join("cli-child")).unwrap();
     fs::write(
         dir.path().join("cli-case.json"),
         serde_json::to_vec(&case).unwrap(),
@@ -465,7 +468,7 @@ fn command_path_override_selects_and_hashes_the_invoked_executable() {
     let tools = dir.path().join("tools");
     fs::create_dir(&tools).unwrap();
     let executable = tools.join("true");
-    fs::hard_link(CHILD, &executable).unwrap();
+    native_executable::install(CHILD, &executable).unwrap();
     let bytes = fs::read(CHILD).unwrap();
     let mut spec = CommandSpec {
         program: "true".into(),
@@ -667,7 +670,7 @@ fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
         symlink(&root, &alias).unwrap();
         let marker = root.join(".chrono-harness/facts-launches");
         let tool = root.join(".chrono-harness/git-fixture");
-        fs::hard_link(CHILD, &tool).unwrap();
+        native_executable::install(CHILD, &tool).unwrap();
         let target = json!({"schema_version":3,"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"expected"}],"environment":{"inherit":[],"values":{},"inputs":[{"id":"git-bytes","location":tool,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&tool).unwrap())}]},"protocol":{"timeout_seconds":5,"stdout_limit_bytes":4096}});
         fs::write(
             root.join(".chrono-harness/direct.json"),

@@ -1,3 +1,6 @@
+#[path = "support/native_executable.rs"]
+mod native_executable;
+
 use chrono_harness::{facts::Reader, sha256};
 use serde_json::{Value, json};
 use std::{fs, path::PathBuf, process::Command};
@@ -33,7 +36,7 @@ impl Host {
         assert!(result.status.success());
         let version = Command::new(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
-        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-git-input"), &tool).unwrap();
+        native_executable::install(env!("CARGO_BIN_EXE_chrono-test-git-input"), &tool).unwrap();
         case["git"] = json!(git);
         case["root"] = json!(root);
         fs::write(
