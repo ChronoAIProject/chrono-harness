@@ -152,9 +152,11 @@ fn main() -> ExitCode {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
             let mut cargo = Command::new("cargo");
-            // Keep compiler invocations in the managed process's original stderr
-            // so a preparation failure identifies the launched Cargo stage.
-            cargo.args(["test", "--offline", "--verbose", "--manifest-path"]);
+            // This fixture owns one native library test. Compile/list/run that
+            // target without starting unrelated library or documentation builds.
+            // Keep compiler and linker stages in the original bounded stderr.
+            cargo.args(["test", "--lib", "--offline", "--verbose", "--manifest-path"]);
+            cargo.env("RUSTC_LOG", "rustc_codegen_ssa::back::link=info");
             cargo.arg(fixture.join("Cargo.toml"));
             if mode == "cargo-prepare" {
                 fs::create_dir_all(fixture.join("src")).unwrap();
