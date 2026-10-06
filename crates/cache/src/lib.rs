@@ -44,6 +44,10 @@ pub enum Input {
         path: String,
         presence: Presence,
     },
+    JsonValue {
+        path: String,
+        pointer: String,
+    },
     Environment {
         name: String,
         presence: Presence,
@@ -198,6 +202,16 @@ pub fn validate(c: &Config) -> Result<(), String> {
     chrono_harness::relative_path(&c.artifact_registry)?;
     for (id, input) in &c.inputs {
         name(id)?;
+        if let Input::JsonValue { pointer, .. } = input {
+            if (!pointer.is_empty() && !pointer.starts_with('/'))
+                || pointer
+                    .split('~')
+                    .skip(1)
+                    .any(|part| !part.starts_with('0') && !part.starts_with('1'))
+            {
+                return Err("E_CACHE_CONFIG: json-value requires an RFC 6901 pointer".into());
+            }
+        }
         if let Input::RegisteredFiles {
             registry,
             node,
@@ -354,6 +368,21 @@ fn consumer_operations(root: &Path, c: &Config, consumer: &str) -> Result<Value,
 }
 
 fn observe(root: &Path, input: &Input) -> Result<Value, String> {
+    if let Input::JsonValue {
+        path: value,
+        pointer,
+    } = input
+    {
+        let raw =
+            fs::read(path(root, value)?).map_err(|e| format!("E_CACHE_INPUT: {value}: {e}"))?;
+        let document: Value = decode(&raw)?;
+        let selected = document
+            .pointer(pointer)
+            .ok_or_else(|| format!("E_CACHE_INPUT: missing JSON value {value}#{pointer}"))?;
+        return Ok(json!({"declaration":input,
+            "observation":{"sha256":wire::digest(selected)?},
+            "source_file":{"sha256":sha256(&raw),"length":raw.len()}}));
+    }
     if let Input::Command {
         command,
         inherit,
@@ -409,8 +438,8 @@ fn observe(root: &Path, input: &Input) -> Result<Value, String> {
             node,
             edges,
         } => registered_files(root, registry, node, edges)?,
-        Input::Command { .. } => {
-            unreachable!("command inputs return their original evidence above")
+        Input::Command { .. } | Input::JsonValue { .. } => {
+            unreachable!("command and JSON inputs return their observations above")
         }
     };
     Ok(json!({"declaration":input,"observation":observation}))
@@ -590,6 +619,9 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
                 .map(|id| {
                     let mut value = observations[id].clone();
                     value.as_object_mut().unwrap().remove("original");
+                    // Whole-file provenance is retained in the plan, while an
+                    // explicit JSON pointer binds only its selected value.
+                    value.as_object_mut().unwrap().remove("source_file");
                     (id.clone(), value)
                 })
                 .collect()
@@ -631,7 +663,9 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
     }
     for id in observations.keys() {
         let mut inputs = Vec::new();
-        if let Input::File { path: input, .. } = &c.inputs[id] {
+        if let Input::File { path: input, .. } | Input::JsonValue { path: input, .. } =
+            &c.inputs[id]
+        {
             inputs.push(path(&root, input)?);
         }
         if matches!(c.inputs[id], Input::Command { .. }) {

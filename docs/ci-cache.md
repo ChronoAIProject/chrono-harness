@@ -44,6 +44,13 @@ directory. It explicitly declares:
   `absent`); `environment` has a variable name and expected presence; `literal`
   carries a JSON declaration. Present files are hashed from their actual bytes;
   environment observations retain a digest and byte length without the value.
+  `json-value` has a literal `path` and an explicit RFC 6901 `pointer` into a
+  present JSON document. Its key binds the selected value, including explicit
+  null, independent of object ordering, formatting and other fields. Empty
+  pointer selects the whole document. Invalid JSON/pointers and missing values
+  fail; the planner does not infer a selection. The plan also retains the whole
+  file's digest and length in `source_file` as provenance outside the key.
+  The same path and input/output exclusion rules apply as for file inputs.
   Literal declarations are not observations of actual toolchains or platforms.
   A `command` explicitly registers a bounded runner command, inherited variable
   names and `result: stdout` or `file-path`. Successful observations bind the
@@ -134,7 +141,7 @@ The planner rejects a linked worktree before restoration; this filesystem guard
 is not a general proof of Git ownership or lifecycle exclusion.
 
 This host's detector selects only the `ci` project target from its dedicated
-bootstrap recipe. Its 25 check units and aggregate rebuild core bootstrap
+bootstrap recipe. Its 26 check units and aggregate rebuild core bootstrap
 projects on fresh runners. Their registrations select the existing bootstrap
 outputs plus only the Cargo outputs claimed by each unit's FILEMAP plan. Existing
 native Rust release builds and verification units select their own project
@@ -143,6 +150,15 @@ compilation cache. Distinct grouped test producers have distinct cache entries.
 The cache seed runs `host.bootstrap-cache`, which builds the candidate planner
 using the existing bootstrap owner and `build.cache`, then installs that binary.
 It is not a second Cargo build implementation.
+
+The detector cache binds its own bootstrap recipe and has no business-check
+policy input. Check compilation caches explicitly select `/policy/environment`
+and `/policy/tools/cargo` from the host check configuration. Unit membership and
+report locations do not change those keys; environment or Cargo-tool changes do.
+Dedicated Rust host-adoption regressions exercise these distinctions, including
+an absent business-check policy for the detector and a changed detector build
+parameter. They cover these declared dependencies, not complete build-input
+closure or a general proof that all registrations are necessary.
 
 The provider obtains output keys from `chrono-cache plan --github-output`, retains
 the plan and original probe outputs, and restores before the original work.

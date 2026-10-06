@@ -886,11 +886,6 @@
       "path": ".chrono-harness/ci/bootstrap-core.json",
       "presence": "present"
     },
-    "check.config": {
-      "kind": "file",
-      "path": ".chrono-harness/ci/check.json",
-      "presence": "present"
-    },
     "release.script": {
       "kind": "file",
       "path": ".chrono-harness/release/build.py",
@@ -905,6 +900,16 @@
       "kind": "file",
       "path": ".chrono-harness/ci/bootstrap-detector.json",
       "presence": "present"
+    },
+    "check.environment": {
+      "kind": "json-value",
+      "path": ".chrono-harness/ci/check.json",
+      "pointer": "/policy/environment"
+    },
+    "check.cargo-tool": {
+      "kind": "json-value",
+      "path": ".chrono-harness/ci/check.json",
+      "pointer": "/policy/tools/cargo"
     }
   },
   "artifacts": {
@@ -1190,7 +1195,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "ci.sources"
@@ -1271,7 +1277,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-ci.sources"
@@ -1340,7 +1347,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "runner.sources"
@@ -1423,7 +1431,8 @@
         "worktree.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "worktree.sources"
@@ -1468,7 +1477,8 @@
         "runner-tests.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "runner-tests.sources"
@@ -1509,7 +1519,8 @@
         "instructions.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "instructions.sources"
@@ -1552,7 +1563,8 @@
         "instructions-tests.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "instructions-tests.sources"
@@ -1609,7 +1621,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-ci-tests.sources"
@@ -1668,7 +1681,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "ci-tests.sources"
@@ -1724,7 +1738,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-registration.sources"
@@ -1771,7 +1786,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-registration-tests.sources"
@@ -1829,7 +1845,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-filemap.sources"
@@ -1880,7 +1897,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-filemap-tests.sources"
@@ -1940,7 +1958,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-projects.sources"
@@ -1999,7 +2018,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-routes.sources"
@@ -2052,7 +2072,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-routes-tests.sources"
@@ -2107,7 +2128,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-projects-tests.sources"
@@ -2164,7 +2186,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-cost.sources"
@@ -2217,7 +2240,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-cost-tests.sources"
@@ -2269,7 +2293,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-mixed.sources"
@@ -2322,7 +2347,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-mixed-tests.sources"
@@ -2378,7 +2404,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "inputs.sources"
@@ -2437,7 +2464,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-workflow.sources"
@@ -2494,7 +2522,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -2549,7 +2578,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "inputs-tests.sources"
@@ -2595,7 +2625,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "distribution.sources"
@@ -2642,7 +2673,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "distribution-tests.sources"
@@ -2695,7 +2727,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-cargo.sources"
@@ -2750,7 +2783,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-cargo-tests.sources"
@@ -2809,7 +2843,8 @@
         "worktree-tests.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "worktree-tests.sources"
@@ -2850,7 +2885,8 @@
         "diagnostics.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "diagnostics.sources"
@@ -2893,7 +2929,8 @@
         "diagnostics-tests.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "diagnostics-tests.sources"
@@ -2938,7 +2975,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "cache.sources"
@@ -2985,7 +3023,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "cache-tests.sources"
@@ -6301,7 +6340,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -6358,7 +6398,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -6417,7 +6458,8 @@
         "worktree-tests.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "worktree-tests.sources"
@@ -6473,8 +6515,7 @@
         "runner.manifest",
         "runner.lock",
         "bootstrap.script",
-        "bootstrap.detector-config",
-        "check.config"
+        "bootstrap.detector-config"
       ],
       "source_inputs": [
         "ci.sources"
@@ -6529,7 +6570,8 @@
         "runner.lock",
         "bootstrap.script",
         "bootstrap.config",
-        "check.config"
+        "check.environment",
+        "check.cargo-tool"
       ],
       "source_inputs": [
         "judge-projects-tests.sources"

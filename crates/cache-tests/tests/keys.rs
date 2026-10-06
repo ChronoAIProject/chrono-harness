@@ -1059,3 +1059,193 @@ fn primary_checkout_transport_refuses_linked_worktrees_before_restoration() {
             .contains("E_CACHE_OWNERSHIP")
     );
 }
+
+fn host_cache_fixture(consumers: &[&str]) -> (tempfile::TempDir, Value) {
+    let host = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let mut config: Value =
+        serde_json::from_slice(&fs::read(host.join(".chrono-harness/cache.json")).unwrap())
+            .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
+    config["require_primary_checkout"] = json!(false);
+    // Vary actual host policy files while keeping unrelated compiler/source
+    // observations fixed; this contract fixture needs no compiler or SDK probes.
+    for (id, input) in config["inputs"].as_object_mut().unwrap() {
+        if input["path"] != ".chrono-harness/ci/check.json"
+            && input["path"] != ".chrono-harness/ci/bootstrap-detector.json"
+        {
+            *input = json!({"kind":"literal","value":{"fixed_input":id}});
+        }
+    }
+    config["caches"]
+        .as_object_mut()
+        .unwrap()
+        .retain(|_, cache| {
+            cache["consumers"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|id| consumers.contains(&id.as_str().unwrap()));
+            !cache["consumers"].as_array().unwrap().is_empty()
+        });
+    config["consumer_operations"]
+        .as_object_mut()
+        .unwrap()
+        .retain(|id, _| consumers.contains(&id.as_str()));
+    let mut files = std::collections::BTreeSet::from([
+        ".chrono-harness/ci/check.json".to_string(),
+        ".chrono-harness/ci/bootstrap-detector.json".to_string(),
+    ]);
+    for refs in config["consumer_operations"].as_object().unwrap().values() {
+        for source in refs.as_array().unwrap() {
+            files.insert(source["registry"].as_str().unwrap().to_string());
+        }
+    }
+    for path in files {
+        fs::copy(host.join(&path), root.path().join(&path)).unwrap();
+    }
+    register_artifacts(root.path(), &config);
+    fs::rename(
+        root.path().join(".chrono-harness/artifacts.json"),
+        root.path()
+            .join(config["artifact_registry"].as_str().unwrap()),
+    )
+    .unwrap();
+    (root, config)
+}
+
+#[test]
+fn host_detector_cache_keys_ignore_check_policy_but_bind_detector_bootstrap() {
+    let (root, config) = host_cache_fixture(&["check.detect"]);
+    let first = plan(root.path(), &config, "check.detect").unwrap();
+    let checks = root.path().join(".chrono-harness/ci/check.json");
+    let mut changed: Value = serde_json::from_slice(&fs::read(&checks).unwrap()).unwrap();
+    changed["policy"]["units"]["locality-fixture"] = json!({"tests":["test:fixture"]});
+    fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
+    assert_eq!(
+        first["caches"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]
+    );
+    fs::remove_file(checks).unwrap();
+    assert_eq!(
+        first["caches"],
+        plan(root.path(), &config, "check.detect").unwrap()["caches"]
+    );
+    let bootstrap = root
+        .path()
+        .join(".chrono-harness/ci/bootstrap-detector.json");
+    let mut changed: Value = serde_json::from_slice(&fs::read(&bootstrap).unwrap()).unwrap();
+    changed["rust_incremental"] = json!(!changed["rust_incremental"].as_bool().unwrap());
+    fs::write(bootstrap, serde_json::to_vec(&changed).unwrap()).unwrap();
+    let build_change = plan(root.path(), &config, "check.detect").unwrap();
+    assert_ne!(
+        first["caches"]["detect.ci"]["restore_keys"],
+        build_change["caches"]["detect.ci"]["restore_keys"]
+    );
+}
+
+#[test]
+fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() {
+    let consumers = ["check.aggregate", "check.unit_ci"];
+    let (root, config) = host_cache_fixture(&consumers);
+    let checks = root.path().join(".chrono-harness/ci/check.json");
+    let original: Value = serde_json::from_slice(&fs::read(&checks).unwrap()).unwrap();
+    for consumer in consumers {
+        fs::write(&checks, serde_json::to_vec(&original).unwrap()).unwrap();
+        let first = plan(root.path(), &config, consumer).unwrap();
+        let mut metadata = original.clone();
+        metadata["policy"]["units"]["locality-fixture"] = json!({"tests":["test:fixture"]});
+        fs::write(&checks, serde_json::to_vec(&metadata).unwrap()).unwrap();
+        assert_eq!(
+            first["caches"],
+            plan(root.path(), &config, consumer).unwrap()["caches"]
+        );
+        for (pointer, value) in [
+            ("/policy/environment/CARGO_INCREMENTAL", json!("0")),
+            ("/policy/tools/cargo", json!("declared-other-cargo")),
+        ] {
+            let mut changed = original.clone();
+            *changed.pointer_mut(pointer).unwrap() = value;
+            fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
+            let after = plan(root.path(), &config, consumer).unwrap();
+            for (id, cache) in first["caches"].as_object().unwrap() {
+                assert_ne!(
+                    cache["restore_keys"], after["caches"][id]["restore_keys"],
+                    "{consumer} {id} {pointer}"
+                );
+            }
+        }
+        fs::remove_file(&checks).unwrap();
+        assert!(
+            plan(root.path(), &config, consumer)
+                .unwrap_err()
+                .contains("check.json")
+        );
+    }
+}
+
+#[test]
+fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() {
+    let (root, mut config) = fixture();
+    config["inputs"]["profile"] =
+        json!({"kind":"json-value","path":"settings.json","pointer":"/build"});
+    let settings = root.path().join("settings.json");
+    fs::write(
+        &settings,
+        br#"{"build":{"flags":["-g"],"incremental":true},"units":["one"]}"#,
+    )
+    .unwrap();
+    let first = plan(root.path(), &config, "check.one").unwrap();
+    fs::write(
+        &settings,
+        br#"{ "units": ["two"], "build": {"incremental":true,"flags":["-g"]} }"#,
+    )
+    .unwrap();
+    let unrelated = plan(root.path(), &config, "check.one").unwrap();
+    assert_eq!(first["caches"], unrelated["caches"]);
+    assert_eq!(
+        first["inputs"]["profile"]["observation"],
+        unrelated["inputs"]["profile"]["observation"]
+    );
+    assert_ne!(
+        first["inputs"]["profile"]["source_file"],
+        unrelated["inputs"]["profile"]["source_file"]
+    );
+    fs::write(&settings, br#"{"build":null}"#).unwrap();
+    assert_ne!(
+        first["caches"],
+        plan(root.path(), &config, "check.one").unwrap()["caches"]
+    );
+    fs::write(&settings, b"{}").unwrap();
+    assert!(
+        plan(root.path(), &config, "check.one")
+            .unwrap_err()
+            .contains("missing JSON value settings.json#/build")
+    );
+    fs::write(&settings, b"invalid JSON").unwrap();
+    assert!(plan(root.path(), &config, "check.one").is_err());
+    fs::write(&settings, br#"{"a/b":{"~c":["selected"]}}"#).unwrap();
+    config["inputs"]["profile"]["pointer"] = json!("/a~1b/~0c/0");
+    assert!(plan(root.path(), &config, "check.one").is_ok());
+    for pointer in ["build", "/a~2b", "/a~"] {
+        config["inputs"]["profile"]["pointer"] = json!(pointer);
+        assert!(
+            plan(root.path(), &config, "check.one")
+                .unwrap_err()
+                .contains("RFC 6901")
+        );
+    }
+    config["inputs"]["profile"]["pointer"] = json!("");
+    assert!(plan(root.path(), &config, "check.one").is_ok());
+    fs::create_dir_all(root.path().join("out/project")).unwrap();
+    fs::copy(&settings, root.path().join("out/project/settings.json")).unwrap();
+    config["inputs"]["profile"]["path"] = json!("out/project/settings.json");
+    assert!(
+        plan(root.path(), &config, "check.one")
+            .unwrap_err()
+            .contains("inside a selected cache artifact")
+    );
+}
