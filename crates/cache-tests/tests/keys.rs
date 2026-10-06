@@ -388,3 +388,282 @@ fn cli_rejects_unknown_actions_and_ambiguous_options() {
         assert!(chrono_cache::dispatch(&args).is_err());
     }
 }
+
+#[test]
+fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
+    let (root, mut config) = fixture();
+    config["artifacts"]["target"]["path"] = json!("outputs with spaces/target");
+    register_artifacts(root.path(), &config);
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    let output = root.path().join("github-output");
+    fs::write(&output, "existing=value\n").unwrap();
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let invoke = |consumer: &str| {
+        Command::new(&binary)
+            .args([
+                "plan",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--config",
+                ".chrono-harness/cache.json",
+                "--consumer",
+                consumer,
+                "--github-output",
+                output.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap()
+    };
+    let result = invoke("check.one");
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let prepared: Value = serde_json::from_slice(&result.stdout).unwrap();
+    let contents = fs::read_to_string(&output).unwrap();
+    assert!(contents.starts_with("existing=value\n"));
+    let mut values = std::collections::BTreeMap::new();
+    let mut lines = contents.lines().skip(1);
+    while let Some(header) = lines.next() {
+        let (name, delimiter) = header.split_once("<<").unwrap();
+        let mut value = Vec::new();
+        loop {
+            let line = lines.next().unwrap();
+            if line == delimiter {
+                break;
+            }
+            value.push(line);
+        }
+        assert!(values.insert(name, value.join("\n")).is_none());
+    }
+    assert_eq!(values.len(), 3);
+    assert_eq!(
+        values["cache_70726f6a656374_key"],
+        prepared["caches"]["project"]["key"]
+    );
+    assert_eq!(
+        values["cache_70726f6a656374_paths"],
+        "outputs with spaces/target"
+    );
+    assert_eq!(
+        values["cache_70726f6a656374_restore"],
+        prepared["caches"]["project"]["restore_keys"][0]
+    );
+    assert_eq!(prepared["execution"], "not-started");
+    let failed = invoke("missing");
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("E_CACHE_CONSUMER"));
+    assert_eq!(fs::read_to_string(&output).unwrap(), contents);
+}
+
+#[test]
+fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
+    let (root, mut config) = fixture();
+    let compiler = root.path().join("compiler");
+    config["inputs"]["compiler"] = json!({"kind":"command", "command":{
+        "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),
+        "args":["file",compiler],"env":{},"timeout_seconds":2,"output_limit_bytes":4096},
+        "inherit":[],"result":"file-path"});
+    let first = plan(root.path(), &config, "check.one").unwrap();
+    assert_eq!(
+        first,
+        plan(root.path(), &config, "check.one").unwrap(),
+        "evidence times must not change keys"
+    );
+    fs::write(&compiler, b"compiler-two").unwrap();
+    let next = plan(root.path(), &config, "check.one").unwrap();
+    assert_ne!(
+        first["caches"]["project"]["restore_keys"],
+        next["caches"]["project"]["restore_keys"]
+    );
+    let observed = &first["inputs"]["compiler"]["observation"];
+    assert_eq!(observed["exit_code"], 0);
+    assert_eq!(observed["file"]["length"], b"compiler-one".len());
+    assert!(observed["executable_sha256"].as_str().unwrap().len() == 64);
+}
+
+#[test]
+fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
+    let (root, mut config) = fixture();
+    let tools = root.path().join("tools");
+    fs::create_dir(&tools).unwrap();
+    let executable = tools.join("registered-probe");
+    fs::copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), &executable).unwrap();
+    config["inputs"]["compiler"] = json!({"kind":"command", "command":{
+        "program":"registered-probe", "args":["echo","actual compiler"],
+        "env":{"PATH":tools},"timeout_seconds":2,"output_limit_bytes":4096},
+        "inherit":[],"result":"stdout"});
+    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    let observed = Path::new(
+        prepared["inputs"]["compiler"]["observation"]["executable"]
+            .as_str()
+            .unwrap(),
+    );
+    assert!(observed.is_absolute());
+    assert_eq!(
+        fs::canonicalize(observed).unwrap(),
+        fs::canonicalize(executable).unwrap()
+    );
+    config["inputs"]["compiler"]["command"]["env"] = json!({});
+    assert!(
+        plan(root.path(), &config, "check.one").is_err(),
+        "a missing declared PATH must not fall back to ambient tools"
+    );
+}
+
+#[test]
+fn failed_and_bounded_probes_retain_original_results_and_stop_planning() {
+    for (mode, limit) in [("exit", 4096), ("sleep", 4096), ("flood", 64)] {
+        let (root, mut config) = fixture();
+        config["inputs"]["compiler"] = json!({"kind":"command","command":{
+            "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":[mode],"env":{},
+            "timeout_seconds":1,"output_limit_bytes":limit},"inherit":[],"result":"stdout"});
+        let error = plan(root.path(), &config, "check.one").unwrap_err();
+        assert!(error.contains("E_CACHE_PROBE"), "{error}");
+        let files = fs::read_dir(root.path().join(".chrono-harness/state/cache-probes"))
+            .unwrap()
+            .map(|v| v.unwrap().path())
+            .collect::<Vec<_>>();
+        assert_eq!(files.len(), 1);
+        let evidence: Value = serde_json::from_slice(&fs::read(&files[0]).unwrap()).unwrap();
+        assert!(error.contains(files[0].file_name().unwrap().to_str().unwrap()));
+        if mode == "exit" {
+            assert_eq!(evidence["exit_code"], 7);
+            assert_eq!(evidence["stderr"], "original probe failure\n");
+        } else {
+            assert!(evidence["failure"].is_string());
+        }
+    }
+}
+
+#[test]
+fn registered_source_keys_follow_only_explicit_transitive_filemap_edges() {
+    let (root, mut config) = fixture();
+    config["inputs"]["source"] = json!({"kind":"registered-files","registry":".chrono-harness/FILEMAP.json","node":"project:product","edges":["compile"]});
+    let mut registry = json!({"schema_version":2,"project_edges":[
+        {"from":"project:dependency","to":"project:product","kind":"compile"},
+        {"from":"project:unrelated","to":"project:product","kind":"test-execution"}],
+        "files":[
+            {"path":"source","edges":[{"kind":"compile","to":"project:product"}]},
+            {"path":"dependency","edges":[{"kind":"compile","to":"project:dependency"}]},
+            {"path":"unavailable","edges":[{"kind":"compile","to":"project:unrelated"}]}]});
+    fs::write(root.path().join("dependency"), b"first dependency").unwrap();
+    let invoke = |registry: &Value| {
+        fs::write(
+            root.path().join(".chrono-harness/FILEMAP.json"),
+            serde_json::to_vec(registry).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            root.path().join(".chrono-harness/cache.json"),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        let binary =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+        let result = Command::new(binary)
+            .args([
+                "plan",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--config",
+                ".chrono-harness/cache.json",
+                "--consumer",
+                "check.one",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        serde_json::from_slice::<Value>(&result.stdout).unwrap()
+    };
+    let first = invoke(&registry);
+    assert_eq!(
+        first["inputs"]["source"]["observation"]["files"]
+            .as_object()
+            .unwrap()
+            .len(),
+        2
+    );
+    registry["files"][2]["cost"] = json!("unrelated membership update");
+    assert_eq!(first, invoke(&registry));
+    fs::write(root.path().join("dependency"), b"next dependency").unwrap();
+    let changed = invoke(&registry);
+    assert_ne!(
+        first["caches"]["project"]["key"],
+        changed["caches"]["project"]["key"]
+    );
+    assert_eq!(
+        first["caches"]["project"]["restore_keys"],
+        changed["caches"]["project"]["restore_keys"]
+    );
+    registry["project_edges"][0]["kind"] = json!("runtime-input");
+    let detached = invoke(&registry);
+    assert_eq!(
+        detached["inputs"]["source"]["observation"]["files"]
+            .as_object()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_ne!(
+        changed["caches"]["project"]["key"],
+        detached["caches"]["project"]["key"]
+    );
+}
+
+#[test]
+fn primary_checkout_transport_refuses_linked_worktrees_before_restoration() {
+    let (root, mut config) = fixture();
+    config["require_primary_checkout"] = json!(true);
+    assert!(
+        plan(root.path(), &config, "check.one")
+            .unwrap_err()
+            .contains("E_CACHE_OWNERSHIP")
+    );
+    let git = |args: &[&str]| {
+        let result = Command::new("/usr/bin/git")
+            .args(args)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["add", "."]);
+    git(&[
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "fixture",
+    ]);
+    assert!(plan(root.path(), &config, "check.one").is_ok());
+    let linked = tempfile::tempdir().unwrap();
+    git(&[
+        "worktree",
+        "add",
+        "--detach",
+        linked.path().to_str().unwrap(),
+        "HEAD",
+    ]);
+    assert!(
+        plan(linked.path(), &config, "check.one")
+            .unwrap_err()
+            .contains("E_CACHE_OWNERSHIP")
+    );
+}

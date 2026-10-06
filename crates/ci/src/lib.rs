@@ -4,6 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
+pub mod cache;
 mod check_inputs;
 mod event_git;
 pub mod full;

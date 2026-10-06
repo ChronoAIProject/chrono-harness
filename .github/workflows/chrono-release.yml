@@ -35,7 +35,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_runner' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.runner
+        id: cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -45,6 +61,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_runner"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+      - name: Save registered cache release.linux.release.runner
+        id: cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -77,7 +101,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_instructions' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.instructions
+        id: cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -87,6 +127,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_instructions"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+      - name: Save registered cache release.linux.release.instructions
+        id: cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -119,7 +167,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_ci' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-ci
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -129,6 +193,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+      - name: Save registered cache release.linux.release.judge-ci
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -161,7 +233,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_ci' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.ci
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6369_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -171,6 +259,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+      - name: Save registered cache release.linux.release.ci
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6369_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -203,7 +299,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_registration' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-registration
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -213,6 +325,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_registration"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+      - name: Save registered cache release.linux.release.judge-registration
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -245,7 +365,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_filemap' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-filemap
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -255,6 +391,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_filemap"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+      - name: Save registered cache release.linux.release.judge-filemap
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -287,7 +431,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_routes' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-routes
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -297,6 +457,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_routes"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+      - name: Save registered cache release.linux.release.judge-routes
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -329,7 +497,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_projects' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-projects
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -339,6 +523,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_projects"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+      - name: Save registered cache release.linux.release.judge-projects
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -371,7 +563,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cost' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-cost
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -381,6 +589,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_cost"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+      - name: Save registered cache release.linux.release.judge-cost
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -413,7 +629,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_mixed' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-mixed
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -423,6 +655,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_mixed"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+      - name: Save registered cache release.linux.release.judge-mixed
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -455,7 +695,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_workflow' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-workflow
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -465,6 +721,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_workflow"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+      - name: Save registered cache release.linux.release.judge-workflow
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -497,7 +761,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_inputs' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.inputs
+        id: cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -507,6 +787,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_inputs"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+      - name: Save registered cache release.linux.release.inputs
+        id: cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -539,7 +827,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_distribution' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.distribution
+        id: cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -549,6 +853,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_distribution"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+      - name: Save registered cache release.linux.release.distribution
+        id: cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -581,7 +893,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cargo' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.judge-cargo
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -591,6 +919,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_judge_cargo"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
+      - name: Save registered cache release.linux.release.judge-cargo
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -623,7 +959,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_worktree' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.worktree
+        id: cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -633,6 +985,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_worktree"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+      - name: Save registered cache release.linux.release.worktree
+        id: cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -771,7 +1131,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_distribution_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.distribution-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -781,6 +1157,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_distribution_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+      - name: Save registered cache release.linux.verify.distribution-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -919,7 +1303,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_worktree_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.worktree-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -929,6 +1329,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_worktree_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+      - name: Save registered cache release.linux.verify.worktree-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1067,7 +1475,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_runner_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.runner-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1077,6 +1501,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_runner_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+      - name: Save registered cache release.linux.verify.runner-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1215,7 +1647,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_inputs_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.inputs-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1225,6 +1673,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_inputs_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+      - name: Save registered cache release.linux.verify.inputs-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1363,7 +1819,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_ci_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.ci-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1373,6 +1845,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+      - name: Save registered cache release.linux.verify.ci-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1511,7 +1991,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_ci_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-ci-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1521,6 +2017,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+      - name: Save registered cache release.linux.verify.judge-ci-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1659,7 +2163,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_registration_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-registration-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1669,6 +2189,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_registration_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+      - name: Save registered cache release.linux.verify.judge-registration-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1807,7 +2335,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_projects_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-projects-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1817,6 +2361,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_projects_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+      - name: Save registered cache release.linux.verify.judge-projects-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1955,7 +2507,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_workflow_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-workflow-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -1965,6 +2533,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_workflow_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+      - name: Save registered cache release.linux.verify.judge-workflow-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2103,7 +2679,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cargo_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-cargo-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -2113,6 +2705,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_cargo_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
+      - name: Save registered cache release.linux.verify.judge-cargo-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2251,7 +2851,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_instructions_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.instructions-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -2261,6 +2877,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_instructions_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+      - name: Save registered cache release.linux.verify.instructions-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2399,7 +3023,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_filemap_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-filemap-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -2409,6 +3049,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_filemap_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+      - name: Save registered cache release.linux.verify.judge-filemap-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2547,7 +3195,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_routes_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-routes-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -2557,6 +3221,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_routes_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+      - name: Save registered cache release.linux.verify.judge-routes-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2695,7 +3367,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cost_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-cost-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -2705,6 +3393,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_cost_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+      - name: Save registered cache release.linux.verify.judge-cost-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2843,7 +3539,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_mixed_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.judge-mixed-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -2853,6 +3565,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_judge_mixed_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+      - name: Save registered cache release.linux.verify.judge-mixed-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3196,7 +3916,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_runner' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.runner
+        id: cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3206,6 +3942,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_runner"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+      - name: Save registered cache release.macos.release.runner
+        id: cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3238,7 +3982,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_instructions' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.instructions
+        id: cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3248,6 +4008,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_instructions"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+      - name: Save registered cache release.macos.release.instructions
+        id: cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3280,7 +4048,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_ci' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-ci
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3290,6 +4074,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+      - name: Save registered cache release.macos.release.judge-ci
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3322,7 +4114,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_ci' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.ci
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6369_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3332,6 +4140,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_ci"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+      - name: Save registered cache release.macos.release.ci
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6369_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3364,7 +4180,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_registration' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-registration
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3374,6 +4206,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_registration"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+      - name: Save registered cache release.macos.release.judge-registration
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3406,7 +4246,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_filemap' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-filemap
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3416,6 +4272,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_filemap"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+      - name: Save registered cache release.macos.release.judge-filemap
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3448,7 +4312,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_routes' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-routes
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3458,6 +4338,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_routes"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+      - name: Save registered cache release.macos.release.judge-routes
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3490,7 +4378,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_projects' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-projects
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3500,6 +4404,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_projects"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+      - name: Save registered cache release.macos.release.judge-projects
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3532,7 +4444,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cost' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-cost
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3542,6 +4470,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_cost"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+      - name: Save registered cache release.macos.release.judge-cost
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3574,7 +4510,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_mixed' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-mixed
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3584,6 +4536,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_mixed"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+      - name: Save registered cache release.macos.release.judge-mixed
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3616,7 +4576,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_workflow' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-workflow
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3626,6 +4602,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_workflow"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+      - name: Save registered cache release.macos.release.judge-workflow
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3658,7 +4642,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_inputs' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.inputs
+        id: cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3668,6 +4668,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_inputs"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+      - name: Save registered cache release.macos.release.inputs
+        id: cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3700,7 +4708,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_distribution' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.distribution
+        id: cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3710,6 +4734,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_distribution"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+      - name: Save registered cache release.macos.release.distribution
+        id: cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3742,7 +4774,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cargo' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.judge-cargo
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3752,6 +4800,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_judge_cargo"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
+      - name: Save registered cache release.macos.release.judge-cargo
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3784,7 +4840,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_worktree' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.worktree
+        id: cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3794,6 +4866,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_worktree"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+      - name: Save registered cache release.macos.release.worktree
+        id: cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3932,7 +5012,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_distribution_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.distribution-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -3942,6 +5038,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_distribution_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+      - name: Save registered cache release.macos.verify.distribution-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4080,7 +5184,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_worktree_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.worktree-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4090,6 +5210,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_worktree_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+      - name: Save registered cache release.macos.verify.worktree-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4228,7 +5356,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_runner_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.runner-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4238,6 +5382,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_runner_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+      - name: Save registered cache release.macos.verify.runner-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4376,7 +5528,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_inputs_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.inputs-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4386,6 +5554,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_inputs_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+      - name: Save registered cache release.macos.verify.inputs-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4524,7 +5700,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_ci_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.ci-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4534,6 +5726,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+      - name: Save registered cache release.macos.verify.ci-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4672,7 +5872,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_ci_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-ci-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4682,6 +5898,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_ci_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+      - name: Save registered cache release.macos.verify.judge-ci-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4820,7 +6044,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_registration_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-registration-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4830,6 +6070,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_registration_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+      - name: Save registered cache release.macos.verify.judge-registration-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4968,7 +6216,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_projects_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-projects-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -4978,6 +6242,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_projects_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+      - name: Save registered cache release.macos.verify.judge-projects-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5116,7 +6388,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_workflow_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-workflow-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -5126,6 +6414,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_workflow_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+      - name: Save registered cache release.macos.verify.judge-workflow-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5264,7 +6560,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cargo_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-cargo-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -5274,6 +6586,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_cargo_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
+      - name: Save registered cache release.macos.verify.judge-cargo-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5412,7 +6732,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_instructions_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.instructions-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -5422,6 +6758,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_instructions_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+      - name: Save registered cache release.macos.verify.instructions-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5560,7 +6904,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_filemap_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-filemap-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -5570,6 +6930,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_filemap_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+      - name: Save registered cache release.macos.verify.judge-filemap-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5708,7 +7076,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_routes_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-routes-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -5718,6 +7102,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_routes_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+      - name: Save registered cache release.macos.verify.judge-routes-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5856,7 +7248,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cost_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-cost-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -5866,6 +7274,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_cost_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+      - name: Save registered cache release.macos.verify.judge-cost-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6004,7 +7420,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_worktree.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_worktree/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_mixed_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.judge-mixed-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -6014,6 +7446,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_judge_mixed_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+      - name: Save registered cache release.macos.verify.judge-mixed-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6709,7 +8149,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_diagnostics_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.diagnostics-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -6719,6 +8175,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_diagnostics_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+      - name: Save registered cache release.linux.verify.diagnostics-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6751,7 +8215,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_diagnostics_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.diagnostics-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -6761,6 +8241,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_diagnostics_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+      - name: Save registered cache release.macos.verify.diagnostics-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6877,7 +8365,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_cache' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.release.cache
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6361636865_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -6887,6 +8391,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_build_cache"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+      - name: Save registered cache release.linux.release.cache
+        id: cache_72656c656173652e6c696e75782e72656c656173652e6361636865_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6927,7 +8439,23 @@ jobs:
           artifact-ids: ${{ needs.linux_build_cache.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_cache/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_cache_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.linux.verify.cache-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -6937,6 +8465,14 @@ jobs:
           CHRONO_RELEASE_JOB: "linux_verify_cache_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+      - name: Save registered cache release.linux.verify.cache-tests
+        id: cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6969,7 +8505,23 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_cache' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.release.cache
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6361636865_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -6979,6 +8531,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_build_cache"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+      - name: Save registered cache release.macos.release.cache
+        id: cache_72656c656173652e6d61636f732e72656c656173652e6361636865_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -7019,7 +8579,23 @@ jobs:
           artifact-ids: ${{ needs.macos_build_cache.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_cache/"
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_cache_tests' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache release.macos.verify.cache-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_restore }}
+          fail-on-cache-miss: false
       - name: Run registered release command
+        id: chrono_cache_work
         if: ${{ always() }}
         shell: bash
         env:
@@ -7029,6 +8605,14 @@ jobs:
           CHRONO_RELEASE_JOB: "macos_verify_cache_tests"
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+      - name: Save registered cache release.macos.verify.cache-tests
+        id: cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_paths }}
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}

@@ -56,6 +56,8 @@ pub(super) const MARKER: &str = "# chrono-ci: owned github-units/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persistent_cache: Option<super::cache::Config>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -158,6 +160,14 @@ impl Config {
 }
 
 pub fn validate(c: &Config) -> Result<(), String> {
+    if let Some(cache) = &c.persistent_cache {
+        let mut jobs: BTreeSet<_> = c.units.keys().map(|id| super::gating::job_id(id)).collect();
+        jobs.insert("aggregate".into());
+        if c.job_gating.is_some() {
+            jobs.insert("detect".into());
+        }
+        super::cache::validate(cache, &jobs)?;
+    }
     if !matches!(c.schema.as_str(), SCHEMA | FULL_SCHEMA)
         || c.units.is_empty()
         || c.collection.initial_inventory.is_some()
@@ -490,6 +500,17 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             c.schema == FULL_SCHEMA,
         )?
         .replacen(super::MARKER, MARKER, 1);
+        let rendered = super::cache::project(
+            c.persistent_cache.as_ref(),
+            &unit
+                .map(super::gating::job_id)
+                .unwrap_or("aggregate".into()),
+            rendered,
+            "Bootstrap registered tools",
+            "Canonical harness check",
+            None,
+            Some("Preserve actual check evidence"),
+        )?;
         outputs.insert(w.workflow_path.clone(), rendered);
     }
     Ok(outputs)
@@ -502,12 +523,14 @@ fn projection_changes(
     c: &Config,
     verify: bool,
 ) -> Result<ProjectionChanges, String> {
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let outputs = render(c, path)?;
     let mut writes = vec![];
     let legacy_outputs = if c.job_gating.is_some() {
         let mut legacy = c.clone();
         legacy.job_gating = None;
         legacy.native_adoption = None;
+        legacy.persistent_cache = None;
         render(&legacy, path)?
     } else {
         BTreeMap::new()
@@ -540,6 +563,7 @@ fn projection_changes(
         let mut legacy = c.clone();
         legacy.job_gating = None;
         legacy.native_adoption = None;
+        legacy.persistent_cache = None;
         for (path, bytes) in render(&legacy, path)? {
             if outputs.contains_key(&path) {
                 continue;

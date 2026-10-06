@@ -1,10 +1,12 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
+mod probe;
 use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, wire};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    io::Write,
     path::{Component, Path, PathBuf},
 };
 
@@ -19,14 +21,34 @@ pub struct Config {
     pub inputs: BTreeMap<String, Input>,
     pub artifacts: BTreeMap<String, Artifact>,
     pub caches: BTreeMap<String, Cache>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_primary_checkout: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Input {
-    File { path: String, presence: Presence },
-    Environment { name: String, presence: Presence },
-    Literal { value: Value },
+    File {
+        path: String,
+        presence: Presence,
+    },
+    Environment {
+        name: String,
+        presence: Presence,
+    },
+    Literal {
+        value: Value,
+    },
+    Command {
+        command: chrono_harness::CommandSpec,
+        inherit: Vec<String>,
+        result: probe::ResultKind,
+    },
+    RegisteredFiles {
+        registry: String,
+        node: String,
+        edges: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -131,6 +153,34 @@ pub fn validate(c: &Config) -> Result<(), String> {
     chrono_harness::relative_path(&c.artifact_registry)?;
     for (id, input) in &c.inputs {
         name(id)?;
+        if let Input::RegisteredFiles {
+            registry,
+            node,
+            edges,
+        } = input
+        {
+            chrono_harness::relative_path(registry)?;
+            if !registry.starts_with(".chrono-harness/") || node.is_empty() || edges.is_empty() {
+                return Err("E_CACHE_CONFIG: registered file inputs need a host registry, node and edge kinds".into());
+            }
+            unique(edges)?;
+        }
+        if let Input::Command {
+            command, inherit, ..
+        } = input
+        {
+            chrono_harness::validate_command(command)?;
+            let mut names = BTreeSet::new();
+            for name in inherit {
+                if name.is_empty()
+                    || name.contains(['=', '\0'])
+                    || !names.insert(name)
+                    || command.env.contains_key(name)
+                {
+                    return Err("E_CACHE_CONFIG: invalid or ambiguous probe environment".into());
+                }
+            }
+        }
         if let Input::Environment { name, .. } = input {
             if name.is_empty() || name.contains(['=', '\0']) {
                 return Err("E_CACHE_CONFIG: invalid environment name".into());
@@ -199,6 +249,15 @@ pub fn validate(c: &Config) -> Result<(), String> {
 }
 
 fn observe(root: &Path, input: &Input) -> Result<Value, String> {
+    if let Input::Command {
+        command,
+        inherit,
+        result,
+    } = input
+    {
+        let (observation, original) = probe::observe(root, command, inherit, result)?;
+        return Ok(json!({"declaration":input,"observation":observation,"original":original}));
+    }
     let observation = match input {
         Input::File {
             path: value,
@@ -240,8 +299,93 @@ fn observe(root: &Path, input: &Input) -> Result<Value, String> {
             }
         },
         Input::Literal { value } => json!({"declaration_sha256":wire::digest(value)?}),
+        Input::RegisteredFiles {
+            registry,
+            node,
+            edges,
+        } => registered_files(root, registry, node, edges)?,
+        Input::Command { .. } => {
+            unreachable!("command inputs return their original evidence above")
+        }
     };
     Ok(json!({"declaration":input,"observation":observation}))
+}
+
+fn registered_files(
+    root: &Path,
+    registry: &str,
+    node: &str,
+    kinds: &[String],
+) -> Result<Value, String> {
+    let registry: Value =
+        decode(&fs::read(no_symlink_parents(root, registry)?).map_err(|e| e.to_string())?)?;
+    if registry["schema_version"] != 2 {
+        return Err("E_CACHE_INPUT: registered files require FILEMAP v2".into());
+    }
+    let declared = registry["project_edges"]
+        .as_array()
+        .ok_or("E_CACHE_INPUT: project edges missing")?;
+    let mut nodes = BTreeSet::from([node.to_owned()]);
+    let mut edges = BTreeSet::new();
+    loop {
+        let before = nodes.len();
+        for edge in declared {
+            let kind = edge["kind"].as_str().ok_or("E_CACHE_INPUT: edge kind")?;
+            let from = edge["from"].as_str().ok_or("E_CACHE_INPUT: edge source")?;
+            let to = edge["to"]
+                .as_str()
+                .ok_or("E_CACHE_INPUT: edge destination")?;
+            if kinds.iter().any(|v| v == kind) && nodes.contains(to) {
+                nodes.insert(from.to_owned());
+                edges.insert((from.to_owned(), kind.to_owned(), to.to_owned()));
+            }
+        }
+        if before == nodes.len() {
+            break;
+        }
+    }
+    let mut files = BTreeMap::new();
+    for file in registry["files"]
+        .as_array()
+        .ok_or("E_CACHE_INPUT: files missing")?
+    {
+        let file_edges = file["edges"]
+            .as_array()
+            .ok_or("E_CACHE_INPUT: file edges missing")?;
+        let selected = file_edges
+            .iter()
+            .filter(|edge| {
+                edge["kind"]
+                    .as_str()
+                    .is_some_and(|k| kinds.iter().any(|v| v == k))
+                    && edge["to"].as_str().is_some_and(|n| nodes.contains(n))
+            })
+            .map(|edge| {
+                (
+                    edge["kind"].as_str().unwrap().to_owned(),
+                    edge["to"].as_str().unwrap().to_owned(),
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        if selected.is_empty() {
+            continue;
+        }
+        let name = file["path"].as_str().ok_or("E_CACHE_INPUT: file path")?;
+        let (digest, length) = file_identity(&no_symlink_parents(root, name)?)?;
+        if files
+            .insert(
+                name.to_owned(),
+                json!({"sha256":digest,"length":length,"edges":selected}),
+            )
+            .is_some()
+        {
+            return Err("E_CACHE_INPUT: duplicate selected file".into());
+        }
+    }
+    if files.is_empty() {
+        return Err(format!("E_CACHE_INPUT: no registered files for {node}"));
+    }
+    Ok(json!({"nodes":nodes,"edges":edges,"files":files}))
 }
 
 /// Read only the selected consumer's explicitly named inputs. Literal values are
@@ -250,6 +394,20 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
     validate(c)?;
     name(consumer)?;
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    if c.require_primary_checkout {
+        let git = root.join(".git");
+        let metadata = fs::symlink_metadata(&git).map_err(|e| format!("E_CACHE_OWNERSHIP: {e}"))?;
+        let shared = match fs::symlink_metadata(git.join("commondir")) {
+            Ok(_) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => return Err(format!("E_CACHE_OWNERSHIP: {error}")),
+        };
+        if !metadata.is_dir() || shared {
+            return Err(
+                "E_CACHE_OWNERSHIP: this cache transport requires a primary Git checkout".into(),
+            );
+        }
+    }
     let selected: BTreeMap<_, _> = c
         .caches
         .iter()
@@ -319,7 +477,11 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         }
         let values = |ids: &[String]| -> BTreeMap<_, _> {
             ids.iter()
-                .map(|id| (id.clone(), observations[id].clone()))
+                .map(|id| {
+                    let mut value = observations[id].clone();
+                    value.as_object_mut().unwrap().remove("original");
+                    (id.clone(), value)
+                })
                 .collect()
         };
         let compatibility =
@@ -340,8 +502,30 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         );
     }
     for id in observations.keys() {
+        let mut inputs = Vec::new();
         if let Input::File { path: input, .. } = &c.inputs[id] {
-            let input = path(&root, input)?;
+            inputs.push(path(&root, input)?);
+        }
+        if matches!(c.inputs[id], Input::Command { .. }) {
+            for value in [
+                &observations[id]["observation"]["executable"],
+                &observations[id]["observation"]["file"]["path"],
+            ] {
+                if let Some(value) = value.as_str() {
+                    inputs.push(fs::canonicalize(value).map_err(|e| e.to_string())?);
+                }
+            }
+        }
+        if matches!(c.inputs[id], Input::RegisteredFiles { .. }) {
+            for name in observations[id]["observation"]["files"]
+                .as_object()
+                .ok_or("E_CACHE_INPUT: file observations")?
+                .keys()
+            {
+                inputs.push(path(&root, name)?);
+            }
+        }
+        for input in inputs {
             if paths.iter().any(|artifact| input.starts_with(artifact)) {
                 return Err(format!(
                     "E_CACHE_PATH: registered input {id} is inside a selected cache artifact"
@@ -362,13 +546,19 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     let mut options = BTreeMap::new();
     for pair in args.get(1..).unwrap_or_default().chunks(2) {
         if pair.len() != 2
-            || !["--host-root", "--config", "--consumer"].contains(&pair[0].as_str())
+            || !["--host-root", "--config", "--consumer", "--github-output"]
+                .contains(&pair[0].as_str())
             || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
         {
-            return Err("plan requires unique host-root/config/consumer options".into());
+            return Err(
+                "plan requires unique host-root/config/consumer and optional github-output".into(),
+            );
         }
     }
-    if options.len() != 3 {
+    if ["--host-root", "--config", "--consumer"]
+        .iter()
+        .any(|name| !options.contains_key(name))
+    {
         return Err("plan requires host-root/config/consumer".into());
     }
     let root = Path::new(options["--host-root"]);
@@ -378,9 +568,52 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     let c: Config =
         decode(&fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())?)?;
-    Ok(
-        serde_json::to_string(&prepare(root, &c, options["--consumer"])?)
-            .map_err(|e| e.to_string())?
-            + "\n",
-    )
+    let plan = prepare(root, &c, options["--consumer"])?;
+    if let Some(output) = options.get("--github-output") {
+        let mut text = String::new();
+        for (id, cache) in plan["caches"]
+            .as_object()
+            .ok_or("E_CACHE_OUTPUT: caches object")?
+        {
+            let prefix = format!(
+                "cache_{}",
+                id.bytes().map(|b| format!("{b:02x}")).collect::<String>()
+            );
+            let paths = cache["artifacts"]
+                .as_object()
+                .ok_or("E_CACHE_OUTPUT: artifacts object")?
+                .values()
+                .map(|a| a["path"].as_str().ok_or("E_CACHE_OUTPUT: artifact path"))
+                .collect::<Result<Vec<_>, _>>()?
+                .join("\n");
+            let restore = cache["restore_keys"]
+                .as_array()
+                .ok_or("E_CACHE_OUTPUT: restore keys")?
+                .iter()
+                .map(|v| v.as_str().ok_or("E_CACHE_OUTPUT: restore key"))
+                .collect::<Result<Vec<_>, _>>()?
+                .join("\n");
+            for (suffix, value) in [
+                ("key", cache["key"].as_str().ok_or("E_CACHE_OUTPUT: key")?),
+                ("paths", paths.as_str()),
+                ("restore", restore.as_str()),
+            ] {
+                let delimiter = format!("chrono_{}", sha256(value.as_bytes()));
+                if value.lines().any(|line| line == delimiter) {
+                    return Err("E_CACHE_OUTPUT: delimiter collision".into());
+                }
+                text.push_str(&format!(
+                    "{prefix}_{suffix}<<{delimiter}\n{value}\n{delimiter}\n"
+                ));
+            }
+        }
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(output)
+            .map_err(|e| format!("E_CACHE_OUTPUT: {e}"))?;
+        file.write_all(text.as_bytes())
+            .map_err(|e| format!("E_CACHE_OUTPUT: {e}"))?;
+    }
+    Ok(serde_json::to_string(&plan).map_err(|e| e.to_string())? + "\n")
 }

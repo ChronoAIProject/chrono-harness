@@ -13,6 +13,8 @@ const ADOPTED: &str = ".chrono-harness/ci/release.json";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persistent_cache: Option<super::cache::Config>,
     pub schema: String,
     pub workflow_path: String,
     pub name: String,
@@ -79,6 +81,12 @@ fn literal(value: &str) -> Result<(), String> {
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
+    if let Some(cache) = &c.persistent_cache {
+        if c.schema != UNITS_SCHEMA {
+            return Err("persistent release cache requires v2".into());
+        }
+        super::cache::validate(cache, &c.jobs.iter().map(|job| job.id.clone()).collect())?;
+    }
     if !matches!(c.schema.as_str(), SCHEMA | UNITS_SCHEMA) || c.name.is_empty() || c.jobs.is_empty()
     {
         return Err("invalid release workflow schema/name/jobs".into());
@@ -231,7 +239,17 @@ pub fn render(c: &Config) -> Result<String, String> {
     );
     for job in &c.jobs {
         if c.schema == UNITS_SCHEMA {
-            render_unit(&mut output, c, job)?;
+            let mut body = String::new();
+            render_unit(&mut body, c, job)?;
+            output.push_str(&super::cache::project(
+                c.persistent_cache.as_ref(),
+                &job.id,
+                body,
+                "Run registered release command",
+                "Run registered release command",
+                None,
+                Some("Preserve original release artifacts"),
+            )?);
             continue;
         }
         output.push_str(&format!(
@@ -380,6 +398,7 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
 }
 
 pub(crate) fn generate(root: &Path, c: &Config, verify: bool) -> Result<bool, String> {
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let output = render(c)?;
     let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
     if verify && !same {
@@ -402,6 +421,7 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     } else {
         incoming
     };
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let output = render(&c)?;
     let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
     if !existing {

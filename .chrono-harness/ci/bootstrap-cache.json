@@ -1,0 +1,28 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {
+    "cargo": "cargo"
+  },
+  "operations": [
+    "build.cache"
+  ],
+  "install": [
+    {
+      "source": "crates/cache/target/debug/chrono-cache",
+      "destination": ".chrono-harness/bin/chrono-cache"
+    }
+  ],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "python3",
+    "script": ".chrono-harness/ci/bootstrap.py"
+  },
+  "rust_incremental": true
+}

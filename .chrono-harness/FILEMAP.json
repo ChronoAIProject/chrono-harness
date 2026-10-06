@@ -5041,6 +5041,114 @@
           "to": "project:worktree-tests"
         }
       ]
+    },
+    {
+      "path": "crates/cache/src/probe.rs",
+      "owner": "cache",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/cache-tests/tests/support/probe.rs",
+      "owner": "cache-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci/src/cache.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/cache.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/cache.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:cache-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-cache.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

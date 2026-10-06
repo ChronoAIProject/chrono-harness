@@ -14,5 +14,11 @@ tempfile = "3"
 name = "keys"
 path = "tests/keys.rs"
 
+[[bin]]
+name = "chrono-cache-test-probe"
+path = "tests/support/probe.rs"
+test = false
+bench = false
+
 [profile.dev.package.sha2]
 opt-level = 3
