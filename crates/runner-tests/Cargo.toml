@@ -52,3 +52,15 @@ name = "chrono-test-protocol-judge"
 path = "tests/support/protocol_judge.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-test-cli-child"
+path = "tests/support/cli_child.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-git-input"
+path = "tests/support/git_input.rs"
+test = false
+bench = false
