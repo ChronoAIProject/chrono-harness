@@ -530,6 +530,7 @@
       "needs": [
         "linux_build_runner",
         "linux_build_judge_ci",
+        "linux_build_ci",
         "linux_build_judge_registration",
         "linux_build_judge_filemap",
         "linux_build_judge_routes",
@@ -543,6 +544,10 @@
         {
           "job": "linux_build_judge_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "linux_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
         },
         {
           "job": "linux_build_judge_registration",
@@ -1586,6 +1591,7 @@
       "needs": [
         "macos_build_runner",
         "macos_build_judge_ci",
+        "macos_build_ci",
         "macos_build_judge_registration",
         "macos_build_judge_filemap",
         "macos_build_judge_routes",
@@ -1599,6 +1605,10 @@
         {
           "job": "macos_build_judge_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "macos_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
         },
         {
           "job": "macos_build_judge_registration",

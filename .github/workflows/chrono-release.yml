@@ -1106,7 +1106,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
+    needs: ["linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1142,6 +1142,13 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+      - name: Download selected original artifact from linux_build_ci
+        if: ${{ always() && needs.linux_build_ci.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_build_ci.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/build_ci/"
       - name: Download selected original artifact from linux_build_judge_registration
         if: ${{ always() && needs.linux_build_judge_registration.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -3124,7 +3131,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
+    needs: ["macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-14"
     timeout-minutes: 45
     outputs:
@@ -3160,6 +3167,13 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+      - name: Download selected original artifact from macos_build_ci
+        if: ${{ always() && needs.macos_build_ci.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_build_ci.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/build_ci/"
       - name: Download selected original artifact from macos_build_judge_registration
         if: ${{ always() && needs.macos_build_judge_registration.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093

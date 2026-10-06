@@ -377,6 +377,7 @@
       "needs": [
         "build_runner",
         "build_judge_ci",
+        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -782,10 +783,11 @@
       ]
     },
     "verify_judge_projects_tests": {
-      "need": "crates/judge-projects-tests/tests/support/host.rs runs runner with registration, filemap, routes and projects to execute declared project/script tests; consumer.rs also runs judge-ci through the scoped runner entry and inspects actual operation receipts.",
+      "need": "crates/judge-projects-tests/tests/support/host.rs runs runner with registration, filemap, routes and projects to execute declared project/script tests; consumer.rs also runs judge-ci through the scoped runner entry and inspects actual operation receipts. migration.rs also runs chrono-ci to repair the generated workflow in a copied historical host, then checks preserved obligations and detected drift.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-ci",
+        "chrono-ci",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-routes",
