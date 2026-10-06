@@ -87,21 +87,32 @@ class RecipeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
                     self.plan_units()
 
-    def test_registered_library_consumers_reject_the_complete_build_vector(self):
+    def test_registered_consumers_reject_extra_or_missing_build_dependencies(self):
         root = HERE.parent.parent
         cfg, _, operations, staging = RECIPE.preflight(root, {'git'}, set())
         complete = [u['id'] for u in cfg['units'] if u['kind'] == 'build']
+        tests = {u['id']: u for u in cfg['units'] if u['kind'] == 'verify'}
+        self.assertEqual(set(cfg['verification_consumers']), set(tests))
         checked = []
         for name, contract in cfg['verification_consumers'].items():
-            if contract['release_assets']:
-                continue
-            changed = deepcopy(cfg)
-            next(u for u in changed['units'] if u['id'] == name)['needs'] = complete
-            with self.subTest(unit=name):
-                with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
-                    RECIPE.units_plan(root, changed, operations, staging)
+            unit = tests[name]
+            # An execution edge cannot be added without updating the real
+            # consumer claim, including units already using some executables.
+            extra = next((b for b in complete if b not in unit['needs']), None)
+            if extra is not None:
+                changed = deepcopy(cfg)
+                next(u for u in changed['units'] if u['id'] == name)['needs'].append(extra)
+                with self.subTest(unit=name, mutation='extra'):
+                    with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
+                        RECIPE.units_plan(root, changed, operations, staging)
+            if unit['needs']:
+                changed = deepcopy(cfg)
+                next(u for u in changed['units'] if u['id'] == name)['needs'].pop()
+                with self.subTest(unit=name, mutation='missing'):
+                    with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
+                        RECIPE.units_plan(root, changed, operations, staging)
             checked.append(name)
-        self.assertTrue(checked, 'registered real library consumers must exercise the regression')
+        self.assertTrue(checked, 'registered real consumers must exercise the regression')
 
     def test_missing_consumer_explanation_is_visible_without_claiming_unnecessary(self):
         plan, builds, tests = self.plan_units()
