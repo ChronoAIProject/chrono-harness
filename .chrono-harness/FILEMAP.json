@@ -4225,6 +4225,18 @@
       ]
     },
     {
+      "path": "crates/runner-tests/tests/support/protocol_judge.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-projects-tests/tests/support/execution_child.rs",
       "owner": "judge-projects-tests",
       "surface": "test",
