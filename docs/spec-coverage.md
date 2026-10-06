@@ -576,6 +576,17 @@ keep their separate failure paths. The shared layout rejects incompatible owners
 all participating binaries must be upgraded together. This behavior does not
 establish the cause of other host timeouts or full candidate acceptance.
 
+Failed process launches also retain shared observer receive-error and incomplete
+handoff observations from their launch interval, including the latest original
+errno or message flags. These bounded observations append to the actual spawn
+error without assigning a shared failure to one child. A real macOS regression
+exhausts only the receiving process's descriptor table after a nested launcher is
+ready; it checks the original receive error, the unchanged handoff failure and
+absence of child execution. Existing registration-error, fork-allocation,
+cancellation and concurrent-launch regressions retain their assertions. This
+closes that receive-diagnostic gap, not the unresolved historical timeout causes;
+the compatible shared layout requires all participating executables to be rebuilt.
+
 The registered scheduler accepts optional explicit launch priority while retaining
 dependency readiness, cap, failure propagation, exclusive resources/outputs and
 canonical report order. Real-process rendezvous tests cover reordered launches,

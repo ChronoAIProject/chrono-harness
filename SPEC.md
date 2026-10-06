@@ -964,6 +964,8 @@ observer 以与执行时限相同的系统单调时钟记录实际内核退出�
 
 exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。
 
+observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 handoff 在原共享内存中保留有界计数及最近的原始 errno／msg_flags。启动失败报告只追加本次 launch 观察窗口内的增量；原 spawn errno 与 child 诊断保留。共享 observer 的读数不归因到某个 child，也不将无读数解释为接收端正常。诊断由 parent 渲染，pre-exec 不增加分配、文件或等待额度；共享布局钉版，所有参与执行物须配套更新。受控接收端描述符耗尽验证能暴露该故障，不证明既有超时皆由同一原因造成。
+
 已登记 v2 birth 的封口中断由原 worktree owner 在正常入口取得实际排除、核原附件与政策后恢复；保留原缺失／部分结果及独立恢复回执，重复中断重用固定回执，不据恢复制造原成功或 finish。新消费在已发布缓存尝试后开启新代际、保留旧 intent/result；后续回收可绑定当前 HEAD。bootstrap 消费原 managed_command_failed 分类，原非零构建与后续生命周期拒绝及报告引用分别保留。
 
 
