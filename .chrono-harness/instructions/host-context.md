@@ -64,3 +64,5 @@ worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附
 发布 v5 在 verification_consumers 为全部 21 个验证单元登记实际调用、输出用途与发布资产子集；instructions／routes／diagnostics 的发布资产列表为空。预检拒绝消费合同与 needs 冲突，未说明的非空发布前置在原始回执与 stderr 报 W_RELEASE_CONSUMPTION_UNVERIFIED。declared 只表示登记一致，不能证明必要性或说明真实。
 
 本宿主在 units.json 的 gather.resource_observation 显式登记原生步骤分类，在输入环境继承 GITHUB_STEP_SUMMARY。现有汇总通过同一 check 入口复用 jobs 响应，向原始 gather 报告及 Actions summary 输出有效已完成步骤的时间分项、未分类与未知项；不新增请求／job／业务重跑。canonical-check 包含其内部构建、测试与汇总，不能称为纯测试时间；报告是包括可见历史 attempt 的观察快照，不是计费或全流程总量。其余消费核验、完整资源分项及公开二进制采用仍未完成。
+
+同一登记的 comparisons 采用 bootstrap-vs-check：已完成 job 的 bootstrap 至少 60 秒且超过该 job 的 canonical-check 时，原始汇总与 Actions summary 输出 W_CI_RESOURCE_COMPARISON 及实际读数。两类别读数不完整则报告无法比较，跳过 job 不适用；不改变准入或推断依赖冗余。规则可由宿主调整，缓存准备／传输也必须纳入优化成本。产品实现与宿主政策同改，验证包含 CI 专属行为测试、原始同命令检查及候选原生汇总；公开版本采用另行验收。
