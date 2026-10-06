@@ -528,23 +528,7 @@
       "id": "verify_instructions_tests",
       "kind": "verify",
       "operation": "test.instructions-tests",
-      "needs": [
-        "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_instructions_tests",
       "rust_toolchain": true
     },
@@ -576,23 +560,7 @@
       "id": "verify_judge_routes_tests",
       "kind": "verify",
       "operation": "test.judge-routes-tests",
-      "needs": [
-        "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_routes_tests",
       "rust_toolchain": true
     },
@@ -876,5 +844,15 @@
     "test.judge-workflow-tests": [
       ".chrono-harness/state/workflow-test-failures/"
     ]
+  },
+  "verification_consumers": {
+    "verify_instructions_tests": {
+      "need": "Exercise instruction generation and CLI dispatch through the Rust library; Cargo compiles its source dependencies. No released executable is invoked.",
+      "release_assets": []
+    },
+    "verify_judge_routes_tests": {
+      "need": "Exercise route planning and observed processes through Rust library calls and temporary tool fixtures. No released executable is invoked.",
+      "release_assets": []
+    }
   }
 }

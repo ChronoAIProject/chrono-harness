@@ -58,6 +58,60 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(tests['test_none']['needs'], [])
         self.assertEqual(tests['test_a']['needs'], ['build_a'])
 
+    def test_consumer_contract_rejects_added_or_missing_binary_dependencies(self):
+        self.cfg['verification_consumers'] = {
+            'test_none': {'need': 'Exercise source library without release executables.', 'release_assets': []},
+            'test_a': {'need': 'Run asset a through its external command interface.', 'release_assets': ['a']},
+        }
+        self.plan_units()
+        for index, needs in [(2, ['build_a']), (3, []), (3, ['build_a', 'build_b'])]:
+            with self.subTest(index=index, needs=needs):
+                original = self.cfg['units'][index]['needs']
+                self.cfg['units'][index]['needs'] = needs
+                try:
+                    with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
+                        self.plan_units()
+                finally:
+                    self.cfg['units'][index]['needs'] = original
+
+    def test_consumer_contract_requires_known_unique_assets_and_a_concrete_need(self):
+        bad = [None, [], {'unknown': {'need': 'test', 'release_assets': []}},
+               {'test_none': {'need': '', 'release_assets': []}},
+               {'test_none': {'need': 'test', 'release_assets': ['missing']}},
+               {'test_none': {'need': 'test', 'release_assets': ['a', 'a']}},
+               {'test_none': {'need': 'test', 'release_assets': 'a'}},
+               {'test_none': {'need': 'test', 'release_assets': [], 'extra': True}}]
+        for contract in bad:
+            with self.subTest(contract=contract):
+                self.cfg['verification_consumers'] = contract
+                with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
+                    self.plan_units()
+
+    def test_registered_library_consumers_reject_the_complete_build_vector(self):
+        root = HERE.parent.parent
+        cfg, _, operations, staging = RECIPE.preflight(root, {'git'}, set())
+        complete = [u['id'] for u in cfg['units'] if u['kind'] == 'build']
+        checked = []
+        for name, contract in cfg['verification_consumers'].items():
+            if contract['release_assets']:
+                continue
+            changed = deepcopy(cfg)
+            next(u for u in changed['units'] if u['id'] == name)['needs'] = complete
+            with self.subTest(unit=name):
+                with self.assertRaisesRegex(ValueError, 'E_RELEASE_CONSUMPTION'):
+                    RECIPE.units_plan(root, changed, operations, staging)
+            checked.append(name)
+        self.assertTrue(checked, 'registered real library consumers must exercise the regression')
+
+    def test_missing_consumer_explanation_is_visible_without_claiming_unnecessary(self):
+        plan, builds, tests = self.plan_units()
+        rows = RECIPE.dependency_contracts(self.cfg, plan, builds, tests)
+        self.assertEqual(rows['test_a']['status'], 'unverified')
+        self.assertEqual(rows['test_a']['findings'], ['W_RELEASE_CONSUMPTION_UNVERIFIED'])
+        self.assertEqual(rows['test_a']['release_assets'], ['a'])
+        self.assertEqual(rows['test_none']['findings'], [])
+        self.assertIsNone(rows['test_a']['need'])
+
     def test_failure_evidence_requires_explicit_owned_nonoverlapping_directories(self):
         self.write('host.json', {'artifacts': [{'path': 'state/', 'tracked': False}]})
         self.cfg['failure_evidence'] = {'test.none': ['state/nested/']}
@@ -254,6 +308,9 @@ class RecipeTests(unittest.TestCase):
         return output, receipt
 
     def test_real_scopes_and_collector_with_subset_and_empty_dependencies(self):
+        self.cfg['verification_consumers'] = {
+            'test_none': {'need': 'Run verifier without a released executable.', 'release_assets': []},
+        }
         self.create_host()
         selections = {}
         receipts = {}
@@ -267,6 +324,9 @@ class RecipeTests(unittest.TestCase):
         self.write(self.cfg['collector']['dependency_metadata'], selections)
         output, receipt = self.invoke_unit('collect', selections)
         self.assertEqual(receipts['test_none']['assets'], {})
+        self.assertEqual(receipts['test_none']['dependency_contracts']['test_none']['status'], 'declared')
+        self.assertEqual(receipts['test_a']['dependency_contracts']['test_a']['findings'], ['W_RELEASE_CONSUMPTION_UNVERIFIED'])
+        self.assertEqual(receipt['dependency_contracts']['test_a']['status'], 'unverified')
         self.assertEqual(set(receipts['test_a']['assets']), {'a'})
         self.assertEqual(set(receipt['verifications']), {'test_none', 'test_a'})
         for name in ['test_none', 'test_a']:

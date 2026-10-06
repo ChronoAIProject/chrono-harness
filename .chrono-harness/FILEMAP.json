@@ -7605,9 +7605,6 @@
       "operations": [
         "fmt.judge-routes",
         "fmt.judge-routes-tests",
-        "build.runner",
-        "build.judge-registration",
-        "build.judge-filemap",
         "build.judge-routes",
         "test.judge-routes-tests"
       ],

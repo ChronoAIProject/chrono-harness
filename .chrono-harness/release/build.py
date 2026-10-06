@@ -297,6 +297,8 @@ def preflight(root, required_tools=None, required_manifests=None):
     cfg = json_file(root / '.chrono-harness/release/build.json')
     if cfg['schema'] not in ('chrono-release-build/v2', 'chrono-release-build/v3', 'chrono-release-build/v4', 'chrono-release-build/v5'):
         raise ValueError('unsupported release build schema')
+    if 'verification_consumers' in cfg and cfg['schema'] != 'chrono-release-build/v5':
+        raise ValueError('E_RELEASE_CONSUMPTION: consumer contracts require release build v5')
     manifests = cfg['manifests']
     if not isinstance(manifests, list) or not manifests or len(set(manifests)) != len(manifests):
         raise ValueError('release manifests must be nonempty and unique')
@@ -486,6 +488,35 @@ def write_json(file, value):
         stream.write(json.dumps(value, indent=2) + '\n')
 
 
+def dependency_contracts(cfg, plan, builds, tests):
+    """Compare execution edges with explicit consumer claims; do not infer usage."""
+    declared = cfg.get('verification_consumers', {})
+    if not isinstance(declared, dict) or any(name not in tests for name in declared):
+        raise ValueError('E_RELEASE_CONSUMPTION: contracts must name registered verification units')
+    if declared and cfg['schema'] != 'chrono-release-build/v5':
+        raise ValueError('E_RELEASE_CONSUMPTION: consumer contracts require release build v5')
+    result = {}
+    for name, unit in tests.items():
+        assets = sorted(builds[n]['asset'] for n in unit['needs'])
+        contract = declared.get(name)
+        row = {'operation': unit['operation'], 'needs': list(unit['needs']),
+               'release_assets': assets, 'need': None, 'status': 'unverified', 'findings': []}
+        if name in declared:
+            if (not isinstance(contract, dict) or set(contract) != {'need', 'release_assets'}
+                    or not isinstance(contract['need'], str) or not contract['need'].strip()
+                    or not isinstance(contract['release_assets'], list)
+                    or any(not isinstance(a, str) or a not in plan['assets'] for a in contract['release_assets'])
+                    or len(set(contract['release_assets'])) != len(contract['release_assets'])):
+                raise ValueError('E_RELEASE_CONSUMPTION: invalid consumer need or assets: ' + name)
+            if sorted(contract['release_assets']) != assets:
+                raise ValueError('E_RELEASE_CONSUMPTION: execution dependencies differ from consumer assets: ' + name)
+            row.update(need=contract['need'], status='declared')
+        elif assets:
+            row['findings'].append('W_RELEASE_CONSUMPTION_UNVERIFIED')
+        result[name] = row
+    return result
+
+
 def units_plan(root, cfg, operations, staging):
     if cfg['schema'] not in ('chrono-release-build/v4', 'chrono-release-build/v5'):
         raise ValueError('independent scopes require release build v4 or v5')
@@ -535,6 +566,7 @@ def units_plan(root, cfg, operations, staging):
                 raise ValueError('verification must explicitly depend on the complete build vector')
         elif not isinstance(needs, list) or any(not isinstance(name, str) or name not in builds for name in needs) or len(set(needs)) != len(needs):
             raise ValueError('verification dependencies must be unique declared build units')
+    dependency_contracts(cfg, plan, builds, tests)
     collector = cfg['collector']
     if set(collector) != {'id', 'needs', 'package_asset', 'dependency_metadata'} or collector['id'] in ids or sorted(collector['needs']) != sorted(ids) or collector['package_asset'] not in plan['assets']:
         raise ValueError('collector needs exact build/test membership and package asset')
@@ -1033,6 +1065,13 @@ def scoped_main(root, output, scope):
     if os.path.lexists(output):
         raise ValueError('release output already exists')
     execution = UnitExecution(root, output, cfg, tools, unit)
+    if cfg['schema'] == 'chrono-release-build/v5':
+        contracts = dependency_contracts(cfg, plan, builds, tests)
+        selected_contracts = contracts if scope == '--collect' else {scope: contracts[scope]} if scope in contracts else {}
+        execution.report['dependency_contracts'] = selected_contracts
+        for name, contract in selected_contracts.items():
+            for finding in contract['findings']:
+                print(f'{finding}: {name} selects {len(contract["release_assets"])} release assets without a consumer explanation', file=sys.stderr)
     if unit.get('kind') == 'verify':
         execution.report['action_tool'] = next(o[1] for o in operations if o[0] == unit['operation'])
     error = None
