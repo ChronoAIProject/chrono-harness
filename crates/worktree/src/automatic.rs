@@ -1,4 +1,5 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
+mod migration;
 use crate::{
     Start, artifact_disposal,
     maintenance::{self, Cleanup, Retention},
@@ -113,6 +114,8 @@ struct Entry {
     ownership: Option<Ownership>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     cache_attempts: Vec<CacheAttempt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    policy_migrations: Vec<Receipt>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -580,13 +583,27 @@ impl Manager {
         head: &str,
         lock: Option<&str>,
     ) -> Result<(), String> {
+        let binding = self.policy_binding(e)?;
+        if binding.policy_sha256 != sha256(&self.policy_bytes) {
+            return Err("enrolled policy changed; explicit migration is required".into());
+        }
+        self.check_attachment(r, e, head, lock)?;
+        if self.target_policy_inputs(r, &e.path, head)? != binding.inputs {
+            return Err("enrolled target policy/configuration changed; preserve work for explicit migration".into());
+        }
+        Ok(())
+    }
+    fn check_attachment(
+        &self,
+        r: &mut Runner,
+        e: &Entry,
+        head: &str,
+        lock: Option<&str>,
+    ) -> Result<(), String> {
         if self._gate.lease.is_some() && e.ownership.is_none() {
             return Err(
                 "kernel enrollment ownership is missing; preserve legacy/unknown work".into(),
             );
-        }
-        if e.policy_sha256 != sha256(&self.policy_bytes) {
-            return Err("enrolled policy changed; explicit migration is required".into());
         }
         if let Some(owner) = &e.ownership {
             if self._gate.lease.is_none() || !owner.path.starts_with(&self.policy.state_directory) {
@@ -606,12 +623,6 @@ impl Manager {
             head,
             lock,
         )?;
-        let inputs: BTreeMap<String, Option<String>> =
-            serde_json::from_value(e.enrollment["policy_inputs"].clone())
-                .map_err(|_| "enrollment lacks original target policy input bindings")?;
-        if self.target_policy_inputs(r, &e.path, head)? != inputs {
-            return Err("enrolled target policy/configuration changed; preserve work for explicit migration".into());
-        }
         if attachment_at(&e.path, &observed.metadata)? != e.attachment {
             return Err("enrolled checkout attachment changed".into());
         }
@@ -743,6 +754,7 @@ impl Manager {
             attempts: vec![],
             ownership,
             cache_attempts: vec![],
+            policy_migrations: vec![],
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
@@ -992,6 +1004,16 @@ impl Manager {
                     })?);
                 }
             }
+            if let Some(rows) = report.get("migration_inputs").and_then(Value::as_array) {
+                for row in rows {
+                    if let Some(input) = row.get("input") {
+                        inputs.push(
+                            serde_json::from_value(input.clone())
+                                .map_err(|e| format!("invalid retained migration input: {e}"))?,
+                        );
+                    }
+                }
+            }
             if let Some(drain) = report.get("drain").and_then(Value::as_array) {
                 reports.extend(drain.iter().filter_map(|entry| entry.get("report")));
             }
@@ -1141,7 +1163,7 @@ impl Manager {
         )?;
         let paths = artifact_disposal::paths(r, &e.path, &head, &names)?;
         let binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,
-            "head":head,"policy_sha256":e.policy_sha256,"config_sha256":sha256(&self.config_bytes),
+            "head":head,"policy_sha256":self.policy_binding(&e)?.policy_sha256,"config_sha256":sha256(&self.config_bytes),
             "anchor_registry_digest":chrono_harness::wire::digest(&value!(self.registrations.filemap()))?,
             "target_registry_digest":target_digest,"artifacts":names,"generation":owner.generation});
         if let Some(prior) = e
@@ -1226,7 +1248,7 @@ impl Manager {
         }
         let receipt=self.immutable(&format!("terminal-{token}.json"),&value!({
             "schema":"chrono-worktree-terminal/v1","path":target,"branch":e.branch,"head":head,"attachment":e.attachment,
-            "policy_sha256":e.policy_sha256,"retained_ref":self.policy.retained_ref,"retained_commit":retained_commit,
+            "policy_sha256":self.policy_binding(&e)?.policy_sha256,"retained_ref":self.policy.retained_ref,"retained_commit":retained_commit,
             "dispose_evidence":dispose_evidence,"artifacts_only":artifacts_only,
             "handoff":"caller-joined-owned-jobs-and-established-completion","report_path":report["report_path"]
         }))?;
@@ -1444,7 +1466,7 @@ impl Manager {
         report["terminal_receipt"] = value!(t.receipt);
         report["terminal_input"] =
             self.retained_input(&t.receipt.path, &self.receipt(&t.receipt)?, "receipt");
-        if e.policy_sha256 != sha256(&self.policy_bytes) {
+        if self.policy_binding(&e)?.policy_sha256 != sha256(&self.policy_bytes) {
             return Err("enrolled policy changed; preserve terminal work".into());
         }
         self.stable(r)?;
@@ -1729,6 +1751,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (operation == "use" && !values.contains_key("--operation"))
         || (values.contains_key("--retained-commit") && operation != "finish")
         || (operation == "maintain" && values.contains_key("--path"))
+        || (operation == "migrate" && !values.contains_key("--path"))
     {
         return Err("invalid lifecycle command arguments".into());
     }
@@ -1755,6 +1778,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "finish" => "finished",
         "maintain" => "maintained",
         "import" => "imported",
+        "migrate" => "migrated",
         "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
@@ -1781,6 +1805,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     "import",
                     value!({"report_path":report["report_path"],"historical_birth":"not-claimed"}),
                 ),
+                "migrate" => manager.migrate(r, target.as_ref().unwrap(), report),
                 "finish" => {
                     manager.finish(
                         r,

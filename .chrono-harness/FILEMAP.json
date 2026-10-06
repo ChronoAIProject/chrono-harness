@@ -4898,6 +4898,30 @@
           "to": "test:host-bootstrap-tests"
         }
       ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/migration.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/policy_migration.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
