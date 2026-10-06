@@ -4237,6 +4237,30 @@
       ]
     },
     {
+      "path": "crates/runner-tests/tests/support/git_input.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/support/cli_child.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-projects-tests/tests/support/execution_child.rs",
       "owner": "judge-projects-tests",
       "surface": "test",

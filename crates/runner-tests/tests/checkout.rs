@@ -24,9 +24,15 @@ fn raw_checkout_rejects_bytes_hidden_by_clean_filter_without_running_filter() {
     let (dir, _) = payload();
     let root = dir.path();
     fs::write(root.join(".gitattributes"), "payload filter=hide\n").unwrap();
+    let filter = env!("CARGO_BIN_EXE_chrono-test-cli-child");
+    let quote = |value: &str| format!("'{}'", value.replace('\'', "'\\''"));
     git(
         root,
-        &["config", "filter.hide.clean", "printf 'canonical\\n'"],
+        &[
+            "config",
+            "filter.hide.clean",
+            &format!("{} filter-clean", quote(filter)),
+        ],
     );
     let candidate = commit(root);
     fs::write(root.join("payload"), b"uncommitted actual bytes\0\xff").unwrap();
@@ -37,7 +43,7 @@ fn raw_checkout_rejects_bytes_hidden_by_clean_filter_without_running_filter() {
         &[
             "config",
             "filter.hide.clean",
-            "printf 'unexpected filter execution' >&2; exit 93",
+            &format!("{} filter-fail", quote(filter)),
         ],
     );
     git(root, &["config", "filter.hide.required", "true"]);

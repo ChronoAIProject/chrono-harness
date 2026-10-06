@@ -1,7 +1,10 @@
 use chrono_harness::{CommandSpec, Status, dispatch, run_process};
-use serde_json::json;
+use serde_json::{Value, json};
+
 use std::fs;
 use tempfile::TempDir;
+
+const CHILD: &str = env!("CARGO_BIN_EXE_chrono-test-cli-child");
 
 #[test]
 #[cfg(unix)]
@@ -74,11 +77,17 @@ fn standard_sha256_vectors_match_memory_stream_and_file() {
     }
 }
 
-fn fixture(script: &str) -> (TempDir, String) {
-    let dir = tempfile::tempdir().unwrap();
+fn fixture(case: Value) -> (TempDir, String) {
+    let dir = tempfile::tempdir_in(std::path::Path::new(CHILD).parent().unwrap()).unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/ci")).unwrap();
+    fs::hard_link(CHILD, dir.path().join("cli-child")).unwrap();
+    fs::write(
+        dir.path().join("cli-case.json"),
+        serde_json::to_vec(&case).unwrap(),
+    )
+    .unwrap();
     let path = dir.path().join(".chrono-harness/ci/check.json");
-    fs::write(&path,serde_json::to_vec(&json!({"schema":"chrono-ci-check/v1","judge":{"program":"python3","args":["-c",script],"timeout_seconds":15,"output_limit_bytes":4096},"policy":{},"report_path":".chrono-harness/state/check.json"})).unwrap()).unwrap();
+    fs::write(&path,serde_json::to_vec(&json!({"schema":"chrono-ci-check/v1","judge":{"program":dir.path().join("cli-child"),"args":["judge"],"timeout_seconds":15,"output_limit_bytes":4096},"policy":{},"report_path":".chrono-harness/state/check.json"})).unwrap()).unwrap();
     let name = path.to_str().unwrap().to_string();
     (dir, name)
 }
@@ -93,10 +102,10 @@ fn run(path: &str) -> chrono_harness::CliOutput {
         &"b".repeat(40),
     ])
 }
-const RESPONSE: &str = "import json,sys; r=json.load(sys.stdin); print(json.dumps({'protocol':'chrono-ci-judge/v1','request_id':r['request_id'],'status':'passed','results':[{'id':'external','status':'passed','cause':'real execution','exit_code':0}],'evidence':{'executed':True}}))";
+
 #[test]
 fn real_child_and_report_publish() {
-    let (dir, p) = fixture(RESPONSE);
+    let (dir, p) = fixture(json!({}));
     let r = run(&p);
     assert_eq!(r.exit_code, 0, "{}", r.stderr);
     let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
@@ -111,10 +120,10 @@ fn real_child_and_report_publish() {
 
 #[test]
 fn unit_report_compacts_formatting_and_preserves_original_process_bytes() {
-    let script = RESPONSE
-        .replace("chrono-ci-judge/v1", "chrono-ci-judge/v2")
-        .replace("{'executed':True}", "{'bytes':list(range(256))*32}");
-    let (dir, p) = fixture(&script);
+    let (dir, p) = fixture(
+        json!({"fields":{"protocol":"chrono-ci-judge/v2", "evidence":{
+        "bytes":(0..=255).cycle().take(8192).collect::<Vec<u8>>()}}}),
+    );
     let mut config: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
     config["schema"] = json!("chrono-ci-check/v3");
     config["judge"]["output_limit_bytes"] = json!(1024 * 1024);
@@ -164,7 +173,7 @@ fn unit_report_compacts_formatting_and_preserves_original_process_bytes() {
 
 #[test]
 fn full_unit_selector_rejects_legacy_profile_before_launch() {
-    let (_dir, p) = fixture(RESPONSE);
+    let (_dir, p) = fixture(json!({}));
     let mut config: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
     config["schema"] = serde_json::Value::Null;
     config["schema_version"] = json!(2);
@@ -226,11 +235,8 @@ fn publication_preflight_rejects_symlink_and_parent_type_conflicts() {
 
 #[test]
 fn actual_failure_is_preserved() {
-    let script = RESPONSE
-        .replace("'passed'", "'failed'")
-        .replace("'exit_code':0", "'exit_code':7")
-        + ";sys.exit(7)";
-    let (_dir, p) = fixture(&script);
+    let (_dir, p) = fixture(json!({"exit":7,"fields":{"status":"failed","results":[{
+        "id":"external","status":"failed","cause":"real execution","exit_code":7}]}}));
     let r = run(&p);
     assert_eq!(r.exit_code, 1);
     assert!(r.stdout.contains("registered") == false);
@@ -238,43 +244,39 @@ fn actual_failure_is_preserved() {
 }
 #[test]
 fn malformed_empty_and_identity_mismatch_fail() {
-    for s in [
-        "pass".to_string(),
-        "print('{}')".into(),
-        "print('not-json')".into(),
-        RESPONSE.replace("r['request_id']", "'other'"),
-        RESPONSE.replace("'protocol':'chrono-ci-judge/v1'", "'protocol':'wrong'"),
-        RESPONSE.replace(
-            "[{'id':'external','status':'passed','cause':'real execution','exit_code':0}]",
-            "[]",
-        ),
-        RESPONSE.to_owned() + ";print('{}')",
+    for case in [
+        json!({"kind":"raw","text":""}),
+        json!({"kind":"raw","text":"{}\n"}),
+        json!({"kind":"raw","text":"not-json\n"}),
+        json!({"fields":{"request_id":"other"}}),
+        json!({"fields":{"protocol":"wrong"}}),
+        json!({"fields":{"results":[]}}),
+        json!({"extra_json":true}),
     ] {
-        let (_dir, p) = fixture(&s);
+        let (_dir, p) = fixture(case.clone());
         let r = run(&p);
-        assert_eq!(r.exit_code, 2, "{s}: {r:?}");
+        assert_eq!(r.exit_code, 2, "{case}: {r:?}");
         assert!(r.stdout.contains("transport_failure"));
     }
 }
 #[test]
 fn exit_status_mismatch_fails() {
-    for script in [
-        RESPONSE.to_owned() + ";sys.exit(9)",
-        RESPONSE
-            .replace("'passed'", "'failed'")
-            .replace("'exit_code':0", "'exit_code':9"),
+    for case in [
+        json!({"exit":9}),
+        json!({"fields":{"status":"failed","results":[{
+            "id":"external","status":"failed","cause":"real execution","exit_code":9}]}}),
     ] {
-        let (_dir, p) = fixture(&script);
+        let (_dir, p) = fixture(case);
         assert_eq!(run(&p).exit_code, 2);
     }
 }
 #[test]
 fn bounds_cover_timeout_and_output() {
-    for (script, cause) in [
-        ("import time;time.sleep(8)", "process timed out"),
-        ("print('x'*8192)", "process output limit exceeded"),
+    for (case, cause) in [
+        (json!({"kind":"sleep"}), "process timed out"),
+        (json!({"kind":"flood"}), "process output limit exceeded"),
     ] {
-        let (_dir, p) = fixture(script);
+        let (_dir, p) = fixture(case);
         let mut cfg: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
         cfg["judge"]["timeout_seconds"] = 1.into();
         fs::write(&p, serde_json::to_vec(&cfg).unwrap()).unwrap();
@@ -296,7 +298,7 @@ fn bounds_cover_timeout_and_output() {
 }
 #[test]
 fn duplicate_json_and_arguments_fail() {
-    let (_dir, p) = fixture(RESPONSE);
+    let (_dir, p) = fixture(json!({}));
     let bytes = fs::read_to_string(&p)
         .unwrap()
         .replace("\"schema\":", "\"schema\":\"bad\",\"schema\":");
@@ -318,7 +320,7 @@ fn duplicate_json_and_arguments_fail() {
 }
 #[test]
 fn proposed_full_profile_remains_unsupported() {
-    let (_dir, p) = fixture(RESPONSE);
+    let (_dir, p) = fixture(json!({}));
     fs::write(&p, r#"{"schema_version":1,"status":"proposed"}"#).unwrap();
     assert_ne!(run(&p).exit_code, 0);
 }
@@ -358,13 +360,9 @@ fn exact_argv_and_spaced_cwd_reach_child() {
     let r = run_process(
         dir.path(),
         &CommandSpec {
-            program: "python3".into(),
+            program: CHILD.into(),
             env: Default::default(),
-            args: vec![
-                "-c".into(),
-                "import sys,os;print(sys.argv[1]);print(os.getcwd())".into(),
-                text.into(),
-            ],
+            args: vec!["echo".into(), text.into()],
             timeout_seconds: 15,
             output_limit_bytes: 4096,
         },
@@ -382,12 +380,9 @@ fn input_pipe_delivers_exact_bytes_and_eof_for_empty_and_nonempty_requests() {
         let result = run_process(
             dir.path(),
             &CommandSpec {
-                program: "python3".into(),
+                program: CHILD.into(),
                 env: Default::default(),
-                args: vec![
-                    "-c".into(),
-                    "import os,stat,sys; assert stat.S_ISFIFO(os.fstat(0).st_mode); data=sys.stdin.buffer.read(); sys.stdout.buffer.write(b'EOF:'+data); sys.stderr.buffer.write(b'joined')".into(),
-                ],
+                args: vec!["pipe".into()],
                 timeout_seconds: 15,
                 output_limit_bytes: 4096,
             },
@@ -410,28 +405,24 @@ fn not_required_is_a_typed_status() {
 }
 #[test]
 fn external_judge_result_exit_invariants() {
-    for (status, child_exit, reported_exit, judge_exit, expected) in [
-        ("not-required", None, "None", 0, 0),
-        ("passed", None, "None", 0, 0),
-        ("failed", None, "None", 1, 1),
-        ("passed", Some(0), "code", 0, 0),
-        ("failed", Some(7), "code", 7, 1),
-        ("not-required", Some(7), "code", 0, 2),
-        ("not-required", Some(0), "code", 0, 2),
-        ("passed", Some(7), "code", 0, 2),
-        ("failed", Some(0), "code", 1, 2),
+    for (status, child_exit, judge_exit, expected) in [
+        ("not-required", None, 0, 0),
+        ("passed", None, 0, 0),
+        ("failed", None, 1, 1),
+        ("passed", Some(0), 0, 0),
+        ("failed", Some(7), 7, 1),
+        ("not-required", Some(7), 0, 2),
+        ("not-required", Some(0), 0, 2),
+        ("passed", Some(7), 0, 2),
+        ("failed", Some(0), 1, 2),
     ] {
-        let execution = child_exit.map_or(String::new(), |code| {
-            format!("code=subprocess.run(['/bin/sh','-c','exit {code}']).returncode;")
-        });
-        let script = format!(
-            "import json,sys,subprocess; r=json.load(sys.stdin); {execution} print(json.dumps({{'protocol':r['protocol'],'request_id':r['request_id'],'status':'{status}','results':[{{'id':'external','status':'{status}','cause':'fixture result','exit_code':{reported_exit}}}],'evidence':{{'fixture':True}}}}));sys.exit({judge_exit})"
-        );
-        let (_dir, path) = fixture(&script);
+        let (_dir, path) = fixture(json!({"echo_protocol":true, "child_exit":child_exit,
+            "exit":judge_exit,"fields":{"status":status,"results":[{"id":"external",
+            "status":status,"cause":"fixture result","exit_code":null}],"evidence":{"fixture":true}}}));
         let result = run(&path);
         assert_eq!(
             result.exit_code, expected,
-            "{status}/{reported_exit}: {result:?}"
+            "{status}/{child_exit:?}: {result:?}"
         );
         let report: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
         assert_eq!(report["judge"]["exit_code"], judge_exit);
@@ -449,16 +440,12 @@ fn external_judge_result_exit_invariants() {
 
 #[test]
 fn aggregate_not_required_exactly_matches_unused_results() {
-    for script in [
-        RESPONSE.replacen("'status':'passed'", "'status':'not-required'", 1),
-        RESPONSE
-            .replace(
-                "'id':'external','status':'passed'",
-                "'id':'external','status':'not-required'",
-            )
-            .replace("'exit_code':0", "'exit_code':None"),
+    for case in [
+        json!({"fields":{"status":"not-required"}}),
+        json!({"fields":{"results":[{"id":"external","status":"not-required",
+            "cause":"real execution","exit_code":null}]}}),
     ] {
-        let (_dir, path) = fixture(&script);
+        let (_dir, path) = fixture(case);
         let result = run(&path);
         assert_eq!(result.exit_code, 2);
         let report: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
@@ -471,20 +458,18 @@ fn aggregate_not_required_exactly_matches_unused_results() {
 
 #[test]
 fn command_path_override_selects_and_hashes_the_invoked_executable() {
-    use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::Builder::new()
         .prefix("command cwd ")
-        .tempdir()
+        .tempdir_in(std::path::Path::new(CHILD).parent().unwrap())
         .unwrap();
     let tools = dir.path().join("tools");
     fs::create_dir(&tools).unwrap();
-    let executable = tools.join("sh");
-    let bytes = b"#!/bin/sh\nexit 9\n";
-    fs::write(&executable, bytes).unwrap();
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    let executable = tools.join("true");
+    fs::hard_link(CHILD, &executable).unwrap();
+    let bytes = fs::read(CHILD).unwrap();
     let mut spec = CommandSpec {
-        program: "sh".into(),
-        args: vec!["-c".into(), "exit 0".into()],
+        program: "true".into(),
+        args: vec![],
         env: Default::default(),
         timeout_seconds: 15,
         output_limit_bytes: 4096,
@@ -501,7 +486,7 @@ fn command_path_override_selects_and_hashes_the_invoked_executable() {
         let result = run_process(dir.path(), &spec, &[]).unwrap();
         assert_eq!(result.exit_code, 9, "PATH={path}");
         assert_eq!(result.executable, executable);
-        assert_eq!(result.sha256, chrono_harness::sha256(bytes));
+        assert_eq!(result.sha256, chrono_harness::sha256(&bytes));
     }
     spec.env.insert("PATH".into(), "missing".into());
     assert!(
@@ -513,13 +498,13 @@ fn command_path_override_selects_and_hashes_the_invoked_executable() {
 #[test]
 fn symlinked_tool_preserves_invocation_identity() {
     let dir = tempfile::tempdir().unwrap();
-    let alias = dir.path().join("registered-shell");
-    std::os::unix::fs::symlink("/bin/sh", &alias).unwrap();
+    let alias = dir.path().join("registered-tool");
+    std::os::unix::fs::symlink(CHILD, &alias).unwrap();
     let result = run_process(
         dir.path(),
         &CommandSpec {
             program: alias.to_str().unwrap().into(),
-            args: vec!["-c".into(), "printf '%s' \"$0\"".into()],
+            args: vec!["argv0".into()],
             env: Default::default(),
             timeout_seconds: 15,
             output_limit_bytes: 4096,
@@ -534,11 +519,9 @@ fn symlinked_tool_preserves_invocation_identity() {
 
 #[test]
 fn scoped_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
-    for (bytes, expected_exit) in [("bytes([239,191,189])", 0), ("bytes([255])", 2)] {
-        let script = format!(
-            "import json,sys\nr=json.load(sys.stdin)\ns={{'protocol':r['protocol'],'request_id':r['request_id'],'status':'passed','results':[{{'id':'encoding','status':'passed','cause':'MARKER','exit_code':0}}],'evidence':{{'executed':True}}}}\nsys.stdout.buffer.write(json.dumps(s).encode().replace(b'MARKER',{bytes}))"
-        );
-        let (_dir, p) = fixture(&script);
+    for (bytes, expected_exit) in [(vec![239u8, 191, 189], 0), (vec![255], 2)] {
+        let (_dir, p) = fixture(json!({"echo_protocol":true,"replacement_bytes":bytes,
+            "fields":{"results":[{"id":"encoding","status":"passed","cause":"MARKER","exit_code":0}]}}));
         let output = std::process::Command::new(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../runner/target/debug/chrono-harness"),
@@ -665,7 +648,7 @@ fn collection_manifest_repeated_separators_are_filesystem_aliases() {
 #[cfg(unix)]
 #[test]
 fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
-    use std::os::unix::{fs::PermissionsExt, fs::symlink};
+    use std::os::unix::fs::symlink;
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -684,15 +667,7 @@ fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
         symlink(&root, &alias).unwrap();
         let marker = root.join(".chrono-harness/facts-launches");
         let tool = root.join(".chrono-harness/git-fixture");
-        fs::write(
-            &tool,
-            format!(
-                "#!/bin/sh\nprintf launch >> '{}'\nprintf wrong-version\n",
-                marker.display()
-            ),
-        )
-        .unwrap();
-        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::hard_link(CHILD, &tool).unwrap();
         let target = json!({"schema_version":3,"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"expected"}],"environment":{"inherit":[],"values":{},"inputs":[{"id":"git-bytes","location":tool,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&tool).unwrap())}]},"protocol":{"timeout_seconds":5,"stdout_limit_bytes":4096}});
         fs::write(
             root.join(".chrono-harness/direct.json"),
@@ -768,7 +743,7 @@ fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
 
 #[test]
 fn scoped_signal_termination_reports_the_process_failure_before_empty_json() {
-    let (dir, path) = fixture("");
+    let (dir, path) = fixture(json!({}));
     let mut config: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     config["schema"] = json!("chrono-ci-check/v3");
     config["judge"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-test-process-lifecycle"));
