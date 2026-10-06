@@ -6,6 +6,7 @@ use chrono_harness::sha256;
 use host::Host;
 use serde_json::{Value, json};
 use std::fs;
+use std::path::Path;
 use support::*;
 
 fn install(h: &mut Host, name: &str, bytes: &[u8]) {
@@ -18,7 +19,15 @@ fn install(h: &mut Host, name: &str, bytes: &[u8]) {
     }
 }
 fn host() -> Host {
-    let mut h = Host::new(false);
+    let dir = tempfile::Builder::new()
+        .prefix("mixed consumer with spaces ")
+        .tempdir_in(
+            Path::new(env!("CARGO_BIN_EXE_chrono-mixed-test-cost"))
+                .parent()
+                .unwrap(),
+        )
+        .unwrap();
+    let mut h = Host::with_directory(false, dir);
     let bytes = fs::read(source().join("crates/judge-mixed/target/debug/chrono-judge-mixed"))
         .expect("build registered mixed executable");
     install(&mut h, "chrono-judge-mixed", &bytes);
@@ -139,11 +148,12 @@ fn actual_missing_cost_predecessor_is_an_error() {
 #[test]
 fn actual_stale_cost_binding_is_rejected_without_recomputing_it() {
     let mut h = host();
-    let script=b"#!/usr/bin/python3\nimport json,subprocess,sys\nr=json.load(sys.stdin)\np=subprocess.run([r['candidate']['root']+'/.chrono-harness/bin/chrono-judge-cost','--protocol','chrono-judge/v1'],input=json.dumps(r).encode(),capture_output=True)\nassert p.returncode==0, p.stderr\nv=json.loads(p.stdout)\nv['outputs']['costs']['binding']['candidate_tree']='0'*40\nprint(json.dumps(v))\n";
-    install(&mut h, "stale-cost", script);
+    let native = Path::new(env!("CARGO_BIN_EXE_chrono-mixed-test-cost"));
+    let bytes = fs::read(native).unwrap();
+    fs::hard_link(native, h.root().join(".chrono-harness/bin/stale-cost")).unwrap();
     h.values.get_mut(JUDGES).unwrap()["judges"][2]["executable"] =
         ".chrono-harness/bin/stale-cost".into();
-    h.values.get_mut(JUDGES).unwrap()["judges"][2]["sha256"] = sha256(script).into();
+    h.values.get_mut(JUDGES).unwrap()["judges"][2]["sha256"] = sha256(&bytes).into();
     h.save();
     let r = checked(&h, 2);
     assert_eq!(mixed(&r)["findings"][0]["code"], "E_COST_INPUT");

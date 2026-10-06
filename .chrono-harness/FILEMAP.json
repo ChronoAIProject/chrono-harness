@@ -2041,6 +2041,18 @@
       ]
     },
     {
+      "path": "crates/judge-mixed-tests/tests/support/stale_cost.rs",
+      "owner": "judge-mixed-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-mixed-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-mixed-tests/tests/consumer.rs",
       "owner": "judge-mixed-tests",
       "surface": "test",
