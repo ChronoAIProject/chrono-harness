@@ -1145,6 +1145,26 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
         "declared-git.json",
         &json!({"program":real_git,"observation":".chrono-harness/state/git-agent-observed"}),
     );
+    // Finish the copied fixture's actual Git protocol before measuring the
+    // registered check with absent and declared SSH agent inputs.
+    let ready = Command::new(&wrapper)
+        .arg("--version")
+        .current_dir(&h.root)
+        .env_clear()
+        .output()
+        .unwrap();
+    let expected = Command::new(&real_git)
+        .arg("--version")
+        .env_clear()
+        .output()
+        .unwrap();
+    assert!(
+        expected.status.success(),
+        "real Git readiness: {expected:?}"
+    );
+    assert!(ready.status.success(), "declared Git readiness: {ready:?}");
+    assert_eq!(ready.stdout, expected.stdout);
+    assert!(ready.stderr.is_empty(), "declared Git readiness: {ready:?}");
     let hash = sha256(&fs::read(&wrapper).unwrap());
     h.modify(".chrono-harness/FILEMAP.json", |fm| {
         fm["files"].as_array_mut().unwrap().push(json!({
