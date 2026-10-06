@@ -395,6 +395,23 @@
         503,
         504
       ]
+    },
+    "resource_observation": {
+      "step_categories": {
+        "Set up job": "runner-setup",
+        "Complete job": "runner-cleanup",
+        "Acquire declared detector source": "source-checkout",
+        "Check out exact candidate": "source-checkout",
+        "Post Acquire declared detector source": "runner-cleanup",
+        "Post Check out exact candidate": "runner-cleanup",
+        "Bootstrap registered detector tools": "bootstrap",
+        "Bootstrap registered tools": "bootstrap",
+        "Detect required units from fixed Git endpoints": "delta-detection",
+        "Canonical harness check": "canonical-check",
+        "Bind original unit artifact production": "evidence-binding",
+        "Preserve actual check evidence": "evidence-upload"
+      },
+      "summary_environment": "GITHUB_STEP_SUMMARY"
     }
   },
   "job_gating": {

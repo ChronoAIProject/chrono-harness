@@ -574,6 +574,44 @@ For example, a host can select three attempts, a two-second delay and statuses
 `[429, 500, 502, 503, 504]`. This policy applies to unit artifacts and shared native
 seeds, without changing API query handling or rerunning any business unit.
 
+With `job_gating`, optional `gather.resource_observation` declares an exact
+`step_categories` map from GitHub step names to host category names. Empty names,
+control characters and the reserved category `unclassified` are rejected.
+Unknown step names remain `unclassified`; the provider does not infer language,
+dependencies, necessity or categories from command text. Omission preserves the
+existing gather output. The host can update this map without changing Rust.
+
+The existing paginated jobs response supplies `resources` in the original gather
+report (`chrono-ci-resources/v1`); no extra request, runner or business execution
+is added. It binds the response's process index/digest, candidate, run and observed
+attempt, and counts each identical job ID once across pages. Conflicting copies
+and invalid identities are excluded with explicit issues. The scope includes
+observed earlier attempts, not just the latest successful jobs, and does not
+assert that GitHub exposed all possible historical work.
+
+`known_step_seconds` sums only completed, non-skipped steps with valid ordered
+timestamps. It is null when nothing was measured. Each step retains its category,
+timestamps and measured/unknown/skipped state. Categories and jobs have separate
+totals; unclassified steps, missing steps, conflicting rows and unfinished jobs
+remain visible. `observed` means the returned rows have usable classified data,
+not that the entire workflow or its resource use is known. `partial` reports
+incomplete observations. A gather attempt that never acquired jobs reports
+`unavailable`; failures before gather have no fresh gather report.
+
+These seconds are neither billing minutes nor parallel workflow wall time or
+CPU time. Queue time, peak memory, disk bytes, work after the snapshot and the
+compile/test split inside a canonical check remain unmeasured. Collection is
+still running when it observes itself. Native failure, transport acceptance and
+the final judge keep their existing rules; resource observations cannot turn a
+failed check green or prove that a successful dependency is necessary.
+
+Optional `summary_environment` names an explicitly inherited variable containing
+an existing appendable summary file. The host adopts `GITHUB_STEP_SUMMARY` in its
+input environment to show the same category totals and unknowns on the Actions
+page. Missing or unwritable summary sinks are reported as unavailable in the
+original report and do not replace the admission verdict. This presentation
+uses the same check invocation and adds no workflow step.
+
 Retries require a nonzero process exit, no process-bound failure, and one
 unambiguous `HTTP nnn:` status in the registered CLI's stderr that appears in
 the whitelist. All attempts and delays share the original download deadline;

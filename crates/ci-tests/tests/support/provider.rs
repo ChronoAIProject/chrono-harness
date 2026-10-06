@@ -194,7 +194,12 @@ pub fn parent(args: &[String]) {
         if mode == "missing-job" {
             rows.remove(1);
         }
-        println!("{}", json!([{"jobs":rows}]));
+        println!(
+            "{}",
+            data.get("resource_pages")
+                .cloned()
+                .unwrap_or(json!([{"jobs":rows}]))
+        );
     } else if args[1].contains("/actions/runs/") {
         let attempt = if matches!(
             mode,

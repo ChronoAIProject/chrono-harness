@@ -445,6 +445,9 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
     }
 }
 
+#[path = "resources.rs"]
+mod resources;
+
 #[test]
 fn aggregate_rejects_detection_failure_and_every_unsuccessful_selected_unit() {
     let mut h = GatedHost::new();

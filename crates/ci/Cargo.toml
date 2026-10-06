@@ -19,6 +19,7 @@ chrono-harness = { path = "../runner" }
 chrono-judge-ci = { path = "../judge-ci" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+time = { version = "0.3", features = ["parsing"] }
 
 [profile.dev.package.sha2]
 opt-level = 3
