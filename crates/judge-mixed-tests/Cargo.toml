@@ -4,14 +4,22 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[dependencies]
+serde_json = "1"
+
 [dev-dependencies]
 chrono-judge-mixed = { path = "../judge-mixed" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-harness = { path = "../runner" }
-serde_json = "1"
 tempfile = "3"
 chrono-judge-cost = { path = "../judge-cost" }
+
+[[bin]]
+name = "chrono-mixed-test-cost"
+path = "tests/support/stale_cost.rs"
+test = false
+bench = false
 
 [profile.dev.package.sha2]
 opt-level = 3

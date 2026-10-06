@@ -15,6 +15,9 @@ impl Host {
             .prefix("cost consumer with spaces ")
             .tempdir()
             .unwrap();
+        Self::with_directory(unknown, dir)
+    }
+    pub fn with_directory(unknown: bool, dir: tempfile::TempDir) -> Self {
         let root = dir.path();
         git(root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
