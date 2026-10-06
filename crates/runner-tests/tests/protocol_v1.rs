@@ -1,3 +1,6 @@
+#[path = "support/native_executable.rs"]
+mod native_executable;
+
 use chrono_harness::{json, sha256, wire};
 use serde_json::json as value;
 use std::fs;
@@ -73,9 +76,9 @@ fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::
         .tempdir_in(std::path::Path::new(PROTOCOL_FIXTURE).parent().unwrap())
         .unwrap();
     let path = dir.path().join("judge");
-    // The protocol requires a regular file. A same-filesystem link names the
-    // completed build without opening executable bytes for writing.
-    fs::hard_link(PROTOCOL_FIXTURE, &path).unwrap();
+    // The protocol requires a regular file with the completed build bytes;
+    // installation never opens an executable for writing.
+    native_executable::install(PROTOCOL_FIXTURE, &path).unwrap();
     fs::write(
         dir.path().join("judge-case.json"),
         serde_json::to_vec(&case).unwrap(),
@@ -110,7 +113,7 @@ fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::
 fn replace_judge(directory: &std::path::Path, executable: &str) {
     let path = directory.join("judge");
     fs::remove_file(&path).unwrap();
-    fs::hard_link(executable, path).unwrap();
+    native_executable::install(executable, path).unwrap();
 }
 fn initial_fixture(
     case: serde_json::Value,

@@ -1,19 +1,31 @@
+#[path = "support/native_executable.rs"]
+mod native_executable;
+
 use chrono_harness::{facts::Reader, sha256};
 use serde_json::{Value, json};
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf, process::Command};
 
 struct Host {
     _temporary: tempfile::TempDir,
     root: PathBuf,
+    tool: PathBuf,
     config: Value,
 }
 impl Host {
-    fn new(body: &str) -> Self {
+    fn new(mut case: Value) -> Self {
         let temporary = tempfile::Builder::new()
             .prefix("Git inputs λ ")
-            .tempdir()
+            .tempdir_in(
+                std::path::Path::new(env!("CARGO_BIN_EXE_chrono-test-git-input"))
+                    .parent()
+                    .unwrap(),
+            )
             .unwrap();
-        let root = fs::canonicalize(temporary.path()).unwrap();
+        fs::create_dir(temporary.path().join("host")).unwrap();
+        fs::create_dir(temporary.path().join("tools")).unwrap();
+        let root = fs::canonicalize(temporary.path().join("host")).unwrap();
+        let tools = fs::canonicalize(temporary.path().join("tools")).unwrap();
+        let tool = tools.join("git-wrapper");
         fs::create_dir(root.join(".chrono-harness")).unwrap();
         let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
         let result = Command::new(&git)
@@ -24,23 +36,22 @@ impl Host {
         assert!(result.status.success());
         let version = Command::new(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
-        let quote = |s: &str| format!("'{}'", s.replace('\'', "'\\''"));
-        let script = format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n{}\nexec {} \"$@\"\n",
-            quote(root.join("trace").to_str().unwrap()),
-            body,
-            quote(git.to_str().unwrap())
-        );
-        fs::write(root.join("git-wrapper"), &script).unwrap();
-        fs::set_permissions(root.join("git-wrapper"), fs::Permissions::from_mode(0o755)).unwrap();
+        native_executable::install(env!("CARGO_BIN_EXE_chrono-test-git-input"), &tool).unwrap();
+        case["git"] = json!(git);
+        case["root"] = json!(root);
+        fs::write(
+            tools.join("git-case.json"),
+            serde_json::to_vec(&case).unwrap(),
+        )
+        .unwrap();
         let config = json!({
             "schema_version":3,
             "facts_git":{"tool":"git","input":"git-binary","guard":{
                 "schema":"chrono-git-inputs/v1","inputs":["git-config","no-extra-config"]}},
             "tools":[{"id":"git","program":"git-wrapper","resolution":"PATH-once",
                 "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
-            "environment":{"inherit":[],"values":{"PATH":root,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
-                "inputs":[{"id":"git-binary","location":"git-wrapper","presence":"present","sha256":sha256(script.as_bytes())},
+            "environment":{"inherit":[],"values":{"PATH":tools,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
+                "inputs":[{"id":"git-binary","location":tool,"presence":"present","sha256":sha256(&fs::read(&tool).unwrap())},
                     {"id":"git-config","location":".git/config","presence":"present","sha256":sha256(&fs::read(root.join(".git/config")).unwrap())},
                     {"id":"no-extra-config","location":".git/config.worktree","presence":"absent"}]},
             "protocol":{"timeout_seconds":30,"stdout_limit_bytes":1048576}
@@ -48,6 +59,7 @@ impl Host {
         Self {
             _temporary: temporary,
             root,
+            tool,
             config,
         }
     }
@@ -66,7 +78,7 @@ impl Host {
 
 #[test]
 fn explicit_git_configuration_is_checked_before_each_real_read() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
     let bytes = reader
         .git(
@@ -100,7 +112,7 @@ fn explicit_git_configuration_is_checked_before_each_real_read() {
 
 #[test]
 fn artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     fs::create_dir_all(h.root.join("cache[1]/allowed")).unwrap();
     fs::write(h.root.join("cache[1]/allowed/output"), "generated").unwrap();
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
@@ -154,7 +166,7 @@ fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
         "directory",
         "symlink",
     ] {
-        let mut h = Host::new("");
+        let mut h = Host::new(json!({"mode":"passthrough"}));
         match case {
             "digest" => h.config["environment"]["inputs"][1]["sha256"] = json!("0".repeat(64)),
             "presence" => fs::write(h.root.join(".git/config.worktree"), "").unwrap(),
@@ -186,9 +198,7 @@ fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
 
 #[test]
 fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
-    let h = Host::new(
-        "case \"$*\" in *rev-parse*) printf 'changed' > .git/config.worktree; printf 'original output'; printf 'original error' >&2; exit 17;; esac",
-    );
+    let h = Host::new(json!({"mode":"input-drift"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
     let error = reader
         .git(&h.root, &["rev-parse", "--show-toplevel"])
@@ -204,7 +214,7 @@ fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
 
 #[test]
 fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
-    let mut h = Host::new("");
+    let mut h = Host::new(json!({"mode":"passthrough"}));
     h.config["facts_git"]
         .as_object_mut()
         .unwrap()
@@ -218,7 +228,7 @@ fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
             .is_ok()
     );
 
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
     let mut observation = reader.observation();
     let environment = observation["environment"].clone();
@@ -284,7 +294,7 @@ fn commit(h: &Host) -> String {
 
 #[test]
 fn selected_platform_binds_both_candidate_files_and_request_observation() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     let mut selector = selection();
     // Another registered platform need not exist on this machine.
     selector["platforms"]["other-system"] = json!(".chrono-harness/elsewhere.json");
@@ -354,7 +364,7 @@ fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
         "duplicate",
         "symlink",
     ] {
-        let mut h = Host::new("");
+        let mut h = Host::new(json!({"mode":"passthrough"}));
         let mut selector = selection();
         match case {
             "empty" => selector["platforms"] = json!({}),
@@ -394,7 +404,7 @@ fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
 #[test]
 fn platform_selector_and_selected_policy_drift_block_the_next_process() {
     for path in [SELECTOR, CONFIG] {
-        let h = Host::new("");
+        let h = Host::new(json!({"mode":"passthrough"}));
         select(&h, &selection());
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
         assert!(reader.is_bound());
@@ -420,9 +430,7 @@ fn platform_selector_and_selected_policy_drift_block_the_next_process() {
 
 #[test]
 fn selector_mutation_during_git_retains_the_original_failed_process() {
-    let h = Host::new(
-        "case \"$*\" in *rev-parse*) printf changed > .chrono-harness/git-platforms.json; printf original; exit 17;; esac",
-    );
+    let h = Host::new(json!({"mode":"selector-drift"}));
     select(&h, &selection());
     let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
     assert!(reader.is_bound());
@@ -439,7 +447,7 @@ fn selector_mutation_during_git_retains_the_original_failed_process() {
 #[test]
 fn platform_selection_must_match_both_fixed_candidate_blobs() {
     for path in [SELECTOR, CONFIG] {
-        let mut h = Host::new("");
+        let mut h = Host::new(json!({"mode":"passthrough"}));
         let selector = selection();
         select(&h, &selector);
         let candidate = commit(&h);
@@ -464,7 +472,7 @@ fn processes(reader: &Reader) -> usize {
 
 #[test]
 fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     h.save();
     fs::create_dir(h.root.join("objects")).unwrap();
     let mut originals = std::collections::BTreeMap::new();
@@ -538,10 +546,7 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
 
 #[test]
 fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
-    let (h, originals, oid) = registry_host(
-        "case \"$*\" in *' cat-file --batch') if [ ! -e retry-ready ]; then printf 'original partial'; printf 'original error' >&2; exit 17; fi;; esac",
-        20,
-    );
+    let (h, originals, oid) = registry_host(json!({"mode":"batch-fail"}), 20);
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &oid).unwrap();
     let tree = reader.tree(&h.root, &oid).unwrap();
@@ -570,7 +575,7 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
 
 #[test]
 fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations() {
-    let mut h = Host::new("");
+    let mut h = Host::new(json!({"mode":"passthrough"}));
     let mut registries = serde_json::Map::new();
     for role in ["judges", "projects", "filemap", "workflow"] {
         let path = format!(".chrono-harness/{role} café.json");
@@ -635,7 +640,7 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
 
 #[test]
 fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     h.save();
     let path = "payload café\t.bin";
     let bytes = b"\0\xff\nbody\0";
@@ -654,7 +659,7 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
     reader.verify_oid(&h.root, &new).unwrap();
     assert_eq!(reader.blob(&h.root, &new, path).unwrap(), b"new");
     assert_eq!(reader.blob(&h.root, &old, path).unwrap(), bytes);
-    let other = Host::new("");
+    let other = Host::new(json!({"mode":"passthrough"}));
     let count = processes(&reader);
     assert!(
         reader
@@ -673,7 +678,7 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
 
 #[test]
 fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     h.save();
     fs::write(h.root.join("payload"), b"original").unwrap();
     let old = commit(&h);
@@ -720,7 +725,7 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
         .filter(|p| p["argv"].as_array().unwrap().iter().any(|v| v == "ls-tree"))
         .count();
     assert_eq!(reads, 1);
-    let other = Host::new("");
+    let other = Host::new(json!({"mode":"passthrough"}));
     let count = processes(&reader);
     assert!(
         reader
@@ -754,9 +759,9 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
 fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
     for drift in [false, true] {
         let h = Host::new(if drift {
-            "case \"$*\" in *' ls-tree '*) if [ -e fail-tree ]; then printf changed > .git/config.worktree; fi;; esac"
+            json!({"mode":"tree-drift"})
         } else {
-            "case \"$*\" in *' ls-tree '*) if [ -e fail-tree ]; then printf malformed; exit 0; fi;; esac"
+            json!({"mode":"tree-malformed"})
         });
         h.save();
         fs::write(h.root.join("payload"), b"original").unwrap();
@@ -787,7 +792,7 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         "guard-absent",
         "symlink",
     ] {
-        let h = Host::new("");
+        let h = Host::new(json!({"mode":"passthrough"}));
         select(&h, &selection());
         fs::write(h.root.join("payload"), b"original").unwrap();
         let oid = commit(&h);
@@ -800,7 +805,10 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         match case {
             "selector" => fs::write(h.root.join(SELECTOR), b"{}").unwrap(),
             "config" => fs::write(h.root.join(CONFIG), b"{}").unwrap(),
-            "tool" => fs::write(h.root.join("git-wrapper"), b"changed").unwrap(),
+            "tool" => {
+                fs::remove_file(&h.tool).unwrap();
+                fs::write(&h.tool, b"changed").unwrap();
+            }
             "guard-present" => fs::write(h.root.join(".git/config"), b"changed").unwrap(),
             "guard-absent" => fs::write(h.root.join(".git/config.worktree"), b"changed").unwrap(),
             "symlink" => {
@@ -831,9 +839,9 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
 fn failed_or_postprocess_drifted_blob_reads_are_never_reused() {
     for drift in [false, true] {
         let body = if drift {
-            "case \"$*\" in *' show '*) if [ ! -e retry-ready ]; then printf changed > .git/config.worktree; fi;; esac"
+            json!({"mode":"blob-drift"})
         } else {
-            "case \"$*\" in *' show '*) if [ ! -e retry-ready ]; then printf 'original output'; printf 'original error' >&2; exit 17; fi;; esac"
+            json!({"mode":"blob-fail"})
         };
         let h = Host::new(body);
         h.save();
@@ -879,7 +887,7 @@ fn failed_or_postprocess_drifted_blob_reads_are_never_reused() {
 
 #[test]
 fn mutable_refs_index_checkout_and_untracked_facts_remain_fresh() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     h.save();
     fs::write(h.root.join("payload"), b"old").unwrap();
     let old = commit(&h);
@@ -930,7 +938,7 @@ fn mutable_refs_index_checkout_and_untracked_facts_remain_fresh() {
 
 #[test]
 fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
-    let mut h = Host::new("case \"$*\" in *' show '*) printf '%s' \"$BOUND_VALUE\"; exit 0;; esac");
+    let mut h = Host::new(json!({"mode":"bound-value"}));
     h.config["environment"]["values"]["BOUND_VALUE"] = json!("first");
     h.save();
     fs::write(h.root.join("payload"), b"committed").unwrap();
@@ -965,7 +973,7 @@ fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
 
 #[test]
 fn oid_shaped_ref_for_another_object_format_is_still_mutable() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     h.save();
     fs::write(h.root.join("payload"), b"old").unwrap();
     let old = commit(&h);
@@ -1000,7 +1008,7 @@ fn oid_shaped_ref_for_another_object_format_is_still_mutable() {
 
 #[test]
 fn reads_before_a_successful_identity_observation_stay_fresh_without_extra_probes() {
-    let h = Host::new("");
+    let h = Host::new(json!({"mode":"passthrough"}));
     h.save();
     fs::write(h.root.join("payload"), b"original").unwrap();
     let oid = commit(&h);
@@ -1037,9 +1045,7 @@ fn malformed_or_failed_identity_observations_never_enable_reuse() {
         "invalid",
         "missing",
     ] {
-        let h = Host::new(
-            "case \"$*\" in *rev-parse*) if [ -e identity-fail ]; then printf 'original error' >&2; exit 17; fi; case \"$*\" in *'^{tree}'*) if [ -e tree-fail ]; then exit 17; fi; if [ -e tree-response ]; then /bin/cat tree-response; exit 0; fi;; esac; if [ -e object-response ]; then /bin/cat object-response; exit 0; fi;; esac",
-        );
+        let h = Host::new(json!({"mode":"identity"}));
         h.save();
         fs::write(h.root.join("payload"), b"original").unwrap();
         let oid = commit(&h);
@@ -1106,7 +1112,7 @@ fn malformed_or_failed_identity_observations_never_enable_reuse() {
 }
 
 fn registry_host(
-    body: &str,
+    body: Value,
     payload_length: usize,
 ) -> (Host, std::collections::BTreeMap<String, Vec<u8>>, String) {
     let mut h = Host::new(body);
@@ -1131,7 +1137,7 @@ fn registry_host(
 
 #[test]
 fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges() {
-    let (h, originals, oid) = registry_host("", 40);
+    let (h, originals, oid) = registry_host(json!({"mode":"passthrough"}), 40);
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &oid).unwrap();
     let start = std::time::Instant::now();
@@ -1201,7 +1207,7 @@ fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges(
 #[test]
 fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs() {
     for exact_limit in [false, true] {
-        let (mut h, mut originals, _) = registry_host("", 700);
+        let (mut h, mut originals, _) = registry_host(json!({"mode":"passthrough"}), 700);
         h.config["protocol"]["stdout_limit_bytes"] = json!(2048);
         if exact_limit {
             for (path, bytes) in &mut originals {
@@ -1239,10 +1245,8 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
             b"malformed\0\xff",
             b"extra\n",
         ] {
-            let body = format!(
-                "case \"$*\" in *' cat-file {phase}') if [ -e response ]; then /bin/cat response; exit 0; fi;; esac"
-            );
-            let (h, _, oid) = registry_host(&body, 20);
+            let body = json!({"mode":"batch-response","phase":phase});
+            let (h, _, oid) = registry_host(body, 20);
             let reader = h.open().unwrap();
             reader.verify_oid(&h.root, &oid).unwrap();
             fs::write(h.root.join("response"), response).unwrap();
@@ -1265,9 +1269,9 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
     }
     for drift in [false, true] {
         let body = if drift {
-            "case \"$*\" in *' cat-file --batch') if [ ! -e retry-ready ]; then printf changed > .git/config.worktree; fi;; esac"
+            json!({"mode":"batch-drift"})
         } else {
-            "case \"$*\" in *' cat-file --batch') if [ ! -e retry-ready ]; then printf 'original partial'; printf 'original error' >&2; exit 17; fi;; esac"
+            json!({"mode":"batch-fail"})
         };
         let (h, _, oid) = registry_host(body, 20);
         let reader = h.open().unwrap();
@@ -1291,7 +1295,7 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
 
 #[test]
 fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
-    let body = "case \"$*\" in *' cat-file --batch') if [ -e response ]; then /bin/cat response; exit 0; fi;; esac";
+    let body = json!({"mode":"batch-response","phase":"--batch"});
     let (h, _, oid) = registry_host(body, 30);
     let first = h.open().unwrap();
     first.verify_oid(&h.root, &oid).unwrap();
@@ -1351,9 +1355,9 @@ fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
 fn registry_batch_keeps_configured_process_output_and_time_failures() {
     for case in ["output", "time"] {
         let body = if case == "output" {
-            "case \"$*\" in *' cat-file --batch') /bin/cat oversized; exit 0;; esac"
+            json!({"mode":"batch-output"})
         } else {
-            "case \"$*\" in *' cat-file --batch') /bin/sleep 60;; esac"
+            json!({"mode":"batch-time"})
         };
         let (mut h, _, _) = registry_host(body, 20);
         h.config["protocol"]["stdout_limit_bytes"] = json!(2048);
@@ -1393,7 +1397,7 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
         "guard-absent",
         "root",
     ] {
-        let (h, originals, _) = registry_host("", 20);
+        let (h, originals, _) = registry_host(json!({"mode":"passthrough"}), 20);
         select(&h, &selection());
         let oid = commit(&h);
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
@@ -1410,7 +1414,10 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
         match case {
             "selector" => fs::write(h.root.join(SELECTOR), b"{}").unwrap(),
             "config" => fs::write(h.root.join(CONFIG), b"{}").unwrap(),
-            "tool" => fs::write(h.root.join("git-wrapper"), b"changed").unwrap(),
+            "tool" => {
+                fs::remove_file(&h.tool).unwrap();
+                fs::write(&h.tool, b"changed").unwrap();
+            }
             "guard-present" => fs::write(h.root.join(".git/config"), b"changed").unwrap(),
             "guard-absent" => fs::write(h.root.join(".git/config.worktree"), b"changed").unwrap(),
             "root" => {}
@@ -1427,7 +1434,7 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
 
 #[test]
 fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
-    let (h, originals, old) = registry_host("", 20);
+    let (h, originals, old) = registry_host(json!({"mode":"passthrough"}), 20);
     let reader = h.open().unwrap();
     for _ in 0..2 {
         let before = processes(&reader);
