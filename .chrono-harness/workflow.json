@@ -250,6 +250,19 @@
         "runner-tests"
       ],
       "reason": "Structured log records, explicit typed error chains and CLI channel preservation"
+    },
+    {
+      "id": "cache-planning",
+      "paths": [
+        "crates/cache/Cargo.toml",
+        "crates/cache/Cargo.lock",
+        "crates/cache/src/lib.rs",
+        "crates/cache/src/main.rs"
+      ],
+      "tests": [
+        "cache-tests"
+      ],
+      "reason": "Explicit cache consumers, artifact ownership and input compatibility"
     }
   ],
   "semantic_changes_require_integration": true,

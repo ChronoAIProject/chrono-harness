@@ -302,14 +302,17 @@ class ReleaseUnits(unittest.TestCase):
         original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','judge-cargo','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
         self.assertTrue(original_operations <= actual)
         builds={u['id'] for u in cfg['units'] if u['kind']=='build'}
+        original_builds={'build_'+name for name in ['runner','instructions','judge_ci','ci','judge_registration','judge_filemap','judge_routes','judge_projects','judge_cost','judge_mixed','judge_workflow','inputs','distribution','judge_cargo','worktree']}
+        self.assertTrue(original_builds <= builds)
         for u in cfg['units']:
             if u['kind']=='verify':
                 owner=owners[u['operation']]
                 action=next(a for a in owner['actions'].values() if a['operation']==u['operation'])
                 if owner['language']=='rust':
                     self.assertEqual(action['argv'],['test','--locked','--manifest-path',owner['manifest']])
-                    if u['operation'] in original_operations:self.assertEqual(set(u['needs']),builds)
+                    if u['operation'] in original_operations:self.assertEqual(set(u['needs']),original_builds)
                     elif u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
+                    elif u['operation']=='test.cache-tests':self.assertEqual(u['needs'],['build_cache'])
                 else:
                     self.assertEqual(owner['language'],'python')
                     if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution'])

@@ -42,7 +42,9 @@
     "diagnostics",
     "diagnostics-tests",
     "host-bootstrap",
-    "host-bootstrap-tests"
+    "host-bootstrap-tests",
+    "cache",
+    "cache-tests"
   ],
   "projects": [
     {
@@ -1803,6 +1805,100 @@
         }
       },
       "tests_for": "diagnostics",
+      "language": "rust"
+    },
+    {
+      "id": "cache",
+      "kind": "production",
+      "manifest": "crates/cache/Cargo.toml",
+      "lockfile": "crates/cache/Cargo.lock",
+      "root": "crates/cache",
+      "actions": {
+        "build": {
+          "operation": "build.cache",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.cache",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.cache",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "cache-tests",
+      "language": "rust"
+    },
+    {
+      "id": "cache-tests",
+      "kind": "test",
+      "manifest": "crates/cache-tests/Cargo.toml",
+      "lockfile": "crates/cache-tests/Cargo.lock",
+      "root": "crates/cache-tests",
+      "actions": {
+        "build": {
+          "operation": "build.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "cache",
       "language": "rust"
     }
   ],

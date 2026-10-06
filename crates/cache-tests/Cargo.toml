@@ -1,0 +1,18 @@
+[package]
+name = "chrono-cache-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-cache = { path = "../cache" }
+serde_json = "1"
+tempfile = "3"
+
+[[test]]
+name = "keys"
+path = "tests/keys.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

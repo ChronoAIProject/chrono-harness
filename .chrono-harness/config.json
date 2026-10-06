@@ -355,6 +355,18 @@
       "owner": "diagnostics-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/cache/target/",
+      "owner": "cache",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/cache-tests/target/",
+      "owner": "cache-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

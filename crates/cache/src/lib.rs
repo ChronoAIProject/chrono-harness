@@ -8,7 +8,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-pub const SCHEMA: &str = "chrono-ci-cache/v1";
+pub const SCHEMA: &str = "chrono-cache/v1";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -122,7 +122,7 @@ fn path(root: &Path, value: &str) -> Result<PathBuf, String> {
 
 pub fn validate(c: &Config) -> Result<(), String> {
     if c.schema != SCHEMA || c.caches.is_empty() {
-        return Err("E_CACHE_CONFIG: expected nonempty chrono-ci-cache/v1 registration".into());
+        return Err("E_CACHE_CONFIG: expected nonempty chrono-cache/v1 registration".into());
     }
     name(&c.namespace)?;
     if !c.artifact_registry.starts_with(".chrono-harness/") {
@@ -324,7 +324,9 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         };
         let compatibility =
             wire::digest(&json!({"schema":SCHEMA,"namespace":c.namespace,"cache":id,
-            "owner":cache.owner,"producer":cache.producer,"artifacts":artifacts,
+            "owner":cache.owner,"producer":cache.producer,
+            "consumers":cache.consumers.iter().collect::<BTreeSet<_>>(),
+            "restore":cache.restore,"artifacts":artifacts,
             "artifact_registry":c.artifact_registry,"artifact_bindings":bindings,
             "inputs":values(&cache.compatibility_inputs)}))?;
         let source = wire::digest(&values(&cache.source_inputs))?;
@@ -348,23 +350,26 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         }
     }
     Ok(
-        json!({"schema":"chrono-ci-cache-plan/v1","consumer":consumer,"caches":entries,
+        json!({"schema":"chrono-plan/v1","consumer":consumer,"caches":entries,
         "inputs":observations,"input_completeness_proven":false,"execution":"not-started"}),
     )
 }
 
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) != Some("plan") {
+        return Err("expected chrono-cache plan".into());
+    }
     let mut options = BTreeMap::new();
     for pair in args.get(1..).unwrap_or_default().chunks(2) {
         if pair.len() != 2
             || !["--host-root", "--config", "--consumer"].contains(&pair[0].as_str())
             || options.insert(pair[0].as_str(), pair[1].as_str()).is_some()
         {
-            return Err("cache-plan requires unique host-root/config/consumer options".into());
+            return Err("plan requires unique host-root/config/consumer options".into());
         }
     }
     if options.len() != 3 {
-        return Err("cache-plan requires host-root/config/consumer".into());
+        return Err("plan requires host-root/config/consumer".into());
     }
     let root = Path::new(options["--host-root"]);
     let config = options["--config"];

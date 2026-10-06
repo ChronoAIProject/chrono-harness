@@ -1,4 +1,4 @@
-use chrono_ci::cache::{Config, prepare};
+use chrono_cache::{Config, prepare};
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
 
@@ -7,7 +7,7 @@ fn fixture() -> (tempfile::TempDir, Value) {
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
     fs::write(root.path().join("compiler"), b"compiler-one").unwrap();
     fs::write(root.path().join("source"), b"source-one").unwrap();
-    let config = json!({"schema":"chrono-ci-cache/v1","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
+    let config = json!({"schema":"chrono-cache/v1","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
         "inputs":{
             "compiler":{"kind":"file","path":"compiler","presence":"present"},
             "source":{"kind":"file","path":"source","presence":"present"},
@@ -313,11 +313,11 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
         json!({"kind":"environment","name":"CHRONO_CACHE_TEST_PROFILE","presence":"present"});
     let path = root.path().join(".chrono-harness/cache.json");
     fs::write(path, serde_json::to_vec(&config).unwrap()).unwrap();
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
     let run = |value: Option<&str>| {
         let mut command = Command::new(&binary);
         command.args([
-            "cache-plan",
+            "plan",
             "--host-root",
             root.path().to_str().unwrap(),
             "--config",
@@ -349,4 +349,39 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
         first["caches"]["project"]["restore_keys"],
         next["caches"]["project"]["restore_keys"]
     );
+}
+
+#[test]
+fn consumer_registration_and_restore_policy_are_bound_without_list_order() {
+    let (root, mut config) = fixture();
+    let first = plan(root.path(), &config, "check.one").unwrap();
+    config["caches"]["project"]["consumers"] = json!(["check.two", "check.one"]);
+    assert_eq!(first, plan(root.path(), &config, "check.one").unwrap());
+    config["caches"]["project"]["consumers"] = json!(["check.one", "check.three"]);
+    let changed = plan(root.path(), &config, "check.one").unwrap();
+    assert_ne!(
+        first["caches"]["project"]["key"],
+        changed["caches"]["project"]["key"]
+    );
+    config["caches"]["project"]["restore"] = json!("exact");
+    let exact = plan(root.path(), &config, "check.one").unwrap();
+    assert_ne!(
+        changed["caches"]["project"]["key"],
+        exact["caches"]["project"]["key"]
+    );
+    assert_eq!(exact["caches"]["project"]["restore_keys"], json!([]));
+}
+
+#[test]
+fn cli_rejects_unknown_actions_and_ambiguous_options() {
+    for args in [
+        vec![],
+        vec!["unknown"],
+        vec!["plan", "--unknown", "x"],
+        vec!["plan", "--host-root", ".", "--host-root", "."],
+        vec!["plan", "--consumer"],
+    ] {
+        let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+        assert!(chrono_cache::dispatch(&args).is_err());
+    }
 }
