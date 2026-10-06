@@ -115,6 +115,7 @@ fn release_adoption_preserves_customization_and_verify_does_not_repair() {
     assert_eq!(fs::metadata(&output).unwrap().modified().unwrap(), mtime);
     let mut c = config();
     c["name"] = json!("Host customization");
+    c["include_hidden_files"] = json!(true);
     c["push_branches"] = json!([]);
     let mut second = c["jobs"][0].clone();
     second["id"] = json!("another");
@@ -133,23 +134,28 @@ fn release_adoption_preserves_customization_and_verify_does_not_repair() {
     assert!(changed.contains("Host customization") && changed.contains("  another:\n"));
     assert!(!changed.contains("  push:\n"));
     assert!(!generate(root, ".chrono-harness/ci/release.json", true).unwrap());
-    let drift = changed + "# altered\n";
-    fs::write(&output, &drift).unwrap();
-    let out = cli(
-        root,
-        &[
-            "verify",
-            "--host-root",
-            root.to_str().unwrap(),
-            "--config",
-            ".chrono-harness/ci/release.json",
-        ],
-    );
-    assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("drift"));
-    assert_eq!(fs::read_to_string(&output).unwrap(), drift);
-    assert!(generate(root, ".chrono-harness/ci/release.json", false).unwrap());
-    assert!(!generate(root, ".chrono-harness/ci/release.json", true).unwrap());
+    assert!(changed.contains("          include-hidden-files: true\n"));
+    for drift in [
+        format!("{changed}# altered\n"),
+        changed.replace("          include-hidden-files: true\n", ""),
+    ] {
+        fs::write(&output, &drift).unwrap();
+        let out = cli(
+            root,
+            &[
+                "verify",
+                "--host-root",
+                root.to_str().unwrap(),
+                "--config",
+                ".chrono-harness/ci/release.json",
+            ],
+        );
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("drift"));
+        assert_eq!(fs::read_to_string(&output).unwrap(), drift);
+        assert!(generate(root, ".chrono-harness/ci/release.json", false).unwrap());
+        assert!(!generate(root, ".chrono-harness/ci/release.json", true).unwrap());
+    }
 }
 
 #[test]
@@ -161,6 +167,7 @@ fn invalid_release_declarations_fail_before_adoption() {
         ("jobs", json!([])),
         ("name", json!("${{ secrets.X }}")),
         ("checkout_action", json!("actions/checkout@main")),
+        ("include_hidden_files", json!("true")),
         ("push_branches", json!(["same", "same"])),
     ] {
         let mut c = config();

@@ -241,7 +241,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
             shell(&a.adapter_path),
             shell(path)
         );
-        text.push_str(&format!("      - name: Publish shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ steps.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n      - name: Upload detector original context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n          include-hidden-files: true\n", c.collection.upload_artifact_action, a.seed_artifact, scalar(&a.seed_directory)));
+        text.push_str(&format!("      - name: Publish shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ steps.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n      - name: Upload detector original context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, a.seed_artifact, scalar(&a.seed_directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
     }
     for id in c.units.keys() {
         text.push_str(&job(c, path, Some(id))?);

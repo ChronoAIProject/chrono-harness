@@ -32,6 +32,7 @@ fn unscoped_source_identity_and_projection_are_stable() {
     let c = config();
     let source = serde_json::to_value(&c).unwrap();
     assert!(source.get("scope").is_none());
+    assert!(source.get("include_hidden_files").is_none());
     assert_eq!(
         serde_json::to_value(serde_json::from_value::<FullConfig>(source.clone()).unwrap())
             .unwrap(),

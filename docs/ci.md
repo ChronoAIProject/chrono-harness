@@ -359,10 +359,12 @@ runner label, event branches and job timeout are data; selected test commands
 never appear in YAML. Runner command rendering uses the same canonical argv
 constructor as event evidence.
 
-Generated check, detector-context and release uploads enable
-`include-hidden-files` within their explicitly declared artifact roots. A hidden
-path component does not remove an original evidence file from transport. The
-upload setting does not expand the registered root or certify receipt contents.
+New registrations should set `include_hidden_files: true` in the check, full or
+release provider; unit providers use `collection.include_hidden_files`, which
+also governs detector-context uploads. This includes hidden descendants of the
+explicit artifact roots. Omitted or false values preserve the legacy projection
+and serialized source identity. The setting does not expand the registered root
+or certify receipt contents. This host explicitly enables it for checks and releases.
 
 For a separate root inventory, opt in to `chrono-github-ci/v2` and add the
 following explicit declaration to the same source (supply the actual selected
