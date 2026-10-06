@@ -1723,7 +1723,8 @@
         "linux_verify_workflow_inventory_tests",
         "linux_verify_release_build_tests",
         "linux_verify_release_build_integration",
-        "linux_verify_diagnostics_tests"
+        "linux_verify_diagnostics_tests",
+        "linux_verify_host_bootstrap_tests"
       ],
       "downloads": [
         {
@@ -1865,6 +1866,10 @@
         {
           "job": "linux_verify_diagnostics_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
+        },
+        {
+          "job": "linux_verify_host_bootstrap_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
         }
       ],
       "always": true,
@@ -3583,7 +3588,8 @@
         "macos_verify_workflow_inventory_tests",
         "macos_verify_release_build_tests",
         "macos_verify_release_build_integration",
-        "macos_verify_diagnostics_tests"
+        "macos_verify_diagnostics_tests",
+        "macos_verify_host_bootstrap_tests"
       ],
       "downloads": [
         {
@@ -3725,6 +3731,10 @@
         {
           "job": "macos_verify_diagnostics_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
+        },
+        {
+          "job": "macos_verify_host_bootstrap_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
         }
       ],
       "always": true,
@@ -3911,6 +3921,40 @@
       ],
       "artifact_name": "chrono-release-macos-verify_diagnostics_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_host_bootstrap_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_host_bootstrap_tests",
+        "--unit",
+        "verify_host_bootstrap_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_host_bootstrap_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_host_bootstrap_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_host_bootstrap_tests",
+        "--unit",
+        "verify_host_bootstrap_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_host_bootstrap_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
       "needs": [],
       "downloads": []
     }

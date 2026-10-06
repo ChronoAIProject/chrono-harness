@@ -46,7 +46,8 @@
     "workflow.inventory-tests",
     "release.tests.units",
     "release.tests.integration",
-    "test.diagnostics-tests"
+    "test.diagnostics-tests",
+    "host.bootstrap-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -684,6 +685,14 @@
       "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests",
       "rust_toolchain": true
+    },
+    {
+      "id": "verify_host_bootstrap_tests",
+      "kind": "verify",
+      "operation": "host.bootstrap-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
+      "rust_toolchain": false
     }
   ],
   "collector": {
@@ -723,7 +732,8 @@
       "verify_workflow_inventory_tests",
       "verify_release_build_tests",
       "verify_release_build_integration",
-      "verify_diagnostics_tests"
+      "verify_diagnostics_tests",
+      "verify_host_bootstrap_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -766,7 +776,8 @@
       "verify_workflow_inventory_tests": "linux_verify_workflow_inventory_tests",
       "verify_release_build_tests": "linux_verify_release_build_tests",
       "verify_release_build_integration": "linux_verify_release_build_integration",
-      "verify_diagnostics_tests": "linux_verify_diagnostics_tests"
+      "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
+      "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -804,7 +815,8 @@
       "verify_workflow_inventory_tests": "macos_verify_workflow_inventory_tests",
       "verify_release_build_tests": "macos_verify_release_build_tests",
       "verify_release_build_integration": "macos_verify_release_build_integration",
-      "verify_diagnostics_tests": "macos_verify_diagnostics_tests"
+      "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
+      "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests"
     }
   },
   "unit_costs": {
@@ -843,7 +855,8 @@
     "verify_workflow_inventory_tests": "unmeasured",
     "verify_release_build_tests": "unmeasured",
     "verify_release_build_integration": "unmeasured",
-    "verify_diagnostics_tests": "unmeasured"
+    "verify_diagnostics_tests": "unmeasured",
+    "verify_host_bootstrap_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
