@@ -613,6 +613,11 @@ pub(super) fn native_consumer(h: &Host, mode: &str) {
 }
 
 pub(super) fn native_consumer_actions(h: &Host, mode: &str, test_mode: &str) {
+    super::check_inputs::ready_version_program(
+        &h.root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer")),
+        b"fixture\n",
+    );
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["tools"].as_array_mut().unwrap().push(value!({
         "id":"consumer", "program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),

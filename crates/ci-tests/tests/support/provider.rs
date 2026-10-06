@@ -36,6 +36,10 @@ fn contents(endpoint: &str, wrong_source: bool) {
 }
 
 pub fn units(args: &[String]) {
+    if args.len() == 1 && args[0] == "--version" {
+        println!("chrono-ci-test-provider/v1");
+        return;
+    }
     let data = read(".chrono-harness/state/mock.json");
     let run = |unit: &str| {
         json!({"id":if unit == "alpha" {101} else {102},"run_attempt":1,
@@ -107,6 +111,10 @@ pub fn units(args: &[String]) {
 }
 
 pub fn parent(args: &[String]) {
+    if args.len() == 1 && args[0] == "--version" {
+        println!("chrono-ci-test-provider/v1");
+        return;
+    }
     let data = read(".chrono-harness/state/parent-data.json");
     let detection = &data["detection"];
     let mode = data["mode"].as_str().unwrap();

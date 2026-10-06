@@ -29,6 +29,36 @@ fn parent_registration_preserves_unit_settings_and_retires_only_owned_outputs() 
     assert!(!h.root.join(".github/workflows/beta.yml").exists());
 }
 
+fn install_parent_provider(root: &Path) {
+    let program = root.join(".chrono-harness/bin/parent-gh");
+    assert_eq!(
+        fs::symlink_metadata(&program).unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
+    let copied = Command::new("/bin/cp")
+        .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
+        .arg(&program)
+        .output()
+        .unwrap();
+    assert!(copied.status.success(), "parent provider copy: {copied:?}");
+    let ready = Command::new(&program)
+        .current_dir(root)
+        .env_clear()
+        .arg("--version")
+        .output()
+        .unwrap();
+    assert!(
+        ready.status.success(),
+        "parent provider readiness: {ready:?}"
+    );
+    assert_eq!(ready.stdout, b"chrono-ci-test-provider/v1\n");
+    assert!(
+        ready.stderr.is_empty(),
+        "parent provider readiness: {ready:?}"
+    );
+    assert!(!root.join(".chrono-harness/state/parent-calls").exists());
+}
+
 struct GatedHost {
     host: ShortHost,
     payload: Value,
@@ -36,6 +66,7 @@ struct GatedHost {
 impl GatedHost {
     fn new() -> Self {
         let mut h = ShortHost::new();
+        install_parent_provider(&h.root);
         let mut cfg: Value =
             serde_json::from_slice(&fs::read(h.root.join(".chrono-harness/config.json")).unwrap())
                 .unwrap();
@@ -159,11 +190,6 @@ impl GatedHost {
             ".chrono-harness/state/parent-data.json",
             &json!({"detection":d, "mode":mode}),
         );
-        fs::copy(
-            env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
-            self.host.root.join(".chrono-harness/bin/parent-gh"),
-        )
-        .unwrap();
     }
     fn produce(&self, unit: &str) {
         let output = self
@@ -657,7 +683,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         &root,
         &["clone", "-q", "--no-checkout", "--depth=2", &remote, "."],
     );
-    let before = Command::new("git")
+    let before = Command::new(fixture_git())
         .current_dir(&root)
         .args(["cat-file", "-e", &format!("{}^{{commit}}", h.host.base)])
         .status()
@@ -675,7 +701,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         PROVIDER,
         ".github/workflows/collection.yml",
     ] {
-        let bytes = Command::new("git")
+        let bytes = Command::new(fixture_git())
             .current_dir(&root)
             .args(["show", &format!("HEAD:{path}")])
             .output()
@@ -1027,12 +1053,13 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         fs::copy(source.join(path), root.join(path)).unwrap();
     }
     install(&root);
+    install_parent_provider(&root);
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
         root.join(".chrono-harness/bin/chrono-worktree"),
     )
     .unwrap();
-    let git_bin = chrono_harness::resolve_program(&root, "git", None).unwrap();
+    let git_bin = fixture_git();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg: Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/config.json")).unwrap())
@@ -1095,9 +1122,17 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         .command(&["check", "--collect"], &initial, &initial_needs)
         .output()
         .unwrap();
+    retain_command_result(
+        &h.host.root,
+        &["check".into(), "--collect".into()],
+        &json!({"detection":initial,"needs":initial_needs}),
+        &out,
+    );
     assert!(
         out.status.success(),
-        "{}",
+        "status {}; stdout {}; stderr {}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
     h.payload["before"] = json!(h.host.base);
@@ -1185,11 +1220,18 @@ fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_paren
             .join(".chrono-harness/state/mock-artifacts/alpha"),
     );
     h.mock(&d, "retry");
+    let retry_needs = needs(&h, &d);
     let out = h
-        .command(&["check", "--collect"], &d, &needs(&h, &d))
+        .command(&["check", "--collect"], &d, &retry_needs)
         .env("GITHUB_RUN_ATTEMPT", "3")
         .output()
         .unwrap();
+    retain_command_result(
+        &h.host.root,
+        &["check".into(), "--collect".into()],
+        &json!({"detection":d,"needs":retry_needs,"attempt":3}),
+        &out,
+    );
     assert!(
         out.status.success(),
         "{} {}",
@@ -1412,7 +1454,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     let original = git(&source, &["rev-parse", "HEAD"]);
     // Fixed baseline data is exported; no other branch or active worktree is read.
     let dir = tempfile::tempdir().unwrap();
-    let archive = Command::new("git")
+    let archive = Command::new(fixture_git())
         .current_dir(&source)
         .args(["archive", &original])
         .output()
@@ -1474,7 +1516,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     }
     // The copied registration belongs to the source host. This fixture owns
     // its actual Git invocation and binds it before fixing the candidate.
-    let program = chrono_harness::resolve_program(dir.path(), "git", None).unwrap();
+    let program = fixture_git();
     let version = Command::new(&program).arg("--version").output().unwrap();
     assert!(version.status.success());
     let config_path = ".chrono-harness/config.json";

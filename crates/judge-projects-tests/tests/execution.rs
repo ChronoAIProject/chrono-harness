@@ -7,6 +7,58 @@ use std::collections::BTreeMap;
 mod execution_fixture;
 use execution_fixture::Step;
 
+fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_projects::Results {
+    let result = execute(plan);
+    if !result.as_ref().is_ok_and(|r| r.passed()) {
+        let retained = (|| -> Result<_, Box<dyn std::error::Error>> {
+            let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.chrono-harness/state/test-failures");
+            std::fs::create_dir_all(&directory)?;
+            let (file, path) = tempfile::Builder::new()
+                .prefix("scheduler-")
+                .suffix(".json")
+                .tempfile_in(&directory)?
+                .keep()?;
+            // Retain from the worker before returning: the controller may have
+            // already panicked while waiting for a child to reach its socket.
+            let evidence = json!({"schema":"chrono-project-execution-failure/v1", "plan":plan, "result":result});
+            match serde_json::to_writer(file, &evidence) {
+                Ok(()) => Ok(format!("original execution retained at {}", path.display())),
+                Err(error) => Ok(format!(
+                    "original execution retention incomplete at {}: {error}",
+                    path.display()
+                )),
+            }
+        })()
+        .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
+        eprintln!("{retained}");
+        match &result {
+            Ok(rows) => {
+                for row in rows.executed.iter().chain(&rows.blocked) {
+                    let process = row.receipt.as_ref().map(|r| &r.process);
+                    let bounded = |s: &str| s.chars().take(512).collect::<String>();
+                    eprintln!(
+                        "{}",
+                        json!({
+                            "operation":row.operation, "status":row.status,
+                            "error":row.error.as_deref().map(bounded),
+                            "exit_code":process.map(|p| p.exit_code),
+                            "failure":process.and_then(|p| p.failure.as_deref()).map(bounded),
+                            "stdout":process.map(|p| bounded(&p.stdout)),
+                            "stderr":process.map(|p| bounded(&p.stderr)),
+                        })
+                    );
+                }
+            }
+            Err(error) => eprintln!(
+                "execution rejected: {}",
+                error.chars().take(512).collect::<String>()
+            ),
+        }
+    }
+    result.unwrap()
+}
+
 fn assert_passed(result: &chrono_judge_projects::Results) {
     assert!(
         result.passed(),
@@ -244,7 +296,7 @@ fn priority_controls_actual_launches_and_preserves_canonical_results() {
             .is_err()
     );
     std::thread::scope(|scope| {
-        let worker = scope.spawn(|| execute(&ordered).unwrap());
+        let worker = scope.spawn(|| execute_observed(&ordered));
         for expected in ["c", "b", "a", "d"] {
             let (id, stream) = arrival(&listener);
             assert_eq!(id, expected);
@@ -297,7 +349,7 @@ fn priority_waits_for_dependencies_and_conflicts_without_holding_disjoint_work()
             json!(["c", "z", "b", "x"]),
         );
         std::thread::scope(|scope| {
-            let worker = scope.spawn(|| execute(&p).unwrap());
+            let worker = scope.spawn(|| execute_observed(&p));
             let mut first = BTreeMap::from([arrival(&listener), arrival(&listener)]);
             assert_eq!(
                 first.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -442,7 +494,7 @@ fn rendezvous_proves_overlap_cap_and_canonical_rows() {
         json!({"a":{"resources":[],"outputs":[]},"b":{"resources":[],"outputs":[]},"c":{"resources":[],"outputs":[]}}),
     );
     std::thread::scope(|scope| {
-        let worker = scope.spawn(|| execute(&p).unwrap());
+        let worker = scope.spawn(|| execute_observed(&p));
         let mut first = BTreeMap::from([arrival(&listener), arrival(&listener)]);
         assert_eq!(
             first.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -482,7 +534,7 @@ fn resource_and_nested_output_exclusion_allow_disjoint_ready_work() {
             },
         );
         std::thread::scope(|scope| {
-            let worker = scope.spawn(|| execute(&p).unwrap());
+            let worker = scope.spawn(|| execute_observed(&p));
             let mut first = BTreeMap::from([arrival(&listener), arrival(&listener)]);
             assert_eq!(
                 first.keys().map(String::as_str).collect::<Vec<_>>(),

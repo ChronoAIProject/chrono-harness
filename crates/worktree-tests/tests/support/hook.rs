@@ -10,6 +10,10 @@ use std::{
 };
 
 fn main() -> ExitCode {
+    if std::env::args_os().skip(1).eq(["--version"]) {
+        println!("fixture");
+        return ExitCode::SUCCESS;
+    }
     let input = std::env::current_exe().unwrap().with_extension("json");
     let config: Value = serde_json::from_slice(&fs::read(input).unwrap()).unwrap();
     if let Some(writes) = config["writes"].as_array() {

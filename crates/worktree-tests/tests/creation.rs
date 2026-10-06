@@ -34,32 +34,40 @@ struct Host {
     remote: PathBuf,
     parent: PathBuf,
 }
-fn retain_fixture_state(root: &Path, destination: &Path) {
+fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> {
     if !root.is_dir() {
-        return;
+        return Ok(());
     }
-    fs::create_dir_all(destination).unwrap();
-    for row in fs::read_dir(root).unwrap() {
-        let row = row.unwrap();
-        let kind = row.file_type().unwrap();
+    fs::create_dir_all(destination)?;
+    for row in fs::read_dir(root)? {
+        let row = row?;
+        let kind = row.file_type()?;
         if kind.is_dir() {
-            retain_fixture_state(&row.path(), &destination.join(row.file_name()));
+            retain_fixture_state(&row.path(), &destination.join(row.file_name()))?;
         } else if kind.is_file() {
-            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+            fs::copy(row.path(), destination.join(row.file_name()))?;
         }
     }
+    Ok(())
 }
 impl Drop for Host {
     fn drop(&mut self) {
-        if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {
-            let destination = Path::new(&directory).join(format!(
-                "fixture-{}",
-                sha256(self.root.as_os_str().as_encoded_bytes())
-            ));
+        let directory = std::env::var_os("CHRONO_WORKTREE_TEST_RECEIPTS")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::thread::panicking()
+                    .then(|| source().join(".chrono-harness/state/worktree-test-failures"))
+            });
+        let Some(directory) = directory else { return };
+        let destination = directory.join(format!(
+            "fixture-{}",
+            sha256(self.root.as_os_str().as_encoded_bytes())
+        ));
+        let retain = || -> std::io::Result<()> {
             retain_fixture_state(
                 &self.root.join(".chrono-harness/state"),
                 &destination.join("coordinator-state"),
-            );
+            )?;
             for name in [
                 "git-mutation.stdout",
                 "git-mutation.stderr",
@@ -68,7 +76,7 @@ impl Drop for Host {
             ] {
                 let path = self.parent.join(name);
                 if path.is_file() {
-                    fs::copy(path, destination.join(name)).unwrap();
+                    fs::copy(path, destination.join(name))?;
                 }
             }
             // Only explicitly enrolled fixtures, never live worker artifacts.
@@ -77,18 +85,32 @@ impl Drop for Host {
                     .join(".chrono-harness/state/automatic-cleanup/ledger.json"),
             ) {
                 if let Ok(ledger) = json(&bytes) {
-                    for entry in ledger["entries"].as_array().unwrap() {
-                        let target = Path::new(entry["path"].as_str().unwrap());
+                    for entry in ledger["entries"].as_array().into_iter().flatten() {
+                        let Some(path) = entry["path"].as_str() else {
+                            continue;
+                        };
+                        let target = Path::new(path);
                         retain_fixture_state(
                             &target.join(".chrono-harness/state"),
                             &destination.join(format!(
                                 "enrollment-{}",
                                 sha256(target.as_os_str().as_encoded_bytes())
                             )),
-                        );
+                        )?;
                     }
                 }
             }
+            Ok(())
+        };
+        match retain() {
+            Ok(()) => eprintln!(
+                "worktree fixture evidence retained at {}",
+                destination.display()
+            ),
+            Err(error) => eprintln!(
+                "worktree fixture evidence at {} is incomplete: {error}",
+                destination.display()
+            ),
         }
     }
 }
@@ -251,13 +273,19 @@ impl Host {
     fn hook(&self, settings: Value) {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
-        fs::copy(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"), &p).unwrap();
+        let copied = Command::new("/bin/cp")
+            .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
+            .arg(&p)
+            .output()
+            .unwrap();
+        assert!(copied.status.success(), "native hook copy: {copied:?}");
         fs::write(
             p.with_extension("json"),
             serde_json::to_vec(&settings).unwrap(),
         )
         .unwrap();
-        fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
+        check_inputs::ready_version_program(&self.root, &p, b"fixture\n");
     }
 }
 

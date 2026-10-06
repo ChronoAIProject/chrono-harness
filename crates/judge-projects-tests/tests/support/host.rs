@@ -3,6 +3,72 @@ use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+
+pub enum FixtureProbe {
+    Version,
+    JudgeEof,
+}
+
+pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureProbe) -> String {
+    let source = source().join(format!("crates/{project}/target/debug/{binary}"));
+    assert!(source.is_file(), "build {}", source.display());
+    let destination = root.join(format!(".chrono-harness/bin/{binary}"));
+    assert!(matches!(fs::symlink_metadata(&destination), Err(error)
+        if error.kind() == std::io::ErrorKind::NotFound));
+    // A joined copy owns all writable descriptors before concurrent test
+    // children can inherit them. Each host retains its own executable file.
+    let copied = Command::new("/bin/cp")
+        .arg(source)
+        .arg(&destination)
+        .output()
+        .unwrap();
+    assert!(copied.status.success(), "fixture installation: {copied:?}");
+    let digest = sha256(&fs::read(&destination).unwrap());
+    let mut command = Command::new(&destination);
+    command
+        .current_dir(root)
+        .env_clear()
+        .stdin(std::process::Stdio::null());
+    match probe {
+        FixtureProbe::Version => {
+            command.arg("--version");
+        }
+        FixtureProbe::JudgeEof => {
+            command.args(["--protocol", "chrono-judge/v1"]);
+        }
+    }
+    let ready = command.output().unwrap();
+    match probe {
+        FixtureProbe::Version => {
+            assert!(
+                ready.status.success(),
+                "fixture readiness {binary}: {ready:?}"
+            );
+            assert_eq!(ready.stdout, format!("{binary} 0.1.0\n").as_bytes());
+            assert!(
+                ready.stderr.is_empty(),
+                "fixture readiness {binary}: {ready:?}"
+            );
+        }
+        FixtureProbe::JudgeEof => {
+            assert_eq!(
+                ready.status.code(),
+                Some(2),
+                "fixture readiness {binary}: {ready:?}"
+            );
+            assert!(
+                ready.stdout.is_empty(),
+                "fixture readiness {binary}: {ready:?}"
+            );
+            assert!(
+                ready.stderr.starts_with(b"E_PROTOCOL: "),
+                "fixture readiness {binary}: {ready:?}"
+            );
+        }
+    }
+    digest
+}
+
 struct CommandEvidence {
     label: String,
     binding: Value,
@@ -49,13 +115,19 @@ impl Host {
             ("routes", "judge-routes", "chrono-judge-routes"),
             ("projects", "judge-projects", "chrono-judge-projects"),
         ] {
-            let source = source().join(format!("crates/{crate_name}/target/debug/{binary}"));
-            assert!(source.is_file(), "build {}", source.display());
             let path = format!(".chrono-harness/bin/{binary}");
-            fs::copy(source, root.join(&path)).unwrap();
+            let digest = install_program(
+                &root,
+                crate_name,
+                binary,
+                if id == "runner" {
+                    FixtureProbe::Version
+                } else {
+                    FixtureProbe::JudgeEof
+                },
+            );
             if id == "runner" {
-                v.get_mut(CONFIG).unwrap()["runner"]["sha256"] =
-                    json!(sha256(&fs::read(root.join(&path)).unwrap()));
+                v.get_mut(CONFIG).unwrap()["runner"]["sha256"] = json!(digest);
             } else {
                 let after = match id {
                     "registration" => vec![],
@@ -63,7 +135,7 @@ impl Host {
                     "routes" => vec!["filemap"],
                     _ => vec!["routes"],
                 };
-                let row = json!({"id":id,"executable":path,"version":"0.1.0","sha256":sha256(&fs::read(root.join(&path)).unwrap()),"argv":["--protocol","chrono-judge/v1"],"selector":"every-delta","after":after,"modes":["evaluate"]});
+                let row = json!({"id":id,"executable":path,"version":"0.1.0","sha256":digest,"argv":["--protocol","chrono-judge/v1"],"selector":"every-delta","after":after,"modes":["evaluate"]});
                 let judges = v.get_mut(JUDGES).unwrap()["judges"].as_array_mut().unwrap();
                 judges.retain(|j| j["id"] != id);
                 judges.push(row);

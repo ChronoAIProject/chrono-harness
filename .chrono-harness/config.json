@@ -343,6 +343,18 @@
       "owner": "worktree-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": "crates/diagnostics/target/",
+      "owner": "diagnostics",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": "crates/diagnostics-tests/target/",
+      "owner": "diagnostics-tests",
+      "kind": "cargo-output",
+      "tracked": false
     }
   ],
   "environment": {

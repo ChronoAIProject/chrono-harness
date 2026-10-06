@@ -1,3 +1,6 @@
+#[path = "support/tools.rs"]
+mod tools;
+use tools::fixture_git;
 #[path = "units.rs"]
 mod units;
 use chrono_ci::{Config, generate, init, prepare};
@@ -13,7 +16,7 @@ fn write(p: &Path, c: &Config) {
     fs::write(p, serde_json::to_vec_pretty(c).unwrap()).unwrap();
 }
 fn git(p: &Path, args: &[&str]) -> String {
-    let o = Command::new("git")
+    let o = Command::new(fixture_git())
         .args(args)
         .current_dir(p)
         .output()
@@ -323,7 +326,7 @@ fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_
     let advanced = git(writer.path(), &["rev-parse", "HEAD"]);
     git(writer.path(), &["push", "-q", "origin", "stable"]);
     assert!(
-        !Command::new("git")
+        !Command::new(fixture_git())
             .current_dir(d.path())
             .args(["cat-file", "-e", &advanced])
             .output()

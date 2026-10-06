@@ -1,6 +1,9 @@
+#[path = "support/tools.rs"]
+mod tools;
 use chrono_ci::{generate, init, load, prepare};
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
+use tools::fixture_git;
 
 fn source() -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/ci/units.json");
@@ -27,7 +30,7 @@ fn write(path: &Path, value: &Value) {
     fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
 fn git(root: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = Command::new(fixture_git())
         .arg("-C")
         .arg(root)
         .args(args)

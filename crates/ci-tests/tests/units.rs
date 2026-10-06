@@ -260,37 +260,36 @@ fn install(root: &Path) {
     install_tools(
         root,
         &[
-            ("runner", "chrono-harness"),
-            ("judge-ci", "chrono-judge-ci"),
-            ("ci", "chrono-ci"),
+            ("runner", "chrono-harness", ToolProbe::Version),
+            ("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof),
+            ("ci", "chrono-ci", ToolProbe::Version),
         ],
     );
 }
 
-fn install_tools(root: &Path, tools: &[(&str, &str)]) {
+enum ToolProbe {
+    Version,
+    JudgeEof,
+}
+
+fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
     // Test the current product outputs; deployed host tools have a separate
     // caller-owned rollout and may intentionally retain an older schema.
-    // Fixtures never edit these product binaries; each host keeps its own path
-    // while sharing the built executable image. Byte-mutation fixtures need
-    // private copies. Cross-filesystem copies keep writable descriptors in a
-    // joined child so concurrently forked tests cannot inherit them before exec.
+    // Each temporary host owns its executable inode and pathname. A joined copy
+    // child keeps writable descriptors out of concurrently forked test children.
     let mut copy = Command::new("/bin/cp");
-    let mut copying = false;
-    for (project, name) in tools {
+    for (project, name, _) in tools {
         let built = source.join(format!("crates/{project}/target/debug/{name}"));
-        match fs::hard_link(&built, bin.join(name)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::CrossesDevices => {
-                copy.arg(built);
-                copying = true;
-            }
-            Err(error) => panic!("fixture executable {name}: {error}"),
-        }
+        assert!(matches!(
+            fs::symlink_metadata(bin.join(name)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound
+        ));
+        copy.arg(built);
     }
-    if copying {
+    if !tools.is_empty() {
         let copied = copy.arg(&bin).output().unwrap();
         assert!(
             copied.status.success(),
@@ -298,6 +297,71 @@ fn install_tools(root: &Path, tools: &[(&str, &str)]) {
             String::from_utf8_lossy(&copied.stderr)
         );
     }
+    // Finish fixture setup before fault injection and bounded check execution.
+    // Each caller declares the program's real readiness protocol.
+    for (_, name, probe) in tools {
+        let mut command = Command::new(bin.join(name));
+        command
+            .current_dir(root)
+            .env_clear()
+            .stdin(std::process::Stdio::null());
+        if matches!(probe, ToolProbe::Version) {
+            command.arg("--version");
+        }
+        let argv: Vec<_> = std::iter::once(command.get_program())
+            .chain(command.get_args())
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        let output = command.output().unwrap();
+        let ready = match probe {
+            ToolProbe::Version => output.status.success(),
+            ToolProbe::JudgeEof => {
+                output.status.code() == Some(2)
+                    && output.stdout.is_empty()
+                    && output.stderr.starts_with(b"E_REQUEST: ")
+            }
+        };
+        if !ready {
+            retain_command_result(root, &argv, &json!({"fixture":"tool-ready"}), &output);
+        }
+        assert!(ready, "fixture {name} readiness: {output:?}");
+    }
+}
+
+#[test]
+fn fixture_executable_identity_survives_neighbor_teardown() {
+    use std::os::unix::fs::MetadataExt;
+
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../crates/judge-ci/target/debug/chrono-judge-ci");
+    let first = fixture();
+    let second = fixture();
+    let tools = [("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof)];
+    install_tools(first.path(), &tools);
+    install_tools(second.path(), &tools);
+    let relative = ".chrono-harness/bin/chrono-judge-ci";
+    let original = fs::metadata(&source).unwrap();
+    let one = fs::metadata(first.path().join(relative)).unwrap();
+    let two = fs::metadata(second.path().join(relative)).unwrap();
+    assert_ne!((one.dev(), one.ino()), (original.dev(), original.ino()));
+    assert_ne!((two.dev(), two.ino()), (original.dev(), original.ino()));
+    assert_ne!((one.dev(), one.ino()), (two.dev(), two.ino()));
+    assert_eq!(
+        fs::read(first.path().join(relative)).unwrap(),
+        fs::read(&source).unwrap()
+    );
+    drop(first);
+    assert_eq!(
+        fs::read(second.path().join(relative)).unwrap(),
+        fs::read(&source).unwrap()
+    );
+    let result = Command::new(second.path().join(relative))
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(2));
+    assert!(result.stdout.is_empty());
+    assert!(result.stderr.starts_with(b"E_REQUEST: "));
 }
 
 fn consumer() -> (tempfile::TempDir, String, String) {
@@ -522,17 +586,35 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     assert!(!host.path().join(".chrono-harness/state/calls-b").exists());
 }
 
+fn configure_mock_transport(config: &mut Value) {
+    config["gather"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
+    config["gather"]["environment"]["CHRONO_CI_TEST_PROVIDER"] = json!("units");
+}
+
 fn install_mock_transport(root: &Path, mode: &str, c: &str) {
-    fs::copy(
-        env!("CARGO_BIN_EXE_chrono-ci-test-transport"),
-        root.join(".chrono-harness/bin/mock-gh"),
-    )
-    .unwrap();
     json_file(
         root,
         ".chrono-harness/state/mock.json",
         &json!({"candidate":c,"mode":mode}),
     );
+    // Establish the external fixture's readiness before measuring transport
+    // deadlines. The probe has no artifact-download or failure-injection effects.
+    let args = vec![
+        env!("CARGO_BIN_EXE_chrono-ci-test-transport").to_string(),
+        "--version".to_string(),
+    ];
+    let ready = Command::new(&args[0])
+        .arg(&args[1])
+        .current_dir(root)
+        .env_clear()
+        .env("CHRONO_CI_TEST_PROVIDER", "units")
+        .output()
+        .unwrap();
+    if !ready.status.success() || ready.stdout != b"chrono-ci-test-provider/v1\n" {
+        retain_command_result(root, &args, &json!({"fixture":"provider-ready"}), &ready);
+    }
+    assert!(ready.status.success(), "{:?}", ready.stderr);
+    assert_eq!(ready.stdout, b"chrono-ci-test-provider/v1\n");
 }
 
 fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
@@ -546,7 +628,7 @@ fn gather_host_config(
     let (host, b, _) = consumer();
     let root = host.path();
     let mut cfg = config_value();
-    cfg["gather"]["program"] = json!(".chrono-harness/bin/mock-gh");
+    configure_mock_transport(&mut cfg);
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
     generate(root, ".chrono-harness/ci/units.json", false).unwrap();
@@ -770,9 +852,29 @@ fn download_recovery_shares_original_time_and_output_budgets() {
             _ => data["second_http_status"] = json!(401),
         }
         fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
-        assert!(!gather_cli(host.path()).status.success(), "{mode}");
+        let started = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string();
+        let result = gather_cli(host.path());
+        let returned = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string();
+        assert!(!result.status.success(), "{mode}");
         let report = gathered(host.path());
         let attempts = alpha_downloads(&report);
+        if attempts.len() != expected_attempts {
+            retain_command_result(
+                host.path(),
+                &["gather".into()],
+                &json!({"case":mode,"expected_attempts":expected_attempts,
+                    "started_unix_ns":started,"returned_unix_ns":returned}),
+                &result,
+            );
+        }
         assert_eq!(
             attempts.len(),
             expected_attempts,
