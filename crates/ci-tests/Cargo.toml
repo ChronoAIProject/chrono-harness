@@ -12,6 +12,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 chrono-ci = { path = "../ci" }
 chrono-harness = { path = "../runner" }
 tempfile = "3"
+serde_yaml_ng = "0.10"
 
 [[test]]
 name = "behavior"

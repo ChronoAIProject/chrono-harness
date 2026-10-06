@@ -260,6 +260,17 @@ push/PR/dev adoption remain caller-owned.
 
 ## Conditional jobs and the required aggregate
 
+The parent workflow replaces superseded runs of the same pull request through
+native workflow concurrency. Its group binds the workflow path, event and PR
+number; events without a PR use their unique run ID. Push runs therefore retain
+their separate complete before/after obligations instead of losing queued
+DELTAs. Unit jobs remain independently scheduled inside each parent.
+
+This host runs development-branch checks through pull requests to `dev`, and
+checks landed changes on pushes to `dev`. An integration branch is verified by
+its PR run; it does not also launch the same unit suite on every branch push.
+Hosts continue to own their explicit trigger branches.
+
 The smallest projection is one parent at `collection.workflow_path`. Require only
 its aggregate job (`collection.name`, currently **chrono / collection** in this
 host) in branch protection. The generator never mutates branch protection.

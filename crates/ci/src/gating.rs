@@ -105,6 +105,12 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         )
     };
     let mut body = body.replacen(old_if, &condition, 1);
+    // The parent has automatic events only, so no manual candidate input exists.
+    body = body.replacen(
+        "          ref: ${{ github.event.pull_request.head.sha || inputs.candidate || github.event.after || github.sha }}\n",
+        "          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}\n",
+        1,
+    );
     let extra = if unit.is_none() {
         "          CHRONO_CI_NEEDS: ${{ toJSON(needs) }}\n"
     } else {
@@ -178,6 +184,15 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         .ok_or("jobs missing")?
         .0
         .replacen(super::MARKER, MARKER, 1);
+    // Replace superseded PR work, while each push keeps its complete before/after
+    // obligation. Grouping pushes by branch would discard queued DELTAs.
+    let group = scalar(&format!(
+        "chrono-ci:{}:${{{{ github.event_name }}}}:${{{{ github.event.pull_request.number || github.run_id }}}}",
+        c.collection.workflow_path
+    ));
+    let prefix = format!(
+        "{prefix}concurrency:\n  group: {group}\n  cancel-in-progress: ${{{{ github.event_name == 'pull_request' }}}}\n"
+    );
     let bootstrap = g
         .detector
         .bootstrap

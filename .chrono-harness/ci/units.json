@@ -6,8 +6,7 @@
     "name": "chrono / collection",
     "runs_on": "macos-26",
     "push_branches": [
-      "dev",
-      "integration/**"
+      "dev"
     ],
     "pull_request_branches": [
       "dev"
@@ -27,12 +26,6 @@
     "check_config": ".chrono-harness/ci/check.json",
     "context_path": ".chrono-harness/state/collection/context.json",
     "artifact_directory": ".chrono-harness/state/",
-    "push_baselines": [
-      {
-        "ref_prefix": "refs/heads/integration/",
-        "base_ref": "refs/heads/dev"
-      }
-    ],
     "facts_config": ".chrono-harness/config.json",
     "include_hidden_files": true
   },
