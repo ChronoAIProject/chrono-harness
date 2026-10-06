@@ -28,6 +28,8 @@ pub struct Config {
     pub push_baselines: Vec<PushBaseline>,
     pub checkout_action: String,
     pub upload_artifact_action: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_hidden_files: bool,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
     pub runner: String,
@@ -70,6 +72,13 @@ pub struct PushBaseline {
 }
 fn scalar(s: &str) -> String {
     serde_json::to_string(s).expect("string serialization")
+}
+fn artifact_hidden_files(enabled: bool) -> &'static str {
+    if enabled {
+        "          include-hidden-files: true\n"
+    } else {
+        ""
+    }
 }
 fn shell(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
@@ -404,7 +413,7 @@ on:
           name: {artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
           path: {artifacts}
           if-no-files-found: error
-"#,
+{hidden_files}"#,
         name = scalar(&c.name),
         push = serde_json::to_string(&c.push_branches).unwrap(),
         pr = serde_json::to_string(&c.pull_request_branches).unwrap(),
@@ -412,6 +421,7 @@ on:
         timeout = c.timeout_minutes,
         checkout = c.checkout_action,
         upload = c.upload_artifact_action,
+        hidden_files = artifact_hidden_files(c.include_hidden_files),
         initial = invoke(c, true) + &suffix,
         normal = invoke(c, false) + &suffix,
         artifacts = scalar(&c.artifact_directory)

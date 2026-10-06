@@ -104,6 +104,7 @@ jobs:
           name: chrono-unit-ci-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_diagnostics:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -144,6 +145,7 @@ jobs:
           name: chrono-unit-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_distribution:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -184,6 +186,7 @@ jobs:
           name: chrono-unit-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_inputs:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -224,6 +227,7 @@ jobs:
           name: chrono-unit-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_instructions:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -264,6 +268,7 @@ jobs:
           name: chrono-unit-instructions-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-cargo:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -304,6 +309,7 @@ jobs:
           name: chrono-unit-judge-cargo-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -344,6 +350,7 @@ jobs:
           name: chrono-unit-judge-ci-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-cost:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -384,6 +391,7 @@ jobs:
           name: chrono-unit-judge-cost-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-filemap:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -424,6 +432,7 @@ jobs:
           name: chrono-unit-judge-filemap-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-mixed:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -464,6 +473,7 @@ jobs:
           name: chrono-unit-judge-mixed-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-projects:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -504,6 +514,7 @@ jobs:
           name: chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-registration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -544,6 +555,7 @@ jobs:
           name: chrono-unit-judge-registration-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-routes:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -584,6 +596,7 @@ jobs:
           name: chrono-unit-judge-routes-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-workflow:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -624,6 +637,7 @@ jobs:
           name: chrono-unit-judge-workflow-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-workflow-short:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -664,6 +678,7 @@ jobs:
           name: chrono-unit-judge-workflow-short-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_judge-workflow-units:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -704,6 +719,7 @@ jobs:
           name: chrono-unit-judge-workflow-units-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_release-build:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -744,6 +760,7 @@ jobs:
           name: chrono-unit-release-build-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_release-build-integration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -784,6 +801,7 @@ jobs:
           name: chrono-unit-release-build-integration-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_runner:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -824,6 +842,7 @@ jobs:
           name: chrono-unit-runner-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_scoped-v1:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -864,6 +883,7 @@ jobs:
           name: chrono-unit-scoped-v1-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_workflow-inventory:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -904,6 +924,7 @@ jobs:
           name: chrono-unit-workflow-inventory-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_worktree:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -944,6 +965,7 @@ jobs:
           name: chrono-unit-worktree-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   unit_worktree-adoption:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -984,6 +1006,7 @@ jobs:
           name: chrono-unit-worktree-adoption-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true
   aggregate:
     name: "chrono / collection"
     needs: ["detect","unit_ci","unit_diagnostics","unit_distribution","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
@@ -1019,3 +1042,4 @@ jobs:
           name: chrono-collection-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
+          include-hidden-files: true

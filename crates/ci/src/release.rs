@@ -19,6 +19,8 @@ pub struct Config {
     pub push_branches: Vec<String>,
     pub checkout_action: String,
     pub upload_artifact_action: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_hidden_files: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_artifact_action: Option<String>,
     pub jobs: Vec<Job>,
@@ -254,7 +256,7 @@ pub fn render(c: &Config) -> Result<String, String> {
           name: {artifact}
           path: {directory}
           if-no-files-found: error
-"#,
+{hidden_files}"#,
             id = job.id,
             runner = scalar(&job.runs_on),
             timeout = job.timeout_minutes,
@@ -266,6 +268,7 @@ pub fn render(c: &Config) -> Result<String, String> {
                 .collect::<Vec<_>>()
                 .join(" "),
             upload = c.upload_artifact_action,
+            hidden_files = super::artifact_hidden_files(c.include_hidden_files),
             artifact = scalar(&job.artifact_name),
             directory = scalar(&job.artifact_directory),
         ));
@@ -368,8 +371,9 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
           name: {artifact}
           path: {directory}
           if-no-files-found: error
-"#,
+{hidden_files}"#,
         upload = c.upload_artifact_action,
+        hidden_files = super::artifact_hidden_files(c.include_hidden_files),
         directory = scalar(&job.artifact_directory)
     ));
     Ok(())

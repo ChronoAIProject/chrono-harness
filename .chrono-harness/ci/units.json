@@ -33,7 +33,8 @@
         "base_ref": "refs/heads/dev"
       }
     ],
-    "facts_config": ".chrono-harness/config.json"
+    "facts_config": ".chrono-harness/config.json",
+    "include_hidden_files": true
   },
   "units": {
     "runner": {

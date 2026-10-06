@@ -25,6 +25,8 @@ pub struct Config {
     pub runs_on: String,
     pub checkout_action: String,
     pub upload_artifact_action: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_hidden_files: bool,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
     pub runner: String,
@@ -259,12 +261,13 @@ jobs:
           name: chrono-full-check-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
           path: {artifacts}
           if-no-files-found: error
-"#,
+{hidden_files}"#,
         name = scalar(&c.name),
         runner = scalar(&c.runs_on),
         timeout = c.timeout_minutes,
         checkout = c.checkout_action,
         upload = c.upload_artifact_action,
+        hidden_files = super::artifact_hidden_files(c.include_hidden_files),
         bootstrap = c
             .bootstrap
             .iter()
