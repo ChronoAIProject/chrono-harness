@@ -149,8 +149,11 @@ pub(crate) fn project(
             "cache_{}",
             id.bytes().map(|b| format!("{b:02x}")).collect::<String>()
         );
-        prefix.push_str(&format!("      - name: Restore registered cache {id}\n        id: {key}_restore\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n          restore-keys: ${{{{ steps.chrono_cache_plan.outputs.{key}_restore }}}}\n          fail-on-cache-miss: false\n", c.restore_action));
-        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {key}_save\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.{work_id}.outcome == 'success' && steps.{key}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
+        // Native reference names are shorter than 100 characters. Output names
+        // keep the planner's encoding; step references bind the complete cache ID.
+        let step = format!("chrono_cache_{}", chrono_harness::sha256(id.as_bytes()));
+        prefix.push_str(&format!("      - name: Restore registered cache {id}\n        id: {step}_restore\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n          restore-keys: ${{{{ steps.chrono_cache_plan.outputs.{key}_restore }}}}\n          fail-on-cache-miss: false\n", c.restore_action));
+        suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.{work_id}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
     }
     let marker = format!("      - name: {before}\n");
     let work_marker = format!("      - name: {work}\n");

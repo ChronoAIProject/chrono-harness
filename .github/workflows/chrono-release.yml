@@ -42,7 +42,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_runner' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.runner
-        id: cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_restore
+        id: chrono_cache_01c4bd4e6bd331931e105ae162080a898a333d26dd133a2bfce3eba2abf19f64_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -62,8 +62,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Save registered cache release.linux.release.runner
-        id: cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_key }}
+        id: chrono_cache_01c4bd4e6bd331931e105ae162080a898a333d26dd133a2bfce3eba2abf19f64_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_01c4bd4e6bd331931e105ae162080a898a333d26dd133a2bfce3eba2abf19f64_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e72756e6e6572_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -108,7 +108,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_instructions' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.instructions
-        id: cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_restore
+        id: chrono_cache_6c19f88073e209b1629a1d1447bc7fcc871c8fd631ac45af4c45d89fe88b12ee_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -128,8 +128,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Save registered cache release.linux.release.instructions
-        id: cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_key }}
+        id: chrono_cache_6c19f88073e209b1629a1d1447bc7fcc871c8fd631ac45af4c45d89fe88b12ee_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_6c19f88073e209b1629a1d1447bc7fcc871c8fd631ac45af4c45d89fe88b12ee_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e737472756374696f6e73_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -174,7 +174,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_ci' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-ci
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_restore
+        id: chrono_cache_5dffba96f9d88e98ee43aab29d2aeca36e6cae5d7bb70bfc2cd2924ac92769eb_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -194,8 +194,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Save registered cache release.linux.release.judge-ci
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_key }}
+        id: chrono_cache_5dffba96f9d88e98ee43aab29d2aeca36e6cae5d7bb70bfc2cd2924ac92769eb_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_5dffba96f9d88e98ee43aab29d2aeca36e6cae5d7bb70bfc2cd2924ac92769eb_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6369_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -240,7 +240,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_ci' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.ci
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6369_restore
+        id: chrono_cache_01d7c9d168b4554715d54586f532dfc48f26748b32d764b7df7a03b14525e31e_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -260,8 +260,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Save registered cache release.linux.release.ci
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6369_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_key }}
+        id: chrono_cache_01d7c9d168b4554715d54586f532dfc48f26748b32d764b7df7a03b14525e31e_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_01d7c9d168b4554715d54586f532dfc48f26748b32d764b7df7a03b14525e31e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6369_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -306,7 +306,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_registration' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-registration
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_restore
+        id: chrono_cache_013e2173574cbf33bb500df794ec3b03f543a5ad9afaae2806827ed0a23cf0ac_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -326,8 +326,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Save registered cache release.linux.release.judge-registration
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+        id: chrono_cache_013e2173574cbf33bb500df794ec3b03f543a5ad9afaae2806827ed0a23cf0ac_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_013e2173574cbf33bb500df794ec3b03f543a5ad9afaae2806827ed0a23cf0ac_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726567697374726174696f6e_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -372,7 +372,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_filemap' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-filemap
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_restore
+        id: chrono_cache_737ec1eeeb6544e77ae9974c547b74961ba94ccdcbb272e9087025bf58bd39bc_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -392,8 +392,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Save registered cache release.linux.release.judge-filemap
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_key }}
+        id: chrono_cache_737ec1eeeb6544e77ae9974c547b74961ba94ccdcbb272e9087025bf58bd39bc_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_737ec1eeeb6544e77ae9974c547b74961ba94ccdcbb272e9087025bf58bd39bc_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d66696c656d6170_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -438,7 +438,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_routes' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-routes
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_restore
+        id: chrono_cache_5df3e2983c817273c18b80e2d0647b1290cb31295a60c1287e76ea01073ccde0_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -458,8 +458,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Save registered cache release.linux.release.judge-routes
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_key }}
+        id: chrono_cache_5df3e2983c817273c18b80e2d0647b1290cb31295a60c1287e76ea01073ccde0_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_5df3e2983c817273c18b80e2d0647b1290cb31295a60c1287e76ea01073ccde0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d726f75746573_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -504,7 +504,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_projects' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-projects
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_restore
+        id: chrono_cache_6b2093db4c672bc2755ab9f8942ad15b979bd8918a58342b4b7e3f5a380edd2d_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -524,8 +524,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Save registered cache release.linux.release.judge-projects
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_key }}
+        id: chrono_cache_6b2093db4c672bc2755ab9f8942ad15b979bd8918a58342b4b7e3f5a380edd2d_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_6b2093db4c672bc2755ab9f8942ad15b979bd8918a58342b4b7e3f5a380edd2d_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d70726f6a65637473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -570,7 +570,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cost' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-cost
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_restore
+        id: chrono_cache_55c7fb48c0224587239b48714d47435dc5f71883bee8d617693876a0fbe62c3a_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -590,8 +590,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Save registered cache release.linux.release.judge-cost
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_key }}
+        id: chrono_cache_55c7fb48c0224587239b48714d47435dc5f71883bee8d617693876a0fbe62c3a_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_55c7fb48c0224587239b48714d47435dc5f71883bee8d617693876a0fbe62c3a_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636f7374_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -636,7 +636,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_mixed' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-mixed
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_restore
+        id: chrono_cache_fb27e0fc68251866c6bb14647d6e039c11362bd87ec13b4658f1be7b1924d6ab_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -656,8 +656,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Save registered cache release.linux.release.judge-mixed
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_key }}
+        id: chrono_cache_fb27e0fc68251866c6bb14647d6e039c11362bd87ec13b4658f1be7b1924d6ab_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_fb27e0fc68251866c6bb14647d6e039c11362bd87ec13b4658f1be7b1924d6ab_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d6d69786564_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -702,7 +702,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_workflow' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-workflow
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_restore
+        id: chrono_cache_4c9634cf526e79ea659ce10caefb6f21aacb8a25aec73714a560fcbe8705841f_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -722,8 +722,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Save registered cache release.linux.release.judge-workflow
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_key }}
+        id: chrono_cache_4c9634cf526e79ea659ce10caefb6f21aacb8a25aec73714a560fcbe8705841f_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_4c9634cf526e79ea659ce10caefb6f21aacb8a25aec73714a560fcbe8705841f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d776f726b666c6f77_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -768,7 +768,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_inputs' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.inputs
-        id: cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_restore
+        id: chrono_cache_9315ffd1a25fa0b776a8b0d94a94cb151eecb53ae304f3a99fc558458d63215f_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -788,8 +788,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Save registered cache release.linux.release.inputs
-        id: cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_key }}
+        id: chrono_cache_9315ffd1a25fa0b776a8b0d94a94cb151eecb53ae304f3a99fc558458d63215f_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_9315ffd1a25fa0b776a8b0d94a94cb151eecb53ae304f3a99fc558458d63215f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e696e70757473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -834,7 +834,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_distribution' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.distribution
-        id: cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_restore
+        id: chrono_cache_0ecdf2bfde2b9255292e5cfe0ea32575ecc3ae948a511ce4b25d2f151939e367_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -854,8 +854,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Save registered cache release.linux.release.distribution
-        id: cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_key }}
+        id: chrono_cache_0ecdf2bfde2b9255292e5cfe0ea32575ecc3ae948a511ce4b25d2f151939e367_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_0ecdf2bfde2b9255292e5cfe0ea32575ecc3ae948a511ce4b25d2f151939e367_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e646973747269627574696f6e_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -900,7 +900,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_judge_cargo' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.judge-cargo
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_restore
+        id: chrono_cache_f47d2ee1c9d54aa38a72a0c454a5b686f0ce0b9ee07dbfd4f638b990f82c67ec_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -920,8 +920,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
       - name: Save registered cache release.linux.release.judge-cargo
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_key }}
+        id: chrono_cache_f47d2ee1c9d54aa38a72a0c454a5b686f0ce0b9ee07dbfd4f638b990f82c67ec_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_f47d2ee1c9d54aa38a72a0c454a5b686f0ce0b9ee07dbfd4f638b990f82c67ec_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6a756467652d636172676f_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -966,7 +966,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_worktree' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.worktree
-        id: cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_restore
+        id: chrono_cache_07b81d90fdf1f72db975f686485f32504408d41900ff83d9bfa6fc1498a5ead4_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -986,8 +986,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Save registered cache release.linux.release.worktree
-        id: cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_key }}
+        id: chrono_cache_07b81d90fdf1f72db975f686485f32504408d41900ff83d9bfa6fc1498a5ead4_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_07b81d90fdf1f72db975f686485f32504408d41900ff83d9bfa6fc1498a5ead4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e776f726b74726565_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1138,7 +1138,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_distribution_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.distribution-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_restore
+        id: chrono_cache_841112f602278997268c620da117271c6082708ba160e9300e1410af58f08c41_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1158,8 +1158,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Save registered cache release.linux.verify.distribution-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_key }}
+        id: chrono_cache_841112f602278997268c620da117271c6082708ba160e9300e1410af58f08c41_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_841112f602278997268c620da117271c6082708ba160e9300e1410af58f08c41_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646973747269627574696f6e2d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1310,7 +1310,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_worktree_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.worktree-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_restore
+        id: chrono_cache_01e76ad21f1e751c94fcb224b897c2316d51ce0e13d7098e659d2a3067c9c497_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1330,8 +1330,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Save registered cache release.linux.verify.worktree-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_key }}
+        id: chrono_cache_01e76ad21f1e751c94fcb224b897c2316d51ce0e13d7098e659d2a3067c9c497_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_01e76ad21f1e751c94fcb224b897c2316d51ce0e13d7098e659d2a3067c9c497_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e776f726b747265652d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1482,7 +1482,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_runner_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.runner-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_restore
+        id: chrono_cache_b745fae71dc7eae1566fd538688445e814c6292d4c83c064cfb005b1486b7bc5_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1502,8 +1502,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Save registered cache release.linux.verify.runner-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_key }}
+        id: chrono_cache_b745fae71dc7eae1566fd538688445e814c6292d4c83c064cfb005b1486b7bc5_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_b745fae71dc7eae1566fd538688445e814c6292d4c83c064cfb005b1486b7bc5_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e72756e6e65722d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1654,7 +1654,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_inputs_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.inputs-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_restore
+        id: chrono_cache_a337117b8e249d267361b721ef171fceda01987a31d4aaf0362202f57b9a0a21_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1674,8 +1674,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Save registered cache release.linux.verify.inputs-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_key }}
+        id: chrono_cache_a337117b8e249d267361b721ef171fceda01987a31d4aaf0362202f57b9a0a21_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_a337117b8e249d267361b721ef171fceda01987a31d4aaf0362202f57b9a0a21_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e707574732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1826,7 +1826,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_ci_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.ci-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_restore
+        id: chrono_cache_7cd0f77230dab548f66fb880ff939301b3a92d89bb7bfdc53070c399ead13c76_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1846,8 +1846,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Save registered cache release.linux.verify.ci-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_key }}
+        id: chrono_cache_7cd0f77230dab548f66fb880ff939301b3a92d89bb7bfdc53070c399ead13c76_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_7cd0f77230dab548f66fb880ff939301b3a92d89bb7bfdc53070c399ead13c76_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63692d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1998,7 +1998,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_ci_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-ci-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_restore
+        id: chrono_cache_f5a9d0deabe83a3811d1fad5267b1271fb7da4bf5dbff11e2ea7fab714542c42_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2018,8 +2018,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Save registered cache release.linux.verify.judge-ci-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_key }}
+        id: chrono_cache_f5a9d0deabe83a3811d1fad5267b1271fb7da4bf5dbff11e2ea7fab714542c42_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_f5a9d0deabe83a3811d1fad5267b1271fb7da4bf5dbff11e2ea7fab714542c42_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d63692d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2170,7 +2170,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_registration_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-registration-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore
+        id: chrono_cache_02ad6e383bab59461de9c6e2fef44a9d7ebc049cf23a4b82e5e2cf565c912527_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2190,8 +2190,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Save registered cache release.linux.verify.judge-registration-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+        id: chrono_cache_02ad6e383bab59461de9c6e2fef44a9d7ebc049cf23a4b82e5e2cf565c912527_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_02ad6e383bab59461de9c6e2fef44a9d7ebc049cf23a4b82e5e2cf565c912527_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2342,7 +2342,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_projects_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-projects-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_restore
+        id: chrono_cache_3bb4bebd763d112f2f719ee95d10446b606eaf1b7849ccc50744a05193309314_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2362,8 +2362,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Save registered cache release.linux.verify.judge-projects-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+        id: chrono_cache_3bb4bebd763d112f2f719ee95d10446b606eaf1b7849ccc50744a05193309314_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_3bb4bebd763d112f2f719ee95d10446b606eaf1b7849ccc50744a05193309314_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2514,7 +2514,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_workflow_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-workflow-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore
+        id: chrono_cache_4feeeeee471dfc87f51e7207cc484828d090d07a5c10eb9986d7d373b5d13b20_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2534,8 +2534,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Save registered cache release.linux.verify.judge-workflow-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+        id: chrono_cache_4feeeeee471dfc87f51e7207cc484828d090d07a5c10eb9986d7d373b5d13b20_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_4feeeeee471dfc87f51e7207cc484828d090d07a5c10eb9986d7d373b5d13b20_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2686,7 +2686,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cargo_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-cargo-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_restore
+        id: chrono_cache_6f20c1a054302822d30d8d4c0101dbd8e58b1d378ddda31c0f6678d61aec31ea_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2706,8 +2706,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
       - name: Save registered cache release.linux.verify.judge-cargo-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_key }}
+        id: chrono_cache_6f20c1a054302822d30d8d4c0101dbd8e58b1d378ddda31c0f6678d61aec31ea_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_6f20c1a054302822d30d8d4c0101dbd8e58b1d378ddda31c0f6678d61aec31ea_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636172676f2d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2858,7 +2858,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_instructions_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.instructions-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_restore
+        id: chrono_cache_ee3dfc4227f565bc3bfec6f3a43b774553ced3f0a7b14745eaffd3fc92fc8b26_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2878,8 +2878,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Save registered cache release.linux.verify.instructions-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_key }}
+        id: chrono_cache_ee3dfc4227f565bc3bfec6f3a43b774553ced3f0a7b14745eaffd3fc92fc8b26_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_ee3dfc4227f565bc3bfec6f3a43b774553ced3f0a7b14745eaffd3fc92fc8b26_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e696e737472756374696f6e732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3030,7 +3030,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_filemap_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-filemap-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_restore
+        id: chrono_cache_850c6dfcec22ccd71990399e96e4a77bfa372ec96ddb75dc4806774ae65fec34_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3050,8 +3050,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Save registered cache release.linux.verify.judge-filemap-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+        id: chrono_cache_850c6dfcec22ccd71990399e96e4a77bfa372ec96ddb75dc4806774ae65fec34_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_850c6dfcec22ccd71990399e96e4a77bfa372ec96ddb75dc4806774ae65fec34_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3202,7 +3202,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_routes_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-routes-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_restore
+        id: chrono_cache_e50c7549d97d299e997632e27fb60a204bb04286d533c4106874963e20696514_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3222,8 +3222,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Save registered cache release.linux.verify.judge-routes-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_key }}
+        id: chrono_cache_e50c7549d97d299e997632e27fb60a204bb04286d533c4106874963e20696514_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_e50c7549d97d299e997632e27fb60a204bb04286d533c4106874963e20696514_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d726f757465732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3374,7 +3374,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_cost_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-cost-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_restore
+        id: chrono_cache_123da66c1701ccf0a552050f245bcea9d4d2e0117a9caeaaf0c3182d42ed33f8_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3394,8 +3394,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Save registered cache release.linux.verify.judge-cost-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_key }}
+        id: chrono_cache_123da66c1701ccf0a552050f245bcea9d4d2e0117a9caeaaf0c3182d42ed33f8_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_123da66c1701ccf0a552050f245bcea9d4d2e0117a9caeaaf0c3182d42ed33f8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d636f73742d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3546,7 +3546,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_judge_mixed_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.judge-mixed-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_restore
+        id: chrono_cache_34bb6b3df02b55018bd7fa2cb028aa0c7b69a93718b7c4f647a9cb218247bdf4_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3566,8 +3566,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Save registered cache release.linux.verify.judge-mixed-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_key }}
+        id: chrono_cache_34bb6b3df02b55018bd7fa2cb028aa0c7b69a93718b7c4f647a9cb218247bdf4_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_34bb6b3df02b55018bd7fa2cb028aa0c7b69a93718b7c4f647a9cb218247bdf4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e6a756467652d6d697865642d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3923,7 +3923,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_runner' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.runner
-        id: cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_restore
+        id: chrono_cache_96ee0aea017535a416227a3adeacabeaba1e3b3c15e6d0f4babd686d26ee6714_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3943,8 +3943,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Save registered cache release.macos.release.runner
-        id: cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_key }}
+        id: chrono_cache_96ee0aea017535a416227a3adeacabeaba1e3b3c15e6d0f4babd686d26ee6714_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_96ee0aea017535a416227a3adeacabeaba1e3b3c15e6d0f4babd686d26ee6714_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e72756e6e6572_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3989,7 +3989,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_instructions' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.instructions
-        id: cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_restore
+        id: chrono_cache_a63dc6afb5c1077d9ad082b8487882d0b1f1f8f303b7f1fee06e0aff082c1268_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4009,8 +4009,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Save registered cache release.macos.release.instructions
-        id: cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_key }}
+        id: chrono_cache_a63dc6afb5c1077d9ad082b8487882d0b1f1f8f303b7f1fee06e0aff082c1268_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_a63dc6afb5c1077d9ad082b8487882d0b1f1f8f303b7f1fee06e0aff082c1268_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e737472756374696f6e73_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4055,7 +4055,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_ci' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-ci
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_restore
+        id: chrono_cache_533ab7e84a658a7e557ebcb8299dd43a4c3f6e5fcd06e6e00e20a92f62494043_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4075,8 +4075,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Save registered cache release.macos.release.judge-ci
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_key }}
+        id: chrono_cache_533ab7e84a658a7e557ebcb8299dd43a4c3f6e5fcd06e6e00e20a92f62494043_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_533ab7e84a658a7e557ebcb8299dd43a4c3f6e5fcd06e6e00e20a92f62494043_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6369_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4121,7 +4121,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_ci' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.ci
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6369_restore
+        id: chrono_cache_78a83384bb793a51c4b1396c762d88f100c9648ef1a0be3c50b83805090aef06_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4141,8 +4141,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Save registered cache release.macos.release.ci
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6369_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6369_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_key }}
+        id: chrono_cache_78a83384bb793a51c4b1396c762d88f100c9648ef1a0be3c50b83805090aef06_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_78a83384bb793a51c4b1396c762d88f100c9648ef1a0be3c50b83805090aef06_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6369_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4187,7 +4187,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_registration' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-registration
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_restore
+        id: chrono_cache_9b635c96d139d16fc0d424a848c1d8be0d6123d9358405c71a49a50b03f3879c_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4207,8 +4207,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Save registered cache release.macos.release.judge-registration
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_key }}
+        id: chrono_cache_9b635c96d139d16fc0d424a848c1d8be0d6123d9358405c71a49a50b03f3879c_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_9b635c96d139d16fc0d424a848c1d8be0d6123d9358405c71a49a50b03f3879c_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726567697374726174696f6e_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4253,7 +4253,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_filemap' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-filemap
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_restore
+        id: chrono_cache_be4d5f9b35a645cfd6817eb54fa463812b902a35a315f943846b57002ef75cb0_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4273,8 +4273,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Save registered cache release.macos.release.judge-filemap
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_key }}
+        id: chrono_cache_be4d5f9b35a645cfd6817eb54fa463812b902a35a315f943846b57002ef75cb0_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_be4d5f9b35a645cfd6817eb54fa463812b902a35a315f943846b57002ef75cb0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d66696c656d6170_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4319,7 +4319,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_routes' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-routes
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_restore
+        id: chrono_cache_edcb1934eaa477345abf3837d6be085fa2ac18672cea9f9f30d10e7dba097076_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4339,8 +4339,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Save registered cache release.macos.release.judge-routes
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_key }}
+        id: chrono_cache_edcb1934eaa477345abf3837d6be085fa2ac18672cea9f9f30d10e7dba097076_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_edcb1934eaa477345abf3837d6be085fa2ac18672cea9f9f30d10e7dba097076_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d726f75746573_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4385,7 +4385,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_projects' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-projects
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_restore
+        id: chrono_cache_ebcb4885d1d2c54101a9cf426e418f0a4461a52972c8b471f77e6573680f1910_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4405,8 +4405,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Save registered cache release.macos.release.judge-projects
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_key }}
+        id: chrono_cache_ebcb4885d1d2c54101a9cf426e418f0a4461a52972c8b471f77e6573680f1910_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_ebcb4885d1d2c54101a9cf426e418f0a4461a52972c8b471f77e6573680f1910_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d70726f6a65637473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4451,7 +4451,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cost' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-cost
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_restore
+        id: chrono_cache_98814b17101ce4728f32a1494c22972f30a91ac924c19c2f142ea0bab6ab8418_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4471,8 +4471,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Save registered cache release.macos.release.judge-cost
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_key }}
+        id: chrono_cache_98814b17101ce4728f32a1494c22972f30a91ac924c19c2f142ea0bab6ab8418_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_98814b17101ce4728f32a1494c22972f30a91ac924c19c2f142ea0bab6ab8418_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636f7374_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4517,7 +4517,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_mixed' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-mixed
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_restore
+        id: chrono_cache_3a3e8285bc4ddd6e281633c638ee93bc6f59e6a619fd35b4e1334b67f43fbcbd_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4537,8 +4537,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Save registered cache release.macos.release.judge-mixed
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_key }}
+        id: chrono_cache_3a3e8285bc4ddd6e281633c638ee93bc6f59e6a619fd35b4e1334b67f43fbcbd_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_3a3e8285bc4ddd6e281633c638ee93bc6f59e6a619fd35b4e1334b67f43fbcbd_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d6d69786564_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4583,7 +4583,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_workflow' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-workflow
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_restore
+        id: chrono_cache_c88b8c72ae828e76ceb56191091d51eb94a8b91f9feb181964cf3c463ccca929_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4603,8 +4603,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Save registered cache release.macos.release.judge-workflow
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_key }}
+        id: chrono_cache_c88b8c72ae828e76ceb56191091d51eb94a8b91f9feb181964cf3c463ccca929_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_c88b8c72ae828e76ceb56191091d51eb94a8b91f9feb181964cf3c463ccca929_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d776f726b666c6f77_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4649,7 +4649,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_inputs' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.inputs
-        id: cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_restore
+        id: chrono_cache_c794b1228994ad3f613a4d68d4ef3146620d80c2e284ef25c0787332e186ae95_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4669,8 +4669,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Save registered cache release.macos.release.inputs
-        id: cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_key }}
+        id: chrono_cache_c794b1228994ad3f613a4d68d4ef3146620d80c2e284ef25c0787332e186ae95_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_c794b1228994ad3f613a4d68d4ef3146620d80c2e284ef25c0787332e186ae95_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e696e70757473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4715,7 +4715,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_distribution' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.distribution
-        id: cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_restore
+        id: chrono_cache_13cd11a48c439dd4e7d74492f77ce1482516bffcb79bf6895a939ee28f210882_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4735,8 +4735,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Save registered cache release.macos.release.distribution
-        id: cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_key }}
+        id: chrono_cache_13cd11a48c439dd4e7d74492f77ce1482516bffcb79bf6895a939ee28f210882_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_13cd11a48c439dd4e7d74492f77ce1482516bffcb79bf6895a939ee28f210882_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e646973747269627574696f6e_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4781,7 +4781,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_judge_cargo' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.judge-cargo
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_restore
+        id: chrono_cache_b433209e575b3c77aef38962d2df4eb3ebc5a81173ec1dc67de9f0e5b96f2d08_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4801,8 +4801,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cargo' '--unit' 'build_judge_cargo'
       - name: Save registered cache release.macos.release.judge-cargo
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_key }}
+        id: chrono_cache_b433209e575b3c77aef38962d2df4eb3ebc5a81173ec1dc67de9f0e5b96f2d08_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_b433209e575b3c77aef38962d2df4eb3ebc5a81173ec1dc67de9f0e5b96f2d08_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6a756467652d636172676f_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4847,7 +4847,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_worktree' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.worktree
-        id: cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_restore
+        id: chrono_cache_06be967b5cff1f10b6da8cb3d35aacf832a6fa8b0a9a9b1d7ff078effd15b285_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4867,8 +4867,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Save registered cache release.macos.release.worktree
-        id: cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_key }}
+        id: chrono_cache_06be967b5cff1f10b6da8cb3d35aacf832a6fa8b0a9a9b1d7ff078effd15b285_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_06be967b5cff1f10b6da8cb3d35aacf832a6fa8b0a9a9b1d7ff078effd15b285_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e776f726b74726565_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5019,7 +5019,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_distribution_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.distribution-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_restore
+        id: chrono_cache_2eb3838cf468289b14c7012b6e971a5d6f4cc25af4dd2ac0bc4f94c04d878f77_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5039,8 +5039,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Save registered cache release.macos.verify.distribution-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_key }}
+        id: chrono_cache_2eb3838cf468289b14c7012b6e971a5d6f4cc25af4dd2ac0bc4f94c04d878f77_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_2eb3838cf468289b14c7012b6e971a5d6f4cc25af4dd2ac0bc4f94c04d878f77_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646973747269627574696f6e2d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5191,7 +5191,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_worktree_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.worktree-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_restore
+        id: chrono_cache_c3898a15bd612a76affe21afe5966c34581f1691015f6e1862cce7354db83279_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5211,8 +5211,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Save registered cache release.macos.verify.worktree-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_key }}
+        id: chrono_cache_c3898a15bd612a76affe21afe5966c34581f1691015f6e1862cce7354db83279_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_c3898a15bd612a76affe21afe5966c34581f1691015f6e1862cce7354db83279_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e776f726b747265652d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5363,7 +5363,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_runner_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.runner-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_restore
+        id: chrono_cache_411ee9047b09354538bef93c481a4815f1f06eb9cb432ef4de7bd75b17b8daa9_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5383,8 +5383,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Save registered cache release.macos.verify.runner-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_key }}
+        id: chrono_cache_411ee9047b09354538bef93c481a4815f1f06eb9cb432ef4de7bd75b17b8daa9_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_411ee9047b09354538bef93c481a4815f1f06eb9cb432ef4de7bd75b17b8daa9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e72756e6e65722d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5535,7 +5535,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_inputs_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.inputs-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_restore
+        id: chrono_cache_30e1bd12f0822a093238c561585ea1aa28e6f4013fec59a0db0c6c2d192baff7_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5555,8 +5555,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Save registered cache release.macos.verify.inputs-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_key }}
+        id: chrono_cache_30e1bd12f0822a093238c561585ea1aa28e6f4013fec59a0db0c6c2d192baff7_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_30e1bd12f0822a093238c561585ea1aa28e6f4013fec59a0db0c6c2d192baff7_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e707574732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5707,7 +5707,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_ci_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.ci-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_restore
+        id: chrono_cache_48e4225aca0641b5f94f25f6a679484f3f40e5befdd13d3d71146786fea58c34_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5727,8 +5727,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Save registered cache release.macos.verify.ci-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_key }}
+        id: chrono_cache_48e4225aca0641b5f94f25f6a679484f3f40e5befdd13d3d71146786fea58c34_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_48e4225aca0641b5f94f25f6a679484f3f40e5befdd13d3d71146786fea58c34_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63692d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5879,7 +5879,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_ci_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-ci-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_restore
+        id: chrono_cache_20323c61c220ae1c280785d3f5972438e0677de1c055d5c5837a2a95fe9aa93e_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -5899,8 +5899,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Save registered cache release.macos.verify.judge-ci-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_key }}
+        id: chrono_cache_20323c61c220ae1c280785d3f5972438e0677de1c055d5c5837a2a95fe9aa93e_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_20323c61c220ae1c280785d3f5972438e0677de1c055d5c5837a2a95fe9aa93e_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d63692d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6051,7 +6051,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_registration_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-registration-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore
+        id: chrono_cache_ec2f749edd2284290029711f09b911b15a81fd3e0322e56a4b24db776291f6de_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6071,8 +6071,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Save registered cache release.macos.verify.judge-registration-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
+        id: chrono_cache_ec2f749edd2284290029711f09b911b15a81fd3e0322e56a4b24db776291f6de_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_ec2f749edd2284290029711f09b911b15a81fd3e0322e56a4b24db776291f6de_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726567697374726174696f6e2d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6223,7 +6223,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_projects_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-projects-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_restore
+        id: chrono_cache_aa55663e03fde9ed1429418b041ea60d414dc4a6df40cf2d2b42b9de2b894a1b_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6243,8 +6243,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Save registered cache release.macos.verify.judge-projects-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
+        id: chrono_cache_aa55663e03fde9ed1429418b041ea60d414dc4a6df40cf2d2b42b9de2b894a1b_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_aa55663e03fde9ed1429418b041ea60d414dc4a6df40cf2d2b42b9de2b894a1b_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d70726f6a656374732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6395,7 +6395,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_workflow_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-workflow-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore
+        id: chrono_cache_2534c6ee15b5012ffd6be6449f94312051d3fdad5e4e0ec817ff6db55b280ecf_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6415,8 +6415,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Save registered cache release.macos.verify.judge-workflow-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
+        id: chrono_cache_2534c6ee15b5012ffd6be6449f94312051d3fdad5e4e0ec817ff6db55b280ecf_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_2534c6ee15b5012ffd6be6449f94312051d3fdad5e4e0ec817ff6db55b280ecf_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d776f726b666c6f772d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6567,7 +6567,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cargo_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-cargo-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_restore
+        id: chrono_cache_a9698030c8b47fedc2f059f1ada8320e5894f83f942921ab3fa04822c15425dd_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6587,8 +6587,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cargo_tests' '--unit' 'verify_judge_cargo_tests'
       - name: Save registered cache release.macos.verify.judge-cargo-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_key }}
+        id: chrono_cache_a9698030c8b47fedc2f059f1ada8320e5894f83f942921ab3fa04822c15425dd_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_a9698030c8b47fedc2f059f1ada8320e5894f83f942921ab3fa04822c15425dd_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636172676f2d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6739,7 +6739,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_instructions_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.instructions-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_restore
+        id: chrono_cache_e5dc2c332519900244ae060d69aae52f381636a7b57b6c9bd21657ef58996f69_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6759,8 +6759,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Save registered cache release.macos.verify.instructions-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_key }}
+        id: chrono_cache_e5dc2c332519900244ae060d69aae52f381636a7b57b6c9bd21657ef58996f69_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_e5dc2c332519900244ae060d69aae52f381636a7b57b6c9bd21657ef58996f69_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e696e737472756374696f6e732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6911,7 +6911,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_filemap_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-filemap-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_restore
+        id: chrono_cache_30368730d269625b11196aa39601b63ef8a555b2c7c630229461c77936961fa3_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -6931,8 +6931,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Save registered cache release.macos.verify.judge-filemap-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
+        id: chrono_cache_30368730d269625b11196aa39601b63ef8a555b2c7c630229461c77936961fa3_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_30368730d269625b11196aa39601b63ef8a555b2c7c630229461c77936961fa3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d66696c656d61702d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -7083,7 +7083,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_routes_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-routes-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_restore
+        id: chrono_cache_d45e98c7cab56a162257ae200f4316455fc73a4677e8e1bb42dfb5b9c4735494_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -7103,8 +7103,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Save registered cache release.macos.verify.judge-routes-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_key }}
+        id: chrono_cache_d45e98c7cab56a162257ae200f4316455fc73a4677e8e1bb42dfb5b9c4735494_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_d45e98c7cab56a162257ae200f4316455fc73a4677e8e1bb42dfb5b9c4735494_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d726f757465732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -7255,7 +7255,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_cost_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-cost-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_restore
+        id: chrono_cache_d9a2c29d6c9363959dc9bd031100900d448f99dcb16656b418578676d099ad52_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -7275,8 +7275,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Save registered cache release.macos.verify.judge-cost-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_key }}
+        id: chrono_cache_d9a2c29d6c9363959dc9bd031100900d448f99dcb16656b418578676d099ad52_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_d9a2c29d6c9363959dc9bd031100900d448f99dcb16656b418578676d099ad52_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d636f73742d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -7427,7 +7427,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_judge_mixed_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.judge-mixed-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_restore
+        id: chrono_cache_b6ff0829b7a4d450e7c0f835b215cbf5b13ec94e4760bad794450f9166cac205_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -7447,8 +7447,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Save registered cache release.macos.verify.judge-mixed-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_key }}
+        id: chrono_cache_b6ff0829b7a4d450e7c0f835b215cbf5b13ec94e4760bad794450f9166cac205_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_b6ff0829b7a4d450e7c0f835b215cbf5b13ec94e4760bad794450f9166cac205_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e6a756467652d6d697865642d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8156,7 +8156,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_diagnostics_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.diagnostics-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_restore
+        id: chrono_cache_5c686f25a365e910068ca2758810984f1b5154c8e12a09032b57fcd36449c06f_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8176,8 +8176,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Save registered cache release.linux.verify.diagnostics-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_key }}
+        id: chrono_cache_5c686f25a365e910068ca2758810984f1b5154c8e12a09032b57fcd36449c06f_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_5c686f25a365e910068ca2758810984f1b5154c8e12a09032b57fcd36449c06f_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e646961676e6f73746963732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8222,7 +8222,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_diagnostics_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.diagnostics-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_restore
+        id: chrono_cache_23a748eb29e901f4be7c548e9dc09599d3b4f370e7654e43a8b0bd6d6e5977a1_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8242,8 +8242,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Save registered cache release.macos.verify.diagnostics-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_key }}
+        id: chrono_cache_23a748eb29e901f4be7c548e9dc09599d3b4f370e7654e43a8b0bd6d6e5977a1_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_23a748eb29e901f4be7c548e9dc09599d3b4f370e7654e43a8b0bd6d6e5977a1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e646961676e6f73746963732d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8372,7 +8372,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_build_cache' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.release.cache
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6361636865_restore
+        id: chrono_cache_ae379a734cba2b5f56c74481c3abe93ad0b2032b30a3b20d6827f23088aceef3_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8392,8 +8392,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Save registered cache release.linux.release.cache
-        id: cache_72656c656173652e6c696e75782e72656c656173652e6361636865_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_key }}
+        id: chrono_cache_ae379a734cba2b5f56c74481c3abe93ad0b2032b30a3b20d6827f23088aceef3_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_ae379a734cba2b5f56c74481c3abe93ad0b2032b30a3b20d6827f23088aceef3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e72656c656173652e6361636865_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8446,7 +8446,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.linux_verify_cache_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.linux.verify.cache-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_restore
+        id: chrono_cache_ff42cdce9ed484836d4107fb76af19eb252cf8ed0622213ddf9353630dabe913_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8466,8 +8466,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Save registered cache release.linux.verify.cache-tests
-        id: cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_key }}
+        id: chrono_cache_ff42cdce9ed484836d4107fb76af19eb252cf8ed0622213ddf9353630dabe913_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_ff42cdce9ed484836d4107fb76af19eb252cf8ed0622213ddf9353630dabe913_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6c696e75782e7665726966792e63616368652d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8512,7 +8512,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_build_cache' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.release.cache
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6361636865_restore
+        id: chrono_cache_542f617702d8672264481bccb02ab131b0bdf3abcee9504cceb7999407dc30ab_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8532,8 +8532,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Save registered cache release.macos.release.cache
-        id: cache_72656c656173652e6d61636f732e72656c656173652e6361636865_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_key }}
+        id: chrono_cache_542f617702d8672264481bccb02ab131b0bdf3abcee9504cceb7999407dc30ab_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_542f617702d8672264481bccb02ab131b0bdf3abcee9504cceb7999407dc30ab_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e72656c656173652e6361636865_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8586,7 +8586,7 @@ jobs:
           'python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
           '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'release.macos_verify_cache_tests' --github-output "$GITHUB_OUTPUT"
       - name: Restore registered cache release.macos.verify.cache-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_restore
+        id: chrono_cache_4cef14b10a13584c9af04ab64b2855e406a2fd5f315ba9aa1b82eb42f88482f9_restore
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -8606,8 +8606,8 @@ jobs:
         run: |
           'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Save registered cache release.macos.verify.cache-tests
-        id: cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_save
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_key }}
+        id: chrono_cache_4cef14b10a13584c9af04ab64b2855e406a2fd5f315ba9aa1b82eb42f88482f9_save
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.chrono_cache_4cef14b10a13584c9af04ab64b2855e406a2fd5f315ba9aa1b82eb42f88482f9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_72656c656173652e6d61636f732e7665726966792e63616368652d7465737473_key }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

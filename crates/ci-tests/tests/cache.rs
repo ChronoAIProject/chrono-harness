@@ -66,6 +66,33 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
 }
 
 #[test]
+fn registered_cache_ids_fit_native_step_limits_without_truncating_output_names() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    let id = "a".repeat(128);
+    value["persistent_cache"]["jobs"]["unit_example"]["caches"] = json!([id]);
+    let config = serde_json::from_value(value).unwrap();
+    let output = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let yaml = &output[".github/workflows/chrono-ci.yml"];
+    for line in yaml.lines() {
+        if let Some(step) = line.trim().strip_prefix("id: ") {
+            assert!(
+                step.len() < 100,
+                "native step exceeds the reference-name limit: {}",
+                step.len()
+            );
+        }
+    }
+    let key = format!(
+        "cache_{}",
+        id.bytes().map(|b| format!("{b:02x}")).collect::<String>()
+    );
+    assert!(yaml.contains(&format!("steps.chrono_cache_plan.outputs.{key}_key")));
+    assert_eq!(yaml.matches("Restore registered cache").count(), 1);
+    assert_eq!(yaml.matches("Save registered cache").count(), 1);
+}
+
+#[test]
 fn release_cache_wraps_only_the_named_original_unit() {
     let mut value = source(".chrono-harness/ci/release.json");
     value["persistent_cache"] = adoption("linux_build_runner");
