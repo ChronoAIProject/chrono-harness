@@ -276,3 +276,41 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
         prior["terminal"]["receipt"]
     );
 }
+
+#[test]
+fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
+    let (h, target) = fixture();
+    let original_policy = fs::read(h.root.join(CLEANUP)).unwrap();
+    advance(&h);
+    adopt(&h, &target);
+    let first = migrate(&h, &target);
+    let receipt = h.root.join(
+        first["policy_migration"]["receipt"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let first_bytes = fs::read(&receipt).unwrap();
+    fs::write(h.root.join(CLEANUP), original_policy).unwrap();
+    commit(&h.root);
+    adopt(&h, &target);
+    migrate(&h, &target);
+    let entry = &h.ledger()["entries"][0];
+    assert_eq!(entry["policy_migrations"].as_array().unwrap().len(), 2);
+    assert_eq!(entry["ownership"]["generation"], 3);
+    assert_eq!(fs::read(receipt).unwrap(), first_bytes);
+    cache(&target);
+    let complete = fs::read(h.root.join(LEDGER)).unwrap();
+    edit(&h.root, LEDGER, |v| {
+        v["entries"][0]["policy_migrations"]
+            .as_array_mut()
+            .unwrap()
+            .remove(0);
+    });
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(report.to_string().contains("migration chain"));
+    assert!(target.join("output λ/cache").exists());
+    fs::write(h.root.join(LEDGER), complete).unwrap();
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(!target.join("output λ").exists());
+}
