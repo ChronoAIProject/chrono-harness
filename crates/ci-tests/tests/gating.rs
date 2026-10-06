@@ -25,6 +25,24 @@ fn parent_registration_preserves_unit_settings_and_retires_only_owned_outputs() 
     assert!(text.contains("'check' '--collect'"));
     assert!(text.contains("'explicit-a.sh'"));
     assert!(text.contains("macos-14"));
+    let workflow: Value = serde_yaml_ng::from_str(&text).unwrap();
+    assert!(workflow["on"].get("workflow_dispatch").is_none());
+    assert!(!text.contains("inputs.candidate"));
+    assert_eq!(
+        workflow["concurrency"]["group"],
+        "chrono-ci:.github/workflows/collection.yml:${{ github.event_name }}:${{ github.event.pull_request.number || github.run_id }}"
+    );
+    assert_eq!(
+        workflow["concurrency"]["cancel-in-progress"],
+        "${{ github.event_name == 'pull_request' }}"
+    );
+    assert!(
+        workflow["jobs"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|job| job.get("concurrency").is_none())
+    );
     assert!(!h.root.join(".github/workflows/alpha.yml").exists());
     assert!(!h.root.join(".github/workflows/beta.yml").exists());
 }

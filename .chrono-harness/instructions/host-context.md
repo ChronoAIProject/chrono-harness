@@ -1,5 +1,7 @@
 # chrono-harness 宿主上下文
 
+本宿主的开发分支通过指向 dev 的 PR 运行检查，integration 分支同样使用其 PR 检查；push 仅检查 dev 的落地 DELTA，不重复触发整套开发分支检查。parent workflow 按 PR 号替换该 PR 的旧运行；push 按各自 run ID 隔离，保留每次完整 before/after 义务。
+
 本仓维护 Rust harness 产品与独立宿主采用数据。SPEC.md 是尚未全部实现的产品合同；当前生产者、调用与限制见 README.md、docs/spec-coverage.md 及对应专用文档。32 个独立 Cargo manifest/lock/target 构成生产／专属测试配对，没有根 workspace。
 
 产品默认归 assets/instructions/catalog.json、default-manifest.json；本宿主独立拥有 .chrono-harness/instructions/catalog.json、manifest.json 和本上下文。产品资产是编译／测试输入，宿主数据及已存在投影是运行输入；FILEMAP 的 owner、输入、消费者与边仍显式登记。升级二进制或重复 init 不覆盖既有宿主选择；采用新默认须明确编辑宿主数据。
