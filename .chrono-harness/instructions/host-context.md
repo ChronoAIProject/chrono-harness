@@ -61,6 +61,6 @@ runner-tests 的协议 transport fixture 由同项目独立 Rust 测试二进制
 
 worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附件租约下采用两端已提交的新政策；旧登记保留，后续操作核不可覆盖迁移链。迁移不清理、不设完成；未知 birth／租约、待执行终态及地址搬迁保持拒绝。候选本地／原生和实际宿主采用仍须验证，不从源码新增声称已迁移。
 
-发布 v5 在 verification_consumers 登记 instructions／routes 的真实库调用用途与空发布资产列表；预检拒绝消费合同与 needs 冲突，未说明的非空发布前置在原始回执与 stderr 报 W_RELEASE_CONSUMPTION_UNVERIFIED。declared 只表示登记一致，不能证明必要性或说明真实。
+发布 v5 在 verification_consumers 为全部 21 个验证单元登记实际调用、输出用途与发布资产子集；instructions／routes／diagnostics 的发布资产列表为空。预检拒绝消费合同与 needs 冲突，未说明的非空发布前置在原始回执与 stderr 报 W_RELEASE_CONSUMPTION_UNVERIFIED。declared 只表示登记一致，不能证明必要性或说明真实。
 
 本宿主在 units.json 的 gather.resource_observation 显式登记原生步骤分类，在输入环境继承 GITHUB_STEP_SUMMARY。现有汇总通过同一 check 入口复用 jobs 响应，向原始 gather 报告及 Actions summary 输出有效已完成步骤的时间分项、未分类与未知项；不新增请求／job／业务重跑。canonical-check 包含其内部构建、测试与汇总，不能称为纯测试时间；报告是包括可见历史 attempt 的观察快照，不是计费或全流程总量。其余消费核验、完整资源分项及公开二进制采用仍未完成。

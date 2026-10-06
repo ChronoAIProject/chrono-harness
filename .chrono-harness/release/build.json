@@ -289,21 +289,7 @@
       "kind": "verify",
       "operation": "test.distribution-tests",
       "needs": [
-        "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_distribution"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_distribution_tests",
       "rust_toolchain": true
@@ -314,19 +300,7 @@
       "operation": "test.worktree-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
         "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
         "build_worktree"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_worktree_tests",
@@ -337,21 +311,7 @@
       "kind": "verify",
       "operation": "test.runner-tests",
       "needs": [
-        "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_runner"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_runner_tests",
       "rust_toolchain": true
@@ -362,9 +322,6 @@
       "operation": "test.inputs-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -372,10 +329,7 @@
         "build_judge_cost",
         "build_judge_mixed",
         "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_inputs"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_inputs_tests",
       "rust_toolchain": true
@@ -386,19 +340,9 @@
       "operation": "test.ci-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
         "build_judge_ci",
         "build_ci",
         "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
         "build_worktree"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
@@ -410,20 +354,7 @@
       "operation": "test.judge-ci-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_ci"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests",
       "rust_toolchain": true
@@ -434,20 +365,7 @@
       "operation": "test.judge-registration-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
-        "build_judge_registration",
-        "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_registration"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests",
       "rust_toolchain": true
@@ -458,20 +376,12 @@
       "operation": "test.judge-projects-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
         "build_judge_ci",
         "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_projects"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_projects_tests",
       "rust_toolchain": true
@@ -482,8 +392,6 @@
       "operation": "test.judge-workflow-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
         "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
@@ -493,8 +401,6 @@
         "build_judge_mixed",
         "build_judge_workflow",
         "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
         "build_worktree"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
@@ -506,9 +412,7 @@
       "operation": "test.judge-cargo-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
         "build_judge_ci",
-        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -516,10 +420,7 @@
         "build_judge_cost",
         "build_judge_mixed",
         "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_cargo"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests",
       "rust_toolchain": true
@@ -538,20 +439,10 @@
       "operation": "test.judge-filemap-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_projects"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_filemap_tests",
       "rust_toolchain": true
@@ -570,20 +461,9 @@
       "operation": "test.judge-cost-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
-        "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_cost"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cost_tests",
       "rust_toolchain": true
@@ -594,20 +474,10 @@
       "operation": "test.judge-mixed-tests",
       "needs": [
         "build_runner",
-        "build_instructions",
-        "build_judge_ci",
-        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
-        "build_judge_routes",
-        "build_judge_projects",
         "build_judge_cost",
-        "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs",
-        "build_distribution",
-        "build_judge_cargo",
-        "build_worktree"
+        "build_judge_mixed"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests",
       "rust_toolchain": true
@@ -852,6 +722,162 @@
     },
     "verify_judge_routes_tests": {
       "need": "Exercise route planning and observed processes through Rust library calls and temporary tool fixtures. No released executable is invoked.",
+      "release_assets": []
+    },
+    "verify_distribution_tests": {
+      "need": "crates/distribution-tests/tests/installation.rs runs the released distribution CLI through the host installer and checks installed bytes, modes and installation evidence; other package assets are synthetic fixture files.",
+      "release_assets": [
+        "chrono-distribution"
+      ]
+    },
+    "verify_worktree_tests": {
+      "need": "crates/worktree-tests/tests/creation.rs and cleanup/check-input consumers run the worktree CLI and runner; check_inputs.rs also runs the CI event producer. Assertions consume actual Git state, retained contexts, ownership and cleanup results.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-ci",
+        "chrono-worktree"
+      ]
+    },
+    "verify_runner_tests": {
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
+      "release_assets": [
+        "chrono-harness"
+      ]
+    },
+    "verify_inputs_tests": {
+      "need": "crates/inputs-tests/tests/consumer.rs runs chrono-inputs to capture/compose declared snapshots, then runner with registration, filemap, routes, projects, cost, mixed and workflow judges from the shared project host. Assertions inspect retained inputs and the resulting full check evidence; snapshots.rs also runs the inputs CLI.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects",
+        "chrono-judge-cost",
+        "chrono-judge-mixed",
+        "chrono-judge-workflow",
+        "chrono-inputs"
+      ]
+    },
+    "verify_ci_tests": {
+      "need": "crates/ci-tests/tests/units.rs and behavior.rs run runner, judge-ci and chrono-ci for generated host checks, preparation and collection; short.rs and gating.rs run worktree for local preparation/ownership; initial_projection.rs runs registration for actual inventory admission. Assertions inspect original results, contexts and generated projections.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci",
+        "chrono-ci",
+        "chrono-judge-registration",
+        "chrono-worktree"
+      ]
+    },
+    "verify_judge_ci_tests": {
+      "need": "crates/judge-ci-tests/tests/units.rs and git_facts.rs run runner with judge-ci and assert scoped unit execution, collected evidence and fixed Git facts.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci"
+      ]
+    },
+    "verify_judge_registration_tests": {
+      "need": "crates/judge-registration-tests/tests/registration_contract.rs runs runner with registration and checks admission failures and passed registration evidence for the declared host inputs.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration"
+      ]
+    },
+    "verify_judge_projects_tests": {
+      "need": "crates/judge-projects-tests/tests/support/host.rs runs runner with registration, filemap, routes and projects to execute declared project/script tests; consumer.rs also runs judge-ci through the scoped runner entry and inspects actual operation receipts. migration.rs also runs chrono-ci to repair the generated workflow in a copied historical host, then checks preserved obligations and detected drift.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci",
+        "chrono-ci",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects"
+      ]
+    },
+    "verify_judge_workflow_tests": {
+      "need": "crates/judge-workflow-tests/tests/consumer.rs and shared project host run runner with all seven full judges for integration/retirement decisions. git_facts.rs and full_short.rs run chrono-ci, full_short.rs runs worktree, and full_units.rs/full_short.rs run inputs; assertions consume fixed contexts, snapshots, unit receipts and collection evidence.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-ci",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects",
+        "chrono-judge-cost",
+        "chrono-judge-mixed",
+        "chrono-judge-workflow",
+        "chrono-inputs",
+        "chrono-worktree"
+      ]
+    },
+    "verify_judge_cargo_tests": {
+      "need": "crates/judge-cargo-tests/tests/support/cargo.rs runs judge-cargo for guarded operations and runner with registration, filemap, routes, projects, cost, mixed and workflow in the full consumer, plus judge-ci in scoped consumers. Assertions inspect actual Cargo actions, their reports and rejection of changed declared inputs.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects",
+        "chrono-judge-cost",
+        "chrono-judge-mixed",
+        "chrono-judge-workflow",
+        "chrono-judge-cargo"
+      ]
+    },
+    "verify_judge_filemap_tests": {
+      "need": "crates/judge-filemap-tests/tests/consumer.rs runs runner with registration and filemap for impact decisions. workflow_consumer.rs reuses the project host and also runs routes and projects to check stability selection, shared operation deduplication and actual declared script execution.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects"
+      ]
+    },
+    "verify_judge_cost_tests": {
+      "need": "crates/judge-cost-tests/tests/support/host.rs runs runner with registration, filemap and cost; consumer assertions read declared impact costs, source identities and unknown coordinates from real reports.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-cost"
+      ]
+    },
+    "verify_judge_mixed_tests": {
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-cost",
+        "chrono-judge-mixed"
+      ]
+    },
+    "verify_release_build_integration": {
+      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity.",
+      "release_assets": [
+        "chrono-distribution"
+      ]
+    },
+    "verify_scoped_v1_tests": {
+      "need": "The original migration.scoped-v1-tests Python action checks decoder inputs and historical/current registry projections without release executables.",
+      "release_assets": []
+    },
+    "verify_workflow_inventory_tests": {
+      "need": "The original workflow.inventory-tests Python action checks explicit inventory parsing, disjoint group membership and subprocess failures with isolated fixtures, without release executables.",
+      "release_assets": []
+    },
+    "verify_release_build_tests": {
+      "need": "The original release.tests.units Python action checks the release recipe, handoff contracts, failures and host projection with synthetic tools and receipts; real packaging belongs to the separate integration group.",
+      "release_assets": []
+    },
+    "verify_diagnostics_tests": {
+      "need": "The original test.diagnostics-tests Cargo action directly consumes the diagnostics Rust library to verify structured errors and logging; it calls no released production executable.",
+      "release_assets": []
+    },
+    "verify_host_bootstrap_tests": {
+      "need": "The original host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; it calls no released production executable.",
       "release_assets": []
     }
   }

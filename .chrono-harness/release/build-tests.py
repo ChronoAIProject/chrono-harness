@@ -302,6 +302,7 @@ class ReleaseUnits(unittest.TestCase):
         original_operations={'test.'+name+'-tests' for name in ['distribution','worktree','runner','inputs','ci','judge-ci','judge-registration','judge-projects','judge-workflow','judge-cargo','instructions','judge-filemap','judge-routes','judge-cost','judge-mixed']}
         self.assertTrue(original_operations <= actual)
         builds={u['id'] for u in cfg['units'] if u['kind']=='build'}
+        self.assertEqual(set(cfg['verification_consumers']),{u['id'] for u in cfg['units'] if u['kind']=='verify'})
         for u in cfg['units']:
             if u['kind']=='verify':
                 owner=owners[u['operation']]
