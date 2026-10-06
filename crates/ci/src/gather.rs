@@ -26,6 +26,7 @@ struct Transport<'a> {
     executable: String,
     digest: String,
     observations: Vec<Value>,
+    resources: Option<Value>,
 }
 
 impl<'a> Transport<'a> {
@@ -49,6 +50,10 @@ impl<'a> Transport<'a> {
             executable: exe.to_str().ok_or("non UTF-8 transport")?.into(),
             digest: file_identity(&exe)?.0,
             observations: vec![],
+            resources: c
+                .resource_observation
+                .as_ref()
+                .map(|_| super::resources::unavailable("jobs-response-not-acquired")),
         })
     }
 
@@ -310,6 +315,14 @@ fn parent_units(
         ),
         true,
     )?;
+    if let Some(config) = &c.gather.resource_observation {
+        let mut observed =
+            super::resources::observe(config, &pages, d.run_id, native.run_attempt, &d.candidate);
+        let index = transport.observations.len() - 1;
+        observed["source"] = json!({"process_index":index,
+            "stdout_sha256":transport.observations[index]["stdout_sha256"]});
+        transport.resources = Some(observed);
+    }
     let jobs: Vec<_> = pages
         .as_array()
         .ok_or("job pages missing")?
@@ -743,6 +756,14 @@ pub(super) fn gather(
     let mut transport = Transport::new(root, &c.gather)?;
     let result = inner(root, path, c, repository, &mut transport);
     let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    if let Some(resources) = transport.resources {
+        report["resources"] = resources;
+        if let Some(summary) = c.gather.resource_observation.as_ref().and_then(|config| {
+            super::resources::publish_summary(config, &report["resources"], &c.gather.report_path)
+        }) {
+            report["resources"]["summary"] = summary;
+        }
+    }
     if c.collection.schema == "chrono-github-ci/v4" {
         report["retained_report"] = json!(
             chrono_harness::prepared::retain_original(

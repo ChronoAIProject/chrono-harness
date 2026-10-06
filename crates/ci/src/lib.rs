@@ -11,6 +11,7 @@ mod gather;
 pub mod gating;
 pub mod migrate;
 pub mod release;
+pub mod resources;
 pub mod units;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";

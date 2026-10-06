@@ -727,7 +727,9 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 资源观察区分测试、编译／bootstrap、缓存准备／传输、证据上传／汇总及排队；记录测量口径与未覆盖范围。步骤时长之和不是并行墙钟时长或计费分钟；未知峰值／字节不得填零。昂贵或重复工作必须能回到具体调用、输入、消费者和必要性说明。是否需要某项工作由 AI 根据这些证据修登记，不引入人工确认门。
 
-现役发布配方 v5 的可选 `verification_consumers` 以验证单元 ID 登记 `{need, release_assets}`；预检核资产引用唯一且其生产者恰为该单元 `needs`。报告区分 `declared` 与 `unverified`，有发布前置却无说明时输出 `W_RELEASE_CONSUMPTION_UNVERIFIED`。它不证明消费说明真实或依赖最小；本宿主先采用 instructions／routes 两个真实库消费者。统一 CI 资源分项报告、其余单元消费核验与普遍冗余诊断仍未完成。
+现役发布配方 v5 的可选 `verification_consumers` 以验证单元 ID 登记 `{need, release_assets}`；预检核资产引用唯一且其生产者恰为该单元 `needs`。报告区分 `declared` 与 `unverified`，有发布前置却无说明时输出 `W_RELEASE_CONSUMPTION_UNVERIFIED`。它不证明消费说明真实或依赖最小；本宿主先采用 instructions／routes 两个真实库消费者。
+
+parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categories` 分类现有 jobs 响应，将步骤读数、分类汇总、未知值与来源摘要写入原始 gather 报告；显式 `summary_environment` 可将简表写入已继承的 GitHub summary 文件。不新增 CI job、API 请求或业务执行。时间只计唯一 job ID 下有效已完成步骤；相同分页行去重，冲突身份排除并报告。范围包含观察到的旧 attempt，不冒充完整运行史；缺步骤、未分类、未完成、无响应均显式保留。汇总尚在运行，后续步骤无读数；检查步骤内部编译／测试拆分、排队、峰值及计费仍未知。它不改变准入判词或推断依赖必要性。其余单元消费核验、完整资源分项与普遍冗余诊断仍未完成。
 
 ## 10. dev、integration 与过期分支
 

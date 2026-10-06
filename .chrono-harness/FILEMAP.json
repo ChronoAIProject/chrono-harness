@@ -3490,6 +3490,18 @@
       ]
     },
     {
+      "path": "crates/ci/src/resources.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-ci-tests/tests/units.rs",
       "owner": "judge-ci-tests",
       "surface": "test",
@@ -3730,6 +3742,18 @@
     },
     {
       "path": "crates/ci-tests/tests/gating.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/resources.rs",
       "owner": "ci-tests",
       "surface": "test",
       "cost": "unmeasured",
