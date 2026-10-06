@@ -2390,6 +2390,30 @@
       ]
     },
     {
+      "path": "crates/inputs-tests/tests/support/git.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/support/zero.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/inputs-tests/tests/consumer.rs",
       "owner": "inputs-tests",
       "surface": "test",
