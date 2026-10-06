@@ -53,6 +53,7 @@ jobs:
           name: "chrono-release-linux-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_runner/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_instructions:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -94,6 +95,7 @@ jobs:
           name: "chrono-release-linux-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_instructions/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_ci:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -135,6 +137,7 @@ jobs:
           name: "chrono-release-linux-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_ci/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_ci:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -176,6 +179,7 @@ jobs:
           name: "chrono-release-linux-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_ci/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_registration:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -217,6 +221,7 @@ jobs:
           name: "chrono-release-linux-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_registration/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_filemap:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -258,6 +263,7 @@ jobs:
           name: "chrono-release-linux-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_filemap/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_routes:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -299,6 +305,7 @@ jobs:
           name: "chrono-release-linux-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_routes/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_projects:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -340,6 +347,7 @@ jobs:
           name: "chrono-release-linux-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_projects/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_cost:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -381,6 +389,7 @@ jobs:
           name: "chrono-release-linux-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cost/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_mixed:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -422,6 +431,7 @@ jobs:
           name: "chrono-release-linux-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_mixed/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_workflow:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -463,6 +473,7 @@ jobs:
           name: "chrono-release-linux-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_workflow/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_inputs:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -504,6 +515,7 @@ jobs:
           name: "chrono-release-linux-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_inputs/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_distribution:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -545,6 +557,7 @@ jobs:
           name: "chrono-release-linux-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_distribution/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_judge_cargo:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -586,6 +599,7 @@ jobs:
           name: "chrono-release-linux-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cargo/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_build_worktree:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -627,6 +641,7 @@ jobs:
           name: "chrono-release-linux-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_worktree/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_distribution_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -774,6 +789,7 @@ jobs:
           name: "chrono-release-linux-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_distribution_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_worktree_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -921,6 +937,7 @@ jobs:
           name: "chrono-release-linux-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_worktree_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_runner_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1068,6 +1085,7 @@ jobs:
           name: "chrono-release-linux-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_runner_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_inputs_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1215,6 +1233,7 @@ jobs:
           name: "chrono-release-linux-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_inputs_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_ci_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1362,6 +1381,7 @@ jobs:
           name: "chrono-release-linux-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_ci_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1509,6 +1529,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_ci_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_registration_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1656,6 +1677,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_registration_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1803,6 +1825,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_projects_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -1950,6 +1973,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_workflow_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_cargo_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -2097,6 +2121,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cargo_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -2244,6 +2269,7 @@ jobs:
           name: "chrono-release-linux-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_instructions_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_filemap_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -2391,6 +2417,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_filemap_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -2538,6 +2565,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_routes_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -2685,6 +2713,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cost_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree"]
@@ -2832,6 +2861,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_mixed_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_package:
     if: ${{ always() && github.event.deleted != true }}
     needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_judge_cargo","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_judge_cargo_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_scoped_v1_tests","linux_verify_workflow_inventory_tests","linux_verify_release_build_tests","linux_verify_release_build_integration","linux_verify_diagnostics_tests"]
@@ -3121,6 +3151,7 @@ jobs:
           name: "chrono-release-linux-package-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/package/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_runner:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3162,6 +3193,7 @@ jobs:
           name: "chrono-release-macos-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_runner/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_instructions:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3203,6 +3235,7 @@ jobs:
           name: "chrono-release-macos-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_instructions/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_ci:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3244,6 +3277,7 @@ jobs:
           name: "chrono-release-macos-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_ci/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_ci:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3285,6 +3319,7 @@ jobs:
           name: "chrono-release-macos-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_ci/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_registration:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3326,6 +3361,7 @@ jobs:
           name: "chrono-release-macos-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_registration/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_filemap:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3367,6 +3403,7 @@ jobs:
           name: "chrono-release-macos-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_filemap/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_routes:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3408,6 +3445,7 @@ jobs:
           name: "chrono-release-macos-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_routes/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_projects:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3449,6 +3487,7 @@ jobs:
           name: "chrono-release-macos-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_projects/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_cost:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3490,6 +3529,7 @@ jobs:
           name: "chrono-release-macos-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cost/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_mixed:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3531,6 +3571,7 @@ jobs:
           name: "chrono-release-macos-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_mixed/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_workflow:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3572,6 +3613,7 @@ jobs:
           name: "chrono-release-macos-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_workflow/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_inputs:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3613,6 +3655,7 @@ jobs:
           name: "chrono-release-macos-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_inputs/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_distribution:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3654,6 +3697,7 @@ jobs:
           name: "chrono-release-macos-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_distribution/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_judge_cargo:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3695,6 +3739,7 @@ jobs:
           name: "chrono-release-macos-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cargo/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_build_worktree:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -3736,6 +3781,7 @@ jobs:
           name: "chrono-release-macos-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_worktree/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_distribution_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -3883,6 +3929,7 @@ jobs:
           name: "chrono-release-macos-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_distribution_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_worktree_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4030,6 +4077,7 @@ jobs:
           name: "chrono-release-macos-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_worktree_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_runner_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4177,6 +4225,7 @@ jobs:
           name: "chrono-release-macos-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_runner_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_inputs_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4324,6 +4373,7 @@ jobs:
           name: "chrono-release-macos-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_inputs_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_ci_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4471,6 +4521,7 @@ jobs:
           name: "chrono-release-macos-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_ci_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4618,6 +4669,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_ci_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_registration_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4765,6 +4817,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_registration_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -4912,6 +4965,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_projects_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5059,6 +5113,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_workflow_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_cargo_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5206,6 +5261,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cargo_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5353,6 +5409,7 @@ jobs:
           name: "chrono-release-macos-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_instructions_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_filemap_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5500,6 +5557,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_filemap_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5647,6 +5705,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_routes_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5794,6 +5853,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cost_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree"]
@@ -5941,6 +6001,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_mixed_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_package:
     if: ${{ always() && github.event.deleted != true }}
     needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_judge_cargo","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_judge_cargo_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_scoped_v1_tests","macos_verify_workflow_inventory_tests","macos_verify_release_build_tests","macos_verify_release_build_integration","macos_verify_diagnostics_tests"]
@@ -6230,6 +6291,7 @@ jobs:
           name: "chrono-release-macos-package-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/package/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_scoped_v1_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -6271,6 +6333,7 @@ jobs:
           name: "chrono-release-linux-verify_scoped_v1_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_scoped_v1_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_workflow_inventory_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -6312,6 +6375,7 @@ jobs:
           name: "chrono-release-linux-verify_workflow_inventory_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_workflow_inventory_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_release_build_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -6353,6 +6417,7 @@ jobs:
           name: "chrono-release-linux-verify_release_build_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_release_build_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_scoped_v1_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -6394,6 +6459,7 @@ jobs:
           name: "chrono-release-macos-verify_scoped_v1_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_scoped_v1_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_workflow_inventory_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -6435,6 +6501,7 @@ jobs:
           name: "chrono-release-macos-verify_workflow_inventory_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_workflow_inventory_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_release_build_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -6476,6 +6543,7 @@ jobs:
           name: "chrono-release-macos-verify_release_build_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_release_build_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_release_build_integration:
     if: ${{ github.event.deleted != true }}
     needs: ["linux_build_distribution"]
@@ -6525,6 +6593,7 @@ jobs:
           name: "chrono-release-linux-verify_release_build_integration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_release_build_integration/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_release_build_integration:
     if: ${{ github.event.deleted != true }}
     needs: ["macos_build_distribution"]
@@ -6574,6 +6643,7 @@ jobs:
           name: "chrono-release-macos-verify_release_build_integration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_release_build_integration/"
           if-no-files-found: error
+          include-hidden-files: true
   linux_verify_diagnostics_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
@@ -6615,6 +6685,7 @@ jobs:
           name: "chrono-release-linux-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_diagnostics_tests/"
           if-no-files-found: error
+          include-hidden-files: true
   macos_verify_diagnostics_tests:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-14"
@@ -6656,3 +6727,4 @@ jobs:
           name: "chrono-release-macos-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_diagnostics_tests/"
           if-no-files-found: error
+          include-hidden-files: true

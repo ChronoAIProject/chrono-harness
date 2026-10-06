@@ -14,7 +14,7 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 `init` 将首次采用源放在宿主 `.chrono-harness/ci/release.json`；后续 init 保留已采用源。generate／verify 的源必须在宿主 `.chrono-harness/`。输出带独立的 `github-release/v1` 所有权标记，不能覆盖未归属工作流、已有检查工作流或符号链接。重复生成无写入，verify 不修复漂移。共用的文件写入器逐文件替换，不提供多文件崩溃事务或并发写者保证；改名／删除登记不自动删除旧工作流，须显式退休。
 
-生成的每个 job 使用登记 runner，检出 `workflow_dispatch` 的 `source` 或 push 的提交，然后以 Bash 执行原始 argv。`source` 是交给 checkout 的修订字符串；生成器不验证其为完整 commit OID。实际源码身份及验收由登记构建消费者核验。所有参数以字面方式引用；失败命令保留原退出码，后续 `always()` 上传步骤尝试保存原始产物，缺少产物仍是错误。各 job 独立运行，不因一个失败而取消其它 job。工作流只有 `contents: read` 权限，不创建 Release、不合并平台清单，也不上传发行资产。
+生成的每个 job 使用登记 runner，检出 `workflow_dispatch` 的 `source` 或 push 的提交，然后以 Bash 执行原始 argv。`source` 是交给 checkout 的修订字符串；生成器不验证其为完整 commit OID。实际源码身份及验收由登记构建消费者核验。所有参数以字面方式引用；失败命令保留原退出码，后续 `always()` 上传步骤尝试保存原始产物，缺少产物仍是错误。v1／v2 上传均启用 `include-hidden-files`，保留登记产物根内具有隐藏路径组件的原始证据；上传范围仍取显式 `artifact_directory`。各 job 独立运行，不因一个失败而取消其它 job。工作流只有 `contents: read` 权限，不创建 Release、不合并平台清单，也不上传发行资产。
 
 本仓的 [发布源](../.chrono-harness/ci/release.json) 明确列 macOS 与 Linux 平台；v1 时各使用一个 job 和同一顺序入口，v2 当前采用路径见下文。完整本地入口继续为：
 

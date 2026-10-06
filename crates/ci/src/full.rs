@@ -259,6 +259,7 @@ jobs:
           name: chrono-full-check-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
           path: {artifacts}
           if-no-files-found: error
+          include-hidden-files: true
 "#,
         name = scalar(&c.name),
         runner = scalar(&c.runs_on),

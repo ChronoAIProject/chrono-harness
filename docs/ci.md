@@ -359,6 +359,11 @@ runner label, event branches and job timeout are data; selected test commands
 never appear in YAML. Runner command rendering uses the same canonical argv
 constructor as event evidence.
 
+Generated check, detector-context and release uploads enable
+`include-hidden-files` within their explicitly declared artifact roots. A hidden
+path component does not remove an original evidence file from transport. The
+upload setting does not expand the registered root or certify receipt contents.
+
 For a separate root inventory, opt in to `chrono-github-ci/v2` and add the
 following explicit declaration to the same source (supply the actual selected
 judge digest). The remaining provider fields retain their v1 meanings:

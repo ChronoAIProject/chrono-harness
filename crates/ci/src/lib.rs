@@ -404,6 +404,7 @@ on:
           name: {artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
           path: {artifacts}
           if-no-files-found: error
+          include-hidden-files: true
 "#,
         name = scalar(&c.name),
         push = serde_json::to_string(&c.push_branches).unwrap(),

@@ -254,6 +254,7 @@ pub fn render(c: &Config) -> Result<String, String> {
           name: {artifact}
           path: {directory}
           if-no-files-found: error
+          include-hidden-files: true
 "#,
             id = job.id,
             runner = scalar(&job.runs_on),
@@ -368,6 +369,7 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
           name: {artifact}
           path: {directory}
           if-no-files-found: error
+          include-hidden-files: true
 "#,
         upload = c.upload_artifact_action,
         directory = scalar(&job.artifact_directory)
