@@ -350,7 +350,7 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         }
     }
     Ok(
-        json!({"schema":"chrono-plan/v1","consumer":consumer,"caches":entries,
+        json!({"schema":"chrono-cache-plan/v1","consumer":consumer,"caches":entries,
         "inputs":observations,"input_completeness_proven":false,"execution":"not-started"}),
     )
 }

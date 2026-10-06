@@ -342,6 +342,9 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
     );
     assert!(!String::from_utf8_lossy(&first.stdout).contains("first-private-value"));
     let first: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(first["schema"], "chrono-cache-plan/v1");
+    assert_eq!(first["consumer"], "check.one");
+    assert_eq!(first["execution"], "not-started");
     let next = run(Some("second-private-value"));
     assert!(next.status.success());
     let next: Value = serde_json::from_slice(&next.stdout).unwrap();
