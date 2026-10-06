@@ -990,14 +990,10 @@
     },
     {
       "path": ".chrono-harness/ci/bootstrap.py",
-      "owner": "repository",
+      "owner": "host-bootstrap",
       "surface": "product",
       "cost": "unmeasured",
       "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:ci-tests"
-        },
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
@@ -1009,6 +1005,14 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-adoption"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -4145,6 +4149,14 @@
         {
           "kind": "test-execution",
           "to": "test:worktree-adoption"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -4752,6 +4764,54 @@
         {
           "kind": "compile",
           "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-tests.py",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/fixtures/bootstrap-tool.py",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/fixtures/bootstrap-operation.py",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     }
@@ -7201,6 +7261,66 @@
       "from": "project:diagnostics-tests",
       "kind": "test-execution",
       "to": "test:diagnostics-tests"
+    },
+    {
+      "from": "script:host-bootstrap",
+      "kind": "test-execution",
+      "to": "test:host-bootstrap-tests"
+    },
+    {
+      "from": "script:host-bootstrap-tests",
+      "kind": "test-execution",
+      "to": "test:host-bootstrap-tests"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "tool:python3",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "tool:git",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "tool:git",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:PATH",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:HOME",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:TMPDIR",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
     }
   ],
   "test_costs": [
@@ -7294,6 +7414,10 @@
     },
     {
       "test": "diagnostics-tests",
+      "cost": "unmeasured"
+    },
+    {
+      "test": "host-bootstrap-tests",
       "cost": "unmeasured"
     }
   ],
@@ -7598,6 +7722,13 @@
         "test.diagnostics-tests"
       ],
       "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
+    "test:host-bootstrap-tests": {
+      "operations": [
+        "host.bootstrap-tests"
+      ],
+      "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     }
   },
@@ -8017,6 +8148,10 @@
         "outputs": [
           "crates/diagnostics-tests/target/"
         ]
+      },
+      "host.bootstrap-tests": {
+        "resources": [],
+        "outputs": []
       }
     }
   }
