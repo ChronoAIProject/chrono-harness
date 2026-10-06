@@ -276,7 +276,7 @@
     },
     "runner.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:runner",
       "edges": [
         "compile"
@@ -294,7 +294,7 @@
     },
     "runner-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:runner-tests",
       "edges": [
         "compile"
@@ -312,7 +312,7 @@
     },
     "instructions.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:instructions",
       "edges": [
         "compile"
@@ -330,7 +330,7 @@
     },
     "instructions-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:instructions-tests",
       "edges": [
         "compile"
@@ -348,7 +348,7 @@
     },
     "judge-ci.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-ci",
       "edges": [
         "compile"
@@ -366,7 +366,7 @@
     },
     "judge-ci-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-ci-tests",
       "edges": [
         "compile"
@@ -384,7 +384,7 @@
     },
     "ci.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:ci",
       "edges": [
         "compile"
@@ -402,7 +402,7 @@
     },
     "ci-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:ci-tests",
       "edges": [
         "compile"
@@ -420,7 +420,7 @@
     },
     "judge-registration.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-registration",
       "edges": [
         "compile"
@@ -438,7 +438,7 @@
     },
     "judge-registration-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-registration-tests",
       "edges": [
         "compile"
@@ -456,7 +456,7 @@
     },
     "judge-filemap.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-filemap",
       "edges": [
         "compile"
@@ -474,7 +474,7 @@
     },
     "judge-filemap-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-filemap-tests",
       "edges": [
         "compile"
@@ -492,7 +492,7 @@
     },
     "judge-routes.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-routes",
       "edges": [
         "compile"
@@ -510,7 +510,7 @@
     },
     "judge-routes-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-routes-tests",
       "edges": [
         "compile"
@@ -528,7 +528,7 @@
     },
     "judge-projects.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-projects",
       "edges": [
         "compile"
@@ -546,7 +546,7 @@
     },
     "judge-projects-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-projects-tests",
       "edges": [
         "compile"
@@ -564,7 +564,7 @@
     },
     "judge-cost.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-cost",
       "edges": [
         "compile"
@@ -582,7 +582,7 @@
     },
     "judge-cost-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-cost-tests",
       "edges": [
         "compile"
@@ -600,7 +600,7 @@
     },
     "judge-mixed.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-mixed",
       "edges": [
         "compile"
@@ -618,7 +618,7 @@
     },
     "judge-mixed-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-mixed-tests",
       "edges": [
         "compile"
@@ -636,7 +636,7 @@
     },
     "judge-workflow.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-workflow",
       "edges": [
         "compile"
@@ -654,7 +654,7 @@
     },
     "judge-workflow-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-workflow-tests",
       "edges": [
         "compile"
@@ -672,7 +672,7 @@
     },
     "inputs.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:inputs",
       "edges": [
         "compile"
@@ -690,7 +690,7 @@
     },
     "inputs-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:inputs-tests",
       "edges": [
         "compile"
@@ -708,7 +708,7 @@
     },
     "distribution.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:distribution",
       "edges": [
         "compile"
@@ -726,7 +726,7 @@
     },
     "distribution-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:distribution-tests",
       "edges": [
         "compile"
@@ -744,7 +744,7 @@
     },
     "judge-cargo.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-cargo",
       "edges": [
         "compile"
@@ -762,7 +762,7 @@
     },
     "judge-cargo-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:judge-cargo-tests",
       "edges": [
         "compile"
@@ -780,7 +780,7 @@
     },
     "worktree.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:worktree",
       "edges": [
         "compile"
@@ -798,7 +798,7 @@
     },
     "worktree-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:worktree-tests",
       "edges": [
         "compile"
@@ -816,7 +816,7 @@
     },
     "diagnostics.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:diagnostics",
       "edges": [
         "compile"
@@ -834,7 +834,7 @@
     },
     "diagnostics-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:diagnostics-tests",
       "edges": [
         "compile"
@@ -852,7 +852,7 @@
     },
     "cache.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:cache",
       "edges": [
         "compile"
@@ -870,7 +870,7 @@
     },
     "cache-tests.sources": {
       "kind": "registered-files",
-      "registry": ".chrono-harness/filemap.json",
+      "registry": ".chrono-harness/FILEMAP.json",
       "node": "project:cache-tests",
       "edges": [
         "compile"
