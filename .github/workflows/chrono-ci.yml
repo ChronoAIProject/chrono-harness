@@ -60,7 +60,7 @@ jobs:
       - name: Bootstrap registered detector tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-detector.json'
       - name: Detect required units from fixed Git endpoints
         id: detect
         shell: bash

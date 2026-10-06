@@ -1907,6 +1907,16 @@
             ".",
             ".chrono-harness/ci/bootstrap-core.json"
           ]
+        },
+        "detector": {
+          "operation": "host.bootstrap-detector",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-detector.json"
+          ]
         }
       }
     },

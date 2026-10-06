@@ -431,7 +431,7 @@
         "/usr/bin/python3",
         ".chrono-harness/ci/bootstrap.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-detector.json"
       ],
       "sparse_checkout": [
         ".chrono-harness/",
