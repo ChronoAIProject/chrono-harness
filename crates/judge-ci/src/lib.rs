@@ -723,6 +723,7 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
+    let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     // A large DELTA can make the predecessor map quadratic in the number of
     // seeds.  Keep the complete explanation for ordinary changes, but publish
     // a digest/count for oversized derived paths.  The registered graph,
@@ -730,81 +731,88 @@ fn ci_impact(
     // response; omission is explicit and fail-closed consumers can require a
     // smaller scope when they need every witness path inline.
     const INLINE_SELECTION_EXPLANATION_BYTES: usize = 2 * 1024 * 1024;
-    let mut closure_value = serde_json::to_value(&closure).expect("closure is serializable");
+    let graph::Closure {
+        reached,
+        predecessors,
+        traversed,
+    } = closure;
+    let edges_bytes = serde_json::to_vec(&edges).expect("edges are serializable");
+    let reached_bytes = serde_json::to_vec(&reached).expect("reached is serializable");
+    let predecessors_bytes =
+        serde_json::to_vec(&predecessors).expect("predecessors are serializable");
+    let traversed_bytes = serde_json::to_vec(&traversed).expect("traversed is serializable");
+    let other_bytes = serde_json::to_vec(&(&seed_nodes, &seeds, &extras, &legacy_only))
+        .expect("selection metadata is serializable");
+    let full_size = edges_bytes
+        .len()
+        .saturating_add(reached_bytes.len())
+        .saturating_add(predecessors_bytes.len())
+        .saturating_add(traversed_bytes.len())
+        .saturating_add(other_bytes.len())
+        .saturating_add(1024);
+    let predecessors_omitted = full_size > INLINE_SELECTION_EXPLANATION_BYTES;
+    let reduced_size = full_size.saturating_sub(predecessors_bytes.len());
+    let paths_omitted = predecessors_omitted && reduced_size > INLINE_SELECTION_EXPLANATION_BYTES;
+    let predecessor_count = predecessors.values().map(BTreeMap::len).sum::<usize>();
+    let predecessor_digest = if predecessors_omitted {
+        Some(sha256(&predecessors_bytes))
+    } else {
+        None
+    };
+    let closure_value = if paths_omitted {
+        object!({
+            "predecessors_omitted": true,
+            "predecessor_count": predecessor_count,
+            "predecessors_sha256": predecessor_digest,
+            "reached_omitted": true,
+            "reached_count": reached.len(),
+            "reached_sha256": sha256(&reached_bytes),
+            "traversed_omitted": true,
+            "traversed_count": traversed.len(),
+            "traversed_sha256": sha256(&traversed_bytes)
+        })
+    } else if predecessors_omitted {
+        object!({
+            "reached": reached,
+            "traversed": traversed,
+            "predecessors_omitted": true,
+            "predecessor_count": predecessor_count,
+            "predecessors_sha256": predecessor_digest
+        })
+    } else {
+        object!({
+            "reached": reached,
+            "predecessors": predecessors,
+            "traversed": traversed
+        })
+    };
     let mut explanation = object!({
         "scope":"chrono-ci-check/v1-adapter",
-        "edges":edges,
+        "edges": if paths_omitted {
+            object!({
+                "omitted": true,
+                "count": edges.len(),
+                "sha256": sha256(&edges_bytes)
+            })
+        } else {
+            object!(edges)
+        },
         "seeds":seed_nodes,
         "seed_causes":seeds,
         "closure":closure_value,
         "extra_selections":extras,
         "legacy_only_selections":legacy_only
     });
-    if serde_json::to_vec(&explanation)
-        .map(|bytes| bytes.len() > INLINE_SELECTION_EXPLANATION_BYTES)
-        .unwrap_or(true)
-    {
-        let predecessor_bytes =
-            serde_json::to_vec(&closure.predecessors).expect("predecessors are serializable");
-        let predecessor_count = closure
-            .predecessors
-            .values()
-            .map(std::collections::BTreeMap::len)
-            .sum::<usize>();
-        if let Some(object) = closure_value.as_object_mut() {
-            object.remove("predecessors");
-            object.insert("predecessors_omitted".into(), Value::Bool(true));
-            object.insert("predecessor_count".into(), object!(predecessor_count));
-            object.insert(
-                "predecessors_sha256".into(),
-                object!(sha256(&predecessor_bytes)),
-            );
-        }
-        explanation["closure"] = closure_value;
+    if predecessors_omitted {
         explanation["predecessor_transport"] = object!({
             "omitted": true,
             "count": predecessor_count,
-            "sha256": sha256(&predecessor_bytes)
+            "sha256": predecessor_digest
         });
     }
-    if serde_json::to_vec(&explanation)
-        .map(|bytes| bytes.len() > INLINE_SELECTION_EXPLANATION_BYTES)
-        .unwrap_or(true)
-    {
-        // Keep the bounded response useful even when the traversed closure
-        // itself is large.  The full edge/closure bytes are represented by
-        // stable digests and counts, never silently discarded.
-        let edges_value = explanation["edges"].clone();
-        let traversed_value = explanation["closure"]["traversed"].clone();
-        let reached_value = explanation["closure"]["reached"].clone();
-        let edge_bytes = serde_json::to_vec(&edges_value).expect("edges are serializable");
-        let traversed_bytes =
-            serde_json::to_vec(&traversed_value).expect("traversed edges are serializable");
-        let reached_bytes = serde_json::to_vec(&reached_value).expect("reached is serializable");
-        explanation["edges"] = object!({
-            "omitted": true,
-            "count": edges_value.as_array().map_or(0, Vec::len),
-            "sha256": sha256(&edge_bytes)
-        });
-        if let Some(object) = explanation["closure"].as_object_mut() {
-            object.remove("traversed");
-            object.remove("reached");
-            object.insert("traversed_omitted".into(), Value::Bool(true));
-            object.insert(
-                "traversed_count".into(),
-                object!(traversed_value.as_array().map_or(0, Vec::len)),
-            );
-            object.insert("traversed_sha256".into(), object!(sha256(&traversed_bytes)));
-            object.insert("reached_omitted".into(), Value::Bool(true));
-            object.insert(
-                "reached_count".into(),
-                object!(reached_value.as_object().map_or(0, serde_json::Map::len)),
-            );
-            object.insert("reached_sha256".into(), object!(sha256(&reached_bytes)));
-        }
+    if paths_omitted {
         explanation["closure_transport"] = object!({"omitted":true});
     }
-    let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());
     }
