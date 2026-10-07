@@ -72,6 +72,11 @@ pub struct Impact {
     pub judges: Vec<JudgeSelection>,
     pub historical_context: Vec<EdgeProblem>,
     pub historical_ambiguities: Vec<NodeAmbiguity>,
+    /// Explicit graph facts for self-diagnostics and future structure work.
+    /// This is observational data; it never infers dependencies or certifies a
+    /// refactoring.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structure: Option<graph::StructureAnalysis>,
     pub limits: Vec<String>,
 }
 /// Read explicit edges. Consistency adapters may consume this inventory; it
@@ -330,6 +335,43 @@ fn produce_environment(
             )
         })
         .collect();
+    let mut base_nodes: BTreeSet<String> = an.keys().cloned().collect();
+    base_nodes.extend(ae.iter().flat_map(|edge| [&edge.from, &edge.to]).cloned());
+    let mut candidate_nodes: BTreeSet<String> = bn.keys().cloned().collect();
+    candidate_nodes.extend(be.iter().flat_map(|edge| [&edge.from, &edge.to]).cloned());
+    let mut union_nodes: BTreeSet<String> = base_nodes.union(&candidate_nodes).cloned().collect();
+    union_nodes.extend(
+        edges
+            .iter()
+            .flat_map(|edge| [&edge.edge.from, &edge.edge.to])
+            .cloned(),
+    );
+    let mut owners: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (node, view) in an.iter().chain(bn.iter()) {
+        let entry = owners.entry(node.clone()).or_default();
+        for definition in &view.definitions {
+            if let Some(owner) = definition.value.get("owner").and_then(Value::as_str) {
+                entry.insert(owner.into());
+            }
+            if let Some((kind, owner)) = definition.identity.split_once(':')
+                && matches!(kind, "project" | "script")
+            {
+                entry.insert(owner.into());
+            }
+        }
+    }
+    let structure = graph::analyze(graph::AnalysisInput {
+        base: &ae,
+        candidate: &be,
+        union: &edges,
+        base_nodes: &base_nodes,
+        candidate_nodes: &candidate_nodes,
+        union_nodes: &union_nodes,
+        owners: &owners,
+        base_filemap: base.filemap(),
+        candidate_filemap: candidate.filemap(),
+        reached: &closure.reached,
+    });
     let mut historical_context = vec![];
     let mut historical_ambiguities = vec![];
     for (endpoint, inventory) in [("base", &an), ("candidate", &bn)] {
@@ -519,6 +561,7 @@ fn produce_environment(
             judges,
             historical_context,
             historical_ambiguities,
+            structure: Some(structure),
             limits: vec![
                 "Declaration impact only; no test execution, retirement approval or cost verdict"
                     .into(),

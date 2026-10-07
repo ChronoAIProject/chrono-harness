@@ -154,26 +154,27 @@ pub fn inventory(
                             }
                         }
                     }
-                    if scope == "config" && key == "artifacts" {
-                        if let Some(policy) = r.filemap().get("execution_scheduling") {
-                            for (operation, claims) in policy["claims"].as_object().unwrap() {
-                                if claims["outputs"]
-                                    .as_array()
-                                    .unwrap()
-                                    .iter()
-                                    .any(|p| p == &row["path"])
+                    if scope == "config"
+                        && key == "artifacts"
+                        && let Some(policy) = r.filemap().get("execution_scheduling")
+                    {
+                        for (operation, claims) in policy["claims"].as_object().unwrap() {
+                            if claims["outputs"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .any(|p| p == &row["path"])
+                            {
+                                for (test, plan) in
+                                    r.filemap()["execution_plans"].as_object().unwrap()
                                 {
-                                    for (test, plan) in
-                                        r.filemap()["execution_plans"].as_object().unwrap()
+                                    if plan["operations"]
+                                        .as_array()
+                                        .unwrap()
+                                        .iter()
+                                        .any(|o| o == operation)
                                     {
-                                        if plan["operations"]
-                                            .as_array()
-                                            .unwrap()
-                                            .iter()
-                                            .any(|o| o == operation)
-                                        {
-                                            targets.extend(plan_targets(test, Some(plan), nodes));
-                                        }
+                                        targets.extend(plan_targets(test, Some(plan), nodes));
                                     }
                                 }
                             }

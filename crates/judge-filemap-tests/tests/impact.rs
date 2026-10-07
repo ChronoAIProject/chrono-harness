@@ -228,6 +228,99 @@ fn cycles_diamonds_and_multiple_causes_retain_real_edges_and_all_seeds() {
     assert_eq!(i.closure.reached["test:t"].len(), 2);
     assert_eq!(i.closure.traversed.len(), rows.len());
     witnesses(&i, &oracle_edges(&rows));
+    let structure = i.structure.as_ref().unwrap();
+    let cyclic: Vec<_> = structure
+        .union
+        .components
+        .iter()
+        .filter(|component| component.cyclic)
+        .collect();
+    assert_eq!(cyclic.len(), 1);
+    assert_eq!(
+        cyclic[0].nodes,
+        ["project:a", "project:b", "project:p", "project:z"]
+    );
+    assert_eq!(
+        cyclic[0].witness.first().unwrap().from,
+        cyclic[0].witness.last().unwrap().to
+    );
+    assert_eq!(cyclic[0].witness.len(), 3);
+    assert_eq!(structure.union.max_depth, 2);
+    assert!(structure.affected_components.contains(&cyclic[0].id));
+}
+
+#[test]
+fn structure_analysis_exposes_cross_owner_edges_and_execution_claim_conflicts() {
+    let mut a = values();
+    script_pair(&mut a, "st");
+    a.get_mut(FM).unwrap()["project_edges"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            edge("project:p", "test-execution", "test:t"),
+            edge("script:s", "test-execution", "test:st"),
+        ]);
+    a.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    a.get_mut(FM).unwrap()["execution_plans"] = json!({
+        "test:t":{"operations":["execute.t"],"timeout_seconds":30,"output_limit_bytes":4096},
+        "test:st":{"operations":["script.st"],"timeout_seconds":30,"output_limit_bytes":4096}
+    });
+    a.get_mut(FM).unwrap()["execution_scheduling"] = json!({
+        "max_running":2,
+        "resources":["shared"],
+        "claims":{
+            "execute.t":{"resources":["shared"],"outputs":[]},
+            "script.st":{"resources":["shared"],"outputs":[]}
+        }
+    });
+    let (impact, findings) = run(&a, &a, &[delta("src.bin")]);
+    assert!(findings.is_empty(), "{findings:?}");
+    assert!(
+        impact
+            .structure
+            .as_ref()
+            .unwrap()
+            .candidate
+            .cross_owner_edges
+            .iter()
+            .any(|edge| edge.edge.from == "file:src.bin" && edge.edge.to == "project:p")
+    );
+    assert_eq!(
+        impact
+            .structure
+            .as_ref()
+            .unwrap()
+            .execution
+            .candidate
+            .resource_conflicts,
+        vec![chrono_judge_filemap::graph::ExecutionConflict {
+            left: "execute.t".into(),
+            right: "script.st".into(),
+            resources: vec!["shared".into()],
+            outputs: vec![],
+        }]
+    );
+    let mut historical = serde_json::to_value(&impact).unwrap();
+    historical.as_object_mut().unwrap().remove("structure");
+    let decoded: Impact = serde_json::from_value(historical).unwrap();
+    assert!(decoded.structure.is_none());
+    let mut cyclic = a.clone();
+    cyclic.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operations"] =
+        json!(["execute.t", "script.st"]);
+    cyclic.get_mut(FM).unwrap()["execution_plans"]["test:st"]["operations"] =
+        json!(["script.st", "execute.t"]);
+    let (cyclic_impact, cyclic_findings) = run(&cyclic, &cyclic, &[delta("src.bin")]);
+    assert!(cyclic_findings.is_empty(), "{cyclic_findings:?}");
+    assert_eq!(
+        cyclic_impact
+            .structure
+            .as_ref()
+            .unwrap()
+            .execution
+            .candidate
+            .cycles,
+        vec![vec!["execute.t", "script.st", "execute.t"]]
+    );
 }
 #[test]
 fn input_declaration_boundary_propagates_build_and_runtime_without_claiming_retention() {
