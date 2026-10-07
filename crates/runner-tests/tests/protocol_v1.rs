@@ -562,6 +562,13 @@ fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
         .unwrap();
         assert_eq!(status, wire::Status::Error);
         assert_eq!(rows[0]["state"], "error");
+        chrono_harness::full::validate_execution(
+            &bad,
+            std::slice::from_ref(&binding),
+            &status,
+            &rows,
+        )
+        .unwrap();
         assert!(
             rows[0]["transport_failure"]
                 .as_str()
@@ -600,6 +607,157 @@ fn dag_forwards_only_direct_predecessors_and_named_outputs() {
     assert_eq!(records.len(), 4);
     assert!(records.iter().all(|r| r["state"] == "executed"));
 }
+
+#[test]
+fn execution_self_diagnostic_rejects_mutated_records_and_status() {
+    let (_dir, request, binding) = fixture(value!({"kind":"response"}));
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    chrono_harness::full::validate_execution(&request, &[binding.clone()], &status, &records)
+        .unwrap();
+
+    for (pointer, changed) in [
+        ("/response/request_id", value!("0".repeat(64))),
+        ("/response/outputs", value!({"unobserved":true})),
+        (
+            "/process/failure",
+            value!("process ownership cleanup failed"),
+        ),
+        ("/process/environment", value!({"FORGED":"yes"})),
+        ("/process/environment_digest", value!("forged")),
+        ("/process/stdout_sha256", value!("forged")),
+        ("/process/stdout", value!("forged")),
+    ] {
+        let mut changed_records = records.clone();
+        *changed_records[0].pointer_mut(pointer).unwrap() = changed;
+        let result = chrono_harness::full::validate_execution(
+            &request,
+            std::slice::from_ref(&binding),
+            &status,
+            &changed_records,
+        );
+        assert!(result.is_err(), "undetected mutation: {pointer}");
+        assert!(result.unwrap_err().starts_with("E_SELF_DIAGNOSTIC:"));
+    }
+
+    let mut response_mutation = records.clone();
+    response_mutation[0]["response"]["judge_id"] = value!("forged");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        &[binding.clone()],
+        &status,
+        &response_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+
+    let mut process_mutation = records.clone();
+    process_mutation[0]["process"]["sha256"] = value!("forged");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        &[binding.clone()],
+        &status,
+        &process_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+
+    let mut status_mutation = records.clone();
+    status_mutation[0]["response"]["status"] = value!("fail");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        &[binding],
+        &wire::Status::Pass,
+        &status_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+}
+
+#[test]
+fn execution_self_diagnostic_rejects_forged_transport_failure_for_valid_execution() {
+    let (_dir, request, binding) = fixture(value!({"kind":"response"}));
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Pass);
+
+    // A caller that edits both the row and aggregate status must not be able
+    // to turn a valid response into a fabricated transport failure.  The
+    // process receipt is otherwise unchanged, so this mutation specifically
+    // exercises the relation between retained stdout and the failure state.
+    let mut forged = records;
+    forged[0]["transport_failure"] = value!("forged transport failure");
+    forged[0].as_object_mut().unwrap().remove("response");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        std::slice::from_ref(&binding),
+        &wire::Status::Error,
+        &forged,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+}
+
+#[test]
+fn execution_self_diagnostic_rejects_mutated_prelaunch_error_records() {
+    let (_dir, request, mut binding) = fixture(value!({}));
+    // A bad executable digest fails before a child is launched and therefore
+    // exercises the error-record branch rather than the executed branch.
+    binding.sha256 = Some("0".repeat(64));
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Error);
+    assert_eq!(records[0]["state"], "error");
+    chrono_harness::full::validate_execution(
+        &request,
+        std::slice::from_ref(&binding),
+        &status,
+        &records,
+    )
+    .unwrap();
+
+    for (pointer, changed) in [
+        ("/request_id", value!("forged")),
+        ("/exit_code", value!(1)),
+        ("/response", value!({"status":"pass"})),
+        ("/process", value!({"exit_code":0})),
+        ("/request_digest", value!("forged")),
+        ("/transport_failure", value!("")),
+    ] {
+        let mut changed_records = records.clone();
+        changed_records[0][pointer.trim_start_matches('/')] = changed;
+        let error = chrono_harness::full::validate_execution(
+            &request,
+            std::slice::from_ref(&binding),
+            &status,
+            &changed_records,
+        )
+        .unwrap_err();
+        assert!(
+            error.starts_with("E_SELF_DIAGNOSTIC:"),
+            "{pointer}: {error}"
+        );
+    }
+}
+
 #[test]
 fn dag_blocks_dependents_and_continues_independent_branch() {
     let (_dir, r, b) = fixture(value!({"kind":"blocked-dag"}));
@@ -626,6 +784,7 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
     assert_eq!(records[1]["state"], "blocked");
     assert_eq!(records[2]["id"], "independent");
     assert_eq!(records[2]["response"]["status"], "pass");
+    chrono_harness::full::validate_execution(&r, &plan, &status, &records).unwrap();
     let mut broken = plan.clone();
     broken[0].after = vec!["missing".into()];
     assert!(chrono_harness::full::schedule(&broken).is_err());
@@ -635,15 +794,71 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
 }
 
 #[test]
+fn execution_self_diagnostic_preserves_conflicting_predecessor_failure() {
+    let (_dir, request, binding) = fixture(value!({"kind":"distinct-impacts"}));
+    let plan: Vec<_> = [("a", vec![]), ("b", vec![]), ("c", vec!["a", "b"])]
+        .into_iter()
+        .map(|(id, after)| wire::Binding {
+            id: id.into(),
+            after: after.into_iter().map(String::from).collect(),
+            ..binding.clone()
+        })
+        .collect();
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        &plan,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Error);
+    assert_eq!(records[2]["state"], "blocked");
+    assert_eq!(
+        records[2]["transport_failure"],
+        "conflicting predecessor impact outputs"
+    );
+    chrono_harness::full::validate_execution(&request, &plan, &status, &records).unwrap();
+    let mut changed = records.clone();
+    changed[2]["transport_failure"] = value!("different failure");
+    assert!(
+        chrono_harness::full::validate_execution(&request, &plan, &status, &changed)
+            .unwrap_err()
+            .starts_with("E_SELF_DIAGNOSTIC:")
+    );
+}
+
+#[test]
 fn invalid_response_retains_actual_process_exit_in_report() {
     let (_dir, r, b) = fixture(value!({"kind":"raw", "stdout":b"invalid JSON\n", "exit":9}));
-    let (status, records) =
-        chrono_harness::full::execute(&r, &[b], &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192)
-            .unwrap();
+    let (status, records) = chrono_harness::full::execute(
+        &r,
+        std::slice::from_ref(&b),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
     assert_eq!(status, wire::Status::Error);
     assert_eq!(records[0]["state"], "executed");
     assert_eq!(records[0]["exit_code"], 9);
     assert_eq!(records[0]["process"]["stdout"], "invalid JSON\n");
+    // A transport/protocol failure may retain the real process receipt without
+    // a request_digest field. The independent audit must accept that record
+    // while still checking the process stdin identity.
+    chrono_harness::full::validate_execution(&r, std::slice::from_ref(&b), &status, &records)
+        .unwrap();
+
+    let mut forged_digest = records.clone();
+    forged_digest[0]["request_digest"] = value!("forged");
+    let error = chrono_harness::full::validate_execution(
+        &r,
+        std::slice::from_ref(&b),
+        &status,
+        &forged_digest,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
 }
 
 #[test]

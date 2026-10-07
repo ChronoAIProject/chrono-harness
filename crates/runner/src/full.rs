@@ -1,6 +1,6 @@
 //! Full-format orchestration: fixed facts, declared DAG, external processes and aggregation.
 use crate::{
-    facts, json, no_symlink_parents, sha256,
+    decode, facts, json, no_symlink_parents, sha256,
     wire::{self, Binding, Context, Endpoint, Executable, Registries, Request, Response, Status},
 };
 use serde::Deserialize;
@@ -486,6 +486,388 @@ pub fn execute(
     }
     Ok((status, records))
 }
+
+/// Independently audit the records emitted by [`execute`].
+///
+/// The process loop is deliberately allowed to evolve separately from this
+/// checker.  A malformed record must not become a successful report merely
+/// because the same helper assembled and consumed it.  This boundary checks
+/// the explicit binding DAG, request identities, response/process agreement,
+/// blocked predecessors, and the aggregate status.  It does not discover
+/// dependencies or inspect host source files.
+pub fn validate_execution(
+    template: &Request,
+    bindings: &[Binding],
+    status: &Status,
+    records: &[Value],
+) -> Result<(), String> {
+    let ordered = independent_schedule(bindings)?;
+    if records.len() != ordered.len() {
+        return Err(format!(
+            "E_SELF_DIAGNOSTIC: execution record count {} differs from binding count {}",
+            records.len(),
+            ordered.len()
+        ));
+    }
+    let mut observations = Vec::new();
+    let mut failed = BTreeSet::<String>::new();
+    let mut expected_status = Status::Pass;
+    let expected_environment: BTreeMap<String, String> = template
+        .observations
+        .get("environment")
+        .and_then(|environment| environment.get("effective"))
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|e| format!("E_SELF_DIAGNOSTIC: effective environment: {e}"))?
+        .unwrap_or_default();
+    let expected_environment_digest = wire::digest(&expected_environment)
+        .map_err(|e| format!("E_SELF_DIAGNOSTIC: effective environment digest: {e}"))?;
+    for (index, (record, binding)) in records.iter().zip(&ordered).enumerate() {
+        let id = record["id"]
+            .as_str()
+            .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {index} has no string id"))?;
+        if id != binding.id {
+            return Err(format!(
+                "E_SELF_DIAGNOSTIC: record {index} id {id:?} differs from scheduled {:?}",
+                binding.id
+            ));
+        }
+        let bound = serde_json::to_value(binding).map_err(|e| e.to_string())?;
+        if record.get("binding") != Some(&bound) {
+            return Err(format!(
+                "E_SELF_DIAGNOSTIC: record {id} binding differs from registered binding"
+            ));
+        }
+        let state = record["state"]
+            .as_str()
+            .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {id} has no string state"))?;
+        match state {
+            "executed" => {
+                let process = record.get("process").ok_or_else(|| {
+                    format!("E_SELF_DIAGNOSTIC: executed record {id} has no process")
+                })?;
+                let process: crate::ProcessResult = serde_json::from_value(process.clone())
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} process: {e}"))?;
+                validate_process_receipt(&process, &format!("record {id}"))
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: {e}"))?;
+                let expected_executable =
+                    no_symlink_parents(&template.candidate.root, &binding.executable).map_err(
+                        |e| format!("E_SELF_DIAGNOSTIC: record {id} executable binding: {e}"),
+                    )?;
+                let expected_argv =
+                    std::iter::once(expected_executable.to_string_lossy().into_owned())
+                        .chain(binding.argv.iter().map(|arg| match arg.as_str() {
+                            "{base}" => template.base.commit.clone(),
+                            "{candidate}" => template.candidate.commit.clone(),
+                            _ => arg.clone(),
+                        }))
+                        .collect::<Vec<_>>();
+                if process.executable != expected_executable
+                    || process.sha256 != binding.sha256.clone().unwrap_or_default()
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} executable receipt differs from binding"
+                    ));
+                }
+                if process.argv != expected_argv {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} argv receipt differs from binding"
+                    ));
+                }
+                if process.environment != expected_environment
+                    || process.environment_digest != expected_environment_digest
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} environment receipt differs from request"
+                    ));
+                }
+                let expected_cwd = fs::canonicalize(&template.candidate.root)
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} candidate root: {e}"))?;
+                if process.cwd != expected_cwd {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} cwd receipt differs from candidate root"
+                    ));
+                }
+                if record["exit_code"] != process.exit_code {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} exit differs from process"
+                    ));
+                }
+                let request = judge_request_from_observations(template, binding, &observations)
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id}: {e}"))?;
+                let request_digest = crate::sha256(
+                    &request
+                        .canonical()
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id} canonical: {e}"))?,
+                );
+                if record["request_id"] != request.request_id {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} request identity differs from DAG (observed id {:?}, expected {:?})",
+                        record["request_id"], request.request_id
+                    ));
+                }
+                if process.stdin_sha256 != request_digest {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} stdin identity differs from request"
+                    ));
+                }
+                if let Some(message) = record.get("transport_failure") {
+                    if message.as_str().is_none() || message.as_str().is_some_and(str::is_empty) {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} has an empty transport failure"
+                        ));
+                    }
+                    if record
+                        .get("request_digest")
+                        .is_some_and(|digest| digest != &Value::String(request_digest.clone()))
+                    {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} request digest differs from process"
+                        ));
+                    }
+                    validate_transport_failure(message.as_str().unwrap(), &process, &request)
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
+                    expected_status = expected_status.max(Status::Error);
+                    failed.insert(binding.id.clone());
+                } else {
+                    if record["request_digest"] != request_digest {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} request digest differs from DAG"
+                        ));
+                    }
+                    let response: Response =
+                        serde_json::from_value(record.get("response").cloned().ok_or_else(
+                            || format!("E_SELF_DIAGNOSTIC: executed record {id} has no response"),
+                        )?)
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} response: {e}"))?;
+                    validate_record_response(&response, &request, process.exit_code)
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
+                    if process.failure.is_some()
+                        || json(&process.stdout_bytes).map_err(|e| {
+                            format!("E_SELF_DIAGNOSTIC: record {id} original response: {e}")
+                        })? != record["response"]
+                    {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} response differs from process"
+                        ));
+                    }
+                    expected_status = expected_status.max(response.status.clone());
+                    if response.status >= Status::Fail {
+                        failed.insert(binding.id.clone());
+                    }
+                }
+            }
+            "blocked" => {
+                if record["exit_code"] != Value::Null
+                    || record.get("response").is_some()
+                    || record.get("process").is_some()
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: blocked record {id} contains execution evidence"
+                    ));
+                }
+                let expected_blocked: Vec<_> = binding
+                    .after
+                    .iter()
+                    .filter(|parent| failed.contains(*parent))
+                    .collect();
+                if expected_blocked.is_empty() {
+                    let failure = judge_request_from_observations(template, binding, &observations)
+                        .err()
+                        .ok_or_else(|| {
+                            format!(
+                                "E_SELF_DIAGNOSTIC: record {id} has no blocking request failure"
+                            )
+                        })?;
+                    if record.get("blocked_by").is_some()
+                        || record["transport_failure"].as_str() != Some(failure.as_str())
+                    {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} request failure differs from DAG"
+                        ));
+                    }
+                } else if record["blocked_by"] != value!(expected_blocked)
+                    || record.get("transport_failure").is_some()
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} has invalid blocked predecessors"
+                    ));
+                }
+                expected_status = expected_status.max(Status::Error);
+                failed.insert(binding.id.clone());
+            }
+            "error" => {
+                if record["exit_code"] != Value::Null
+                    || record.get("response").is_some_and(|value| !value.is_null())
+                    || record.get("process").is_some_and(|value| !value.is_null())
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} contains execution evidence"
+                    ));
+                }
+                let request = judge_request_from_observations(template, binding, &observations)
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id}: {e}"))?;
+                if record["request_id"] != request.request_id {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} request identity differs from DAG"
+                    ));
+                }
+                if record.get("request_digest").is_some() {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} contains process request digest"
+                    ));
+                }
+                if record
+                    .get("transport_failure")
+                    .and_then(Value::as_str)
+                    .is_none_or(str::is_empty)
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} has no transport failure"
+                    ));
+                }
+                expected_status = expected_status.max(Status::Error);
+                failed.insert(binding.id.clone());
+            }
+            other => {
+                return Err(format!(
+                    "E_SELF_DIAGNOSTIC: record {id} has unknown state {other:?}"
+                ));
+            }
+        }
+        observations.push(
+            predecessor_observation(record, template.scope.is_some()).map_err(|e| {
+                format!("E_SELF_DIAGNOSTIC: record {id} predecessor observation: {e}")
+            })?,
+        );
+    }
+    if status != &expected_status {
+        return Err(format!(
+            "E_SELF_DIAGNOSTIC: aggregate status {status:?} differs from records {expected_status:?}"
+        ));
+    }
+    Ok(())
+}
+
+/// Check receipt invariants independently of the process loop.  These checks
+/// deliberately derive facts from retained bytes rather than enumerating
+/// possible runtime error strings.
+fn validate_process_receipt(process: &crate::ProcessResult, label: &str) -> Result<(), String> {
+    if process.stdout_sha256 != sha256(&process.stdout_bytes)
+        || process.stderr_sha256 != sha256(&process.stderr_bytes)
+        || process.stdout != String::from_utf8_lossy(&process.stdout_bytes)
+        || process.stderr != String::from_utf8_lossy(&process.stderr_bytes)
+    {
+        return Err(format!(
+            "{label} output receipt differs from retained bytes"
+        ));
+    }
+    Ok(())
+}
+
+/// Validate the relation between a transport failure and the independently
+/// retained process observation.  The process engine owns its failure text;
+/// protocol failures are checked by replaying the protocol predicate over the
+/// captured bytes, without maintaining a list of expected error messages.
+fn validate_transport_failure(
+    message: &str,
+    process: &crate::ProcessResult,
+    request: &Request,
+) -> Result<(), String> {
+    if let Some(failure) = process.failure.as_deref() {
+        if message != failure {
+            return Err("transport failure differs from process failure evidence".into());
+        }
+        return Ok(());
+    }
+
+    let protocol_result = decode::<Response>(&process.stdout_bytes).and_then(|response| {
+        wire::validate_response(request, &response, process.exit_code)?;
+        Ok(())
+    });
+    if protocol_result.is_ok() {
+        return Err("transport failure accompanies a valid protocol response".into());
+    }
+    Ok(())
+}
+
+fn validate_record_response(
+    response: &Response,
+    request: &Request,
+    exit_code: i32,
+) -> Result<(), String> {
+    if response.protocol != wire::PROTOCOL
+        || response.judge_id != request.judge_id
+        || response.request_id != request.request_id
+        || response.status.exit_code() != exit_code
+    {
+        return Err("response identity/status/exit mismatch".into());
+    }
+    let errors = response
+        .findings
+        .iter()
+        .any(|finding| finding.level == "error");
+    let warnings = response
+        .findings
+        .iter()
+        .any(|finding| finding.level == "warning");
+    if (matches!(response.status, Status::Fail | Status::Error) != errors)
+        || (response.status == Status::Pass && warnings)
+        || (response.status == Status::Warn && !warnings)
+    {
+        return Err("response findings/status disagree".into());
+    }
+    Ok(())
+}
+
+/// Independent Kahn walk used only by the report audit.  Keeping this small
+/// copy separate from `schedule` prevents a future scheduling edit from also
+/// making the audit accept the same malformed order.
+fn independent_schedule(bindings: &[Binding]) -> Result<Vec<Binding>, String> {
+    let mut pending = BTreeMap::<String, Binding>::new();
+    for binding in bindings {
+        if binding.id.is_empty()
+            || pending
+                .insert(binding.id.clone(), binding.clone())
+                .is_some()
+        {
+            return Err("E_SELF_DIAGNOSTIC: duplicate/empty judge binding".into());
+        }
+        if binding.after.iter().collect::<BTreeSet<_>>().len() != binding.after.len() {
+            return Err(format!(
+                "E_SELF_DIAGNOSTIC: duplicate predecessor for {}",
+                binding.id
+            ));
+        }
+    }
+    if pending.is_empty() {
+        return Err("E_SELF_DIAGNOSTIC: no configured judges".into());
+    }
+    if bindings
+        .iter()
+        .flat_map(|binding| &binding.after)
+        .any(|id| !pending.contains_key(id))
+    {
+        return Err("E_SELF_DIAGNOSTIC: missing predecessor".into());
+    }
+    let mut done = BTreeSet::new();
+    let mut ordered = Vec::with_capacity(pending.len());
+    while !pending.is_empty() {
+        let id = pending
+            .iter()
+            .find(|(_, binding)| binding.after.iter().all(|parent| done.contains(parent)))
+            .map(|(id, _)| id.clone())
+            .ok_or("E_SELF_DIAGNOSTIC: judge dependency cycle")?;
+        let binding = pending
+            .remove(&id)
+            .ok_or("E_SELF_DIAGNOSTIC: missing scheduled judge")?;
+        done.insert(id);
+        ordered.push(binding);
+    }
+    Ok(ordered)
+}
+
 /// Build fixed full inputs without executing judges or business tools.
 #[allow(clippy::too_many_arguments)]
 pub fn prepare_request(
@@ -831,6 +1213,7 @@ pub fn check_prepared(
     };
     crate::prepare_publication(root, &publication_path)?;
     let (status, mut judges) = execute(&req, &bindings, &env, timeout, limit)?;
+    validate_execution(&req, &bindings, &status, &judges)?;
     let judge_pins: Vec<_> = bindings
         .iter()
         .map(|binding| value!({"id": binding.id, "sha256": binding.sha256}))
