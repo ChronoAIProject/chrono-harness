@@ -538,6 +538,37 @@ pub fn validate_execution(
                 })?;
                 let process: crate::ProcessResult = serde_json::from_value(process.clone())
                     .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} process: {e}"))?;
+                let expected_executable =
+                    no_symlink_parents(&template.candidate.root, &binding.executable).map_err(
+                        |e| format!("E_SELF_DIAGNOSTIC: record {id} executable binding: {e}"),
+                    )?;
+                let expected_argv =
+                    std::iter::once(expected_executable.to_string_lossy().into_owned())
+                        .chain(binding.argv.iter().map(|arg| match arg.as_str() {
+                            "{base}" => template.base.commit.clone(),
+                            "{candidate}" => template.candidate.commit.clone(),
+                            _ => arg.clone(),
+                        }))
+                        .collect::<Vec<_>>();
+                if process.executable != expected_executable
+                    || process.sha256 != binding.sha256.clone().unwrap_or_default()
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} executable receipt differs from binding"
+                    ));
+                }
+                if process.argv != expected_argv {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} argv receipt differs from binding"
+                    ));
+                }
+                let expected_cwd = fs::canonicalize(&template.candidate.root)
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} candidate root: {e}"))?;
+                if process.cwd != expected_cwd {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} cwd receipt differs from candidate root"
+                    ));
+                }
                 if record["exit_code"] != process.exit_code {
                     return Err(format!(
                         "E_SELF_DIAGNOSTIC: record {id} exit differs from process"

@@ -626,6 +626,17 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
     .unwrap_err();
     assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
 
+    let mut process_mutation = records.clone();
+    process_mutation[0]["process"]["sha256"] = value!("forged");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        &[binding.clone()],
+        &status,
+        &process_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+
     let mut status_mutation = records.clone();
     status_mutation[0]["response"]["status"] = value!("fail");
     let error = chrono_harness::full::validate_execution(
@@ -676,15 +687,14 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
 #[test]
 fn invalid_response_retains_actual_process_exit_in_report() {
     let (_dir, r, b) = fixture(value!({"kind":"raw", "stdout":b"invalid JSON\n", "exit":9}));
-    let (status, records) =
-        chrono_harness::full::execute(
-            &r,
-            std::slice::from_ref(&b),
-            &Default::default(),
-            FIXTURE_TIMEOUT_SECONDS,
-            8192,
-        )
-        .unwrap();
+    let (status, records) = chrono_harness::full::execute(
+        &r,
+        std::slice::from_ref(&b),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
     assert_eq!(status, wire::Status::Error);
     assert_eq!(records[0]["state"], "executed");
     assert_eq!(records[0]["exit_code"], 9);
