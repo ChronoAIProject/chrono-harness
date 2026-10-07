@@ -124,6 +124,7 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     let positions: Vec<_> = [
         "Prepare registered caches",
         "Restore registered cache core.target",
+        "Recover failed cache restores",
         "Bootstrap registered tools",
         "Canonical harness check",
         "Save registered cache core.target",
@@ -134,6 +135,10 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     .map(|name| job.find(name).unwrap())
     .collect();
     assert!(positions.windows(2).all(|p| p[0] < p[1]));
+    assert!(job.contains(
+        "steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores'"
+    ));
+    assert!(job.contains(" recover --host-root . --config '.chrono-harness/cache.json' --plan "));
     assert!(job.contains("'check' '--unit' 'example'"));
     let seed = job
         .split("Prepare registered caches")

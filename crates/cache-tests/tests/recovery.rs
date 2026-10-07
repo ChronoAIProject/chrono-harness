@@ -1,0 +1,334 @@
+use super::*;
+
+fn recovery_host() -> (Host, Value, Value) {
+    let (root, mut config) = fixture();
+    adopt_consumer_contract(root.path(), &mut config);
+    fs::create_dir(root.path().join(".git")).unwrap();
+    config["require_primary_checkout"] = json!(true);
+    let before = plan(root.path(), &config, "check.one").unwrap();
+    config["recover_failed_restores"] = json!(true);
+    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    assert_eq!(before["caches"], prepared["caches"]);
+    fs::create_dir_all(root.path().join(".chrono-harness/state/restore")).unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&prepared).unwrap(),
+    )
+    .unwrap();
+    fs::create_dir_all(root.path().join("out/project")).unwrap();
+    fs::write(root.path().join("out/project/partial"), b"partial archive").unwrap();
+    fs::create_dir_all(root.path().join("out/other")).unwrap();
+    fs::write(root.path().join("out/other/keep"), b"other consumer").unwrap();
+    (root, config, prepared)
+}
+
+fn recover(root: &Path, steps: &Value) -> std::process::Output {
+    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
+        .args([
+            "recover",
+            "--host-root",
+            root.to_str().unwrap(),
+            "--config",
+            ".chrono-harness/cache.json",
+            "--plan",
+            ".chrono-harness/state/restore/plan.json",
+            "--steps-env",
+            "CACHE_RECOVERY_STEPS",
+        ])
+        .env(
+            "CACHE_RECOVERY_STEPS",
+            serde_json::to_string(steps).unwrap(),
+        )
+        .output()
+        .unwrap()
+}
+
+fn result(root: &Path) -> Value {
+    let pointer: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/state/restore/recovery.json")).unwrap(),
+    )
+    .unwrap();
+    let raw = fs::read(root.join(pointer["path"].as_str().unwrap())).unwrap();
+    assert_eq!(pointer["sha256"], format!("{:x}", Sha256::digest(&raw)));
+    serde_json::from_slice(&raw).unwrap()
+}
+
+fn transport(root: &Path, steps: &Value) -> std::process::Output {
+    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
+        .args([
+            "report",
+            "--host-root",
+            root.to_str().unwrap(),
+            "--plan",
+            ".chrono-harness/state/restore/plan.json",
+            "--report-directory",
+            ".chrono-harness/cache/release-result/",
+            "--steps-env",
+            "CACHE_RECOVERY_STEPS",
+            "--work",
+            "work",
+        ])
+        .env(
+            "CACHE_RECOVERY_STEPS",
+            serde_json::to_string(steps).unwrap(),
+        )
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn failed_restore_clears_only_its_registered_artifacts_and_does_not_repeat_after_build() {
+    let (root, _, _) = recovery_host();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        root.path().join("source"),
+        root.path().join("out/project/source-alias"),
+    )
+    .unwrap();
+    let steps =
+        json!({"cache_0_restore":{"outcome":"failure","conclusion":"success","outputs":{}}});
+    let recovered = recover(root.path(), &steps);
+    assert!(
+        recovered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&recovered.stderr)
+    );
+    assert!(!root.path().join("out/project").exists());
+    assert_eq!(
+        fs::read(root.path().join("out/other/keep")).unwrap(),
+        b"other consumer"
+    );
+    assert_eq!(fs::read(root.path().join("source")).unwrap(), b"source-one");
+    let report = result(root.path());
+    assert_eq!(report["status"], "recovered");
+    assert_eq!(
+        report["caches"]["project"]["restore"],
+        steps["cache_0_restore"]
+    );
+    assert_eq!(
+        report["caches"]["project"]["artifacts"][0]["status"],
+        "removed"
+    );
+    let original = fs::read(
+        root.path()
+            .join(report["native_steps"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(serde_json::from_slice::<Value>(&original).unwrap(), steps);
+    fs::create_dir_all(root.path().join("out/project")).unwrap();
+    fs::write(root.path().join("out/project/new-build"), b"new build").unwrap();
+    let replay = recover(root.path(), &steps);
+    assert!(replay.status.success());
+    assert_eq!(result(root.path()), report);
+    assert_eq!(
+        fs::read(root.path().join("out/project/new-build")).unwrap(),
+        b"new build"
+    );
+    let mut final_steps = steps.clone();
+    final_steps["work"] = json!({"outcome":"failure"});
+    let delivered = transport(root.path(), &final_steps);
+    assert!(
+        delivered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&delivered.stderr)
+    );
+    let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
+    assert_eq!(delivered["observation"]["work"]["outcome"], "failure");
+    assert_eq!(
+        delivered["observation"]["caches"]["project"]["restore"]["status"],
+        "error"
+    );
+    let recovery = &delivered["observation"]["recovery"];
+    assert_eq!(recovery["status"], "recovered");
+    let uploaded = fs::read(
+        root.path()
+            .join(recovery["original"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(serde_json::from_slice::<Value>(&uploaded).unwrap(), report);
+    let uploaded_steps = fs::read(
+        root.path()
+            .join(recovery["native_steps"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&uploaded_steps).unwrap(),
+        steps
+    );
+}
+
+#[test]
+fn missing_or_damaged_recovery_evidence_stops_report_production() {
+    for damaged in [false, true] {
+        let (root, _, _) = recovery_host();
+        let steps = json!({"cache_0_restore":{"outcome":"success"},"work":{"outcome":"success"}});
+        if damaged {
+            assert!(recover(root.path(), &steps).status.success());
+            let pointer: Value = serde_json::from_slice(
+                &fs::read(
+                    root.path()
+                        .join(".chrono-harness/state/restore/recovery.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            fs::write(
+                root.path().join(pointer["path"].as_str().unwrap()),
+                b"damaged original",
+            )
+            .unwrap();
+        }
+        let output = transport(root.path(), &steps);
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(if damaged {
+                "digest mismatch"
+            } else {
+                "missing recovery result"
+            })
+        );
+    }
+}
+
+#[test]
+fn successful_or_skipped_restore_keeps_outputs_and_missing_observations_fail() {
+    for outcome in [
+        Some("success"),
+        Some("skipped"),
+        Some("cancelled"),
+        Some("unknown"),
+        None,
+    ] {
+        let (root, _, _) = recovery_host();
+        let steps = outcome
+            .map(|s| json!({"cache_0_restore":{"outcome":s}}))
+            .unwrap_or(json!({}));
+        let output = recover(root.path(), &steps);
+        let allowed = matches!(outcome, Some("success" | "skipped"));
+        assert_eq!(
+            output.status.success(),
+            allowed,
+            "{outcome:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read(root.path().join("out/project/partial")).unwrap(),
+            b"partial archive"
+        );
+        assert_eq!(
+            result(root.path())["status"],
+            if allowed { "not-required" } else { "failed" }
+        );
+    }
+}
+
+#[test]
+fn changed_registration_and_symlinked_outputs_preserve_original_failure_without_discard() {
+    for alter in ["registration", "output", "unfinished"] {
+        let (root, mut config, _) = recovery_host();
+        match alter {
+            "registration" => {
+                config["artifacts"]["target"]["path"] = json!("source");
+                fs::write(
+                    root.path().join(".chrono-harness/cache.json"),
+                    serde_json::to_vec(&config).unwrap(),
+                )
+                .unwrap();
+            }
+            "output" => {
+                fs::rename(
+                    root.path().join("out/project"),
+                    root.path().join("out/retained"),
+                )
+                .unwrap();
+                #[cfg(unix)]
+                std::os::unix::fs::symlink("retained", root.path().join("out/project")).unwrap();
+            }
+            "unfinished" => fs::write(
+                root.path()
+                    .join(".chrono-harness/state/restore/recovery-intent.json"),
+                b"original interrupted intent",
+            )
+            .unwrap(),
+            _ => unreachable!(),
+        }
+        let output = recover(
+            root.path(),
+            &json!({"cache_0_restore":{"outcome":"failure"}}),
+        );
+        assert!(!output.status.success(), "{alter}");
+        assert_eq!(fs::read(root.path().join("source")).unwrap(), b"source-one");
+        assert_eq!(
+            fs::read(root.path().join("out/project/partial")).unwrap(),
+            b"partial archive"
+        );
+        if alter != "unfinished" {
+            assert_eq!(result(root.path())["status"], "failed");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
+    let (root, mut config, _) = recovery_host();
+    config["artifacts"]["zz-socket"] = json!({
+        "owner":"project","path":"out/socket","kind":"compilation","external":false
+    });
+    config["caches"]["project"]["artifacts"] = json!(["target", "zz-socket"]);
+    register_artifacts(root.path(), &config);
+    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&prepared).unwrap(),
+    )
+    .unwrap();
+    let socket_root = tempfile::tempdir().unwrap();
+    let socket_path = socket_root.path().join("socket");
+    let _socket = std::os::unix::net::UnixListener::bind(&socket_path).unwrap();
+    fs::rename(socket_path, root.path().join("out/socket")).unwrap();
+    let steps = json!({"cache_0_restore":{"outcome":"failure"}});
+    let failed = recover(root.path(), &steps);
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("neither a regular file"));
+    assert!(!root.path().join("out/project").exists());
+    assert!(root.path().join("out/socket").exists());
+    let original = result(root.path());
+    assert_eq!(original["status"], "failed");
+    let artifacts = &original["caches"]["project"]["artifacts"];
+    assert_eq!(artifacts[0]["status"], "removed");
+    assert_eq!(artifacts[1]["status"], "failed");
+    fs::create_dir(root.path().join("out/project")).unwrap();
+    fs::write(root.path().join("out/project/new-build"), b"new build").unwrap();
+    let repeated = recover(root.path(), &steps);
+    assert!(!repeated.status.success());
+    assert!(String::from_utf8_lossy(&repeated.stderr).contains("previous attempt failed"));
+    assert_eq!(result(root.path()), original);
+    assert_eq!(
+        fs::read(root.path().join("out/project/new-build")).unwrap(),
+        b"new build"
+    );
+    let delivered = transport(root.path(), &steps);
+    assert!(
+        delivered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&delivered.stderr)
+    );
+    let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
+    assert_eq!(delivered["observation"]["recovery"]["status"], "failed");
+    assert_eq!(
+        delivered["observation"]["recovery"]["error"],
+        original["error"]
+    );
+}

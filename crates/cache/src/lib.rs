@@ -1,6 +1,7 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
 mod backend;
 mod probe;
+mod recovery;
 mod report;
 pub use backend::Config as Backend;
 use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, wire};
@@ -32,6 +33,8 @@ pub struct Config {
     pub require_primary_checkout: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<Backend>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recover_failed_restores: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -168,6 +171,12 @@ pub fn validate(c: &Config) -> Result<(), String> {
     }
     if c.schema == SCHEMA && !c.consumer_operations.is_empty() {
         return Err("E_CACHE_CONFIG: consumer operation contracts require chrono-cache/v2".into());
+    }
+    if c.recover_failed_restores && (c.schema != CONSUMER_SCHEMA || !c.require_primary_checkout) {
+        return Err(
+            "E_CACHE_RECOVERY: failed-restore recovery requires v2 and primary-checkout protection"
+                .into(),
+        );
     }
     if let Some(backend) = &c.backend {
         if c.schema != CONSUMER_SCHEMA {
@@ -535,6 +544,15 @@ fn registered_files(
 /// Read only the selected consumer's explicitly named inputs. Literal values are
 /// declarations; hashing them does not turn them into toolchain observations.
 pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String> {
+    prepare_with_inputs(root, c, consumer, None)
+}
+
+fn prepare_with_inputs(
+    root: &Path,
+    c: &Config,
+    consumer: &str,
+    prior: Option<&Value>,
+) -> Result<Value, String> {
     validate(c)?;
     name(consumer)?;
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
@@ -579,6 +597,12 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
         let mut bindings = BTreeMap::new();
         for artifact_id in &cache.artifacts {
             let artifact = &c.artifacts[artifact_id];
+            if c.recover_failed_restores && artifact.external {
+                return Err(
+                    "E_CACHE_RECOVERY: external artifacts require their own lifecycle protection"
+                        .into(),
+                );
+            }
             if !artifact.external {
                 let found: Vec<_> = registered
                     .iter()
@@ -621,7 +645,20 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
             .chain(&cache.source_inputs)
         {
             if !observations.contains_key(input_id) {
-                observations.insert(input_id.clone(), observe(&root, &c.inputs[input_id])?);
+                let observed = if let Some(prior) = prior {
+                    let value = prior
+                        .get(input_id)
+                        .ok_or("E_CACHE_RECOVERY: missing original input")?;
+                    if value["declaration"]
+                        != serde_json::to_value(&c.inputs[input_id]).map_err(|e| e.to_string())?
+                    {
+                        return Err("E_CACHE_RECOVERY: original input declaration differs".into());
+                    }
+                    value.clone()
+                } else {
+                    observe(&root, &c.inputs[input_id])?
+                };
+                observations.insert(input_id.clone(), observed);
             }
         }
         let values = |ids: &[String]| -> BTreeMap<_, _> {
@@ -714,10 +751,17 @@ pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String>
     if let Some(backend) = &c.backend {
         plan["backend"] = json!(backend);
     }
+    if c.recover_failed_restores {
+        plan["recovery"] = json!({"method":"discard-failed-host-restores","host_root":root,
+            "registration_sha256":wire::digest(c)?});
+    }
     Ok(plan)
 }
 
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) == Some("recover") {
+        return recovery::dispatch(&args[1..]);
+    }
     if args.first().map(String::as_str) == Some("report") {
         return report::dispatch(&args[1..]);
     }
@@ -801,6 +845,9 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     if let Some(output) = options.get("--github-output") {
         let mut text = String::new();
+        if c.recover_failed_restores {
+            text.push_str("cache_recovery=discard-failed-host-restores\n");
+        }
         let selected: BTreeMap<_, _> = plan["caches"]
             .as_object()
             .ok_or("E_CACHE_OUTPUT: caches object")?

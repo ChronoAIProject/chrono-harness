@@ -224,6 +224,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     });
     report["plan"] = json!({"path":plan_path,"sha256":sha256(&plan_raw)});
     report["plan_upload"] = json!(retain_for_upload(root, directory, "plan", &plan_raw)?);
+    if plan.get("recovery").is_some() {
+        let (original, recovery) = super::recovery::retained(root, plan_path)?;
+        if recovery["schema"] != "chrono-cache-recovery/v1" || recovery["plan"] != report["plan"] {
+            return Err("E_CACHE_REPORT: recovery belongs to another plan".into());
+        }
+        let raw = prepared::read_original(root, &original, None)?;
+        let steps: prepared::Original = serde_json::from_value(recovery["native_steps"].clone())
+            .map_err(|e| format!("E_CACHE_REPORT: recovery steps: {e}"))?;
+        let steps_raw = prepared::read_original(root, &steps, None)?;
+        report["recovery"] = json!({"original":retain_for_upload(root, directory, "cache-recovery", &raw)?,
+            "native_steps":retain_for_upload(root, directory, "restore-steps", &steps_raw)?,
+            "status":recovery["status"],"error":recovery["error"]});
+    }
     let mut probes = Vec::new();
     for input in plan["inputs"]
         .as_object()

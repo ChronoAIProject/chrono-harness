@@ -51,6 +51,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_runner/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -125,6 +132,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_instructions/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -199,6 +213,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -273,6 +294,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -347,6 +375,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_registration/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -421,6 +456,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_filemap/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -495,6 +537,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_routes/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -569,6 +618,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_projects/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -643,6 +699,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_cost/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -717,6 +780,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_mixed/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -791,6 +861,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_workflow/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -865,6 +942,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_inputs/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -939,6 +1023,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_distribution/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1013,6 +1104,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1087,6 +1185,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_worktree/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1170,6 +1275,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_distribution_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1269,6 +1381,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_worktree_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1345,6 +1464,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_runner_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1485,6 +1611,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_inputs_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1572,6 +1705,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_ci_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1649,6 +1789,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_ci_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1726,6 +1873,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_registration_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1808,6 +1962,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_projects_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1894,6 +2055,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_workflow_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -1986,6 +2154,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2060,6 +2235,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_instructions_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2140,6 +2322,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_filemap_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2214,6 +2403,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_routes_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2293,6 +2489,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_cost_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2373,6 +2576,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_judge_mixed_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2675,6 +2885,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_runner/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2749,6 +2966,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_instructions/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2823,6 +3047,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2897,6 +3128,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -2971,6 +3209,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_registration/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3045,6 +3290,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_filemap/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3119,6 +3371,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_routes/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3193,6 +3452,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_projects/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3267,6 +3533,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_cost/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3341,6 +3614,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_mixed/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3415,6 +3695,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_workflow/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3489,6 +3776,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_inputs/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3563,6 +3857,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_distribution/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3637,6 +3938,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3711,6 +4019,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_worktree/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3794,6 +4109,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_distribution_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3893,6 +4215,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_worktree_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -3969,6 +4298,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_runner_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4109,6 +4445,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_inputs_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4196,6 +4539,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_ci_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4273,6 +4623,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_ci_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4350,6 +4707,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_registration_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4432,6 +4796,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_projects_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4518,6 +4889,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_workflow_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4610,6 +4988,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4684,6 +5069,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_instructions_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4764,6 +5156,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_filemap_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4838,6 +5237,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_routes_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4917,6 +5323,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_cost_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -4997,6 +5410,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_judge_mixed_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -5639,6 +6059,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_diagnostics_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -5713,6 +6140,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_diagnostics_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -5871,6 +6305,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_build_cache/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -5947,6 +6388,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.linux_verify_cache_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -6021,6 +6469,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_build_cache/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}
@@ -6097,6 +6552,13 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
           fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/release.macos_verify_cache_tests/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Run registered release command
         id: chrono_cache_work
         if: ${{ always() }}

@@ -1,5 +1,7 @@
 #[path = "backend.rs"]
 mod backend;
+#[path = "recovery.rs"]
+mod recovery;
 
 use chrono_cache::{Config, prepare};
 use serde_json::{Value, json};
@@ -289,6 +291,7 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
     // Toolchain/key observation is tested separately. This fixture reads the
     // actual host's consumers and producer references without running platform probes.
     config["require_primary_checkout"] = json!(false);
+    config["recover_failed_restores"] = json!(false);
     for input in config["inputs"].as_object_mut().unwrap().values_mut() {
         *input = json!({"kind":"literal","value":"fixture-only input observation"});
     }
@@ -1152,6 +1155,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     let root = Host::new();
     fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
     config["require_primary_checkout"] = json!(false);
+    config["recover_failed_restores"] = json!(false);
     // Vary actual host policy files while keeping unrelated compiler/source
     // observations fixed; this contract fixture needs no compiler or SDK probes.
     for (id, input) in config["inputs"].as_object_mut().unwrap() {

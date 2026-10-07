@@ -7277,5 +7277,6 @@
     ],
     "repository_environment": "GITHUB_REPOSITORY",
     "ref_environment": "GITHUB_REF"
-  }
+  },
+  "recover_failed_restores": true
 }

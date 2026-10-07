@@ -127,6 +127,40 @@ observations. Its status is `prepared-unrestored`, execution is `not-started`, a
 cache hit states, successful builds or parity evidence. Cache backend results,
 failure chains and original reports must be supplied by their actual producers.
 
+## Failed restore recovery
+
+V2 can explicitly enable `recover_failed_restores: true` for isolated primary
+checkouts. Selected external artifacts remain unsupported because their separate
+ownership is not established. This choice is retained in the plan outside build
+cache keys. The planner publishes the adopted method to the native provider;
+older registrations and planners do not execute recovery.
+
+The provider invokes `chrono-cache recover` after native restores and before the
+original bootstrap/build, using the existing plan, registration and original step
+observations. The owner revalidates the selected artifact/consumer contract with
+the original declared observations, without executing input probes again. Changed
+registration, host, selected paths or plan bindings fail before removal. Only
+caches whose native restore **outcome** is `failure` have their registered host
+artifacts removed. Success or skipped outcomes preserve outputs; missing,
+cancelled or unknown outcomes fail. Nested symlinks are removed without following
+their targets, while symlinked artifact roots or ancestors are refused.
+
+An intent precedes removal. Results retain the original restore observations,
+each attempted path and any failure; partial cleanup or publication failure is
+nonzero and stops the original build. The final transport report retains the
+recovery result and its original step bytes alongside the unchanged restore and
+business outcomes. Missing or damaged recovery evidence makes reporting fail.
+Repeating an already completed attempt returns its original result without
+discarding outputs that a later producer rebuilt. An unfinished intent is retained
+and refused; a previous failure is not automatically retried.
+
+The host adopts this method in its existing jobs and classifies its step time as
+`cache-recovery`. No job, build recipe or business-test retry is added. This covers
+reported native restore failures and partial extraction, not corruption hidden
+behind a successful restore, backend archive replacement, or general compiler
+failure recovery. Archive integrity, linked-worktree leases and full native
+failure-scenario acceptance remain obligations.
+
 ## Actual provider consumers
 
 The optional `persistent_cache` field on check/release providers adopts

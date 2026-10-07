@@ -518,7 +518,8 @@
         "Save registered cache check.cache-tests": "cache-save",
         "Preserve detector evidence": "evidence-upload",
         "Restore registered cache check.judge-projects-tests.migration": "cache-restore",
-        "Save registered cache check.judge-projects-tests.migration": "cache-save"
+        "Save registered cache check.judge-projects-tests.migration": "cache-save",
+        "Recover failed cache restores": "cache-recovery"
       },
       "summary_environment": "GITHUB_STEP_SUMMARY",
       "comparisons": {
