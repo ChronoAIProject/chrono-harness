@@ -677,12 +677,34 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
 fn invalid_response_retains_actual_process_exit_in_report() {
     let (_dir, r, b) = fixture(value!({"kind":"raw", "stdout":b"invalid JSON\n", "exit":9}));
     let (status, records) =
-        chrono_harness::full::execute(&r, &[b], &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192)
-            .unwrap();
+        chrono_harness::full::execute(
+            &r,
+            std::slice::from_ref(&b),
+            &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS,
+            8192,
+        )
+        .unwrap();
     assert_eq!(status, wire::Status::Error);
     assert_eq!(records[0]["state"], "executed");
     assert_eq!(records[0]["exit_code"], 9);
     assert_eq!(records[0]["process"]["stdout"], "invalid JSON\n");
+    // A transport/protocol failure may retain the real process receipt without
+    // a request_digest field. The independent audit must accept that record
+    // while still checking the process stdin identity.
+    chrono_harness::full::validate_execution(&r, std::slice::from_ref(&b), &status, &records)
+        .unwrap();
+
+    let mut forged_digest = records.clone();
+    forged_digest[0]["request_digest"] = value!("forged");
+    let error = chrono_harness::full::validate_execution(
+        &r,
+        std::slice::from_ref(&b),
+        &status,
+        &forged_digest,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
 }
 
 #[test]
