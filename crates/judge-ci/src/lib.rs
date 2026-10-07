@@ -6,8 +6,10 @@ use chrono_harness::{
 use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as object};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::{self, Write};
 use std::path::Path;
 mod collect;
 mod units;
@@ -38,6 +40,35 @@ pub(crate) fn process_projection(process: &ProcessResult) -> Value {
         object.insert("stderr_omitted".into(), Value::Bool(true));
     }
     value
+}
+
+struct JsonMeasure {
+    digest: Sha256,
+    bytes: usize,
+}
+
+impl Write for JsonMeasure {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.digest.update(bytes);
+        self.bytes = self
+            .bytes
+            .checked_add(bytes.len())
+            .ok_or_else(|| io::Error::other("JSON length overflow"))?;
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn measure_json<T: Serialize>(value: &T) -> (usize, String) {
+    let mut output = JsonMeasure {
+        digest: Sha256::new(),
+        bytes: 0,
+    };
+    serde_json::to_writer(&mut output, value).expect("selection evidence is serializable");
+    (output.bytes, format!("{:x}", output.digest.finalize()))
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -736,26 +767,23 @@ fn ci_impact(
         predecessors,
         traversed,
     } = closure;
-    let edges_bytes = serde_json::to_vec(&edges).expect("edges are serializable");
-    let reached_bytes = serde_json::to_vec(&reached).expect("reached is serializable");
-    let predecessors_bytes =
-        serde_json::to_vec(&predecessors).expect("predecessors are serializable");
-    let traversed_bytes = serde_json::to_vec(&traversed).expect("traversed is serializable");
-    let other_bytes = serde_json::to_vec(&(&seed_nodes, &seeds, &extras, &legacy_only))
-        .expect("selection metadata is serializable");
-    let full_size = edges_bytes
-        .len()
-        .saturating_add(reached_bytes.len())
-        .saturating_add(predecessors_bytes.len())
-        .saturating_add(traversed_bytes.len())
-        .saturating_add(other_bytes.len())
+    let (edges_size, edges_digest) = measure_json(&edges);
+    let (reached_size, reached_digest) = measure_json(&reached);
+    let (predecessors_size, predecessors_digest) = measure_json(&predecessors);
+    let (traversed_size, traversed_digest) = measure_json(&traversed);
+    let (other_size, _) = measure_json(&(&seed_nodes, &seeds, &extras, &legacy_only));
+    let full_size = edges_size
+        .saturating_add(reached_size)
+        .saturating_add(predecessors_size)
+        .saturating_add(traversed_size)
+        .saturating_add(other_size)
         .saturating_add(1024);
     let predecessors_omitted = full_size > INLINE_SELECTION_EXPLANATION_BYTES;
-    let reduced_size = full_size.saturating_sub(predecessors_bytes.len());
+    let reduced_size = full_size.saturating_sub(predecessors_size);
     let paths_omitted = predecessors_omitted && reduced_size > INLINE_SELECTION_EXPLANATION_BYTES;
     let predecessor_count = predecessors.values().map(BTreeMap::len).sum::<usize>();
     let predecessor_digest = if predecessors_omitted {
-        Some(sha256(&predecessors_bytes))
+        Some(predecessors_digest)
     } else {
         None
     };
@@ -766,10 +794,10 @@ fn ci_impact(
             "predecessors_sha256": predecessor_digest,
             "reached_omitted": true,
             "reached_count": reached.len(),
-            "reached_sha256": sha256(&reached_bytes),
+            "reached_sha256": reached_digest,
             "traversed_omitted": true,
             "traversed_count": traversed.len(),
-            "traversed_sha256": sha256(&traversed_bytes)
+            "traversed_sha256": traversed_digest
         })
     } else if predecessors_omitted {
         object!({
@@ -792,7 +820,7 @@ fn ci_impact(
             object!({
                 "omitted": true,
                 "count": edges.len(),
-                "sha256": sha256(&edges_bytes)
+                "sha256": edges_digest
             })
         } else {
             object!(edges)
