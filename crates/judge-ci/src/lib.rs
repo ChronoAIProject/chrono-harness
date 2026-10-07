@@ -779,8 +779,11 @@ fn ci_impact(
         .saturating_add(other_size)
         .saturating_add(1024);
     let predecessors_omitted = full_size > INLINE_SELECTION_EXPLANATION_BYTES;
-    let reduced_size = full_size.saturating_sub(predecessors_size);
-    let paths_omitted = predecessors_omitted && reduced_size > INLINE_SELECTION_EXPLANATION_BYTES;
+    // Once the predecessor map exceeds the inline budget, retain only bounded
+    // structural counts/digests for the derived closure as well.  Re-emitting
+    // the reached/traversed maps would recreate the same quadratic transport
+    // pressure even after removing predecessors.
+    let paths_omitted = predecessors_omitted;
     let predecessor_count = predecessors.values().map(BTreeMap::len).sum::<usize>();
     let predecessor_digest = if predecessors_omitted {
         Some(predecessors_digest)
