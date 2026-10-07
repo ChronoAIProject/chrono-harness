@@ -135,6 +135,14 @@ ownership is not established. This choice is retained in the plan outside build
 cache keys. The planner publishes the adopted method to the native provider;
 older registrations and planners do not execute recovery.
 
+The final transport report checks each planned restore step against the original
+observations consumed by recovery. Later bootstrap, build, test and save steps
+may be added, but an existing restore observation cannot disappear or change.
+On a mismatch the report retains both snapshots in the upload directory and
+returns `E_CACHE_REPORT` with the cache ID and both original paths; it does not
+publish a normal transport report or query the backend. This checks consistency
+between retained observations, not the truth of the native action's claim.
+
 The provider invokes `chrono-cache recover` after native restores and before the
 original bootstrap/build, using the existing plan, registration and original step
 observations. The owner revalidates the selected artifact/consumer contract with

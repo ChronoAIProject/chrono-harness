@@ -231,18 +231,39 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     });
     report["plan"] = json!({"path":plan_path,"sha256":sha256(&plan_raw)});
     report["plan_upload"] = json!(retain_for_upload(root, directory, "plan", &plan_raw)?);
+    report["native_steps"] = json!(retain_for_upload(
+        root,
+        directory,
+        "native-steps",
+        steps_raw.as_bytes()
+    )?);
     if plan.get("recovery").is_some() {
         let (original, recovery) = super::recovery::retained(root, plan_path)?;
         if recovery["schema"] != "chrono-cache-recovery/v1" || recovery["plan"] != report["plan"] {
             return Err("E_CACHE_REPORT: recovery belongs to another plan".into());
         }
         let raw = prepared::read_original(root, &original, None)?;
-        let steps: prepared::Original = serde_json::from_value(recovery["native_steps"].clone())
-            .map_err(|e| format!("E_CACHE_REPORT: recovery steps: {e}"))?;
-        let steps_raw = prepared::read_original(root, &steps, None)?;
+        let restore_steps: prepared::Original =
+            serde_json::from_value(recovery["native_steps"].clone())
+                .map_err(|e| format!("E_CACHE_REPORT: recovery steps: {e}"))?;
+        let restore_raw = prepared::read_original(root, &restore_steps, None)?;
         report["recovery"] = json!({"original":retain_for_upload(root, directory, "cache-recovery", &raw)?,
-            "native_steps":retain_for_upload(root, directory, "restore-steps", &steps_raw)?,
+            "native_steps":retain_for_upload(root, directory, "restore-steps", &restore_raw)?,
             "status":recovery["status"],"error":recovery["error"]});
+        let original_steps: Value = decode(&restore_raw)?;
+        // Later work adds observations, but completed restore steps must remain
+        // the same observations on which recovery acted.
+        let caches: BTreeMap<_, _> = plan["caches"].as_object().unwrap().iter().collect();
+        for (index, id) in caches.keys().enumerate() {
+            let step = format!("cache_{index}_restore");
+            if original_steps.get(&step) != steps.get(&step) {
+                return Err(format!(
+                    "E_CACHE_REPORT: restore observation for {id} differs from recovery; original {}; final {}",
+                    report["recovery"]["native_steps"]["path"].as_str().unwrap(),
+                    report["native_steps"]["path"].as_str().unwrap(),
+                ));
+            }
+        }
     }
     let mut probes = Vec::new();
     for input in plan["inputs"]
@@ -256,12 +277,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         }
     }
     report["probe_uploads"] = json!(probes);
-    report["native_steps"] = json!(retain_for_upload(
-        root,
-        directory,
-        "native-steps",
-        steps_raw.as_bytes()
-    )?);
     if let Some(backend) = plan.get("backend") {
         let config: super::Backend =
             serde_json::from_value(backend.clone()).map_err(|e| format!("E_CACHE_BACKEND: {e}"))?;

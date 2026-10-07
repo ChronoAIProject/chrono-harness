@@ -197,6 +197,73 @@ fn missing_or_damaged_recovery_evidence_stops_report_production() {
 }
 
 #[test]
+fn changed_restore_observations_stop_transport_and_preserve_both_originals() {
+    for fault in ["missing", "outcome", "key"] {
+        let (root, _, prepared) = recovery_host();
+        let restore = if fault == "key" {
+            json!({"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}})
+        } else {
+            json!({"outcome":"failure","conclusion":"success","outputs":{}})
+        };
+        let initial = json!({"cache_0_restore":restore});
+        assert!(recover(root.path(), &initial).status.success());
+        let recovery = result(root.path());
+        let mut final_steps = initial.clone();
+        final_steps["work"] = json!({"outcome":"failure"});
+        match fault {
+            "missing" => {
+                final_steps
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("cache_0_restore");
+            }
+            "outcome" => final_steps["cache_0_restore"]["outcome"] = json!("success"),
+            "key" => {
+                final_steps["cache_0_restore"]["outputs"]["cache-matched-key"] =
+                    json!("different-key");
+            }
+            _ => unreachable!(),
+        }
+        let output = transport(root.path(), &final_steps);
+        assert!(
+            !output.status.success(),
+            "{fault}: contradictory restore observations were accepted: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(output.stdout.is_empty());
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains("E_CACHE_REPORT"), "{error}");
+        assert!(error.contains("project"), "{error}");
+        assert!(error.contains("restore observation"), "{error}");
+        assert_eq!(result(root.path()), recovery);
+        let upload = root.path().join(".chrono-harness/cache/release-result");
+        for (prefix, expected) in [
+            ("restore-steps-", &initial),
+            ("native-steps-", &final_steps),
+        ] {
+            let originals: Vec<_> = fs::read_dir(&upload)
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .filter(|p| p.file_name().unwrap().to_str().unwrap().starts_with(prefix))
+                .collect();
+            assert_eq!(originals.len(), 1, "{fault}: {prefix}");
+            let raw = fs::read(&originals[0]).unwrap();
+            assert_eq!(&serde_json::from_slice::<Value>(&raw).unwrap(), expected);
+            assert!(error.contains(originals[0].file_name().unwrap().to_str().unwrap()));
+        }
+        assert!(fs::read_dir(&upload).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_str()
+                .unwrap()
+                .starts_with("cache-transport-")
+        }));
+        assert_eq!(fs::read(root.path().join("source")).unwrap(), b"source-one");
+    }
+}
+
+#[test]
 fn successful_or_skipped_restore_keeps_outputs_and_missing_observations_fail() {
     for outcome in [
         Some("success"),
