@@ -87,6 +87,7 @@ dependencies = [
  "chrono-judge-routes",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
