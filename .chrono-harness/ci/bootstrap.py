@@ -101,6 +101,25 @@ def participate(root, config_path, config):
     sys.exit(process["exit_code"] if 0 <= process["exit_code"] <= 255 else 1)
 
 
+def toolchain_environment(config):
+    toolchain = config["rust_toolchain"]
+    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], pass_fds=PASS_FDS, capture_output=True)
+    if probe.returncode:
+        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], pass_fds=PASS_FDS, check=True)
+    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], pass_fds=PASS_FDS, capture_output=True)
+    if fmt_probe.returncode:
+        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], pass_fds=PASS_FDS, check=True)
+    env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
+    if "rust_incremental" in config:
+        env["CARGO_INCREMENTAL"] = "1" if config["rust_incremental"] else "0"
+    versions = {}
+    for tool in ["cargo", "rustc"]:
+        versions[tool] = subprocess.check_output([tool, "--version"], env=env, pass_fds=PASS_FDS, text=True).strip()
+    if not versions["rustc"].startswith("rustc " + toolchain + " "):
+        raise ValueError("unexpected rustc version")
+    return env, versions
+
+
 def main():
     if len(sys.argv) not in (2, 3):
         raise ValueError("usage: bootstrap.py HOST_ROOT [REGISTERED_CONFIG]")
@@ -124,21 +143,7 @@ def main():
             if key in operations:
                 raise ValueError("duplicate operation: " + key)
             operations[key] = action
-    toolchain = config["rust_toolchain"]
-    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], pass_fds=PASS_FDS, capture_output=True)
-    if probe.returncode:
-        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], pass_fds=PASS_FDS, check=True)
-    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], pass_fds=PASS_FDS, capture_output=True)
-    if fmt_probe.returncode:
-        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], pass_fds=PASS_FDS, check=True)
-    env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
-    if "rust_incremental" in config:
-        env["CARGO_INCREMENTAL"] = "1" if config["rust_incremental"] else "0"
-    versions = {}
-    for tool in ["cargo", "rustc"]:
-        versions[tool] = subprocess.check_output([tool, "--version"], env=env, pass_fds=PASS_FDS, text=True).strip()
-    if not versions["rustc"].startswith("rustc " + toolchain + " "):
-        raise ValueError("unexpected rustc version")
+    env, versions = toolchain_environment(config)
     for operation in config["operations"]:
         action = operations[operation]
         subprocess.run([config["tools"][action["tool"]], *action["argv"]], cwd=root, env=env, pass_fds=PASS_FDS, check=True)

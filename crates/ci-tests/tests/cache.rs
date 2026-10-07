@@ -1,5 +1,7 @@
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
+#[path = "startup.rs"]
+mod startup;
 
 fn source(path: &str) -> Value {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))

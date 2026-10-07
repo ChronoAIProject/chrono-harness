@@ -17,9 +17,11 @@
     "timeout_minutes": 45,
     "bootstrap": [
       "/usr/bin/python3",
-      ".chrono-harness/ci/bootstrap.py",
+      ".chrono-harness/ci/bootstrap_shared.py",
       ".",
-      ".chrono-harness/ci/bootstrap-core.json"
+      ".chrono-harness/ci/bootstrap-shared.json",
+      "verify",
+      "core"
     ],
     "runner": ".chrono-harness/bin/chrono-harness",
     "generator": ".chrono-harness/bin/chrono-ci",
@@ -37,9 +39,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/runner/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -51,9 +55,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/instructions/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -65,9 +71,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-ci/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -79,9 +87,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/ci/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -93,9 +103,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-registration/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -107,9 +119,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-filemap/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -121,9 +135,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-routes/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -135,9 +151,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-projects/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -149,9 +167,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/scoped-v1/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -163,9 +183,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-cost/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -177,9 +199,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-mixed/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -191,9 +215,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -205,9 +231,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/inputs/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -219,9 +247,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/distribution/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -233,9 +263,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-cargo/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -247,9 +279,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/worktree/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -261,9 +295,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-units/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -275,9 +311,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-workflow-short/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -289,9 +327,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/workflow-inventory/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -303,9 +343,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/release-build/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -317,9 +359,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/release-build-integration/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -331,9 +375,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/worktree-adoption/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -345,9 +391,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/diagnostics/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -359,9 +407,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/host-bootstrap/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -373,9 +423,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/cache/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -387,9 +439,11 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-core.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "verify",
+        "core"
       ],
       "context_path": ".chrono-harness/state/units/judge-projects-migration/context.json",
       "artifact_directory": ".chrono-harness/state/"
@@ -519,7 +573,16 @@
         "Preserve detector evidence": "evidence-upload",
         "Restore registered cache check.judge-projects-tests.migration": "cache-restore",
         "Save registered cache check.judge-projects-tests.migration": "cache-save",
-        "Recover failed cache restores": "cache-recovery"
+        "Recover failed cache restores": "cache-recovery",
+        "Publish registered startup artifact": "startup-upload",
+        "Download registered startup artifact": "startup-download",
+        "Install registered startup tools": "startup-install",
+        "Restore registered cache detect.runner": "cache-restore",
+        "Save registered cache detect.runner": "cache-save",
+        "Restore registered cache detect.judge-ci": "cache-restore",
+        "Save registered cache detect.judge-ci": "cache-save",
+        "Restore registered cache detect.worktree": "cache-restore",
+        "Save registered cache detect.worktree": "cache-save"
       },
       "summary_environment": "GITHUB_STEP_SUMMARY",
       "comparisons": {
@@ -564,6 +627,18 @@
           "reference_category": "canonical-check",
           "factor": 1.0,
           "minimum_seconds": 10
+        },
+        "startup-download-vs-check": {
+          "category": "startup-download",
+          "reference_category": "canonical-check",
+          "factor": 1.0,
+          "minimum_seconds": 30
+        },
+        "startup-install-vs-check": {
+          "category": "startup-install",
+          "reference_category": "canonical-check",
+          "factor": 1.0,
+          "minimum_seconds": 30
         }
       }
     }
@@ -575,9 +650,10 @@
       "timeout_minutes": 45,
       "bootstrap": [
         "/usr/bin/python3",
-        ".chrono-harness/ci/bootstrap.py",
+        ".chrono-harness/ci/bootstrap_shared.py",
         ".",
-        ".chrono-harness/ci/bootstrap-detector.json"
+        ".chrono-harness/ci/bootstrap-shared.json",
+        "produce"
       ],
       "sparse_checkout": [
         ".chrono-harness/",
@@ -587,6 +663,338 @@
         ".gitignore"
       ],
       "evidence_directory": ".chrono-harness/state/"
+    },
+    "startup": {
+      "schema": "chrono-shared-startup/v1",
+      "directory": ".chrono-harness/startup/",
+      "artifact": "chrono-startup",
+      "download_action": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+      "consumers": {
+        "unit_runner": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_runner"
+          ]
+        },
+        "unit_instructions": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_instructions"
+          ]
+        },
+        "unit_judge-ci": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-ci"
+          ]
+        },
+        "unit_ci": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_ci"
+          ]
+        },
+        "unit_judge-registration": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-registration"
+          ]
+        },
+        "unit_judge-filemap": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-filemap"
+          ]
+        },
+        "unit_judge-routes": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-routes"
+          ]
+        },
+        "unit_judge-projects": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-projects"
+          ]
+        },
+        "unit_scoped-v1": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_scoped-v1"
+          ]
+        },
+        "unit_judge-cost": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-cost"
+          ]
+        },
+        "unit_judge-mixed": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-mixed"
+          ]
+        },
+        "unit_judge-workflow": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow"
+          ]
+        },
+        "unit_inputs": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_inputs"
+          ]
+        },
+        "unit_distribution": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_distribution"
+          ]
+        },
+        "unit_judge-cargo": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-cargo"
+          ]
+        },
+        "unit_worktree": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_worktree"
+          ]
+        },
+        "unit_judge-workflow-units": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow-units"
+          ]
+        },
+        "unit_judge-workflow-short": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow-short"
+          ]
+        },
+        "unit_workflow-inventory": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_workflow-inventory"
+          ]
+        },
+        "unit_release-build": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_release-build"
+          ]
+        },
+        "unit_release-build-integration": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_release-build-integration"
+          ]
+        },
+        "unit_worktree-adoption": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_worktree-adoption"
+          ]
+        },
+        "unit_diagnostics": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_diagnostics"
+          ]
+        },
+        "unit_host-bootstrap": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_host-bootstrap"
+          ]
+        },
+        "unit_cache": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_cache"
+          ]
+        },
+        "unit_judge-projects-migration": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-projects-migration"
+          ]
+        },
+        "aggregate": {
+          "need": "Run the current candidate canonical check and its registered preparation.",
+          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "install": [
+            "/usr/bin/python3",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "aggregate"
+          ]
+        }
+      }
     }
   },
   "persistent_cache": {
@@ -597,8 +1005,8 @@
     "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
     "jobs": {
       "detect": {
-        "need": "The detector runs chrono-ci detect from its own registered source bootstrap.",
-        "output_use": "Restore only the ci project target before build.ci in bootstrap-detector.json; the current build and complete Git DELTA detection still execute.",
+        "need": "Build the current candidate detector and shared startup tools once.",
+        "output_use": "Restore the registered core bootstrap targets, build them and publish startup binaries for the explicitly registered consumers.",
         "prepare": [
           "/usr/bin/python3",
           ".chrono-harness/ci/bootstrap.py",
@@ -607,82 +1015,60 @@
         ],
         "consumer": "check.detect",
         "caches": [
-          "detect.ci"
+          "detect.ci",
+          "detect.judge-ci",
+          "detect.runner",
+          "detect.worktree"
         ],
         "save_after_bootstrap": [
-          "detect.ci"
+          "detect.ci",
+          "detect.judge-ci",
+          "detect.runner",
+          "detect.worktree"
         ],
         "save_caches": [
-          "detect.ci"
-        ]
-      },
-      "aggregate": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
-        ],
-        "consumer": "check.aggregate",
-        "caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ],
-        "save_after_bootstrap": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ],
-        "save_caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+          "detect.ci",
+          "detect.judge-ci",
+          "detect.runner",
+          "detect.worktree"
         ]
       },
       "unit_runner": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_runner",
         "caches": [
-          "check.ci",
-          "check.judge-ci",
           "check.runner",
-          "check.runner-tests",
-          "check.worktree"
+          "check.runner-tests"
         ],
         "save_caches": [
-          "check.runner-tests"
+          "check.runner-tests",
+          "check.runner"
         ]
       },
       "unit_instructions": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_instructions",
         "caches": [
-          "check.ci",
           "check.instructions",
-          "check.instructions-tests",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+          "check.instructions-tests"
         ],
         "save_caches": [
           "check.instructions",
@@ -690,34 +1076,36 @@
         ]
       },
       "unit_judge-ci": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-ci",
         "caches": [
-          "check.ci",
           "check.judge-ci",
-          "check.judge-ci-tests",
-          "check.runner",
-          "check.worktree"
+          "check.judge-ci-tests"
         ],
         "save_caches": [
-          "check.judge-ci-tests"
+          "check.judge-ci-tests",
+          "check.judge-ci"
         ]
       },
       "unit_ci": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_ci",
         "caches": [
@@ -729,26 +1117,26 @@
           "check.worktree"
         ],
         "save_caches": [
-          "check.ci-tests"
+          "check.ci-tests",
+          "check.ci"
         ]
       },
       "unit_judge-registration": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-registration",
         "caches": [
-          "check.ci",
-          "check.judge-ci",
           "check.judge-registration",
           "check.judge-registration-tests",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-registration",
@@ -756,25 +1144,24 @@
         ]
       },
       "unit_judge-filemap": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-filemap",
         "caches": [
-          "check.ci",
-          "check.judge-ci",
           "check.judge-filemap",
           "check.judge-filemap-tests",
           "check.judge-projects",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-filemap",
@@ -782,22 +1169,20 @@
         ]
       },
       "unit_judge-routes": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-routes",
         "caches": [
-          "check.ci",
-          "check.judge-ci",
           "check.judge-routes",
-          "check.judge-routes-tests",
-          "check.runner",
-          "check.worktree"
+          "check.judge-routes-tests"
         ],
         "save_caches": [
           "check.judge-routes",
@@ -805,13 +1190,15 @@
         ]
       },
       "unit_judge-projects": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-projects",
         "caches": [
@@ -822,51 +1209,31 @@
           "check.judge-projects-tests",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-projects",
           "check.judge-projects-tests"
         ]
       },
-      "unit_scoped-v1": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
-        ],
-        "consumer": "check.unit_scoped-v1",
-        "caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ],
-        "save_caches": []
-      },
       "unit_judge-cost": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-cost",
         "caches": [
-          "check.ci",
-          "check.judge-ci",
           "check.judge-cost",
           "check.judge-cost-tests",
           "check.judge-filemap",
           "check.judge-registration",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-cost",
@@ -874,25 +1241,24 @@
         ]
       },
       "unit_judge-mixed": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-mixed",
         "caches": [
-          "check.ci",
-          "check.judge-ci",
           "check.judge-cost",
           "check.judge-filemap",
           "check.judge-mixed",
           "check.judge-mixed-tests",
           "check.judge-registration",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-mixed",
@@ -900,19 +1266,20 @@
         ]
       },
       "unit_judge-workflow": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-workflow",
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-ci",
           "check.judge-cost",
           "check.judge-filemap",
           "check.judge-mixed",
@@ -930,20 +1297,20 @@
         ]
       },
       "unit_inputs": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_inputs",
         "caches": [
-          "check.ci",
           "check.inputs",
           "check.inputs-tests",
-          "check.judge-ci",
           "check.judge-cost",
           "check.judge-filemap",
           "check.judge-mixed",
@@ -951,8 +1318,7 @@
           "check.judge-registration",
           "check.judge-routes",
           "check.judge-workflow",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.inputs",
@@ -960,22 +1326,20 @@
         ]
       },
       "unit_distribution": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_distribution",
         "caches": [
-          "check.ci",
           "check.distribution",
-          "check.distribution-tests",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+          "check.distribution-tests"
         ],
         "save_caches": [
           "check.distribution",
@@ -983,17 +1347,18 @@
         ]
       },
       "unit_judge-cargo": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-cargo",
         "caches": [
-          "check.ci",
           "check.judge-cargo",
           "check.judge-cargo-tests",
           "check.judge-ci",
@@ -1004,8 +1369,7 @@
           "check.judge-registration",
           "check.judge-routes",
           "check.judge-workflow",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-cargo",
@@ -1013,40 +1377,43 @@
         ]
       },
       "unit_worktree": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_worktree",
         "caches": [
           "check.ci",
-          "check.judge-ci",
           "check.runner",
           "check.worktree",
           "check.worktree-tests"
         ],
         "save_caches": [
-          "check.worktree-tests"
+          "check.worktree-tests",
+          "check.worktree"
         ]
       },
       "unit_judge-workflow-units": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-workflow-units",
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-ci",
           "check.judge-cost",
           "check.judge-filemap",
           "check.judge-mixed",
@@ -1063,19 +1430,20 @@
         ]
       },
       "unit_judge-workflow-short": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-workflow-short",
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-ci",
           "check.judge-cost",
           "check.judge-filemap",
           "check.judge-mixed",
@@ -1091,74 +1459,37 @@
           "check.judge-workflow-tests.judge-workflow-short"
         ]
       },
-      "unit_workflow-inventory": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
-        ],
-        "consumer": "check.unit_workflow-inventory",
-        "caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ],
-        "save_caches": []
-      },
-      "unit_release-build": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
-        ],
-        "consumer": "check.unit_release-build",
-        "caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ],
-        "save_caches": []
-      },
       "unit_release-build-integration": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_release-build-integration",
         "caches": [
-          "check.ci",
-          "check.distribution",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+          "check.distribution"
         ],
         "save_caches": []
       },
       "unit_worktree-adoption": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_worktree-adoption",
         "caches": [
           "check.ci",
-          "check.judge-ci",
           "check.runner",
           "check.worktree",
           "check.worktree-tests.worktree-adoption"
@@ -1168,63 +1499,41 @@
         ]
       },
       "unit_diagnostics": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_diagnostics",
         "caches": [
-          "check.ci",
           "check.diagnostics",
-          "check.diagnostics-tests",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+          "check.diagnostics-tests"
         ],
         "save_caches": [
           "check.diagnostics",
           "check.diagnostics-tests"
         ]
       },
-      "unit_host-bootstrap": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
-        "prepare": [
-          "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
-          ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
-        ],
-        "consumer": "check.unit_host-bootstrap",
-        "caches": [
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
-        ],
-        "save_caches": []
-      },
       "unit_cache": {
-        "need": "This existing CI job rebuilds its registered Cargo outputs on a fresh macos-26 runner.",
-        "output_use": "Restore only the listed project targets before bootstrap and the unchanged harness check; Cargo checks fingerprints and the job still executes its selected judgments and tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_cache",
         "caches": [
           "check.cache",
-          "check.cache-tests",
-          "check.ci",
-          "check.judge-ci",
-          "check.runner",
-          "check.worktree"
+          "check.cache-tests"
         ],
         "save_caches": [
           "check.cache",
@@ -1232,13 +1541,15 @@
         ]
       },
       "unit_judge-projects-migration": {
-        "need": "The registered historical-host migration group executes the actual current CI plan in an isolated native checkout.",
-        "output_use": "Restore this group's explicitly registered compilation outputs before bootstrap, inventory and the unchanged migration tests.",
+        "need": "This job executes the explicitly referenced build and test operations.",
+        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/usr/bin/python3",
-          ".chrono-harness/ci/bootstrap.py",
+          ".chrono-harness/ci/bootstrap_shared.py",
           ".",
-          ".chrono-harness/ci/bootstrap-cache.json"
+          ".chrono-harness/ci/bootstrap-shared.json",
+          "verify",
+          "cache"
         ],
         "consumer": "check.unit_judge-projects-migration",
         "caches": [
@@ -1249,8 +1560,7 @@
           "check.judge-projects-tests.migration",
           "check.judge-registration",
           "check.judge-routes",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-projects-tests.migration"

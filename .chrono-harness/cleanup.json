@@ -154,6 +154,10 @@
     {
       "path": "crates/cache-tests/target/",
       "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/startup/",
+      "disposition": "dispose"
     }
   ]
 }

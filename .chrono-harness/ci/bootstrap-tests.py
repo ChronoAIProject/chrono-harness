@@ -309,4 +309,6 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    from bootstrap_shared_tests import SharedStartup
+
     unittest.main()

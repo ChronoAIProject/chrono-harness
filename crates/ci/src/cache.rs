@@ -159,6 +159,7 @@ pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), S
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn project(
     c: Option<&Config>,
     job: &str,
@@ -166,6 +167,7 @@ pub(crate) fn project(
     before: &str,
     work: &str,
     existing_work_id: Option<&str>,
+    existing_bootstrap_id: Option<&str>,
     after: Option<&str>,
 ) -> Result<String, String> {
     let Some(c) = c else {
@@ -175,6 +177,7 @@ pub(crate) fn project(
         return Ok(body);
     };
     let work_id = existing_work_id.unwrap_or("chrono_cache_work");
+    let bootstrap_id = existing_bootstrap_id.unwrap_or("chrono_cache_bootstrap");
     if before == work && !consumer.save_after_bootstrap.is_empty() {
         return Err("bootstrap cache saving requires a separate original bootstrap step".into());
     }
@@ -214,7 +217,7 @@ pub(crate) fn project(
             continue;
         }
         let producer_step = if consumer.save_after_bootstrap.contains(id) {
-            "chrono_cache_bootstrap"
+            bootstrap_id
         } else {
             work_id
         };
@@ -222,9 +225,9 @@ pub(crate) fn project(
     }
     prefix.push_str(&format!("      - name: Recover failed cache restores\n        if: ${{{{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_RESTORE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} recover --host-root . --config {} --plan {} --steps-env CHRONO_CACHE_RESTORE_STEPS\n", shell(&c.program), shell(&c.config), shell(&plan_path)));
     let bootstrap_arg = if consumer.save_after_bootstrap.is_empty() {
-        ""
+        String::new()
     } else {
-        " --bootstrap chrono_cache_bootstrap"
+        format!(" --bootstrap {bootstrap_id}")
     };
     let saves_arg = consumer
         .save_caches
@@ -251,7 +254,7 @@ pub(crate) fn project(
     } else {
         body
     };
-    if !consumer.save_after_bootstrap.is_empty() {
+    if !consumer.save_after_bootstrap.is_empty() && existing_bootstrap_id.is_none() {
         body = body.replacen(
             &marker,
             &format!("{marker}        id: chrono_cache_bootstrap\n"),

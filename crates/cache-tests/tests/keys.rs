@@ -1160,7 +1160,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     // observations fixed; this contract fixture needs no compiler or SDK probes.
     for (id, input) in config["inputs"].as_object_mut().unwrap() {
         if input["path"] != ".chrono-harness/ci/check.json"
-            && input["path"] != ".chrono-harness/ci/bootstrap-detector.json"
+            && input["path"] != ".chrono-harness/ci/bootstrap-core.json"
         {
             *input = json!({"kind":"literal","value":{"fixed_input":id}});
         }
@@ -1181,7 +1181,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         .retain(|id, _| consumers.contains(&id.as_str()));
     let mut files = std::collections::BTreeSet::from([
         ".chrono-harness/ci/check.json".to_string(),
-        ".chrono-harness/ci/bootstrap-detector.json".to_string(),
+        ".chrono-harness/ci/bootstrap-core.json".to_string(),
     ]);
     for refs in config["consumer_operations"].as_object().unwrap().values() {
         for source in refs.as_array().unwrap() {
@@ -1202,7 +1202,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
 }
 
 #[test]
-fn host_detector_cache_keys_ignore_check_policy_but_bind_detector_bootstrap() {
+fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
     let (root, config) = host_cache_fixture(&["check.detect"]);
     let first = plan(root.path(), &config, "check.detect").unwrap();
     let checks = root.path().join(".chrono-harness/ci/check.json");
@@ -1218,9 +1218,7 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_detector_bootstrap() {
         first["caches"],
         plan(root.path(), &config, "check.detect").unwrap()["caches"]
     );
-    let bootstrap = root
-        .path()
-        .join(".chrono-harness/ci/bootstrap-detector.json");
+    let bootstrap = root.path().join(".chrono-harness/ci/bootstrap-core.json");
     let mut changed: Value = serde_json::from_slice(&fs::read(&bootstrap).unwrap()).unwrap();
     changed["rust_incremental"] = json!(!changed["rust_incremental"].as_bool().unwrap());
     fs::write(bootstrap, serde_json::to_vec(&changed).unwrap()).unwrap();
@@ -1233,7 +1231,7 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_detector_bootstrap() {
 
 #[test]
 fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() {
-    let consumers = ["check.aggregate", "check.unit_ci"];
+    let consumers = ["check.unit_runner", "check.unit_ci"];
     let (root, config) = host_cache_fixture(&consumers);
     let checks = root.path().join(".chrono-harness/ci/check.json");
     let original: Value = serde_json::from_slice(&fs::read(&checks).unwrap()).unwrap();

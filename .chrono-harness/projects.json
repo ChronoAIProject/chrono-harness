@@ -2064,6 +2064,365 @@
             ".",
             ".chrono-harness/ci/bootstrap-detector.json"
           ]
+        },
+        "shared-produce": {
+          "operation": "host.bootstrap-shared-produce",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "produce"
+          ]
+        },
+        "shared-verify-core": {
+          "operation": "host.bootstrap-shared-verify-core",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "verify",
+            "core"
+          ]
+        },
+        "shared-verify-cache": {
+          "operation": "host.bootstrap-shared-verify-cache",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "verify",
+            "cache"
+          ]
+        },
+        "shared-install-unit_runner": {
+          "operation": "host.bootstrap-shared-install-unit_runner",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_runner"
+          ]
+        },
+        "shared-install-unit_instructions": {
+          "operation": "host.bootstrap-shared-install-unit_instructions",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_instructions"
+          ]
+        },
+        "shared-install-unit_judge-ci": {
+          "operation": "host.bootstrap-shared-install-unit_judge-ci",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-ci"
+          ]
+        },
+        "shared-install-unit_ci": {
+          "operation": "host.bootstrap-shared-install-unit_ci",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_ci"
+          ]
+        },
+        "shared-install-unit_judge-registration": {
+          "operation": "host.bootstrap-shared-install-unit_judge-registration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-registration"
+          ]
+        },
+        "shared-install-unit_judge-filemap": {
+          "operation": "host.bootstrap-shared-install-unit_judge-filemap",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-filemap"
+          ]
+        },
+        "shared-install-unit_judge-routes": {
+          "operation": "host.bootstrap-shared-install-unit_judge-routes",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-routes"
+          ]
+        },
+        "shared-install-unit_judge-projects": {
+          "operation": "host.bootstrap-shared-install-unit_judge-projects",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-projects"
+          ]
+        },
+        "shared-install-unit_scoped-v1": {
+          "operation": "host.bootstrap-shared-install-unit_scoped-v1",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_scoped-v1"
+          ]
+        },
+        "shared-install-unit_judge-cost": {
+          "operation": "host.bootstrap-shared-install-unit_judge-cost",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-cost"
+          ]
+        },
+        "shared-install-unit_judge-mixed": {
+          "operation": "host.bootstrap-shared-install-unit_judge-mixed",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-mixed"
+          ]
+        },
+        "shared-install-unit_judge-workflow": {
+          "operation": "host.bootstrap-shared-install-unit_judge-workflow",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow"
+          ]
+        },
+        "shared-install-unit_inputs": {
+          "operation": "host.bootstrap-shared-install-unit_inputs",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_inputs"
+          ]
+        },
+        "shared-install-unit_distribution": {
+          "operation": "host.bootstrap-shared-install-unit_distribution",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_distribution"
+          ]
+        },
+        "shared-install-unit_judge-cargo": {
+          "operation": "host.bootstrap-shared-install-unit_judge-cargo",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-cargo"
+          ]
+        },
+        "shared-install-unit_worktree": {
+          "operation": "host.bootstrap-shared-install-unit_worktree",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_worktree"
+          ]
+        },
+        "shared-install-unit_judge-workflow-units": {
+          "operation": "host.bootstrap-shared-install-unit_judge-workflow-units",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow-units"
+          ]
+        },
+        "shared-install-unit_judge-workflow-short": {
+          "operation": "host.bootstrap-shared-install-unit_judge-workflow-short",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow-short"
+          ]
+        },
+        "shared-install-unit_workflow-inventory": {
+          "operation": "host.bootstrap-shared-install-unit_workflow-inventory",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_workflow-inventory"
+          ]
+        },
+        "shared-install-unit_release-build": {
+          "operation": "host.bootstrap-shared-install-unit_release-build",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_release-build"
+          ]
+        },
+        "shared-install-unit_release-build-integration": {
+          "operation": "host.bootstrap-shared-install-unit_release-build-integration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_release-build-integration"
+          ]
+        },
+        "shared-install-unit_worktree-adoption": {
+          "operation": "host.bootstrap-shared-install-unit_worktree-adoption",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_worktree-adoption"
+          ]
+        },
+        "shared-install-unit_diagnostics": {
+          "operation": "host.bootstrap-shared-install-unit_diagnostics",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_diagnostics"
+          ]
+        },
+        "shared-install-unit_host-bootstrap": {
+          "operation": "host.bootstrap-shared-install-unit_host-bootstrap",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_host-bootstrap"
+          ]
+        },
+        "shared-install-unit_cache": {
+          "operation": "host.bootstrap-shared-install-unit_cache",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_cache"
+          ]
+        },
+        "shared-install-unit_judge-projects-migration": {
+          "operation": "host.bootstrap-shared-install-unit_judge-projects-migration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-projects-migration"
+          ]
+        },
+        "shared-install-aggregate": {
+          "operation": "host.bootstrap-shared-install-aggregate",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "aggregate"
+          ]
         }
       }
     },

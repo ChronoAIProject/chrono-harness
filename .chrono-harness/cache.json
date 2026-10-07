@@ -896,11 +896,6 @@
       "path": ".chrono-harness/release/build.json",
       "presence": "present"
     },
-    "bootstrap.detector-config": {
-      "kind": "file",
-      "path": ".chrono-harness/ci/bootstrap-detector.json",
-      "presence": "present"
-    },
     "check.environment": {
       "kind": "json-value",
       "path": ".chrono-harness/ci/check.json",
@@ -1123,31 +1118,12 @@
       "owner": "ci",
       "producer": "build.ci",
       "consumers": [
-        "check.aggregate",
-        "check.unit_cache",
         "check.unit_ci",
-        "check.unit_diagnostics",
-        "check.unit_distribution",
-        "check.unit_host-bootstrap",
-        "check.unit_inputs",
-        "check.unit_instructions",
-        "check.unit_judge-cargo",
-        "check.unit_judge-ci",
-        "check.unit_judge-cost",
-        "check.unit_judge-filemap",
-        "check.unit_judge-mixed",
         "check.unit_judge-projects",
         "check.unit_judge-projects-migration",
-        "check.unit_judge-registration",
-        "check.unit_judge-routes",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units",
-        "check.unit_release-build",
-        "check.unit_release-build-integration",
-        "check.unit_runner",
-        "check.unit_scoped-v1",
-        "check.unit_workflow-inventory",
         "check.unit_worktree",
         "check.unit_worktree-adoption"
       ],
@@ -1207,33 +1183,11 @@
       "owner": "judge-ci",
       "producer": "build.judge-ci",
       "consumers": [
-        "check.aggregate",
-        "check.unit_cache",
         "check.unit_ci",
-        "check.unit_diagnostics",
-        "check.unit_distribution",
-        "check.unit_host-bootstrap",
-        "check.unit_inputs",
-        "check.unit_instructions",
         "check.unit_judge-cargo",
         "check.unit_judge-ci",
-        "check.unit_judge-cost",
-        "check.unit_judge-filemap",
-        "check.unit_judge-mixed",
         "check.unit_judge-projects",
-        "check.unit_judge-projects-migration",
-        "check.unit_judge-registration",
-        "check.unit_judge-routes",
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units",
-        "check.unit_release-build",
-        "check.unit_release-build-integration",
-        "check.unit_runner",
-        "check.unit_scoped-v1",
-        "check.unit_workflow-inventory",
-        "check.unit_worktree",
-        "check.unit_worktree-adoption"
+        "check.unit_judge-projects-migration"
       ],
       "artifacts": [
         "judge-ci.target"
@@ -1289,31 +1243,19 @@
       "owner": "runner",
       "producer": "build.runner",
       "consumers": [
-        "check.aggregate",
-        "check.unit_cache",
         "check.unit_ci",
-        "check.unit_diagnostics",
-        "check.unit_distribution",
-        "check.unit_host-bootstrap",
         "check.unit_inputs",
-        "check.unit_instructions",
         "check.unit_judge-cargo",
-        "check.unit_judge-ci",
         "check.unit_judge-cost",
         "check.unit_judge-filemap",
         "check.unit_judge-mixed",
         "check.unit_judge-projects",
         "check.unit_judge-projects-migration",
         "check.unit_judge-registration",
-        "check.unit_judge-routes",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units",
-        "check.unit_release-build",
-        "check.unit_release-build-integration",
         "check.unit_runner",
-        "check.unit_scoped-v1",
-        "check.unit_workflow-inventory",
         "check.unit_worktree",
         "check.unit_worktree-adoption"
       ],
@@ -1359,31 +1301,10 @@
       "owner": "worktree",
       "producer": "build.worktree",
       "consumers": [
-        "check.aggregate",
-        "check.unit_cache",
         "check.unit_ci",
-        "check.unit_diagnostics",
-        "check.unit_distribution",
-        "check.unit_host-bootstrap",
-        "check.unit_inputs",
-        "check.unit_instructions",
-        "check.unit_judge-cargo",
-        "check.unit_judge-ci",
-        "check.unit_judge-cost",
-        "check.unit_judge-filemap",
-        "check.unit_judge-mixed",
-        "check.unit_judge-projects",
-        "check.unit_judge-projects-migration",
-        "check.unit_judge-registration",
-        "check.unit_judge-routes",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units",
-        "check.unit_release-build",
-        "check.unit_release-build-integration",
-        "check.unit_runner",
-        "check.unit_scoped-v1",
-        "check.unit_workflow-inventory",
         "check.unit_worktree",
         "check.unit_worktree-adoption"
       ],
@@ -6515,7 +6436,7 @@
         "runner.manifest",
         "runner.lock",
         "bootstrap.script",
-        "bootstrap.detector-config"
+        "bootstrap.config"
       ],
       "source_inputs": [
         "ci.sources"
@@ -6577,16 +6498,162 @@
         "judge-projects-tests.sources"
       ],
       "restore": "compatible"
+    },
+    "detect.runner": {
+      "owner": "runner",
+      "producer": "build.runner",
+      "consumers": [
+        "check.detect"
+      ],
+      "artifacts": [
+        "runner.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "macos.sdk",
+        "macos.linker",
+        "macos.cc",
+        "macos.cargo.home-config",
+        "macos.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "runner.manifest",
+        "runner.lock",
+        "bootstrap.script",
+        "bootstrap.config"
+      ],
+      "source_inputs": [
+        "runner.sources"
+      ],
+      "restore": "compatible"
+    },
+    "detect.judge-ci": {
+      "owner": "judge-ci",
+      "producer": "build.judge-ci",
+      "consumers": [
+        "check.detect"
+      ],
+      "artifacts": [
+        "judge-ci.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "macos.sdk",
+        "macos.linker",
+        "macos.cc",
+        "macos.cargo.home-config",
+        "macos.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "judge-ci.manifest",
+        "judge-ci.lock",
+        "judge-filemap.manifest",
+        "judge-filemap.lock",
+        "judge-mixed.manifest",
+        "judge-mixed.lock",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-registration.manifest",
+        "judge-registration.lock",
+        "judge-routes.manifest",
+        "judge-routes.lock",
+        "runner.manifest",
+        "runner.lock",
+        "bootstrap.script",
+        "bootstrap.config"
+      ],
+      "source_inputs": [
+        "judge-ci.sources"
+      ],
+      "restore": "compatible"
+    },
+    "detect.worktree": {
+      "owner": "worktree",
+      "producer": "build.worktree",
+      "consumers": [
+        "check.detect"
+      ],
+      "artifacts": [
+        "worktree.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "macos.sdk",
+        "macos.linker",
+        "macos.cc",
+        "macos.cargo.home-config",
+        "macos.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "judge-filemap.manifest",
+        "judge-filemap.lock",
+        "judge-mixed.manifest",
+        "judge-mixed.lock",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-registration.manifest",
+        "judge-registration.lock",
+        "judge-routes.manifest",
+        "judge-routes.lock",
+        "judge-workflow.manifest",
+        "judge-workflow.lock",
+        "runner.manifest",
+        "runner.lock",
+        "worktree.manifest",
+        "worktree.lock",
+        "bootstrap.script",
+        "bootstrap.config"
+      ],
+      "source_inputs": [
+        "worktree.sources"
+      ],
+      "restore": "compatible"
     }
   },
   "consumer_operations": {
     "check.detect": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-detector.json",
-        "pointer": "/operations"
-      }
-    ],
-    "check.aggregate": [
       {
         "registry": ".chrono-harness/ci/bootstrap-core.json",
         "pointer": "/operations"
@@ -6594,19 +6661,11 @@
     ],
     "check.unit_runner": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:runner-tests/operations"
       }
     ],
     "check.unit_instructions": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:instructions-tests/operations"
@@ -6614,19 +6673,11 @@
     ],
     "check.unit_judge-ci": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-ci-tests/operations"
       }
     ],
     "check.unit_ci": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:ci-tests/operations"
@@ -6634,19 +6685,11 @@
     ],
     "check.unit_judge-registration": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-registration-tests/operations"
       }
     ],
     "check.unit_judge-filemap": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-filemap-tests/operations"
@@ -6654,39 +6697,17 @@
     ],
     "check.unit_judge-routes": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-routes-tests/operations"
       }
     ],
     "check.unit_judge-projects": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-projects-tests/operations"
       }
     ],
-    "check.unit_scoped-v1": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
-        "registry": ".chrono-harness/FILEMAP.json",
-        "pointer": "/execution_plans/test:scoped-v1-tests/operations"
-      }
-    ],
     "check.unit_judge-cost": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-cost-tests/operations"
@@ -6694,19 +6715,11 @@
     ],
     "check.unit_judge-mixed": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-mixed-tests/operations"
       }
     ],
     "check.unit_judge-workflow": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-workflow-tests/operations"
@@ -6714,19 +6727,11 @@
     ],
     "check.unit_inputs": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:inputs-tests/operations"
       }
     ],
     "check.unit_distribution": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:distribution-tests/operations"
@@ -6734,19 +6739,11 @@
     ],
     "check.unit_judge-cargo": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-cargo-tests/operations"
       }
     ],
     "check.unit_worktree": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:worktree-tests/operations"
@@ -6754,49 +6751,17 @@
     ],
     "check.unit_judge-workflow-units": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:workflow-units/operations"
       }
     ],
     "check.unit_judge-workflow-short": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:workflow-short/operations"
       }
     ],
-    "check.unit_workflow-inventory": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
-        "registry": ".chrono-harness/FILEMAP.json",
-        "pointer": "/execution_plans/test:workflow-inventory-tests/operations"
-      }
-    ],
-    "check.unit_release-build": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
-        "registry": ".chrono-harness/FILEMAP.json",
-        "pointer": "/execution_plans/test:release-build-tests/operations"
-      }
-    ],
     "check.unit_release-build-integration": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:release-build-integration/operations"
@@ -6804,39 +6769,17 @@
     ],
     "check.unit_worktree-adoption": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:worktree-adoption/operations"
       }
     ],
     "check.unit_diagnostics": [
       {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:diagnostics-tests/operations"
       }
     ],
-    "check.unit_host-bootstrap": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
-      {
-        "registry": ".chrono-harness/FILEMAP.json",
-        "pointer": "/execution_plans/test:host-bootstrap-tests/operations"
-      }
-    ],
     "check.unit_cache": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:cache-tests/operations"
@@ -7239,10 +7182,6 @@
       }
     ],
     "check.unit_judge-projects-migration": [
-      {
-        "registry": ".chrono-harness/ci/bootstrap-core.json",
-        "pointer": "/operations"
-      },
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:judge-projects-migration/operations"

@@ -294,3 +294,15 @@ Check, release build, release verification and platform declarations use separat
 compatibility domains. This finite registration does not establish complete
 compiler backend, SDK library, build-script or ambient configuration closure.
 Current native adoption and missing evidence remain visible in the coverage map.
+
+With explicit shared startup adoption, the detector builds the host core tools
+once and publishes them to registered consumers (see [startup transfer](ci-units.md)).
+Only actual remaining build/test producers retain target cache subscriptions;
+aggregate and script-only consumers do not restore startup compilation targets.
+The detector is the sole saver for its separate `detect.*` startup caches; actual
+unit producers save their `check.*` caches. Detector compatibility excludes check
+policy inputs that its bootstrap does not consume. Imported startup verification is not a compilation
+producer and does not grant `save_after_bootstrap`. Original producer reports and
+explicit imported provenance remain available in each consumer's evidence; startup
+binaries stay outside evidence uploads. Transfer costs are measured separately,
+and a source-bound artifact is not proof of complete build input provenance.

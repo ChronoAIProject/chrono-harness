@@ -336,13 +336,40 @@ paths above are this Rust product host's choices; a released-binary consumer can
 materialize just its host registration/installer/workflow paths. The detector
 never discovers host SDKs, imports, directories or language boundaries.
 
-This host's detector bootstrap registers only `build.ci` and installs `chrono-ci`,
-the executable called by its detection step. Cargo builds that project's library
-dependencies in its own target. The detector has no standalone runner, judge-ci
-or worktree executable consumer. Unit and collection jobs use the separate core
-bootstrap because their canonical check invokes those tools, including the
-registered worktree lifecycle participant. Both recipes use the same bootstrap
-implementation and existing project actions; the provider does not infer them.
+This host's detector produces the registered core startup tools for the unit and
+collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
+the existing core profile once and publishes all five installed tools. Consumer
+jobs validate and install the selected profiles, then verify them at the original
+cache/core preparation points. Their canonical checks and business build plans
+remain unchanged. Local and release bootstraps keep their registered source builds.
+
+Optional `job_gating.startup` uses schema `chrono-shared-startup/v1`. It declares a
+literal host `directory`, artifact name, pinned `download_action`, and `consumers`
+keyed by explicit job IDs. Each consumer supplies nonempty `need`, `output_use` and
+literal `install` argv. The existing detector bootstrap is the sole producer and
+writes an opaque `binding` to `GITHUB_OUTPUT`; no additional job is generated.
+The provider uploads the declared directory before detection, and carries the
+producer binding and actual upload artifact ID as detector outputs. Consumers
+download that ID, including when only failed jobs are rerun in a later attempt.
+Empty artifact IDs cannot trigger download-all. The installer must reject a missing
+binding or missing transfer; it has no success exemption. Transfer directories must
+not overlap evidence roots, preventing binaries from being copied into every
+ordinary evidence archive. Unlisted consumers and configurations without startup
+keep their existing behavior. Hosts own compatibility and install checks; the
+provider infers no language, layout or platform compatibility.
+
+The host Python implementation binds a clean primary source commit/tree, platform,
+configuration/profile bytes, original bootstrap reports, and file digests, sizes
+and executable modes. It validates the complete transfer before replacing tools,
+restores executable modes lost by artifact transport, and retains exact producer
+reports beside explicit import provenance. Installation is not a local build.
+Point-of-use verification rejects installed drift. Missing/changed bindings,
+source/config/platform mismatches, symlinks, damaged payloads and failed publication
+stop the job. This covers registered startup outputs, not complete compiler/SDK
+input closure, adversarial attestation, linked-worktree ownership or power-loss
+atomicity across all installed files. Native transfer and rerun acceptance remain
+separate from fixture validation. Startup upload/download/install steps have
+explicit resource categories; their observed costs count toward evaluating reuse.
 
 PR endpoints are event base/head. Default push endpoints are the complete event
 before/after, including multiple commits. Explicit `push_baselines` and branch

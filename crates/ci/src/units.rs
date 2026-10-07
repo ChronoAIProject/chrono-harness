@@ -527,6 +527,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             "Bootstrap registered tools",
             "Canonical harness check",
             None,
+            None,
             Some("Preserve actual check evidence"),
         )?;
         outputs.insert(w.workflow_path.clone(), rendered);
@@ -633,6 +634,7 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     };
     if !existing && c.job_gating.is_none() && c.collection.schema == "chrono-github-ci/v4" {
         c.job_gating = Some(super::gating::Config {
+            startup: None,
             schema: super::gating::SCHEMA.into(),
             detector: super::gating::Detector {
                 evidence_directory: None,

@@ -367,6 +367,12 @@
       "owner": "cache-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/startup/",
+      "owner": "host-bootstrap",
+      "kind": "startup-transfer",
+      "tracked": false
     }
   ],
   "environment": {

@@ -5321,6 +5321,94 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": "crates/ci/src/startup.rs",
+      "owner": "ci",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/startup.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap_shared.py",
+      "owner": "host-bootstrap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap_shared_tests.py",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-shared.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

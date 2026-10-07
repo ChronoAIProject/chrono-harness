@@ -14,6 +14,17 @@ pub const NEEDS_ENV: &str = "CHRONO_CI_NEEDS";
 pub struct Config {
     pub schema: String,
     pub detector: Detector,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "startup_present"
+    )]
+    pub startup: Option<super::startup::Config>,
+}
+fn startup_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<super::startup::Config>, D::Error> {
+    super::startup::Config::deserialize(d).map(Some)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,6 +77,9 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
         if path.contains(['\n', '\r', '*', '?', '[', ']', '!']) || !paths.insert(path) {
             return Err("detector sparse checkout must contain unique literal paths".into());
         }
+    }
+    if let Some(startup) = &g.startup {
+        super::startup::validate(c, startup)?;
     }
     Ok(())
 }
@@ -183,8 +197,22 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         "Bootstrap registered tools",
         "Canonical harness check",
         None,
+        None,
         Some("Preserve actual check evidence"),
     )?;
+    if let Some(startup) = c.job_gating.as_ref().and_then(|g| g.startup.as_ref()) {
+        let job = unit.map(job_id).unwrap_or("aggregate".into());
+        let before = if c
+            .persistent_cache
+            .as_ref()
+            .is_some_and(|cache| cache.jobs.contains_key(&job))
+        {
+            "Prepare registered caches"
+        } else {
+            "Bootstrap registered tools"
+        };
+        body = super::startup::consumer(startup, &job, body, before)?;
+    }
     Ok(format!(
         "  {}:\n{body}",
         unit.map(job_id).unwrap_or("aggregate".into())
@@ -230,6 +258,9 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         .map(|s| format!("            {s}\n"))
         .collect::<String>();
     let mut outputs = "      detection: ${{ steps.detect.outputs.detection }}\n".to_string();
+    if g.startup.is_some() {
+        outputs.push_str("      startup_binding: ${{ steps.chrono_startup.outputs.binding }}\n      startup_artifact: ${{ steps.chrono_startup_upload.outputs.artifact-id }}\n");
+    }
     for id in c.units.keys() {
         let job = job_id(id);
         outputs.push_str(&format!(
@@ -272,6 +303,9 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         generator = shell(&c.collection.generator),
         config = shell(path)
     );
+    if let Some(startup) = &g.startup {
+        text = super::startup::producer(c, startup, text)?;
+    }
     text = super::cache::project(
         c.persistent_cache.as_ref(),
         "detect",
@@ -279,6 +313,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         "Bootstrap registered detector tools",
         "Detect required units from fixed Git endpoints",
         Some("detect"),
+        g.startup.as_ref().map(|_| "chrono_startup"),
         None,
     )?;
     if let Some(a) = &c.native_adoption {

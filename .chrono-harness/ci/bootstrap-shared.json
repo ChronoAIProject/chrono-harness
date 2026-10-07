@@ -1,0 +1,119 @@
+{
+  "schema": "chrono-host-startup/v1",
+  "directory": ".chrono-harness/startup/",
+  "profiles": {
+    "cache": {
+      "config": ".chrono-harness/ci/bootstrap-cache.json",
+      "build": false
+    },
+    "core": {
+      "config": ".chrono-harness/ci/bootstrap-core.json",
+      "build": true
+    }
+  },
+  "consumers": {
+    "unit_runner": [
+      "cache",
+      "core"
+    ],
+    "unit_instructions": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-ci": [
+      "cache",
+      "core"
+    ],
+    "unit_ci": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-registration": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-filemap": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-routes": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-projects": [
+      "cache",
+      "core"
+    ],
+    "unit_scoped-v1": [
+      "core"
+    ],
+    "unit_judge-cost": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-mixed": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-workflow": [
+      "cache",
+      "core"
+    ],
+    "unit_inputs": [
+      "cache",
+      "core"
+    ],
+    "unit_distribution": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-cargo": [
+      "cache",
+      "core"
+    ],
+    "unit_worktree": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-workflow-units": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-workflow-short": [
+      "cache",
+      "core"
+    ],
+    "unit_workflow-inventory": [
+      "core"
+    ],
+    "unit_release-build": [
+      "core"
+    ],
+    "unit_release-build-integration": [
+      "cache",
+      "core"
+    ],
+    "unit_worktree-adoption": [
+      "cache",
+      "core"
+    ],
+    "unit_diagnostics": [
+      "cache",
+      "core"
+    ],
+    "unit_host-bootstrap": [
+      "core"
+    ],
+    "unit_cache": [
+      "cache",
+      "core"
+    ],
+    "unit_judge-projects-migration": [
+      "cache",
+      "core"
+    ],
+    "aggregate": [
+      "core"
+    ]
+  }
+}

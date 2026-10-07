@@ -625,3 +625,13 @@ retained-input corruption, interrupted adoption and retained terminal evidence.
 Canonical local checks, native acceptance, compatible binary deployment and actual
 host migration are not yet completed for this candidate. It performs no disposal
 or terminal handoff and does not relocate coordinator/state/policy addresses.
+
+Shared startup has an explicit provider contract and a host Python implementation.
+The existing detector publishes once; 27 registered consumers carry the original
+artifact ID and binding, validate source/config/platform and all files, and retain
+producer originals with import provenance. Rust projection tests cover ordering,
+rerun ID transport and cache-step identity; Python fault cases cover missing or
+changed binding/source/platform, damaged late payloads, symlinks and publication
+failures without declaring local rebuilds. Native transfer/rerun acceptance and
+complete compiler/SDK provenance remain unfinished. Historical timeout causes
+remain unresolved; these bounded regressions do not establish universal detection.

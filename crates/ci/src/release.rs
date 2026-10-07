@@ -270,6 +270,7 @@ pub fn render(c: &Config) -> Result<String, String> {
                 "Run registered release command",
                 "Run registered release command",
                 None,
+                None,
                 Some("Preserve original release artifacts"),
             )?);
             continue;
