@@ -10,6 +10,42 @@ use tempfile::TempDir;
 const CHILD: &str = env!("CARGO_BIN_EXE_chrono-test-cli-child");
 
 #[test]
+fn report_reference_publication_is_an_explicit_scoped_v3_contract() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("check.json");
+    let mut config = serde_json::json!({"schema":"chrono-ci-check/v3","judge":{"program":CHILD,"args":[],"timeout_seconds":15,"output_limit_bytes":4096},"policy":{},"report_path":".chrono-harness/state/check.json"});
+    fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+    assert!(
+        !chrono_harness::units::reference_publication(&chrono_harness::load_config(&path).unwrap())
+            .unwrap()
+    );
+    for schema in [
+        "chrono-ci-check/v1",
+        "chrono-ci-check/v2",
+        "chrono-ci-check/v3",
+    ] {
+        for value in [
+            Value::Null,
+            Value::Bool(true),
+            serde_json::json!("unknown"),
+            serde_json::json!("retained-reference/v1"),
+        ] {
+            config["schema"] = schema.into();
+            config["policy"]["report_publication"] = value.clone();
+            fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+            let loaded = chrono_harness::load_config(&path);
+            assert_eq!(
+                loaded.is_ok(),
+                schema == "chrono-ci-check/v3" && value == "retained-reference/v1"
+            );
+            if let Ok(config) = loaded {
+                assert!(chrono_harness::units::reference_publication(&config).unwrap());
+            }
+        }
+    }
+}
+
+#[test]
 #[cfg(unix)]
 fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
     use std::os::unix::ffi::OsStringExt;

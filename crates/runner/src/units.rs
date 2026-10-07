@@ -5,6 +5,23 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const PROFILE: &str = "chrono-ci-check/v3";
 pub const PROTOCOL: &str = "chrono-ci-judge/v2";
+pub const REPORT_REFERENCE: &str = "chrono-check-reference/v1";
+
+/// A fixed publication slot names one immutable original; it carries no verdict.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReportReference {
+    pub schema: String,
+    pub original: crate::prepared::Original,
+}
+
+pub fn reference_publication(config: &CheckConfig) -> Result<bool, String> {
+    match config.policy.get("report_publication") {
+        None => Ok(false),
+        Some(value) if config.schema == PROFILE && value == "retained-reference/v1" => Ok(true),
+        Some(_) => Err("report_publication requires scoped v3 retained-reference/v1".into()),
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]

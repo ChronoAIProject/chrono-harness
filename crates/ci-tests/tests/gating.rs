@@ -445,6 +445,85 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
     }
 }
 
+#[test]
+fn parent_collection_transports_report_references_and_rejects_damaged_originals() {
+    let mut h = GatedHost::new();
+    h.host.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["report_publication"] = json!("retained-reference/v1");
+    });
+    h.change(&["a.txt", "b.txt"]);
+    let d = h.detection();
+    h.units(&d);
+    h.mock(&d, "skipped-jobs-omitted");
+    let n = needs(&h, &d);
+    let calls = ["a", "b"].map(|id| {
+        fs::read(
+            h.host
+                .root
+                .join(format!(".chrono-harness/state/calls-{id}")),
+        )
+        .unwrap()
+    });
+    // Only the transported copy remains; a local original must not hide missing upload bytes.
+    let reference: Value = serde_json::from_slice(
+        &fs::read(h.host.root.join(".chrono-harness/state/alpha/check.json")).unwrap(),
+    )
+    .unwrap();
+    let original = reference["original"]["path"].as_str().unwrap();
+    let downloaded = h
+        .host
+        .root
+        .join(".chrono-harness/state/mock-artifacts/alpha")
+        .join(
+            original
+                .strip_prefix(".chrono-harness/state/alpha/")
+                .unwrap(),
+        );
+    let raw = fs::read(&downloaded).unwrap();
+    fs::remove_file(h.host.root.join(original)).unwrap();
+    for corrupt in [false, true] {
+        if corrupt {
+            fs::write(&downloaded, b"damaged uploaded original").unwrap();
+        }
+        let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(if corrupt { 1 } else { 0 }),
+            "{out:?}"
+        );
+        let report = referenced_report(&h.host.root, ".chrono-harness/state/check.json", &out);
+        if corrupt {
+            assert!(
+                report["response"]["results"][0]["cause"]
+                    .as_str()
+                    .unwrap()
+                    .contains("original report digest mismatch")
+            );
+        } else {
+            assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+            assert_eq!(
+                report["response"]["evidence"]["reports"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                2
+            );
+        }
+    }
+    assert_ne!(raw, b"damaged uploaded original");
+    for (id, original_calls) in ["a", "b"].into_iter().zip(calls) {
+        assert_eq!(
+            fs::read(
+                h.host
+                    .root
+                    .join(format!(".chrono-harness/state/calls-{id}"))
+            )
+            .unwrap(),
+            original_calls
+        );
+    }
+}
+
 #[path = "resources.rs"]
 mod resources;
 

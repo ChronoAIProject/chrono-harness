@@ -29,6 +29,8 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 本地/CI 同命令已经采用；普遍同判仍以完整相同有效输入和确定性求值为条件。独立 parity 比较器要求更强 completeness_proven:true 和完整观察，当前未建立；它不另加普通 full check 门，也不从成对读数证明普遍确定性。完整宿主启用、full 原生 CI、端到端交付及完整 SPEC 验收仍未完成。worktree 生产者支持显式创建／重建／恢复／清理，冲突协调及 PR／合并／落地生命周期归调用方，不能把阶段成功报成完成交付。
 
+本宿主 scoped check 在 policy.report_publication 显式采用 retained-reference/v1：固定 check.json 保存 chrono-check-reference/v1 的原件路径和摘要，完整原件只在 preparation/ 保留一份。控制台直接给原件路径；本地及原生汇总通过既有登记上传映射校验引用与原件。读取固定路径的外部消费者须先解析引用并核摘要，不能把引用当完整报告；上传仍包含完整登记目录。生产者、汇总判官与宿主政策须配套更新，普通命令不变。该采用消除 check 固定地址与原件的正文重复；其它 gather／进程证据重复、完整资源计量及 SPEC 义务仍未完成。
+
 详细历史与限定仍在可选 docs/ 下，来源／许可资料不是必读政策。指令生成不证明 AI 遵守或翻译等价；成本仍 unmeasured。Git 生命周期按当前任务授权，不从本文推断提交、推送或启用门已获授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
 
 本宿主现将同一个 judge-workflow-tests 项目显式绑定为 core、full_units、full_short 三个 test_groups／CI 单元；成员由当前 inventory 动态核定，原 test ID、生产／测试项目配对、未过滤 execute／release 操作、历史测试正文与限制保留。注册所有者统一解析组 ID、本项目 action 与终端操作；FILEMAP 完整登记各组边、计划、成本及共享前置。宿主 workflow-inventory guard 从真实未过滤／过滤 libtest 列表核非空、无忽略、互斥且全集相等；长期核当前集合，不冻结历史数量。当前变化同时含产品合同与宿主政策，验证成本包括受影响 owner 专属测试、三组完整执行及独立库存核验。原生时限充分性、发布平台／公开分发和 main/examples full 启用仍归调用方后续验证；本地通过不证明激活。

@@ -131,7 +131,48 @@ pub(super) fn collect(
         if sha256(&bytes) != input.sha256 {
             return Err(format!("unit report digest mismatch: {}", input.unit));
         }
-        let report = json(&bytes)?;
+        if input
+            .artifacts
+            .as_ref()
+            .is_some_and(|t| !p.artifacts.iter().any(|a| t.directory.starts_with(a)))
+        {
+            return Err("original evidence transport is not a declared artifact".into());
+        }
+        let published = json(&bytes)?;
+        let report = if chrono_harness::units::reference_publication(config)? {
+            let reference: chrono_harness::units::ReportReference =
+                serde_json::from_value(published).map_err(|e| e.to_string())?;
+            if reference.schema != chrono_harness::units::REPORT_REFERENCE {
+                return Err("unit report reference schema mismatch".into());
+            }
+            let path = chrono_harness::prepared::original_path(
+                &reference.original,
+                input.artifacts.as_ref(),
+            )?;
+            let raw = read(
+                &req.host_root,
+                &path,
+                p,
+                "report_bytes",
+                limits.report_bytes,
+            )?;
+            if sha256(&raw) != reference.original.sha256 {
+                return Err(format!(
+                    "original report digest mismatch: {} ({path})",
+                    input.unit
+                ));
+            }
+            let original = json(&raw)?;
+            if original["schema"] != "chrono-check-report/v1" {
+                return Err(format!("unit transport failed: {}", input.unit));
+            }
+            if original["retained_report"] != reference.original.path {
+                return Err(format!("original report path mismatch: {}", input.unit));
+            }
+            original
+        } else {
+            published
+        };
         if report["schema"] != "chrono-check-report/v1" || report.get("transport_failure").is_some()
         {
             return Err(format!("unit transport failed: {}", input.unit));
@@ -140,13 +181,6 @@ pub(super) fn collect(
             serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
         let response: Response =
             serde_json::from_value(report["response"].clone()).map_err(|e| e.to_string())?;
-        if input
-            .artifacts
-            .as_ref()
-            .is_some_and(|t| !p.artifacts.iter().any(|a| t.directory.starts_with(a)))
-        {
-            return Err("original evidence transport is not a declared artifact".into());
-        }
         if let Some(binding) = original
             .observations
             .get("preparation")

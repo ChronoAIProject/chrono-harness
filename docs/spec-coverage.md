@@ -635,3 +635,14 @@ changed binding/source/platform, damaged late payloads, symlinks and publication
 failures without declaring local rebuilds. Native transfer/rerun acceptance and
 complete compiler/SDK provenance remain unfinished. Historical timeout causes
 remain unresolved; these bounded regressions do not establish universal detection.
+
+Scoped check publication supports an explicit retained-reference policy. The
+runner keeps the complete original and publishes only its path/digest at the
+registered slot. The existing collection judge resolves it through the declared
+local/native transport and applies original digest, path and size checks before
+the existing verdict verification. Rust regressions exercise local repetition,
+missing and modified originals, invalid references and transported corruption
+without rerunning business operations. The host adoption requires compatible
+producer and consumer binaries; canonical/native acceptance and measured archive
+costs remain separate obligations. Other report duplication and full SPEC
+completion are not established by this change.

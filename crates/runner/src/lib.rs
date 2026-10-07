@@ -435,6 +435,7 @@ pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
     if !c.report_path.starts_with(".chrono-harness/state/") {
         return Err("report_path must reside in .chrono-harness/state/".into());
     }
+    units::reference_publication(&c)?;
     Ok(c)
 }
 pub fn validate_command(s: &CommandSpec) -> Result<(), String> {
@@ -1210,6 +1211,11 @@ fn execute_check(
         return Err("CI profile does not accept --context".into());
     }
     let c = load_config(&root.join(&config_path))?;
+    if units::reference_publication(&c)? && preparation.is_none() {
+        return Err(
+            "retained-reference publication requires the prepared short check entry".into(),
+        );
+    }
     let output_path = scope
         .as_ref()
         .map(|s| s.report_path(&c))
@@ -1337,7 +1343,7 @@ fn execute_check(
             prepared::retention_directory(&prepared)
         );
         report["retained_report"] = serde_json::json!(path);
-        Some(no_symlink_parents(&root, &path)?)
+        Some(path)
     } else {
         None
     };
@@ -1354,9 +1360,24 @@ fn execute_check(
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(path)
+            .open(no_symlink_parents(&root, &path)?)
             .map_err(|e| e.to_string())?;
         file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        if units::reference_publication(&c)? {
+            let reference = units::ReportReference {
+                schema: units::REPORT_REFERENCE.into(),
+                original: prepared::Original {
+                    path,
+                    sha256: sha256(text.as_bytes()),
+                },
+            };
+            fs::write(
+                report_path,
+                serde_json::to_vec(&reference).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            return Ok((code, text));
+        }
     }
     fs::write(report_path, &text).map_err(|e| e.to_string())?;
     Ok((code, text))

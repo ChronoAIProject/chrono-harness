@@ -403,6 +403,7 @@
         "judge-projects-migration"
       ]
     },
-    "facts_config": ".chrono-harness/config.json"
+    "facts_config": ".chrono-harness/config.json",
+    "report_publication": "retained-reference/v1"
   }
 }

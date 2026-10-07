@@ -571,6 +571,27 @@ retained original error, not a completed report; retention failures preserve the
 original failure and explain the write failure without claiming an artifact.
 Early configuration/selection errors keep their existing `E_CHECK` diagnostics.
 
+Scoped v3 hosts can adopt `policy.report_publication: "retained-reference/v1"`
+to keep one complete immutable check report. The registered fixed report path
+then contains only `{"schema":"chrono-check-reference/v1","original":{"path":...,"sha256":...}}`.
+The short console still points directly to the complete original; the reference
+contains no verdict. Local and native manifests bind the reference's exact bytes.
+Collection reads the original through the existing declared artifact transport,
+verifies its digest and retained path, and applies every existing report, process,
+plan and executable check. It does not follow reference chains. Missing, changed,
+symlinked, undeclared or oversized originals fail; neither a small reference nor
+a successful download replaces the original evidence. Both the reference and
+original are subject to the registered report read limit separately.
+
+Adoption requires matching runner and collector binaries and the prepared short
+check entry; explicit endpoint calls fail before business execution. Old profiles,
+including scoped v3 hosts omitting this field, keep complete fixed-path reports.
+Unknown values, explicit null and adoption in scoped v1/v2 are rejected. Consumers
+that read a fixed path must understand the reference before a host adopts it.
+Upload the registered artifact directory containing both reference and original;
+do not upload only the small reference. This reduces duplicate check-report
+publication; it does not deduplicate other acquisition, process or gather evidence.
+
 Hosts may declare independent collection read limits in their check policy:
 
 ```json
