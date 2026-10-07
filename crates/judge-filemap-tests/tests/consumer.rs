@@ -403,6 +403,10 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
     let impact: Impact = serde_json::from_value(r["impact"].clone()).unwrap();
     assert_eq!(impact.schema, IMPACT_SCHEMA);
     assert_eq!(
+        r["impact"]["structure"]["schema"],
+        "chrono-filemap-structure/v1"
+    );
+    assert_eq!(
         impact
             .required_tests
             .iter()
