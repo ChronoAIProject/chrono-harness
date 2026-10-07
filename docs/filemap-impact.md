@@ -72,6 +72,15 @@ measured absence for the registered claims, not a proof that undeclared effects
 do not exist. Routes remains the execution authority and rejects a malformed
 operation cycle before launching work.
 
+Before publishing this diagnostic, the filemap judge runs a bounded
+consistency check over the report it just produced. It checks schema and edge
+counts, node partitioning, SCC identities and closed witnesses, component
+depths, DELTA affected-component membership, and execution-plan precedence
+edges. A violation is an `E_SELF_DIAGNOSTIC` error with the offending
+invariant; the report is not treated as a successful impact result. This
+detects an internally inconsistent judge result, but does not prove the
+algorithm complete, the declarations necessary, or the host inputs complete.
+
 This output is intended to expose a concrete candidate for an autonomous
 refactoring round. It does not rank candidates, invent a consumer, claim a
 runtime speedup or declare an optimization delivered. A real refactoring still

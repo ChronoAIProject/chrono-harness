@@ -197,6 +197,7 @@ pub struct ExecutionConflict {
 /// Analyse an explicit endpoint union.  `all_nodes` and `owners` are supplied
 /// by registration's interpreted inventory; this function never discovers
 /// either from the checkout.
+#[derive(Clone, Copy)]
 pub struct AnalysisInput<'a> {
     pub base: &'a BTreeSet<Edge>,
     pub candidate: &'a BTreeSet<Edge>,
@@ -208,6 +209,459 @@ pub struct AnalysisInput<'a> {
     pub base_filemap: &'a Value,
     pub candidate_filemap: &'a Value,
     pub reached: &'a BTreeMap<String, BTreeSet<String>>,
+}
+
+/// A report-side invariant violation found while the judge is assembling its
+/// own structural evidence.  These checks deliberately consume only the
+/// already bound declarations and the produced report; they never discover a
+/// dependency or turn a diagnostic into an optimisation decision.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StructureIssue {
+    pub message: String,
+}
+
+/// Validate the internal consistency of a structure report.
+///
+/// The analysis is useful only when its witnesses are trustworthy.  Keeping a
+/// small independent checker here means a future edit that drops an edge,
+/// mislabels an SCC, or reports an impossible affected component becomes an
+/// explicit judge error instead of silently publishing a plausible report.
+/// This is intentionally a consistency check, not a second dependency
+/// discovery mechanism.
+pub fn validate_structure(
+    input: AnalysisInput<'_>,
+    closure: &Closure,
+    analysis: &StructureAnalysis,
+) -> Vec<StructureIssue> {
+    let mut issues = vec![];
+    if analysis.schema != "chrono-filemap-structure/v1" {
+        issues.push(StructureIssue {
+            message: format!("unexpected structure schema {:?}", analysis.schema),
+        });
+    }
+    validate_snapshot(
+        "base",
+        &analysis.base,
+        input.base,
+        input.base_nodes,
+        &mut issues,
+    );
+    validate_snapshot(
+        "candidate",
+        &analysis.candidate,
+        input.candidate,
+        input.candidate_nodes,
+        &mut issues,
+    );
+    let union_edges: BTreeSet<_> = input.union.iter().map(|edge| edge.edge.clone()).collect();
+    validate_snapshot(
+        "union",
+        &analysis.union,
+        &union_edges,
+        input.union_nodes,
+        &mut issues,
+    );
+
+    let component_of: BTreeMap<_, _> = analysis
+        .union
+        .components
+        .iter()
+        .flat_map(|component| {
+            component
+                .nodes
+                .iter()
+                .map(move |node| (node.clone(), component.id.clone()))
+        })
+        .collect();
+    let expected_affected: BTreeSet<_> = closure
+        .reached
+        .keys()
+        .filter_map(|node| component_of.get(node))
+        .cloned()
+        .collect();
+    let actual_affected: BTreeSet<_> = analysis.affected_components.iter().cloned().collect();
+    if expected_affected != actual_affected {
+        issues.push(StructureIssue {
+            message: format!(
+                "affected components disagree with closure: expected {:?}, observed {:?}",
+                expected_affected, actual_affected
+            ),
+        });
+    }
+    if analysis
+        .affected_components
+        .windows(2)
+        .any(|pair| pair[0] >= pair[1])
+    {
+        issues.push(StructureIssue {
+            message: "affected components are not sorted and unique".into(),
+        });
+    }
+    validate_execution(
+        &analysis.execution.base,
+        input.base_filemap,
+        "base",
+        &mut issues,
+    );
+    validate_execution(
+        &analysis.execution.candidate,
+        input.candidate_filemap,
+        "candidate",
+        &mut issues,
+    );
+    issues
+}
+
+fn validate_snapshot(
+    endpoint: &str,
+    snapshot: &GraphSnapshot,
+    edges: &BTreeSet<Edge>,
+    declared_nodes: &BTreeSet<String>,
+    issues: &mut Vec<StructureIssue>,
+) {
+    let mut nodes = declared_nodes.clone();
+    let mut outgoing: BTreeMap<String, usize> = BTreeMap::new();
+    for edge in edges {
+        nodes.insert(edge.from.clone());
+        nodes.insert(edge.to.clone());
+        *outgoing.entry(edge.from.clone()).or_default() += 1;
+    }
+    if snapshot.node_count != nodes.len() {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} node count {} does not match {} bound nodes",
+                snapshot.node_count,
+                nodes.len()
+            ),
+        });
+    }
+    if snapshot.edge_count != edges.len() {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} edge count {} does not match {} bound edges",
+                snapshot.edge_count,
+                edges.len()
+            ),
+        });
+    }
+    let mut expected_direct = BTreeMap::new();
+    for node in &nodes {
+        expected_direct.insert(node.clone(), outgoing.get(node).copied().unwrap_or(0));
+    }
+    if snapshot.direct_relations != expected_direct {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} direct relation counts disagree with bound edges"),
+        });
+    }
+    let mut seen = BTreeSet::new();
+    let mut component_of = BTreeMap::new();
+    let mut adjacency: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for edge in edges {
+        adjacency
+            .entry(edge.from.clone())
+            .or_default()
+            .insert(edge.to.clone());
+    }
+    for component in &snapshot.components {
+        if component.nodes.is_empty() || component.nodes.windows(2).any(|pair| pair[0] >= pair[1]) {
+            issues.push(StructureIssue {
+                message: format!(
+                    "{endpoint} component {:?} is empty or unsorted",
+                    component.id
+                ),
+            });
+        }
+        if component
+            .nodes
+            .first()
+            .is_some_and(|node| component.id != format!("scc:{node}"))
+        {
+            issues.push(StructureIssue {
+                message: format!(
+                    "{endpoint} component {:?} has an invalid identity",
+                    component.id
+                ),
+            });
+        }
+        for node in &component.nodes {
+            if !seen.insert(node.clone()) {
+                issues.push(StructureIssue {
+                    message: format!("{endpoint} node {node} occurs in multiple components"),
+                });
+            }
+            component_of.insert(node.clone(), component.id.clone());
+        }
+        let expected_cyclic = component.nodes.len() > 1
+            || component.nodes.first().is_some_and(|node| {
+                edges
+                    .iter()
+                    .any(|edge| edge.from == *node && edge.to == *node)
+            });
+        if component.cyclic != expected_cyclic {
+            issues.push(StructureIssue {
+                message: format!(
+                    "{endpoint} component {:?} cyclic flag disagrees with bound edges",
+                    component.id
+                ),
+            });
+        }
+        validate_witness(endpoint, component, edges, issues);
+    }
+    if seen != nodes {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} components do not partition the bound node set"),
+        });
+    }
+    // Check the partition independently from the producer's SCC algorithm:
+    // every reported component must be mutually reachable, and its
+    // condensation graph must be acyclic.  This catches both a dropped cycle
+    // and an accidental merge without reusing the producer's traversal.
+    for component in &snapshot.components {
+        for start in &component.nodes {
+            let reachable = reachable_nodes(start, &adjacency);
+            if component.nodes.iter().any(|node| !reachable.contains(node)) {
+                issues.push(StructureIssue {
+                    message: format!(
+                        "{endpoint} component {:?} is not strongly connected",
+                        component.id
+                    ),
+                });
+                break;
+            }
+        }
+    }
+    let mut condensed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for component in &snapshot.components {
+        condensed.entry(component.id.clone()).or_default();
+    }
+    for edge in edges {
+        if let (Some(from), Some(to)) = (component_of.get(&edge.from), component_of.get(&edge.to))
+            && from != to
+        {
+            condensed
+                .entry(from.clone())
+                .or_default()
+                .insert(to.clone());
+        }
+    }
+    if directed_cycle(&condensed) {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} SCC condensation graph contains a cycle"),
+        });
+    }
+    let component_ids: BTreeSet<_> = snapshot
+        .components
+        .iter()
+        .map(|component| component.id.clone())
+        .collect();
+    if snapshot
+        .component_depth
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        != component_ids
+    {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} component depths do not cover every component"),
+        });
+    }
+    let expected_max = snapshot
+        .component_depth
+        .values()
+        .copied()
+        .max()
+        .unwrap_or(0);
+    if snapshot.max_depth != expected_max {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} maximum depth is inconsistent with component depths"),
+        });
+    }
+    for edge in edges {
+        if !component_of.contains_key(&edge.from) || !component_of.contains_key(&edge.to) {
+            issues.push(StructureIssue {
+                message: format!("{endpoint} edge {:?} has no component witness", edge),
+            });
+        }
+    }
+}
+
+fn reachable_nodes(
+    start: &str,
+    adjacency: &BTreeMap<String, BTreeSet<String>>,
+) -> BTreeSet<String> {
+    let mut reached = BTreeSet::from([start.to_string()]);
+    let mut queue = VecDeque::from([start.to_string()]);
+    while let Some(node) = queue.pop_front() {
+        for next in adjacency.get(node.as_str()).into_iter().flatten() {
+            if reached.insert(next.clone()) {
+                queue.push_back(next.clone());
+            }
+        }
+    }
+    reached
+}
+
+fn directed_cycle(adjacency: &BTreeMap<String, BTreeSet<String>>) -> bool {
+    fn visit(
+        node: &str,
+        adjacency: &BTreeMap<String, BTreeSet<String>>,
+        visiting: &mut BTreeSet<String>,
+        finished: &mut BTreeSet<String>,
+    ) -> bool {
+        if visiting.contains(node) {
+            return true;
+        }
+        if !finished.insert(node.to_string()) {
+            return false;
+        }
+        visiting.insert(node.to_string());
+        let cycle = adjacency
+            .get(node)
+            .into_iter()
+            .flatten()
+            .any(|next| visit(next, adjacency, visiting, finished));
+        visiting.remove(node);
+        cycle
+    }
+    let mut visiting = BTreeSet::new();
+    let mut finished = BTreeSet::new();
+    for node in adjacency.keys() {
+        if visit(node, adjacency, &mut visiting, &mut finished) {
+            return true;
+        }
+    }
+    false
+}
+
+fn validate_witness(
+    endpoint: &str,
+    component: &StrongComponent,
+    edges: &BTreeSet<Edge>,
+    issues: &mut Vec<StructureIssue>,
+) {
+    if !component.cyclic {
+        if !component.witness.is_empty() {
+            issues.push(StructureIssue {
+                message: format!(
+                    "{endpoint} acyclic component {:?} has a cycle witness",
+                    component.id
+                ),
+            });
+        }
+        return;
+    }
+    if component.witness.is_empty() {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} cyclic component {:?} has no witness",
+                component.id
+            ),
+        });
+        return;
+    }
+    for edge in &component.witness {
+        if !edges.contains(edge)
+            || !component.nodes.contains(&edge.from)
+            || !component.nodes.contains(&edge.to)
+        {
+            issues.push(StructureIssue {
+                message: format!(
+                    "{endpoint} component {:?} witness uses an unbound edge",
+                    component.id
+                ),
+            });
+        }
+    }
+    if component
+        .witness
+        .windows(2)
+        .any(|pair| pair[0].to != pair[1].from)
+        || component.witness.first().map(|edge| &edge.from)
+            != component.witness.last().map(|edge| &edge.to)
+    {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} component {:?} witness is not a closed path",
+                component.id
+            ),
+        });
+    }
+}
+
+fn validate_execution(
+    snapshot: &ExecutionSnapshot,
+    filemap: &Value,
+    endpoint: &str,
+    issues: &mut Vec<StructureIssue>,
+) {
+    let operations: BTreeSet<_> = snapshot.operations.iter().cloned().collect();
+    if operations.len() != snapshot.operations.len()
+        || snapshot
+            .operations
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+    {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} execution operations are not sorted and unique"),
+        });
+    }
+    let mut expected_edges = BTreeSet::new();
+    if let Some(plans) = filemap.get("execution_plans").and_then(Value::as_object) {
+        for (test, plan) in plans {
+            let ids: Vec<_> = plan["operations"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            for pair in ids.windows(2) {
+                expected_edges.insert((pair[0].to_string(), pair[1].to_string(), test.clone()));
+            }
+        }
+    }
+    let actual_edges: BTreeSet<_> = snapshot
+        .edges
+        .iter()
+        .flat_map(|edge| {
+            edge.tests
+                .iter()
+                .map(move |test| (edge.from.clone(), edge.to.clone(), test.clone()))
+        })
+        .collect();
+    if actual_edges != expected_edges {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} execution precedence edges disagree with registered plans"
+            ),
+        });
+    }
+    for edge in &snapshot.edges {
+        if !operations.contains(&edge.from) || !operations.contains(&edge.to) {
+            issues.push(StructureIssue {
+                message: format!(
+                    "{endpoint} execution edge {:?} references an unknown operation",
+                    edge
+                ),
+            });
+        }
+    }
+    for cycle in &snapshot.cycles {
+        if cycle.len() < 2 || cycle.first() != cycle.last() {
+            issues.push(StructureIssue {
+                message: format!("{endpoint} execution cycle is not closed"),
+            });
+        }
+        if cycle.windows(2).any(|pair| {
+            !snapshot
+                .edges
+                .iter()
+                .any(|edge| edge.from == pair[0] && edge.to == pair[1])
+        }) {
+            issues.push(StructureIssue {
+                message: format!("{endpoint} execution cycle uses an unbound precedence edge"),
+            });
+        }
+    }
 }
 
 pub fn analyze(input: AnalysisInput<'_>) -> StructureAnalysis {
