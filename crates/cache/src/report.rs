@@ -47,6 +47,33 @@ pub fn transport_report(
     transport_report_with_saves(plan, steps, work, bootstrap, None)
 }
 
+pub(crate) fn restore_status(cache: &Value, restore: &Value) -> &'static str {
+    let matched = restore["outputs"]["cache-matched-key"]
+        .as_str()
+        .filter(|key| !key.is_empty());
+    match restore["outcome"].as_str() {
+        Some("success") => match matched {
+            Some(key) if cache["key"] == key => "exact",
+            Some(key)
+                if cache["restore_keys"].as_array().is_some_and(|prefixes| {
+                    prefixes.iter().any(|prefix| {
+                        prefix
+                            .as_str()
+                            .is_some_and(|p| !p.is_empty() && key.starts_with(p))
+                    })
+                }) =>
+            {
+                "compatible"
+            }
+            Some(_) => "incompatible",
+            None => "miss-or-unavailable",
+        },
+        Some("failure" | "cancelled") => "error",
+        Some("skipped") => "not-attempted",
+        _ => "unavailable",
+    }
+}
+
 fn transport_report_with_saves(
     plan: &Value,
     steps: &Value,
@@ -82,27 +109,7 @@ fn transport_report_with_saves(
         let matched = restore["outputs"]["cache-matched-key"]
             .as_str()
             .filter(|s| !s.is_empty());
-        let restored = match restore["outcome"].as_str() {
-            Some("success") => match matched {
-                Some(key) if key == requested => "exact",
-                Some(key)
-                    if cache["restore_keys"].as_array().is_some_and(|prefixes| {
-                        prefixes.iter().any(|prefix| {
-                            prefix
-                                .as_str()
-                                .is_some_and(|p| !p.is_empty() && key.starts_with(p))
-                        })
-                    }) =>
-                {
-                    "compatible"
-                }
-                Some(_) => "incompatible",
-                None => "miss-or-unavailable",
-            },
-            Some("failure" | "cancelled") => "error",
-            Some("skipped") => "not-attempted",
-            _ => "unavailable",
-        };
+        let restored = restore_status(cache, restore);
         let save_requested = saves.is_none_or(|saves| saves.contains(id));
         let save_observed = matches!(
             save["outcome"].as_str(),

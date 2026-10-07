@@ -228,6 +228,171 @@ fn successful_or_skipped_restore_keeps_outputs_and_missing_observations_fail() {
     }
 }
 
+fn adopt_unconfirmed_recovery(root: &Path, config: &mut Value, original: &Value) {
+    config["recover_unconfirmed_restores"] = json!(true);
+    let prepared = plan(root, config, "check.one").unwrap();
+    assert_eq!(prepared["caches"], original["caches"]);
+    assert_eq!(prepared["recovery"]["unconfirmed"], true);
+    for (path, value) in [
+        (".chrono-harness/cache.json", config.clone()),
+        (".chrono-harness/state/restore/plan.json", prepared),
+    ] {
+        fs::write(root.join(path), serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn unconfirmed_success_discards_partial_outputs_and_retains_original_uncertainty() {
+    for matched in [None, Some(""), Some("unregistered-key")] {
+        let (root, mut config, prepared) = recovery_host();
+        adopt_unconfirmed_recovery(root.path(), &mut config, &prepared);
+        let mut restore = json!({"outcome":"success","conclusion":"success","outputs":{}});
+        if let Some(key) = matched {
+            restore["outputs"]["cache-matched-key"] = json!(key);
+        }
+        let mut steps = json!({"cache_0_restore":restore});
+        let output = recover(root.path(), &steps);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!root.path().join("out/project").exists(), "{matched:?}");
+        assert_eq!(
+            fs::read(root.path().join("out/other/keep")).unwrap(),
+            b"other consumer"
+        );
+        assert_eq!(fs::read(root.path().join("source")).unwrap(), b"source-one");
+        let report = result(root.path());
+        assert_eq!(report["status"], "recovered");
+        assert_eq!(report["caches"]["project"]["restore"], restore);
+        let reason = if matched == Some("unregistered-key") {
+            "incompatible"
+        } else {
+            "miss-or-unavailable"
+        };
+        assert_eq!(report["caches"]["project"]["reason"], reason);
+        fs::create_dir_all(root.path().join("out/project")).unwrap();
+        fs::write(root.path().join("out/project/rebuilt"), b"rebuilt").unwrap();
+        assert!(recover(root.path(), &steps).status.success());
+        assert_eq!(
+            fs::read(root.path().join("out/project/rebuilt")).unwrap(),
+            b"rebuilt"
+        );
+        steps["work"] = json!({"outcome":"failure"});
+        let transported = transport(root.path(), &steps);
+        assert!(
+            transported.status.success(),
+            "{}",
+            String::from_utf8_lossy(&transported.stderr)
+        );
+        let transported: Value = serde_json::from_slice(&transported.stdout).unwrap();
+        let observed = &transported["observation"];
+        assert_eq!(observed["work"]["outcome"], "failure");
+        assert_eq!(observed["caches"]["project"]["restore"]["status"], reason);
+        assert_eq!(
+            observed["caches"]["project"]["restore"]["observation"],
+            restore
+        );
+        let original = fs::read(
+            root.path()
+                .join(report["native_steps"]["path"].as_str().unwrap()),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&original).unwrap(),
+            json!({"cache_0_restore":restore})
+        );
+    }
+}
+
+#[test]
+fn unconfirmed_recovery_keeps_matching_hits_and_rejects_missing_or_malformed_observations() {
+    for kind in [
+        "exact",
+        "compatible",
+        "skipped",
+        "missing",
+        "cancelled",
+        "malformed",
+    ] {
+        let (root, mut config, prepared) = recovery_host();
+        adopt_unconfirmed_recovery(root.path(), &mut config, &prepared);
+        let cache = &prepared["caches"]["project"];
+        let mut restore = json!({"outcome":"success","outputs":{}});
+        match kind {
+            "exact" => restore["outputs"]["cache-matched-key"] = cache["key"].clone(),
+            "compatible" => {
+                restore["outputs"]["cache-matched-key"] = json!(format!(
+                    "{}old-source",
+                    cache["restore_keys"][0].as_str().unwrap()
+                ))
+            }
+            "skipped" => restore["outcome"] = json!("skipped"),
+            "missing" => restore = Value::Null,
+            "cancelled" => restore["outcome"] = json!("cancelled"),
+            "malformed" => restore["outputs"]["cache-matched-key"] = json!(123),
+            _ => unreachable!(),
+        }
+        let output = recover(root.path(), &json!({"cache_0_restore":restore}));
+        let allowed = matches!(kind, "exact" | "compatible" | "skipped");
+        assert_eq!(
+            output.status.success(),
+            allowed,
+            "{kind}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read(root.path().join("out/project/partial")).unwrap(),
+            b"partial archive"
+        );
+        assert_eq!(
+            result(root.path())["status"],
+            if allowed { "not-required" } else { "failed" }
+        );
+    }
+}
+
+#[test]
+fn unconfirmed_recovery_requires_failed_restore_adoption_and_keeps_cold_miss_uncertain() {
+    let (root, mut config, prepared) = recovery_host();
+    config["recover_unconfirmed_restores"] = json!(true);
+    config["recover_failed_restores"] = json!(false);
+    assert!(
+        plan(root.path(), &config, "check.one")
+            .unwrap_err()
+            .contains("adopted failed-restore recovery")
+    );
+    config["recover_failed_restores"] = json!(true);
+    config["require_primary_checkout"] = json!(false);
+    assert!(
+        plan(root.path(), &config, "check.one")
+            .unwrap_err()
+            .contains("primary-checkout")
+    );
+    config["require_primary_checkout"] = json!(true);
+    adopt_unconfirmed_recovery(root.path(), &mut config, &prepared);
+    fs::remove_dir_all(root.path().join("out/project")).unwrap();
+    let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{}}});
+    let output = recover(root.path(), &steps);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stderr.is_empty(),
+        "a cold miss without leftover outputs is not a diagnosed restore error"
+    );
+    let report = result(root.path());
+    assert_eq!(report["caches"]["project"]["reason"], "miss-or-unavailable");
+    assert_eq!(
+        report["caches"]["project"]["artifacts"][0]["status"],
+        "absent"
+    );
+    assert!(!root.path().join("out/project").exists());
+}
+
 #[test]
 fn changed_registration_and_symlinked_outputs_preserve_original_failure_without_discard() {
     for alter in ["registration", "output", "unfinished"] {

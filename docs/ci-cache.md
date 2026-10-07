@@ -127,7 +127,7 @@ observations. Its status is `prepared-unrestored`, execution is `not-started`, a
 cache hit states, successful builds or parity evidence. Cache backend results,
 failure chains and original reports must be supplied by their actual producers.
 
-## Failed restore recovery
+## Restore recovery
 
 V2 can explicitly enable `recover_failed_restores: true` for isolated primary
 checkouts. Selected external artifacts remain unsupported because their separate
@@ -155,11 +155,31 @@ discarding outputs that a later producer rebuilt. An unfinished intent is retain
 and refused; a previous failure is not automatically retried.
 
 The host adopts this method in its existing jobs and classifies its step time as
-`cache-recovery`. No job, build recipe or business-test retry is added. This covers
+`cache-recovery`. No job, build recipe or business-test retry is added. The failure-only policy covers
 reported native restore failures and partial extraction, not corruption hidden
 behind a successful restore, backend archive replacement, or general compiler
 failure recovery. Archive integrity, linked-worktree leases and full native
 failure-scenario acceptance remain obligations.
+
+The host additionally adopts `recover_unconfirmed_restores: true`. This optional
+v2 policy requires `recover_failed_restores` and its primary-checkout boundary;
+omission preserves the earlier failure-only behavior. The same recovery entry
+also discards registered outputs after a successful restore step whose matched
+key is absent, empty or outside the declared exact/compatible domain. A step can
+succeed after the native cache implementation suppresses download or extraction
+errors. Missing keys remain `miss-or-unavailable`; cleanup does not diagnose which
+case occurred or manufacture a restore failure. Recovery and transport use the
+same key classification. Exact/compatible hits and skipped restores preserve
+outputs; missing/cancelled outcomes and malformed outputs still fail before any
+removal. The policy enters the retained recovery plan, not compilation cache keys.
+
+Original outcomes, reasons and per-artifact results remain available to the
+transport reporter. Completed reentry preserves subsequent builds. An ordinary
+cold miss with all selected artifacts already absent adds no recovery warning;
+removed leftovers and explicit failures remain visible. The original build and
+selected tests still run, and their failures remain failures. This extension does
+not verify the contents of a restore that reports a valid matched key, preserve
+external ownership, or establish a native corruption experiment.
 
 ## Actual provider consumers
 
@@ -174,10 +194,11 @@ writes. The host cache registry explicitly sets `require_primary_checkout: true`
 The planner rejects a linked worktree before restoration; this filesystem guard
 is not a general proof of Git ownership or lifecycle exclusion.
 
-This host's detector selects only the `ci` project target from its dedicated
-bootstrap recipe. Its 26 check units and aggregate rebuild core bootstrap
-projects on fresh runners. Their registrations select the existing bootstrap
-outputs plus only the Cargo outputs claimed by each unit's FILEMAP plan. Existing
+This host's detector builds the shared startup profiles and selects their four
+registered compilation caches. Its 26 check units and aggregate install the
+source-bound startup artifact. Unit cache registrations select only the actual
+Cargo producers remaining in each unit's FILEMAP plan; the aggregate and units
+without compilation operations have no compilation-cache subscriptions. Existing
 native Rust release builds and verification units select their own project
 output. Python release verification and the package collector have no registered
 compilation cache. Distinct grouped test producers have distinct cache entries.
@@ -216,7 +237,7 @@ conflicting writers with `E_CACHE_SAVE_OWNERSHIP`, identifying the cache and bot
 jobs. Other consumers explicitly select restore-only for that cache; a pipeline
 may intentionally have no writer. Separate cache identities keep independently
 registered production domains separate, including different release platforms.
-This host assigns the four shared startup caches to the existing aggregate and
+This host assigns the four shared startup caches to the existing detector and
 each remaining cache to its registered production unit. Consumers still restore,
 rebuild and check without extra jobs or prerequisite waits. If the chosen writer
 is skipped or does not complete its producer, that run supplies no new archive.

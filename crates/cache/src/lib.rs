@@ -35,6 +35,8 @@ pub struct Config {
     pub backend: Option<Backend>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub recover_failed_restores: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recover_unconfirmed_restores: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -175,6 +177,12 @@ pub fn validate(c: &Config) -> Result<(), String> {
     if c.recover_failed_restores && (c.schema != CONSUMER_SCHEMA || !c.require_primary_checkout) {
         return Err(
             "E_CACHE_RECOVERY: failed-restore recovery requires v2 and primary-checkout protection"
+                .into(),
+        );
+    }
+    if c.recover_unconfirmed_restores && !c.recover_failed_restores {
+        return Err(
+            "E_CACHE_RECOVERY: unconfirmed-restore recovery requires adopted failed-restore recovery"
                 .into(),
         );
     }
@@ -754,6 +762,9 @@ fn prepare_with_inputs(
     if c.recover_failed_restores {
         plan["recovery"] = json!({"method":"discard-failed-host-restores","host_root":root,
             "registration_sha256":wire::digest(c)?});
+        if c.recover_unconfirmed_restores {
+            plan["recovery"]["unconfirmed"] = json!(true);
+        }
     }
     Ok(plan)
 }

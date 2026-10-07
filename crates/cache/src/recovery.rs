@@ -1,4 +1,4 @@
-//! Discard registered host outputs after a failed native restore, before producers run.
+//! Discard registered host outputs after unusable native restores, before producers run.
 use chrono_harness::{decode, no_symlink_parents, prepared, sha256};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, io::Write, path::Path};
@@ -113,7 +113,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         super::report::retain_for_upload(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
     let mut report = json!({"schema":"chrono-cache-recovery/v1","plan":binding,"native_steps":steps_original,
         "status":"not-required","caches":{},"error":null,
-        "limits":["isolated provider restore phase, before producers", "native restore failure only; no archive integrity or build verdict", "linked worktree and external artifact recovery unsupported"]});
+        "limits":["isolated provider restore phase, before producers", "registered native observations only; no archive integrity or build verdict", "missing matched keys do not distinguish miss from backend or extraction failure", "linked worktree and external artifact recovery unsupported"]});
     let result = (|| -> Result<(), String> {
         let config: super::Config =
             decode(&fs::read(no_symlink_parents(&root, config_path)?).map_err(|e| e.to_string())?)?;
@@ -141,8 +141,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         let mut paths = vec![];
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
-            let failed = match restore["outcome"].as_str() {
+            let reason = super::report::restore_status(cache, restore);
+            let discard = match restore["outcome"].as_str() {
                 Some("failure") => true,
+                Some("success") if config.recover_unconfirmed_restores => {
+                    let outputs = &restore["outputs"];
+                    if (!outputs.is_null() && !outputs.is_object())
+                        || outputs
+                            .get("cache-matched-key")
+                            .is_some_and(|key| !key.is_null() && !key.is_string())
+                    {
+                        return Err(format!(
+                            "E_CACHE_RECOVERY: malformed restore outputs for {id}"
+                        ));
+                    }
+                    matches!(reason, "miss-or-unavailable" | "incompatible")
+                }
                 Some("success" | "skipped") => false,
                 _ => {
                     return Err(format!(
@@ -150,8 +164,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     ));
                 }
             };
-            report["caches"][id] = json!({"restore":restore,"status":if failed {"pending"} else {"not-required"},"artifacts":[]});
-            if !failed {
+            report["caches"][id] = json!({"restore":restore,"reason":reason,"status":if discard {"pending"} else {"not-required"},"artifacts":[]});
+            if !discard {
                 continue;
             }
             let artifacts: BTreeMap<_, _> = cache["artifacts"]
@@ -249,9 +263,17 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     if let Err(error) = result {
         return Err(format!("{error}; original {}", original.path));
     }
-    if report["status"] == "recovered" {
+    let changed_or_failed = report["caches"].as_object().unwrap().values().any(|cache| {
+        cache["restore"]["outcome"] == "failure"
+            || cache["artifacts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|artifact| artifact["status"] == "removed")
+    });
+    if report["status"] == "recovered" && changed_or_failed {
         eprintln!(
-            "W_CACHE_RESTORE_RECOVERED: failed restore outputs discarded before registered build; original {}",
+            "W_CACHE_RESTORE_RECOVERED: unusable restore outputs cleared before registered build; original {}",
             original.path
         );
     }
