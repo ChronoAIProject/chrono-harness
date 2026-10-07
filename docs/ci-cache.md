@@ -13,7 +13,10 @@ The host explicitly adopts those actions in its check and release registrations.
 A successful plan or generated workflow does not establish native restoration,
 saving, compiler reuse or acceptance. SPEC §4.2 still requires backend evidence,
 cold/warm/changed-source/failure/concurrent acceptance and current executable
-verification. The transport currently requires a primary Git checkout; linked
+verification. Each plan also records the exact `chrono-cache` executable digest
+and version that prepared it. The report step compares that identity with the
+currently running executable before publishing transport evidence; a mismatch
+fails closed. The transport currently requires a primary Git checkout; linked
 worktree restore/save needs a lease spanning the entire transport and remains
 unsupported.
 
@@ -112,7 +115,9 @@ must likewise be assigned according to their actual compatibility role.
 `executable-candidate` artifacts permit exact restoration only. Every plan entry
 still requires its registered build producer; this interface never authorizes
 direct execution of a restored historical judge. Current executable verification
-and the selected judgments/tests remain obligations of the consuming pipeline.
+also verifies the cache planner/report executable identity. The selected
+judgments/tests remain obligations of the consuming pipeline; this identity
+check does not prove that a restored project executable was rebuilt.
 
 Literal paths reject traversal, globs and symlink components. Selected outputs
 cannot overlap one another, contain Git metadata or harness execution state, or

@@ -1,5 +1,15 @@
 use super::*;
 
+fn bind_installed_planner(plan: &mut Value) {
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    plan["planner"] = json!({
+        "executable": fs::canonicalize(&binary).unwrap(),
+        "sha256": format!("{:x}", Sha256::digest(fs::read(&binary).unwrap())),
+        "bytes": fs::metadata(&binary).unwrap().len(),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+}
+
 fn recovery_host() -> (Host, Value, Value) {
     let (root, mut config) = fixture();
     adopt_consumer_contract(root.path(), &mut config);
@@ -7,7 +17,8 @@ fn recovery_host() -> (Host, Value, Value) {
     config["require_primary_checkout"] = json!(true);
     let before = plan(root.path(), &config, "check.one").unwrap();
     config["recover_failed_restores"] = json!(true);
-    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
     assert_eq!(before["caches"], prepared["caches"]);
     fs::create_dir_all(root.path().join(".chrono-harness/state/restore")).unwrap();
     fs::write(
@@ -297,7 +308,8 @@ fn successful_or_skipped_restore_keeps_outputs_and_missing_observations_fail() {
 
 fn adopt_unconfirmed_recovery(root: &Path, config: &mut Value, original: &Value) {
     config["recover_unconfirmed_restores"] = json!(true);
-    let prepared = plan(root, config, "check.one").unwrap();
+    let mut prepared = plan(root, config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
     assert_eq!(prepared["caches"], original["caches"]);
     assert_eq!(prepared["recovery"]["unconfirmed"], true);
     for (path, value) in [
@@ -515,7 +527,8 @@ fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
     });
     config["caches"]["project"]["artifacts"] = json!(["target", "zz-socket"]);
     register_artifacts(root.path(), &config);
-    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
     fs::write(
         root.path().join(".chrono-harness/cache.json"),
         serde_json::to_vec(&config).unwrap(),
