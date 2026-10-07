@@ -6,10 +6,8 @@ use chrono_harness::{
 use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as object};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::{self, Write};
 use std::path::Path;
 mod collect;
 mod units;
@@ -40,35 +38,6 @@ pub(crate) fn process_projection(process: &ProcessResult) -> Value {
         object.insert("stderr_omitted".into(), Value::Bool(true));
     }
     value
-}
-
-struct JsonMeasure {
-    digest: Sha256,
-    bytes: usize,
-}
-
-impl Write for JsonMeasure {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.digest.update(bytes);
-        self.bytes = self
-            .bytes
-            .checked_add(bytes.len())
-            .ok_or_else(|| io::Error::other("JSON length overflow"))?;
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-fn measure_json<T: Serialize>(value: &T) -> (usize, String) {
-    let mut output = JsonMeasure {
-        digest: Sha256::new(),
-        bytes: 0,
-    };
-    serde_json::to_writer(&mut output, value).expect("selection evidence is serializable");
-    (output.bytes, format!("{:x}", output.digest.finalize()))
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -761,54 +730,41 @@ fn ci_impact(
     // seeds, traversed edges and selected tests remain available in the same
     // response; omission is explicit and fail-closed consumers can require a
     // smaller scope when they need every witness path inline.
-    const INLINE_SELECTION_EXPLANATION_BYTES: usize = 2 * 1024 * 1024;
     let graph::Closure {
         reached,
         predecessors,
         traversed,
     } = closure;
-    let (edges_size, edges_digest) = measure_json(&edges);
-    let (reached_size, reached_digest) = measure_json(&reached);
-    let (predecessors_size, predecessors_digest) = measure_json(&predecessors);
-    let (traversed_size, traversed_digest) = measure_json(&traversed);
-    let (other_size, _) = measure_json(&(&seed_nodes, &seeds, &extras, &legacy_only));
-    let full_size = edges_size
-        .saturating_add(reached_size)
-        .saturating_add(predecessors_size)
-        .saturating_add(traversed_size)
-        .saturating_add(other_size)
-        .saturating_add(1024);
-    let predecessors_omitted = full_size > INLINE_SELECTION_EXPLANATION_BYTES;
+    // Estimate the derived map from registered node/seed cardinalities only.
+    // No second JSON traversal is allowed here: the graph itself may be large
+    // enough that serialising it merely to decide whether to omit it would
+    // exhaust the judge before the bounded response is written.
+    let predecessor_count = predecessors.values().map(BTreeMap::len).sum::<usize>();
+    let estimated_predecessor_entries = seeds.len().saturating_mul(reached.len());
+    let predecessors_omitted = estimated_predecessor_entries > 16_384
+        || predecessor_count > 16_384
+        || reached.len() > 8_192
+        || traversed.len() > 16_384;
     // Once the predecessor map exceeds the inline budget, retain only bounded
-    // structural counts/digests for the derived closure as well.  Re-emitting
-    // the reached/traversed maps would recreate the same quadratic transport
+    // structural counts for the derived closure as well. Re-emitting the
+    // reached/traversed maps would recreate the same quadratic transport
     // pressure even after removing predecessors.
     let paths_omitted = predecessors_omitted;
-    let predecessor_count = predecessors.values().map(BTreeMap::len).sum::<usize>();
-    let predecessor_digest = if predecessors_omitted {
-        Some(predecessors_digest)
-    } else {
-        None
-    };
     let closure_value = if paths_omitted {
         object!({
             "predecessors_omitted": true,
             "predecessor_count": predecessor_count,
-            "predecessors_sha256": predecessor_digest,
             "reached_omitted": true,
             "reached_count": reached.len(),
-            "reached_sha256": reached_digest,
             "traversed_omitted": true,
-            "traversed_count": traversed.len(),
-            "traversed_sha256": traversed_digest
+            "traversed_count": traversed.len()
         })
     } else if predecessors_omitted {
         object!({
             "reached": reached,
             "traversed": traversed,
             "predecessors_omitted": true,
-            "predecessor_count": predecessor_count,
-            "predecessors_sha256": predecessor_digest
+            "predecessor_count": predecessor_count
         })
     } else {
         object!({
@@ -822,8 +778,7 @@ fn ci_impact(
         "edges": if paths_omitted {
             object!({
                 "omitted": true,
-                "count": edges.len(),
-                "sha256": edges_digest
+                "count": edges.len()
             })
         } else {
             object!(edges)
@@ -838,7 +793,7 @@ fn ci_impact(
         explanation["predecessor_transport"] = object!({
             "omitted": true,
             "count": predecessor_count,
-            "sha256": predecessor_digest
+            "source": "registered FILEMAP graph plus explicit seeds"
         });
     }
     if paths_omitted {
