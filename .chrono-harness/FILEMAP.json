@@ -3733,6 +3733,18 @@
       ]
     },
     {
+      "path": "crates/runner/src/scoped_report.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
       "path": "crates/inputs/src/composition.rs",
       "owner": "inputs",
       "surface": "product",

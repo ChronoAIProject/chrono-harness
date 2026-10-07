@@ -646,3 +646,12 @@ without rerunning business operations. The host adoption requires compatible
 producer and consumer binaries; canonical/native acceptance and measured archive
 costs remain separate obligations. Other report duplication and full SPEC
 completion are not established by this change.
+
+The explicit v2 policy stores judge stdout/stderr as exact separate originals
+and derives the response from verified stdout. It removes inline text, numeric
+byte arrays and the separately serialized response from report metadata. The
+collector bounds metadata plus both streams cumulatively. Rust tests exercise
+non-UTF8 roundtrips, business/transport failures, corruption, missing uploads with
+all local originals removed, and zero business reruns during collection. Host
+adoption and validation remain subject to the same candidate and native checks;
+this does not remove nested business-receipt or acquisition duplication.

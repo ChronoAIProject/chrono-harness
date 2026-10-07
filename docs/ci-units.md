@@ -592,6 +592,27 @@ Upload the registered artifact directory containing both reference and original;
 do not upload only the small reference. This reduces duplicate check-report
 publication; it does not deduplicate other acquisition, process or gather evidence.
 
+With explicit `retained-reference/v2`, the fixed reference format stays the same,
+but its original uses `chrono-check-report/v2`. The original preserves request,
+runner identity, process metadata, exit status, failure and retained path. The
+judge's exact stdout and stderr bytes are retained separately through the existing
+original mechanism; `judge.stdout_original` and `judge.stderr_original` each hold
+`{path, sha256}`. The report has no separate `response` or inline judge `stdout`,
+`stderr`, `stdout_bytes`, `stderr_bytes`. Collection verifies both stream hashes
+against their references and process metadata, restores transient process views,
+and decodes the response from original stdout. Existing protocol, executable,
+plan, receipt and verdict checks still apply. Business and transport failures keep
+their original status and bytes; the bounded console points to the report.
+
+For v2, `report_bytes` covers the combined bytes of original report metadata,
+stdout and stderr for each unit. The fixed reference has its own bound of the
+same size. Collection resolves every original through the declared transport;
+missing or damaged streams cannot fall back to producer-local copies. Upload the
+whole registered artifact directory and upgrade all actual readers before
+adoption. Inline stream views are rejected; consumers must use verified original bytes. This storage contract does not deduplicate business receipts
+inside judge output or other acquisition evidence. V1 and omitted policy keep
+their existing formats.
+
 Hosts may declare independent collection read limits in their check policy:
 
 ```json
@@ -603,7 +624,8 @@ Hosts may declare independent collection read limits in their check policy:
 
 Both values are positive byte counts below the platform's `usize::MAX`;
 an omitted object preserves the existing
-64 MiB limit for each file. A supplied object requires both fields and accepts no
+64 MiB limit (per file, or the v2 original-and-stream total described above).
+A supplied object requires both fields and accepts no
 unknown fields or explicit `null`. It is a scoped-v3 extension; older binaries reject the new field,
 so install a release containing it before adopting the policy. Each original unit
 report is read and verified separately. The limit applies to its actual serialized

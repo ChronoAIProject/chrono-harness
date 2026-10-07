@@ -20,6 +20,7 @@ pub mod prepared;
 #[cfg(unix)]
 pub mod process_fds;
 pub mod retained_artifacts;
+pub mod scoped_report;
 mod short_console;
 pub mod units;
 pub mod wire;
@@ -1248,6 +1249,17 @@ fn execute_check(
         candidate,
         initial,
     };
+    let retention = req.observations["preparation"]["request"]
+        .as_object()
+        .map(|_| {
+            serde_json::from_value::<prepared::InputRequest>(
+                req.observations["preparation"]["request"].clone(),
+            )
+            .map(|p| prepared::retention_directory(&p))
+        })
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let retained_streams = units::stream_publication(&c);
     let report_path = prepare_publication(&root, &output_path)?;
     let input = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     let proc = if req.observations["preparation"].is_object() {
@@ -1306,15 +1318,26 @@ fn execute_check(
                 Some(failure) => Err(failure.clone()),
                 None => decode(&p.stdout_bytes),
             };
+            let stored_process = if retained_streams {
+                scoped_report::retain_process(
+                    &root,
+                    retention
+                        .as_deref()
+                        .ok_or("missing report retention directory")?,
+                    &p,
+                )?
+            } else {
+                serde_json::to_value(&p).map_err(|e| e.to_string())?
+            };
             match response.and_then(|r| {
                 validate_response_protocol(&r, &request_id, p.exit_code, protocol)?;
                 Ok(r)
             }) {
                 Ok(r) => {
-                    serde_json::json!({"schema":"chrono-check-report/v1","request":req,"judge":p,"response":r,"parity":"unestablished"})
+                    serde_json::json!({"schema":"chrono-check-report/v1","request":req,"judge":stored_process,"response":r,"parity":"unestablished"})
                 }
                 Err(e) => {
-                    serde_json::json!({"schema":"chrono-check-report/v1","request":req,"transport_failure":e,"judge":p})
+                    serde_json::json!({"schema":"chrono-check-report/v1","request":req,"transport_failure":e,"judge":stored_process})
                 }
             }
         }
@@ -1333,17 +1356,22 @@ fn execute_check(
     } else {
         1
     };
-    let retained_report = if report["request"]["observations"]["preparation"].is_object() {
-        let prepared: prepared::InputRequest = serde_json::from_value(
-            report["request"]["observations"]["preparation"]["request"].clone(),
-        )
-        .map_err(|e| e.to_string())?;
-        let path = format!(
-            "{}check-{request_id}.json",
-            prepared::retention_directory(&prepared)
-        );
+    let retained_report = if let Some(directory) = retention {
+        let path = format!("{directory}check-{request_id}.json");
         report["retained_report"] = serde_json::json!(path);
         Some(path)
+    } else {
+        None
+    };
+    let console = if retained_streams {
+        let projection = serde_json::json!({
+            "retained_report": report["retained_report"],
+            "response": report.get("response").map(|r| serde_json::json!({"status":r["status"], "results":r["results"]})),
+            "transport_failure":report["transport_failure"],
+        });
+        report.as_object_mut().unwrap().remove("response");
+        report["schema"] = serde_json::json!(scoped_report::SCHEMA);
+        Some(serde_json::to_string(&projection).map_err(|e| e.to_string())? + "\n")
     } else {
         None
     };
@@ -1376,7 +1404,7 @@ fn execute_check(
                 serde_json::to_vec(&reference).map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
-            return Ok((code, text));
+            return Ok((code, console.unwrap_or(text)));
         }
     }
     fs::write(report_path, &text).map_err(|e| e.to_string())?;

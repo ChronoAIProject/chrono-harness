@@ -404,6 +404,6 @@
       ]
     },
     "facts_config": ".chrono-harness/config.json",
-    "report_publication": "retained-reference/v1"
+    "report_publication": "retained-reference/v2"
   }
 }

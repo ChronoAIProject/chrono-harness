@@ -120,6 +120,12 @@ pub(super) fn collect(
         exit_code: None,
     }];
     let mut verified = vec![];
+    let retained_streams = chrono_harness::units::stream_publication(config);
+    let report_schema = if retained_streams {
+        chrono_harness::scoped_report::SCHEMA
+    } else {
+        "chrono-check-report/v1"
+    };
     for input in &inputs.reports {
         let bytes = read(
             &req.host_root,
@@ -139,7 +145,7 @@ pub(super) fn collect(
             return Err("original evidence transport is not a declared artifact".into());
         }
         let published = json(&bytes)?;
-        let report = if chrono_harness::units::reference_publication(config)? {
+        let (report, mut remaining) = if chrono_harness::units::reference_publication(config)? {
             let reference: chrono_harness::units::ReportReference =
                 serde_json::from_value(published).map_err(|e| e.to_string())?;
             if reference.schema != chrono_harness::units::REPORT_REFERENCE {
@@ -163,24 +169,21 @@ pub(super) fn collect(
                 ));
             }
             let original = json(&raw)?;
-            if original["schema"] != "chrono-check-report/v1" {
+            if original["schema"] != report_schema {
                 return Err(format!("unit transport failed: {}", input.unit));
             }
             if original["retained_report"] != reference.original.path {
                 return Err(format!("original report path mismatch: {}", input.unit));
             }
-            original
+            (original, limits.report_bytes - raw.len() as u64)
         } else {
-            published
+            (published, 0)
         };
-        if report["schema"] != "chrono-check-report/v1" || report.get("transport_failure").is_some()
-        {
+        if report["schema"] != report_schema || report.get("transport_failure").is_some() {
             return Err(format!("unit transport failed: {}", input.unit));
         }
         let original: Request =
             serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
-        let response: Response =
-            serde_json::from_value(report["response"].clone()).map_err(|e| e.to_string())?;
         if let Some(binding) = original
             .observations
             .get("preparation")
@@ -203,9 +206,35 @@ pub(super) fn collect(
         } else if input.artifacts.is_some() {
             return Err("native short report missing original preparation".into());
         }
-        let producer: ProcessResult =
-            serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?;
+        let producer: ProcessResult = if retained_streams {
+            if report.get("response").is_some() {
+                return Err("retained-stream report cannot contain a separate response".into());
+            }
+            chrono_harness::scoped_report::restore_process(&report["judge"], |original| {
+                let path =
+                    chrono_harness::prepared::original_path(original, input.artifacts.as_ref())?;
+                let raw = read(
+                    &req.host_root,
+                    &path,
+                    p,
+                    "report_bytes (remaining original/stream budget)",
+                    remaining,
+                )?;
+                remaining -= raw.len() as u64;
+                Ok(raw)
+            })?
+        } else {
+            serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
+        };
         process(&producer)?;
+        let decoded = json(&producer.stdout_bytes)?;
+        let response_value = if retained_streams {
+            decoded.clone()
+        } else {
+            report["response"].clone()
+        };
+        let response: Response =
+            serde_json::from_value(response_value.clone()).map_err(|e| e.to_string())?;
         chrono_harness::validate_response_protocol(
             &response,
             &original.request_id,
@@ -226,7 +255,7 @@ pub(super) fn collect(
             || producer.sha256 != input.judge_sha256
             || producer.stdin_sha256
                 != sha256(&serde_json::to_vec(&original).map_err(|e| e.to_string())?)
-            || json(&producer.stdout_bytes)? != report["response"]
+            || decoded != response_value
             || producer.cwd != original.host_root
             || producer.failure.is_some()
         {

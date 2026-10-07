@@ -491,6 +491,229 @@ fn referenced_report(root: &Path, path: &str, out: &std::process::Output) -> Val
     report
 }
 
+fn stream_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
+    let reference: Value = serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
+    assert_eq!(reference["schema"], "chrono-check-reference/v1");
+    let original = reference["original"]["path"].as_str().unwrap();
+    let raw = fs::read(root.join(original)).unwrap();
+    assert_eq!(reference["original"]["sha256"], sha256(&raw));
+    let mut report: Value = serde_json::from_slice(&raw).unwrap();
+    assert_eq!(report["schema"], "chrono-check-report/v2");
+    assert_eq!(report["retained_report"], original);
+    assert!(report.get("response").is_none());
+    for key in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+        assert!(report["judge"].get(key).is_none());
+    }
+    for stream in ["stdout", "stderr"] {
+        let r = &report["judge"][format!("{stream}_original")];
+        let bytes = fs::read(root.join(r["path"].as_str().unwrap())).unwrap();
+        assert_eq!(r["sha256"], sha256(&bytes));
+        assert_eq!(report["judge"][format!("{stream}_sha256")], r["sha256"]);
+        if stream == "stdout" && report.get("transport_failure").is_none() {
+            report["response"] = serde_json::from_slice(&bytes).unwrap();
+        }
+    }
+    assert!(String::from_utf8_lossy(&out.stdout).contains(original));
+    assert!(out.stdout.len() < 16384);
+    report
+}
+
+#[test]
+fn scoped_stream_reports_reject_missing_or_modified_streams_without_business_reruns() {
+    let mut h = ShortHost::new();
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["report_publication"] = json!("retained-reference/v2")
+    });
+    let check = |args: &[&str], path: &str, exit: i32| {
+        let out = h.command(args).output().unwrap();
+        assert_eq!(out.status.code(), Some(exit), "{out:?}");
+        stream_report(&h.root, path, &out)
+    };
+    let alpha = check(
+        &["check", "--unit", "alpha"],
+        ".chrono-harness/state/alpha/check.json",
+        0,
+    );
+    check(
+        &["check", "--unit", "beta"],
+        ".chrono-harness/state/beta/check.json",
+        0,
+    );
+    let calls = ["a", "b"]
+        .map(|id| fs::read(h.root.join(format!(".chrono-harness/state/calls-{id}"))).unwrap());
+    let collected = check(
+        &["check", "--collect"],
+        ".chrono-harness/state/check.json",
+        0,
+    );
+    assert_eq!(collected["response"]["evidence"]["executed"], json!([]));
+    let path = h
+        .root
+        .join(alpha["judge"]["stdout_original"]["path"].as_str().unwrap());
+    let raw = fs::read(&path).unwrap();
+    for missing in [false, true] {
+        if missing {
+            fs::remove_file(&path).unwrap();
+        } else {
+            fs::write(&path, b"modified stdout").unwrap();
+        }
+        let failed = check(
+            &["check", "--collect"],
+            ".chrono-harness/state/check.json",
+            1,
+        );
+        let cause = failed["response"]["results"][0]["cause"].as_str().unwrap();
+        assert!(
+            cause.contains(if missing {
+                "No such file"
+            } else {
+                "judge stdout original digest mismatch"
+            }),
+            "{cause}"
+        );
+        fs::write(&path, &raw).unwrap();
+    }
+    check(
+        &["check", "--collect"],
+        ".chrono-harness/state/check.json",
+        0,
+    );
+    for (id, original) in ["a", "b"].into_iter().zip(calls) {
+        assert_eq!(
+            fs::read(h.root.join(format!(".chrono-harness/state/calls-{id}"))).unwrap(),
+            original
+        );
+    }
+}
+
+#[test]
+fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals() {
+    let mut h = ShortHost::new();
+    fs::write(
+        h.root.join("a.sh"),
+        "printf original-business-failure >&2\nexit 19\n",
+    )
+    .unwrap();
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["report_publication"] = json!("retained-reference/v2")
+    });
+    for unit in ["alpha", "beta"] {
+        let out = h.command(&["check", "--unit", unit]).output().unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(if unit == "alpha" { 1 } else { 0 }),
+            "{out:?}"
+        );
+        let report = stream_report(
+            &h.root,
+            &format!(".chrono-harness/state/{unit}/check.json"),
+            &out,
+        );
+        if unit == "alpha" {
+            let process = &report["response"]["evidence"]["executed"][0]["receipt"]["process"];
+            assert_eq!(process["exit_code"], 19);
+            assert_eq!(process["stderr"], "original-business-failure");
+        }
+    }
+    let out = h.command(&["check", "--collect"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let report = stream_report(&h.root, ".chrono-harness/state/check.json", &out);
+    assert_eq!(
+        report["response"]["evidence"]["reports"][0]["status"],
+        "failed-original-retained"
+    );
+    assert_eq!(report["response"]["evidence"]["executed"], json!([]));
+
+    for (mode, expected) in [
+        ("timeout-partial", "process timed out"),
+        ("output-limit", "process output limit exceeded"),
+    ] {
+        let mut h = ShortHost::new();
+        h.modify(".chrono-harness/ci/check.json", |c| {
+            c["policy"]["report_publication"] = json!("retained-reference/v2");
+            c["judge"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
+            c["judge"]["args"] = json!([mode]);
+            c["judge"]["timeout_seconds"] = json!(1);
+            c["judge"]["output_limit_bytes"] = json!(4096);
+        });
+        let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        let report = stream_report(&h.root, ".chrono-harness/state/alpha/check.json", &out);
+        assert_eq!(report["judge"]["failure"], expected);
+        assert_eq!(report["transport_failure"], expected);
+        assert!(report.get("response").is_none());
+        assert!(
+            String::from_utf8_lossy(&out.stdout).contains(expected),
+            "{out:?}"
+        );
+        let bytes = fs::read(
+            h.root
+                .join(report["judge"]["stdout_original"]["path"].as_str().unwrap()),
+        )
+        .unwrap();
+        if mode == "output-limit" {
+            assert_eq!(bytes, vec![b'x'; 4096]);
+        } else {
+            assert!(
+                !bytes.is_empty(),
+                "the partial original must survive timeout"
+            );
+        }
+    }
+}
+
+#[test]
+fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
+    let mut h = ShortHost::new();
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["report_publication"] = json!("retained-reference/v2")
+    });
+    let out = h.command(&["check", "--unit", "alpha"]).output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let first = stream_report(&h.root, ".chrono-harness/state/alpha/check.json", &out);
+    let metadata_bytes = fs::metadata(h.root.join(first["retained_report"].as_str().unwrap()))
+        .unwrap()
+        .len();
+    let stream_bytes = fs::metadata(
+        h.root
+            .join(first["judge"]["stdout_original"]["path"].as_str().unwrap()),
+    )
+    .unwrap()
+    .len();
+    let limit = metadata_bytes + stream_bytes / 2;
+    h.modify(".chrono-harness/ci/check.json", |c| {
+        c["policy"]["collection_limits"] = json!({"manifest_bytes":1048576,"report_bytes":limit})
+    });
+    for unit in ["alpha", "beta"] {
+        let out = h.command(&["check", "--unit", unit]).output().unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let report = stream_report(
+            &h.root,
+            &format!(".chrono-harness/state/{unit}/check.json"),
+            &out,
+        );
+        let meta = fs::metadata(h.root.join(report["retained_report"].as_str().unwrap()))
+            .unwrap()
+            .len();
+        let bytes = fs::metadata(
+            h.root
+                .join(report["judge"]["stdout_original"]["path"].as_str().unwrap()),
+        )
+        .unwrap()
+        .len();
+        assert!(meta < limit && meta + bytes > limit);
+    }
+    let out = h.command(&["check", "--collect"]).output().unwrap();
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let failed = stream_report(&h.root, ".chrono-harness/state/check.json", &out);
+    assert!(
+        failed["response"]["results"][0]["cause"]
+            .as_str()
+            .unwrap()
+            .contains("remaining original/stream budget")
+    );
+}
+
 #[test]
 fn scoped_report_references_retain_originals_and_reject_missing_or_changed_evidence() {
     let mut h = ShortHost::new();

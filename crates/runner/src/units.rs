@@ -18,9 +18,21 @@ pub struct ReportReference {
 pub fn reference_publication(config: &CheckConfig) -> Result<bool, String> {
     match config.policy.get("report_publication") {
         None => Ok(false),
-        Some(value) if config.schema == PROFILE && value == "retained-reference/v1" => Ok(true),
-        Some(_) => Err("report_publication requires scoped v3 retained-reference/v1".into()),
+        Some(value)
+            if config.schema == PROFILE
+                && matches!(
+                    value.as_str(),
+                    Some("retained-reference/v1" | "retained-reference/v2")
+                ) =>
+        {
+            Ok(true)
+        }
+        Some(_) => Err("report_publication requires scoped v3 retained-reference/v1 or v2".into()),
     }
+}
+
+pub fn stream_publication(config: &CheckConfig) -> bool {
+    config.policy["report_publication"] == "retained-reference/v2"
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
