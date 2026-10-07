@@ -165,7 +165,9 @@ inputs and the workflow source revision separately from candidate/base.
 `bootstrap.json` records the selected configuration and actual tools.
 Costs remain unmeasured. The same command alone does not establish local/CI
 parity: ambient compiler backend, SDK, configuration, environment, external input
-and deterministic evaluation are not completely modeled. No cache is enabled.
+and deterministic evaluation are not completely modeled. Registered native caches
+are enabled for declared check/release consumers; see the [cache contract](ci-cache.md)
+for bounded acceptance and remaining input, integrity and lifecycle limits.
 
 ## Configuration and selection contract
 
