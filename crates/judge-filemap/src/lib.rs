@@ -360,7 +360,7 @@ fn produce_environment(
             }
         }
     }
-    let structure = graph::analyze(graph::AnalysisInput {
+    let analysis_input = graph::AnalysisInput {
         base: &ae,
         candidate: &be,
         union: &edges,
@@ -371,7 +371,17 @@ fn produce_environment(
         base_filemap: base.filemap(),
         candidate_filemap: candidate.filemap(),
         reached: &closure.reached,
-    });
+    };
+    let structure = graph::analyze(analysis_input);
+    for issue in graph::validate_structure(analysis_input, &closure, &structure) {
+        findings.push(Finding {
+            code: "E_SELF_DIAGNOSTIC".into(),
+            level: "error".into(),
+            message: issue.message,
+            delta_refs: vec!["/impact/structure".into()],
+            causes: vec![],
+        });
+    }
     let mut historical_context = vec![];
     let mut historical_ambiguities = vec![];
     for (endpoint, inventory) in [("base", &an), ("candidate", &bn)] {

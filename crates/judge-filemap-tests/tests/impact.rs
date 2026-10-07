@@ -6,7 +6,10 @@ use chrono_judge_filemap::{
     produce,
 };
 use serde_json::json;
-use std::{collections::BTreeSet, fs};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+};
 use support::*;
 fn run(a: &Values, b: &Values, d: &[chrono_harness::wire::Delta]) -> (Impact, Vec<Finding>) {
     produce(&load(a), &load(b), CONFIG, d)
@@ -461,6 +464,48 @@ fn shared_graph_does_not_need_full_registration_and_only_execution_edges_select(
         "nonexecution edges cannot select tests"
     );
 }
+
+#[test]
+fn self_diagnostic_rejects_a_mutated_structure_report() {
+    let values = values();
+    let registrations = load(&values);
+    let explicit = chrono_judge_filemap::edges(&registrations);
+    let union = graph::union(&explicit, &explicit);
+    let nodes = registrations.node_data();
+    let node_ids: BTreeSet<_> = nodes.keys().cloned().collect();
+    let closure = graph::closure(
+        &union,
+        &[Seed {
+            id: "mutation".into(),
+            node: "file:src.bin".into(),
+            reference: "src.bin".into(),
+            reason: "test".into(),
+        }],
+    );
+    let owners = BTreeMap::new();
+    let input = graph::AnalysisInput {
+        base: &explicit,
+        candidate: &explicit,
+        union: &union,
+        base_nodes: &node_ids,
+        candidate_nodes: &node_ids,
+        union_nodes: &node_ids,
+        owners: &owners,
+        base_filemap: registrations.filemap(),
+        candidate_filemap: registrations.filemap(),
+        reached: &closure.reached,
+    };
+    let mut mutated = graph::analyze(input);
+    mutated.union.max_depth += 1;
+    let issues = graph::validate_structure(input, &closure, &mutated);
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.message.contains("maximum depth")),
+        "mutating a structural verdict must be observable: {issues:?}"
+    );
+}
+
 #[test]
 fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
     let mut a = values();
