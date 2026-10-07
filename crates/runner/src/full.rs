@@ -550,15 +550,10 @@ pub fn validate_execution(
                         .canonical()
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id} canonical: {e}"))?,
                 );
-                if record["request_id"] != request.request_id
-                    || record["request_digest"] != request_digest
-                {
+                if record["request_id"] != request.request_id {
                     return Err(format!(
-                        "E_SELF_DIAGNOSTIC: record {id} request identity differs from DAG (observed id {:?}, expected {:?}, observed digest {:?}, expected {:?})",
-                        record["request_id"],
-                        request.request_id,
-                        record["request_digest"],
-                        request_digest
+                        "E_SELF_DIAGNOSTIC: record {id} request identity differs from DAG (observed id {:?}, expected {:?})",
+                        record["request_id"], request.request_id
                     ));
                 }
                 if process.stdin_sha256 != request_digest {
@@ -572,9 +567,22 @@ pub fn validate_execution(
                             "E_SELF_DIAGNOSTIC: record {id} has an empty transport failure"
                         ));
                     }
+                    if record
+                        .get("request_digest")
+                        .is_some_and(|digest| digest != &Value::String(request_digest.clone()))
+                    {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} request digest differs from process"
+                        ));
+                    }
                     expected_status = expected_status.max(Status::Error);
                     failed.insert(binding.id.clone());
                 } else {
+                    if record["request_digest"] != request_digest {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} request digest differs from DAG"
+                        ));
+                    }
                     let response: Response =
                         serde_json::from_value(record.get("response").cloned().ok_or_else(
                             || format!("E_SELF_DIAGNOSTIC: executed record {id} has no response"),
