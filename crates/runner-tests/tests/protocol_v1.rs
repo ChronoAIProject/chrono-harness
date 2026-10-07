@@ -631,6 +631,8 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
         ),
         ("/process/environment", value!({"FORGED":"yes"})),
         ("/process/environment_digest", value!("forged")),
+        ("/process/stdout_sha256", value!("forged")),
+        ("/process/stdout", value!("forged")),
     ] {
         let mut changed_records = records.clone();
         *changed_records[0].pointer_mut(pointer).unwrap() = changed;
@@ -673,6 +675,36 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
         &[binding],
         &wire::Status::Pass,
         &status_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+}
+
+#[test]
+fn execution_self_diagnostic_rejects_forged_transport_failure_for_valid_execution() {
+    let (_dir, request, binding) = fixture(value!({"kind":"response"}));
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Pass);
+
+    // A caller that edits both the row and aggregate status must not be able
+    // to turn a valid response into a fabricated transport failure.  The
+    // process receipt is otherwise unchanged, so this mutation specifically
+    // exercises the relation between retained stdout and the failure state.
+    let mut forged = records;
+    forged[0]["transport_failure"] = value!("forged transport failure");
+    forged[0].as_object_mut().unwrap().remove("response");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        std::slice::from_ref(&binding),
+        &wire::Status::Error,
+        &forged,
     )
     .unwrap_err();
     assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");

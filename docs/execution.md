@@ -209,6 +209,9 @@ the process executable/argv/cwd/environment receipt against its binding, matches
 identity/status/findings to the observed process exit, verifies that blocked
 records name failed registered predecessors or reproduce a request-construction
 failure, checks successful response bytes against the original process stdout,
+checks retained stdout/stderr text and digests against their original bytes,
+and rejects a transport-failure record when the retained process has a valid
+protocol response or its process failure evidence does not match the record,
 checks pre-launch error records for the expected request identity and the
 absence of process, response, exit, and stdin evidence,
 and recomputes the aggregate status. Any contradiction is

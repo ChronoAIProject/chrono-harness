@@ -1,6 +1,6 @@
 //! Full-format orchestration: fixed facts, declared DAG, external processes and aggregation.
 use crate::{
-    facts, json, no_symlink_parents, sha256,
+    decode, facts, json, no_symlink_parents, sha256,
     wire::{self, Binding, Context, Endpoint, Executable, Registries, Request, Response, Status},
 };
 use serde::Deserialize;
@@ -549,6 +549,8 @@ pub fn validate_execution(
                 })?;
                 let process: crate::ProcessResult = serde_json::from_value(process.clone())
                     .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} process: {e}"))?;
+                validate_process_receipt(&process, &format!("record {id}"))
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: {e}"))?;
                 let expected_executable =
                     no_symlink_parents(&template.candidate.root, &binding.executable).map_err(
                         |e| format!("E_SELF_DIAGNOSTIC: record {id} executable binding: {e}"),
@@ -624,6 +626,8 @@ pub fn validate_execution(
                             "E_SELF_DIAGNOSTIC: record {id} request digest differs from process"
                         ));
                     }
+                    validate_transport_failure(message.as_str().unwrap(), &process, &request)
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
                     expected_status = expected_status.max(Status::Error);
                     failed.insert(binding.id.clone());
                 } else {
@@ -742,6 +746,48 @@ pub fn validate_execution(
         return Err(format!(
             "E_SELF_DIAGNOSTIC: aggregate status {status:?} differs from records {expected_status:?}"
         ));
+    }
+    Ok(())
+}
+
+/// Check receipt invariants independently of the process loop.  These checks
+/// deliberately derive facts from retained bytes rather than enumerating
+/// possible runtime error strings.
+fn validate_process_receipt(process: &crate::ProcessResult, label: &str) -> Result<(), String> {
+    if process.stdout_sha256 != sha256(&process.stdout_bytes)
+        || process.stderr_sha256 != sha256(&process.stderr_bytes)
+        || process.stdout != String::from_utf8_lossy(&process.stdout_bytes)
+        || process.stderr != String::from_utf8_lossy(&process.stderr_bytes)
+    {
+        return Err(format!(
+            "{label} output receipt differs from retained bytes"
+        ));
+    }
+    Ok(())
+}
+
+/// Validate the relation between a transport failure and the independently
+/// retained process observation.  The process engine owns its failure text;
+/// protocol failures are checked by replaying the protocol predicate over the
+/// captured bytes, without maintaining a list of expected error messages.
+fn validate_transport_failure(
+    message: &str,
+    process: &crate::ProcessResult,
+    request: &Request,
+) -> Result<(), String> {
+    if let Some(failure) = process.failure.as_deref() {
+        if message != failure {
+            return Err("transport failure differs from process failure evidence".into());
+        }
+        return Ok(());
+    }
+
+    let protocol_result = decode::<Response>(&process.stdout_bytes).and_then(|response| {
+        wire::validate_response(request, &response, process.exit_code)?;
+        Ok(())
+    });
+    if protocol_result.is_ok() {
+        return Err("transport failure accompanies a valid protocol response".into());
     }
     Ok(())
 }
