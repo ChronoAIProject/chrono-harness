@@ -417,11 +417,17 @@ local 独立 scopes 仅在当前端点、birth／role 与输入引用一致且�
 
 宿主自定义与更新是交付合同：单元、启动参数、平台、超时及扩展调用由宿主显式配置；安装新二进制不重置这些源。`init` 保留已有宿主源，常规修改仍从该源生成和核验。显式迁移以旧、新 provider 为输入，先核旧投影及所有目标冲突，再更新受管输出、退休不再使用的旧输出；保留新源和无关宿主文件，不推断测试归属或替宿主改登记。公开 beta.13 的 `chrono-ci migrate` 支持 scoped v1／units 到 units，以及同源地址的显式旧配置快照；初始 inventory、full 和 release 合同不在该迁移入口中。完整 CLI 与失败边界见上述合同；投影迁移通过不等于 CI、完整治理或跨文件事务通过。
 
+一个测试项目可以显式登记多个测试组并分别绑定 CI 单元，不为分组另造生产／测试项目。分组须保留原测试义务，使用登记的库存判法核对当前未过滤集合：各组非空、互斥、并集完整，不能按历史数量或隐式发现规则选测。共享编译输出与库存操作仍登记互斥；原未过滤入口、各组执行边界和超时分别明确，不把分组后的多个预算声称为原单项总预算。宿主 projects 的普通测试和真实宿主迁移测试采用此分组，原断言与测试内时限保留，具体登记见 [独立 CI 单元](docs/ci-units.md)。分组不证明总工作量减少或原生时限充分。
+
+共享启动产物须显式登记真实消费者、需求、用途与安装入口。可由已有 detector 构建一次，向所选单元及汇总传递；不新增专门启动 job，不取消实际业务检查。消费者须核原提交／配置、平台及文件身份，保留原构建报告并区分复用与本地构建。重跑使用原生产者的 artifact ID 与绑定，不能按当前 attempt 猜测或在输入缺失时静默成功。二进制传递目录与证据上传目录隔离；转移构建后，删除已无实际生产操作的编译缓存订阅，传输与安装开销纳入原有资源观察。生成器只投影登记合同，身份核验及平台适用性由宿主安装器负责，不推断语言或目录。
+
 ### 4.2 CI 缓存与增量编译（目标合同）
 
 CI 必须实际恢复和保存可重建缓存，覆盖启动工具、当前判官及所选生产／测试项目的编译工作。检查与发布 CI 均适用；检测、单元及汇总 job 按各自登记的消费者取缓存，不默认构建或缓存全仓项目。仅有名为 cache 的本地目录或 artifact 上传不算跨运行缓存已启用。
 
 缓存政策与 provider 源由宿主在 `.chrono-harness/` 显式登记，沿现有 generate/verify 入口生成与核验 CI 投影；不得独立手改生成 YAML。逐项登记缓存 ID、所有者、生产／消费操作、准确路径、兼容输入、键的构造、允许的恢复前缀、恢复／保存时机和处置方式。路径引用已有登记工件或显式外部工具缓存，不按目录、语言或文件扫描发现缓存。执行与选测仍只消费 FILEMAP 的声明。
+
+同一 provider 配置中的一个缓存 ID 至多登记一个保存 job。`save_caches` 显式选择各 job 的保存子集；省略表示保存全部所选缓存，空数组表示只恢复。生成／校验预检在写投影前拒绝多个保存者，报 `E_CACHE_SAVE_OWNERSHIP` 并列出缓存与冲突 job；不自动选择保存者、不增加 job 或跨单元等待。允许全部消费者只恢复；指定保存者被跳过或未满足保存条件时，本轮没有新归档。独立生产域（如不同发布平台）须各有显式缓存身份，不由程序推断拆分。
 
 | 缓存内容 | 必须保留与复用的范围 |
 | --- | --- |
@@ -432,6 +438,8 @@ CI 必须实际恢复和保存可重建缓存，覆盖启动工具、当前判�
 Rust 的登记编译操作必须启用增量编译，并将各项目实际使用的 `target` 中增量数据一并纳入持久缓存。debug/test 与 release 的 profile、`CARGO_INCREMENTAL`／profile 配置及真实生效值均须登记；不能只缓存包下载、最终二进制，或在 CI 关闭 incremental 后宣称缓存了增量编译。其它工具链按其显式登记的增量／编译缓存合同采用，不由通用 runner 推断实现。
 
 缓存兼容域必须绑定缓存格式、生产／消费项目及操作、OS／架构／target、实际工具链与编译器身份、profile／features／flags，以及已登记的链接器／SDK／build-script／配置／环境输入。锁文件、manifest 与显式直接依赖的构建输入也进入相应键。提交 OID 可区分保存代际，但不能作为唯一兼容判断或唯一恢复条件，使每次源码变化都丢失可用的编译缓存。键必须由实际声明输入确定，不能用不相关目录变化替代依赖。
+
+同一 JSON 文件混合构建参数与单元登记时，可用 `json-value` 输入显式登记字面 `path` 与 RFC 6901 `pointer`。键只绑定所选 JSON 值；对象键顺序、格式与未选字段不影响键。空 pointer 选择全文，显式 null 是值，缺文件、非法 JSON／pointer 或缺所选字段均失败。全文件摘要与长度作为 `source_file` 来源读数保留在计划中，不进入所选值的身份；路径及输入／缓存输出隔离继续适用。宿主明确选择字段，程序不推断编译参数。隔离回归须同时检验无关登记变化不改变键、实际构建参数变化改变兼容域；这不证明未登记输入不存在。
 
 依赖取得、可复用编译中间产物与可直接执行的二进制分别明确恢复条件。编译缓存可以从同一兼容域的旧源码键恢复，以登记构建命令校验指纹并增量重建；跨工具链、target、profile 或其它不兼容域不得宽前缀恢复。直接复用判官二进制还须绑定候选源码及其显式传递依赖、锁文件和全部登记构建输入，核实际版本与摘要符合当前执行物绑定。缺少身份、来源绑定或完整适用输入时，将它作为构建候选或重建，不直接执行为候选判官；缓存中的历史判官不得参与当前裁决。
 
@@ -656,6 +664,22 @@ outputs 是登记的具名结果，filemap 的 impact 按上述结构；无结�
 
 对任意路径、文本、OS／工具错误、外部响应及其它开放或无限输入集合，按类型、结构、语义不变量和能力边界定义通用处理规则，不逐个样本、消息片段、文件名或测试 case 打补丁。只有已登记的有限协议值／错误码可以枚举；未知成员进入统一且保留原始输入／异常的规则，不把未知当通过。新特殊分支必须具有独立语义和明确适用边界，不能只覆盖曾出现的一个失败文本。检查使用等价类、成功／失败／边界预期及必要反例；通过有限样本不宣称无限集合已穷举。
 
+现役缓存恢复可由宿主 v2 明确采用 `recover_failed_restores`：在独占的原生恢复阶段、原构建开始前，以固定计划和原观察重新核对登记，仅清理 restore 原始 outcome=failure 的登记宿主产物，保留原失败、intent、逐项结果及发布异常，再沿原构建入口执行。登记漂移、路径别名、缺失／未知原生结果、未完成 intent 或清理失败须阻断；已完成尝试的重入只返回原结果，不再次删除后来构建的产物。外部目录和 linked worktree 尚不支持；该机制不替代完整归档校验，也不证明成功 restore 的内容未损坏。报告必须保留恢复原始证据，不能把恢复成功改写为原 restore 或业务检查成功。
+
+宿主还可显式采用 `recover_unconfirmed_restores`，须同时采用上述失败恢复及隔离边界，省略保持旧行为。同一恢复入口在原生步骤 success 却没有命中键、键为空或不在登记兼容域时，也清理对应登记输出，避免下载／解压异常被原生实现转为警告后留下部分产物。原步骤不改判；缺键仍是 miss-or-unavailable，清理不证明缓存原先损坏。恢复与报告共享键分类，命中 exact／compatible 或明确 skipped 保留输出；缺失／取消 outcome 及畸形 outputs 在删除前失败。策略绑定恢复计划但不使未变编译缓存失效。普通冷缓存且没有残留工件时不制造恢复错误警告；删除残留、原生失败和后续构建失败仍分别保留。该扩展不校验声称有效命中后的完整内容，也不自动完成原生损坏实验、外部目录或 linked-worktree 的所有权合同。
+
+最终缓存报告须按固定计划逐项核对恢复阶段与报告阶段的 restore 原始观测。后续构建、测试和保存可增加其它步骤，既有恢复观测不得丢失或改写；不一致时先保留两端原始记录，以缓存 ID 和原件路径报 `E_CACHE_REPORT`，不发布正常 transport 报告、不查询后端。该核对只证明两份观测一致，不证明原生动作或缓存内容正确。
+
+### 7.3 自检的发现能力（目标合同）
+
+Harness 自身的检查、观测、缓存与资源报告也按独立生产／测试单元登记。修复已知盲点时，专属测试须先构造实际异常或等价的受控故障，验证异常确实进入原始报告及面向消费者的失败、警告或未知状态；只验证正常路径通过不足以验收发现能力。适用时先确认旧实现不能通过该回归。诊断故障由实际生产者保留，不能因业务步骤成功、检查器没有输出或查询不可用而报告正常。登记的必需报告无法生成或保存时，报告入口须非零并向上传播，工作流不得整体忽略该报告程序的退出码；已完整记录的可恢复后端异常可保留为非致命警告，两者不得混淆。
+
+发现与修复分别验收：暴露错误不等于已消除原因，一次重跑通过不关闭历史失败。修复保持原功能与测试义务，并核对应异常的报告、恢复行为及未解决边界。已知遗漏须补入真实所有者的回归和登记；不推断依赖，不宣称可以自动发现所有未知缺陷。
+
+观测优先复用现有执行、原始证据、报告与同一 check 入口。新增探测须登记实际消费者、所需读数、界限及成本；无适用操作则不启动探测，不以自检之名新增没有消费者的全仓扫描或常驻任务。测试和观测只能说明已验证范围的发现能力，不能从“没有告警”推出整个系统健康。
+
+独立报告生产者的构建记录须使用明确登记的独立输出位置，不能被后续无关构建覆盖。报告保留实际程序路径、文件摘要与版本，消费者核对其构建记录与源码身份；缺记录、脏源码或身份不符不得声称完成源码绑定。路径摘要是文件观察，不证明完整编译输入或已加载内存身份。
+
 ## 8. 默认判官、规则表面与警告
 
 当前 judges.json 登记以下判官；registration、filemap、routes、projects、cost、mixed、workflow 已实现有界合同，宿主绑定仍 proposed，不存在默认隐形 gate。
@@ -721,6 +745,10 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 ### 9.1 暴露登记与执行中的资源问题
 
+证据的固定发布地址可以由宿主显式选择保存原件引用，不重复保存完整正文。scoped v3 的 `policy.report_publication = "retained-reference/v1"` 只适用于已准备输入的短 check；固定地址保存 `chrono-check-reference/v1` 的原件路径和 SHA-256，完整报告先独立保留，控制台指向完整原件。未采用保持旧格式，未知值、null 及旧 profile 采用须拒绝。汇总核固定引用摘要，再按登记上传映射核原件摘要、原始留存路径、实际字节上限及既有全部报告义务；缺失、损坏、越界、链接或引用链不得通过。不删除历史原件，不改变业务失败，不新增 job 或重执行业务。宿主采用前须配套升级生产者及实际消费者；该机制只消除 check 报告固定地址与原件的正文重复，不宣称其它证据已去重。
+
+显式采用 `retained-reference/v2` 时，固定引用格式不变，原件为 `chrono-check-report/v2`。判官 stdout／stderr 各按原始字节独立保留，以路径和 SHA-256 引用；进程身份、退出码、失败、请求与报告身份保留。报告不再另存 stdout／stderr 文本、数字字节数组或独立 response；消费者核原字节后在内存重建进程视图，并从原 stdout 解码唯一 response。汇总继续执行既有协议、进程、执行物、计划、回执和判词校验；不能因存储投影而改变原业务失败。`report_bytes` 对每份原件累计约束元数据＋stdout＋stderr，固定引用另受相同上限约束。引用及全部原件须经过同一已登记上传映射；缺失、损坏、未登记、越界、链接、重复内联视图或超出累计上限均失败。本地与原生消费者须配套升级；旧版本政策保持原义。不宣称业务回执内部或其它采集证据已去重。
+
 按登记执行成功不证明登记必要、消费真实或资源合理。宿主须把库源码依赖与运行所需发布资产分开登记；前置构建／下载与显式消费合同不符时报错，缺少消费说明时给出具名单元和未验证依赖，不把未知当作已合理。声明只能证明一致性；必要性须由真实消费者和适用的隔离／反例验证支持，不自动猜测或删改依赖。
 
 发现冗余、漏检或误判后，先把实际问题写成能推翻旧行为的回归场景，再修原生产者。回归约束消费语义、完整原测试和登记投影的对应，不把当下的单元数量或全量前置固化为永远正确。独立单元的库调用测试应能在未提供发布二进制时完整执行；实际 CLI 消费仍须取得其明确选择的产物。
@@ -729,9 +757,9 @@ executables 仍是 `{path, sha256, version}` 列表：runner 使用自身执行�
 
 现役发布配方 v5 的可选 `verification_consumers` 以验证单元 ID 登记 `{need, release_assets}`；预检核资产引用唯一且其生产者恰为该单元 `needs`。报告区分 `declared` 与 `unverified`，有发布前置却无说明时输出 `W_RELEASE_CONSUMPTION_UNVERIFIED`。它不证明消费说明真实或依赖最小；本宿主逐项登记全部验证单元的实际发布资产消费。
 
-parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categories` 分类现有 jobs 响应，将步骤读数、分类汇总、未知值与来源摘要写入原始 gather 报告；显式 `summary_environment` 可将简表写入已继承的 GitHub summary 文件。不新增 CI job、API 请求或业务执行。时间只计唯一 job ID 下有效已完成步骤；相同分页行去重，冲突身份排除并报告。范围包含观察到的旧 attempt，不冒充完整运行史；缺步骤、未分类、未完成、无响应均显式保留。汇总尚在运行，后续步骤无读数；检查步骤内部编译／测试拆分、排队、峰值及计费仍未知。它不改变准入判词或推断依赖必要性。其余单元消费核验、完整资源分项与普遍冗余诊断仍未完成。
+parent CI 的可选 `gather.resource_observation` 用宿主显式 `step_categories` 分类现有 jobs 响应，将步骤读数、分类汇总、未知值与来源摘要写入原始 gather 报告；显式 `summary_environment` 可将简表写入已继承的 GitHub summary 文件。不新增 CI job、API 请求或业务执行。时间及比较只计当前 attempt API 视图内唯一 job ID 下有效已完成步骤；相同分页行去重，冲突身份排除并报告。旧 attempt 的 job ID／attempt 显式列为排除项，完整行及失败仍保存在原始响应。GitHub 可用新 ID 将已完成 job 沿用到新 attempt；当前视图可含沿用结果，既不代表本次重跑成本，也不代表去重后的完整执行历史。不能把不同 attempt 的 API 行相加，或按相同名字／时间戳猜测执行身份。缺步骤、未分类、未完成、无响应均显式保留。汇总尚在运行，后续步骤无读数；检查步骤内部编译／测试拆分、排队、峰值及计费仍未知。它不改变准入判词或推断依赖必要性。其余单元消费核验、完整资源分项与普遍冗余诊断仍未完成。
 
-该资源登记可在 `comparisons` 按规则 ID 声明两个不同的已登记类别、正有限倍数与非负秒数下限。对同一已完成 job，两个类别的全部实际执行步骤读数完整时，前者达到下限且严格超过后者乘倍数即产生 `W_CI_RESOURCE_COMPARISON`；报告保留规则、job／attempt 与两个实测值，摘要呈现告警。缺类别、缺读数或 job 未完成须具名报告无法比较，跳过 job 不适用；未知不得填零。规则只提示需要审查的成本，不证明冗余或节省，不改变原检查结果。本宿主以倍数 1、下限 60 秒登记 bootstrap 与同 job canonical-check 的比较；缓存准备与传输也须计入优化评估，不能只凭命中或构建变快声称总资源下降。
+该资源登记可在 `comparisons` 按规则 ID 声明两个不同的已登记类别、正有限倍数与非负秒数下限。对同一已完成 job，两个类别的全部实际执行步骤读数完整时，前者达到下限且严格超过后者乘倍数即产生 `W_CI_RESOURCE_COMPARISON`；报告保留规则、job／attempt 与两个实测值，摘要呈现告警。缺类别、缺读数或 job 未完成须具名报告无法比较，跳过 job 不适用；未知不得填零。规则只提示需要审查的成本，不证明冗余或节省，不改变原检查结果。本宿主以倍数 1、下限 60 秒登记 bootstrap 与同 job canonical-check 的比较；detector 以 delta-detection 为参照，bootstrap／缓存准备下限 30 秒、缓存保存下限 10 秒，另以 10 秒下限比较保存与 canonical-check。检测 job 没有 canonical-check，不能把缺少参照的比较当作成本正常。缓存准备与传输也须计入优化评估，不能只凭命中或构建变快声称总资源下降。
 
 ## 10. dev、integration 与过期分支
 
@@ -897,7 +925,7 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 
 §2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
-§4.2、§7.1 与 §7.2 是新增目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，但尚未统一结构化日志与跨层异常链，也未在现役生成的检查／发布 CI 中采用持久的依赖、判官及增量编译缓存。现有 target、bin、名为 cache 的工件目录及原始 artifact 传输不满足这些新增合同。日志／异常记录、缓存登记与投影须由后续实现及显式迁移接入；本次 SPEC 更新不改变当前 schema、执行入口或声称这些验收已通过。具体待实现项同步见 docs/spec-coverage.md。
+§4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。生成成功不证明实际恢复、保存或增量复用；v2 消费者引用原操作登记，恢复前拒绝生产操作已退出计划的缓存订阅，消费者增减不使未变产物失效。当前报告保存 action 原始读数；save 步骤成功本身仍报未确认。v2 可显式登记有界 GitHub 后端查询，在已有 report 步骤只核待确认保存；精确 key/ref 的单一后端条目可报告可用性已观察，不能归因到本次 action 或证明归档内容。分页非原子快照，未观察到不证明不存在；歧义、查询失败、超时与截断保留原始读数及未确认状态，业务失败不改判。无待确认保存不发请求；查询成本计入原 cache-report 分类，凭据值不进入保留环境。启动构建成功的显式子集可在后续检查失败并结束后保存；完整原生验收、后端观察验收、损坏恢复、任意项目的测试失败后独立保存、完整适用输入及 linked worktree 全程租约仍未完成。现有 target、bin、名为 cache 的目录和 artifact 传输本身不满足缓存合同。具体实现边界与待实现项见 docs/ci-cache.md 和 docs/spec-coverage.md。
 
 The native release recipe v2 emits `chrono-native-build/v3` evidence with explicit passed/failed status and ordered actual process records for source observation, installation, versions, builds, registered verification and packaging. Ordinary child failures retain original bytes, hashes and exits before the CLI returns failure; unstarted processes and unknown source identity are not invented. Preflight rejects an existing output or invalid registration without starting work. Native workflow artifact upload is attempted on success and failure; report or directory presence alone is not release success. Hard termination, storage failure recovery, complete build provenance and input closure are not certified by this evidence. The recipe contract remains host-owned under `.chrono-harness/release/`; see [docs/distribution.md](docs/distribution.md).
 
@@ -957,6 +985,8 @@ Unix runner 的中断恢复由同一 process engine 的单个已加入 observer 
 observer 以与执行时限相同的系统单调时钟记录实际内核退出观察。监控恢复时已过期限，仅当该观察严格早于原期限且立即取得真实子进程退出状态，才保留原退出结果；观察缺失、过晚、时钟失败或仍未退出均不授予额外等待。取消、输出上限与收束失败仍独立生效。时间戳是退出的观察上界，不是内核记录的精确退出时间；observer 自身延迟时不推断更早退出。共享布局身份独立钉版，嵌套执行须配套运行时，不兼容继承描述符直接拒绝。
 
 exec 前身份登记失败保留 observer 的实际 kernel errno；child 经已有私有 context descriptor 以有界、核返回值的写入发布固定 stage／reason／errno 记录，pre-exec 所有错误路径不分配，只返回 raw OS error；诊断文字由 parent 在 spawn 失败后构造。诊断缺失或部分写入不替换实际 errno，无 OS errno 的 owner 失败使用 EINVAL。已有 send loop 在原一秒 handoff 内重试 EAGAIN、EINTR、ENOBUFS，耗尽后保留最后 send errno；parent 区分 acknowledgement poll timeout 与 short read。启动失败仍不制造已执行 process／exit／完成回执，不延长原一秒 handoff／清理额度或注册执行时限。Linux pidfd syscall 显式采用已有 `libc::pid_t` ABI 类型；编译修复不证明 Linux 运行行为。
+
+observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 handoff 在原共享内存中保留有界计数及最近的原始 errno／msg_flags。启动失败报告只追加本次 launch 观察窗口内的增量；原 spawn errno 与 child 诊断保留。共享 observer 的读数不归因到某个 child，也不将无读数解释为接收端正常。诊断由 parent 渲染，pre-exec 不增加分配、文件或等待额度；共享布局钉版，所有参与执行物须配套更新。受控接收端描述符耗尽验证能暴露该故障，不证明既有超时皆由同一原因造成。
 
 已登记 v2 birth 的封口中断由原 worktree owner 在正常入口取得实际排除、核原附件与政策后恢复；保留原缺失／部分结果及独立恢复回执，重复中断重用固定回执，不据恢复制造原成功或 finish。新消费在已发布缓存尝试后开启新代际、保留旧 intent/result；后续回收可绑定当前 HEAD。bootstrap 消费原 managed_command_failed 分类，原非零构建与后续生命周期拒绝及报告引用分别保留。
 

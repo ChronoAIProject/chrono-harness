@@ -1470,6 +1470,17 @@ fn failed_live_identity_registration_helper() {
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec() {
+    failed_live_identity_handoff(210, "failed_live_identity_registration_helper");
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_handoff_receive_preserves_original_transport_failure_before_exec() {
+    failed_live_identity_handoff(256, "failed_handoff_receive_helper");
+}
+
+#[cfg(target_os = "macos")]
+fn failed_live_identity_handoff(descriptor_limit: libc::rlim_t, helper: &str) {
     use std::os::unix::process::CommandExt;
     let root = tempfile::tempdir().unwrap();
     let descriptors: Vec<i32> = std::env::var("CHRONO_PROCESS_FDS")
@@ -1478,11 +1489,7 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
         .unwrap_or_default();
     let mut command = std::process::Command::new(std::env::current_exe().unwrap());
     command
-        .args([
-            "--exact",
-            "failed_live_identity_registration_helper",
-            "--nocapture",
-        ])
+        .args(["--exact", helper, "--nocapture"])
         .env("CHRONO_FAILED_HANDOFF", root.path())
         .env_remove("CHRONO_PROCESS_FDS");
     unsafe {
@@ -1490,7 +1497,7 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
             // Keep inherited leases open above the fixed allocation budget.
             // F_DUPFD creates inheritable copies; this helper omits their carrier.
             for fd in &descriptors {
-                if libc::fcntl(*fd, libc::F_DUPFD, 210) < 0 {
+                if libc::fcntl(*fd, libc::F_DUPFD, descriptor_limit as i32) < 0 {
                     return Err(std::io::Error::last_os_error());
                 }
             }
@@ -1508,8 +1515,8 @@ fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec()
                 }
             }
             let limit = libc::rlimit {
-                rlim_cur: 210,
-                rlim_max: 210,
+                rlim_cur: descriptor_limit,
+                rlim_max: descriptor_limit,
             };
             if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) < 0 {
                 return Err(std::io::Error::last_os_error());
@@ -1633,4 +1640,118 @@ fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
     assert_eq!(process.failure.as_deref(), Some(expected.as_str()));
     assert_eq!(process.exit_code, -1);
     assert!(process.stdout_bytes.is_empty());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_handoff_receive_helper() {
+    use std::os::unix::fs::FileExt;
+    let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    let spec = chrono_harness::CommandSpec {
+        program: std::env::current_exe().unwrap().to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "failed_handoff_receive_child_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: [(
+            "CHRONO_FAILED_HANDOFF".into(),
+            root.to_string_lossy().into(),
+        )]
+        .into(),
+        timeout_seconds: 30,
+        output_limit_bytes: 65536,
+    };
+    let digest = sha256(&fs::read(&spec.program).unwrap());
+    let release = fs::File::create_new(root.join("release")).unwrap();
+    let result = std::thread::scope(|scope| {
+        let task = scope.spawn(|| chrono_harness::run_process_observed(root, &spec, &[], &digest));
+        let started = std::time::Instant::now();
+        while !root.join("ready").exists() {
+            assert!(started.elapsed().as_secs() < 10, "child readiness missing");
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        // Only the observer process exhausts descriptors. The already-running
+        // nested launcher retains its independent descriptor budget.
+        let mut held = Vec::new();
+        loop {
+            match fs::File::open("/dev/null") {
+                Ok(file) => held.push(file),
+                Err(error) => {
+                    assert_eq!(error.raw_os_error(), Some(libc::EMFILE));
+                    break;
+                }
+            }
+        }
+        release.write_all_at(b"go", 0).unwrap();
+        let result = task.join().unwrap();
+        drop(held);
+        result
+    })
+    .unwrap();
+    assert_eq!(
+        result.exit_code, 0,
+        "{} {} {:?}",
+        result.stdout, result.stderr, result.failure
+    );
+    assert!(result.failure.is_none(), "{result:?}");
+    assert!(!root.join("unexpected-exec").exists());
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_handoff_receive_child_helper() {
+    let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
+        return;
+    };
+    check_launch_allocations();
+    let root = std::path::Path::new(&root);
+    fs::File::create_new(root.join("ready")).unwrap();
+    let started = std::time::Instant::now();
+    while fs::metadata(root.join("release")).unwrap().len() == 0 {
+        assert!(started.elapsed().as_secs() < 10, "release missing");
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let spec = chrono_harness::CommandSpec {
+        program: std::env::current_exe().unwrap().to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "unexpected_exec_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: [("CHRONO_UNEXPECTED_EXEC".into(), "1".into())].into(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let error = chrono_harness::run_process_observed(
+        root,
+        &spec,
+        &[],
+        &sha256(&fs::read(&spec.program).unwrap()),
+    )
+    .expect_err("unreceived identity must prevent exec");
+    println!("{error}");
+    assert!(error.contains("poll timeout"), "{error}");
+    assert!(
+        error.contains("observer receive"),
+        "missing receiving endpoint diagnostic: {error}"
+    );
+    // macOS reports EMSGSIZE when it cannot externalize SCM_RIGHTS into
+    // the exhausted receiving descriptor table; retain that original errno.
+    assert!(
+        error.contains(&format!("os error {}", libc::EMSGSIZE)),
+        "missing original recvmsg errno: {error}"
+    );
+    assert!(error.contains("observer incomplete handoffs"), "{error}");
+    assert!(
+        error.contains("not attributed to this child"),
+        "shared transport observations must not become a child-specific cause: {error}"
+    );
+    assert!(
+        error.split(';').next().unwrap().contains("os error 22"),
+        "observer diagnostics must preserve the actual spawn errno: {error}"
+    );
 }

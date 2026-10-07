@@ -2,6 +2,7 @@
 """Minimal external compiler/package interfaces for the release recipe tests."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -19,12 +20,14 @@ def main():
     elif executable.name == 'rustup' and args[:2] == ['toolchain', 'install']:
         pass
     elif executable.name == 'cargo' and args[:1] == ['build']:
+        print(json.dumps({'CARGO_INCREMENTAL': os.environ.get('CARGO_INCREMENTAL')}))
         name = Path(args[args.index('--manifest-path') + 1]).parent.name
         destination = Path('out') / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(executable, destination)
     elif args[:1] == ['verify']:
         print('verification ran without unpublished assets')
+        print(json.dumps({'CARGO_INCREMENTAL': os.environ.get('CARGO_INCREMENTAL')}))
     elif args[:1] == ['pack']:
         root = Path(args[args.index('--root') + 1])
         output = Path(args[args.index('--output') + 1])

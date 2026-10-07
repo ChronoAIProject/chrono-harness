@@ -1,0 +1,24 @@
+[package]
+name = "chrono-cache"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Explicit cache input and artifact planning"
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-cache"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-harness = { path = "../runner" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.dev.package.sha2]
+opt-level = 3

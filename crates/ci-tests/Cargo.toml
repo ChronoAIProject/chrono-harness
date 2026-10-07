@@ -30,6 +30,10 @@ path = "tests/git_facts.rs"
 name = "release"
 path = "tests/release.rs"
 
+[[test]]
+name = "cache"
+path = "tests/cache.rs"
+
 [[bin]]
 name = "chrono-ci-test-transport"
 path = "tests/support/transport.rs"

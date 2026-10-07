@@ -289,6 +289,77 @@ fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_
 }
 
 #[test]
+fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() {
+    let mut value = units_config();
+    for (id, directory) in [("same", "inputs/native/"), ("different", "other/native/")] {
+        let mut job = value["jobs"][1].clone();
+        job["id"] = json!(id);
+        job["artifact_name"] = json!(format!("{id}-output"));
+        job["downloads"][0]["directory"] = json!(directory);
+        value["jobs"].as_array_mut().unwrap().push(job);
+    }
+    let c: release::Config = serde_json::from_value(value).unwrap();
+    let yaml = release::render(&c).unwrap();
+    assert_eq!(yaml.matches("uses: actions/download-artifact@").count(), 2);
+    let expanded: Value = serde_yaml_ng::from_str(&yaml).unwrap();
+    for job in c.jobs.iter().skip(1) {
+        let actual = &expanded["jobs"][&job.id];
+        assert_eq!(actual["needs"], json!(job.needs));
+        assert_eq!(actual["timeout-minutes"], job.timeout_minutes);
+        let downloads: Vec<_> = actual["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|step| {
+                step["uses"]
+                    .as_str()
+                    .is_some_and(|v| v.starts_with("actions/download-artifact@"))
+            })
+            .collect();
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(
+            downloads[0]["with"]["artifact-ids"],
+            "${{ needs.native.outputs.artifact_id }}"
+        );
+        assert_eq!(downloads[0]["with"]["path"], job.downloads[0].directory);
+        assert_eq!(downloads[0]["with"]["merge-multiple"], true);
+        assert_eq!(
+            downloads[0]["if"],
+            "${{ always() && needs.native.outputs.artifact_id != '' }}"
+        );
+    }
+}
+
+#[test]
+fn oversized_workflows_reject_adoption_and_generation_without_writes() {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path();
+    let source = root.join("source.json");
+    let mut c = config();
+    c["jobs"][0]["command"] = json!(["echo", "x".repeat(501_000)]);
+    write(root, "source.json", &c);
+    assert!(init(root, &source).unwrap_err().contains("500 KB"));
+    let adopted = root.join(".chrono-harness/ci/release.json");
+    let workflow = root.join(".github/workflows/package.yml");
+    assert!(!adopted.exists());
+    assert!(!workflow.exists());
+    write(root, "source.json", &config());
+    init(root, &source).unwrap();
+    let previous = fs::read(&workflow).unwrap();
+    write(root, ".chrono-harness/ci/release.json", &c);
+    let before = fs::read(&adopted).unwrap();
+    for verify in [false, true] {
+        assert!(
+            generate(root, ".chrono-harness/ci/release.json", verify)
+                .unwrap_err()
+                .contains("500 KB")
+        );
+        assert_eq!(fs::read(&workflow).unwrap(), previous);
+        assert_eq!(fs::read(&adopted).unwrap(), before);
+    }
+}
+
+#[test]
 fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
     for case in 0..7 {
         let mut c = units_config();

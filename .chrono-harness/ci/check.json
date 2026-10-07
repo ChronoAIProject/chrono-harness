@@ -50,7 +50,10 @@
       "crates/worktree/target/",
       "crates/worktree-tests/target/",
       "crates/diagnostics/target/",
-      "crates/diagnostics-tests/target/"
+      "crates/diagnostics-tests/target/",
+      "crates/cache/target/",
+      "crates/cache-tests/target/",
+      ".chrono-harness/startup/"
     ],
     "required_inputs": [
       ".chrono-harness/ci/check.json",
@@ -63,14 +66,18 @@
       ".chrono-harness/ci/workflow-inventory.py",
       ".chrono-harness/ci/workflow-inventory-tests.py",
       ".chrono-harness/ci/workflow-inventory.json",
-      ".chrono-harness/process_fds.py"
+      ".chrono-harness/process_fds.py",
+      ".chrono-harness/ci/projects-inventory.json",
+      ".chrono-harness/ci/bootstrap_shared.py",
+      ".chrono-harness/ci/bootstrap-shared.json"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
     "operation_output_limit_bytes": 1048576,
     "environment": {
       "RUSTUP_TOOLCHAIN": "1.95.0",
-      "CARGO_TERM_COLOR": "never"
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_INCREMENTAL": "1"
     },
     "registration_config": ".chrono-harness/config.json",
     "units": {
@@ -217,12 +224,25 @@
           "test:host-bootstrap-tests"
         ],
         "report_path": ".chrono-harness/state/units/host-bootstrap/check.json"
+      },
+      "cache": {
+        "tests": [
+          "test:cache-tests"
+        ],
+        "report_path": ".chrono-harness/state/units/cache/check.json"
+      },
+      "judge-projects-migration": {
+        "tests": [
+          "test:judge-projects-migration"
+        ],
+        "report_path": ".chrono-harness/state/units/judge-projects-migration/check.json"
       }
     },
     "shared_operations": {
       "build.ci": [
         "ci",
         "judge-projects",
+        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",
@@ -239,7 +259,8 @@
         "ci",
         "judge-cargo",
         "judge-ci",
-        "judge-projects"
+        "judge-projects",
+        "judge-projects-migration"
       ],
       "build.judge-cost": [
         "inputs",
@@ -257,6 +278,7 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
+        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -274,6 +296,7 @@
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
+        "judge-projects-migration",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
@@ -286,6 +309,7 @@
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
+        "judge-projects-migration",
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
@@ -296,6 +320,7 @@
         "judge-cargo",
         "judge-filemap",
         "judge-projects",
+        "judge-projects-migration",
         "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
@@ -312,10 +337,12 @@
         "ci",
         "inputs",
         "judge-cargo",
+        "judge-ci",
         "judge-cost",
         "judge-filemap",
         "judge-mixed",
         "judge-projects",
+        "judge-projects-migration",
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
@@ -362,8 +389,21 @@
       "worktree.inventory": [
         "worktree",
         "worktree-adoption"
+      ],
+      "fmt.judge-projects": [
+        "judge-projects",
+        "judge-projects-migration"
+      ],
+      "fmt.judge-projects-tests": [
+        "judge-projects",
+        "judge-projects-migration"
+      ],
+      "projects.inventory": [
+        "judge-projects",
+        "judge-projects-migration"
       ]
     },
-    "facts_config": ".chrono-harness/config.json"
+    "facts_config": ".chrono-harness/config.json",
+    "report_publication": "retained-reference/v2"
   }
 }

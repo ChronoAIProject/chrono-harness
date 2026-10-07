@@ -56,6 +56,8 @@ pub(super) const MARKER: &str = "# chrono-ci: owned github-units/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persistent_cache: Option<super::cache::Config>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -170,6 +172,14 @@ impl Config {
 }
 
 pub fn validate(c: &Config) -> Result<(), String> {
+    if let Some(cache) = &c.persistent_cache {
+        let mut jobs: BTreeSet<_> = c.units.keys().map(|id| super::gating::job_id(id)).collect();
+        jobs.insert("aggregate".into());
+        if c.job_gating.is_some() {
+            jobs.insert("detect".into());
+        }
+        super::cache::validate(cache, &jobs)?;
+    }
     if !matches!(c.schema.as_str(), SCHEMA | FULL_SCHEMA)
         || c.units.is_empty()
         || c.collection.initial_inventory.is_some()
@@ -504,10 +514,22 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
             &prepare,
             &pre_check,
             &artifact,
-            unit.is_none() || c.native_adoption.is_some(),
+            unit.is_none() || c.native_adoption.is_some() || c.persistent_cache.is_some(),
             c.schema == FULL_SCHEMA,
         )?
         .replacen(super::MARKER, MARKER, 1);
+        let rendered = super::cache::project(
+            c.persistent_cache.as_ref(),
+            &unit
+                .map(super::gating::job_id)
+                .unwrap_or("aggregate".into()),
+            rendered,
+            "Bootstrap registered tools",
+            "Canonical harness check",
+            None,
+            None,
+            Some("Preserve actual check evidence"),
+        )?;
         outputs.insert(w.workflow_path.clone(), rendered);
     }
     Ok(outputs)
@@ -520,6 +542,7 @@ fn projection_changes(
     c: &Config,
     verify: bool,
 ) -> Result<ProjectionChanges, String> {
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let outputs = render(c, path)?;
     let mut writes = vec![];
     let legacy_outputs = if c.job_gating.is_some() {
@@ -527,6 +550,7 @@ fn projection_changes(
         legacy.job_gating = None;
         legacy.gather.resource_observation = None;
         legacy.native_adoption = None;
+        legacy.persistent_cache = None;
         render(&legacy, path)?
     } else {
         BTreeMap::new()
@@ -560,6 +584,7 @@ fn projection_changes(
         legacy.job_gating = None;
         legacy.gather.resource_observation = None;
         legacy.native_adoption = None;
+        legacy.persistent_cache = None;
         for (path, bytes) in render(&legacy, path)? {
             if outputs.contains_key(&path) {
                 continue;
@@ -609,8 +634,10 @@ pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     };
     if !existing && c.job_gating.is_none() && c.collection.schema == "chrono-github-ci/v4" {
         c.job_gating = Some(super::gating::Config {
+            startup: None,
             schema: super::gating::SCHEMA.into(),
             detector: super::gating::Detector {
+                evidence_directory: None,
                 runs_on: c.collection.runs_on.clone(),
                 timeout_minutes: c.collection.timeout_minutes,
                 bootstrap: c.collection.bootstrap.clone(),

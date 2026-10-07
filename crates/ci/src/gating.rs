@@ -14,6 +14,17 @@ pub const NEEDS_ENV: &str = "CHRONO_CI_NEEDS";
 pub struct Config {
     pub schema: String,
     pub detector: Detector,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "startup_present"
+    )]
+    pub startup: Option<super::startup::Config>,
+}
+fn startup_present<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<super::startup::Config>, D::Error> {
+    super::startup::Config::deserialize(d).map(Some)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +34,9 @@ pub struct Detector {
     pub bootstrap: Vec<String>,
     /// Literal source/registration paths chosen by the host, not unit inference.
     pub sparse_checkout: Vec<String>,
+    /// Explicit retained originals; omitted preserves the previous detector.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_directory: Option<String>,
 }
 
 pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
@@ -43,6 +57,17 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
     detector.timeout_minutes = g.detector.timeout_minutes;
     detector.bootstrap = g.detector.bootstrap.clone();
     super::validate_policy(&detector, c.schema == units::FULL_SCHEMA)?;
+    if let Some(directory) = &g.detector.evidence_directory {
+        relative_path(directory.trim_end_matches('/'))?;
+        if !directory.starts_with(".chrono-harness/state/")
+            || !directory.ends_with('/')
+            || directory.contains(['\0', '\n', '\r', '*', '?', '[', ']'])
+            || directory.contains("${{")
+            || !c.collection.include_hidden_files
+        {
+            return Err("detector evidence requires a literal host state directory and explicit hidden-file upload".into());
+        }
+    }
     if g.detector.sparse_checkout.is_empty() {
         return Err("detector requires explicit source/registration checkout paths".into());
     }
@@ -52,6 +77,9 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
         if path.contains(['\n', '\r', '*', '?', '[', ']', '!']) || !paths.insert(path) {
             return Err("detector sparse checkout must contain unique literal paths".into());
         }
+    }
+    if let Some(startup) = &g.startup {
+        super::startup::validate(c, startup)?;
     }
     Ok(())
 }
@@ -162,6 +190,29 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         "          fetch-depth: 2\n          filter: blob:none\n"
     };
     body = body.replacen("          fetch-depth: 0\n", checkout, 1);
+    body = super::cache::project(
+        c.persistent_cache.as_ref(),
+        &unit.map(job_id).unwrap_or("aggregate".into()),
+        body,
+        "Bootstrap registered tools",
+        "Canonical harness check",
+        None,
+        None,
+        Some("Preserve actual check evidence"),
+    )?;
+    if let Some(startup) = c.job_gating.as_ref().and_then(|g| g.startup.as_ref()) {
+        let job = unit.map(job_id).unwrap_or("aggregate".into());
+        let before = if c
+            .persistent_cache
+            .as_ref()
+            .is_some_and(|cache| cache.jobs.contains_key(&job))
+        {
+            "Prepare registered caches"
+        } else {
+            "Bootstrap registered tools"
+        };
+        body = super::startup::consumer(startup, &job, body, before)?;
+    }
     Ok(format!(
         "  {}:\n{body}",
         unit.map(job_id).unwrap_or("aggregate".into())
@@ -207,6 +258,9 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         .map(|s| format!("            {s}\n"))
         .collect::<String>();
     let mut outputs = "      detection: ${{ steps.detect.outputs.detection }}\n".to_string();
+    if g.startup.is_some() {
+        outputs.push_str("      startup_binding: ${{ steps.chrono_startup.outputs.binding }}\n      startup_artifact: ${{ steps.chrono_startup_upload.outputs.artifact-id }}\n");
+    }
     for id in c.units.keys() {
         let job = job_id(id);
         outputs.push_str(&format!(
@@ -249,6 +303,19 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         generator = shell(&c.collection.generator),
         config = shell(path)
     );
+    if let Some(startup) = &g.startup {
+        text = super::startup::producer(c, startup, text)?;
+    }
+    text = super::cache::project(
+        c.persistent_cache.as_ref(),
+        "detect",
+        text,
+        "Bootstrap registered detector tools",
+        "Detect required units from fixed Git endpoints",
+        Some("detect"),
+        g.startup.as_ref().map(|_| "chrono_startup"),
+        None,
+    )?;
     if let Some(a) = &c.native_adoption {
         let command = format!(
             "{} {} publish --config {}",
@@ -257,6 +324,9 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
             shell(path)
         );
         text.push_str(&format!("      - name: Publish shared native context\n        shell: bash\n        env:\n          CHRONO_WORKFLOW_REVISION: ${{{{ github.workflow_sha }}}}\n          CHRONO_CI_DETECTION: ${{{{ steps.detect.outputs.detection }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {command}\n      - name: Upload detector original context\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, a.seed_artifact, scalar(&a.seed_directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
+    }
+    if let Some(directory) = &g.detector.evidence_directory {
+        text.push_str(&format!("      - name: Preserve detector evidence\n        if: ${{{{ always() }}}}\n        uses: {}\n        with:\n          name: chrono-detector-evidence-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, scalar(directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
     }
     for id in c.units.keys() {
         text.push_str(&job(c, path, Some(id))?);

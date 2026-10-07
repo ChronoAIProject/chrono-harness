@@ -13,7 +13,7 @@ use std::{
 };
 const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
-const MAGIC: u64 = 0x4348524f4e4f5033;
+const MAGIC: u64 = 0x4348524f4e4f5034;
 const OBSERVER_FD: i32 = 200;
 // Private copies must not alias the fixed inherited transport descriptors.
 pub(crate) const PRIVATE_FD_MIN: i32 = 202;
@@ -170,7 +170,56 @@ struct Slot {
 struct Shared {
     magic: u64,
     next_generation: AtomicUsize,
+    receive_errors: AtomicU64,
+    incomplete_handoffs: AtomicU64,
     slots: [Slot; CAPACITY],
+}
+// One observer writes each packed counter/detail observation. Readers obtain
+// both in one load; a later receive failure cannot replace only the detail.
+fn observe_receive_failure(observation: &AtomicU64, detail: i32) {
+    let count = (observation.load(Ordering::Relaxed) >> 32).saturating_add(1);
+    observation.store(
+        (count.min(u32::MAX as u64) << 32) | detail as u32 as u64,
+        Ordering::Release,
+    );
+}
+#[derive(Clone, Copy)]
+struct ReceiveSnapshot {
+    errors: u64,
+    incomplete: u64,
+}
+impl ReceiveSnapshot {
+    fn read(shared: &Shared) -> Self {
+        Self {
+            errors: shared.receive_errors.load(Ordering::Acquire),
+            incomplete: shared.incomplete_handoffs.load(Ordering::Acquire),
+        }
+    }
+    fn describe_since(self, before: Self) -> String {
+        let mut details = Vec::new();
+        if self.errors != before.errors {
+            details.push(format!(
+                "observer receive failures during launch: {}; last recvmsg error: {}",
+                (self.errors >> 32).saturating_sub(before.errors >> 32),
+                std::io::Error::from_raw_os_error(self.errors as i32)
+            ));
+        }
+        if self.incomplete != before.incomplete {
+            details.push(format!(
+                "observer incomplete handoffs during launch: {}; last msg_flags: {}",
+                (self.incomplete >> 32).saturating_sub(before.incomplete >> 32),
+                self.incomplete as i32
+            ));
+        }
+        if details.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; {} (shared observer observations, not attributed to this child)",
+                details.join("; ")
+            )
+        }
+    }
 }
 struct Tree {
     file: File,
@@ -240,6 +289,8 @@ impl Tree {
             tree.memory.as_ptr().write(Shared {
                 magic: MAGIC,
                 next_generation: AtomicUsize::new(1),
+                receive_errors: AtomicU64::new(0),
+                incomplete_handoffs: AtomicU64::new(0),
                 slots: std::array::from_fn(|_| Slot {
                     state: AtomicU8::new(0),
                     cancelled: AtomicBool::new(false),
@@ -332,6 +383,7 @@ fn inherited() -> Result<Option<(Arc<Tree>, usize, usize)>, String> {
 }
 pub(crate) struct Launch {
     tree: Arc<Tree>,
+    receive_before: ReceiveSnapshot,
     index: usize,
     context: File,
     acknowledged: AtomicBool,
@@ -394,6 +446,7 @@ impl Launch {
         slot.parent.store(parent, Ordering::Release);
         slot.state.store(2, Ordering::Release);
         let launch = Self {
+            receive_before: ReceiveSnapshot::read(tree.memory()),
             tree,
             index,
             context,
@@ -486,9 +539,11 @@ impl Launch {
     }
     pub(crate) fn spawn_error(&self, error: std::io::Error) -> String {
         use std::os::unix::fs::FileExt;
+        let observations =
+            ReceiveSnapshot::read(self.tree.memory()).describe_since(self.receive_before);
         let mut bytes = [0u8; 12];
         if self.context.read_exact_at(&mut bytes, 16).is_err() {
-            return error.to_string();
+            return format!("{error}{observations}");
         }
         let [stage, reason, errno] = std::array::from_fn(|i| {
             i32::from_ne_bytes(bytes[i * 4..i * 4 + 4].try_into().unwrap())
@@ -510,13 +565,13 @@ impl Launch {
             (7, 5) => "process cancelled by enclosing owner before exec",
             (7, 6) => "invalid process ownership ancestry",
             (8, 1) => "process ownership live exit handoff clock",
-            _ => return error.to_string(),
+            _ => return format!("{error}{observations}"),
         };
         if errno == 0 {
-            format!("{error}; {detail}")
+            format!("{error}; {detail}{observations}")
         } else {
             format!(
-                "{error}; {detail}: {}",
+                "{error}; {detail}: {}{observations}",
                 std::io::Error::from_raw_os_error(errno)
             )
         }
@@ -676,10 +731,17 @@ impl ExitObserver {
                         msg.msg_controllen = std::mem::size_of_val(&control) as _;
                         let n = unsafe { libc::recvmsg(receiver.as_raw_fd(), &mut msg, 0) };
                         if n < 0 {
+                            let errno = std::io::Error::last_os_error()
+                                .raw_os_error()
+                                .unwrap_or(libc::EINVAL);
+                            if !matches!(errno, libc::EAGAIN | libc::EINTR) {
+                                observe_receive_failure(&shared.receive_errors, errno);
+                            }
                             break;
                         }
                         let header = unsafe { libc::CMSG_FIRSTHDR(&msg) };
                         if n as usize != std::mem::size_of_val(&data) || header.is_null() {
+                            observe_receive_failure(&shared.incomplete_handoffs, msg.msg_flags);
                             continue;
                         }
                         let reply =

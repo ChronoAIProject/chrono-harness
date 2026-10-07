@@ -1,5 +1,7 @@
 # 显式发布工作流生成
 
+重复的 v2 下载步骤以 YAML 锚点和别名共享配置；只有生产 job 与目的目录完全相同的登记才复用。每个消费者 job 仍独立执行自己的下载，使用原 artifact ID、条件与目录，`needs`、原命令、时限、并发及证据采集不变。此复用不推断依赖，也不减少实际下载次数。生成器在写入工作流或首次采用配置前检查输出字节数，以 500,000 字节作为 GitHub 500 KB 限额的保守上限；超限失败并保留已有文件。
+
 `chrono-ci` 的 `init`、`generate`、`verify` 按配置中明确的 schema 选择生成合同。既有 `chrono-github-ci/v1`、v2、v3 仍生成检查工作流；`chrono-github-release/v1` 生成原生发布构建工作流。生成器不发现项目、语言、平台或待发布资产，不执行构建或发布。
 
 发布源包含 `schema`、`workflow_path`、`name`、`push_branches`、固定提交的 `checkout_action`／`upload_artifact_action` 和非空 `jobs`。每个 job 明确登记 `id`、`runs_on`、`timeout_minutes`、`command`（完整 argv）、`artifact_name`、`artifact_directory`（以 `/` 结尾的相对目录）。job ID、产物名必须分别唯一；目录不是 glob，参数不作 shell 展开。拒绝未知／重复字段、无效路径、空命令和配置值内的 GitHub 表达式。空 `push_branches` 表示只允许手动触发。
@@ -26,7 +28,7 @@ Rust、发布资产与验证操作属于这个宿主入口及其配方，生成�
 
 专属测试使用真实 CLI 和字面 shell 消费者验证参数、原始失败、定制保留、无写入复用、漂移、错误登记与输出所有权；旧检查工作流测试继续覆盖其原版本语义。生成／测试成功不认证完整输入闭包、任意宿主构建或确定性同判。原 v1 扩展已进入公开 beta.10。本产品生成的发布工作流在[固定源码原生构建](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)中执行，两个平台各通过 371 项登记测试。匿名下载的 macOS CI 二进制另验证了显式发布投影；这些读数不认证其它宿主的构建或 full 工作流执行。
 
-本宿主采用 `chrono-github-release/v2` 与 `chrono-release-build/v5`，每个平台登记 15 个 build、21 个 verification 和一个 `always()` collector/package。Rust 验证继续执行原始未过滤测试操作；Python migration、inventory、宿主 bootstrap、发布配方单元组与真实打包集成组各有独立验证单元。每个 job 和整个单平台执行仍受登记的 45 分钟时限约束。所有验证按实际消费登记构建子集；instructions、routes 与 diagnostics 不消费发布二进制，显式登记空 needs 与 rust_toolchain=true，可独立于资产构建启动。原生两平台验收与公开发行须核对应候选的实际结果。
+本宿主采用 `chrono-github-release/v2` 与 `chrono-release-build/v5`，每个平台登记 16 个 build、22 个 verification 和一个 `always()` collector/package。Rust 验证继续执行原始未过滤测试操作；Python migration、inventory、宿主 bootstrap、发布配方单元组与真实打包集成组各有独立验证单元。每个 job 和整个单平台执行仍受登记的 45 分钟时限约束。所有验证按实际消费登记构建子集；instructions、routes 与 diagnostics 不消费发布二进制，显式登记空 needs 与 rust_toolchain=true，可独立于资产构建启动。原生两平台验收与公开发行须核对应候选的实际结果。
 
 v1 的输出和无依赖行为保留。v2 增加固定提交的 `download_artifact_action`，每个 job 可明确列 `needs`、`downloads`（生产 job 与以 `/` 结尾的字面目的目录）、`always` 和 `dependency_metadata`（字面文件）。生成器核重复／未知依赖、循环及下载／输出／元数据路径重叠，不解析语言、命令或资产来补边。上传步骤直接导出 `artifact_id`，独立原始 attempt 步骤导出 `run_id`／`attempt`；artifact 名附当前 run/attempt，失败产物不覆盖旧尝试。下载只使用选定的原始 artifact ID，不按名称寻找最近产物。`toJson(needs)` 作为原生当前依赖结果及选定输出传给宿主，最终 job 另将同一原始 JSON 写至登记元数据路径。其它宿主可以登记任意字面非 Rust 命令；这些传输字段没有 Rust 或本仓语义。
 

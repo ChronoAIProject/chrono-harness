@@ -72,6 +72,16 @@ fn resource_observations_expose_cost_and_unknowns_without_extra_requests_or_busi
     let mut measured_job = detector.clone();
     measured_job["id"] = json!(201);
     measured_job["name"] = json!("unit alpha");
+    let mut prior_detector = job(
+        199,
+        "Detect registered DELTA",
+        json!([step(
+            "Bootstrap registered tools",
+            "2026-10-07T08:00:00+08:00",
+            "2026-10-07T00:00:02.500Z"
+        )]),
+    );
+    prior_detector["run_attempt"] = json!(1);
     let cases = [
         (
             json!([{"jobs":[job(200,"Detect registered DELTA",json!([])),measured_job.clone()]},{"jobs":[measured_job,active]}]),
@@ -100,7 +110,7 @@ fn resource_observations_expose_cost_and_unknowns_without_extra_requests_or_busi
         (
             json!([{"jobs":[job(200,"Detect registered DELTA",json!([
                 step("Bootstrap registered tools", "2026-10-07T08:00:00+08:00", "2026-10-07T00:00:02.500Z")
-            ]))]}]),
+            ])),prior_detector]}]),
             Some(2.5),
             0,
             0,
@@ -167,8 +177,19 @@ fn resource_observations_expose_cost_and_unknowns_without_extra_requests_or_busi
         assert_eq!(r["unknown_steps"], unknown);
         assert_eq!(r["unclassified_steps"], unclassified);
         assert_eq!(r["summary"]["status"], "written");
+        if seconds == Some(2.5) {
+            assert_eq!(r["scope"], "current-attempt-api-job-view");
+            assert_eq!(r["jobs"].as_array().unwrap().len(), 1);
+            assert_eq!(
+                r["excluded_prior_attempts"],
+                json!([{"job_id":199,"run_attempt":1}])
+            );
+        }
         let text = fs::read_to_string(&summary).unwrap();
         assert!(text.contains("not billing time"));
+        if seconds == Some(2.5) {
+            assert!(text.contains("may include carried results"));
+        }
         assert!(text.contains(&format!("Status: **{status}**")));
         if seconds.is_none() {
             assert!(text.contains("**unknown seconds**"));
@@ -313,6 +334,12 @@ fn resource_comparisons_expose_overhead_without_guessing_missing_measurements() 
             step("execute", 20)
         ]),
     );
+    let mut carried_original = measured.clone();
+    carried_original["id"] = json!(101);
+    carried_original["run_attempt"] = json!(1);
+    let mut earlier_failure = job(99, json!([step("prepare", 120), step("execute", 20)]));
+    earlier_failure["run_attempt"] = json!(1);
+    earlier_failure["conclusion"] = json!("failure");
     let pages = json!([{"jobs":[
         job(200,json!([])),
         measured.clone(),
@@ -323,7 +350,7 @@ fn resource_comparisons_expose_overhead_without_guessing_missing_measurements() 
         job(207,json!([step("prepare",120)])),
         job(208,json!([step("prepare",10),step("execute",20),step("unknown",500)])),
         failed
-    ]},{"jobs":[measured]}]);
+    ]},{"jobs":[measured,carried_original,earlier_failure]}]);
     json_file(
         &h.host.root,
         ".chrono-harness/state/parent-data.json",
@@ -354,6 +381,10 @@ fn resource_comparisons_expose_overhead_without_guessing_missing_measurements() 
         evaluations.len(),
         22,
         "duplicate API rows must not duplicate findings"
+    );
+    assert_eq!(
+        report["resources"]["excluded_prior_attempts"],
+        json!([{"job_id":99,"run_attempt":1},{"job_id":101,"run_attempt":1}])
     );
     let scaled = evaluations
         .iter()

@@ -87,6 +87,92 @@ class Bootstrap(unittest.TestCase):
     def observation(self, commit, tree, dirty):
         return {"commit": commit, "tree": tree, "dirty": dirty, "error": None}
 
+    def test_selected_report_survives_a_later_bootstrap(self):
+        selected = dict(self.config, report_path=".chrono-harness/state/cache/bootstrap.json")
+        self.write_json(self.ci / "cache.json", selected)
+        self.succeeded(self.invoke(".chrono-harness/ci/cache.json"))
+        retained = self.root / selected["report_path"]
+        self.assertTrue(retained.is_file(), "selected bootstrap evidence was not retained")
+        original = retained.read_bytes()
+        result = json.loads(original)
+        self.assertEqual(result["config"], ".chrono-harness/ci/cache.json")
+        self.assertEqual(result["installed"][0]["sha256"], hashlib.sha256(b"binary").hexdigest())
+        self.assertFalse(self.state_path.exists(), "selected report overwrote the default slot")
+
+        self.declare("write", "built-tool", "later binary")
+        self.succeeded(self.invoke())
+        self.assertEqual(retained.read_bytes(), original)
+        self.assertEqual(self.evidence()["config"], ".chrono-harness/ci/bootstrap.json")
+        self.assertEqual(self.evidence()["installed"][0]["sha256"],
+                         hashlib.sha256(b"later binary").hexdigest())
+
+    def test_invalid_report_location_stops_before_tools(self):
+        for value in [None, 1, [], "", "/tmp/bootstrap.json", "bootstrap.json",
+                      ".chrono-harness/ci/overwrite.json", ".chrono-harness/state/../source",
+                      ".chrono-harness/state", ".chrono-harness/state/", ".chrono-harness/state//a.json"]:
+            with self.subTest(value=value):
+                self.write_json(self.ci / "bootstrap.json", dict(self.config, report_path=value))
+                result = self.invoke()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"bootstrap report must be an explicit host state file", result.stderr)
+                self.assertFalse((self.tools / "calls.json").exists())
+
+    def test_report_write_failure_is_not_success(self):
+        selected = dict(self.config, report_path=".chrono-harness/state/blocked/result.json")
+        self.write_json(self.ci / "bootstrap.json", selected)
+        blocked = self.root / ".chrono-harness/state/blocked"
+        blocked.parent.mkdir()
+        blocked.write_bytes(b"original evidence")
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"E_BOOTSTRAP:", result.stderr)
+        self.assertEqual(blocked.read_bytes(), b"original evidence")
+        self.assertFalse(self.state_path.exists())
+
+    def test_report_symlinks_do_not_redirect_evidence(self):
+        state = self.state_path.parent
+        state.mkdir()
+        other = self.root / "other"
+        other.mkdir()
+        source = other / "source"
+        source.write_bytes(b"keep source")
+        for is_directory in [True, False]:
+            with self.subTest(is_directory=is_directory):
+                alias = state / "alias"
+                alias.symlink_to(other if is_directory else source)
+                selected = ".chrono-harness/state/alias" + ("/source" if is_directory else "")
+                self.write_json(self.ci / "bootstrap.json", dict(self.config, report_path=selected))
+                result = self.invoke()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"bootstrap report path must not contain a symlink", result.stderr)
+                self.assertFalse((self.tools / "calls.json").exists())
+                self.assertEqual(source.read_bytes(), b"keep source")
+                alias.unlink()
+
+    def test_registered_incremental_reaches_child_and_result(self):
+        self.declare("environment", "built-tool", "CARGO_INCREMENTAL")
+        for declared, ambient, expected in [(True, "0", "1"), (False, "1", "0"), (None, "0", "0")]:
+            with self.subTest(declared=declared):
+                config = dict(self.config)
+                if declared is not None:
+                    config["rust_incremental"] = declared
+                self.write_json(self.ci / "bootstrap.json", config)
+                self.environment["CARGO_INCREMENTAL"] = ambient
+                self.succeeded(self.invoke())
+                child = json.loads((self.root / ".chrono-harness/bin/tool").read_bytes())
+                self.assertEqual(child["CARGO_INCREMENTAL"], expected)
+                self.assertEqual(self.evidence()["environment"]["CARGO_INCREMENTAL"], expected)
+
+    def test_invalid_incremental_declared_value_stops_before_tools(self):
+        for value in [None, 0, 1, "true", [], {}]:
+            with self.subTest(value=value):
+                self.write_json(self.ci / "bootstrap.json", dict(self.config, rust_incremental=value))
+                result = self.invoke()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(b"rust_incremental must be a boolean", result.stderr)
+                self.assertFalse((self.tools / "calls.json").exists())
+                self.assertFalse(self.state_path.exists())
+
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
         self.assertEqual(json.dumps(self.evidence()["source"], sort_keys=True),
@@ -223,4 +309,6 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    from bootstrap_shared_tests import SharedStartup
+
     unittest.main()
