@@ -511,6 +511,7 @@ pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<Process
         input,
         None,
         Duration::from_secs(s.timeout_seconds),
+        None,
     )?)
 }
 /// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
@@ -526,6 +527,7 @@ pub fn run_process_bound(
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
+        None,
     )?)
 }
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
@@ -547,6 +549,7 @@ pub fn run_process_observed(
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
+        None,
     )
 }
 /// Preserve a caller's finer acquisition deadline through the same engine.
@@ -557,7 +560,31 @@ pub fn run_process_observed_for(
     digest: &str,
     timeout: Duration,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(root, s, input, Some(digest), timeout)
+    run_process_inner(root, s, input, Some(digest), timeout, None)
+}
+/// Explicit originals for a consumer that can be terminated by an enclosing owner.
+/// Stream files contain only bytes actually read, within the unchanged output bound.
+/// A launch record is not a terminal receipt; absent terminal evidence stays unknown.
+pub struct ProcessEvidence<'a> {
+    pub stdout: &'a Path,
+    pub stderr: &'a Path,
+    pub launch: &'a Path,
+}
+pub fn run_process_observed_retained(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<ProcessResult, String> {
+    run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        Some(evidence),
+    )
 }
 // The existing process engine owns termination on errors and unwinding too.
 struct OwnedProcess {
@@ -599,6 +626,7 @@ fn run_process_inner(
     input: &[u8],
     expected: Option<&str>,
     timeout: Duration,
+    evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, String> {
     validate_command(s)?;
     if expected.is_some() && !Path::new(&s.program).is_absolute() {
@@ -618,6 +646,13 @@ fn run_process_inner(
     if expected.is_some_and(|v| v != hash) {
         return Err("prelaunch executable digest mismatch".into());
     }
+    let (stdout_original, stderr_original) = match evidence {
+        Some(paths) => (
+            Some(fs::File::create_new(paths.stdout).map_err(|e| format!("stdout original: {e}"))?),
+            Some(fs::File::create_new(paths.stderr).map_err(|e| format!("stderr original: {e}"))?),
+        ),
+        None => (None, None),
+    };
     let mut command = Command::new(&executable);
     if expected.is_some() {
         command.env_clear();
@@ -660,6 +695,29 @@ fn run_process_inner(
             joined: false,
         };
         let pid = child.id();
+        if let Some(paths) = evidence {
+            let record = serde_json::json!({
+                "schema": "chrono-process-launch/v1",
+                "launcher_pid": std::process::id(), "child_pid": pid,
+                "argv": std::iter::once(executable.to_string_lossy().into_owned()).chain(s.args.clone()).collect::<Vec<_>>(),
+                "cwd": root, "executable": executable, "sha256": hash,
+                "environment": environment, "environment_digest": wire::digest(&environment)?,
+                "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
+                "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
+            });
+            let mut original = tempfile::NamedTempFile::new_in(
+                paths
+                    .launch
+                    .parent()
+                    .ok_or("launch original parent missing")?,
+            )
+            .map_err(|e| format!("launch original: {e}"))?;
+            serde_json::to_writer(&mut original, &record).map_err(|e| e.to_string())?;
+            original.flush().map_err(|e| e.to_string())?;
+            original
+                .persist_noclobber(paths.launch)
+                .map_err(|e| format!("launch original: {e}"))?;
+        }
         let stdin = child.stdin.take().ok_or("missing process stdin")?;
         let writer = if input.is_empty() {
             // Preserve the child's input pipe and publish EOF directly; there
@@ -691,6 +749,7 @@ fn run_process_inner(
             limit: usize,
             flag: Arc<AtomicBool>,
             monitor: W,
+            mut original: Option<fs::File>,
         ) -> std::thread::ScopedJoinHandle<'scope, std::io::Result<Vec<u8>>> {
             scope.spawn(move || {
                 let result = (|| {
@@ -705,6 +764,11 @@ fn run_process_inner(
                             monitor();
                         }
                         let keep = n.min(limit.saturating_sub(out.len()));
+                        if let Some(file) = &mut original {
+                            // File is unbuffered: enclosing termination cannot discard
+                            // bytes already retained by a completed write.
+                            file.write_all(&buf[..keep])?;
+                        }
                         out.extend_from_slice(&buf[..keep]);
                     }
                     Ok(out)
@@ -721,6 +785,7 @@ fn run_process_inner(
             limit,
             exceeded.clone(),
             monitor.clone(),
+            stdout_original,
         );
         let stderr = reader(
             scope,
@@ -728,6 +793,7 @@ fn run_process_inner(
             limit,
             exceeded.clone(),
             monitor,
+            stderr_original,
         );
         // Read the shared clock first: this evidence cutoff cannot extend the
         // existing monitor deadline, including a delay between the two reads.
@@ -1308,6 +1374,7 @@ fn execute_check(
             &input,
             None,
             Duration::from_secs(c.judge.timeout_seconds),
+            None,
         )
     };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;

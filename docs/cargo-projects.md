@@ -383,3 +383,17 @@ check on its declared platform. This is local source validation. Native
 provisioning, runtime-platform scope, genuine historical/current snapshots and
 fixed compatible artifacts remain prerequisites; full host enforcement stays
 proposed/incomplete. Product code contains no host layout or platform recipe.
+
+The native consumer explicitly asks the existing process engine to retain raw
+stdout/stderr as they are read, within the original output bound. Its atomic
+launch record identifies the actual executable, argv, environment, stdin and
+spawned child. Enclosing termination can leave these streams as partial originals.
+Returned process and terminal JSON are published atomically and preserve the
+engine's actual observations; when both are absent, the child terminal remains
+unobserved by those receipts. Complete runs still compare retained bytes
+with the original process result and preserve the existing metadata and native
+assertions. The registered Cargo operation remains bounded at 900 seconds;
+the per-test timer cannot account for preceding test binaries. Rust regressions
+exercise enclosing termination of the real registered native guard and a stalled
+fixture, including interruption before terminal publication. These bounded source
+checks do not diagnose a past timeout or replace clean canonical/native acceptance.

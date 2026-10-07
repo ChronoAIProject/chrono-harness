@@ -329,7 +329,10 @@ fn native_v6_keeps_the_original_output_layout_and_checks_real_host_and_offline_s
 
 #[test]
 fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
-    use chrono_harness::{CommandSpec, observation, run_process_observed};
+    use chrono_harness::{
+        CommandSpec, ProcessEvidence, observation, run_process_observed,
+        run_process_observed_retained,
+    };
     use std::{
         collections::BTreeMap,
         time::{SystemTime, UNIX_EPOCH},
@@ -449,51 +452,40 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
             serde_json::from_slice(&fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap())
                 .unwrap();
         let bounds = &filemap["execution_plans"]["test:judge-cargo-tests"];
-        let policy: serde_json::Value = serde_json::from_slice(
-            &fs::read(root.join(consumer["policy"].as_str().unwrap())).unwrap(),
-        )
-        .unwrap();
-        // Leave time for the observed producer to retain its terminal result before
-        // the enclosing registered test operation expires. No budget is enlarged.
+        // This child-local cutoff does not know time spent in preceding Cargo
+        // binaries. Retain observed bytes during execution, even if the original
+        // enclosing operation ends before this consumer can publish a terminal.
         let remaining = bounds["timeout_seconds"]
             .as_u64()
             .unwrap()
             .saturating_sub(started.elapsed().as_secs())
             .saturating_sub(30)
             .max(1);
-        let out = run_process_observed(
+        let out = run_process_observed_retained(
             &root,
-            &CommandSpec {
-                program: guard.to_str().unwrap().into(),
-                args: vec![
-                    "run".into(),
-                    "--host-root".into(),
-                    root.to_str().unwrap().into(),
-                    "--config".into(),
-                    ".chrono-harness/config.json".into(),
-                    "--policy".into(),
-                    consumer["policy"].as_str().unwrap().into(),
-                    "--operation".into(),
-                    consumer["operation"].as_str().unwrap().into(),
-                ],
-                // Preserve the original Command::output inherited environment.
-                // The process engine carries ownership descriptors separately.
-                env: std::env::vars().collect(),
-                timeout_seconds: remaining,
-                output_limit_bytes: policy["output_limit_bytes"].as_u64().unwrap() as usize,
-            },
+            &main_host_native_spec(&root, consumer, remaining),
             &[],
             &chrono_harness::file_identity(&guard).unwrap().0,
+            &ProcessEvidence {
+                stdout: &directory.join("native-consumer.stdout"),
+                stderr: &directory.join("native-consumer.stderr"),
+                launch: &directory.join("native-consumer.launch.json"),
+            },
         )
         .unwrap();
-        fs::write(directory.join("native-consumer.stdout"), &out.stdout_bytes).unwrap();
-        fs::write(directory.join("native-consumer.stderr"), &out.stderr_bytes).unwrap();
-        fs::write(
-            directory.join("native-consumer.json"),
-            serde_json::to_vec(&out).unwrap(),
-        )
-        .unwrap();
-        fs::write(directory.join("native-terminal.json"),serde_json::to_vec(&json!({"elapsed_millis":started.elapsed().as_millis(),"timeout_seconds":remaining,"exit_code":out.exit_code,"failure":out.failure,"stdout_sha256":out.stdout_sha256,"stderr_sha256":out.stderr_sha256})).unwrap()).unwrap();
+        assert_eq!(
+            fs::read(directory.join("native-consumer.stdout")).unwrap(),
+            out.stdout_bytes
+        );
+        assert_eq!(
+            fs::read(directory.join("native-consumer.stderr")).unwrap(),
+            out.stderr_bytes
+        );
+        retain_native_json(
+            &directory.join("native-consumer.json"),
+            &serde_json::to_vec(&out).unwrap(),
+        );
+        retain_native_json(&directory.join("native-terminal.json"), &serde_json::to_vec(&json!({"elapsed_millis":started.elapsed().as_millis(),"timeout_seconds":remaining,"exit_code":out.exit_code,"failure":out.failure,"stdout_sha256":out.stdout_sha256,"stderr_sha256":out.stderr_sha256})).unwrap());
         observation::process_success(&out)
             .unwrap_or_else(|e| panic!("native guard: {e}; original {}", directory.display()));
         let phases: Vec<serde_json::Value> = out
@@ -548,6 +540,222 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
                 .contains("host: aarch64-apple-darwin")
         );
     }
+}
+
+// Shared by the original native consumer and the enclosing-termination regression.
+// Source registration remains the authority for its operation, policy and bound.
+fn retain_native_json(path: &std::path::Path, bytes: &[u8]) {
+    let mut original = tempfile::NamedTempFile::new_in(path.parent().unwrap()).unwrap();
+    std::io::Write::write_all(&mut original, bytes).unwrap();
+    original.persist_noclobber(path).unwrap();
+}
+
+fn main_host_native_spec(
+    root: &std::path::Path,
+    consumer: &serde_json::Value,
+    timeout_seconds: u64,
+) -> chrono_harness::CommandSpec {
+    let policy: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(consumer["policy"].as_str().unwrap())).unwrap())
+            .unwrap();
+    chrono_harness::CommandSpec {
+        program: root
+            .join(".chrono-harness/bin/chrono-judge-cargo")
+            .to_str()
+            .unwrap()
+            .into(),
+        args: vec![
+            "run".into(),
+            "--host-root".into(),
+            root.to_str().unwrap().into(),
+            "--config".into(),
+            ".chrono-harness/config.json".into(),
+            "--policy".into(),
+            consumer["policy"].as_str().unwrap().into(),
+            "--operation".into(),
+            consumer["operation"].as_str().unwrap().into(),
+        ],
+        // Preserve the original inherited environment and separate ownership carrier.
+        env: std::env::vars().collect(),
+        timeout_seconds,
+        output_limit_bytes: policy["output_limit_bytes"].as_u64().unwrap() as usize,
+    }
+}
+
+#[test]
+fn main_host_native_enclosing_helper() {
+    let Ok(directory) = std::env::var("CHRONO_NATIVE_ENCLOSING_FIXTURE") else {
+        return;
+    };
+    let directory = std::path::Path::new(&directory);
+    let root = fs::canonicalize(source()).unwrap();
+    let declaration: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/cargo/observe.json")).unwrap())
+            .unwrap();
+    let filemap: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap())
+            .unwrap();
+    let spec = main_host_native_spec(
+        &root,
+        &declaration["native_consumer"],
+        filemap["execution_plans"]["test:judge-cargo-tests"]["timeout_seconds"]
+            .as_u64()
+            .unwrap(),
+    );
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            let start = std::time::Instant::now();
+            loop {
+                let bytes = fs::read(directory.join("native-consumer.stderr")).unwrap_or_default();
+                if bytes.starts_with(b"CHRONO_CARGO_PHASE ") && bytes.contains(&b'\n') {
+                    // The exact consumer is interrupted only after its engine has
+                    // retained a genuine native phase. No child exit is substituted.
+                    #[cfg(target_os = "macos")]
+                    let signal = 17; // SIGSTOP in the native macOS ABI.
+                    #[cfg(not(target_os = "macos"))]
+                    let signal = 19; // SIGSTOP in the supported Linux ABI.
+                    assert_eq!(
+                        unsafe { native_signal(std::process::id() as i32, signal) },
+                        0
+                    );
+                    return;
+                }
+                if start.elapsed() >= std::time::Duration::from_secs(30) {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        let out = chrono_harness::run_process_observed_retained(
+            &root,
+            &spec,
+            &[],
+            &chrono_harness::file_identity(std::path::Path::new(&spec.program))
+                .unwrap()
+                .0,
+            &chrono_harness::ProcessEvidence {
+                stdout: &directory.join("native-consumer.stdout"),
+                stderr: &directory.join("native-consumer.stderr"),
+                launch: &directory.join("native-consumer.launch.json"),
+            },
+        )
+        .unwrap();
+        retain_native_json(
+            &directory.join("native-terminal.json"),
+            &serde_json::to_vec(&out).unwrap(),
+        );
+    });
+}
+
+#[test]
+fn main_host_native_partial_originals_survive_enclosing_termination() {
+    let root = fs::canonicalize(source()).unwrap();
+    let declaration: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/cargo/observe.json")).unwrap())
+            .unwrap();
+    if declaration["native_consumer"]["platform"]
+        != format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+    {
+        return;
+    }
+    let directory = root.join(format!(
+        ".chrono-harness/state/inputs/main-native-enclosing-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let mut environment: std::collections::BTreeMap<String, String> = std::env::vars().collect();
+    environment.insert(
+        "CHRONO_NATIVE_ENCLOSING_FIXTURE".into(),
+        directory.to_str().unwrap().into(),
+    );
+    let spec = chrono_harness::CommandSpec {
+        program: exe.to_str().unwrap().into(),
+        args: vec![
+            "--exact".into(),
+            "main_host_native_enclosing_helper".into(),
+            "--nocapture".into(),
+        ],
+        env: environment,
+        timeout_seconds: 10,
+        output_limit_bytes: 4 * 1024 * 1024,
+    };
+    let outer = chrono_harness::run_process_observed(
+        &root,
+        &spec,
+        &[],
+        &chrono_harness::file_identity(&exe).unwrap().0,
+    )
+    .unwrap();
+    fs::write(
+        directory.join("enclosing-operation.json"),
+        serde_json::to_vec(&outer).unwrap(),
+    )
+    .unwrap();
+    println!(
+        "main host enclosing native original: {}",
+        directory.display()
+    );
+    assert!(
+        outer
+            .failure
+            .as_deref()
+            .unwrap()
+            .starts_with("process timed out"),
+        "{outer:?}"
+    );
+    assert_ne!(outer.exit_code, 0);
+    let launch: serde_json::Value =
+        serde_json::from_slice(&fs::read(directory.join("native-consumer.launch.json")).unwrap())
+            .unwrap();
+    assert_eq!(launch["timeout_seconds"], 900);
+    assert_eq!(
+        launch["argv"][launch["argv"].as_array().unwrap().len() - 1],
+        declaration["native_consumer"]["operation"]
+    );
+    assert_eq!(
+        launch["sha256"],
+        chrono_harness::file_identity(std::path::Path::new(launch["executable"].as_str().unwrap()))
+            .unwrap()
+            .0
+    );
+    let stderr = fs::read(directory.join("native-consumer.stderr")).unwrap();
+    assert!(stderr.starts_with(b"CHRONO_CARGO_PHASE "));
+    let first = String::from_utf8_lossy(&stderr);
+    let phase: serde_json::Value = serde_json::from_str(
+        first
+            .lines()
+            .next()
+            .unwrap()
+            .strip_prefix("CHRONO_CARGO_PHASE ")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(phase["phase"], "guard");
+    assert_eq!(phase["event"], "start");
+    assert!(directory.join("native-consumer.stdout").is_file());
+    assert!(
+        !directory.join("native-terminal.json").exists(),
+        "interrupted observer has no observed child terminal"
+    );
+    assert!(!directory.join("native-consumer.json").exists());
+    for field in ["child_pid", "launcher_pid"] {
+        assert_eq!(
+            unsafe { native_signal(launch[field].as_i64().unwrap() as i32, 0) },
+            -1,
+            "{field} survived enclosing completion"
+        );
+        assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(3)); // ESRCH.
+    }
+    fs::write(directory.join("retained-observation.json"), serde_json::to_vec(&json!({"stdout_sha256":chrono_harness::file_identity(&directory.join("native-consumer.stdout")).unwrap().0,"stderr_sha256":chrono_harness::sha256(&stderr),"terminal_presence":"absent","child_terminal":"unobserved"})).unwrap()).unwrap();
+}
+
+unsafe extern "C" {
+    #[link_name = "kill"]
+    fn native_signal(pid: i32, signal: i32) -> i32;
 }
 
 #[test]

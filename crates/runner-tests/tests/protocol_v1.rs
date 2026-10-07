@@ -1141,6 +1141,225 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
 // Real nested runner launch: the outer process must finish only after its owned
 // operation has been terminated. The PID is produced by that actual operation.
 #[test]
+fn retained_nested_helper() {
+    let Ok(root) = std::env::var("CHRONO_RETAINED_FIXTURE") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec![
+            "retained".into(),
+            std::env::var("CHRONO_RETAINED_CASE").unwrap(),
+        ],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let result = chrono_harness::run_process_observed_retained(
+        root,
+        &spec,
+        &[],
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+        &chrono_harness::ProcessEvidence {
+            stdout: &root.join("original.stdout"),
+            stderr: &root.join("original.stderr"),
+            launch: &root.join("launch.json"),
+        },
+    )
+    .unwrap();
+    let mut terminal = tempfile::NamedTempFile::new_in(root).unwrap();
+    serde_json::to_writer(&mut terminal, &result).unwrap();
+    terminal
+        .persist_noclobber(root.join("terminal.json"))
+        .unwrap();
+}
+
+#[test]
+fn retained_originals_match_complete_streams_and_launch_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["retained".into(), "normal".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
+    let paths = chrono_harness::ProcessEvidence {
+        stdout: &root.path().join("original.stdout"),
+        stderr: &root.path().join("original.stderr"),
+        launch: &root.path().join("launch.json"),
+    };
+    let result = chrono_harness::run_process_observed_retained(
+        root.path(),
+        &spec,
+        b"original stdin",
+        &digest,
+        &paths,
+    )
+    .unwrap();
+    assert_eq!(result.exit_code, 0);
+    assert!(result.failure.is_none());
+    assert_eq!(fs::read(paths.stdout).unwrap(), b"original stdout\xff\n");
+    assert_eq!(fs::read(paths.stderr).unwrap(), result.stderr_bytes);
+    assert_eq!(
+        sha256(&fs::read(paths.stdout).unwrap()),
+        result.stdout_sha256
+    );
+    assert_eq!(
+        sha256(&fs::read(paths.stderr).unwrap()),
+        result.stderr_sha256
+    );
+    let launch: serde_json::Value =
+        serde_json::from_slice(&fs::read(paths.launch).unwrap()).unwrap();
+    assert_eq!(launch["argv"], value!(result.argv));
+    assert_eq!(launch["cwd"], value!(result.cwd));
+    assert_eq!(launch["sha256"], digest);
+    assert_eq!(launch["environment"], value!(result.environment));
+    assert_eq!(launch["environment_digest"], result.environment_digest);
+    assert_eq!(launch["stdin_sha256"], sha256(b"original stdin"));
+    assert_eq!(launch["timeout_seconds"], 30);
+    assert_eq!(launch["output_limit_bytes"], 4096);
+    assert_eq!(
+        launch["child_pid"].as_u64().unwrap().to_string(),
+        fs::read_to_string(root.path().join("retained.pid")).unwrap()
+    );
+    assert!(
+        chrono_harness::run_process_observed_retained(root.path(), &spec, &[], &digest, &paths)
+            .is_err()
+    );
+    assert_eq!(
+        fs::read(paths.stdout).unwrap(),
+        result.stdout_bytes,
+        "existing originals must not be overwritten"
+    );
+}
+
+#[test]
+fn retained_originals_survive_enclosing_timeout_even_without_terminal_publication() {
+    for case in ["stall", "pause-launcher"] {
+        let root = tempfile::tempdir().unwrap();
+        let exe = std::env::current_exe().unwrap();
+        let spec = chrono_harness::CommandSpec {
+            program: exe.to_string_lossy().into(),
+            args: vec![
+                "--exact".into(),
+                "retained_nested_helper".into(),
+                "--nocapture".into(),
+            ],
+            env: [
+                (
+                    "CHRONO_RETAINED_FIXTURE".into(),
+                    root.path().to_string_lossy().into(),
+                ),
+                ("CHRONO_RETAINED_CASE".into(), case.into()),
+            ]
+            .into(),
+            timeout_seconds: 2,
+            output_limit_bytes: 4096,
+        };
+        let result = chrono_harness::run_process_observed(
+            root.path(),
+            &spec,
+            &[],
+            &sha256(&fs::read(&exe).unwrap()),
+        )
+        .unwrap();
+        assert!(
+            result
+                .failure
+                .as_deref()
+                .unwrap()
+                .starts_with("process timed out"),
+            "{result:?}"
+        );
+        // The cooperative helper can return before enclosing cleanup kills it.
+        // Preserve that observed exit independently from the enclosing failure.
+        if case == "pause-launcher" {
+            assert_ne!(result.exit_code, 0);
+        }
+        assert_eq!(
+            fs::read(root.path().join("original.stdout")).unwrap(),
+            b"original stdout\xff\n"
+        );
+        assert_eq!(fs::read(root.path().join("original.stderr")).unwrap(), b"CHRONO_CARGO_PHASE {\"phase\":\"consumer\",\"event\":\"begin\"}\noriginal stderr\xfe\n");
+        let launch: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.path().join("launch.json")).unwrap()).unwrap();
+        assert_eq!(
+            launch["timeout_seconds"], 30,
+            "the enclosing deadline, not the child's bound, fired"
+        );
+        if case == "pause-launcher" {
+            assert!(
+                !root.path().join("terminal.json").exists(),
+                "no unobserved child terminal may be fabricated"
+            );
+        } else if root.path().join("terminal.json").exists() {
+            let terminal: chrono_harness::ProcessResult =
+                serde_json::from_slice(&fs::read(root.path().join("terminal.json")).unwrap())
+                    .unwrap();
+            assert_ne!(terminal.exit_code, 0);
+            assert!(
+                terminal
+                    .failure
+                    .as_deref()
+                    .unwrap()
+                    .contains("enclosing owner")
+            );
+        }
+        assert!(!root.path().join("escaped").exists());
+        let pid: libc::pid_t = fs::read_to_string(root.path().join("retained.pid"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            unsafe { libc::kill(pid, 0) },
+            -1,
+            "owned child survived enclosing completion"
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ESRCH)
+        );
+    }
+}
+
+#[test]
+fn retained_originals_keep_the_existing_stream_limit_and_failure() {
+    let root = tempfile::tempdir().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["retained".into(), "normal".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 8,
+    };
+    let paths = chrono_harness::ProcessEvidence {
+        stdout: &root.path().join("original.stdout"),
+        stderr: &root.path().join("original.stderr"),
+        launch: &root.path().join("launch.json"),
+    };
+    let result = chrono_harness::run_process_observed_retained(
+        root.path(),
+        &spec,
+        &[],
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+        &paths,
+    )
+    .unwrap();
+    assert_eq!(
+        result.failure.as_deref(),
+        Some("process output limit exceeded")
+    );
+    assert_eq!(fs::read(paths.stdout).unwrap(), result.stdout_bytes);
+    assert_eq!(fs::read(paths.stderr).unwrap(), result.stderr_bytes);
+    assert_eq!(result.stdout_bytes, b"original");
+    // The stdout overflow can terminate the child before all stderr is read.
+    assert!(b"CHRONO_C".starts_with(&result.stderr_bytes));
+}
+
+#[test]
 fn owned_nested_helper() {
     let Ok(root) = std::env::var("CHRONO_NESTED_FIXTURE") else {
         return;
