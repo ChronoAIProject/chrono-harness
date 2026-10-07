@@ -73,13 +73,17 @@ do not exist. Routes remains the execution authority and rejects a malformed
 operation cycle before launching work.
 
 Before publishing this diagnostic, the filemap judge runs a bounded
-consistency check over the report it just produced. It checks schema and edge
-counts, node partitioning, SCC identities and closed witnesses, component
-depths, DELTA affected-component membership, and execution-plan precedence
-edges. A violation is an `E_SELF_DIAGNOSTIC` error with the offending
-invariant; the report is not treated as a successful impact result. This
-detects an internally inconsistent judge result, but does not prove the
-algorithm complete, the declarations necessary, or the host inputs complete.
+consistency check over the report it just produced. It independently checks
+schema and edge counts, node partitioning, SCC identities and closed witnesses,
+the full compressed-DAG depth map, owner-crossing edges, DELTA
+affected-component membership, and execution-plan operation sets, precedence
+edges, cycle witnesses, depths, and resource/output conflicts. A violation is
+an `E_SELF_DIAGNOSTIC` error with the offending invariant; the report is not
+treated as a successful impact result. The checker uses a separate topological
+depth walk and set-based scheduling reconstruction so a malformed report or a
+shared producer helper cannot silently validate itself. This detects an
+internally inconsistent judge result, but does not prove the algorithm
+complete, the declarations necessary, or the host inputs complete.
 
 This output is intended to expose a concrete candidate for an autonomous
 refactoring round. It does not rank candidates, invent a consumer, claim a

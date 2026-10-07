@@ -244,6 +244,7 @@ pub fn validate_structure(
         &analysis.base,
         input.base,
         input.base_nodes,
+        input.owners,
         &mut issues,
     );
     validate_snapshot(
@@ -251,6 +252,7 @@ pub fn validate_structure(
         &analysis.candidate,
         input.candidate,
         input.candidate_nodes,
+        input.owners,
         &mut issues,
     );
     let union_edges: BTreeSet<_> = input.union.iter().map(|edge| edge.edge.clone()).collect();
@@ -259,6 +261,7 @@ pub fn validate_structure(
         &analysis.union,
         &union_edges,
         input.union_nodes,
+        input.owners,
         &mut issues,
     );
 
@@ -317,6 +320,7 @@ fn validate_snapshot(
     snapshot: &GraphSnapshot,
     edges: &BTreeSet<Edge>,
     declared_nodes: &BTreeSet<String>,
+    owners: &BTreeMap<String, BTreeSet<String>>,
     issues: &mut Vec<StructureIssue>,
 ) {
     let mut nodes = declared_nodes.clone();
@@ -476,6 +480,48 @@ fn validate_snapshot(
             message: format!("{endpoint} maximum depth is inconsistent with component depths"),
         });
     }
+    if let Some(expected_depth) =
+        expected_component_depths(&component_of, &snapshot.components, edges)
+        && snapshot.component_depth != expected_depth
+    {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} component depths disagree with the condensed graph"),
+        });
+    }
+    let expected_cross_owner = edges
+        .iter()
+        .filter_map(|edge| {
+            let from_owners: Vec<_> = owners
+                .get(&edge.from)
+                .into_iter()
+                .flatten()
+                .cloned()
+                .collect();
+            let to_owners: Vec<_> = owners
+                .get(&edge.to)
+                .into_iter()
+                .flatten()
+                .cloned()
+                .collect();
+            if !from_owners.is_empty()
+                && !to_owners.is_empty()
+                && from_owners.iter().all(|owner| !to_owners.contains(owner))
+            {
+                Some(CrossOwnerEdge {
+                    edge: edge.clone(),
+                    from_owners,
+                    to_owners,
+                })
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    if snapshot.cross_owner_edges != expected_cross_owner {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} cross-owner edge diagnostics disagree with bound owners"),
+        });
+    }
     for edge in edges {
         if !component_of.contains_key(&edge.from) || !component_of.contains_key(&edge.to) {
             issues.push(StructureIssue {
@@ -483,6 +529,71 @@ fn validate_snapshot(
             });
         }
     }
+}
+
+fn expected_component_depths(
+    component_of: &BTreeMap<String, String>,
+    components: &[StrongComponent],
+    edges: &BTreeSet<Edge>,
+) -> Option<BTreeMap<String, usize>> {
+    let mut predecessors: BTreeMap<String, BTreeSet<String>> = components
+        .iter()
+        .map(|component| (component.id.clone(), BTreeSet::new()))
+        .collect();
+    for edge in edges {
+        let (Some(from), Some(to)) = (component_of.get(&edge.from), component_of.get(&edge.to))
+        else {
+            continue;
+        };
+        if from != to {
+            predecessors
+                .entry(to.clone())
+                .or_default()
+                .insert(from.clone());
+        }
+    }
+    independent_depths(&predecessors)
+}
+
+/// Compute longest paths with a Kahn walk rather than the producer's recursive
+/// helper.  This is intentionally duplicated at the validation boundary so a
+/// defect in report construction cannot reproduce itself in the checker.
+fn independent_depths(
+    predecessors: &BTreeMap<String, BTreeSet<String>>,
+) -> Option<BTreeMap<String, usize>> {
+    let mut indegree: BTreeMap<_, _> = predecessors
+        .iter()
+        .map(|(node, parents)| (node.clone(), parents.len()))
+        .collect();
+    let mut children: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (node, parents) in predecessors {
+        for parent in parents {
+            children
+                .entry(parent.clone())
+                .or_default()
+                .insert(node.clone());
+        }
+    }
+    let mut ready: BTreeSet<_> = indegree
+        .iter()
+        .filter_map(|(node, degree)| (*degree == 0).then_some(node.clone()))
+        .collect();
+    let mut depths: BTreeMap<_, _> = indegree.keys().cloned().map(|node| (node, 0)).collect();
+    let mut processed = 0;
+    while let Some(node) = ready.pop_first() {
+        processed += 1;
+        let parent_depth = depths[&node];
+        for child in children.get(&node).into_iter().flatten() {
+            let depth = depths.get_mut(child).expect("child is in predecessor map");
+            *depth = (*depth).max(parent_depth + 1);
+            let degree = indegree.get_mut(child).expect("child has an indegree");
+            *degree -= 1;
+            if *degree == 0 {
+                ready.insert(child.clone());
+            }
+        }
+    }
+    (processed == indegree.len()).then_some(depths)
 }
 
 fn reachable_nodes(
@@ -605,6 +716,30 @@ fn validate_execution(
             message: format!("{endpoint} execution operations are not sorted and unique"),
         });
     }
+    let mut expected_operations = BTreeSet::new();
+    let mut expected_adjacency: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    if let Some(plans) = filemap.get("execution_plans").and_then(Value::as_object) {
+        for plan in plans.values() {
+            let ids: Vec<_> = plan["operations"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            expected_operations.extend(ids.iter().map(|id| (*id).to_string()));
+            for pair in ids.windows(2) {
+                expected_adjacency
+                    .entry(pair[0].to_string())
+                    .or_default()
+                    .insert(pair[1].to_string());
+            }
+        }
+    }
+    if operations != expected_operations {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} execution operations disagree with registered plans"),
+        });
+    }
     let mut expected_edges = BTreeSet::new();
     if let Some(plans) = filemap.get("execution_plans").and_then(Value::as_object) {
         for (test, plan) in plans {
@@ -635,6 +770,29 @@ fn validate_execution(
             ),
         });
     }
+    let actual_edge_keys: Vec<_> = snapshot
+        .edges
+        .iter()
+        .map(|edge| (edge.from.clone(), edge.to.clone()))
+        .collect();
+    let unique_edge_keys: BTreeSet<_> = actual_edge_keys.iter().cloned().collect();
+    if unique_edge_keys.len() != actual_edge_keys.len()
+        || actual_edge_keys.windows(2).any(|pair| pair[0] >= pair[1])
+    {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} execution precedence edges are not sorted and unique"),
+        });
+    }
+    for edge in &snapshot.edges {
+        if edge.tests.is_empty()
+            || edge.tests.windows(2).any(|pair| pair[0] >= pair[1])
+            || edge.tests.windows(2).any(|pair| pair[0] == pair[1])
+        {
+            issues.push(StructureIssue {
+                message: format!("{endpoint} execution edge has unsorted or empty test witnesses"),
+            });
+        }
+    }
     for edge in &snapshot.edges {
         if !operations.contains(&edge.from) || !operations.contains(&edge.to) {
             issues.push(StructureIssue {
@@ -662,6 +820,132 @@ fn validate_execution(
             });
         }
     }
+    let expected_cycles = string_cycles(&expected_operations, &expected_adjacency);
+    if snapshot.cycles != expected_cycles {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} execution cycle diagnostics disagree with registered plans"
+            ),
+        });
+    }
+    let expected_depth = if expected_cycles.is_empty() {
+        let mut predecessors: BTreeMap<String, BTreeSet<String>> = expected_operations
+            .iter()
+            .map(|operation| (operation.clone(), BTreeSet::new()))
+            .collect();
+        for edge in &expected_edges {
+            predecessors
+                .entry(edge.1.clone())
+                .or_default()
+                .insert(edge.0.clone());
+        }
+        independent_depths(&predecessors).unwrap_or_default()
+    } else {
+        BTreeMap::new()
+    };
+    if snapshot.depth != expected_depth {
+        issues.push(StructureIssue {
+            message: format!("{endpoint} execution depths disagree with registered plans"),
+        });
+    }
+    let expected_conflicts = independent_resource_conflicts(filemap);
+    if canonical_conflicts(&snapshot.resource_conflicts) != canonical_conflicts(&expected_conflicts)
+    {
+        issues.push(StructureIssue {
+            message: format!(
+                "{endpoint} execution resource diagnostics disagree with registered claims"
+            ),
+        });
+    }
+}
+
+fn canonical_conflicts(conflicts: &[ExecutionConflict]) -> Vec<ExecutionConflict> {
+    let mut conflicts = conflicts.to_vec();
+    for conflict in &mut conflicts {
+        conflict.resources.sort();
+        conflict.resources.dedup();
+        conflict.outputs.sort();
+        conflict.outputs.dedup();
+    }
+    conflicts.sort_by(|left, right| {
+        (&left.left, &left.right, &left.resources, &left.outputs).cmp(&(
+            &right.left,
+            &right.right,
+            &right.resources,
+            &right.outputs,
+        ))
+    });
+    conflicts
+}
+
+/// Independent set-based reconstruction of scheduling conflicts for the
+/// report validator.  The producer preserves declaration order; the checker
+/// compares canonical sets so it can catch missing/extra conflicts without
+/// depending on that presentation detail.
+fn independent_resource_conflicts(filemap: &Value) -> Vec<ExecutionConflict> {
+    let Some(claims) = filemap
+        .get("execution_scheduling")
+        .and_then(|value| value.get("claims"))
+        .and_then(Value::as_object)
+    else {
+        return vec![];
+    };
+    let ids: Vec<_> = claims.keys().cloned().collect();
+    let mut conflicts = vec![];
+    for (index, left) in ids.iter().enumerate() {
+        for right in ids.iter().skip(index + 1) {
+            let left_claim = &claims[left];
+            let right_claim = &claims[right];
+            let left_resources: BTreeSet<_> = left_claim["resources"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+            let right_resources: BTreeSet<_> = right_claim["resources"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+            let resources: Vec<_> = left_resources
+                .intersection(&right_resources)
+                .cloned()
+                .collect();
+            let left_outputs: Vec<_> = left_claim["outputs"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            let right_outputs: Vec<_> = right_claim["outputs"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            let outputs: BTreeSet<_> = left_outputs
+                .iter()
+                .filter(|left_output| {
+                    right_outputs.iter().any(|right_output| {
+                        chrono_harness::units::overlap(left_output, right_output)
+                    })
+                })
+                .map(|output| (*output).to_string())
+                .collect();
+            if !resources.is_empty() || !outputs.is_empty() {
+                conflicts.push(ExecutionConflict {
+                    left: left.clone(),
+                    right: right.clone(),
+                    resources,
+                    outputs: outputs.into_iter().collect(),
+                });
+            }
+        }
+    }
+    conflicts
 }
 
 pub fn analyze(input: AnalysisInput<'_>) -> StructureAnalysis {
@@ -970,7 +1254,18 @@ fn execution_snapshot(filemap: &Value) -> ExecutionSnapshot {
             depth.insert(operation.clone(), value);
         }
     }
-    let resource_conflicts = filemap
+    let resource_conflicts = expected_resource_conflicts(filemap);
+    ExecutionSnapshot {
+        operations: operations.into_iter().collect(),
+        edges,
+        cycles,
+        depth,
+        resource_conflicts,
+    }
+}
+
+fn expected_resource_conflicts(filemap: &Value) -> Vec<ExecutionConflict> {
+    filemap
         .get("execution_scheduling")
         .and_then(|v| v.get("claims"))
         .and_then(Value::as_object)
@@ -1024,14 +1319,7 @@ fn execution_snapshot(filemap: &Value) -> ExecutionSnapshot {
             }
             conflicts
         })
-        .unwrap_or_default();
-    ExecutionSnapshot {
-        operations: operations.into_iter().collect(),
-        edges,
-        cycles,
-        depth,
-        resource_conflicts,
-    }
+        .unwrap_or_default()
 }
 
 fn string_cycles(

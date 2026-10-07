@@ -507,6 +507,89 @@ fn self_diagnostic_rejects_a_mutated_structure_report() {
 }
 
 #[test]
+fn self_diagnostic_rejects_mutated_depth_owner_execution_and_resource_evidence() {
+    let mut values = values();
+    values.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    values.get_mut(FM).unwrap()["execution_plans"] = json!({
+        "test:t":{"operations":["execute.p","execute.t"],"timeout_seconds":30,"output_limit_bytes":4096}
+    });
+    values.get_mut(FM).unwrap()["execution_scheduling"] = json!({
+        "max_running":2,
+        "resources":["shared"],
+        "claims":{
+            "execute.p":{"resources":["shared"],"outputs":[]},
+            "execute.t":{"resources":["shared"],"outputs":[]}
+        }
+    });
+    let registrations = load(&values);
+    let explicit = chrono_judge_filemap::edges(&registrations);
+    let union = graph::union(&explicit, &explicit);
+    let nodes = registrations.node_data();
+    let node_ids: BTreeSet<_> = nodes.keys().cloned().collect();
+    let closure = graph::closure(
+        &union,
+        &[Seed {
+            id: "mutation".into(),
+            node: "file:src.bin".into(),
+            reference: "src.bin".into(),
+            reason: "test".into(),
+        }],
+    );
+    let owners = BTreeMap::from([
+        ("file:src.bin".into(), BTreeSet::from(["host".into()])),
+        ("project:p".into(), BTreeSet::from(["p".into()])),
+        ("test:t".into(), BTreeSet::from(["t".into()])),
+    ]);
+    let input = graph::AnalysisInput {
+        base: &explicit,
+        candidate: &explicit,
+        union: &union,
+        base_nodes: &node_ids,
+        candidate_nodes: &node_ids,
+        union_nodes: &node_ids,
+        owners: &owners,
+        base_filemap: registrations.filemap(),
+        candidate_filemap: registrations.filemap(),
+        reached: &closure.reached,
+    };
+    let mut mutated = graph::analyze(input);
+    mutated
+        .candidate
+        .component_depth
+        .entry("scc:file:doc.txt".into())
+        .and_modify(|depth| *depth += 1);
+    mutated.candidate.cross_owner_edges.clear();
+    mutated.execution.candidate.operations.pop();
+    mutated.execution.candidate.resource_conflicts.clear();
+    let issues = graph::validate_structure(input, &closure, &mutated);
+    let messages: Vec<_> = issues.iter().map(|issue| issue.message.as_str()).collect();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("component depths disagree")),
+        "depth mutation was not observable: {messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("cross-owner edge diagnostics")),
+        "owner mutation was not observable: {messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("execution operations disagree")),
+        "operation mutation was not observable: {messages:?}"
+    );
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("resource diagnostics disagree")),
+        "resource mutation was not observable: {messages:?}"
+    );
+}
+
+#[test]
 fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
     let mut a = values();
     a.remove(FM);
