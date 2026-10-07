@@ -93,21 +93,35 @@ fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
     )
     .unwrap();
     let path = ".chrono-harness/registry-source.json";
-    fs::write(h.root.join(path), &original).unwrap();
-    h.config["protocol"]["stdout_limit_bytes"] = json!(2 * 1024 * 1024);
+    let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config: Value = serde_json::from_slice(&original).unwrap();
+    let mut originals = std::collections::BTreeMap::new();
+    for registry in chrono_harness::facts::registry_paths(&config, path).unwrap() {
+        let bytes = if registry == path {
+            original.clone()
+        } else {
+            fs::read(product.join(&registry)).unwrap()
+        };
+        fs::create_dir_all(h.root.join(&registry).parent().unwrap()).unwrap();
+        fs::write(h.root.join(&registry), &bytes).unwrap();
+        originals.insert(registry, bytes);
+    }
+    h.config["protocol"]["stdout_limit_bytes"] = json!(8 * 1024 * 1024);
     h.save();
     let oid = commit(&h);
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &oid).unwrap();
-    assert_eq!(reader.blob(&h.root, &oid, path).unwrap(), original);
+    let base = reader.registry_snapshot(&h.root, &oid, path).unwrap();
+    assert_eq!(base.bytes, originals);
     fs::write(h.root.join("candidate-source"), "a real second endpoint").unwrap();
     let candidate = commit(&h);
     reader.verify_oid(&h.root, &candidate).unwrap();
-    assert_eq!(reader.blob(&h.root, &candidate, path).unwrap(), original);
+    let current = reader.registry_snapshot(&h.root, &candidate, path).unwrap();
+    assert_eq!(current.bytes, originals);
     let observed = reader.observation();
     let wire_bytes = serde_json::to_vec(&observed).unwrap();
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    chrono_harness::prepared::retain_original(
+    let retained = chrono_harness::prepared::retain_original(
         &product,
         ".chrono-harness/state/preparation/",
         "registry-transport",
@@ -115,16 +129,31 @@ fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
     )
     .unwrap();
     println!(
-        "ACTUAL_REGISTRY_TRANSPORT original_bytes={} observation_bytes={}",
+        "ACTUAL_REGISTRY_TRANSPORT config_bytes={} registry_bytes_per_endpoint={} registries={} processes={} observation_bytes={} original={} sha256={}",
         original.len(),
-        wire_bytes.len()
+        originals.values().map(Vec::len).sum::<usize>(),
+        originals.len(),
+        observed["processes"].as_array().unwrap().len(),
+        wire_bytes.len(),
+        retained.path,
+        retained.sha256
     );
     assert!(
         wire_bytes.len() < 8 * 1024 * 1024,
         "actual host evidence must fit the existing check bound"
     );
-    let last = observed["processes"].as_array().unwrap().last().unwrap();
-    assert_eq!(last["encoding"], "chrono-retained-process/v1");
+    for row in observed["processes"].as_array().unwrap() {
+        let expanded = chrono_harness::full::expand_process(row).unwrap();
+        let process: chrono_harness::ProcessResult = serde_json::from_value(expanded).unwrap();
+        chrono_harness::observation::process_success(&process).unwrap();
+    }
+    let last = observed["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["stdout_sha256"] == sha256(&original))
+        .unwrap();
+    assert_eq!(last["encoding"], "chrono-retained-process/v2");
     assert!(last.get("stdout").is_none() && last.get("stdout_bytes").is_none());
     let expanded = chrono_harness::full::expand_process(last).unwrap();
     let process: chrono_harness::ProcessResult = serde_json::from_value(expanded).unwrap();

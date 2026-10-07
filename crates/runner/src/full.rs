@@ -70,16 +70,21 @@ pub fn judge_request(
 ) -> Result<Request, String> {
     let observations = history
         .iter()
-        .map(|record| predecessor_observation(record, template.scope.is_some()))
+        .map(|record| predecessor_observation(record, template))
         .collect::<Result<Vec<_>, String>>()?;
     judge_request_from_observations(template, binding, &observations)
 }
-fn predecessor_observation(record: &Value, scoped: bool) -> Result<Value, String> {
+fn predecessor_observation(record: &Value, template: &Request) -> Result<Value, String> {
     let mut record = predecessor(record);
-    // Preserve the existing lossless scoped stdin encoding. Prepare it once
-    // per original process in an invocation, then reuse it for later judges.
-    if scoped {
-        compact_record(&mut record)?;
+    match template.observations.get("process_encoding") {
+        Some(Value::String(encoding)) if encoding == "chrono-retained-process/v2" => {
+            compact_record(&mut record)?
+        }
+        Some(_) => return Err("unsupported predecessor process encoding".into()),
+        None if template.scope.is_some() && record["process"].is_object() => {
+            record["process"] = encode_process(&record["process"], false)?;
+        }
+        None => {} // Historical full stdin used its original inline view.
     }
     Ok(record)
 }
@@ -132,9 +137,11 @@ pub fn expand_process(value: &Value) -> Result<Value, String> {
     if value.get("encoding").is_none() {
         return Ok(value.clone());
     }
-    if value["encoding"] != "chrono-retained-process/v1" {
-        return Err("unsupported retained process encoding".into());
-    }
+    let compressed = match value["encoding"].as_str() {
+        Some("chrono-retained-process/v1") => false,
+        Some("chrono-retained-process/v2") => true,
+        _ => return Err("unsupported retained process encoding".into()),
+    };
     if ["stdout", "stderr", "stdout_bytes", "stderr_bytes"]
         .iter()
         .any(|key| value.get(key).is_some())
@@ -144,13 +151,56 @@ pub fn expand_process(value: &Value) -> Result<Value, String> {
     let mut value = value.clone();
     for field in ["stdout", "stderr"] {
         let key = format!("{field}_hex");
-        let bytes = artifact_bytes(
-            &value!({"bytes": {"hex":value[&key],"sha256":value[format!("{field}_sha256")],"length":value[&key].as_str().ok_or("process encoding")?.len()/2}}),
-            "bytes",
-        )?;
+        let packed_key = format!("{field}_zlib_hex");
+        let length_key = format!("{field}_length");
+        let digest_key = format!("{field}_sha256");
+        let bytes = if compressed {
+            if value.get(&key).is_some() {
+                return Err("retained process has conflicting encodings".into());
+            }
+            let packed = decode_hex(value[&packed_key].as_str().ok_or("process encoding")?)?;
+            let length = value[&length_key]
+                .as_u64()
+                .filter(|n| *n <= 64 * 1024 * 1024)
+                .ok_or("process original stream bound/length")? as usize;
+            // One extra byte detects a false length without unbounded inflation.
+            let mut bytes = vec![0; length + 1];
+            let mut state = miniz_oxide::inflate::stream::InflateState::new_boxed(
+                miniz_oxide::DataFormat::Zlib,
+            );
+            let result = miniz_oxide::inflate::stream::inflate(
+                &mut state,
+                &packed,
+                &mut bytes,
+                miniz_oxide::MZFlush::Finish,
+            );
+            if result.status != Ok(miniz_oxide::MZStatus::StreamEnd)
+                || result.bytes_consumed != packed.len()
+                || result.bytes_written != length
+            {
+                return Err("process compressed stream/length differs".into());
+            }
+            bytes.truncate(length);
+            if value[&digest_key] != sha256(&bytes) {
+                return Err("process original stream digest differs".into());
+            }
+            value.as_object_mut().unwrap().remove(&packed_key);
+            value.as_object_mut().unwrap().remove(&length_key);
+            bytes
+        } else {
+            if value.get(&packed_key).is_some() || value.get(&length_key).is_some() {
+                return Err("retained process has conflicting encodings".into());
+            }
+            let hex = value[&key].as_str().ok_or("process encoding")?;
+            let bytes = artifact_bytes(
+                &value!({"bytes":{"hex":hex,"sha256":value[&digest_key],"length":hex.len()/2}}),
+                "bytes",
+            )?;
+            value.as_object_mut().unwrap().remove(&key);
+            bytes
+        };
         value[format!("{field}_bytes")] = value!(&bytes);
         value[field] = value!(String::from_utf8_lossy(&bytes));
-        value.as_object_mut().unwrap().remove(&key);
     }
     value.as_object_mut().unwrap().remove("encoding");
     Ok(value)
@@ -159,6 +209,28 @@ pub fn expand_record(record: &Value) -> Result<Value, String> {
     let mut record = record.clone();
     record["process"] = expand_process(&record["process"])?;
     Ok(record)
+}
+/// Current compressed reports charge metadata plus their original judge streams.
+/// Historical inline/v1 reports retain their existing serialized-byte contract.
+/// This preflight never replaces subsequent original-byte/digest validation.
+pub fn report_transport_bytes(report: &Value, metadata_bytes: u64) -> Result<u64, String> {
+    let mut total = metadata_bytes;
+    for row in report["judges"].as_array().ok_or("report judges")? {
+        let process = &row["process"];
+        if process["encoding"] != "chrono-retained-process/v2" {
+            continue;
+        }
+        for stream in ["stdout", "stderr"] {
+            let length = process[format!("{stream}_length")]
+                .as_u64()
+                .filter(|n| *n <= 64 * 1024 * 1024)
+                .ok_or("process original stream bound/length")?;
+            total = total
+                .checked_add(length)
+                .ok_or("report original stream budget overflow")?;
+        }
+    }
+    Ok(total)
 }
 /// Pure original DAG/process validation, shared by unit admission and collected proof consumption.
 pub fn retained_judges(
@@ -242,7 +314,9 @@ pub fn retained_judges(
                 binding.id
             ));
         }
-        history.push(predecessor_observation(&record, template.scope.is_some())?);
+        // The original first stdin declares the current codec; absent markers
+        // retain historical full-inline/scoped-v1 construction semantics.
+        history.push(predecessor_observation(&record, template)?);
         parsed.insert(binding.id.clone(), (request, binding, response, process));
     }
     Ok(parsed)
@@ -256,11 +330,14 @@ fn compact_record(record: &mut Value) -> Result<(), String> {
 }
 /// Encode each original stream once; retain all process identity and failures.
 pub fn compact_process(value: &Value) -> Result<Value, String> {
-    if value.get("encoding").is_some() {
-        expand_process(value)?;
-        return Ok(value.clone());
+    encode_process(value, true)
+}
+fn encode_process(original: &Value, compressed: bool) -> Result<Value, String> {
+    if original.get("encoding").is_some() {
+        expand_process(original)?;
+        return Ok(original.clone());
     }
-    let mut value = value.clone();
+    let mut value = original.clone();
     let process = value.as_object_mut().ok_or("process object")?;
     for field in ["stdout", "stderr"] {
         let bytes: Vec<u8> = serde_json::from_value(
@@ -275,9 +352,30 @@ pub fn compact_process(value: &Value) -> Result<Value, String> {
             return Err("process stream aliases or digest differ from original bytes".into());
         }
         process.remove(field);
-        process.insert(format!("{field}_hex"), value!(hex_bytes(&bytes)));
+        if bytes.len() > 64 * 1024 * 1024 {
+            return Err("process original stream bound".into());
+        }
+        if compressed {
+            let packed = miniz_oxide::deflate::compress_to_vec_zlib(&bytes, 1);
+            if packed.len() > 64 * 1024 * 1024 {
+                // Incompressible streams at the original maximum still have
+                // the existing lossless v1 view; no transport bound is raised.
+                return encode_process(original, false);
+            }
+            process.insert(format!("{field}_zlib_hex"), value!(hex_bytes(&packed)));
+            process.insert(format!("{field}_length"), value!(bytes.len()));
+        } else {
+            process.insert(format!("{field}_hex"), value!(hex_bytes(&bytes)));
+        }
     }
-    process.insert("encoding".into(), value!("chrono-retained-process/v1"));
+    process.insert(
+        "encoding".into(),
+        value!(if compressed {
+            "chrono-retained-process/v2"
+        } else {
+            "chrono-retained-process/v1"
+        }),
+    );
     Ok(value)
 }
 fn hex_bytes(bytes: &[u8]) -> String {
@@ -289,6 +387,18 @@ fn hex_bytes(bytes: &[u8]) -> String {
     }
     hex
 }
+fn decode_hex(hex: &str) -> Result<Vec<u8>, String> {
+    if hex.len() > 128 * 1024 * 1024 || hex.len() % 2 != 0 {
+        return Err("artifact bound/encoding".into());
+    }
+    hex.as_bytes()
+        .chunks_exact(2)
+        .map(|p| {
+            let p = std::str::from_utf8(p).map_err(|e| e.to_string())?;
+            u8::from_str_radix(p, 16).map_err(|e| e.to_string())
+        })
+        .collect::<Result<Vec<_>, String>>()
+}
 /// Bounded addressed bytes. Original addresses remain intact during transport.
 pub fn artifact(bytes: &[u8]) -> Value {
     value!({"sha256":sha256(bytes),"length":bytes.len(),"hex":hex_bytes(bytes)})
@@ -298,17 +408,7 @@ pub fn artifact_bytes(artifacts: &Value, address: &str) -> Result<Vec<u8>, Strin
         .get(address)
         .ok_or_else(|| format!("missing original artifact {address}"))?;
     let hex = a["hex"].as_str().ok_or("artifact encoding")?;
-    if hex.len() > 128 * 1024 * 1024 || hex.len() % 2 != 0 {
-        return Err("artifact bound/encoding".into());
-    }
-    let bytes = hex
-        .as_bytes()
-        .chunks_exact(2)
-        .map(|p| {
-            let p = std::str::from_utf8(p).map_err(|e| e.to_string())?;
-            u8::from_str_radix(p, 16).map_err(|e| e.to_string())
-        })
-        .collect::<Result<Vec<_>, String>>()?;
+    let bytes = decode_hex(hex)?;
     if a["sha256"] != sha256(&bytes) || a["length"] != bytes.len() {
         return Err("original artifact digest/length".into());
     }
@@ -479,7 +579,7 @@ pub fn execute(
         }
         let req = match (|| {
             for record in &records[observations.len()..] {
-                observations.push(predecessor_observation(record, template.scope.is_some())?);
+                observations.push(predecessor_observation(record, template)?);
             }
             wire::PreparedRequest::new(request_from_observations(template, &b, &observations)?)
         })() {
@@ -758,7 +858,7 @@ pub fn validate_execution(
             }
         }
         observations.push(
-            predecessor_observation(record, template.scope.is_some()).map_err(|e| {
+            predecessor_observation(record, template).map_err(|e| {
                 format!("E_SELF_DIAGNOSTIC: record {id} predecessor observation: {e}")
             })?,
         );
@@ -1034,7 +1134,7 @@ pub fn prepare_request(
     }
     let req = Request {
         scope: scope.clone(),
-        observations: value!({"git_facts":reader.observation(),"entry":entry,"preparation":preparation,"run":run,"report_path":report_path,"environment":environment,"retained":retained,
+        observations: value!({"process_encoding":"chrono-retained-process/v2","git_facts":reader.observation(),"entry":entry,"preparation":preparation,"run":run,"report_path":report_path,"environment":environment,"retained":retained,
             "execution_units":cfg.get("execution_units"),"registry_bindings":{"base":{"entry_path":base_identity.entry_path,"effective_path":base_identity.effective_path,"selection":base_identity.selection},"candidate":{"entry_path":candidate_identity.entry_path,"effective_path":candidate_identity.effective_path,"selection":candidate_identity.selection}}}),
         protocol: wire::PROTOCOL.into(),
         request_id: String::new(),
@@ -1401,14 +1501,15 @@ pub fn check_prepared(
     }
     report["unresolved"] = value!(unresolved);
     report["sources"] = value!(sources);
-    if scope.is_some() {
-        for record in report["judges"].as_array_mut().ok_or("report judges")? {
-            compact_record(record)?;
+    for record in report["judges"].as_array_mut().ok_or("report judges")? {
+        let projection = predecessor_observation(record, &req)?;
+        if record["process"].is_object() {
+            record["process"] = projection["process"].clone();
         }
     }
     let text = serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n";
     if scope.is_some()
-        && text.len() as u64
+        && report_transport_bytes(&report, text.len() as u64)?
             > req.observations["execution_units"]["collection_limits"]["report_bytes"]
                 .as_u64()
                 .ok_or("full report bound")?

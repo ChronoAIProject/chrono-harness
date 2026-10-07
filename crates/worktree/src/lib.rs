@@ -160,7 +160,7 @@ pub fn run(args: &[String]) -> CliOutput {
             } else {
                 2
             },
-            stdout: format!("{}\n", serde_json::to_string_pretty(&report).unwrap()),
+            stdout: format!("{}\n", serde_json::to_string(&report).unwrap()),
             stderr: String::new(),
         },
         Err(error) => CliOutput {

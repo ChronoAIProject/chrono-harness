@@ -76,4 +76,6 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 本轮同时修改产品 Cargo adapter 和宿主输入／启动登记，须保留 mixed-change 警告及实际验证成本。新操作独立 use 须先由调用方提交候选；worker 的本地 source／主消费者检查不表示 clean candidate、native CI、full 启用或落地。
 
-A3 source 前置同时修改产品 Git 过程证据编码、专属消费者测试及宿主 FILEMAP／release plan：这是 mixed-change，新增实际 config→runner-tests 输入边，原始操作、独立单元、选择与检查限额保留。验证成本包含受影响的 Rust 原始测试、真实历史迁移及生成／发布 owner 检查；成本回执归调用方的规范检查和 worker 原始执行记录。beta.21 仅已准备 source，须调用方完成 clean candidate 检查、原生 release 生产和准确产物核验，之后才可继续采用 runner／七判官／工具固定摘要及 startup。不得用版本号、source tests 或浅验证宣称完整启用；运行时／native／非 Cargo 输入和真实两端快照等 A4 义务仍在。
+产品过程证据采用可验证的 `chrono-retained-process/v2` 压缩传输；历史 inline／v1 原件与原 stdin 判法保留。宿主显式登记压缩库的包文件、archive／index 输入与 runner 依赖边，Cargo policies 采用实际 metadata 的原始解析。工作树原报告仍由生命周期生产者保存；console 使用 compact JSON，check 运输失败引用保留的原始过程，不复制大输出到错误文字。Cargo guard 在 stderr 产生有界的原始 phase／elapsed 观察，主宿主消费者保留有界终态与完整流；不删除检查、不改线程／选择器、不提高时限，也不根据静态成本归因 ENFILE。
+
+这些产品、专属消费者与宿主输入／FILEMAP 同改属于 mixed-change。实际验证成本包括受影响 Rust 原始测试、主宿主 34 个 metadata 与 native guard 消费者、历史迁移、指令生成及 bootstrap／projection owners；具体原始执行回执归 source handoff 与调用方规范检查。beta.21 保持 source preparation，须调用方完成 clean candidate 检查、原生 release 生产和准确产物核验，之后才可继续采用 runner／七判官／工具固定摘要及 startup。source 测试、codec 或版本号不表示 full 启用；运行时／native／非 Cargo 输入和真实两端快照等义务仍在。

@@ -950,6 +950,58 @@ fn process_encoding_preserves_actual_binary_failure_and_rejects_conflicting_view
         conflict[alias] = original[alias].clone();
         assert!(chrono_harness::full::expand_process(&conflict).is_err());
     }
+    let mut legacy = original.clone();
+    for stream in ["stdout", "stderr"] {
+        let raw: Vec<u8> =
+            serde_json::from_value(legacy[format!("{stream}_bytes")].clone()).unwrap();
+        legacy[format!("{stream}_hex")] = chrono_harness::full::artifact(&raw)["hex"].clone();
+        legacy.as_object_mut().unwrap().remove(stream);
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove(&format!("{stream}_bytes"));
+    }
+    legacy["encoding"] = value!("chrono-retained-process/v1");
+    assert_eq!(
+        chrono_harness::full::expand_process(&legacy).unwrap(),
+        original
+    );
+    for field in [
+        "stdout_length",
+        "stdout_zlib_hex",
+        "stdout_sha256",
+        "stdout_hex",
+    ] {
+        let mut corrupt = compact.clone();
+        corrupt[field] = match field {
+            "stdout_length" => value!(64 * 1024 * 1024 + 1u64),
+            "stdout_zlib_hex" => value!(format!("{}00", compact[field].as_str().unwrap())),
+            "stdout_hex" => value!("00"),
+            _ => value!("0".repeat(64)),
+        };
+        assert!(
+            chrono_harness::full::expand_process(&corrupt).is_err(),
+            "{field}"
+        );
+    }
+    let mut truncated = compact.clone();
+    truncated["stdout_zlib_hex"] = value!(&compact["stdout_zlib_hex"].as_str().unwrap()[..8]);
+    assert!(chrono_harness::full::expand_process(&truncated).is_err());
+    let mut short_length = compact.clone();
+    short_length["stdout_length"] = value!(1);
+    assert!(chrono_harness::full::expand_process(&short_length).is_err());
+    let report = value!({"judges":[{"process":compact}]});
+    let metadata_bytes = serde_json::to_vec(&report).unwrap().len() as u64;
+    assert_eq!(
+        chrono_harness::full::report_transport_bytes(&report, metadata_bytes).unwrap(),
+        metadata_bytes + stdout.len() as u64 + stderr.len() as u64
+    );
+    let historic = value!({"judges":[{"process":legacy}]});
+    let historic_bytes = serde_json::to_vec(&historic).unwrap().len() as u64;
+    assert_eq!(
+        chrono_harness::full::report_transport_bytes(&historic, historic_bytes).unwrap(),
+        historic_bytes
+    );
     let mut inconsistent = original.clone();
     inconsistent["stdout"] = value!("a different text view");
     assert!(chrono_harness::full::compact_process(&inconsistent).is_err());
@@ -1024,7 +1076,8 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
     req.candidate.root = fs::canonicalize(&req.candidate.root).unwrap();
     req.base.root = req.candidate.root.clone();
     req.scope = Some(chrono_harness::units::Scope::Unit { unit: "one".into() });
-    req.observations = value!({"environment":{"effective":{}}});
+    req.observations =
+        value!({"process_encoding":"chrono-retained-process/v2","environment":{"effective":{}}});
     first.id = "a".into();
     let bindings: Vec<_> = [
         ("a", vec![]),

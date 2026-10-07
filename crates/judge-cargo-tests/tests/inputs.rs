@@ -334,6 +334,7 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
         collections::BTreeMap,
         time::{SystemTime, UNIX_EPOCH},
     };
+    let started = std::time::Instant::now();
     let root = fs::canonicalize(source()).unwrap();
     let projects: serde_json::Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
@@ -444,28 +445,99 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
     {
         let consumer = &declaration["native_consumer"];
         let guard = root.join(".chrono-harness/bin/chrono-judge-cargo");
-        let out = std::process::Command::new(guard)
-            .current_dir(&root)
-            .args([
-                "run",
-                "--host-root",
-                root.to_str().unwrap(),
-                "--config",
-                ".chrono-harness/config.json",
-                "--policy",
-                consumer["policy"].as_str().unwrap(),
-                "--operation",
-                consumer["operation"].as_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
-        fs::write(directory.join("native-consumer.stdout"), &out.stdout).unwrap();
-        fs::write(directory.join("native-consumer.stderr"), &out.stderr).unwrap();
-        let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        let filemap: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap())
+                .unwrap();
+        let bounds = &filemap["execution_plans"]["test:judge-cargo-tests"];
+        let policy: serde_json::Value = serde_json::from_slice(
+            &fs::read(root.join(consumer["policy"].as_str().unwrap())).unwrap(),
+        )
+        .unwrap();
+        // Leave time for the observed producer to retain its terminal result before
+        // the enclosing registered test operation expires. No budget is enlarged.
+        let remaining = bounds["timeout_seconds"]
+            .as_u64()
+            .unwrap()
+            .saturating_sub(started.elapsed().as_secs())
+            .saturating_sub(30)
+            .max(1);
+        let out = run_process_observed(
+            &root,
+            &CommandSpec {
+                program: guard.to_str().unwrap().into(),
+                args: vec![
+                    "run".into(),
+                    "--host-root".into(),
+                    root.to_str().unwrap().into(),
+                    "--config".into(),
+                    ".chrono-harness/config.json".into(),
+                    "--policy".into(),
+                    consumer["policy"].as_str().unwrap().into(),
+                    "--operation".into(),
+                    consumer["operation"].as_str().unwrap().into(),
+                ],
+                // Preserve the original Command::output inherited environment.
+                // The process engine carries ownership descriptors separately.
+                env: std::env::vars().collect(),
+                timeout_seconds: remaining,
+                output_limit_bytes: policy["output_limit_bytes"].as_u64().unwrap() as usize,
+            },
+            &[],
+            &chrono_harness::file_identity(&guard).unwrap().0,
+        )
+        .unwrap();
+        fs::write(directory.join("native-consumer.stdout"), &out.stdout_bytes).unwrap();
+        fs::write(directory.join("native-consumer.stderr"), &out.stderr_bytes).unwrap();
+        fs::write(
+            directory.join("native-consumer.json"),
+            serde_json::to_vec(&out).unwrap(),
+        )
+        .unwrap();
+        fs::write(directory.join("native-terminal.json"),serde_json::to_vec(&json!({"elapsed_millis":started.elapsed().as_millis(),"timeout_seconds":remaining,"exit_code":out.exit_code,"failure":out.failure,"stdout_sha256":out.stdout_sha256,"stderr_sha256":out.stderr_sha256})).unwrap()).unwrap();
+        observation::process_success(&out)
+            .unwrap_or_else(|e| panic!("native guard: {e}; original {}", directory.display()));
+        let phases: Vec<serde_json::Value> = out
+            .stderr
+            .lines()
+            .filter_map(|line| line.strip_prefix("CHRONO_CARGO_PHASE "))
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
         assert!(
-            out.status.success(),
+            phases
+                .iter()
+                .any(|p| p["phase"] == "guard" && p["event"] == "terminal")
+        );
+        for phase in [
+            "prepare-inputs",
+            "native-host",
+            "metadata",
+            "validate-metadata",
+            "consumer",
+        ] {
+            assert!(
+                phases
+                    .iter()
+                    .any(|p| p["phase"] == phase && p["event"] == "terminal"),
+                "missing original phase {phase}"
+            );
+        }
+        assert_eq!(
+            phases
+                .iter()
+                .filter(|p| p["phase"] == "unchanged-inputs" && p["event"] == "terminal")
+                .count(),
+            6
+        );
+        fs::write(
+            directory.join("native-phases.json"),
+            serde_json::to_vec(&phases).unwrap(),
+        )
+        .unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&out.stdout_bytes).unwrap();
+        assert!(
+            out.exit_code == 0 && out.failure.is_none(),
             "{report} {}",
-            String::from_utf8_lossy(&out.stderr)
+            String::from_utf8_lossy(&out.stderr_bytes)
         );
         assert_eq!(report["metadata"]["exit_code"], 0);
         assert_eq!(report["operation"]["exit_code"], 0);

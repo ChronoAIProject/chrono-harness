@@ -17,15 +17,6 @@ fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
         .expect("required protocol observation field")
 }
 
-fn unhex(value: &Value) -> Vec<u8> {
-    let value = value.as_str().unwrap();
-    assert_eq!(value.len() % 2, 0);
-    (0..value.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&value[i..i + 2], 16).unwrap())
-        .collect()
-}
-
 fn main() {
     let case: Value = serde_json::from_slice(&std::fs::read("judge-case.json").unwrap()).unwrap();
     let kind = case["kind"].as_str().unwrap_or("response");
@@ -121,10 +112,10 @@ fn main() {
                 assert_eq!(observations.len(), 1);
                 let original = &observations[0];
                 assert_eq!(original["id"], "producer");
-                let process = &original["process"];
+                let process = chrono_harness::full::expand_process(&original["process"]).unwrap();
                 assert_eq!(
                     field(original, "request_digest"),
-                    field(process, "stdin_sha256")
+                    field(&process, "stdin_sha256")
                 );
                 let stdout = bytes(&process["stdout_bytes"]);
                 assert_eq!(digest(&stdout), process["stdout_sha256"]);
@@ -137,18 +128,22 @@ fn main() {
                     field(&request["prior_results"][0], "request_id")
                 );
                 assert_eq!(process["exit_code"], 0);
-                assert!(field(process, "failure").is_null());
+                assert!(field(&process, "failure").is_null());
             }
         }
         "retained-process" => {
             for row in request["observations"]["judges"].as_array().unwrap() {
                 let process = &row["process"];
-                assert_eq!(process["encoding"], "chrono-retained-process/v1");
+                assert!(matches!(
+                    process["encoding"].as_str(),
+                    Some("chrono-retained-process/v1" | "chrono-retained-process/v2")
+                ));
                 assert!(
                     process.get("stdout_bytes").is_none() && process.get("stderr_bytes").is_none()
                 );
-                let stdout = unhex(&process["stdout_hex"]);
-                let stderr = unhex(&process["stderr_hex"]);
+                let expanded = chrono_harness::full::expand_process(process).unwrap();
+                let stdout = bytes(&expanded["stdout_bytes"]);
+                let stderr = bytes(&expanded["stderr_bytes"]);
                 assert_eq!(digest(&stdout), process["stdout_sha256"]);
                 assert_eq!(digest(&stderr), process["stderr_sha256"]);
                 assert_eq!(stderr, (0..=255).collect::<Vec<u8>>());

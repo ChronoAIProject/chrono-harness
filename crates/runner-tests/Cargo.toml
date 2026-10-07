@@ -9,9 +9,9 @@ autotests = false
 serde_json = "1"
 libc = "0.2"
 sha2 = "0.10"
+chrono-harness = { path = "../runner" }
 
 [dev-dependencies]
-chrono-harness = { path = "../runner" }
 tempfile = "3"
 
 [[test]]

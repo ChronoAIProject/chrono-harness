@@ -89,6 +89,17 @@ declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
 
+The guard emits bounded `CHRONO_CARGO_PHASE` JSON lines on stderr at the start
+and terminal return of input preparation, each declared directory bind/recheck,
+tool probes, native-host observation, metadata, validation and consumer execution.
+Terminal observations include elapsed milliseconds and whether the phase returned
+or raised an error. A missing terminal line remains an incomplete observation;
+silence is not evidence of a hang. The original process report continues to own
+child exits, failures and stream identities. Timing does not skip any input check.
+The product-host native metadata test observes the guard through the existing
+bounded process engine, retains its stdout/stderr and terminal process report,
+and reserves time within its existing registered test budget to publish a timeout.
+
 The configuration policy has schema `chrono-cargo-inputs/v3` and these required fields.
 The fixed v2 inventory contract remains supported with its original absolute
 `CARGO_HOME` requirement and no ancestor-policy choice.

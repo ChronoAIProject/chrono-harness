@@ -188,21 +188,31 @@ fn install_inner(root: &Path, stdout: &str, stderr: &str, exit: i32) {
 }
 #[test]
 fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
+    let stdout = "original stdout\n".repeat(200_000);
+    let stderr = "original diagnostic\n".repeat(200_000);
     for exit in [0, 7] {
         let h = Host::new("payload");
         participating_check(&h);
         h.kernel_cleanup();
         let target = h.parent.join("console");
         assert_eq!(h.invoke("feature", "console", &target).0, 0);
-        install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
+        install_inner(&target, &stdout, &stderr, exit);
         let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
             .output()
             .unwrap();
-        assert_eq!(out.status.code(), Some(exit), "{out:?}");
-        assert_eq!(out.stdout, b"original stdout\n");
-        assert_eq!(out.stderr, b"original diagnostic\n");
+        assert_eq!(
+            out.status.code(),
+            Some(exit),
+            "stdout bytes {}, stderr bytes {}",
+            out.stdout.len(),
+            out.stderr.len()
+        );
+        assert_eq!(sha256(&out.stdout), sha256(stdout.as_bytes()));
+        assert_eq!(out.stdout.len(), stdout.len());
+        assert_eq!(sha256(&out.stderr), sha256(stderr.as_bytes()));
+        assert_eq!(out.stderr.len(), stderr.len());
         assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
         let (_, owner, _) = h.received(
             Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
@@ -214,11 +224,11 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert_eq!(owner["managed_process"]["exit_code"], exit);
         assert_eq!(
             owner["managed_process"]["stdout_bytes"],
-            value!(b"original stdout\n".to_vec())
+            value!(stdout.as_bytes())
         );
         assert_eq!(
             owner["managed_process"]["stderr_bytes"],
-            value!(b"original diagnostic\n".to_vec())
+            value!(stderr.as_bytes())
         );
         // Target policy failure is a lifecycle refusal, distinct from diagnostics.
         fs::write(target.join(AUTO_POLICY), "ordinary policy edit").unwrap();
@@ -231,6 +241,50 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert!(String::from_utf8_lossy(&refused.stderr).contains("participation refused"));
         assert!(refused.stdout.is_empty());
     }
+    // The lifecycle producer finishes its original report before console
+    // transport exceeds the fixture's bound. Keep that failure by reference.
+    let h = Host::new("payload");
+    participating_check(&h);
+    let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    cfg["protocol"]["stdout_limit_bytes"] = value!(1024);
+    fs::write(
+        h.root.join(CONFIG),
+        serde_json::to_vec_pretty(&cfg).unwrap(),
+    )
+    .unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    h.kernel_cleanup();
+    let target = h.parent.join("bounded-console");
+    assert_eq!(h.invoke("feature", "bounded-console", &target).0, 0);
+    install_inner(&target, &stdout, &stderr, 0);
+    let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(&target)
+        .arg("check")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    assert!(out.stderr.len() < 2048);
+    let original = fs::read_dir(target.join(".chrono-harness/state/preparation"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("participation-")
+        })
+        .unwrap();
+    let bytes = fs::read(&original).unwrap();
+    let process = chrono_harness::full::expand_process(&json(&bytes).unwrap()).unwrap();
+    assert!(process["failure"].is_string());
+    assert_eq!(process["stdout_bytes"].as_array().unwrap().len(), 1024);
+    assert_eq!(process["argv"][1], "check");
+    let error = String::from_utf8(out.stderr).unwrap();
+    assert!(error.contains(original.file_name().unwrap().to_str().unwrap()));
+    assert!(error.contains(&sha256(&bytes)));
+    assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
 }
 #[test]
 fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {

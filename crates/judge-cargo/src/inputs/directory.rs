@@ -34,6 +34,12 @@ enum Kind {
 
 impl Binding {
     pub(super) fn unchanged(&self) -> Result {
+        crate::guard::measure(
+            &format!("directory-unchanged:{}", self.source.display()),
+            || self.unchanged_inner(),
+        )
+    }
+    fn unchanged_inner(&self) -> Result {
         if fs::canonicalize(&self.source).map_err(error)? != self.root {
             return Err(error(format!(
                 "toolchain directory root changed during guarded operation: {}",
@@ -259,6 +265,15 @@ fn directory_entries(root: &Path, relative: &str, expected: &[String]) -> Result
 }
 
 pub(super) fn bind(
+    root: &Path,
+    declaration: &DirectoryInventory,
+    manifest: &Path,
+) -> Result<(Binding, DirectoryEvidence)> {
+    crate::guard::measure(&format!("directory-bind:{}", declaration.root), || {
+        bind_inner(root, declaration, manifest)
+    })
+}
+fn bind_inner(
     root: &Path,
     declaration: &DirectoryInventory,
     manifest: &Path,

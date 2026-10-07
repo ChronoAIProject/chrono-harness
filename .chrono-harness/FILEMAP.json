@@ -204,6 +204,10 @@
         {
           "kind": "runtime-input",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -43869,6 +43873,216 @@
       "from": "tool:rustfmt",
       "kind": "build-input",
       "to": "project:worktree-tests"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:cargo-cache.adler2-2.0.1.archive"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:cargo-cache.adler2.index"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:cargo-cache.miniz_oxide-0.8.9.archive"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:cargo-cache.miniz_oxide.index"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.06572a96a58dc510"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.13ee4b2252c9e516"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.1b7a45280246f35f"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.1cfccd828fdcaa7a"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.2e9d962a08321605"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.30a6712231dd51e3"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.421f8eecf75a1acd"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.4967a07438301854"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.4dc7b68391aabbf4"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.b1a35a68f14e6962"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.b335630551682c19"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.cbe8c656abaf2895"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.cfb90341d744cf16"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.adler2.2.0.1.f8db13a291483ecd"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.049d37b53430f255"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.089b0d007ed70513"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.13ee4b2252c9e516"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.1550ec65ac92f658"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.269345dd65da9af0"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.29d612a4091dc37f"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.2e9d962a08321605"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.30a6712231dd51e3"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.4967a07438301854"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.4b969f4332238026"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.4dc7b68391aabbf4"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.58d2b03f92e6257c"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.5b6dc9d441ed3a22"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.6d0f2ca22207910f"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.80d084928b753b38"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.862f1032d0885fcc"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.9c0699494758bf81"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.9c59d6cddc736ace"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.b1a35a68f14e6962"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.c11e72174294250d"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.c693279643b8cd5d"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.de73824c75ee6203"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.ebb2ec3586555ea1"
+    },
+    {
+      "kind": "build-input",
+      "to": "project:runner",
+      "from": "input:package.miniz_oxide.0.8.9.f047924b6a49d5d5"
     }
   ],
   "test_costs": [

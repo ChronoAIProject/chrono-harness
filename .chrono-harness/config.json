@@ -19133,6 +19133,258 @@
         "location": ".chrono-harness/inputs/local/sdk.json",
         "presence": "present",
         "sha256": "c80db310fb6ebf0ee4f56a79f5a05344f5c85a7286206d6df455229ff82cf40f"
+      },
+      {
+        "id": "package.adler2.2.0.1.4dc7b68391aabbf4",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/.cargo-ok",
+        "presence": "present",
+        "sha256": "afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91"
+      },
+      {
+        "id": "package.adler2.2.0.1.30a6712231dd51e3",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/.cargo_vcs_info.json",
+        "presence": "present",
+        "sha256": "08071a308400282ad18ca2de0df6d1f2dc270475f69aa483740ce311af3f63e0"
+      },
+      {
+        "id": "package.adler2.2.0.1.06572a96a58dc510",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/CHANGELOG.md",
+        "presence": "present",
+        "sha256": "04fa29ec6eb6b05b706247ecac2cbc7075792dbfcea0bf52715782cf42132e94"
+      },
+      {
+        "id": "package.adler2.2.0.1.13ee4b2252c9e516",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/Cargo.lock",
+        "presence": "present",
+        "sha256": "3e44ced212a9e7ddc0a5450bcebb48ec67f32a058529856458efa36415554e53"
+      },
+      {
+        "id": "package.adler2.2.0.1.2e9d962a08321605",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/Cargo.toml",
+        "presence": "present",
+        "sha256": "8f30dbd092f3acc475b9d339736cd7b64c6489bc47cd234a7f2232fc52e2d490"
+      },
+      {
+        "id": "package.adler2.2.0.1.4967a07438301854",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/Cargo.toml.orig",
+        "presence": "present",
+        "sha256": "077df9094ac86443a4d05305f74782bd237c1f15fa39640463e4c62e9e4a310a"
+      },
+      {
+        "id": "package.adler2.2.0.1.cfb90341d744cf16",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/LICENSE-0BSD",
+        "presence": "present",
+        "sha256": "861399f8c21c042b110517e76dc6b63a2b334276c8cf17412fc3c8908ca8dc17"
+      },
+      {
+        "id": "package.adler2.2.0.1.1b7a45280246f35f",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/LICENSE-APACHE",
+        "presence": "present",
+        "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb"
+      },
+      {
+        "id": "package.adler2.2.0.1.421f8eecf75a1acd",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/LICENSE-MIT",
+        "presence": "present",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+      },
+      {
+        "id": "package.adler2.2.0.1.b335630551682c19",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/README.md",
+        "presence": "present",
+        "sha256": "cd955d5d6a49161e6f7a04df4a5963581b66ed43fd5096b2dedca8e295efe4f9"
+      },
+      {
+        "id": "package.adler2.2.0.1.f8db13a291483ecd",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/RELEASE_PROCESS.md",
+        "presence": "present",
+        "sha256": "a86cd10fc70f167f8d00e9e4ce0c6b4ebdfa1865058390dffd1e0ad4d3e68d9d"
+      },
+      {
+        "id": "package.adler2.2.0.1.1cfccd828fdcaa7a",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/benches/bench.rs",
+        "presence": "present",
+        "sha256": "d67bef1c7f36ed300a8fbcf9d50b9dfdead1fd340bf87a4d47d99a0c1c042c04"
+      },
+      {
+        "id": "package.adler2.2.0.1.cbe8c656abaf2895",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/src/algo.rs",
+        "presence": "present",
+        "sha256": "932c2bc591d13fe4470185125617b5aaa660a3898f23b553acc85df0bf49dded"
+      },
+      {
+        "id": "package.adler2.2.0.1.b1a35a68f14e6962",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1/src/lib.rs",
+        "presence": "present",
+        "sha256": "4acd41668fe30daffa37084e7e223f268957b816afc1864ffb3f5d6d7adf0890"
+      },
+      {
+        "id": "cargo-cache.adler2-2.0.1.archive",
+        "location": "/Users/auricstudio/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/adler2-2.0.1.crate",
+        "presence": "present",
+        "sha256": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+      },
+      {
+        "id": "cargo-cache.adler2.index",
+        "location": "/Users/auricstudio/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f/.cache/ad/le/adler2",
+        "presence": "present",
+        "sha256": "70c3aa11518c152c87074799e1d8bb8334fbcc81ea8d8c7bb99a415d107ccb05"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.4dc7b68391aabbf4",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/.cargo-ok",
+        "presence": "present",
+        "sha256": "afbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.30a6712231dd51e3",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/.cargo_vcs_info.json",
+        "presence": "present",
+        "sha256": "63ec91898b26d8ad1c575376009d0dedc8e81dba4fc6a312ed21be764bbbe524"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.13ee4b2252c9e516",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/Cargo.lock",
+        "presence": "present",
+        "sha256": "cbb9f38749859d59171bc231b62c446ac1c037e567db4e9ea5cdd9ccd65adaf8"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.2e9d962a08321605",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/Cargo.toml",
+        "presence": "present",
+        "sha256": "f0d2683434f1c0d3cd9b8080031e82aa5089c9be1779cc5101e065883258d77d"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.4967a07438301854",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/Cargo.toml.orig",
+        "presence": "present",
+        "sha256": "cd14ac8745b43145dab0cbbfa9e425f4778eb30d521a71d6c535fdcd9f00d3ca"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.c693279643b8cd5d",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/LICENSE",
+        "presence": "present",
+        "sha256": "4108245a1f2df9d4e94df8abed5b4ba0759bb2f9b40a6b939f1be141077ae50b"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.862f1032d0885fcc",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/LICENSE-APACHE.md",
+        "presence": "present",
+        "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.58d2b03f92e6257c",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/LICENSE-MIT.md",
+        "presence": "present",
+        "sha256": "799e9ca9d179295ef372f25d3769cdda7d25bb2668add6a6a1e22d1e4c678b8d"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.29d612a4091dc37f",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/LICENSE-ZLIB.md",
+        "presence": "present",
+        "sha256": "0a54e647fe54104658b5e563c04c6f9edf251710e47bce692e0bd990a4ddaa39"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.1550ec65ac92f658",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/Readme.md",
+        "presence": "present",
+        "sha256": "223adc19e791c521f7cbc160c6f77959c74a86c58450855fead310461839fdd9"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.049d37b53430f255",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/deflate/buffer.rs",
+        "presence": "present",
+        "sha256": "6078f2cb24ad3245a78c013c5f86060801e5f7d4c6ab7259e441ac7336444f2c"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.9c0699494758bf81",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/deflate/core.rs",
+        "presence": "present",
+        "sha256": "78f8f7d9a5a58c7e53d2053496942fc9c4e9d783fa317e7a3ddebf716675149b"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.80d084928b753b38",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/deflate/mod.rs",
+        "presence": "present",
+        "sha256": "a306d53b2cbc3b33eabd84edbf118b4e02cd3dbdfe82967398b05246deb41d2c"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.269345dd65da9af0",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/deflate/stored.rs",
+        "presence": "present",
+        "sha256": "726db3ea000b8552b752142c99656d3c51b00b2f64de99b35739abe2a5622f5a"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.4b969f4332238026",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/deflate/stream.rs",
+        "presence": "present",
+        "sha256": "016c82b09a989492c8c8ea89027d339fcf59a5ca2155e7026ac094ca74344712"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.ebb2ec3586555ea1",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/deflate/zlib.rs",
+        "presence": "present",
+        "sha256": "ec6565b1ec04003690cfc1c73eb4d379bbb27f8cddfbde66a0283780bb55ad43"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.f047924b6a49d5d5",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/inflate/core.rs",
+        "presence": "present",
+        "sha256": "59611659879c2b2bd70f840565fe618602a64650901b20ee7246a7aea8491d08"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.5b6dc9d441ed3a22",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/inflate/mod.rs",
+        "presence": "present",
+        "sha256": "27766db858d6a29d040843c17538ff8e648bae20f8cd896fc4197f21a601ee3e"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.9c59d6cddc736ace",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/inflate/output_buffer.rs",
+        "presence": "present",
+        "sha256": "e93b924ae4ffd289b74cb7f91be0c71af0f30ac672c88e25f713f58c85cf125d"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.6d0f2ca22207910f",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/inflate/stream.rs",
+        "presence": "present",
+        "sha256": "c7ae319dff661e0ebc2f47562012c889264b14b6ad7afc9b64c4375c023915bc"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.b1a35a68f14e6962",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/lib.rs",
+        "presence": "present",
+        "sha256": "04b23e8d8e83bb42114222ff3631d10cd9f936f489bd4000a633e5d8b44e433e"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.089b0d007ed70513",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/serde/big_array.rs",
+        "presence": "present",
+        "sha256": "63dab5ebc958bc346a237d062833db6e2e16184a2e9cc06e160ed16edeabc320"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.de73824c75ee6203",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/serde/mod.rs",
+        "presence": "present",
+        "sha256": "a93e69079dfbc22412ae7502d248cbb4c29c9e4f3167f0847ae9ea3e7186f616"
+      },
+      {
+        "id": "package.miniz_oxide.0.8.9.c11e72174294250d",
+        "location": "/Users/auricstudio/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9/src/shared.rs",
+        "presence": "present",
+        "sha256": "511f1d9a603ded80a91c59da2d6a092b7a3d2f9b43b26b8cfa00fb5ebe9541ff"
+      },
+      {
+        "id": "cargo-cache.miniz_oxide-0.8.9.archive",
+        "location": "/Users/auricstudio/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/miniz_oxide-0.8.9.crate",
+        "presence": "present",
+        "sha256": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
+      },
+      {
+        "id": "cargo-cache.miniz_oxide.index",
+        "location": "/Users/auricstudio/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f/.cache/mi/ni/miniz_oxide",
+        "presence": "present",
+        "sha256": "f3b29fb89becacdf3395b20271f0b697561ac935be82fc85322610892fc06e00"
       }
     ]
   },
@@ -20466,7 +20718,49 @@
           "input:cargo-cache.typenum-1.20.1.archive",
           "input:cargo-cache.typenum.index",
           "input:cargo-cache.version_check-0.9.5.archive",
-          "input:cargo-cache.version_check.index"
+          "input:cargo-cache.version_check.index",
+          "input:cargo-cache.adler2-2.0.1.archive",
+          "input:cargo-cache.adler2.index",
+          "input:cargo-cache.miniz_oxide-0.8.9.archive",
+          "input:cargo-cache.miniz_oxide.index",
+          "input:package.adler2.2.0.1.06572a96a58dc510",
+          "input:package.adler2.2.0.1.13ee4b2252c9e516",
+          "input:package.adler2.2.0.1.1b7a45280246f35f",
+          "input:package.adler2.2.0.1.1cfccd828fdcaa7a",
+          "input:package.adler2.2.0.1.2e9d962a08321605",
+          "input:package.adler2.2.0.1.30a6712231dd51e3",
+          "input:package.adler2.2.0.1.421f8eecf75a1acd",
+          "input:package.adler2.2.0.1.4967a07438301854",
+          "input:package.adler2.2.0.1.4dc7b68391aabbf4",
+          "input:package.adler2.2.0.1.b1a35a68f14e6962",
+          "input:package.adler2.2.0.1.b335630551682c19",
+          "input:package.adler2.2.0.1.cbe8c656abaf2895",
+          "input:package.adler2.2.0.1.cfb90341d744cf16",
+          "input:package.adler2.2.0.1.f8db13a291483ecd",
+          "input:package.miniz_oxide.0.8.9.049d37b53430f255",
+          "input:package.miniz_oxide.0.8.9.089b0d007ed70513",
+          "input:package.miniz_oxide.0.8.9.13ee4b2252c9e516",
+          "input:package.miniz_oxide.0.8.9.1550ec65ac92f658",
+          "input:package.miniz_oxide.0.8.9.269345dd65da9af0",
+          "input:package.miniz_oxide.0.8.9.29d612a4091dc37f",
+          "input:package.miniz_oxide.0.8.9.2e9d962a08321605",
+          "input:package.miniz_oxide.0.8.9.30a6712231dd51e3",
+          "input:package.miniz_oxide.0.8.9.4967a07438301854",
+          "input:package.miniz_oxide.0.8.9.4b969f4332238026",
+          "input:package.miniz_oxide.0.8.9.4dc7b68391aabbf4",
+          "input:package.miniz_oxide.0.8.9.58d2b03f92e6257c",
+          "input:package.miniz_oxide.0.8.9.5b6dc9d441ed3a22",
+          "input:package.miniz_oxide.0.8.9.6d0f2ca22207910f",
+          "input:package.miniz_oxide.0.8.9.80d084928b753b38",
+          "input:package.miniz_oxide.0.8.9.862f1032d0885fcc",
+          "input:package.miniz_oxide.0.8.9.9c0699494758bf81",
+          "input:package.miniz_oxide.0.8.9.9c59d6cddc736ace",
+          "input:package.miniz_oxide.0.8.9.b1a35a68f14e6962",
+          "input:package.miniz_oxide.0.8.9.c11e72174294250d",
+          "input:package.miniz_oxide.0.8.9.c693279643b8cd5d",
+          "input:package.miniz_oxide.0.8.9.de73824c75ee6203",
+          "input:package.miniz_oxide.0.8.9.ebb2ec3586555ea1",
+          "input:package.miniz_oxide.0.8.9.f047924b6a49d5d5"
         ]
       },
       {
