@@ -7,6 +7,27 @@ CI unit and central release asset. It does not compile with the CI generator.
 --consumer ID` prepares keys for one explicitly registered consumer. This is an
 internal provider entry; the daily check remains `chrono-harness check`.
 
+## Bounded native acceptance
+
+The host has a real GitHub Actions consumer for the registered `cache` unit. The
+first run of [workflow 37627480033](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033)
+was a cold run: both `check.cache` and `check.cache-tests` reported misses,
+continued through the original bootstrap and canonical check, and completed their
+native saves. A later rerun observed the platform's cache visibility delay and
+saved again; this is retained as an observation rather than generalized cache
+behavior. On [attempt 3](https://github.com/ChronoAIProject/chrono-harness/actions/runs/37627480033/attempts/3)
+of the same immutable commit, both entries restored with `exact` status. The
+transport report recorded `current_executable_verification: matched`,
+`recovery.status: not-required`, no warnings, a successful original work result,
+and `verdict: not-a-judgment`. The canonical bootstrap and check still ran after
+the hits, and no save was attempted for the exact-hit attempt.
+
+This proves the registered consumer's bounded cold miss/save and exact-hit
+restore path, including current cache executable identity and recovery evidence.
+It does not prove changed-source reuse, incompatible-input partitioning, corrupt
+or unavailable archive handling, concurrent producers/reruns, complete backend
+lifecycle protection, or cache completeness for other consumers.
+
 The planner prepares identities; the GitHub provider projects pinned native
 restore/save actions around the original bootstrap and check/release command.
 The host explicitly adopts those actions in its check and release registrations.
