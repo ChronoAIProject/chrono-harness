@@ -512,6 +512,17 @@ pub fn validate_execution(
     let mut observations = Vec::new();
     let mut failed = BTreeSet::<String>::new();
     let mut expected_status = Status::Pass;
+    let expected_environment: BTreeMap<String, String> = template
+        .observations
+        .get("environment")
+        .and_then(|environment| environment.get("effective"))
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|e| format!("E_SELF_DIAGNOSTIC: effective environment: {e}"))?
+        .unwrap_or_default();
+    let expected_environment_digest = wire::digest(&expected_environment)
+        .map_err(|e| format!("E_SELF_DIAGNOSTIC: effective environment digest: {e}"))?;
     for (index, (record, binding)) in records.iter().zip(&ordered).enumerate() {
         let id = record["id"]
             .as_str()
@@ -560,6 +571,13 @@ pub fn validate_execution(
                 if process.argv != expected_argv {
                     return Err(format!(
                         "E_SELF_DIAGNOSTIC: record {id} argv receipt differs from binding"
+                    ));
+                }
+                if process.environment != expected_environment
+                    || process.environment_digest != expected_environment_digest
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} environment receipt differs from request"
                     ));
                 }
                 let expected_cwd = fs::canonicalize(&template.candidate.root)

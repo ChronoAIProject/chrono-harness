@@ -205,7 +205,7 @@ unavailable originals in `artifact_failures` and `unresolved./artifacts`.
 Before a full report is assembled, the runner independently audits the records
 returned by the execution loop. The audit reconstructs the registered binding
 DAG with a separate topological walk, checks each request and stdin digest and
-the process executable/argv/cwd receipt against its binding, matches response
+the process executable/argv/cwd/environment receipt against its binding, matches response
 identity/status/findings to the observed process exit, verifies that blocked
 records name failed registered predecessors or reproduce a request-construction
 failure, checks successful response bytes against the original process stdout,

@@ -629,6 +629,8 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
             "/process/failure",
             value!("process ownership cleanup failed"),
         ),
+        ("/process/environment", value!({"FORGED":"yes"})),
+        ("/process/environment_digest", value!("forged")),
     ] {
         let mut changed_records = records.clone();
         *changed_records[0].pointer_mut(pointer).unwrap() = changed;
