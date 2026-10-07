@@ -209,6 +209,8 @@ the process executable/argv/cwd receipt against its binding, matches response
 identity/status/findings to the observed process exit, verifies that blocked
 records name failed registered predecessors or reproduce a request-construction
 failure, checks successful response bytes against the original process stdout,
+checks pre-launch error records for the expected request identity and the
+absence of process, response, exit, and stdin evidence,
 and recomputes the aggregate status. Any contradiction is
 `E_SELF_DIAGNOSTIC` and prevents report publication. This is a consistency
 boundary over declared inputs; it does not discover dependencies, validate

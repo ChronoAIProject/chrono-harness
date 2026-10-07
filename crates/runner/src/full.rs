@@ -676,10 +676,30 @@ pub fn validate_execution(
                 failed.insert(binding.id.clone());
             }
             "error" => {
+                if record["exit_code"] != Value::Null
+                    || record.get("response").is_some_and(|value| !value.is_null())
+                    || record.get("process").is_some_and(|value| !value.is_null())
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} contains execution evidence"
+                    ));
+                }
+                let request = judge_request_from_observations(template, binding, &observations)
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id}: {e}"))?;
+                if record["request_id"] != request.request_id {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} request identity differs from DAG"
+                    ));
+                }
+                if record.get("request_digest").is_some() {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} contains process request digest"
+                    ));
+                }
                 if record
                     .get("transport_failure")
                     .and_then(Value::as_str)
-                    .is_none()
+                    .is_none_or(str::is_empty)
                 {
                     return Err(format!(
                         "E_SELF_DIAGNOSTIC: error record {id} has no transport failure"

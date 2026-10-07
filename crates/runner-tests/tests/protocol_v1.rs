@@ -677,6 +677,54 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
 }
 
 #[test]
+fn execution_self_diagnostic_rejects_mutated_prelaunch_error_records() {
+    let (_dir, request, mut binding) = fixture(value!({}));
+    // A bad executable digest fails before a child is launched and therefore
+    // exercises the error-record branch rather than the executed branch.
+    binding.sha256 = Some("0".repeat(64));
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Error);
+    assert_eq!(records[0]["state"], "error");
+    chrono_harness::full::validate_execution(
+        &request,
+        std::slice::from_ref(&binding),
+        &status,
+        &records,
+    )
+    .unwrap();
+
+    for (pointer, changed) in [
+        ("/request_id", value!("forged")),
+        ("/exit_code", value!(1)),
+        ("/response", value!({"status":"pass"})),
+        ("/process", value!({"exit_code":0})),
+        ("/request_digest", value!("forged")),
+        ("/transport_failure", value!("")),
+    ] {
+        let mut changed_records = records.clone();
+        changed_records[0][pointer.trim_start_matches('/')] = changed;
+        let error = chrono_harness::full::validate_execution(
+            &request,
+            std::slice::from_ref(&binding),
+            &status,
+            &changed_records,
+        )
+        .unwrap_err();
+        assert!(
+            error.starts_with("E_SELF_DIAGNOSTIC:"),
+            "{pointer}: {error}"
+        );
+    }
+}
+
+#[test]
 fn dag_blocks_dependents_and_continues_independent_branch() {
     let (_dir, r, b) = fixture(value!({"kind":"blocked-dag"}));
     let binding = |id: &str, after: &[&str]| {
