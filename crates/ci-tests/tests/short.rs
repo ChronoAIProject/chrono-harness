@@ -98,7 +98,7 @@ struct ShortHost {
 }
 impl ShortHost {
     fn new() -> Self {
-        let (old, _, _) = consumer();
+        let (old, _, _) = consumer_source();
         let dir = tempfile::Builder::new()
             .prefix("short host λ ")
             .tempdir()
