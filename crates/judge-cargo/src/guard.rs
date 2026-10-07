@@ -17,6 +17,7 @@ pub struct Report {
     operation_id: String,
     tool: Option<observation::Tool>,
     compiler: Option<observation::Tool>,
+    native_target: Option<ProcessResult>,
     linker: Option<observation::Tool>,
     toolchain: Option<crate::inputs::ToolchainEvidence>,
     metadata: Option<ProcessResult>,
@@ -40,6 +41,7 @@ pub fn run(root: &Path, config: &str, policy: &str, operation: &str) -> Report {
         operation_id: operation.into(),
         tool: None,
         compiler: None,
+        native_target: None,
         linker: None,
         toolchain: None,
         metadata: None,
@@ -188,6 +190,39 @@ fn evaluate(
         tools.insert(id, tool);
     }
     let tool = &tools[contract.metadata.tool.as_str()];
+    if let Some(target) = contract.native_target() {
+        let compiler = &tools[contract.compiler.as_ref().unwrap().tool.as_str()];
+        let process = run_process_observed(
+            &root,
+            &CommandSpec {
+                program: compiler
+                    .path
+                    .to_str()
+                    .ok_or("E_CARGO_INPUT: compiler path UTF-8")?
+                    .into(),
+                args: vec!["-vV".into()],
+                env: environment.clone(),
+                timeout_seconds: contract.timeout_seconds,
+                output_limit_bytes: contract.output_limit_bytes,
+            },
+            &[],
+            &compiler.sha256,
+        )?;
+        report.native_target = Some(process);
+        let process = report.native_target.as_ref().unwrap();
+        observation::process_success(process)?;
+        let hosts: Vec<_> = process
+            .stdout
+            .lines()
+            .filter_map(|line| line.strip_prefix("host: "))
+            .collect();
+        if hosts != [target] {
+            return Err(format!(
+                "E_CARGO_INPUT: compiler native host differs from declared target {target}"
+            ));
+        }
+        check.unchanged()?;
+    }
     let invoke = |argv: Vec<String>| {
         run_process_observed(
             &root,

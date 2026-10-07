@@ -68,8 +68,10 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 ## 当前未完成边界
 
-五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，开发工具目录仍未显式绑定。
+五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；已登记 34 个 Cargo 根的本地 v6 输入 policy 与 guarded_* 候选操作，原 build／check／test／fmt／分组库存及未过滤发布操作保留；现役 scoped 计划仍执行原操作。Cargo／编译器／formatter／sysroot／linker／SDK、包文件与 offline resolver、配置与环境已有真实本地观察及显式边；native 供应、运行时平台、原始两端快照、非 Cargo／治理输入与固定执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，本地开发工具与 SDK 目录采用显式 inventory；它们不表示 native 平台身份或原始历史快照。
 
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 
 缓存已有一个登记消费者的原生 cold miss/save 与 exact-hit 路径验收；changed-source、损坏／不可用、并发、其它消费者及完整成本／生命周期合同仍未完成。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
+
+本轮同时修改产品 Cargo adapter 和宿主输入／启动登记，须保留 mixed-change 警告及实际验证成本。新操作独立 use 须先由调用方提交候选；worker 的本地 source／主消费者检查不表示 clean candidate、native CI、full 启用或落地。

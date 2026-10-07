@@ -162,6 +162,323 @@ fn guarded_registry_and_transitive_inputs_execute_real_cargo_test() {
 }
 
 #[test]
+fn registered_named_suites_filters_and_libtest_tails_preserve_real_listings_and_assertions() {
+    let mut f = Fixture::new();
+    write(
+        &f.root(),
+        "t/tests/groups.rs",
+        "#[test] fn core_pass() { assert_eq!(p::value(),43); }\n#[test] fn detail_pass() { assert_eq!(p::value(),43); }\n#[test] fn selected_failure() { panic!(\"real selected assertion\"); }\n",
+    );
+    let mut row = file(
+        "t/tests/groups.rs",
+        json!([{"kind":"compile","to":"project:t"}]),
+    );
+    row["owner"] = "t".into();
+    f.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(row);
+    let original = f.contract["operations"]["test.t"]["argv"]
+        .as_array()
+        .unwrap()
+        .clone();
+    for (tail, expected, listing) in [
+        (
+            vec!["--test", "groups", "--", "--list"],
+            0,
+            "core_pass: test",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "detail",
+                "--",
+                "--list",
+                "--exact",
+                "detail_pass",
+            ],
+            0,
+            "detail_pass: test",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "--",
+                "--skip",
+                "selected_failure",
+                "--test-threads=1",
+            ],
+            0,
+            "2 passed",
+        ),
+        (
+            vec![
+                "--test",
+                "groups",
+                "selected_failure",
+                "--",
+                "--exact",
+                "--nocapture",
+            ],
+            101,
+            "selected_failure",
+        ),
+    ] {
+        let mut argv = original.clone();
+        argv.extend(tail.iter().map(|s| json!(s)));
+        f.contract["operations"]["test.t"]["argv"] = json!(argv);
+        f.save();
+        let (code, report, stderr) = f.call();
+        assert_eq!(code, expected, "{report} {stderr}");
+        let process = &report["operation"];
+        assert_eq!(process["exit_code"], expected, "{report}");
+        assert!(
+            process["stdout"].as_str().unwrap().contains(listing),
+            "{report}"
+        );
+        let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+        assert_eq!(process["stdout_sha256"], sha256(&bytes));
+    }
+}
+
+#[test]
+fn native_v6_keeps_the_original_output_layout_and_checks_real_host_and_offline_selection() {
+    for case in [
+        "native",
+        "wrong-host",
+        "target-env",
+        "online",
+        "old-schema",
+        "format",
+    ] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        f.contract["schema"] = json!("chrono-cargo-inputs/v6");
+        f.contract["target_mode"] = json!("native");
+        f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_NET_OFFLINE"] =
+            json!("true");
+        let argv = f.contract["operations"]["test.t"]["argv"]
+            .as_array_mut()
+            .unwrap();
+        let index = argv.iter().position(|v| v == "--target").unwrap();
+        argv.drain(index..index + 2);
+        argv.retain(|v| v != "--offline");
+        match case {
+            "wrong-host" => {
+                f.contract["target"] = json!("wrong-native-host");
+                let argv = f.contract["metadata"]["argv"].as_array_mut().unwrap();
+                let index = argv.iter().position(|v| v == "--filter-platform").unwrap();
+                argv[index + 1] = json!("wrong-native-host");
+            }
+            "target-env" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CARGO_BUILD_TARGET"] =
+                    f.contract["target"].clone()
+            }
+            "online" => f.values.get_mut(CONFIG).unwrap()["environment"]["values"]
+                .as_object_mut()
+                .unwrap()
+                .remove("CARGO_NET_OFFLINE")
+                .map(|_| ())
+                .unwrap(),
+            "old-schema" => f.contract["schema"] = json!("chrono-cargo-inputs/v5"),
+            "format" => f.contract["operations"]["test.t"]["argv"][0] = json!("fmt"),
+            _ => {}
+        }
+        f.save();
+        let (code, report, stderr) = f.call();
+        if case == "native" {
+            assert_eq!(code, 0, "{report} {stderr}");
+            assert!(
+                report["native_target"]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .contains("host: ")
+            );
+            assert!(
+                report["operation"]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .contains("1 passed")
+            );
+            assert!(f.root().join("t/target/debug/deps").is_dir());
+            assert!(
+                !f.root()
+                    .join("t/target")
+                    .join(f.contract["target"].as_str().unwrap())
+                    .exists()
+            );
+        } else {
+            assert_ne!(code, 0, "{case}: {report} {stderr}");
+            assert!(report["operation"].is_null());
+            assert!(!f.root().join(".chrono-harness/state/test-ran").exists());
+            if case == "wrong-host" {
+                assert!(report["native_target"].is_object(), "{report}");
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("native host differs"),
+                    "{report}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
+    use chrono_harness::{CommandSpec, observation, run_process_observed};
+    use std::{
+        collections::BTreeMap,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+    let root = fs::canonicalize(source()).unwrap();
+    let projects: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
+            .unwrap();
+    let declaration: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/cargo/observe.json")).unwrap())
+            .unwrap();
+    assert_eq!(declaration["schema"], "chrono-host-cargo-observation/v1");
+    let mut environment = BTreeMap::new();
+    for key in [
+        "PATH",
+        "HOME",
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+        "TMPDIR",
+        "SDKROOT",
+    ] {
+        if let Ok(value) = std::env::var(key) {
+            environment.insert(key.into(), value);
+        }
+    }
+    environment.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
+    let tool = observation::tool(
+        &root,
+        "cargo",
+        &["--version".into()],
+        &environment,
+        120,
+        4 * 1024 * 1024,
+    )
+    .unwrap();
+    observation::process_success(&tool.version).unwrap();
+    assert_eq!(
+        tool.version.stdout.trim(),
+        "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+    );
+    let directory = root.join(format!(
+        ".chrono-harness/state/inputs/main-metadata-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(
+        directory.join("tool.json"),
+        serde_json::to_vec_pretty(&tool).unwrap(),
+    )
+    .unwrap();
+    let mut summaries = Vec::new();
+    for identity in declaration["projects"].as_array().unwrap() {
+        let identity = identity.as_str().unwrap();
+        let row = projects["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == identity)
+            .unwrap();
+        let action = &row["actions"]["inputs_metadata"];
+        assert_eq!(action["operation"], format!("inputs.metadata.{identity}"));
+        assert_eq!(action["tool"], "cargo");
+        let argv: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
+        let process = run_process_observed(
+            &root,
+            &CommandSpec {
+                program: tool.path.to_str().unwrap().into(),
+                args: argv,
+                env: environment.clone(),
+                timeout_seconds: 120,
+                output_limit_bytes: 4 * 1024 * 1024,
+            },
+            &[],
+            &tool.sha256,
+        )
+        .unwrap();
+        fs::write(
+            directory.join(format!("{identity}.stdout")),
+            &process.stdout_bytes,
+        )
+        .unwrap();
+        fs::write(
+            directory.join(format!("{identity}.stderr")),
+            &process.stderr_bytes,
+        )
+        .unwrap();
+        fs::write(
+            directory.join(format!("{identity}.json")),
+            serde_json::to_vec_pretty(&process).unwrap(),
+        )
+        .unwrap();
+        observation::process_success(&process).unwrap();
+        let metadata: serde_json::Value = serde_json::from_slice(&process.stdout_bytes).unwrap();
+        assert_eq!(metadata["version"], 1);
+        assert_eq!(
+            metadata["workspace_root"],
+            root.join(row["root"].as_str().unwrap()).to_str().unwrap()
+        );
+        summaries.push(json!({"project":identity,"stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256,"packages":metadata["packages"].as_array().unwrap().len(),"resolution_nodes":metadata["resolve"]["nodes"].as_array().unwrap().len()}));
+    }
+    fs::write(
+        directory.join("observations.json"),
+        serde_json::to_vec_pretty(&summaries).unwrap(),
+    )
+    .unwrap();
+    println!("main host original metadata: {}", directory.display());
+    if declaration["native_consumer"]["platform"]
+        == format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+    {
+        let consumer = &declaration["native_consumer"];
+        let guard = root.join(".chrono-harness/bin/chrono-judge-cargo");
+        let out = std::process::Command::new(guard)
+            .current_dir(&root)
+            .args([
+                "run",
+                "--host-root",
+                root.to_str().unwrap(),
+                "--config",
+                ".chrono-harness/config.json",
+                "--policy",
+                consumer["policy"].as_str().unwrap(),
+                "--operation",
+                consumer["operation"].as_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+        fs::write(directory.join("native-consumer.stdout"), &out.stdout).unwrap();
+        fs::write(directory.join("native-consumer.stderr"), &out.stderr).unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert!(
+            out.status.success(),
+            "{report} {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(report["metadata"]["exit_code"], 0);
+        assert_eq!(report["operation"]["exit_code"], 0);
+        assert!(
+            report["native_target"]["stdout"]
+                .as_str()
+                .unwrap()
+                .contains("host: aarch64-apple-darwin")
+        );
+    }
+}
+
+#[test]
 fn metadata_declaration_mismatch_retains_actual_successful_metadata_and_blocks_test() {
     let mut f = Fixture::new();
     f.contract["packages"][2]["features"] = json!([]);
@@ -894,6 +1211,64 @@ fn save_sdk_links(f: &mut Fixture, manifest: &serde_json::Value) {
         .unwrap();
     input["sha256"] = json!(sha256(&bytes));
     f.save();
+}
+
+#[cfg(unix)]
+#[test]
+fn v3_directory_aliases_cover_empty_and_alias_only_directories_and_detect_drift() {
+    use std::os::unix::fs::symlink;
+    for case in ["accepted", "v2", "missing", "extra-child", "mutation"] {
+        let mut f = Fixture::new();
+        let mut manifest = sdk_links(&mut f);
+        let sdk = f.root().join(".chrono-harness/state/sdk");
+        fs::create_dir(sdk.join("empty")).unwrap();
+        fs::create_dir(sdk.join("container")).unwrap();
+        symlink("../empty", sdk.join("container/leaf")).unwrap();
+        symlink("container", sdk.join("container-alias")).unwrap();
+        manifest["schema"] = json!("chrono-input-directory/v3");
+        manifest["directories"] =
+            json!([{"path":"empty","entries":[]},{"path":"container","entries":["leaf"]}]);
+        manifest["symlinks"].as_array_mut().unwrap().extend([
+            json!({"path":"container/leaf","target":"../empty","kind":"directory"}),
+            json!({"path":"container-alias","target":"container","kind":"directory"}),
+        ]);
+        match case {
+            "v2" => manifest["schema"] = json!("chrono-input-directory/v2"),
+            "missing" => {
+                manifest.as_object_mut().unwrap().remove("directories");
+            }
+            "extra-child" => fs::write(sdk.join("empty/unlisted"), b"changed").unwrap(),
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(sdk.join("empty/unlisted"));
+                write(
+                    &f.root(),
+                    "t/src/lib.rs",
+                    "#[test] fn change_directory() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n",
+                );
+            }
+            _ => {}
+        }
+        save_sdk_links(&mut f, &manifest);
+        let (exit, report, stderr) = f.call();
+        if case == "accepted" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            if case == "mutation" {
+                assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("directory children differ"),
+                    "{report}"
+                );
+            } else {
+                assert!(report["operation"].is_null());
+            }
+        }
+    }
 }
 
 #[cfg(unix)]

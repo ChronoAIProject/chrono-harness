@@ -13,7 +13,8 @@
     "tools": {
       "cargo": "cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "python3": "/usr/bin/python3"
+      "python3": "/usr/bin/python3",
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo"
     },
     "artifacts": [
       ".chrono-harness/bin/",

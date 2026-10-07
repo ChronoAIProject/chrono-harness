@@ -9,7 +9,8 @@
     "build.runner",
     "build.judge-ci",
     "build.ci",
-    "build.worktree"
+    "build.worktree",
+    "build.judge-cargo"
   ],
   "install": [
     {
@@ -27,6 +28,10 @@
     {
       "source": "crates/worktree/target/debug/chrono-worktree",
       "destination": ".chrono-harness/bin/chrono-worktree"
+    },
+    {
+      "source": "crates/judge-cargo/target/debug/chrono-judge-cargo",
+      "destination": ".chrono-harness/bin/chrono-judge-cargo"
     }
   ],
   "participation": {

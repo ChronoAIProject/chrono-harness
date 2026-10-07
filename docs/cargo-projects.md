@@ -205,9 +205,13 @@ locked/offline mode, feature selection and ordered `--config` file arguments.
 `--filter-platform`, while consumers require `--target`. The initial argument
 grammar also accepts `--frozen`, `--features`, `--all-features`,
 `--no-default-features`, `--release`, `--profile`, `--lib`, `--bins`, `--tests`,
-`--all-targets`, `--examples` and `--benches` where applicable. Unlisted flags,
-inline configuration assignments and arguments after `--` are rejected; supporting
-them requires an explicit adapter extension. Cargo still determines whether a
+`--all-targets`, `--examples` and `--benches` where applicable. Named `--test`, `--bin`, `--example` and `--bench` selectors are supported,
+including repeated named suites. `test` and `bench` accept one positional filter.
+Registered `test`, `bench` and `run` tails after `--` are forwarded unchanged to
+the child; they do not alter Cargo feature/configuration selection. This retains
+libtest listing, exact filters, skips, threads, original assertion failures and
+application arguments. Other unlisted Cargo flags and inline configuration
+assignments are rejected. Cargo still determines whether a
 particular accepted combination is legal and retains its real failure.
 
 The registered outer action must invoke this guard with the exact root, config,
@@ -321,3 +325,50 @@ The full host remains proposed until the host registers and activates this
 policy. Dedicated tests cover a real Rust sysroot, linker, SDK inventory,
 build-script input, selection conflicts and directory/input drift through the
 ordinary Cargo operation.
+
+## Native consumers and offline environment (v6)
+
+`chrono-cargo-inputs/v6` retains every v5 binding and requires `target_mode`,
+either `explicit` or `native`. Explicit mode retains `--target`. Native mode
+requires its absence, rejects `CARGO_BUILD_TARGET` and parsed Cargo
+`build.target`/`env.CARGO_BUILD_TARGET`, and retains an additional real compiler
+`-vV` process at `native_target`. Its single observed `host:` must equal the
+declared target before metadata or consumer execution. Metadata continues to
+use the declared `--filter-platform`. Native mode keeps the original native
+Cargo output layout, including `target/debug`; it does not rewrite output paths.
+
+V6 accepts the original locked command without an offline flag when its explicit
+effective environment sets `CARGO_NET_OFFLINE` to exactly `true`. Otherwise the
+existing locked/offline flags remain required. V2–v5 reject `target_mode`, even
+null, and keep their original target/offline requirements. Formatting retains
+its Cargo/rustfmt contract and is not a supported guarded verb.
+
+`chrono-input-directory/v3` retains the v2 file and literal-alias inventories
+and requires `directories`, an array of `{path, entries}` declarations. Paths
+are physical directories and entries are their exact immediate child names,
+including an empty list. Such a directory may supply a directory-alias target
+even when it contains no registered regular file. The owner checks physical
+parents and exact child membership before and after the real consumer. Added
+children, missing/replaced directories, duplicate/invalid names and alias drift
+fail while preserving the original consumer result. Older inventory schemas
+reject the new field. This closes the real macOS SDK's empty and alias-only
+directory targets; it is not a discovery or hidden-input completeness proof.
+
+The product host stages v6 policies for its 34 existing Cargo roots under
+[`.chrono-harness/cargo/`](../.chrono-harness/cargo/observe.json). Each original
+source build/check/test/run and unfiltered release action remains available;
+`guarded_*` actions declare the same consumer argv, with offline selection in
+the environment. Existing group inventory still uses its original complete and
+disjoint listing operations. Switching the full execution plans and inventory
+to compatible guarded actions remains activation work.
+
+The explicit local compiler, resolver archive/index, extracted package, SDK,
+linker/delegate and configuration declarations are source-backed observations,
+not native CI identities or endpoint snapshots. Compiler/SDK directory manifests
+remain separately identified under `.chrono-harness/inputs/local/`. The dedicated
+Rust consumer observes each explicitly named main metadata operation, retains
+its original streams under host state, and exercises the registered main native
+check on its declared platform. This is local source validation. Native
+provisioning, runtime-platform scope, genuine historical/current snapshots and
+fixed compatible artifacts remain prerequisites; full host enforcement stays
+proposed/incomplete. Product code contains no host layout or platform recipe.
