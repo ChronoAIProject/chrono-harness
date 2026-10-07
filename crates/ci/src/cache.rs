@@ -235,7 +235,7 @@ pub(crate) fn project(
             )
         })
         .unwrap_or_default();
-    suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        continue-on-error: true\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}{saves_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));
+    suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}{saves_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));
     let marker = format!("      - name: {before}\n");
     let work_marker = format!("      - name: {work}\n");
     if body.matches(&marker).count() != 1 || body.matches(&work_marker).count() != 1 {

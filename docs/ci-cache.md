@@ -204,8 +204,10 @@ exit successfully. This report cannot claim a saved archive, compiler reuse or
 verified executable identity from action outcomes. A cache excluded from this
 job's save selection reports `not-requested` when no save was observed; an actual
 save outside that selection remains visible with `W_CACHE_UNREGISTERED_SAVE`.
-Backend and action logs remain necessary to attribute a particular save or diagnose archive contents. Failed report production is visible as its
-own action outcome and does not replace the original check result.
+Backend and action logs remain necessary to attribute a particular save or diagnose archive contents. Failed report production or evidence retention fails its workflow step and job;
+the original business result is retained independently. The report step has no
+`continue-on-error` exemption. A backend query failure that is successfully
+recorded remains a nonfatal availability warning.
 
 Cache backend failures remain nonfatal to the following build. Native acceptance of backend observations, explicit corrupt-cache recovery and preserving arbitrary project compilation
 after a later test failure remain unfinished. Saving does not include `.chrono-harness/state`, release

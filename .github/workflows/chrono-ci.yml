@@ -96,7 +96,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -223,7 +222,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -342,7 +340,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -469,7 +466,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -596,7 +592,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -689,7 +684,6 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'host-bootstrap' --github-output "$GITHUB_OUTPUT"
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -879,7 +873,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1006,7 +999,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1196,7 +1188,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1306,7 +1297,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1451,7 +1441,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1605,7 +1594,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1759,7 +1747,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -1913,7 +1900,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2059,7 +2045,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2186,7 +2171,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2313,7 +2297,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2503,7 +2486,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2685,7 +2667,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2867,7 +2848,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -2960,7 +2940,6 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'release-build' --github-output "$GITHUB_OUTPUT"
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3062,7 +3041,6 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'release-build-integration' --github-output "$GITHUB_OUTPUT"
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3172,7 +3150,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3265,7 +3242,6 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'scoped-v1' --github-output "$GITHUB_OUTPUT"
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3358,7 +3334,6 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'workflow-inventory' --github-output "$GITHUB_OUTPUT"
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3468,7 +3443,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3578,7 +3552,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
@@ -3699,7 +3672,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Record original cache transport observations
         if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         env:
           CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
