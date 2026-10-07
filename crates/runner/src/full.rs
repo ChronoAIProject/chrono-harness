@@ -619,8 +619,17 @@ pub fn validate_execution(
                             || format!("E_SELF_DIAGNOSTIC: executed record {id} has no response"),
                         )?)
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} response: {e}"))?;
-                    validate_record_response(&response, &binding.id, process.exit_code)
+                    validate_record_response(&response, &request, process.exit_code)
                         .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
+                    if process.failure.is_some()
+                        || json(&process.stdout_bytes).map_err(|e| {
+                            format!("E_SELF_DIAGNOSTIC: record {id} original response: {e}")
+                        })? != record["response"]
+                    {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} response differs from process"
+                        ));
+                    }
                     expected_status = expected_status.max(response.status.clone());
                     if response.status >= Status::Fail {
                         failed.insert(binding.id.clone());
@@ -636,14 +645,28 @@ pub fn validate_execution(
                         "E_SELF_DIAGNOSTIC: blocked record {id} contains execution evidence"
                     ));
                 }
-                let blocked_by: Vec<String> = serde_json::from_value(
-                    record.get("blocked_by").cloned().unwrap_or(Value::Null),
-                )
-                .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} blocked_by: {e}"))?;
-                if blocked_by.is_empty()
-                    || blocked_by.iter().any(|predecessor| {
-                        !binding.after.contains(predecessor) || !failed.contains(predecessor)
-                    })
+                let expected_blocked: Vec<_> = binding
+                    .after
+                    .iter()
+                    .filter(|parent| failed.contains(*parent))
+                    .collect();
+                if expected_blocked.is_empty() {
+                    let failure = judge_request_from_observations(template, binding, &observations)
+                        .err()
+                        .ok_or_else(|| {
+                            format!(
+                                "E_SELF_DIAGNOSTIC: record {id} has no blocking request failure"
+                            )
+                        })?;
+                    if record.get("blocked_by").is_some()
+                        || record["transport_failure"].as_str() != Some(failure.as_str())
+                    {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} request failure differs from DAG"
+                        ));
+                    }
+                } else if record["blocked_by"] != value!(expected_blocked)
+                    || record.get("transport_failure").is_some()
                 {
                     return Err(format!(
                         "E_SELF_DIAGNOSTIC: record {id} has invalid blocked predecessors"
@@ -685,10 +708,14 @@ pub fn validate_execution(
     Ok(())
 }
 
-fn validate_record_response(response: &Response, id: &str, exit_code: i32) -> Result<(), String> {
+fn validate_record_response(
+    response: &Response,
+    request: &Request,
+    exit_code: i32,
+) -> Result<(), String> {
     if response.protocol != wire::PROTOCOL
-        || response.judge_id != id
-        || response.request_id.is_empty()
+        || response.judge_id != request.judge_id
+        || response.request_id != request.request_id
         || response.status.exit_code() != exit_code
     {
         return Err("response identity/status/exit mismatch".into());

@@ -562,6 +562,13 @@ fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
         .unwrap();
         assert_eq!(status, wire::Status::Error);
         assert_eq!(rows[0]["state"], "error");
+        chrono_harness::full::validate_execution(
+            &bad,
+            std::slice::from_ref(&binding),
+            &status,
+            &rows,
+        )
+        .unwrap();
         assert!(
             rows[0]["transport_failure"]
                 .as_str()
@@ -614,6 +621,26 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
     .unwrap();
     chrono_harness::full::validate_execution(&request, &[binding.clone()], &status, &records)
         .unwrap();
+
+    for (pointer, changed) in [
+        ("/response/request_id", value!("0".repeat(64))),
+        ("/response/outputs", value!({"unobserved":true})),
+        (
+            "/process/failure",
+            value!("process ownership cleanup failed"),
+        ),
+    ] {
+        let mut changed_records = records.clone();
+        *changed_records[0].pointer_mut(pointer).unwrap() = changed;
+        let result = chrono_harness::full::validate_execution(
+            &request,
+            std::slice::from_ref(&binding),
+            &status,
+            &changed_records,
+        );
+        assert!(result.is_err(), "undetected mutation: {pointer}");
+        assert!(result.unwrap_err().starts_with("E_SELF_DIAGNOSTIC:"));
+    }
 
     let mut response_mutation = records.clone();
     response_mutation[0]["response"]["judge_id"] = value!("forged");
@@ -682,6 +709,41 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
     broken[0].after = vec!["blocked".into()];
     assert!(chrono_harness::full::schedule(&broken).is_err());
     assert!(chrono_harness::full::schedule(&[]).is_err());
+}
+
+#[test]
+fn execution_self_diagnostic_preserves_conflicting_predecessor_failure() {
+    let (_dir, request, binding) = fixture(value!({"kind":"distinct-impacts"}));
+    let plan: Vec<_> = [("a", vec![]), ("b", vec![]), ("c", vec!["a", "b"])]
+        .into_iter()
+        .map(|(id, after)| wire::Binding {
+            id: id.into(),
+            after: after.into_iter().map(String::from).collect(),
+            ..binding.clone()
+        })
+        .collect();
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        &plan,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    assert_eq!(status, wire::Status::Error);
+    assert_eq!(records[2]["state"], "blocked");
+    assert_eq!(
+        records[2]["transport_failure"],
+        "conflicting predecessor impact outputs"
+    );
+    chrono_harness::full::validate_execution(&request, &plan, &status, &records).unwrap();
+    let mut changed = records.clone();
+    changed[2]["transport_failure"] = value!("different failure");
+    assert!(
+        chrono_harness::full::validate_execution(&request, &plan, &status, &changed)
+            .unwrap_err()
+            .starts_with("E_SELF_DIAGNOSTIC:")
+    );
 }
 
 #[test]

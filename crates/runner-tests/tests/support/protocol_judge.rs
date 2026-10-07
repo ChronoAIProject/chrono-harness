@@ -112,6 +112,9 @@ fn main() {
                 exit = 2;
             }
         }
+        "distinct-impacts" => {
+            response["outputs"]["impact"] = json!({"producer": request["judge_id"]});
+        }
         "prior-process" => {
             if request["judge_id"] == "consumer" {
                 let observations = request["observations"]["judges"].as_array().unwrap();

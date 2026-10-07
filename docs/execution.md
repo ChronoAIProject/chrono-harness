@@ -207,11 +207,13 @@ returned by the execution loop. The audit reconstructs the registered binding
 DAG with a separate topological walk, checks each request and stdin digest and
 the process executable/argv/cwd receipt against its binding, matches response
 identity/status/findings to the observed process exit, verifies that blocked
-records name failed registered predecessors, and recomputes the aggregate
-status. Any contradiction is `E_SELF_DIAGNOSTIC` and prevents report
-publication. This is a consistency boundary over declared inputs; it does not
-discover dependencies, validate host completeness, or prove that a judge's
-business result is semantically correct.
+records name failed registered predecessors or reproduce a request-construction
+failure, checks successful response bytes against the original process stdout,
+and recomputes the aggregate status. Any contradiction is
+`E_SELF_DIAGNOSTIC` and prevents report publication. This is a consistency
+boundary over declared inputs; it does not discover dependencies, validate
+host completeness, or prove that a judge's business result is semantically
+correct.
 
 `--collect MANIFEST` uses the same seven-judge entry and consumes a bounded
 `chrono-full-collection/v1` manifest with `unit`, `path`, and `sha256` rows. Runner
