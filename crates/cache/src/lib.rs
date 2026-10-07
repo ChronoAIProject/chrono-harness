@@ -18,6 +18,19 @@ use std::{
 pub const SCHEMA: &str = "chrono-cache/v1";
 pub const CONSUMER_SCHEMA: &str = "chrono-cache/v2";
 
+pub(crate) fn current_executable_identity() -> Result<Value, String> {
+    let executable =
+        fs::canonicalize(std::env::current_exe().map_err(|e| format!("E_CACHE_EXECUTABLE: {e}"))?)
+            .map_err(|e| format!("E_CACHE_EXECUTABLE: {e}"))?;
+    let (sha256, bytes) = file_identity(&executable)?;
+    Ok(json!({
+        "executable": executable,
+        "sha256": sha256,
+        "bytes": bytes,
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -752,7 +765,8 @@ fn prepare_with_inputs(
     }
     let mut plan = json!({"schema":if c.schema == CONSUMER_SCHEMA {"chrono-cache-plan/v2"} else {"chrono-cache-plan/v1"},
         "consumer":consumer,"caches":entries,"inputs":observations,
-        "input_completeness_proven":false,"execution":"not-started"});
+        "input_completeness_proven":false,"execution":"not-started",
+        "planner":current_executable_identity()?});
     if let Some(contract) = operation_contract {
         plan["consumer_operations"] = contract;
     }

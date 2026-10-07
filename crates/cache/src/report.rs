@@ -219,16 +219,34 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         options.get("--bootstrap").copied(),
         saves.as_deref(),
     )?;
-    let executable = std::env::current_exe()
-        .and_then(fs::canonicalize)
+    let producer = super::current_executable_identity()
         .map_err(|e| format!("E_CACHE_REPORT: producer executable: {e}"))?;
-    let producer_bytes = fs::read(&executable)
-        .map_err(|e| format!("E_CACHE_REPORT: producer executable bytes: {e}"))?;
-    report["producer"] = json!({
-        "executable": executable,
-        "sha256": sha256(&producer_bytes),
-        "version": env!("CARGO_PKG_VERSION"),
-    });
+    let verification = match plan.get("planner") {
+        Some(expected)
+            if expected["sha256"] == producer["sha256"]
+                && expected["version"] == producer["version"] =>
+        {
+            json!({"status":"matched","expected":expected,"observed":producer})
+        }
+        Some(expected) => {
+            json!({"status":"mismatch","expected":expected,"observed":producer})
+        }
+        None => {
+            json!({"status":"unavailable","reason":"legacy-plan-without-planner-identity","observed":producer})
+        }
+    };
+    report["producer"] = producer;
+    report["current_executable_verification"] = verification.clone();
+    if verification["status"] == "mismatch" {
+        return Err("E_CACHE_REPORT: report executable differs from the planner executable".into());
+    }
+    if verification["status"] == "matched" {
+        if let Some(caches) = report["caches"].as_object_mut() {
+            for cache in caches.values_mut() {
+                cache["current_executable_verification"] = json!("matched");
+            }
+        }
+    }
     report["plan"] = json!({"path":plan_path,"sha256":sha256(&plan_raw)});
     report["plan_upload"] = json!(retain_for_upload(root, directory, "plan", &plan_raw)?);
     report["native_steps"] = json!(retain_for_upload(

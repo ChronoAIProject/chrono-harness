@@ -580,6 +580,68 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
 }
 
 #[test]
+fn report_rejects_a_planner_executable_mismatch_before_publication() {
+    let (root, config) = fixture();
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let plan_path = ".chrono-harness/state/cache/check.one/plan.json";
+    let planned = Command::new(&binary)
+        .args([
+            "plan",
+            "--host-root",
+            root.path().to_str().unwrap(),
+            "--config",
+            ".chrono-harness/cache.json",
+            "--consumer",
+            "check.one",
+            "--plan-output",
+            plan_path,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        planned.status.success(),
+        "{}",
+        String::from_utf8_lossy(&planned.stderr)
+    );
+    let path = root.path().join(plan_path);
+    let mut plan: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    plan["planner"]["sha256"] = json!("0".repeat(64));
+    fs::write(&path, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let steps = json!({
+        "cache_0_restore":{"outcome":"success","outputs":{}},
+        "cache_0_save":{"outcome":"skipped","outputs":{}},
+        "work":{"outcome":"success"}
+    });
+    let output = Command::new(&binary)
+        .args([
+            "report",
+            "--host-root",
+            root.path().to_str().unwrap(),
+            "--plan",
+            plan_path,
+            "--report-directory",
+            ".chrono-harness/state/cache/check.one/",
+            "--steps-env",
+            "CACHE_TEST_STEPS",
+            "--work",
+            "work",
+        ])
+        .env("CACHE_TEST_STEPS", serde_json::to_string(&steps).unwrap())
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("differs from the planner executable")
+    );
+}
+
+#[test]
 fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let (root, config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();

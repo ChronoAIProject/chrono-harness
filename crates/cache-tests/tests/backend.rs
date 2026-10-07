@@ -4,7 +4,17 @@ fn backend_fixture() -> (Host, Value) {
     let (root, mut config) = fixture();
     adopt_consumer_contract(root.path(), &mut config);
     config["backend"] = backend();
-    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    // The backend fixture calls the installed report binary below, so bind the
+    // plan to that same executable just as the native workflow does.
+    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let executable = fs::canonicalize(&binary).unwrap();
+    prepared["planner"] = json!({
+        "executable": executable,
+        "sha256": format!("{:x}", Sha256::digest(fs::read(&binary).unwrap())),
+        "bytes": fs::metadata(&binary).unwrap().len(),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
     (root, prepared)
 }
 
@@ -154,10 +164,13 @@ fn backend_presence_requires_original_exact_key_and_ref_evidence() {
         fs::read_to_string(root.path().join("backend-call.txt")).unwrap(),
         "repos/owner/repository/actions/caches?ref=refs%2Fpull%2F7%2Fmerge&per_page=100\ncredential=true"
     );
-    assert_eq!(report["current_executable_verification"], Value::Null);
+    assert_eq!(
+        report["current_executable_verification"]["status"],
+        "matched"
+    );
     assert_eq!(
         report["caches"]["project"]["current_executable_verification"],
-        "not-observed-by-cache-report"
+        "matched"
     );
 }
 
