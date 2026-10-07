@@ -8031,6 +8031,11 @@
       "from": "project:judge-projects-tests",
       "kind": "test-execution",
       "to": "test:judge-projects-migration"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:judge-ci-tests"
     }
   ],
   "test_costs": [
@@ -8164,6 +8169,7 @@
       "operations": [
         "fmt.judge-ci",
         "fmt.judge-ci-tests",
+        "build.runner",
         "build.judge-ci",
         "test.judge-ci-tests"
       ],

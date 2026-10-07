@@ -1089,7 +1089,8 @@
         "consumer": "check.unit_judge-ci",
         "caches": [
           "check.judge-ci",
-          "check.judge-ci-tests"
+          "check.judge-ci-tests",
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-ci-tests",

@@ -337,6 +337,7 @@
         "ci",
         "inputs",
         "judge-cargo",
+        "judge-ci",
         "judge-cost",
         "judge-filemap",
         "judge-mixed",
