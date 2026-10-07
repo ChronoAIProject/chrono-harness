@@ -1362,7 +1362,9 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     );
     let handshake = target.join(".chrono-harness/state/check-holder");
     let began = Instant::now();
-    while !handshake.exists() && began.elapsed() < Duration::from_secs(10) {
+    // Allow the ordinary runner fixture startup guard before checking nested
+    // lease ownership; startup latency has no bearing on that contract.
+    while !handshake.exists() && began.elapsed() < Duration::from_secs(30) {
         if check.try_wait().unwrap().is_some() {
             break;
         }

@@ -899,7 +899,9 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
             let original = String::from_utf8(raw).unwrap();
             let evidence =
                 json(original.strip_prefix("E_GIT_FACTS: ").unwrap().as_bytes()).unwrap();
-            let process = &evidence["observation"]["processes"][0];
+            let process =
+                chrono_harness::full::expand_process(&evidence["observation"]["processes"][0])
+                    .unwrap();
             let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
             assert_eq!(process["stdout_sha256"], sha256(&bytes));
             assert!(String::from_utf8_lossy(&bytes).contains("original-full-version-probe"));
@@ -911,7 +913,18 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
             );
         } else {
             assert!(stderr.contains("Original check error retention failed:"));
-            assert!(stderr.contains("original-full-version-probe"));
+            let original = stderr
+                .split("\nOriginal check error retention failed:")
+                .next()
+                .unwrap();
+            let start = original.find("E_GIT_FACTS: ").unwrap() + "E_GIT_FACTS: ".len();
+            let evidence: Value = serde_json::from_str(original[start..].trim()).unwrap();
+            let process =
+                chrono_harness::full::expand_process(&evidence["observation"]["processes"][0])
+                    .unwrap();
+            let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
+            assert_eq!(process["stdout_sha256"], sha256(&bytes));
+            assert!(String::from_utf8_lossy(&bytes).contains("original-full-version-probe"));
             assert!(out.stderr.len() > 1_000_000);
             assert!(!stderr.contains("Original check error:"));
         }

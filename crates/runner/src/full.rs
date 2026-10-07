@@ -126,14 +126,20 @@ fn request_from_observations(
     req.impact = impacts.first().map(|v| (*v).clone()).unwrap_or(Value::Null);
     Ok(req)
 }
-/// Lossless process encoding for scoped reports and predecessor observations.
-/// Unscoped stdin and direct legacy reports retain their original shape and bytes.
+/// Lossless process encoding shared by Git evidence and scoped DAG records.
+/// Legacy inline records remain readable without rewriting their originals.
 pub fn expand_process(value: &Value) -> Result<Value, String> {
     if value.get("encoding").is_none() {
         return Ok(value.clone());
     }
     if value["encoding"] != "chrono-retained-process/v1" {
         return Err("unsupported retained process encoding".into());
+    }
+    if ["stdout", "stderr", "stdout_bytes", "stderr_bytes"]
+        .iter()
+        .any(|key| value.get(key).is_some())
+    {
+        return Err("retained process cannot contain inline stream aliases".into());
     }
     let mut value = value.clone();
     for field in ["stdout", "stderr"] {
@@ -245,7 +251,17 @@ fn compact_record(record: &mut Value) -> Result<(), String> {
     if !record["process"].is_object() {
         return Ok(());
     }
-    let process = record["process"].as_object_mut().unwrap();
+    record["process"] = compact_process(&record["process"])?;
+    Ok(())
+}
+/// Encode each original stream once; retain all process identity and failures.
+pub fn compact_process(value: &Value) -> Result<Value, String> {
+    if value.get("encoding").is_some() {
+        expand_process(value)?;
+        return Ok(value.clone());
+    }
+    let mut value = value.clone();
+    let process = value.as_object_mut().ok_or("process object")?;
     for field in ["stdout", "stderr"] {
         let bytes: Vec<u8> = serde_json::from_value(
             process
@@ -253,11 +269,16 @@ fn compact_record(record: &mut Value) -> Result<(), String> {
                 .ok_or("process bytes")?,
         )
         .map_err(|e| e.to_string())?;
+        if process.get(field) != Some(&value!(String::from_utf8_lossy(&bytes)))
+            || process.get(&format!("{field}_sha256")) != Some(&value!(sha256(&bytes)))
+        {
+            return Err("process stream aliases or digest differ from original bytes".into());
+        }
         process.remove(field);
         process.insert(format!("{field}_hex"), value!(hex_bytes(&bytes)));
     }
     process.insert("encoding".into(), value!("chrono-retained-process/v1"));
-    Ok(())
+    Ok(value)
 }
 fn hex_bytes(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";

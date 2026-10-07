@@ -1003,11 +1003,39 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         "args":["file",compiler],"env":{},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"file-path"});
     let first = plan(root.path(), &config, "check.one").unwrap();
+    let repeated = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(
-        first,
-        plan(root.path(), &config, "check.one").unwrap(),
-        "evidence times must not change keys"
+        first["caches"], repeated["caches"],
+        "original process receipts must not change cache or restore keys"
     );
+    assert_eq!(
+        first["inputs"]["compiler"]["observation"],
+        repeated["inputs"]["compiler"]["observation"]
+    );
+    for prepared in [&first, &repeated] {
+        let original = prepared["inputs"]["compiler"]["original"].as_str().unwrap();
+        let raw = fs::read(root.path().join(original)).unwrap();
+        assert!(original.ends_with(&format!("{:x}.json", Sha256::digest(&raw))));
+        let process: Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(process["exit_code"], 0);
+        assert!(process["failure"].is_null());
+        for stream in ["stdout", "stderr"] {
+            let bytes: Vec<u8> =
+                serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+            assert_eq!(
+                process[format!("{stream}_sha256")],
+                format!("{:x}", Sha256::digest(&bytes))
+            );
+            assert_eq!(
+                process[stream].as_str().unwrap(),
+                String::from_utf8_lossy(&bytes).as_ref()
+            );
+        }
+        assert_eq!(
+            process["sha256"],
+            prepared["inputs"]["compiler"]["observation"]["executable_sha256"]
+        );
+    }
     fs::write(&compiler, b"compiler-two").unwrap();
     let next = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(

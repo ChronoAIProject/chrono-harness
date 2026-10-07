@@ -108,6 +108,10 @@
         {
           "kind": "runtime-input",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },

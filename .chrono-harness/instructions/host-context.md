@@ -75,3 +75,5 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 缓存已有一个登记消费者的原生 cold miss/save 与 exact-hit 路径验收；changed-source、损坏／不可用、并发、其它消费者及完整成本／生命周期合同仍未完成。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
 
 本轮同时修改产品 Cargo adapter 和宿主输入／启动登记，须保留 mixed-change 警告及实际验证成本。新操作独立 use 须先由调用方提交候选；worker 的本地 source／主消费者检查不表示 clean candidate、native CI、full 启用或落地。
+
+A3 source 前置同时修改产品 Git 过程证据编码、专属消费者测试及宿主 FILEMAP／release plan：这是 mixed-change，新增实际 config→runner-tests 输入边，原始操作、独立单元、选择与检查限额保留。验证成本包含受影响的 Rust 原始测试、真实历史迁移及生成／发布 owner 检查；成本回执归调用方的规范检查和 worker 原始执行记录。beta.21 仅已准备 source，须调用方完成 clean candidate 检查、原生 release 生产和准确产物核验，之后才可继续采用 runner／七判官／工具固定摘要及 startup。不得用版本号、source tests 或浅验证宣称完整启用；运行时／native／非 Cargo 输入和真实两端快照等 A4 义务仍在。

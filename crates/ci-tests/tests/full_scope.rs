@@ -498,6 +498,7 @@ fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
             .iter()
             .find(|p| p["exit_code"] == 29)
             .unwrap();
+        let failed = chrono_harness::full::expand_process(failed).unwrap();
         let bytes: Vec<u8> = serde_json::from_value(failed["stderr_bytes"].clone()).unwrap();
         assert_eq!(bytes, b"\xffscope-probe-failure");
         assert_eq!(failed["stderr_sha256"], sha256(&bytes));

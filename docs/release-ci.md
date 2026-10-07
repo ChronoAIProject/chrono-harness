@@ -48,6 +48,8 @@ v5 verification 另须声明布尔值 `rust_toolchain`。为 true 时安装并�
 
 本地 v5 调度只等待各单元显式声明的前置，受 `local_workers` 限制；无依赖验证可与构建同时就绪。失败前置仍产生实际失败结果，collector 仍要求全部登记单元成功。stdout/stderr 为原始文件，receipt 记录字节数／摘要、原始 argv、cwd、退出码、所用工具身份及时间，不伪造相同环境或完整输入证明。
 
+当前 `plan.json` 准备 `v0.1.0-beta.21`，保留全部 16 个资产、16 个构建与 22 个原始验证单元、两平台和原时限／并发合同。这只是 release source 前置；beta.20 原发行保留。调用方须在 clean committed 候选上完成规范检查，再由现有原生生产者产生、收集并核对固定源码产物，才能采用它们的准确平台摘要／来源。共享 startup 的原始源码观察仍指向真正的生产源码；候选选择兼容旧固定源码产物不授权把该观察改写为消费候选。当前主宿主尚未采用此新公开产物，五份 full 登记和完整链启用仍未完成。
+
 collector 不安装工具链、不构建、不跑测试。它核 exact build/test 成员、当前依赖结果和选中原始 run/attempt；允许兼容的成功前置来自较早 producing attempt，但最新 failure/cancelled/skipped 不能用旧 pass 掩盖。更换选中 producer 或字节使不对应的测试 receipt 失效。collector 核原始过程退出／流、原始 argv、全部资产观察与生产 lineage 后，运行被验证向量中的 `chrono-distribution pack`，再核实际最终清单、15 项包字节／mode、源及平台。最终 artifact 含完整原始 receipt／过程流和明确选定 artifact-ID 引用；独立 job 的失败 artifact 仍保留。
 
 v5 可在 `failure_evidence` 中按验证 operation 显式登记失败目录列表。路径为以 `/` 结尾的字面相对目录，必须属于宿主唯一的 untracked artifact，单个操作的目录不能重复或嵌套；未登记目录不采集。验证子进程失败后，生产者将这些目录的普通文件及原字节摘要写入该单元的发布 artifact，保留明确的目录缺失、非普通文件、容量省略和复制错误。登记采集与原生 fixture 证据共用现有 64 MiB 内容上限，原 stdout/stderr、退出码及原业务失败不被辅助采集失败覆盖。该配置不从测试名称、语言或输出文本推断路径；v2/v3/v4 不接受此字段。此机制只运输已产生的登记证据，不证明所有异常都已使用标准错误链。

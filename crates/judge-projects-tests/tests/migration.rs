@@ -635,7 +635,8 @@ fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
                 "{error}"
             );
             assert_eq!(
-                diagnostic["observation"]["processes"][0]["stdout"],
+                chrono_harness::full::expand_process(&diagnostic["observation"]["processes"][0])
+                    .unwrap()["stdout"],
                 format!(
                     "{}\n",
                     config["tools"]

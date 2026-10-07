@@ -399,18 +399,20 @@ fn exit_status_mismatch_fails() {
 }
 #[test]
 fn bounds_cover_timeout_and_output() {
-    for (case, cause) in [
-        (json!({"kind":"sleep"}), "process timed out"),
-        (json!({"kind":"flood"}), "process output limit exceeded"),
+    for (case, cause, timeout) in [
+        (json!({"kind":"sleep"}), "process timed out", 1),
+        // Output bounds allow ordinary child startup so this case exercises
+        // the output limit independently of the dedicated timeout case.
+        (json!({"kind":"flood"}), "process output limit exceeded", 30),
     ] {
         let (_dir, p) = fixture(case);
         let mut cfg: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
-        cfg["judge"]["timeout_seconds"] = 1.into();
+        cfg["judge"]["timeout_seconds"] = timeout.into();
         fs::write(&p, serde_json::to_vec(&cfg).unwrap()).unwrap();
         let start = std::time::Instant::now();
         let r = run(&p);
         assert_eq!(r.exit_code, 2);
-        assert!(start.elapsed().as_secs() < 5);
+        assert!(start.elapsed().as_secs() < timeout + 4);
         let report: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
         assert_eq!(
             report["transport_failure"],
@@ -803,7 +805,9 @@ fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
         let marker = root.join(".chrono-harness/facts-launches");
         let tool = root.join(".chrono-harness/git-fixture");
         native_executable::install(CHILD, &tool).unwrap();
-        let target = json!({"schema_version":3,"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"expected"}],"environment":{"inherit":[],"values":{},"inputs":[{"id":"git-bytes","location":tool,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&tool).unwrap())}]},"protocol":{"timeout_seconds":5,"stdout_limit_bytes":4096}});
+        // Alias guards are checked before launch; legal controls must allow the
+        // native fixture to start, independently of the dedicated timeout test.
+        let target = json!({"schema_version":3,"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"expected"}],"environment":{"inherit":[],"values":{},"inputs":[{"id":"git-bytes","location":tool,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&tool).unwrap())}]},"protocol":{"timeout_seconds":30,"stdout_limit_bytes":4096}});
         fs::write(
             root.join(".chrono-harness/direct.json"),
             serde_json::to_vec(&target).unwrap(),

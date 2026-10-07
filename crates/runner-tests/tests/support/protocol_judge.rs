@@ -182,6 +182,10 @@ fn main() {
     if let Some(suffix) = case.get("suffix") {
         output.extend(bytes(suffix));
     }
+    if let Some(stderr) = case.get("stderr") {
+        io::stderr().write_all(&bytes(stderr)).unwrap();
+        io::stderr().flush().unwrap();
+    }
     io::stdout().write_all(&output).unwrap();
     io::stdout().flush().unwrap();
     std::process::exit(exit);

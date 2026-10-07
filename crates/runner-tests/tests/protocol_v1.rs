@@ -914,6 +914,48 @@ fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() 
 }
 
 #[test]
+fn process_encoding_preserves_actual_binary_failure_and_rejects_conflicting_views() {
+    let stdout: Vec<u8> = (0..=255).collect();
+    let stderr: Vec<u8> = (0..=255).rev().collect();
+    let (_dir, request, binding) = fixture(value!({"kind":"raw", "consume_request":true,
+        "stdout":stdout, "stderr":stderr, "exit":17}));
+    let failure = wire::invoke_detailed(
+        &request,
+        &binding,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        4096,
+    )
+    .unwrap_err();
+    let process = failure.process.unwrap();
+    assert_eq!(process.exit_code, 17);
+    assert_eq!(process.stdout_bytes, stdout);
+    assert_eq!(process.stderr_bytes, stderr);
+    let original = serde_json::to_value(&process).unwrap();
+    let compact = chrono_harness::full::compact_process(&original).unwrap();
+    assert_eq!(
+        chrono_harness::full::expand_process(&compact).unwrap(),
+        original
+    );
+    assert_eq!(
+        chrono_harness::full::compact_process(&compact).unwrap(),
+        compact
+    );
+    assert_eq!(
+        chrono_harness::full::expand_process(&original).unwrap(),
+        original
+    );
+    for alias in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+        let mut conflict = compact.clone();
+        conflict[alias] = original[alias].clone();
+        assert!(chrono_harness::full::expand_process(&conflict).is_err());
+    }
+    let mut inconsistent = original.clone();
+    inconsistent["stdout"] = value!("a different text view");
+    assert!(chrono_harness::full::compact_process(&inconsistent).is_err());
+}
+
+#[test]
 fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
     let bytes: Vec<u8> = (0..=255).collect();
     let expected = concat!(
@@ -1954,10 +1996,20 @@ fn failed_handoff_receive_child_helper() {
         error.contains("observer receive"),
         "missing receiving endpoint diagnostic: {error}"
     );
-    // macOS reports EMSGSIZE when it cannot externalize SCM_RIGHTS into
-    // the exhausted receiving descriptor table; retain that original errno.
+    // macOS may report EMSGSIZE or EMFILE when it cannot externalize
+    // SCM_RIGHTS into the exhausted receiving descriptor table. The observer
+    // retains the actual recvmsg errno, separately from the child's spawn errno.
     assert!(
-        error.contains(&format!("os error {}", libc::EMSGSIZE)),
+        error
+            .split("last recvmsg error: ")
+            .nth(1)
+            .is_some_and(
+                |receive| [libc::EMSGSIZE, libc::EMFILE].iter().any(|errno| receive
+                    .split(';')
+                    .next()
+                    .unwrap()
+                    .contains(&format!("os error {errno}")))
+            ),
         "missing original recvmsg errno: {error}"
     );
     assert!(error.contains("observer incomplete handoffs"), "{error}");

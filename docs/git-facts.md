@@ -39,6 +39,19 @@ Consumers reject missing/mismatched binding observations before invoking Git.
 Process bounds apply per invocation; accumulated report storage is not a total
 run memory/disk quota.
 
+New Git process observations use the existing `chrono-retained-process/v1`
+encoding. Each original stream appears once as hexadecimal bytes with its original
+SHA-256; metadata, ownership carriers, exit codes and failures remain unchanged.
+The runner's `full::expand_process` validates the encoding and digests before
+constructing transient byte/text views. Legacy inline observations remain readable;
+their retained originals are not rewritten. Mixed inline and encoded stream views
+are rejected. This removes numeric-array and text duplication from real registry
+evidence without changing declared inputs, selection or the host's check bounds.
+The dedicated runner regression acquires the main host's actual config bytes at
+two real Git endpoints and verifies complete decoding under the existing 8 MiB
+transport bound. It is bounded transport evidence, not full host acceptance or a
+promise for arbitrary repository sizes.
+
 A bound Reader reuses successful blob bytes for the same full immutable OID and
 exact requested path only after that Reader's existing `verify_oid` has observed
 the exact requested commit identity and a valid full tree OID. Reads before this
