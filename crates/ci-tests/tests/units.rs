@@ -365,9 +365,15 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
 }
 
 fn consumer() -> (tempfile::TempDir, String, String) {
+    let (host, base, candidate) = consumer_source();
+    install(host.path());
+    (host, base, candidate)
+}
+
+// Clone sources contain repository inputs; only an executing host installs tools.
+fn consumer_source() -> (tempfile::TempDir, String, String) {
     let d = fixture();
     let root = d.path();
-    install(root);
     fs::write(
         root.join(".gitignore"),
         ".chrono-harness/state/\n.chrono-harness/bin/\n",

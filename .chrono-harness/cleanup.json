@@ -146,6 +146,18 @@
     {
       "path": "crates/diagnostics-tests/target/",
       "disposition": "dispose"
+    },
+    {
+      "path": "crates/cache/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/cache-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/startup/",
+      "disposition": "dispose"
     }
   ]
 }

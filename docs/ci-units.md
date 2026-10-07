@@ -44,6 +44,25 @@ their local operations cannot write that target concurrently. Independent native
 jobs retain separate checkouts, reports and reruns. This grouping does not certify
 that every host can satisfy a timing bound under arbitrary external load.
 
+The projects test project has separate `judge-projects` and
+`judge-projects-migration` units. The core action runs the `consumer`, `execution`
+and `languages` binaries; the migration action runs the `migration` binary,
+including the real historical-host repair and its nested CI suite. Both retain
+the existing assertions, fixture deadlines and default libtest concurrency.
+`projects.inventory` uses the same Python owner and
+`.chrono-harness/ci/projects-inventory.json` to compare their union with the
+current unfiltered inventory. New or omitted binaries fail inventory validation;
+the registration does not freeze a historical test count.
+
+Each group has its own 900-second operation bound, checkout, check report and
+rerun; this replaces the single combined operation in ordinary CI. It does not
+claim the same aggregate time budget or a reduction in total work. The original
+unfiltered `execute` action remains available for release, and nested tests are
+not omitted or replaced by stored results. The groups share their declared
+target and inventory resource in a local checkout, so local execution remains
+exclusive. Native timing and complete candidate acceptance require the actual
+registered checks.
+
 Providers without `job_gating` retain their original separate-workflow behavior
 and evidence contracts. Installing a new binary or running init does not opt
 an existing host in. This source correction has no published release or native
@@ -317,13 +336,40 @@ paths above are this Rust product host's choices; a released-binary consumer can
 materialize just its host registration/installer/workflow paths. The detector
 never discovers host SDKs, imports, directories or language boundaries.
 
-This host's detector bootstrap registers only `build.ci` and installs `chrono-ci`,
-the executable called by its detection step. Cargo builds that project's library
-dependencies in its own target. The detector has no standalone runner, judge-ci
-or worktree executable consumer. Unit and collection jobs use the separate core
-bootstrap because their canonical check invokes those tools, including the
-registered worktree lifecycle participant. Both recipes use the same bootstrap
-implementation and existing project actions; the provider does not infer them.
+This host's detector produces the registered core startup tools for the unit and
+collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
+the existing core profile once and publishes all five installed tools. Consumer
+jobs validate and install the selected profiles, then verify them at the original
+cache/core preparation points. Their canonical checks and business build plans
+remain unchanged. Local and release bootstraps keep their registered source builds.
+
+Optional `job_gating.startup` uses schema `chrono-shared-startup/v1`. It declares a
+literal host `directory`, artifact name, pinned `download_action`, and `consumers`
+keyed by explicit job IDs. Each consumer supplies nonempty `need`, `output_use` and
+literal `install` argv. The existing detector bootstrap is the sole producer and
+writes an opaque `binding` to `GITHUB_OUTPUT`; no additional job is generated.
+The provider uploads the declared directory before detection, and carries the
+producer binding and actual upload artifact ID as detector outputs. Consumers
+download that ID, including when only failed jobs are rerun in a later attempt.
+Empty artifact IDs cannot trigger download-all. The installer must reject a missing
+binding or missing transfer; it has no success exemption. Transfer directories must
+not overlap evidence roots, preventing binaries from being copied into every
+ordinary evidence archive. Unlisted consumers and configurations without startup
+keep their existing behavior. Hosts own compatibility and install checks; the
+provider infers no language, layout or platform compatibility.
+
+The host Python implementation binds a clean primary source commit/tree, platform,
+configuration/profile bytes, original bootstrap reports, and file digests, sizes
+and executable modes. It validates the complete transfer before replacing tools,
+restores executable modes lost by artifact transport, and retains exact producer
+reports beside explicit import provenance. Installation is not a local build.
+Point-of-use verification rejects installed drift. Missing/changed bindings,
+source/config/platform mismatches, symlinks, damaged payloads and failed publication
+stop the job. This covers registered startup outputs, not complete compiler/SDK
+input closure, adversarial attestation, linked-worktree ownership or power-loss
+atomicity across all installed files. Native transfer and rerun acceptance remain
+separate from fixture validation. Startup upload/download/install steps have
+explicit resource categories; their observed costs count toward evaluating reuse.
 
 PR endpoints are event base/head. Default push endpoints are the complete event
 before/after, including multiple commits. Explicit `push_baselines` and branch
@@ -525,6 +571,48 @@ retained original error, not a completed report; retention failures preserve the
 original failure and explain the write failure without claiming an artifact.
 Early configuration/selection errors keep their existing `E_CHECK` diagnostics.
 
+Scoped v3 hosts can adopt `policy.report_publication: "retained-reference/v1"`
+to keep one complete immutable check report. The registered fixed report path
+then contains only `{"schema":"chrono-check-reference/v1","original":{"path":...,"sha256":...}}`.
+The short console still points directly to the complete original; the reference
+contains no verdict. Local and native manifests bind the reference's exact bytes.
+Collection reads the original through the existing declared artifact transport,
+verifies its digest and retained path, and applies every existing report, process,
+plan and executable check. It does not follow reference chains. Missing, changed,
+symlinked, undeclared or oversized originals fail; neither a small reference nor
+a successful download replaces the original evidence. Both the reference and
+original are subject to the registered report read limit separately.
+
+Adoption requires matching runner and collector binaries and the prepared short
+check entry; explicit endpoint calls fail before business execution. Old profiles,
+including scoped v3 hosts omitting this field, keep complete fixed-path reports.
+Unknown values, explicit null and adoption in scoped v1/v2 are rejected. Consumers
+that read a fixed path must understand the reference before a host adopts it.
+Upload the registered artifact directory containing both reference and original;
+do not upload only the small reference. This reduces duplicate check-report
+publication; it does not deduplicate other acquisition, process or gather evidence.
+
+With explicit `retained-reference/v2`, the fixed reference format stays the same,
+but its original uses `chrono-check-report/v2`. The original preserves request,
+runner identity, process metadata, exit status, failure and retained path. The
+judge's exact stdout and stderr bytes are retained separately through the existing
+original mechanism; `judge.stdout_original` and `judge.stderr_original` each hold
+`{path, sha256}`. The report has no separate `response` or inline judge `stdout`,
+`stderr`, `stdout_bytes`, `stderr_bytes`. Collection verifies both stream hashes
+against their references and process metadata, restores transient process views,
+and decodes the response from original stdout. Existing protocol, executable,
+plan, receipt and verdict checks still apply. Business and transport failures keep
+their original status and bytes; the bounded console points to the report.
+
+For v2, `report_bytes` covers the combined bytes of original report metadata,
+stdout and stderr for each unit. The fixed reference has its own bound of the
+same size. Collection resolves every original through the declared transport;
+missing or damaged streams cannot fall back to producer-local copies. Upload the
+whole registered artifact directory and upgrade all actual readers before
+adoption. Inline stream views are rejected; consumers must use verified original bytes. This storage contract does not deduplicate business receipts
+inside judge output or other acquisition evidence. V1 and omitted policy keep
+their existing formats.
+
 Hosts may declare independent collection read limits in their check policy:
 
 ```json
@@ -536,7 +624,8 @@ Hosts may declare independent collection read limits in their check policy:
 
 Both values are positive byte counts below the platform's `usize::MAX`;
 an omitted object preserves the existing
-64 MiB limit for each file. A supplied object requires both fields and accepts no
+64 MiB limit (per file, or the v2 original-and-stream total described above).
+A supplied object requires both fields and accepts no
 unknown fields or explicit `null`. It is a scoped-v3 extension; older binaries reject the new field,
 so install a release containing it before adopting the policy. Each original unit
 report is read and verified separately. The limit applies to its actual serialized
@@ -593,9 +682,14 @@ The existing paginated jobs response supplies `resources` in the original gather
 report (`chrono-ci-resources/v1`); no extra request, runner or business execution
 is added. It binds the response's process index/digest, candidate, run and observed
 attempt, and counts each identical job ID once across pages. Conflicting copies
-and invalid identities are excluded with explicit issues. The scope includes
-observed earlier attempts, not just the latest successful jobs, and does not
-assert that GitHub exposed all possible historical work.
+and invalid identities are excluded with explicit issues. Totals and comparisons
+use only the current attempt's API job view. `excluded_prior_attempts` lists older
+job IDs and attempts; the original source response retains their full rows,
+including failures. GitHub may copy successful jobs into a new attempt with new
+IDs and unchanged execution timestamps. The current view may therefore include
+carried results; it is neither distinct execution history nor the cost of rerunning
+the current attempt. The observer does not infer execution identity from matching
+names or timestamps and does not add historical rows to the current view.
 
 `known_step_seconds` sums only completed, non-skipped steps with valid ordered
 timestamps. It is null when nothing was measured. Each step retains its category,

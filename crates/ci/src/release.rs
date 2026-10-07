@@ -3,7 +3,11 @@ use super::{action, output_preflight, scalar, shell, write_file};
 use chrono_harness::{decode, no_symlink_parents, relative_path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
 
 pub const SCHEMA: &str = "chrono-github-release/v1";
 pub const UNITS_SCHEMA: &str = "chrono-github-release/v2";
@@ -13,6 +17,8 @@ const ADOPTED: &str = ".chrono-harness/ci/release.json";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persistent_cache: Option<super::cache::Config>,
     pub schema: String,
     pub workflow_path: String,
     pub name: String,
@@ -79,6 +85,12 @@ fn literal(value: &str) -> Result<(), String> {
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
+    if let Some(cache) = &c.persistent_cache {
+        if c.schema != UNITS_SCHEMA {
+            return Err("persistent release cache requires v2".into());
+        }
+        super::cache::validate(cache, &c.jobs.iter().map(|job| job.id.clone()).collect())?;
+    }
     if !matches!(c.schema.as_str(), SCHEMA | UNITS_SCHEMA) || c.name.is_empty() || c.jobs.is_empty()
     {
         return Err("invalid release workflow schema/name/jobs".into());
@@ -219,6 +231,20 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
 
 pub fn render(c: &Config) -> Result<String, String> {
     validate(c)?;
+    // Reuse only identical, explicitly registered downloads. Aliases retain one
+    // execution per consumer job and do not add or remove dependency edges.
+    let mut counts = BTreeMap::new();
+    for download in c.jobs.iter().flat_map(|job| &job.downloads) {
+        *counts
+            .entry((download.job.as_str(), download.directory.as_str()))
+            .or_insert(0) += 1;
+    }
+    let mut shared_downloads: BTreeMap<_, _> = counts
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .enumerate()
+        .map(|(index, (key, _))| (key, (format!("chrono_release_download_{index}"), false)))
+        .collect();
     let mut output = format!("{MARKER}name: {}\non:\n", scalar(&c.name));
     if !c.push_branches.is_empty() {
         output.push_str(&format!(
@@ -227,11 +253,26 @@ pub fn render(c: &Config) -> Result<String, String> {
         ));
     }
     output.push_str(
-        "  workflow_dispatch:\n    inputs:\n      source:\n        description: Source revision to check out\n        required: true\n        type: string\npermissions:\n  contents: read\njobs:\n",
+        "  workflow_dispatch:\n    inputs:\n      source:\n        description: Source revision to check out\n        required: true\n        type: string\npermissions:\n  contents: read\n",
     );
+    if c.persistent_cache.is_some() {
+        output.push_str("  actions: read\n");
+    }
+    output.push_str("jobs:\n");
     for job in &c.jobs {
         if c.schema == UNITS_SCHEMA {
-            render_unit(&mut output, c, job)?;
+            let mut body = String::new();
+            render_unit(&mut body, c, job, &mut shared_downloads)?;
+            output.push_str(&super::cache::project(
+                c.persistent_cache.as_ref(),
+                &job.id,
+                body,
+                "Run registered release command",
+                "Run registered release command",
+                None,
+                None,
+                Some("Preserve original release artifacts"),
+            )?);
             continue;
         }
         output.push_str(&format!(
@@ -276,7 +317,12 @@ pub fn render(c: &Config) -> Result<String, String> {
     Ok(output)
 }
 
-fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String> {
+fn render_unit<'a>(
+    output: &mut String,
+    c: &Config,
+    job: &'a Job,
+    shared_downloads: &mut BTreeMap<(&'a str, &'a str), (String, bool)>,
+) -> Result<(), String> {
     output.push_str(&format!(
         "  {}:\n    if: ${{{{ {}github.event.deleted != true }}}}\n",
         job.id,
@@ -316,8 +362,20 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
         checkout = c.checkout_action
     ));
     for download in &job.downloads {
+        let prefix =
+            match shared_downloads.get_mut(&(download.job.as_str(), download.directory.as_str())) {
+                Some((anchor, emitted)) if *emitted => {
+                    output.push_str(&format!("      - *{anchor}\n"));
+                    continue;
+                }
+                Some((anchor, emitted)) => {
+                    *emitted = true;
+                    format!("      - &{anchor}\n        name:")
+                }
+                None => "      - name:".to_string(),
+            };
         output.push_str(&format!(
-            r#"      - name: Download selected original artifact from {producer}
+            r#"{prefix} Download selected original artifact from {producer}
         if: ${{{{ always() && needs.{producer}.outputs.artifact_id != '' }}}}
         uses: {action}
         with:
@@ -380,6 +438,7 @@ fn render_unit(output: &mut String, c: &Config, job: &Job) -> Result<(), String>
 }
 
 pub(crate) fn generate(root: &Path, c: &Config, verify: bool) -> Result<bool, String> {
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let output = render(c)?;
     let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
     if verify && !same {
@@ -402,6 +461,7 @@ pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     } else {
         incoming
     };
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let output = render(&c)?;
     let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
     if !existing {

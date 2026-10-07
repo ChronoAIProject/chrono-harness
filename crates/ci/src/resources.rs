@@ -99,7 +99,7 @@ pub(crate) fn publish_summary(config: &Config, report: &Value, original: &str) -
                 .unwrap_or("unknown".into())
         };
         let mut body = format!(
-            "### CI resource observation\n\nStatus: **{}**. Known completed-step sum: **{} seconds**.\n\nThis snapshot is not billing time, workflow elapsed time, or pure test time. Running, missing and later steps are not measured.\n\n| Category | Known seconds | Unknown steps |\n| --- | ---: | ---: |\n",
+            "### CI resource observation\n\nStatus: **{}**. Known completed-step sum: **{} seconds**.\n\nThis snapshot is not billing time, workflow elapsed time, or pure test time. The current attempt's API view may include carried results; these seconds are not the cost of rerunning this attempt. Prior-attempt rows are excluded from totals and comparisons and retained in the source response. Running, missing and later steps are not measured.\n\n| Category | Known seconds | Unknown steps |\n| --- | ---: | ---: |\n",
             report["status"].as_str().unwrap_or("unavailable"),
             number(&report["known_step_seconds"])
         );
@@ -324,7 +324,14 @@ pub(crate) fn observe(
     let mut totals = Totals::default();
     let mut categories: BTreeMap<String, Totals> = BTreeMap::new();
     let mut observations = vec![];
+    let mut excluded_prior_attempts = vec![];
     for (id, job) in rows {
+        // GitHub can copy completed jobs into a later attempt with new IDs.
+        // Keep one API attempt view; IDs do not identify distinct executions.
+        if job["run_attempt"] != attempt {
+            excluded_prior_attempts.push(json!({"job_id":id,"run_attempt":job["run_attempt"]}));
+            continue;
+        }
         let mut job_totals = Totals::default();
         let mut steps = vec![];
         if let Some(raw_steps) = job["steps"].as_array() {
@@ -367,10 +374,11 @@ pub(crate) fn observe(
     let mut report = serde_json::to_value(&totals).unwrap();
     report.as_object_mut().unwrap().extend(json!({"schema":"chrono-ci-resources/v1",
         "status":if issues.is_empty() && totals.unknown_steps == 0 && totals.unclassified_steps == 0 {"observed"} else {"partial"},
-        "metric":"sum-of-completed-step-seconds", "scope":"unique-job-ids-in-observed-run-history",
+        "metric":"sum-of-completed-step-seconds", "scope":"current-attempt-api-job-view",
         "run_id":run,"through_attempt":attempt,"candidate":candidate,
         "categories":categories,"jobs":observations,"issues":issues,
-        "unmeasured":["queue-time","billing-minutes","workflow-wall-time","cpu-time","peak-memory","disk-bytes","compile-test-split-within-check","steps-after-snapshot"]
+        "excluded_prior_attempts":excluded_prior_attempts,
+        "unmeasured":["queue-time","billing-minutes","workflow-wall-time","cpu-time","peak-memory","disk-bytes","compile-test-split-within-check","steps-after-snapshot","distinct-execution-history","current-attempt-rerun-cost"]
     }).as_object().unwrap().clone());
     if !config.comparisons.is_empty() {
         report["comparisons"] = json!(compare(config, report["jobs"].as_array().unwrap()));

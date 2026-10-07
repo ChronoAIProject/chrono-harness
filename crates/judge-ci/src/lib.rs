@@ -32,6 +32,8 @@ impl Default for CollectionLimits {
 #[serde(deny_unknown_fields)]
 pub struct Policy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_publication: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collection_limits: Option<CollectionLimits>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub units: Option<BTreeMap<String, chrono_harness::units::Unit>>,
@@ -141,6 +143,7 @@ fn tree(
         .collect()
 }
 fn policy(c: &CheckConfig) -> Result<Policy, String> {
+    chrono_harness::units::reference_publication(c)?;
     if !matches!(
         c.schema.as_str(),
         "chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3"

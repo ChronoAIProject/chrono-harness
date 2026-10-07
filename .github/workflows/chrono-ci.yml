@@ -18,6 +18,9 @@ jobs:
     timeout-minutes: 45
     outputs:
       detection: ${{ steps.detect.outputs.detection }}
+      startup_binding: ${{ steps.chrono_startup.outputs.binding }}
+      startup_artifact: ${{ steps.chrono_startup_upload.outputs.artifact-id }}
+      unit_cache: ${{ steps.detect.outputs.unit_cache }}
       unit_ci: ${{ steps.detect.outputs.unit_ci }}
       unit_diagnostics: ${{ steps.detect.outputs.unit_diagnostics }}
       unit_distribution: ${{ steps.detect.outputs.unit_distribution }}
@@ -30,6 +33,7 @@ jobs:
       unit_judge-filemap: ${{ steps.detect.outputs.unit_judge-filemap }}
       unit_judge-mixed: ${{ steps.detect.outputs.unit_judge-mixed }}
       unit_judge-projects: ${{ steps.detect.outputs.unit_judge-projects }}
+      unit_judge-projects-migration: ${{ steps.detect.outputs.unit_judge-projects-migration }}
       unit_judge-registration: ${{ steps.detect.outputs.unit_judge-registration }}
       unit_judge-routes: ${{ steps.detect.outputs.unit_judge-routes }}
       unit_judge-workflow: ${{ steps.detect.outputs.unit_judge-workflow }}
@@ -57,10 +61,68 @@ jobs:
             .github/workflows/chrono-ci.yml
             .gitignore
           persist-credentials: true
-      - name: Bootstrap registered detector tools
+      - name: Prepare registered caches
+        id: chrono_cache_plan
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-detector.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-cache.json'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.detect' --plan-output '.chrono-harness/state/cache/check.detect/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache detect.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache detect.judge-ci
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache detect.runner
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache detect.worktree
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.detect/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
+      - name: Bootstrap registered detector tools
+        id: chrono_startup
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'produce'
+      - name: Publish registered startup artifact
+        id: chrono_startup_upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-startup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/startup/"
+          if-no-files-found: error
+          include-hidden-files: true
       - name: Detect required units from fixed Git endpoints
         id: detect
         shell: bash
@@ -68,6 +130,164 @@ jobs:
           CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
           '.chrono-harness/bin/chrono-ci' detect --host-root . --config '.chrono-harness/ci/units.json' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache detect.ci
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache detect.judge-ci
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Save registered cache detect.runner
+        id: cache_2_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+      - name: Save registered cache detect.worktree
+        id: cache_3_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.detect/plan.json' --report-directory '.chrono-harness/state/cache/check.detect/' --steps-env CHRONO_CACHE_STEPS --work 'detect' --bootstrap chrono_startup --save-caches '["detect.ci","detect.judge-ci","detect.runner","detect.worktree"]'
+      - name: Preserve detector evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-detector-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+          include-hidden-files: true
+  unit_cache:
+    outputs:
+      production: ${{ steps.production.outputs.production }}
+    name: "chrono / cache"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_cache == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_cache'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_cache' --plan-output '.chrono-harness/state/cache/check.unit_cache/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.cache
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.cache-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+      - name: Canonical harness check
+        id: chrono_cache_work
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'cache'
+      - name: Bind original unit artifact production
+        id: production
+        shell: bash
+        run: |
+          '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'cache' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.cache
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.cache-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_cache/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.cache","check.cache-tests"]'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+          include-hidden-files: true
   unit_ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -84,11 +304,92 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_ci'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_ci' --plan-output '.chrono-harness/state/cache/check.unit_ci/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.ci-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-ci
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -101,6 +402,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'ci' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.ci
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.ci-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.ci-tests","check.ci"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -125,11 +450,56 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_diagnostics'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_diagnostics' --plan-output '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.diagnostics
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.diagnostics-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -142,6 +512,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'diagnostics' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.diagnostics
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.diagnostics-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_diagnostics/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.diagnostics","check.diagnostics-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -166,11 +560,56 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_distribution'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_distribution' --plan-output '.chrono-harness/state/cache/check.unit_distribution/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.distribution
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.distribution-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_distribution/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -183,6 +622,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'distribution' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.distribution
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.distribution-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_distribution/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_distribution/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.distribution","check.distribution-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -207,10 +670,23 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_host-bootstrap'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:
@@ -248,11 +724,128 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_inputs'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_inputs' --plan-output '.chrono-harness/state/cache/check.unit_inputs/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.inputs
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.inputs-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cost
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow
+        id: cache_8_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_8_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_9_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_9_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -265,6 +858,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'inputs' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.inputs
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.inputs-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_inputs/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.inputs-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -289,11 +906,56 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_instructions'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_instructions' --plan-output '.chrono-harness/state/cache/check.unit_instructions/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.instructions
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.instructions-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_instructions/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -306,6 +968,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'instructions' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.instructions
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.instructions-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_instructions/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_instructions/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.instructions","check.instructions-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -330,11 +1016,137 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-cargo'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-cargo' --plan-output '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-cargo
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cargo-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-ci
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cost
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_8_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_8_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow
+        id: cache_9_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_9_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_10_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -347,6 +1159,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-cargo' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-cargo
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.judge-cargo-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cargo/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cargo/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cargo","check.judge-cargo-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -371,11 +1207,65 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-ci'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-ci' --plan-output '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-ci-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -388,6 +1278,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-ci' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-ci
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.judge-ci-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-ci/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-ci-tests","check.judge-ci"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -412,11 +1326,83 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-cost'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-cost' --plan-output '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-cost
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cost-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -429,6 +1415,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-cost' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-cost
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.judge-cost-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-cost/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-cost-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -453,11 +1463,92 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-filemap'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-filemap' --plan-output '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-filemap
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -470,6 +1561,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-filemap' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-filemap
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.judge-filemap-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-filemap/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-filemap-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -494,11 +1609,92 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-mixed'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-mixed' --plan-output '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-cost
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed-tests
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -511,6 +1707,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-mixed' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-mixed
+        id: cache_2_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+      - name: Save registered cache check.judge-mixed-tests
+        id: cache_3_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-mixed/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-mixed","check.judge-mixed-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -535,11 +1755,110 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-projects'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-projects' --plan-output '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-ci
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects-tests
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -552,11 +1871,191 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-projects' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-projects
+        id: cache_3_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Save registered cache check.judge-projects-tests
+        id: cache_4_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects","check.judge-projects-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ".chrono-harness/state/"
+          if-no-files-found: error
+          include-hidden-files: true
+  unit_judge-projects-migration:
+    outputs:
+      production: ${{ steps.production.outputs.production }}
+    name: "chrono / judge-projects-migration"
+    needs: detect
+    if: ${{ needs.detect.outputs.unit_judge-projects-migration == 'true' }}
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+          fetch-depth: 2
+          filter: blob:none
+          persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-projects-migration'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-projects-migration' --plan-output '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-ci
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects-tests.migration
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
+      - name: Bootstrap registered tools
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+      - name: Canonical harness check
+        id: chrono_cache_work
+        shell: bash
+        env:
+          CHRONO_CHECK_SOURCE: ci
+          CHRONO_CI_DETECTION: ${{ needs.detect.outputs.detection }}
+          CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          '.chrono-harness/bin/chrono-harness' 'check' '--unit' 'judge-projects-migration'
+      - name: Bind original unit artifact production
+        id: production
+        shell: bash
+        run: |
+          '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-projects-migration' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-projects-tests.migration
+        id: cache_4_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-projects-migration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-projects-migration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects-tests.migration"]'
+      - name: Preserve actual check evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chrono-unit-judge-projects-migration-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
@@ -576,11 +2075,65 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-registration'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-registration' --plan-output '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-registration
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -593,6 +2146,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-registration' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-registration
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.judge-registration-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-registration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-registration","check.judge-registration-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -617,11 +2194,56 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-routes'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-routes' --plan-output '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.judge-routes
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -634,6 +2256,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-routes' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-routes
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.judge-routes-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-routes/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-routes","check.judge-routes-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -658,11 +2304,146 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-workflow' --plan-output '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.inputs
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cost
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow
+        id: cache_8_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_8_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow-tests
+        id: cache_9_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_9_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_10_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_11_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_11_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_11_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_11_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -675,6 +2456,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-workflow
+        id: cache_8_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+      - name: Save registered cache check.judge-workflow-tests
+        id: cache_9_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow","check.judge-workflow-tests"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -699,11 +2504,146 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow-short'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-workflow-short' --plan-output '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.inputs
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cost
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow
+        id: cache_8_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_8_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow-tests.judge-workflow-short
+        id: cache_9_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_9_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_10_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_11_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_11_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_11_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_11_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -716,6 +2656,22 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow-short' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-workflow-tests.judge-workflow-short
+        id: cache_9_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-short/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-short"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -740,11 +2696,146 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_judge-workflow-units'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_judge-workflow-units' --plan-output '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.inputs
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-cost
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-filemap
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-mixed
+        id: cache_4_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_4_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-projects
+        id: cache_5_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-registration
+        id: cache_6_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_6_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_6_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_6_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-routes
+        id: cache_7_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_7_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_7_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_7_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow
+        id: cache_8_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_8_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_8_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.judge-workflow-tests.judge-workflow-units
+        id: cache_9_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_9_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_10_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_11_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_11_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_11_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_11_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -757,6 +2848,22 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow-units' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.judge-workflow-tests.judge-workflow-units
+        id: cache_9_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_9_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_9_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_judge-workflow-units/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-units"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -781,10 +2888,23 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_release-build'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:
@@ -822,11 +2942,47 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_release-build-integration'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_release-build-integration' --plan-output '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.distribution
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -839,6 +2995,14 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'release-build-integration' --github-output "$GITHUB_OUTPUT"
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_release-build-integration/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_release-build-integration/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '[]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -863,11 +3027,56 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_runner'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_runner' --plan-output '.chrono-harness/state/cache/check.unit_runner/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.runner
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner-tests
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_runner/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -880,6 +3089,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'runner' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.runner
+        id: cache_0_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+      - name: Save registered cache check.runner-tests
+        id: cache_1_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_runner/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_runner/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.runner-tests","check.runner"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -904,10 +3137,23 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_scoped-v1'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:
@@ -945,10 +3191,23 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_workflow-inventory'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:
@@ -986,11 +3245,74 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_worktree'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_worktree' --plan-output '.chrono-harness/state/cache/check.unit_worktree/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree-tests
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_worktree/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -1003,6 +3325,30 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'worktree' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.worktree
+        id: cache_2_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+      - name: Save registered cache check.worktree-tests
+        id: cache_3_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_worktree/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_worktree/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests","check.worktree"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1027,11 +3373,74 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'unit_worktree-adoption'
+      - name: Prepare registered caches
+        id: chrono_cache_plan
+        shell: bash
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'cache'
+          '.chrono-harness/bin/chrono-cache' plan --host-root . --config '.chrono-harness/cache.json' --consumer 'check.unit_worktree-adoption' --plan-output '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --github-output "$GITHUB_OUTPUT"
+      - name: Restore registered cache check.ci
+        id: cache_0_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_0_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.runner
+        id: cache_1_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_1_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_1_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree
+        id: cache_2_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_2_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_2_restore }}
+          fail-on-cache-miss: false
+      - name: Restore registered cache check.worktree-tests.worktree-adoption
+        id: cache_3_restore
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_3_restore }}
+          fail-on-cache-miss: false
+      - name: Recover failed cache restores
+        if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_RESTORE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' recover --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --steps-env CHRONO_CACHE_RESTORE_STEPS
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
+        id: chrono_cache_work
         shell: bash
         env:
           CHRONO_CHECK_SOURCE: ci
@@ -1044,6 +3453,22 @@ jobs:
         shell: bash
         run: |
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'worktree-adoption' --github-output "$GITHUB_OUTPUT"
+      - name: Save registered cache check.worktree-tests.worktree-adoption
+        id: cache_3_save
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: ${{ steps.chrono_cache_plan.outputs.cache_3_key }}
+          path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
+      - name: Record original cache transport observations
+        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --report-directory '.chrono-harness/state/cache/check.unit_worktree-adoption/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests.worktree-adoption"]'
       - name: Preserve actual check evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1054,7 +3479,7 @@ jobs:
           include-hidden-files: true
   aggregate:
     name: "chrono / collection"
-    needs: ["detect","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
+    needs: ["detect","unit_cache","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-cargo","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-projects-migration","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_release-build-integration","unit_runner","unit_scoped-v1","unit_workflow-inventory","unit_worktree","unit_worktree-adoption"]
     if: ${{ always() }}
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -1066,10 +3491,23 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Download registered startup artifact
+        if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.detect.outputs.startup_artifact }}
+          path: ".chrono-harness/startup/"
+          merge-multiple: true
+      - name: Install registered startup tools
+        shell: bash
+        env:
+          CHRONO_STARTUP_BINDING: ${{ needs.detect.outputs.startup_binding }}
+        run: |
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'install' 'aggregate'
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/usr/bin/python3' '.chrono-harness/ci/bootstrap.py' '.' '.chrono-harness/ci/bootstrap-core.json'
+          '/usr/bin/python3' '.chrono-harness/ci/bootstrap_shared.py' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
       - name: Canonical harness check
         shell: bash
         env:

@@ -920,7 +920,9 @@
         "linux_verify_release_build_tests",
         "linux_verify_release_build_integration",
         "linux_verify_diagnostics_tests",
-        "linux_verify_host_bootstrap_tests"
+        "linux_verify_host_bootstrap_tests",
+        "linux_build_cache",
+        "linux_verify_cache_tests"
       ],
       "downloads": [
         {
@@ -1066,6 +1068,14 @@
         {
           "job": "linux_verify_host_bootstrap_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
+        },
+        {
+          "job": "linux_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        },
+        {
+          "job": "linux_verify_cache_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_cache_tests/"
         }
       ],
       "always": true,
@@ -1981,7 +1991,9 @@
         "macos_verify_release_build_tests",
         "macos_verify_release_build_integration",
         "macos_verify_diagnostics_tests",
-        "macos_verify_host_bootstrap_tests"
+        "macos_verify_host_bootstrap_tests",
+        "macos_build_cache",
+        "macos_verify_cache_tests"
       ],
       "downloads": [
         {
@@ -2127,6 +2139,14 @@
         {
           "job": "macos_verify_host_bootstrap_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
+        },
+        {
+          "job": "macos_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        },
+        {
+          "job": "macos_verify_cache_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_cache_tests/"
         }
       ],
       "always": true,
@@ -2349,8 +2369,1089 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
       "needs": [],
       "downloads": []
+    },
+    {
+      "id": "linux_build_cache",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_cache",
+        "--unit",
+        "build_cache"
+      ],
+      "artifact_name": "chrono-release-linux-build_cache",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_cache/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_cache_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_cache_tests",
+        "--unit",
+        "verify_cache_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_cache_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
+      "needs": [
+        "linux_build_cache"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
+    },
+    {
+      "id": "macos_build_cache",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_cache",
+        "--unit",
+        "build_cache"
+      ],
+      "artifact_name": "chrono-release-macos-build_cache",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_cache/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_cache_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_cache_tests",
+        "--unit",
+        "verify_cache_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_cache_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
+      "needs": [
+        "macos_build_cache"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
     }
   ],
   "download_artifact_action": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
-  "include_hidden_files": true
+  "include_hidden_files": true,
+  "persistent_cache": {
+    "schema": "chrono-github-cache/v1",
+    "program": ".chrono-harness/bin/chrono-cache",
+    "config": ".chrono-harness/cache.json",
+    "restore_action": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "jobs": {
+      "linux_build_runner": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_runner",
+        "caches": [
+          "release.linux.release.runner"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_runner/cache-observations/"
+      },
+      "linux_build_instructions": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_instructions",
+        "caches": [
+          "release.linux.release.instructions"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_instructions/cache-observations/"
+      },
+      "linux_build_judge_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_ci",
+        "caches": [
+          "release.linux.release.judge-ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_ci/cache-observations/"
+      },
+      "linux_build_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_ci",
+        "caches": [
+          "release.linux.release.ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_ci/cache-observations/"
+      },
+      "linux_build_judge_registration": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_registration",
+        "caches": [
+          "release.linux.release.judge-registration"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_registration/cache-observations/"
+      },
+      "linux_build_judge_filemap": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_filemap",
+        "caches": [
+          "release.linux.release.judge-filemap"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_filemap/cache-observations/"
+      },
+      "linux_build_judge_routes": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_routes",
+        "caches": [
+          "release.linux.release.judge-routes"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_routes/cache-observations/"
+      },
+      "linux_build_judge_projects": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_projects",
+        "caches": [
+          "release.linux.release.judge-projects"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_projects/cache-observations/"
+      },
+      "linux_build_judge_cost": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_cost",
+        "caches": [
+          "release.linux.release.judge-cost"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cost/cache-observations/"
+      },
+      "linux_build_judge_mixed": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_mixed",
+        "caches": [
+          "release.linux.release.judge-mixed"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_mixed/cache-observations/"
+      },
+      "linux_build_judge_workflow": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_workflow",
+        "caches": [
+          "release.linux.release.judge-workflow"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_workflow/cache-observations/"
+      },
+      "linux_build_inputs": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_inputs",
+        "caches": [
+          "release.linux.release.inputs"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_inputs/cache-observations/"
+      },
+      "linux_build_distribution": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_distribution",
+        "caches": [
+          "release.linux.release.distribution"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_distribution/cache-observations/"
+      },
+      "linux_build_judge_cargo": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_cargo",
+        "caches": [
+          "release.linux.release.judge-cargo"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cargo/cache-observations/"
+      },
+      "linux_build_worktree": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_worktree",
+        "caches": [
+          "release.linux.release.worktree"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_worktree/cache-observations/"
+      },
+      "linux_verify_distribution_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_distribution_tests",
+        "caches": [
+          "release.linux.verify.distribution-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/"
+      },
+      "linux_verify_worktree_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_worktree_tests",
+        "caches": [
+          "release.linux.verify.worktree-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/"
+      },
+      "linux_verify_runner_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_runner_tests",
+        "caches": [
+          "release.linux.verify.runner-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_runner_tests/cache-observations/"
+      },
+      "linux_verify_inputs_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_inputs_tests",
+        "caches": [
+          "release.linux.verify.inputs-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/"
+      },
+      "linux_verify_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_ci_tests",
+        "caches": [
+          "release.linux.verify.ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_ci_tests/cache-observations/"
+      },
+      "linux_verify_judge_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_ci_tests",
+        "caches": [
+          "release.linux.verify.judge-ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/"
+      },
+      "linux_verify_judge_registration_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_registration_tests",
+        "caches": [
+          "release.linux.verify.judge-registration-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/"
+      },
+      "linux_verify_judge_projects_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_projects_tests",
+        "caches": [
+          "release.linux.verify.judge-projects-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/"
+      },
+      "linux_verify_judge_workflow_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_workflow_tests",
+        "caches": [
+          "release.linux.verify.judge-workflow-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/"
+      },
+      "linux_verify_judge_cargo_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_cargo_tests",
+        "caches": [
+          "release.linux.verify.judge-cargo-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/"
+      },
+      "linux_verify_instructions_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_instructions_tests",
+        "caches": [
+          "release.linux.verify.instructions-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/"
+      },
+      "linux_verify_judge_filemap_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_filemap_tests",
+        "caches": [
+          "release.linux.verify.judge-filemap-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/"
+      },
+      "linux_verify_judge_routes_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_routes_tests",
+        "caches": [
+          "release.linux.verify.judge-routes-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/"
+      },
+      "linux_verify_judge_cost_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_cost_tests",
+        "caches": [
+          "release.linux.verify.judge-cost-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/"
+      },
+      "linux_verify_judge_mixed_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_mixed_tests",
+        "caches": [
+          "release.linux.verify.judge-mixed-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/"
+      },
+      "linux_verify_diagnostics_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_diagnostics_tests",
+        "caches": [
+          "release.linux.verify.diagnostics-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/"
+      },
+      "linux_build_cache": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_cache",
+        "caches": [
+          "release.linux.release.cache"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_cache/cache-observations/"
+      },
+      "linux_verify_cache_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_cache_tests",
+        "caches": [
+          "release.linux.verify.cache-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_cache_tests/cache-observations/"
+      },
+      "macos_build_runner": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_runner",
+        "caches": [
+          "release.macos.release.runner"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_runner/cache-observations/"
+      },
+      "macos_build_instructions": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_instructions",
+        "caches": [
+          "release.macos.release.instructions"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_instructions/cache-observations/"
+      },
+      "macos_build_judge_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_ci",
+        "caches": [
+          "release.macos.release.judge-ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_ci/cache-observations/"
+      },
+      "macos_build_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_ci",
+        "caches": [
+          "release.macos.release.ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_ci/cache-observations/"
+      },
+      "macos_build_judge_registration": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_registration",
+        "caches": [
+          "release.macos.release.judge-registration"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_registration/cache-observations/"
+      },
+      "macos_build_judge_filemap": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_filemap",
+        "caches": [
+          "release.macos.release.judge-filemap"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_filemap/cache-observations/"
+      },
+      "macos_build_judge_routes": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_routes",
+        "caches": [
+          "release.macos.release.judge-routes"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_routes/cache-observations/"
+      },
+      "macos_build_judge_projects": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_projects",
+        "caches": [
+          "release.macos.release.judge-projects"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_projects/cache-observations/"
+      },
+      "macos_build_judge_cost": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_cost",
+        "caches": [
+          "release.macos.release.judge-cost"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cost/cache-observations/"
+      },
+      "macos_build_judge_mixed": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_mixed",
+        "caches": [
+          "release.macos.release.judge-mixed"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_mixed/cache-observations/"
+      },
+      "macos_build_judge_workflow": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_workflow",
+        "caches": [
+          "release.macos.release.judge-workflow"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_workflow/cache-observations/"
+      },
+      "macos_build_inputs": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_inputs",
+        "caches": [
+          "release.macos.release.inputs"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_inputs/cache-observations/"
+      },
+      "macos_build_distribution": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_distribution",
+        "caches": [
+          "release.macos.release.distribution"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_distribution/cache-observations/"
+      },
+      "macos_build_judge_cargo": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_cargo",
+        "caches": [
+          "release.macos.release.judge-cargo"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cargo/cache-observations/"
+      },
+      "macos_build_worktree": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_worktree",
+        "caches": [
+          "release.macos.release.worktree"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_worktree/cache-observations/"
+      },
+      "macos_verify_distribution_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_distribution_tests",
+        "caches": [
+          "release.macos.verify.distribution-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/"
+      },
+      "macos_verify_worktree_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_worktree_tests",
+        "caches": [
+          "release.macos.verify.worktree-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/"
+      },
+      "macos_verify_runner_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_runner_tests",
+        "caches": [
+          "release.macos.verify.runner-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_runner_tests/cache-observations/"
+      },
+      "macos_verify_inputs_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_inputs_tests",
+        "caches": [
+          "release.macos.verify.inputs-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/"
+      },
+      "macos_verify_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_ci_tests",
+        "caches": [
+          "release.macos.verify.ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_ci_tests/cache-observations/"
+      },
+      "macos_verify_judge_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_ci_tests",
+        "caches": [
+          "release.macos.verify.judge-ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/"
+      },
+      "macos_verify_judge_registration_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_registration_tests",
+        "caches": [
+          "release.macos.verify.judge-registration-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/"
+      },
+      "macos_verify_judge_projects_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_projects_tests",
+        "caches": [
+          "release.macos.verify.judge-projects-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/"
+      },
+      "macos_verify_judge_workflow_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_workflow_tests",
+        "caches": [
+          "release.macos.verify.judge-workflow-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/"
+      },
+      "macos_verify_judge_cargo_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_cargo_tests",
+        "caches": [
+          "release.macos.verify.judge-cargo-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/"
+      },
+      "macos_verify_instructions_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_instructions_tests",
+        "caches": [
+          "release.macos.verify.instructions-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/"
+      },
+      "macos_verify_judge_filemap_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_filemap_tests",
+        "caches": [
+          "release.macos.verify.judge-filemap-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/"
+      },
+      "macos_verify_judge_routes_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_routes_tests",
+        "caches": [
+          "release.macos.verify.judge-routes-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/"
+      },
+      "macos_verify_judge_cost_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_cost_tests",
+        "caches": [
+          "release.macos.verify.judge-cost-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/"
+      },
+      "macos_verify_judge_mixed_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_mixed_tests",
+        "caches": [
+          "release.macos.verify.judge-mixed-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/"
+      },
+      "macos_verify_diagnostics_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_diagnostics_tests",
+        "caches": [
+          "release.macos.verify.diagnostics-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/"
+      },
+      "macos_build_cache": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_cache",
+        "caches": [
+          "release.macos.release.cache"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_cache/cache-observations/"
+      },
+      "macos_verify_cache_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_cache_tests",
+        "caches": [
+          "release.macos.verify.cache-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_cache_tests/cache-observations/"
+      }
+    }
+  }
 }

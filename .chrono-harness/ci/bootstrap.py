@@ -15,6 +15,22 @@ from process_fds import inherited_fds
 PASS_FDS = inherited_fds()
 
 
+def report_destination(root, config):
+    declared = config.get("report_path", ".chrono-harness/state/bootstrap.json")
+    if not isinstance(declared, str) or any(c in declared for c in "\x00\r\n"):
+        raise ValueError("bootstrap report must be an explicit host state file")
+    path = Path(declared)
+    if (path.is_absolute() or ".." in path.parts or len(path.parts) < 3
+            or path.parts[:2] != (".chrono-harness", "state") or path.as_posix() != declared):
+        raise ValueError("bootstrap report must be an explicit host state file")
+    target = root
+    for part in path.parts:
+        target = target / part
+        if target.is_symlink():
+            raise ValueError("bootstrap report path must not contain a symlink")
+    return target
+
+
 def observe_source(root):
     """Observe this host's source repository without requiring one for development."""
     observed = {"commit": None, "tree": None, "dirty": None, "error": None}
@@ -85,6 +101,25 @@ def participate(root, config_path, config):
     sys.exit(process["exit_code"] if 0 <= process["exit_code"] <= 255 else 1)
 
 
+def toolchain_environment(config):
+    toolchain = config["rust_toolchain"]
+    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], pass_fds=PASS_FDS, capture_output=True)
+    if probe.returncode:
+        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], pass_fds=PASS_FDS, check=True)
+    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], pass_fds=PASS_FDS, capture_output=True)
+    if fmt_probe.returncode:
+        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], pass_fds=PASS_FDS, check=True)
+    env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
+    if "rust_incremental" in config:
+        env["CARGO_INCREMENTAL"] = "1" if config["rust_incremental"] else "0"
+    versions = {}
+    for tool in ["cargo", "rustc"]:
+        versions[tool] = subprocess.check_output([tool, "--version"], env=env, pass_fds=PASS_FDS, text=True).strip()
+    if not versions["rustc"].startswith("rustc " + toolchain + " "):
+        raise ValueError("unexpected rustc version")
+    return env, versions
+
+
 def main():
     if len(sys.argv) not in (2, 3):
         raise ValueError("usage: bootstrap.py HOST_ROOT [REGISTERED_CONFIG]")
@@ -93,6 +128,9 @@ def main():
     if config_path.is_absolute() or ".." in config_path.parts or config_path.parts[:2] != (".chrono-harness", "ci"):
         raise ValueError("bootstrap config must be an explicit host CI path")
     config = json.loads((root / config_path).read_text())
+    report_destination(root, config)
+    if "rust_incremental" in config and type(config["rust_incremental"]) is not bool:
+        raise ValueError("rust_incremental must be a boolean")
     participate(root, config_path, config)
     source_before = observe_source(root)
     if config["schema"] != "chrono-bootstrap/v1":
@@ -105,19 +143,7 @@ def main():
             if key in operations:
                 raise ValueError("duplicate operation: " + key)
             operations[key] = action
-    toolchain = config["rust_toolchain"]
-    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], pass_fds=PASS_FDS, capture_output=True)
-    if probe.returncode:
-        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], pass_fds=PASS_FDS, check=True)
-    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], pass_fds=PASS_FDS, capture_output=True)
-    if fmt_probe.returncode:
-        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], pass_fds=PASS_FDS, check=True)
-    env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
-    versions = {}
-    for tool in ["cargo", "rustc"]:
-        versions[tool] = subprocess.check_output([tool, "--version"], env=env, pass_fds=PASS_FDS, text=True).strip()
-    if not versions["rustc"].startswith("rustc " + toolchain + " "):
-        raise ValueError("unexpected rustc version")
+    env, versions = toolchain_environment(config)
     for operation in config["operations"]:
         action = operations[operation]
         subprocess.run([config["tools"][action["tool"]], *action["argv"]], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
@@ -146,9 +172,9 @@ def main():
         "before": source_before,
         "after": source_after,
     }
-    state = root / ".chrono-harness/state"
-    state.mkdir(parents=True, exist_ok=True)
-    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "installed": installed}, indent=2) + "\n")
+    report = report_destination(root, config)
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}, indent=2) + "\n")
 
 
 if __name__ == "__main__":

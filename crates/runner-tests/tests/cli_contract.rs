@@ -10,6 +10,131 @@ use tempfile::TempDir;
 const CHILD: &str = env!("CARGO_BIN_EXE_chrono-test-cli-child");
 
 #[test]
+fn report_reference_publication_is_an_explicit_scoped_v3_contract() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("check.json");
+    let mut config = serde_json::json!({"schema":"chrono-ci-check/v3","judge":{"program":CHILD,"args":[],"timeout_seconds":15,"output_limit_bytes":4096},"policy":{},"report_path":".chrono-harness/state/check.json"});
+    fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+    assert!(
+        !chrono_harness::units::reference_publication(&chrono_harness::load_config(&path).unwrap())
+            .unwrap()
+    );
+    for schema in [
+        "chrono-ci-check/v1",
+        "chrono-ci-check/v2",
+        "chrono-ci-check/v3",
+    ] {
+        for value in [
+            Value::Null,
+            Value::Bool(true),
+            serde_json::json!("unknown"),
+            serde_json::json!("retained-reference/v1"),
+            serde_json::json!("retained-reference/v2"),
+        ] {
+            config["schema"] = schema.into();
+            config["policy"]["report_publication"] = value.clone();
+            fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+            let loaded = chrono_harness::load_config(&path);
+            assert_eq!(
+                loaded.is_ok(),
+                schema == "chrono-ci-check/v3"
+                    && matches!(
+                        value.as_str(),
+                        Some("retained-reference/v1" | "retained-reference/v2")
+                    )
+            );
+            if let Ok(config) = loaded {
+                assert!(chrono_harness::units::reference_publication(&config).unwrap());
+            }
+        }
+    }
+}
+
+#[test]
+fn scoped_stream_storage_preserves_raw_process_identity_and_detects_bad_originals() {
+    use chrono_harness::{prepared, scoped_report};
+    let dir = tempfile::tempdir().unwrap();
+    let process = run_process(
+        dir.path(),
+        &CommandSpec {
+            program: CHILD.into(),
+            args: vec!["pipe".into()],
+            env: Default::default(),
+            timeout_seconds: 15,
+            output_limit_bytes: 4096,
+        },
+        b"\x00\xff\xf0\x80",
+    )
+    .unwrap();
+    assert_eq!(process.stdout_bytes, b"EOF:\x00\xff\xf0\x80");
+    assert_eq!(process.stderr_bytes, b"joined");
+    let record =
+        scoped_report::retain_process(dir.path(), ".chrono-harness/state/preparation/", &process)
+            .unwrap();
+    for key in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+        assert!(record.get(key).is_none());
+    }
+    let restored =
+        scoped_report::restore_process(&record, |o| prepared::read_original(dir.path(), o, None))
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(&restored).unwrap(),
+        serde_json::to_value(&process).unwrap()
+    );
+    let repeated =
+        scoped_report::retain_process(dir.path(), ".chrono-harness/state/preparation/", &process)
+            .unwrap();
+    assert_eq!(record, repeated);
+    for stream in ["stdout", "stderr"] {
+        let key = format!("{stream}_original");
+        let path = dir.path().join(record[&key]["path"].as_str().unwrap());
+        let original = fs::read(&path).unwrap();
+        fs::write(&path, b"damaged bytes").unwrap();
+        assert!(
+            scoped_report::restore_process(&record, |o| prepared::read_original(
+                dir.path(),
+                o,
+                None
+            ))
+            .is_err()
+        );
+        let error = scoped_report::retain_process(
+            dir.path(),
+            ".chrono-harness/state/preparation/",
+            &process,
+        )
+        .unwrap_err();
+        assert!(
+            error.contains(&format!("cannot retain judge {stream}")) && error.contains("exit 0"),
+            "{error}"
+        );
+        fs::write(&path, &original).unwrap();
+        let mut changed = record.clone();
+        changed[format!("{stream}_sha256")] = json!("0".repeat(64));
+        assert!(
+            scoped_report::restore_process(&changed, |o| prepared::read_original(
+                dir.path(),
+                o,
+                None
+            ))
+            .unwrap_err()
+            .contains("digest mismatch")
+        );
+        let mut changed = record.clone();
+        changed[format!("{stream}_bytes")] = json!([]);
+        assert!(
+            scoped_report::restore_process(&changed, |o| prepared::read_original(
+                dir.path(),
+                o,
+                None
+            ))
+            .unwrap_err()
+            .contains("cannot contain inline streams")
+        );
+    }
+}
+
+#[test]
 #[cfg(unix)]
 fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
     use std::os::unix::ffi::OsStringExt;

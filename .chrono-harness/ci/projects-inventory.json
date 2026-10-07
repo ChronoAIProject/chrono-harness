@@ -1,0 +1,32 @@
+{
+  "schema": "chrono-workflow-inventory/v1",
+  "projects": ".chrono-harness/projects.json",
+  "project": "judge-projects-tests",
+  "unfiltered_action": "execute",
+  "groups": {
+    "judge-projects-tests": "execute_core",
+    "judge-projects-migration": "execute_migration"
+  },
+  "binaries": {
+    "execute": [
+      "consumer",
+      "execution",
+      "languages",
+      "migration"
+    ],
+    "execute_core": [
+      "consumer",
+      "execution",
+      "languages"
+    ],
+    "execute_migration": [
+      "migration"
+    ]
+  },
+  "tools": {
+    "cargo": "cargo"
+  },
+  "report_directory": ".chrono-harness/state/projects-inventory",
+  "timeout_seconds": 600,
+  "output_limit_bytes": 1048576
+}
