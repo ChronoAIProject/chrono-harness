@@ -639,9 +639,14 @@ The existing paginated jobs response supplies `resources` in the original gather
 report (`chrono-ci-resources/v1`); no extra request, runner or business execution
 is added. It binds the response's process index/digest, candidate, run and observed
 attempt, and counts each identical job ID once across pages. Conflicting copies
-and invalid identities are excluded with explicit issues. The scope includes
-observed earlier attempts, not just the latest successful jobs, and does not
-assert that GitHub exposed all possible historical work.
+and invalid identities are excluded with explicit issues. Totals and comparisons
+use only the current attempt's API job view. `excluded_prior_attempts` lists older
+job IDs and attempts; the original source response retains their full rows,
+including failures. GitHub may copy successful jobs into a new attempt with new
+IDs and unchanged execution timestamps. The current view may therefore include
+carried results; it is neither distinct execution history nor the cost of rerunning
+the current attempt. The observer does not infer execution identity from matching
+names or timestamps and does not add historical rows to the current view.
 
 `known_step_seconds` sums only completed, non-skipped steps with valid ordered
 timestamps. It is null when nothing was measured. Each step retains its category,

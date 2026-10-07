@@ -65,13 +65,13 @@ worktree 源码提供显式 migrate --path 入口，在相同 v2 协调与原附
 
 发布 v5 在 verification_consumers 为全部 22 个验证单元登记实际调用、输出用途与发布资产子集；instructions／routes／diagnostics 的发布资产列表为空。预检拒绝消费合同与 needs 冲突，未说明的非空发布前置在原始回执与 stderr 报 W_RELEASE_CONSUMPTION_UNVERIFIED。declared 只表示登记一致，不能证明必要性或说明真实。
 
-本宿主在 units.json 的 gather.resource_observation 显式登记原生步骤分类，在输入环境继承 GITHUB_STEP_SUMMARY。现有汇总通过同一 check 入口复用 jobs 响应，向原始 gather 报告及 Actions summary 输出有效已完成步骤的时间分项、未分类与未知项；不新增请求／job／业务重跑。canonical-check 包含其内部构建、测试与汇总，不能称为纯测试时间；报告是包括可见历史 attempt 的观察快照，不是计费或全流程总量。其余消费核验、完整资源分项及公开二进制采用仍未完成。
+本宿主在 units.json 的 gather.resource_observation 显式登记原生步骤分类，在输入环境继承 GITHUB_STEP_SUMMARY。现有汇总通过同一 check 入口复用 jobs 响应，向原始 gather 报告及 Actions summary 输出有效已完成步骤的时间分项、未分类与未知项；不新增请求／job／业务重跑。canonical-check 包含其内部构建、测试与汇总，不能称为纯测试时间；总数与比较只取当前 attempt 的 API 视图，旧 attempt 行列为排除项并保存在原始响应。当前视图可含沿用结果，不能把新 job ID 当作重新执行；读数不是本次重跑成本、完整执行历史、计费或全流程总量。其余消费核验、完整资源分项及公开二进制采用仍未完成。
 
 同一登记的 comparisons 采用 bootstrap-vs-check：已完成 job 的 bootstrap 至少 60 秒且超过该 job 的 canonical-check 时，原始汇总与 Actions summary 输出 W_CI_RESOURCE_COMPARISON 及实际读数。两类别读数不完整则报告无法比较，跳过 job 不适用；不改变准入或推断依赖冗余。规则可由宿主调整，缓存准备／传输也必须纳入优化成本。产品实现与宿主政策同改，验证包含 CI 专属行为测试、原始同命令检查及候选原生汇总；公开版本采用另行验收。
 
 缓存候选采用 chrono-cache/v2，在 cache.json 用 JSON 指针引用各消费者的 bootstrap、FILEMAP 计划或发布操作；缺引用及退出计划的生产者恢复前报错，消费者增减不改变未变生产输入的缓存身份。detector 订阅实际 core 启动生产者 target；单元只订阅仍在业务计划中的生产者，aggregate 及没有编译操作的单元不订阅 target。routes 不订阅未调用的 registration／filemap target。生成器在原工作结束后记录缓存动作原始读数；原生保存步骤成功仍先报 W_CACHE_SAVE_UNCONFIRMED；cache.json 显式登记 gh 后端查询，仅在有待确认保存时由原 report 步骤执行，保留精确 key/ref 条目与有界原始进程证据。条目存在只确认观察时可用，不能归因到本次 action；查询失败及歧义保持未确认，原业务失败保留。凭据只传给查询且不写入保留环境，查询成本归 cache-report；没有待确认保存不发请求。完整原生、损坏恢复及成本验收尚未完成。显式启动缓存子集可在后续测试失败后保存，取消不保存，不把缓存读数当测试结果。宿主登记 cache-prepare／restore／save 分类及准备、恢复相对检查的阈值告警，成本比较不证明浪费。
 
-本宿主用显式 save_caches 将四个共享启动缓存的保存归既有 aggregate，其余缓存各归实际生产单元。每个缓存 ID 在同一 provider 中至多登记一个保存 job；generate／verify 发现冲突报 E_CACHE_SAVE_OWNERSHIP 并点名双方，允许显式全只读。单元仍恢复、重建及检查，不增加 job 或前置等待；指定保存者未运行或生产者未成功时，本轮不产生新归档。未请求保存与实际异常保存分别报告，取消不制造保存结果。detector 的 evidence_directory 选择 .chrono-harness/state/，在原 job 内 always 上传原始探测、计划与启动证据；缺文件报错。成本比较另覆盖 bootstrap／缓存准备、保存相对 delta-detection，以及缓存保存相对 canonical-check；只提示实测成本，不证明冗余或节省。完整本地／原生验收及缓存剩余合同仍须分别验证。
+本宿主用显式 save_caches 将四个共享启动缓存的保存归既有 detector，其余缓存各归实际生产单元；aggregate 不订阅编译缓存。每个缓存 ID 在同一 provider 中至多登记一个保存 job；generate／verify 发现冲突报 E_CACHE_SAVE_OWNERSHIP 并点名双方，允许显式全只读。单元仍恢复、重建及检查，不增加 job 或前置等待；指定保存者未运行或生产者未成功时，本轮不产生新归档。未请求保存与实际异常保存分别报告，取消不制造保存结果。detector 的 evidence_directory 选择 .chrono-harness/state/，在原 job 内 always 上传原始探测、计划与启动证据；缺文件报错。成本比较另覆盖 bootstrap／缓存准备、保存相对 delta-detection，以及缓存保存相对 canonical-check；只提示实测成本，不证明冗余或节省。完整本地／原生验收及缓存剩余合同仍须分别验证。
 
 projects 的专属测试项目显式分为 core 与 migration 两组，分别绑定 judge-projects 和 judge-projects-migration 单元。core 运行 consumer／execution／languages，migration 运行原 migration 二进制及其真实宿主嵌套 CI 测试。projects.inventory 复用 Python 库存所有者，以 projects-inventory.json 核当前未过滤列表与分组列表非空、无忽略、互斥且全集相等。原测试正文、断言、测试内时限、默认 libtest 并发与未过滤发布入口保留；每组操作限时 900 秒，明确区别于原单项合并总预算。两组共享 target 与库存资源，本地互斥，原生独立 checkout／报告／重跑。产品测试替身的就绪修复与宿主分组政策同时进入候选，完整本地／原生验收及公开采用仍须验证，不从分组声明节省或超时已修复。
 
