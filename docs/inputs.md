@@ -153,7 +153,11 @@ traversal. Ordinary IO uses temporary files and publication without clobbering;
 power-loss recovery and concurrent mutation of source files remain outside this
 contract.
 
-Set context `retained_inputs` to the produced pair path. Registration accepts
+Set context `retained_inputs` to the produced pair path. For ordinary local full
+checks, the optional worktree `check_inputs.full_inputs.retained_inputs` binding
+lets the existing producer retain and reference that output without editing the
+birth origin; see [the worktree owner contract](worktree.md#current-full-check-input-references).
+Registration accepts
 either the existing inline `{bytes: [...]}` representation or exactly one
 `{blob, sha256, length}` reference. It checks the snapshot's endpoint/config binding,
 declared file IDs, original blob digest/length and current candidate disk identity.

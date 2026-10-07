@@ -22,10 +22,26 @@ pub struct Policy {
     pub context_path: String,
     pub collection_manifest: String,
     pub roles: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_inputs: Option<FullInputs>,
+}
+/// Current producer output binding, independent of the immutable branch birth.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FullInputs {
+    pub retained_inputs: String,
 }
 pub(crate) fn validate(p: &Policy) -> Result<(), String> {
     for path in [&p.origin_path, &p.context_path, &p.collection_manifest] {
         units::artifact_path(path)?;
+    }
+    if let Some(inputs) = &p.full_inputs {
+        units::artifact_path(&inputs.retained_inputs)?;
+        if [&p.origin_path, &p.context_path, &p.collection_manifest]
+            .contains(&&inputs.retained_inputs)
+        {
+            return Err("full retained inputs collide with local producer outputs".into());
+        }
     }
     if p.origin_path == p.context_path
         || p.origin_path == p.collection_manifest
@@ -39,6 +55,16 @@ pub(crate) fn validate(p: &Policy) -> Result<(), String> {
         return Err("invalid local check origin/context/role binding".into());
     }
     Ok(())
+}
+fn retain_reference(root: &Path, path: &str, kind: &str) -> Result<Value, String> {
+    units::artifact_path(path)?;
+    let input = no_symlink_parents(root, path)?;
+    file_identity(&input)?;
+    let bytes = fs::read(input).map_err(|e| e.to_string())?;
+    let digest = sha256(&bytes);
+    let retained = format!(".chrono-harness/state/preparation/local-{kind}-{digest}.json");
+    publish(root, &retained, &bytes, false)?;
+    Ok(json!({"source":{"path":path,"sha256":digest},"retained":{"path":retained,"sha256":digest}}))
 }
 /// Publish the final original producer report in the destination, then its exact association.
 pub(crate) fn publish_origin(source: &Path, report: &Value, p: &Policy) -> Result<(), String> {
@@ -227,7 +253,34 @@ fn produce(
                 r.oid(root, &format!("{fork}^{{commit}}"))?;
                 let observed = OffsetDateTime::now_utc();
                 let mut ctx = json!({"schema_version":2,"base":base,"candidate":candidate,"dev_tip":base,"branch_ref":branch,"fork_point":fork,"branch_started_at":birth["branch_started_at"],"observed_at":observed.format(&Rfc3339).map_err(|e|e.to_string())?,"operation":"validate.delta","run_kind":origin["run_kind"],"integration_evidence":origin["integration_evidence"]});
-                if let Some(retained) = origin["retained_inputs"].as_str() {
+                if let Some(inputs) = &p.full_inputs {
+                    let retained = retain_reference(root, &inputs.retained_inputs, "inputs")
+                        .map_err(|e| {
+                            format!("full retained inputs {}: {e}", inputs.retained_inputs)
+                        })?;
+                    ctx["retained_inputs"] = retained["retained"]["path"].clone();
+                    report["full_inputs"] = json!({"retained_inputs":retained});
+                    // Workflow owns this output path and its admission. An integration
+                    // run must not consume its own prior certificate or change unit context.
+                    ctx["integration_evidence"] = Value::Null;
+                    if origin["run_kind"] == "delivery" {
+                        let certificate = registrations.workflow()["integration"]["evidence"]
+                            .as_str()
+                            .ok_or("full integration evidence binding missing")?;
+                        units::artifact_path(certificate)?;
+                        let path = no_symlink_parents(root, certificate)?;
+                        match fs::metadata(path) {
+                            Ok(_) => {
+                                let retained = retain_reference(root, certificate, "integration")?;
+                                ctx["integration_evidence"] =
+                                    retained["retained"]["sha256"].clone();
+                                report["full_inputs"]["integration_evidence"] = retained;
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    }
+                } else if let Some(retained) = origin["retained_inputs"].as_str() {
                     units::artifact_path(retained)?;
                     file_identity(&no_symlink_parents(root, retained)?)?;
                     ctx["retained_inputs"] = json!(retained);
@@ -313,9 +366,22 @@ fn produce(
     if let Some(path) = report["origin"]["birth_report"].as_str() {
         originals.push(prepared::original(&req.host_root, path)?);
     }
+    if let Some(inputs) = report["full_inputs"].as_object() {
+        for reference in inputs.values() {
+            originals.push(prepared::original(
+                &req.host_root,
+                reference["retained"]["path"]
+                    .as_str()
+                    .ok_or("full input reference path")?,
+            )?);
+        }
+    }
     let mut evidence = json!({"report_path":report["report_path"],"report_sha256":file_identity(&no_symlink_parents(&req.host_root,report["report_path"].as_str().ok_or("report path")?)?)?.0,"origin":report["origin"],"remote":report["remote"],"target_ref":report["target_ref"]});
     if let Some(observation) = report.get("current_observation") {
         evidence["current_observation"] = observation.clone();
+    }
+    if let Some(inputs) = report.get("full_inputs") {
+        evidence["full_inputs"] = inputs.clone();
     }
     Ok(PreparedCheck {
         schema: prepared::RESPONSE.into(),

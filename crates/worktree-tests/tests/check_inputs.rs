@@ -394,6 +394,87 @@ fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures
     assert!(String::from_utf8_lossy(&o.stderr).contains("original birth association"));
 }
 #[test]
+fn full_input_references_preserve_birth_and_raw_producer_data() {
+    let h = Host::new("independent/input");
+    bind(&h);
+    h.policy(|p| {
+        p["check_inputs"]["roles"]["feature"] = value!("delivery");
+        p["check_inputs"]["full_inputs"] =
+            value!({"retained_inputs":".chrono-harness/state/current-inputs.json"});
+    });
+    let dest = h.parent.join("current references");
+    let (exit, birth, err) = h.invoke("feature", "references", &dest);
+    assert_eq!(exit, 0, "{} {err}", birth["error"]);
+    install(&dest);
+    let origin_path = dest.join(".chrono-harness/state/origin.json");
+    let origin_bytes = fs::read(&origin_path).unwrap();
+    let origin = json(&origin_bytes).unwrap();
+    let birth_path = dest.join(origin["birth_report"].as_str().unwrap());
+    let birth_bytes = fs::read(&birth_path).unwrap();
+    assert!(origin["retained_inputs"].is_null());
+    assert!(origin["integration_evidence"].is_null());
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(prepared.is_none());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("current-inputs.json"));
+    // Opaque producer inputs deliberately carry no governance success. The
+    // seven-judge consumer tests separately validate real snapshots/certificates.
+    let raw = b"{\n \"producer\":\"original data\"\n}\n";
+    let input_path = dest.join(".chrono-harness/state/current-inputs.json");
+    fs::write(&input_path, raw).unwrap();
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let first = prepared.unwrap();
+    let ctx = json(&first.context.unwrap().raw).unwrap();
+    let retained_path = dest.join(ctx["retained_inputs"].as_str().unwrap());
+    assert_eq!(fs::read(&retained_path).unwrap(), raw);
+    assert!(ctx["integration_evidence"].is_null());
+    assert_eq!(
+        first.evidence["full_inputs"]["retained_inputs"]["source"]["sha256"],
+        sha256(raw)
+    );
+    assert!(
+        first
+            .originals
+            .iter()
+            .any(|r| r.path == ctx["retained_inputs"].as_str().unwrap() && r.sha256 == sha256(raw))
+    );
+    fs::write(&input_path, b"replacement data").unwrap();
+    // Observing even a failed certificate is not admission; that belongs to workflow.
+    let certificate = b"{\"status\":\"failed\"}\n";
+    fs::write(
+        dest.join(".chrono-harness/state/integration.json"),
+        certificate,
+    )
+    .unwrap();
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let second = prepared.unwrap();
+    let next = json(&second.context.unwrap().raw).unwrap();
+    assert_ne!(next["retained_inputs"], ctx["retained_inputs"]);
+    assert_eq!(next["integration_evidence"], sha256(certificate));
+    assert_eq!(fs::read(&retained_path).unwrap(), raw);
+    assert_eq!(fs::read(&origin_path).unwrap(), origin_bytes);
+    assert_eq!(fs::read(&birth_path).unwrap(), birth_bytes);
+    fs::remove_file(input_path).unwrap();
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        prepared.is_none(),
+        "must not fall back to an earlier retained pair"
+    );
+}
+#[test]
 fn generated_full_native_short_step_preserves_exact_context_bytes() {
     let h = Host::new("non rust/input");
     bind(&h);

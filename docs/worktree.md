@@ -153,6 +153,47 @@ and in CI. This increment changes product and adopted policy together; validatio
 scope expands by the new project/test pair and bootstrap/release registrations.
 Declared costs remain unknown, and no acknowledgement or human approval is added.
 
+### Current full-check input references
+
+A v2 worktree policy can explicitly bind the current endpoint pair produced by
+`chrono-inputs` without changing the original branch birth:
+
+```json
+"check_inputs": {
+  "origin_path": ".chrono-harness/state/origin.json",
+  "context_path": ".chrono-harness/state/local/context.json",
+  "collection_manifest": ".chrono-harness/state/collection/manifest.json",
+  "roles": {"integration": "integration", "feature": "delivery"},
+  "full_inputs": {"retained_inputs": ".chrono-harness/state/inputs.json"}
+}
+```
+
+The registered local `check-inputs` action reads that pair and retains its exact
+bytes at an immutable content address before referencing it in the current
+context. It records the source path/digest and retained path/digest in its
+original producer report and preparation evidence. Missing configured input is
+an error; it never falls back to an older pair or captures today's files as base
+data. Snapshot endpoint/configuration, blob and current-input validation remain
+with registration. Provisioning the original snapshots and blobs remains with
+the host's existing input/bootstrap owners.
+
+For delivery, this same binding reads the certificate at the current workflow's
+explicit `integration.evidence` path and records its observed byte digest. An
+absent certificate leaves a null digest: workflow decides whether this DELTA
+requires integration and validates the certificate's completed producer report
+and all other bindings. Even an observed failed/misbound certificate receives no
+admission from this producer. Integration runs leave the digest null so their own
+prior certificate cannot change the shared unit/collection context. Collection
+reads retained references without probing live business inputs or rerunning
+business work.
+
+`start`/`reconstruct` still publish the genuine immutable origin and birth report;
+preparation never attaches new evidence to them. Omitting `full_inputs` preserves
+legacy origin-attached references, and scoped checks ignore the extension. Older
+binaries reject the new field, so hosts adopting it must first provision the
+compatible candidate product. This optional product contract does not activate
+this repository's proposed full registries or replace native acceptance.
+
 
 ## Explicit reconstruction
 
