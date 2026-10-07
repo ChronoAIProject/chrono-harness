@@ -94,6 +94,24 @@ the index, physical source, policies, locks and usage checks retain their live
 reads. Failed or malformed trees never enter the cache, and a later operation
 acquires its own evidence.
 
+The product host declares a 2 MiB process output bound in
+`.chrono-harness/worktree.json`. Its real Cargo input configuration and FILEMAP
+each exceed the previous 1 MiB bound; partitioning a registry list cannot split
+one Git blob. The existing reader transports the complete original bytes under
+the new bound. Input IDs, package inventories, consumer edges and source actions
+are preserved; this does not enable full governance or supply native inputs.
+
+**Mixed-change warning:** Host process policy and Rust consumer/migration tests
+change together.
+They exercise the actual product-host registry bytes in fixed fixture commits,
+retain the original low-bound failure, and verify the existing enrollment
+transition. The caller must commit matching worktree policy bytes in the surviving
+coordinator and enrolled target, deploy a compatible lifecycle binary, and run
+the registered `migrate --path` transition before retrying the fixed bootstrap
+and check. A target-only policy edit remains refused. These source checks are
+neither a clean main-host bootstrap nor native acceptance; their validation cost
+includes the worktree test pair and its complete group inventory.
+
 Live checkout identity reads its root, common repository, metadata directory,
 HEAD and full branch name in one bounded Git process. Maintenance consumes that
 same observation for branch and attachment checks, alongside fresh inventory,

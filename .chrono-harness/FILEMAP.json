@@ -104,6 +104,10 @@
         {
           "kind": "runtime-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
         }
       ]
     },
@@ -128,6 +132,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
         }
       ]
     },
@@ -160,6 +168,10 @@
         {
           "kind": "test-execution",
           "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
         }
       ]
     },
@@ -184,6 +196,10 @@
         {
           "kind": "runtime-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
         }
       ]
     },
@@ -220,6 +236,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
         }
       ]
     },
