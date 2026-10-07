@@ -486,6 +486,238 @@ pub fn execute(
     }
     Ok((status, records))
 }
+
+/// Independently audit the records emitted by [`execute`].
+///
+/// The process loop is deliberately allowed to evolve separately from this
+/// checker.  A malformed record must not become a successful report merely
+/// because the same helper assembled and consumed it.  This boundary checks
+/// the explicit binding DAG, request identities, response/process agreement,
+/// blocked predecessors, and the aggregate status.  It does not discover
+/// dependencies or inspect host source files.
+pub fn validate_execution(
+    template: &Request,
+    bindings: &[Binding],
+    status: &Status,
+    records: &[Value],
+) -> Result<(), String> {
+    let ordered = independent_schedule(bindings)?;
+    if records.len() != ordered.len() {
+        return Err(format!(
+            "E_SELF_DIAGNOSTIC: execution record count {} differs from binding count {}",
+            records.len(),
+            ordered.len()
+        ));
+    }
+    let mut observations = Vec::new();
+    let mut failed = BTreeSet::<String>::new();
+    let mut expected_status = Status::Pass;
+    for (index, (record, binding)) in records.iter().zip(&ordered).enumerate() {
+        let id = record["id"]
+            .as_str()
+            .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {index} has no string id"))?;
+        if id != binding.id {
+            return Err(format!(
+                "E_SELF_DIAGNOSTIC: record {index} id {id:?} differs from scheduled {:?}",
+                binding.id
+            ));
+        }
+        let bound = serde_json::to_value(binding).map_err(|e| e.to_string())?;
+        if record.get("binding") != Some(&bound) {
+            return Err(format!(
+                "E_SELF_DIAGNOSTIC: record {id} binding differs from registered binding"
+            ));
+        }
+        let state = record["state"]
+            .as_str()
+            .ok_or_else(|| format!("E_SELF_DIAGNOSTIC: record {id} has no string state"))?;
+        match state {
+            "executed" => {
+                let process = record.get("process").ok_or_else(|| {
+                    format!("E_SELF_DIAGNOSTIC: executed record {id} has no process")
+                })?;
+                let process: crate::ProcessResult = serde_json::from_value(process.clone())
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} process: {e}"))?;
+                if record["exit_code"] != process.exit_code {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} exit differs from process"
+                    ));
+                }
+                let request = judge_request_from_observations(template, binding, &observations)
+                    .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id}: {e}"))?;
+                let request_digest = crate::sha256(
+                    &request
+                        .canonical()
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: request {id} canonical: {e}"))?,
+                );
+                if record["request_id"] != request.request_id
+                    || record["request_digest"] != request_digest
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} request identity differs from DAG (observed id {:?}, expected {:?}, observed digest {:?}, expected {:?})",
+                        record["request_id"],
+                        request.request_id,
+                        record["request_digest"],
+                        request_digest
+                    ));
+                }
+                if process.stdin_sha256 != request_digest {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} stdin identity differs from request"
+                    ));
+                }
+                if let Some(message) = record.get("transport_failure") {
+                    if message.as_str().is_none() || message.as_str().is_some_and(str::is_empty) {
+                        return Err(format!(
+                            "E_SELF_DIAGNOSTIC: record {id} has an empty transport failure"
+                        ));
+                    }
+                    expected_status = expected_status.max(Status::Error);
+                    failed.insert(binding.id.clone());
+                } else {
+                    let response: Response =
+                        serde_json::from_value(record.get("response").cloned().ok_or_else(
+                            || format!("E_SELF_DIAGNOSTIC: executed record {id} has no response"),
+                        )?)
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} response: {e}"))?;
+                    validate_record_response(&response, &binding.id, process.exit_code)
+                        .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id}: {e}"))?;
+                    expected_status = expected_status.max(response.status.clone());
+                    if response.status >= Status::Fail {
+                        failed.insert(binding.id.clone());
+                    }
+                }
+            }
+            "blocked" => {
+                if record["exit_code"] != Value::Null
+                    || record.get("response").is_some()
+                    || record.get("process").is_some()
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: blocked record {id} contains execution evidence"
+                    ));
+                }
+                let blocked_by: Vec<String> = serde_json::from_value(
+                    record.get("blocked_by").cloned().unwrap_or(Value::Null),
+                )
+                .map_err(|e| format!("E_SELF_DIAGNOSTIC: record {id} blocked_by: {e}"))?;
+                if blocked_by.is_empty()
+                    || blocked_by.iter().any(|predecessor| {
+                        !binding.after.contains(predecessor) || !failed.contains(predecessor)
+                    })
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: record {id} has invalid blocked predecessors"
+                    ));
+                }
+                expected_status = expected_status.max(Status::Error);
+                failed.insert(binding.id.clone());
+            }
+            "error" => {
+                if record
+                    .get("transport_failure")
+                    .and_then(Value::as_str)
+                    .is_none()
+                {
+                    return Err(format!(
+                        "E_SELF_DIAGNOSTIC: error record {id} has no transport failure"
+                    ));
+                }
+                expected_status = expected_status.max(Status::Error);
+                failed.insert(binding.id.clone());
+            }
+            other => {
+                return Err(format!(
+                    "E_SELF_DIAGNOSTIC: record {id} has unknown state {other:?}"
+                ));
+            }
+        }
+        observations.push(
+            predecessor_observation(record, template.scope.is_some()).map_err(|e| {
+                format!("E_SELF_DIAGNOSTIC: record {id} predecessor observation: {e}")
+            })?,
+        );
+    }
+    if status != &expected_status {
+        return Err(format!(
+            "E_SELF_DIAGNOSTIC: aggregate status {status:?} differs from records {expected_status:?}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_record_response(response: &Response, id: &str, exit_code: i32) -> Result<(), String> {
+    if response.protocol != wire::PROTOCOL
+        || response.judge_id != id
+        || response.request_id.is_empty()
+        || response.status.exit_code() != exit_code
+    {
+        return Err("response identity/status/exit mismatch".into());
+    }
+    let errors = response
+        .findings
+        .iter()
+        .any(|finding| finding.level == "error");
+    let warnings = response
+        .findings
+        .iter()
+        .any(|finding| finding.level == "warning");
+    if (matches!(response.status, Status::Fail | Status::Error) != errors)
+        || (response.status == Status::Pass && warnings)
+        || (response.status == Status::Warn && !warnings)
+    {
+        return Err("response findings/status disagree".into());
+    }
+    Ok(())
+}
+
+/// Independent Kahn walk used only by the report audit.  Keeping this small
+/// copy separate from `schedule` prevents a future scheduling edit from also
+/// making the audit accept the same malformed order.
+fn independent_schedule(bindings: &[Binding]) -> Result<Vec<Binding>, String> {
+    let mut pending = BTreeMap::<String, Binding>::new();
+    for binding in bindings {
+        if binding.id.is_empty()
+            || pending
+                .insert(binding.id.clone(), binding.clone())
+                .is_some()
+        {
+            return Err("E_SELF_DIAGNOSTIC: duplicate/empty judge binding".into());
+        }
+        if binding.after.iter().collect::<BTreeSet<_>>().len() != binding.after.len() {
+            return Err(format!(
+                "E_SELF_DIAGNOSTIC: duplicate predecessor for {}",
+                binding.id
+            ));
+        }
+    }
+    if pending.is_empty() {
+        return Err("E_SELF_DIAGNOSTIC: no configured judges".into());
+    }
+    if bindings
+        .iter()
+        .flat_map(|binding| &binding.after)
+        .any(|id| !pending.contains_key(id))
+    {
+        return Err("E_SELF_DIAGNOSTIC: missing predecessor".into());
+    }
+    let mut done = BTreeSet::new();
+    let mut ordered = Vec::with_capacity(pending.len());
+    while !pending.is_empty() {
+        let id = pending
+            .iter()
+            .find(|(_, binding)| binding.after.iter().all(|parent| done.contains(parent)))
+            .map(|(id, _)| id.clone())
+            .ok_or("E_SELF_DIAGNOSTIC: judge dependency cycle")?;
+        let binding = pending
+            .remove(&id)
+            .ok_or("E_SELF_DIAGNOSTIC: missing scheduled judge")?;
+        done.insert(id);
+        ordered.push(binding);
+    }
+    Ok(ordered)
+}
+
 /// Build fixed full inputs without executing judges or business tools.
 #[allow(clippy::too_many_arguments)]
 pub fn prepare_request(
@@ -831,6 +1063,7 @@ pub fn check_prepared(
     };
     crate::prepare_publication(root, &publication_path)?;
     let (status, mut judges) = execute(&req, &bindings, &env, timeout, limit)?;
+    validate_execution(&req, &bindings, &status, &judges)?;
     let judge_pins: Vec<_> = bindings
         .iter()
         .map(|binding| value!({"id": binding.id, "sha256": binding.sha256}))

@@ -202,6 +202,16 @@ bound transport. Missing maps, lost nested bytes, truncation and conflicting
 identities reject. Failed runs preserve their original failure and report
 unavailable originals in `artifact_failures` and `unresolved./artifacts`.
 
+Before a full report is assembled, the runner independently audits the records
+returned by the execution loop. The audit reconstructs the registered binding
+DAG with a separate topological walk, checks each request and stdin digest,
+matches response identity/status/findings to the observed process exit, verifies
+that blocked records name failed registered predecessors, and recomputes the
+aggregate status. Any contradiction is `E_SELF_DIAGNOSTIC` and prevents report
+publication. This is a consistency boundary over declared inputs; it does not
+discover dependencies, validate host completeness, or prove that a judge's
+business result is semantically correct.
+
 `--collect MANIFEST` uses the same seven-judge entry and consumes a bounded
 `chrono-full-collection/v1` manifest with `unit`, `path`, and `sha256` rows. Runner
 and seven-judge pins come from the current bound invocation and candidate

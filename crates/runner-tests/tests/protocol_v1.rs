@@ -600,6 +600,44 @@ fn dag_forwards_only_direct_predecessors_and_named_outputs() {
     assert_eq!(records.len(), 4);
     assert!(records.iter().all(|r| r["state"] == "executed"));
 }
+
+#[test]
+fn execution_self_diagnostic_rejects_mutated_records_and_status() {
+    let (_dir, request, binding) = fixture(value!({"kind":"response"}));
+    let (status, records) = chrono_harness::full::execute(
+        &request,
+        std::slice::from_ref(&binding),
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        8192,
+    )
+    .unwrap();
+    chrono_harness::full::validate_execution(&request, &[binding.clone()], &status, &records)
+        .unwrap();
+
+    let mut response_mutation = records.clone();
+    response_mutation[0]["response"]["judge_id"] = value!("forged");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        &[binding.clone()],
+        &status,
+        &response_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+
+    let mut status_mutation = records.clone();
+    status_mutation[0]["response"]["status"] = value!("fail");
+    let error = chrono_harness::full::validate_execution(
+        &request,
+        &[binding],
+        &wire::Status::Pass,
+        &status_mutation,
+    )
+    .unwrap_err();
+    assert!(error.starts_with("E_SELF_DIAGNOSTIC:"), "{error}");
+}
+
 #[test]
 fn dag_blocks_dependents_and_continues_independent_branch() {
     let (_dir, r, b) = fixture(value!({"kind":"blocked-dag"}));
@@ -626,6 +664,7 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
     assert_eq!(records[1]["state"], "blocked");
     assert_eq!(records[2]["id"], "independent");
     assert_eq!(records[2]["response"]["status"], "pass");
+    chrono_harness::full::validate_execution(&r, &plan, &status, &records).unwrap();
     let mut broken = plan.clone();
     broken[0].after = vec!["missing".into()];
     assert!(chrono_harness::full::schedule(&broken).is_err());
