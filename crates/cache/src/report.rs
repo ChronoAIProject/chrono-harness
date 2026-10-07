@@ -212,6 +212,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         options.get("--bootstrap").copied(),
         saves.as_deref(),
     )?;
+    let executable = std::env::current_exe()
+        .and_then(fs::canonicalize)
+        .map_err(|e| format!("E_CACHE_REPORT: producer executable: {e}"))?;
+    let producer_bytes = fs::read(&executable)
+        .map_err(|e| format!("E_CACHE_REPORT: producer executable bytes: {e}"))?;
+    report["producer"] = json!({
+        "executable": executable,
+        "sha256": sha256(&producer_bytes),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
     report["plan"] = json!({"path":plan_path,"sha256":sha256(&plan_raw)});
     report["plan_upload"] = json!(retain_for_upload(root, directory, "plan", &plan_raw)?);
     let mut probes = Vec::new();

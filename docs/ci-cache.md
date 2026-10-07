@@ -149,7 +149,19 @@ output. Python release verification and the package collector have no registered
 compilation cache. Distinct grouped test producers have distinct cache entries.
 The cache seed runs `host.bootstrap-cache`, which builds the candidate planner
 using the existing bootstrap owner and `build.cache`, then installs that binary.
-It is not a second Cargo build implementation.
+Its bootstrap recipe explicitly selects `report_path` as
+`.chrono-harness/state/cache-bootstrap.json`; the later core bootstrap retains
+the default `.chrono-harness/state/bootstrap.json`. The host bootstrap accepts
+an optional literal report file under `.chrono-harness/state/`, rejects escaped
+or symlinked locations, and propagates report publication errors. Each recipe
+owns its selected report slot; repeated use of the same slot replaces its latest
+result. The existing artifact upload retains both independent records.
+
+Cache transport reports retain the reporting process's executable path, observed
+file digest and version. Consumers can match that digest to the installed cache
+binary in the separate bootstrap record and its clean source identity. A digest
+observation does not prove complete compiler inputs or loaded-memory identity;
+missing or dirty-source bootstrap evidence cannot establish a clean source binding.
 
 The detector cache binds its own bootstrap recipe and has no business-check
 policy input. Check compilation caches explicitly select `/policy/environment`

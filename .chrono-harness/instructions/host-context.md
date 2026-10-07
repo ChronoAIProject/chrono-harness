@@ -56,6 +56,8 @@ worktree-tests 的 core 与 adoption 两个测试组分别对应 worktree、work
 
 宿主 bootstrap.py 与其 Python 测试独立登记为 host-bootstrap / host-bootstrap-tests。专属测试通过显式 Python SDK／操作 fixture 检查配置选择、安装字节与摘要、Git 源状态、工具链安装及失败传播。测试直接由 Python 执行，不经 Cargo 转发；独立 host-bootstrap CI 单元使用宿主共同的 harness bootstrap，两个平台的专属发布验证显式登记空 needs 与 rust_toolchain=false。Rust worktree 的宿主入口与租约集成测试仍验证真实跨程序边界。其余跨语言测试迁移、完整候选原生验收及公开采用仍需完成。
 
+bootstrap-cache.json 显式将 report_path 登记为 .chrono-harness/state/cache-bootstrap.json，核心 bootstrap 保留默认 bootstrap.json，两者随既有证据上传。缓存 transport 报告记录实际程序路径、文件摘要与版本，供消费者核对独立构建记录及干净源码身份；路径摘要不证明完整输入或加载内存身份。bootstrap 拒绝越界及 symlink 报告位置，保存失败非零；同一登记槽位保留最近结果。缓存测试只在失败时保留原 fixture、探测配置及原始报告，正常退出清理临时宿主。
+
 runner-tests 的协议 transport fixture 由同项目独立 Rust 测试二进制执行；用例参数是临时 JSON 数据，判定与子进程断言归 Rust。初始／DELTA 响应、四态退出、原始字节、直接前置及保留进程身份、超时和输出上限控制保留，FILEMAP 显式登记编译输入。此范围不包含其它文件中的脚本 fixture，也不宣称全仓语言迁移完成。
 
 

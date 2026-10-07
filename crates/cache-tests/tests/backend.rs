@@ -1,6 +1,6 @@
 use super::*;
 
-fn backend_fixture() -> (tempfile::TempDir, Value) {
+fn backend_fixture() -> (Host, Value) {
     let (root, mut config) = fixture();
     adopt_consumer_contract(root.path(), &mut config);
     config["backend"] = backend();

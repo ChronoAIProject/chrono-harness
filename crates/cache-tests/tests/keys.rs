@@ -3,10 +3,40 @@ mod backend;
 
 use chrono_cache::{Config, prepare};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::{fs, path::Path, process::Command};
 
-fn fixture() -> (tempfile::TempDir, Value) {
-    let root = tempfile::tempdir().unwrap();
+struct Host(tempfile::TempDir);
+
+impl Host {
+    fn new() -> Self {
+        let retained = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.chrono-harness/state/cache-test-failures");
+        fs::create_dir_all(&retained).unwrap();
+        Self(tempfile::tempdir_in(retained).unwrap())
+    }
+
+    fn path(&self) -> &Path {
+        self.0.path()
+    }
+}
+
+impl Drop for Host {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            use std::io::Write;
+            self.0.disable_cleanup(true);
+            let _ = writeln!(
+                std::io::stderr(),
+                "Cache test original host: {}",
+                self.path().display()
+            );
+        }
+    }
+}
+
+fn fixture() -> (Host, Value) {
+    let root = Host::new();
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
     fs::write(root.path().join("compiler"), b"compiler-one").unwrap();
     fs::write(root.path().join("source"), b"source-one").unwrap();
@@ -41,7 +71,44 @@ fn register_artifacts(root: &Path, config: &Value) {
 
 fn plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
     let config: Config = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-    prepare(root, &config, consumer)
+    let result = prepare(root, &config, consumer);
+    if let Err(error) = &result {
+        let original = json!({"consumer":consumer,"config":value,"error":error});
+        fs::write(
+            root.join("failed-plan.json"),
+            serde_json::to_vec(&original).unwrap(),
+        )
+        .unwrap();
+    }
+    result
+}
+
+#[test]
+fn failed_test_retains_probe_originals_and_success_removes_its_host() {
+    let (root, mut config) = fixture();
+    let retained = root.path().to_path_buf();
+    config["inputs"]["compiler"] = json!({"kind":"command","command":{
+        "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":["exit"],"env":{},
+        "timeout_seconds":5,"output_limit_bytes":4096},"inherit":[],"result":"stdout"});
+    let failure = std::panic::catch_unwind(move || {
+        plan(root.path(), &config, "check.one").unwrap();
+    });
+    assert!(failure.is_err());
+    let original: Value =
+        serde_json::from_slice(&fs::read(retained.join("failed-plan.json")).unwrap()).unwrap();
+    assert_eq!(original["consumer"], "check.one");
+    let error = original["error"].as_str().unwrap();
+    let (_, path) = error.split_once("; original ").unwrap();
+    let process: Value = serde_json::from_slice(&fs::read(retained.join(path)).unwrap()).unwrap();
+    assert_eq!(process["exit_code"], 7);
+    assert_eq!(process["failure"], Value::Null);
+    assert_eq!(process["stderr"], "original probe failure\n");
+    fs::remove_dir_all(retained).unwrap();
+
+    let successful = Host::new();
+    let removed = successful.path().to_path_buf();
+    drop(successful);
+    assert!(!removed.exists());
 }
 
 fn adopt_consumer_contract(root: &Path, config: &mut Value) {
@@ -405,6 +472,16 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
     assert_eq!(
         report["observation"],
         serde_json::from_slice::<Value>(&fs::read(root.path().join(original)).unwrap()).unwrap()
+    );
+    let producer = &report["observation"]["producer"];
+    assert_eq!(
+        producer["executable"],
+        json!(fs::canonicalize(&binary).unwrap())
+    );
+    assert_eq!(producer["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        producer["sha256"],
+        format!("{:x}", Sha256::digest(fs::read(&binary).unwrap()))
     );
     let steps_path = report["observation"]["native_steps"]["path"]
         .as_str()
@@ -1063,7 +1140,7 @@ fn primary_checkout_transport_refuses_linked_worktrees_before_restoration() {
     );
 }
 
-fn host_cache_fixture(consumers: &[&str]) -> (tempfile::TempDir, Value) {
+fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     let host = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -1072,7 +1149,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (tempfile::TempDir, Value) {
     let mut config: Value =
         serde_json::from_slice(&fs::read(host.join(".chrono-harness/cache.json")).unwrap())
             .unwrap();
-    let root = tempfile::tempdir().unwrap();
+    let root = Host::new();
     fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
     config["require_primary_checkout"] = json!(false);
     // Vary actual host policy files while keeping unrelated compiler/source

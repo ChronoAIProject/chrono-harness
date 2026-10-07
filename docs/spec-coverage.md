@@ -602,6 +602,16 @@ The release recipe v5 consumes explicit build subsets and a mandatory per-verifi
 
 The host bootstrap has an explicit Python production/test script pair and separate Python SDK and operation fixtures. Its independent CI and release units execute the registered Python test directly, including source identity, selected configuration, installed digests, toolchain installation and failure propagation. Rust lifecycle integration tests retain their real bootstrap boundary. Complete candidate/native acceptance, remaining language ownership and public adoption are separate obligations.
 
+The bootstrap's optional explicit `report_path` separates the host's cache-tool
+record from the later core-tool record. Python regressions cover consecutive
+selected/default bootstraps, invalid or symlinked locations and write failures.
+Cache transport reports record the actual reporting executable's file digest,
+path and version; the Rust CLI regression verifies the retained identity against
+the invoked binary. Test hosts retain failed probe inputs and raw reports during
+panic, while successful fixtures are removed. These observations permit source
+binding checks against retained clean bootstrap records; they do not establish
+complete build inputs, historical timeout causes or full host acceptance.
+
 The mixed-judge stale-cost consumer uses a registered Rust fixture that invokes the actual cost judge, checks its exit and corrupts only the candidate-tree binding. The original mixed-judge rejection and empty-output assertions remain; this does not complete remaining foreign-language fixture migrations.
 
 Runner CLI and Git-input tests use native Rust child binaries with explicit JSON case data. The same tests retain protocol/status disagreement, raw UTF-8 and stream hashes, pipe/EOF, invocation paths, actual child exits, Git input drift and malformed batch observations. Git clean-filter configuration invokes a registered Rust fixture through Git’s command interface; the filter behavior resides in Rust. CLI response cases invoke the compiled helper directly; required executable aliases use completed build bytes without writable launch descriptors: independent file clones on macOS, regular hardlinks on other supported Unix platforms. Git instrumentation occupies a sibling directory outside the snapshot under test; tool-drift cases replace their own link before writing changed bytes. This scope does not establish language migration for other project owners, native acceptance or public adoption.

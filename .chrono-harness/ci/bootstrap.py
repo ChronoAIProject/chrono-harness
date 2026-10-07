@@ -15,6 +15,22 @@ from process_fds import inherited_fds
 PASS_FDS = inherited_fds()
 
 
+def report_destination(root, config):
+    declared = config.get("report_path", ".chrono-harness/state/bootstrap.json")
+    if not isinstance(declared, str) or any(c in declared for c in "\x00\r\n"):
+        raise ValueError("bootstrap report must be an explicit host state file")
+    path = Path(declared)
+    if (path.is_absolute() or ".." in path.parts or len(path.parts) < 3
+            or path.parts[:2] != (".chrono-harness", "state") or path.as_posix() != declared):
+        raise ValueError("bootstrap report must be an explicit host state file")
+    target = root
+    for part in path.parts:
+        target = target / part
+        if target.is_symlink():
+            raise ValueError("bootstrap report path must not contain a symlink")
+    return target
+
+
 def observe_source(root):
     """Observe this host's source repository without requiring one for development."""
     observed = {"commit": None, "tree": None, "dirty": None, "error": None}
@@ -93,6 +109,7 @@ def main():
     if config_path.is_absolute() or ".." in config_path.parts or config_path.parts[:2] != (".chrono-harness", "ci"):
         raise ValueError("bootstrap config must be an explicit host CI path")
     config = json.loads((root / config_path).read_text())
+    report_destination(root, config)
     if "rust_incremental" in config and type(config["rust_incremental"]) is not bool:
         raise ValueError("rust_incremental must be a boolean")
     participate(root, config_path, config)
@@ -150,9 +167,9 @@ def main():
         "before": source_before,
         "after": source_after,
     }
-    state = root / ".chrono-harness/state"
-    state.mkdir(parents=True, exist_ok=True)
-    (state / "bootstrap.json").write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}, indent=2) + "\n")
+    report = report_destination(root, config)
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}, indent=2) + "\n")
 
 
 if __name__ == "__main__":
