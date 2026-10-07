@@ -14,7 +14,10 @@ and result publication. `judge-registration` owns full-format registration check
 and consumes those shared mechanics through an explicit adapter. Its
 `selection_explanation.extra_selections` explains legacy rules, with
 `legacy_only_selections` identifying selections outside test-execution edges;
-these do not become full-policy edges. See [the impact contract](filemap-impact.md).
+these do not become full-policy edges. Large derived predecessor/path maps are
+bounded in the response with an explicit omission marker, count, and digest;
+the registered graph and seed set remain the source for recomputing a witness.
+See [the impact contract](filemap-impact.md).
 `ci` owns the GitHub workflow projection and event input
 preparation. It does not select tests or judge outcomes. `instructions` remains
 independent and its catalogs, layouts and relative root alias are unchanged.

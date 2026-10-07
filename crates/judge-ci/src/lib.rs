@@ -1,7 +1,7 @@
 //! Explicit CI policy: fixed Git snapshots, registered old/new impact graph, candidate operations.
 use chrono_harness::{
-    CheckConfig, CheckResult, PROTOCOL, Request, Response, Status, decode, json, relative_path,
-    sha256,
+    CheckConfig, CheckResult, PROTOCOL, ProcessResult, Request, Response, Status, decode, json,
+    relative_path, sha256,
 };
 use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,34 @@ use std::fs;
 use std::path::Path;
 mod collect;
 mod units;
+
+/// The receipt is the canonical owner of complete process evidence.  The
+/// adjacent `process` field in an executed row is a compatibility projection
+/// used for status/identity consumers; large streams are kept only once, in
+/// `receipt.process`, so a large DELTA cannot exhaust the judge transport
+/// merely by repeating the same bytes.
+const INLINE_PROCESS_STREAM_BYTES: usize = 4096;
+
+pub(crate) fn process_projection(process: &ProcessResult) -> Value {
+    let mut value = serde_json::to_value(process).expect("process result is serializable");
+    if process
+        .stdout_bytes
+        .len()
+        .saturating_add(process.stderr_bytes.len())
+        > INLINE_PROCESS_STREAM_BYTES
+    {
+        let object = value
+            .as_object_mut()
+            .expect("serialized process result is an object");
+        object.remove("stdout_bytes");
+        object.remove("stderr_bytes");
+        object.remove("stdout");
+        object.remove("stderr");
+        object.insert("stdout_omitted".into(), Value::Bool(true));
+        object.insert("stderr_omitted".into(), Value::Bool(true));
+    }
+    value
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -695,7 +723,87 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    // A large DELTA can make the predecessor map quadratic in the number of
+    // seeds.  Keep the complete explanation for ordinary changes, but publish
+    // a digest/count for oversized derived paths.  The registered graph,
+    // seeds, traversed edges and selected tests remain available in the same
+    // response; omission is explicit and fail-closed consumers can require a
+    // smaller scope when they need every witness path inline.
+    const INLINE_SELECTION_EXPLANATION_BYTES: usize = 2 * 1024 * 1024;
+    let mut closure_value = serde_json::to_value(&closure).expect("closure is serializable");
+    let mut explanation = object!({
+        "scope":"chrono-ci-check/v1-adapter",
+        "edges":edges,
+        "seeds":seed_nodes,
+        "seed_causes":seeds,
+        "closure":closure_value,
+        "extra_selections":extras,
+        "legacy_only_selections":legacy_only
+    });
+    if serde_json::to_vec(&explanation)
+        .map(|bytes| bytes.len() > INLINE_SELECTION_EXPLANATION_BYTES)
+        .unwrap_or(true)
+    {
+        let predecessor_bytes =
+            serde_json::to_vec(&closure.predecessors).expect("predecessors are serializable");
+        let predecessor_count = closure
+            .predecessors
+            .values()
+            .map(std::collections::BTreeMap::len)
+            .sum::<usize>();
+        if let Some(object) = closure_value.as_object_mut() {
+            object.remove("predecessors");
+            object.insert("predecessors_omitted".into(), Value::Bool(true));
+            object.insert("predecessor_count".into(), object!(predecessor_count));
+            object.insert(
+                "predecessors_sha256".into(),
+                object!(sha256(&predecessor_bytes)),
+            );
+        }
+        explanation["closure"] = closure_value;
+        explanation["predecessor_transport"] = object!({
+            "omitted": true,
+            "count": predecessor_count,
+            "sha256": sha256(&predecessor_bytes)
+        });
+    }
+    if serde_json::to_vec(&explanation)
+        .map(|bytes| bytes.len() > INLINE_SELECTION_EXPLANATION_BYTES)
+        .unwrap_or(true)
+    {
+        // Keep the bounded response useful even when the traversed closure
+        // itself is large.  The full edge/closure bytes are represented by
+        // stable digests and counts, never silently discarded.
+        let edges_value = explanation["edges"].clone();
+        let traversed_value = explanation["closure"]["traversed"].clone();
+        let reached_value = explanation["closure"]["reached"].clone();
+        let edge_bytes = serde_json::to_vec(&edges_value).expect("edges are serializable");
+        let traversed_bytes =
+            serde_json::to_vec(&traversed_value).expect("traversed edges are serializable");
+        let reached_bytes = serde_json::to_vec(&reached_value).expect("reached is serializable");
+        explanation["edges"] = object!({
+            "omitted": true,
+            "count": edges_value.as_array().map_or(0, Vec::len),
+            "sha256": sha256(&edge_bytes)
+        });
+        if let Some(object) = explanation["closure"].as_object_mut() {
+            object.remove("traversed");
+            object.remove("reached");
+            object.insert("traversed_omitted".into(), Value::Bool(true));
+            object.insert(
+                "traversed_count".into(),
+                object!(traversed_value.as_array().map_or(0, Vec::len)),
+            );
+            object.insert("traversed_sha256".into(), object!(sha256(&traversed_bytes)));
+            object.insert("reached_omitted".into(), Value::Bool(true));
+            object.insert(
+                "reached_count".into(),
+                object!(reached_value.as_object().map_or(0, serde_json::Map::len)),
+            );
+            object.insert("reached_sha256".into(), object!(sha256(&reached_bytes)));
+        }
+        explanation["closure_transport"] = object!({"omitted":true});
+    }
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());
@@ -1457,7 +1565,11 @@ fn evaluate(
                 }),
             });
             if let Some(receipt) = &result.receipt {
-                executed.push(object!({"operation":result.operation,"process":receipt.process,"receipt":receipt}));
+                executed.push(object!({
+                    "operation": result.operation,
+                    "process": process_projection(&receipt.process),
+                    "receipt": receipt
+                }));
             }
         }
         for (old, replacement) in &removed {
@@ -1512,4 +1624,47 @@ fn evaluate(
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn process(stdout_bytes: Vec<u8>, stderr_bytes: Vec<u8>) -> ProcessResult {
+        ProcessResult {
+            argv: vec!["tool".into()],
+            cwd: "/tmp/host".into(),
+            environment: BTreeMap::new(),
+            environment_digest: "environment".into(),
+            ownership_fds: None,
+            stdin_sha256: "stdin".into(),
+            stdout_sha256: "stdout".into(),
+            stderr_sha256: "stderr".into(),
+            stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
+            stdout_bytes,
+            stderr_bytes,
+            failure: None,
+            exit_code: 0,
+            executable: "/bin/tool".into(),
+            sha256: "tool".into(),
+        }
+    }
+
+    #[test]
+    fn process_projection_retains_small_streams() {
+        let projected = process_projection(&process(vec![b'a'; 3], vec![b'b'; 2]));
+        assert_eq!(projected["stdout_bytes"], serde_json::json!([97, 97, 97]));
+        assert!(projected.get("stdout_omitted").is_none());
+    }
+
+    #[test]
+    fn process_projection_keeps_large_streams_in_receipt_only() {
+        let projected = process_projection(&process(vec![b'a'; 4097], vec![]));
+        assert!(projected.get("stdout_bytes").is_none());
+        assert!(projected.get("stderr_bytes").is_none());
+        assert_eq!(projected["stdout_omitted"], serde_json::json!(true));
+        assert_eq!(projected["stderr_omitted"], serde_json::json!(true));
+        assert_eq!(projected["stdout_sha256"], serde_json::json!("stdout"));
+    }
 }
