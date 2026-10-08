@@ -2,14 +2,23 @@
 
 The main-host metadata consumer registers `inputs.fetch.*` actions as package
 acquisition prerequisites for its 34 original `inputs.metadata.*` actions.
-Acquisition uses the same locked manifest and declared target; metadata remains
-locked and offline. Both processes retain launch records and original streams
+Acquisition fetches the complete locked package graph for the same manifest,
+including host and target dependencies; metadata keeps its declared target and
+remains locked and offline. Both processes retain launch records and original streams
 under `.chrono-harness/state/inputs/`, including failures and enclosing
 termination. The release recipe carries that directory for failed
 `test.judge-cargo-tests` operations. An empty package inventory is a controlled
 reproduction of a missing prerequisite. Diagnosing a native metadata failure
 requires its original inner process streams; a local reproduction alone does
 not identify that failure's cause.
+
+The real main-host guard runs in both local and native CI test contexts.
+`CHRONO_CHECK_SOURCE` and the release producer's run/attempt/job and local marker
+select the expectations declared in `cargo/observe.json`. Local consumption must
+pass all original guard assertions. Native CI must reject the fixed developer
+Cargo binding with the exact registered input error before metadata or business
+execution. Expected input bytes remain fixed. This validates the product's host
+boundary; it does not activate full governance on the native runner.
 
 **Mixed-change warning:** These host prerequisites and transport bindings change
 alongside their Rust consumer tests and release evidence registration. Validation

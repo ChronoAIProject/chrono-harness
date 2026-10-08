@@ -436,10 +436,14 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
     )
     .unwrap();
     println!("main host original metadata: {}", directory.display());
-    if declaration["native_consumer"]["platform"]
-        == format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
     {
         let consumer = &declaration["native_consumer"];
+        let context = main_host_native_context(consumer, &std::env::vars().collect()).unwrap();
+        fs::write(
+            directory.join("native-context.json"),
+            serde_json::to_vec(&json!({"expectation": context})).unwrap(),
+        )
+        .unwrap();
         let guard = root.join(".chrono-harness/bin/chrono-judge-cargo");
         let filemap: serde_json::Value =
             serde_json::from_slice(&fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap())
@@ -479,14 +483,28 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
             &serde_json::to_vec(&out).unwrap(),
         );
         retain_native_json(&directory.join("native-terminal.json"), &serde_json::to_vec(&json!({"elapsed_millis":started.elapsed().as_millis(),"timeout_seconds":remaining,"exit_code":out.exit_code,"failure":out.failure,"stdout_sha256":out.stdout_sha256,"stderr_sha256":out.stderr_sha256})).unwrap());
-        observation::process_success(&out)
-            .unwrap_or_else(|e| panic!("native guard: {e}; original {}", directory.display()));
         let phases: Vec<serde_json::Value> = out
             .stderr
             .lines()
             .filter_map(|line| line.strip_prefix("CHRONO_CARGO_PHASE "))
             .map(|line| serde_json::from_str(line).unwrap())
             .collect();
+        fs::write(
+            directory.join("native-phases.json"),
+            serde_json::to_vec(&phases).unwrap(),
+        )
+        .unwrap();
+        if context["status"] == "failed" {
+            assert_main_host_binding_rejection(&out, context);
+            return;
+        }
+        assert_eq!(context["status"], "passed");
+        assert_eq!(
+            consumer["platform"],
+            format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+        );
+        observation::process_success(&out)
+            .unwrap_or_else(|e| panic!("native guard: {e}; original {}", directory.display()));
         assert!(
             phases
                 .iter()
@@ -513,11 +531,6 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
                 .count(),
             6
         );
-        fs::write(
-            directory.join("native-phases.json"),
-            serde_json::to_vec(&phases).unwrap(),
-        )
-        .unwrap();
         let report: serde_json::Value = serde_json::from_slice(&out.stdout_bytes).unwrap();
         assert!(
             out.exit_code == 0 && out.failure.is_none(),
@@ -533,6 +546,228 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
                 .contains("host: aarch64-apple-darwin")
         );
     }
+}
+
+fn main_host_native_context<'a>(
+    consumer: &'a serde_json::Value,
+    environment: &std::collections::BTreeMap<String, String>,
+) -> Result<&'a serde_json::Value, String> {
+    let source = environment
+        .get("CHRONO_CHECK_SOURCE")
+        .map(String::as_str)
+        .unwrap_or("local");
+    if !["local", "ci"].contains(&source) {
+        return Err("unregistered check source".into());
+    }
+    let release_keys = [
+        "CHRONO_RELEASE_RUN",
+        "CHRONO_RELEASE_ATTEMPT",
+        "CHRONO_RELEASE_JOB",
+    ];
+    let release = release_keys
+        .iter()
+        .any(|key| environment.contains_key(*key));
+    let local_release = match environment.get("CHRONO_RELEASE_LOCAL").map(String::as_str) {
+        None => false,
+        Some("1") if release => true,
+        _ => return Err("invalid local release context".into()),
+    };
+    if release
+        && (release_keys
+            .iter()
+            .any(|key| environment.get(*key).is_none_or(String::is_empty))
+            || environment["CHRONO_RELEASE_ATTEMPT"]
+                .parse::<u64>()
+                .unwrap_or(0)
+                == 0)
+    {
+        return Err("incomplete release producer context".into());
+    }
+    if source == "ci" && local_release {
+        return Err("conflicting check and release contexts".into());
+    }
+    let name = if source == "ci" || (release && !local_release) {
+        "native-ci"
+    } else {
+        "local"
+    };
+    consumer["contexts"]
+        .get(name)
+        .ok_or_else(|| format!("missing declared {name} context"))
+}
+
+fn assert_main_host_binding_rejection(
+    out: &chrono_harness::ProcessResult,
+    expected: &serde_json::Value,
+) {
+    assert!(out.failure.is_none(), "{out:?}");
+    assert_eq!(json!(out.exit_code), expected["exit_code"]);
+    let report: serde_json::Value = serde_json::from_slice(&out.stdout_bytes).unwrap();
+    assert_eq!(report["status"], expected["status"]);
+    assert_eq!(report["exit_code"], expected["exit_code"]);
+    assert_eq!(report["error"], expected["error"]);
+    assert_eq!(report["input_closure_complete"], false);
+    for field in [
+        "tool",
+        "compiler",
+        "native_target",
+        "linker",
+        "toolchain",
+        "metadata",
+        "operation",
+        "configuration",
+    ] {
+        assert!(report[field].is_null(), "{field}: {report}");
+    }
+    let phases: Vec<serde_json::Value> = out
+        .stderr
+        .lines()
+        .filter_map(|line| line.strip_prefix("CHRONO_CARGO_PHASE "))
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    for phase in ["prepare-inputs", "guard"] {
+        assert!(
+            phases.iter().any(|p| p["phase"] == phase
+                && p["event"] == "terminal"
+                && p["outcome"] == "error"),
+            "{phases:?}"
+        );
+    }
+    assert!(
+        phases
+            .iter()
+            .all(|p| p["phase"] == "guard" || p["phase"] == "prepare-inputs"),
+        "{phases:?}"
+    );
+}
+
+#[test]
+fn main_host_declared_contexts_preserve_local_success_and_exact_binding_rejection() {
+    use std::collections::BTreeMap;
+    let root = fs::canonicalize(source()).unwrap();
+    let declaration: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/cargo/observe.json")).unwrap())
+            .unwrap();
+    let consumer = &declaration["native_consumer"];
+    let environment = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).into(), (*v).into()))
+            .collect()
+    };
+    for pairs in [
+        vec![],
+        vec![("CHRONO_CHECK_SOURCE", "local")],
+        vec![
+            ("CHRONO_RELEASE_RUN", "local-source"),
+            ("CHRONO_RELEASE_ATTEMPT", "1"),
+            ("CHRONO_RELEASE_JOB", "verify_judge_cargo_tests"),
+            ("CHRONO_RELEASE_LOCAL", "1"),
+        ],
+    ] {
+        assert_eq!(
+            main_host_native_context(consumer, &environment(&pairs)).unwrap()["status"],
+            "passed"
+        );
+    }
+    for pairs in [
+        vec![("CHRONO_CHECK_SOURCE", "ci")],
+        vec![
+            ("CHRONO_RELEASE_RUN", "native-source"),
+            ("CHRONO_RELEASE_ATTEMPT", "1"),
+            ("CHRONO_RELEASE_JOB", "linux_verify_judge_cargo_tests"),
+        ],
+        vec![
+            ("CHRONO_RELEASE_RUN", "native-source"),
+            ("CHRONO_RELEASE_ATTEMPT", "1"),
+            ("CHRONO_RELEASE_JOB", "macos_verify_judge_cargo_tests"),
+        ],
+    ] {
+        assert_eq!(
+            main_host_native_context(consumer, &environment(&pairs)).unwrap()["status"],
+            "failed"
+        );
+    }
+    for pairs in [
+        vec![("CHRONO_CHECK_SOURCE", "unknown")],
+        vec![("CHRONO_RELEASE_JOB", "linux_verify_judge_cargo_tests")],
+        vec![("CHRONO_RELEASE_LOCAL", "1")],
+        vec![
+            ("CHRONO_RELEASE_RUN", "native-source"),
+            ("CHRONO_RELEASE_ATTEMPT", "0"),
+            ("CHRONO_RELEASE_JOB", "macos_verify_judge_cargo_tests"),
+        ],
+        vec![
+            ("CHRONO_CHECK_SOURCE", "ci"),
+            ("CHRONO_RELEASE_RUN", "local-source"),
+            ("CHRONO_RELEASE_ATTEMPT", "1"),
+            ("CHRONO_RELEASE_JOB", "verify_judge_cargo_tests"),
+            ("CHRONO_RELEASE_LOCAL", "1"),
+        ],
+    ] {
+        assert!(main_host_native_context(consumer, &environment(&pairs)).is_err());
+    }
+    let expected =
+        main_host_native_context(consumer, &environment(&[("CHRONO_CHECK_SOURCE", "ci")])).unwrap();
+    let retained = root.join(".chrono-harness/state/inputs");
+    fs::create_dir_all(&retained).unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("main-binding-rejection-")
+        .tempdir_in(&retained)
+        .unwrap()
+        .keep();
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    let input = config["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|input| input["id"] == "tool.cargo")
+        .unwrap();
+    // The registered expected bytes remain fixed; this controlled host lacks them.
+    let original_digest = input["sha256"].clone();
+    input["location"] = json!(directory.join("absent-cargo"));
+    assert_eq!(input["sha256"], original_digest);
+    let config_path = directory.join("config.json");
+    let relative_config = config_path.strip_prefix(&root).unwrap().to_str().unwrap();
+    let mut projects: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.join(config["registries"]["projects"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    let runner = projects["projects"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|project| project["id"] == "runner")
+        .unwrap();
+    runner["actions"]["guarded_check"]["argv"][4] = json!(relative_config);
+    let projects_path = directory.join("projects.json");
+    fs::write(&projects_path, serde_json::to_vec(&projects).unwrap()).unwrap();
+    config["registries"]["projects"] = json!(projects_path.strip_prefix(&root).unwrap());
+    fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+    let mut spec = main_host_native_spec(&root, consumer, 120);
+    let index = spec.args.iter().position(|arg| arg == "--config").unwrap();
+    spec.args[index + 1] = relative_config.into();
+    let out = chrono_harness::run_process_observed_retained(
+        &root,
+        &spec,
+        &[],
+        &chrono_harness::file_identity(std::path::Path::new(&spec.program))
+            .unwrap()
+            .0,
+        &chrono_harness::ProcessEvidence {
+            stdout: &directory.join("rejection.stdout"),
+            stderr: &directory.join("rejection.stderr"),
+            launch: &directory.join("rejection.launch.json"),
+        },
+    )
+    .unwrap();
+    fs::write(
+        directory.join("rejection.json"),
+        serde_json::to_vec(&out).unwrap(),
+    )
+    .unwrap();
+    assert_main_host_binding_rejection(&out, expected);
 }
 
 fn main_host_input_process(

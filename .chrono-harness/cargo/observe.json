@@ -39,7 +39,17 @@
   "native_consumer": {
     "platform": "macos-aarch64",
     "policy": ".chrono-harness/cargo/runner.json",
-    "operation": "guard.check.runner"
+    "operation": "guard.check.runner",
+    "contexts": {
+      "local": {
+        "status": "passed"
+      },
+      "native-ci": {
+        "status": "failed",
+        "exit_code": 1,
+        "error": "E_CARGO_INPUT: input tool.cargo requires bound present bytes"
+      }
+    }
   },
   "prerequisite_action": "inputs_fetch",
   "prerequisite_cost": "unmeasured"

@@ -136,8 +136,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/runner/Cargo.toml"
           ]
@@ -261,8 +259,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
           ]
@@ -421,8 +417,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/instructions/Cargo.toml"
           ]
@@ -546,8 +540,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/instructions-tests/Cargo.toml"
           ]
@@ -644,8 +636,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
           ]
@@ -769,8 +759,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
           ]
@@ -889,8 +877,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/ci/Cargo.toml"
           ]
@@ -1014,8 +1000,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
@@ -1112,8 +1096,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
           ]
@@ -1237,8 +1219,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-registration-tests/Cargo.toml"
           ]
@@ -1335,8 +1315,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-filemap/Cargo.toml"
           ]
@@ -1460,8 +1438,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
           ]
@@ -1558,8 +1534,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
           ]
@@ -1683,8 +1657,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-routes-tests/Cargo.toml"
           ]
@@ -1781,8 +1753,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-projects/Cargo.toml"
           ]
@@ -1964,8 +1934,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
@@ -2065,8 +2033,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-cost/Cargo.toml"
           ]
@@ -2190,8 +2156,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-cost-tests/Cargo.toml"
           ]
@@ -2288,8 +2252,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
           ]
@@ -2413,8 +2375,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-mixed-tests/Cargo.toml"
           ]
@@ -2511,8 +2471,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-workflow/Cargo.toml"
           ]
@@ -2820,8 +2778,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
@@ -2923,8 +2879,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/inputs/Cargo.toml"
           ]
@@ -3048,8 +3002,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/inputs-tests/Cargo.toml"
           ]
@@ -3146,8 +3098,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/distribution/Cargo.toml"
           ]
@@ -3271,8 +3221,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/distribution-tests/Cargo.toml"
           ]
@@ -3369,8 +3317,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-cargo/Cargo.toml"
           ]
@@ -3494,8 +3440,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
           ]
@@ -3592,8 +3536,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/worktree/Cargo.toml"
           ]
@@ -3788,8 +3730,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml"
           ]
@@ -3948,8 +3888,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/diagnostics/Cargo.toml"
           ]
@@ -4073,8 +4011,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/diagnostics-tests/Cargo.toml"
           ]
@@ -4171,8 +4107,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/cache/Cargo.toml"
           ]
@@ -4296,8 +4230,6 @@
           "argv": [
             "fetch",
             "--locked",
-            "--target",
-            "aarch64-apple-darwin",
             "--manifest-path",
             "crates/cache-tests/Cargo.toml"
           ]
