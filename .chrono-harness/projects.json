@@ -420,6 +420,17 @@
             "--config",
             ".chrono-harness/ci/release.json"
           ]
+        },
+        "generate": {
+          "operation": "ci.generate",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
         }
       },
       "language": "rust"

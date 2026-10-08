@@ -11,6 +11,42 @@ fn main() {
     }
     let root = std::env::args().nth(1).unwrap();
     let root = Path::new(&root);
+    if std::env::args().nth(2).as_deref() == Some("fixture-consumer") {
+        let path = root.join(".chrono-harness/state/fixtures/interrupted-capture");
+        let publication =
+            chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+                root,
+                "fixture",
+                &path,
+                true,
+                json!({"exit":null}),
+                None,
+                "fixture-recheck",
+            )
+            .unwrap()
+            .unwrap();
+        publication
+            .write_file(&path.join("stderr"), b"original partial failure")
+            .unwrap();
+        println!("{}", publication.id());
+        std::io::stdout().flush().unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(45));
+        drop(publication);
+        return;
+    }
+    if std::env::args().nth(2).as_deref() == Some("consumer") {
+        let id = std::env::args().nth(3).unwrap();
+        let reader = Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .consume(&id)
+            .unwrap();
+        println!("{id}");
+        std::io::stdout().flush().unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(45));
+        drop(reader);
+        return;
+    }
     if std::env::args().nth(2).as_deref() == Some("creation-intent") {
         let publication = Inventory::adopted(root)
             .unwrap()

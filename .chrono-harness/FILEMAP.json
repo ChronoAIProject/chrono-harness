@@ -259,7 +259,7 @@
       "path": "crates/runner/src/lib.rs",
       "owner": "runner",
       "surface": "product",
-      "cost": "unmeasured",
+      "cost": "unmeasured outside retention; same strict JSON visitor shared by generic json and typed inventory opaque fields",
       "edges": [
         {
           "kind": "compile",
@@ -5450,7 +5450,7 @@
       "path": "crates/runner/src/retained_artifacts/retention.rs",
       "owner": "runner",
       "surface": "product",
-      "cost": "finite host policy; one serialized inventory buffer per durable save and metadata charge; per-output reservation and controlled byte/node admission",
+      "cost": "finite host policy; exact declared consumer identities, existing lease/root exclusion, bounded durable release summaries; no expiry rewrite; typed strict inventory decoding removes redundant whole-ledger Value, preserves strict opaque members; fixture root attachment uses the existing materialization save, no extra admission transaction",
       "edges": [
         {
           "kind": "compile",
@@ -5462,7 +5462,7 @@
       "path": "crates/runner-tests/tests/retention.rs",
       "owner": "runner-tests",
       "surface": "test",
-      "cost": "finite Rust fixture policies, interruption children joined; 420 retained producer outputs and 28 concurrent 32 MiB reservations; original 41 tests preserved; contention fixture runtime 30.01 s on macOS Rust 1.95.0",
+      "cost": "finite Rust fixture policies, interruption children joined; 420 retained producer outputs and 28 concurrent 32 MiB reservations; original 41 tests preserved; contention fixture runtime 30.01 s on macOS Rust 1.95.0; six Rust consumer/decoder CLI/API regressions with joined interruption children, real release, old inventory, unchanged expiry and bounded admission",
       "edges": [
         {
           "kind": "compile",
@@ -5562,10 +5562,90 @@
       "path": "crates/runner/src/retained_artifacts/retention_command.rs",
       "owner": "runner",
       "surface": "product",
-      "cost": "bounded by retention policy; measured acceptance pending",
+      "cost": "64 KiB requests and 1 MiB exact declaration/release inputs; at most policy.max_entries owner identities; actual CPU/IO cost unknown",
       "edges": [
         {
           "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/retention-consumers/current-repair-recheck.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "explicit finite current inventory declaration; 96949 bytes; no host protection/release effect yet",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/retention-consumers/protect-current.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "explicit finite current inventory declaration; 222 bytes; no host protection/release effect yet",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/retention-consumers/required-os39.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "explicit finite current inventory declaration; 775 bytes; no host protection/release effect yet",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/retention-consumers/protect-os39.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "explicit finite current inventory declaration; 213 bytes; no host protection/release effect yet",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
           "to": "project:runner"
         }
       ]

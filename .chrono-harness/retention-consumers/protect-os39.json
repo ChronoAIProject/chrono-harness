@@ -1,0 +1,7 @@
+{
+  "operation": "protect-consumer",
+  "declaration": {
+    "path": ".chrono-harness/retention-consumers/required-os39.json",
+    "sha256": "a866ebaf2e5583a160c47f24cbaf74c61ceeb2210cf4efd2f8acdd946692d256"
+  }
+}

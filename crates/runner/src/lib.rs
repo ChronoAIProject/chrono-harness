@@ -358,7 +358,7 @@ pub fn validate_invocation_observation(
     Ok(())
 }
 /// Reject duplicate object members before typed decoding, including opaque policy data.
-pub fn json(bytes: &[u8]) -> Result<Value, String> {
+pub(crate) fn strict_json_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Value, D::Error> {
     struct Strict;
     impl<'de> serde::de::Visitor<'de> for Strict {
         type Value = Value;
@@ -417,10 +417,13 @@ pub fn json(bytes: &[u8]) -> Result<Value, String> {
             d.deserialize_any(Strict).map(StrictValue)
         }
     }
+    d.deserialize_any(Strict)
+}
+pub fn json(bytes: &[u8]) -> Result<Value, String> {
     let mut d = serde_json::Deserializer::from_slice(bytes);
-    let v = StrictValue::deserialize(&mut d).map_err(|e| e.to_string())?;
+    let v = strict_json_value(&mut d).map_err(|e| e.to_string())?;
     d.end().map_err(|e| e.to_string())?;
-    Ok(v.0)
+    Ok(v)
 }
 pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
     serde_json::from_value(json(bytes)?).map_err(|e| e.to_string())

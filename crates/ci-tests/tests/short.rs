@@ -402,14 +402,17 @@ impl Drop for ShortHost {
             fs::create_dir_all(&directory)?;
             let owner = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
                 .map_err(std::io::Error::other)?;
-            let publication = chrono_harness::retained_artifacts::retention::create_adopted(
-                &owner,
-                "ci-fixture",
-                &target,
-                true,
-                json!({"test_outcome":"failed","capture":"started"}),
-            )
-            .map_err(std::io::Error::other)?;
+            let publication =
+                chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+                    &owner,
+                    "ci-fixture",
+                    &target,
+                    true,
+                    json!({"test_outcome":"failed","capture":"started"}),
+                    None,
+                    "fixture-recheck",
+                )
+                .map_err(std::io::Error::other)?;
             copy(
                 &self.root.join(".chrono-harness/state"),
                 &target,

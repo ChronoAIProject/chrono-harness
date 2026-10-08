@@ -22,15 +22,17 @@ impl Host {
             chrono_harness::retained_artifacts::retention::unique_path(&retained, "cache-", "")
                 .unwrap();
         let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let publication = chrono_harness::retained_artifacts::retention::create_adopted_with_limit(
-            &root,
-            "cache-fixture",
-            &container,
-            true,
-            json!({"test_outcome":"not-established"}),
-            Some(32 * 1024 * 1024),
-        )
-        .unwrap();
+        let publication =
+            chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+                &root,
+                "cache-fixture",
+                &container,
+                true,
+                json!({"test_outcome":"not-established"}),
+                Some(32 * 1024 * 1024),
+                "fixture-recheck",
+            )
+            .unwrap();
         let directory = tempfile::tempdir_in(&container).unwrap();
         Self(Some(directory), publication)
     }
@@ -70,7 +72,14 @@ impl Drop for Host {
             }
         }
         if let Some(publication) = self.1.take() {
-            if let Err(error) = publication.complete(json!({"test_outcome":if std::thread::panicking() {"failed"} else {"completed"},"original_results":"fixture files authoritative"})) {
+            let consumer = format!("fixture-recheck:{}", publication.id());
+            let outcome = json!({"test_outcome":if std::thread::panicking() {"failed"} else {"completed"},"original_results":"fixture files authoritative"});
+            let result = if std::thread::panicking() {
+                publication.complete(outcome)
+            } else {
+                publication.complete_releasing_consumer(outcome, &consumer)
+            };
+            if let Err(error) = result {
                 eprintln!("Cache fixture lifetime publication failed: {error}");
             }
         }
@@ -140,6 +149,7 @@ fn plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
 fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     let (root, mut config) = fixture();
     let retained = root.path().to_path_buf();
+    let publication_id = root.1.as_ref().map(|p| p.id().to_owned());
     config["inputs"]["compiler"] = json!({"kind":"command","command":{
         "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":["exit"],"env":{},
         "timeout_seconds":5,"output_limit_bytes":4096},"inherit":[],"result":"stdout"});
@@ -147,6 +157,16 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
         plan(root.path(), &config, "check.one").unwrap();
     });
     assert!(failure.is_err());
+    let owner = publication_id.as_ref().map(|_| {
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(
+            &fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap(),
+        )
+        .unwrap()
+        .unwrap()
+    });
+    let reader = publication_id
+        .as_ref()
+        .map(|id| owner.as_ref().unwrap().consume(id).unwrap());
     let original: Value =
         serde_json::from_slice(&fs::read(retained.join("failed-plan.json")).unwrap()).unwrap();
     assert_eq!(original["consumer"], "check.one");
@@ -156,6 +176,15 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     assert_eq!(process["exit_code"], 7);
     assert_eq!(process["failure"], Value::Null);
     assert_eq!(process["stderr"], "original probe failure\n");
+    // The real expected-failure recheck has now consumed and verified its originals.
+    // Keep the failed producer outcome; release only this completed consumer.
+    drop(reader);
+    if let Some(id) = publication_id {
+        owner
+            .unwrap()
+            .reference(&format!("consumer:fixture-recheck:{id}"), &[])
+            .unwrap();
+    }
     fs::remove_dir_all(retained).unwrap();
 
     let successful = Host::new();
@@ -1062,11 +1091,31 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         "args":["file",compiler],"env":{},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"file-path"});
     let first = plan(root.path(), &config, "check.one").unwrap();
+    let reader = root.1.as_ref().map(|p| {
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(
+            &fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap(),
+        )
+        .unwrap()
+        .unwrap()
+        .consume(p.id())
+        .unwrap()
+    });
+    let recheck = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(
-        first,
-        plan(root.path(), &config, "check.one").unwrap(),
+        first["caches"], recheck["caches"],
         "evidence times must not change keys"
     );
+    assert_eq!(
+        first["inputs"]["compiler"]["observation"]["file"],
+        recheck["inputs"]["compiler"]["observation"]["file"]
+    );
+    if reader.is_some() {
+        assert_ne!(
+            first["inputs"]["compiler"]["original"], recheck["inputs"]["compiler"]["original"],
+            "different actual ownership transfers keep independent original receipts"
+        );
+    }
+    drop(reader);
     root.write(&compiler, b"compiler-two").unwrap();
     let next = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(

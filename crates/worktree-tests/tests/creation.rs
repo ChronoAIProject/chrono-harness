@@ -76,14 +76,17 @@ impl Drop for Host {
         ));
         let retain = || -> std::io::Result<()> {
             fs::create_dir_all(&directory)?;
-            let publication = chrono_harness::retained_artifacts::retention::create_adopted(
-                &source(),
-                "worktree-fixture",
-                &destination,
-                true,
-                value!({"producer":"worktree fixture capture","outcome":"not-established"}),
-            )
-            .map_err(std::io::Error::other)?;
+            let publication =
+                chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+                    &source(),
+                    "worktree-fixture",
+                    &destination,
+                    true,
+                    value!({"producer":"worktree fixture capture","outcome":"not-established"}),
+                    None,
+                    "fixture-recheck",
+                )
+                .map_err(std::io::Error::other)?;
             retain_fixture_state(
                 &self.root.join(".chrono-harness/state"),
                 &destination.join("coordinator-state"),
@@ -128,7 +131,14 @@ impl Drop for Host {
                 }
             }
             if let Some(publication) = publication {
-                publication.complete(value!({"capture":"completed","test_outcome":if std::thread::panicking() {"failed"} else {"original reports authoritative"}})).map_err(std::io::Error::other)?;
+                let consumer = format!("fixture-recheck:{}", publication.id());
+                let outcome = value!({"capture":"completed","test_outcome":if std::thread::panicking() {"failed"} else {"original reports authoritative"}});
+                if std::thread::panicking() {
+                    publication.complete(outcome)
+                } else {
+                    publication.complete_releasing_consumer(outcome, &consumer)
+                }
+                .map_err(std::io::Error::other)?;
             }
             Ok(())
         };

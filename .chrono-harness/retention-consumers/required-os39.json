@@ -1,0 +1,17 @@
+{
+  "schema": "chrono-retention-consumer/v1",
+  "consumer": "os39-causal-recheck",
+  "purpose": "Required original check-kDhXA0 and check-lvpNl3 report/stream closures for unresolved os39/os54 causal repair; later passing tests are not release. Source3 canonical conclusion names these exact originals.",
+  "originals": [
+    {
+      "id": "output-153",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d909cbd6ed7ed96260c32c41cc2a30d761d872419b0bc22e8e82f7415b07f3fd",
+      "identity": "16777229:2302189266:directory"
+    },
+    {
+      "id": "output-157",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-bac200ace738691359ea2c127862bc55f33423979d75f3a2c868f832a9546c35",
+      "identity": "16777229:2302537918:directory"
+    }
+  ]
+}

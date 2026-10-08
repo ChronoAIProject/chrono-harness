@@ -1,0 +1,2472 @@
+{
+  "schema": "chrono-retention-consumer/v1",
+  "consumer": "current-retention-adoption-recheck",
+  "purpose": "Current explicit repair/recheck and retention-adoption accounting of the 493 extant originals enumerated from producer inventory snapshot a6961bd289c81abe7f814987e6062ab499bfd20a9da76b303b7b94742b1418f1. Prepared/full/lifecycle report inputs are protected only within the listed originals and their existing owner closures. Caller-owned source1/2/3/4 conclusions, logs and source snapshots outside these scopes remain under their existing owners. Historical failures are not permanent roots: first account actual required originals and establish their separate recheck references, then publish genuine transition-consumer release. No original is claimed accounted by this declaration. Missing outputs need original metadata recovery, not invented input bytes.",
+  "originals": [
+    {
+      "id": "output-0FdIBI",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-02fdad09e3f880a11ac6da5977e90783211fdd38f4fda37e52d61d237e15b2e4",
+      "identity": "16777229:2299807647:directory"
+    },
+    {
+      "id": "output-0akUJd",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b9ed3bf1e560b007bc222e9f5be322629480d7a951be07fac4e29a141af56d95",
+      "identity": "16777229:2299805499:directory"
+    },
+    {
+      "id": "output-141",
+      "path": ".chrono-harness/state/ci-test-failures/6afebdc6bc6313bed329f1c8f25054d95720b478588da6dc436ef6f7c9729fae",
+      "identity": "16777229:2300545530:directory"
+    },
+    {
+      "id": "output-143",
+      "path": ".chrono-harness/state/ci-test-failures/context-MRLlAX",
+      "identity": "16777229:2300887244:directory"
+    },
+    {
+      "id": "output-144",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-0cd98ce4cc32cbd45735dc484f0ca28fb3a125c677cdfbbe065070aeeb4bca8b",
+      "identity": "16777229:2301514482:directory"
+    },
+    {
+      "id": "output-145",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d9f0b38ed01fc2830a741d2c0507350c75101556418ed6950f656feff6aaf903",
+      "identity": "16777229:2301549053:directory"
+    },
+    {
+      "id": "output-146",
+      "path": ".chrono-harness/state/preparation/registry-transport-0a0c8539a7b68d50bbe1dae9584621433425d04dbb242bba8f7451512319c9de.json",
+      "identity": "16777229:2301636886:file"
+    },
+    {
+      "id": "output-148",
+      "path": ".chrono-harness/state/migration-tests/unexpected-execution-h18X3r.json",
+      "identity": "16777229:2301733176:file"
+    },
+    {
+      "id": "output-149",
+      "path": ".chrono-harness/state/migration-tests/unexpected-execution-h18X3r.ci-test-failures",
+      "identity": "16777229:2301733583:directory"
+    },
+    {
+      "id": "output-150",
+      "path": ".chrono-harness/state/ci-test-failures/context-CwFhDH",
+      "identity": "16777229:2301735801:directory"
+    },
+    {
+      "id": "output-151",
+      "path": ".chrono-harness/state/ci-test-failures/41067c6837083dedc92985b54110136b2eee8e50517509f3cc0af342928bd829",
+      "identity": "16777229:2301806103:directory"
+    },
+    {
+      "id": "output-152",
+      "path": ".chrono-harness/state/preparation/registry-transport-e4be80c63e6249d56a7d4beb9f3fb5d3aa5c7b1b67bc420893b9d6f268494e4a.json",
+      "identity": "16777229:2301892618:file"
+    },
+    {
+      "id": "output-153",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d909cbd6ed7ed96260c32c41cc2a30d761d872419b0bc22e8e82f7415b07f3fd",
+      "identity": "16777229:2302189266:directory"
+    },
+    {
+      "id": "output-154",
+      "path": ".chrono-harness/state/preparation/registry-transport-8ef5ec9a79a5ca098917b0e289fb99779bc2fe544d3c82c9367f6a14a08542ba.json",
+      "identity": "16777229:2302201898:file"
+    },
+    {
+      "id": "output-156",
+      "path": ".chrono-harness/state/ci-test-failures/context-x87pTo",
+      "identity": "16777229:2302530894:directory"
+    },
+    {
+      "id": "output-157",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-bac200ace738691359ea2c127862bc55f33423979d75f3a2c868f832a9546c35",
+      "identity": "16777229:2302537918:directory"
+    },
+    {
+      "id": "output-158",
+      "path": ".chrono-harness/state/ci-test-failures/64ff12d27eff14d7ea83c0c66b482ed66a4c4214abe23c7ee09bed85a07dcb74",
+      "identity": "16777229:2302614814:directory"
+    },
+    {
+      "id": "output-159",
+      "path": ".chrono-harness/state/preparation/registry-transport-4b289a32cd59dc9d23e6938353eb3f4b88526d089cc0346c3a344a6944cd918e.json",
+      "identity": "16777229:2302666593:file"
+    },
+    {
+      "id": "output-160",
+      "path": ".chrono-harness/state/ci-test-failures/632e73fb0f7a6df011d680d8003e93c4aa8eb8750512ba6c73747f55c2067e94",
+      "identity": "16777229:2302695798:directory"
+    },
+    {
+      "id": "output-161",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-ba697fb8af1eb85f9db14220323ce5f7cb51de34b833bd337ab65e71d1e452d4",
+      "identity": "16777229:2303598654:directory"
+    },
+    {
+      "id": "output-162",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-494b07df5b62f1c98ae789ce3265e1da7e8472906d0b7b16b0d61269e5b4c297",
+      "identity": "16777229:2303598687:directory"
+    },
+    {
+      "id": "output-163",
+      "path": ".chrono-harness/state/preparation/registry-transport-852743ff9557e29f1023bf6381021bf44e6488bcab46b450c0fe47d2157e12ee.json",
+      "identity": "16777229:2303604411:file"
+    },
+    {
+      "id": "output-164",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-88096acc83f098f8069fa9f573d7f3e549b5bbc31a30c242e8ecb739233affc3",
+      "identity": "16777229:2303620336:directory"
+    },
+    {
+      "id": "output-166",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468117569243000-20",
+      "identity": "16777229:2303846531:directory"
+    },
+    {
+      "id": "output-167",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468117569338000-23",
+      "identity": "16777229:2303846661:directory"
+    },
+    {
+      "id": "output-168",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468118736348000-27",
+      "identity": "16777229:2303847180:directory"
+    },
+    {
+      "id": "output-169",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468119159798000-29",
+      "identity": "16777229:2303848995:directory"
+    },
+    {
+      "id": "output-16iQOh",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpOWIEjZ",
+      "identity": "16777229:2299826519:directory"
+    },
+    {
+      "id": "output-170",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468117568798000-3",
+      "identity": "16777229:2303847904:directory"
+    },
+    {
+      "id": "output-171",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468117569519000-24",
+      "identity": "16777229:2303848431:directory"
+    },
+    {
+      "id": "output-172",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468117569178000-16",
+      "identity": "16777229:2303848551:directory"
+    },
+    {
+      "id": "output-173",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468117568738000-1",
+      "identity": "16777229:2303850054:directory"
+    },
+    {
+      "id": "output-174",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468121168154000-32",
+      "identity": "16777229:2303849575:directory"
+    },
+    {
+      "id": "output-175",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468122574346000-40",
+      "identity": "16777229:2303849967:directory"
+    },
+    {
+      "id": "output-176",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468122433232000-39",
+      "identity": "16777229:2303850221:directory"
+    },
+    {
+      "id": "output-177",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468121820184000-35",
+      "identity": "16777229:2303850331:directory"
+    },
+    {
+      "id": "output-178",
+      "path": ".chrono-harness/state/cache-test-failures/cache-62918-1791468120937259000-31",
+      "identity": "16777229:2303850471:directory"
+    },
+    {
+      "id": "output-179",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059859000-22",
+      "identity": "16777229:2303980838:directory"
+    },
+    {
+      "id": "output-180",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059869000-6",
+      "identity": "16777229:2303980802:directory"
+    },
+    {
+      "id": "output-181",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059905000-20",
+      "identity": "16777229:2303980881:directory"
+    },
+    {
+      "id": "output-182",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059853000-7",
+      "identity": "16777229:2303980949:directory"
+    },
+    {
+      "id": "output-183",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059866000-19",
+      "identity": "16777229:2303981057:directory"
+    },
+    {
+      "id": "output-184",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059900000-2",
+      "identity": "16777229:2303982001:directory"
+    },
+    {
+      "id": "output-185",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059944000-15",
+      "identity": "16777229:2303981558:directory"
+    },
+    {
+      "id": "output-186",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367060697000-24",
+      "identity": "16777229:2303982025:directory"
+    },
+    {
+      "id": "output-187",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367059999000-17",
+      "identity": "16777229:2303981876:directory"
+    },
+    {
+      "id": "output-188",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468367065371000-26",
+      "identity": "16777229:2303981978:directory"
+    },
+    {
+      "id": "output-189",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468372133764000-35",
+      "identity": "16777229:2303982258:directory"
+    },
+    {
+      "id": "output-190",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468372532253000-38",
+      "identity": "16777229:2303982231:directory"
+    },
+    {
+      "id": "output-191",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468372690586000-41",
+      "identity": "16777229:2303982436:directory"
+    },
+    {
+      "id": "output-192",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468372311325000-36",
+      "identity": "16777229:2303982459:directory"
+    },
+    {
+      "id": "output-193",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468372071862000-33",
+      "identity": "16777229:2303982512:directory"
+    },
+    {
+      "id": "output-194",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468375588687000-44",
+      "identity": "16777229:2303982554:directory"
+    },
+    {
+      "id": "output-195",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468377572414000-45",
+      "identity": "16777229:2303982632:directory"
+    },
+    {
+      "id": "output-196",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468375007683000-43",
+      "identity": "16777229:2303982752:directory"
+    },
+    {
+      "id": "output-197",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468377774705000-47",
+      "identity": "16777229:2303982700:directory"
+    },
+    {
+      "id": "output-198",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468378636461000-48",
+      "identity": "16777229:2303982781:directory"
+    },
+    {
+      "id": "output-199",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468377634813000-46",
+      "identity": "16777229:2303983250:directory"
+    },
+    {
+      "id": "output-1CrZzI",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-4fd50db221b3aa6a5dd4d656b7610f3ca31563e79f66e0865314a8e163bcda2b",
+      "identity": "16777229:2299810701:directory"
+    },
+    {
+      "id": "output-1Xw8My",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-94ffa76aa8ea62c38338b10c2b490bea737e9910019d99bcb8f7bb08dc1307a0",
+      "identity": "16777229:2299807135:directory"
+    },
+    {
+      "id": "output-1qOPJ8",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-7abfca82c4d1f9635348815664aedb03960e2df70cdb47f1363338038ff54dfd",
+      "identity": "16777229:2299789127:directory"
+    },
+    {
+      "id": "output-200",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468379214091000-49",
+      "identity": "16777229:2303983647:directory"
+    },
+    {
+      "id": "output-201",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468381257066000-50",
+      "identity": "16777229:2303984091:directory"
+    },
+    {
+      "id": "output-202",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468381465252000-51",
+      "identity": "16777229:2303984157:directory"
+    },
+    {
+      "id": "output-203",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468382253453000-52",
+      "identity": "16777229:2303984520:directory"
+    },
+    {
+      "id": "output-204",
+      "path": ".chrono-harness/state/cache-test-failures/cache-1921-1791468382693920000-53",
+      "identity": "16777229:2303985575:directory"
+    },
+    {
+      "id": "output-205",
+      "path": ".chrono-harness/state/cache-test-failures/cache-12660-1791468554572462000-0",
+      "identity": "16777229:2304065681:directory"
+    },
+    {
+      "id": "output-206",
+      "path": ".chrono-harness/state/cache-test-failures/cache-12660-1791468555745736000-1",
+      "identity": "16777229:2304065956:directory"
+    },
+    {
+      "id": "output-207",
+      "path": ".chrono-harness/state/ci-test-failures/6e2b25bd10e83756f2000d35f4a2d647d4acd5c04738d59b04b727365fc02c83",
+      "identity": "16777229:2304108767:directory"
+    },
+    {
+      "id": "output-213",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262219000-3",
+      "identity": "16777229:2304557799:directory"
+    },
+    {
+      "id": "output-214",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262237000-0",
+      "identity": "16777229:2304560870:directory"
+    },
+    {
+      "id": "output-215",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262206000-21",
+      "identity": "16777229:2304558505:directory"
+    },
+    {
+      "id": "output-216",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262271000-4",
+      "identity": "16777229:2304563212:directory"
+    },
+    {
+      "id": "output-217",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262320000-13",
+      "identity": "16777229:2304560162:directory"
+    },
+    {
+      "id": "output-218",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262224000-19",
+      "identity": "16777229:2304558866:directory"
+    },
+    {
+      "id": "output-219",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895265192000-24",
+      "identity": "16777229:2304562830:directory"
+    },
+    {
+      "id": "output-220",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469900278174000-32",
+      "identity": "16777229:2304565993:directory"
+    },
+    {
+      "id": "output-221",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469900278390000-37",
+      "identity": "16777229:2304568725:directory"
+    },
+    {
+      "id": "output-222",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469895262318000-8",
+      "identity": "16777229:2304570739:directory"
+    },
+    {
+      "id": "output-223",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469900278274000-35",
+      "identity": "16777229:2304575185:directory"
+    },
+    {
+      "id": "output-224",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469900268437000-28",
+      "identity": "16777229:2304575683:directory"
+    },
+    {
+      "id": "output-225",
+      "path": ".chrono-harness/state/ci-test-failures/context-83155-1791469905327128000-0",
+      "identity": "16777229:2304578359:directory"
+    },
+    {
+      "id": "output-226",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469911914483000-43",
+      "identity": "16777229:2304583453:directory"
+    },
+    {
+      "id": "output-227",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469912563952000-44",
+      "identity": "16777229:2304583978:directory"
+    },
+    {
+      "id": "output-228",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469913940932000-45",
+      "identity": "16777229:2304584622:directory"
+    },
+    {
+      "id": "output-229",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469914820998000-46",
+      "identity": "16777229:2304584801:directory"
+    },
+    {
+      "id": "output-230",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469916290260000-47",
+      "identity": "16777229:2304585525:directory"
+    },
+    {
+      "id": "output-231",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469917728625000-48",
+      "identity": "16777229:2304586282:directory"
+    },
+    {
+      "id": "output-232",
+      "path": ".chrono-harness/state/cache-test-failures/cache-81116-1791469920576619000-49",
+      "identity": "16777229:2304586440:directory"
+    },
+    {
+      "id": "output-233",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470081646873000-9",
+      "identity": "16777229:2304607646:directory"
+    },
+    {
+      "id": "output-235",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470081646927000-13",
+      "identity": "16777229:2304607482:directory"
+    },
+    {
+      "id": "output-237",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470081647162000-17",
+      "identity": "16777229:2304608379:directory"
+    },
+    {
+      "id": "output-238",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470081646483000-21",
+      "identity": "16777229:2304608071:directory"
+    },
+    {
+      "id": "output-239",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470081646932000-11",
+      "identity": "16777229:2304608441:directory"
+    },
+    {
+      "id": "output-240",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470081646506000-16",
+      "identity": "16777229:2304608760:directory"
+    },
+    {
+      "id": "output-241",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086676362000-35",
+      "identity": "16777229:2304608549:directory"
+    },
+    {
+      "id": "output-242",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086686115000-39",
+      "identity": "16777229:2304608885:directory"
+    },
+    {
+      "id": "output-243",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086666584000-31",
+      "identity": "16777229:2304608897:directory"
+    },
+    {
+      "id": "output-244",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086660219000-30",
+      "identity": "16777229:2304608362:directory"
+    },
+    {
+      "id": "output-245",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086666908000-32",
+      "identity": "16777229:2304608472:directory"
+    },
+    {
+      "id": "output-246",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086672289000-34",
+      "identity": "16777229:2304608534:directory"
+    },
+    {
+      "id": "output-247",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086687444000-40",
+      "identity": "16777229:2304608863:directory"
+    },
+    {
+      "id": "output-248",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086659741000-29",
+      "identity": "16777229:2304608601:directory"
+    },
+    {
+      "id": "output-249",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086677343000-38",
+      "identity": "16777229:2304608753:directory"
+    },
+    {
+      "id": "output-250",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086676724000-36",
+      "identity": "16777229:2304608731:directory"
+    },
+    {
+      "id": "output-251",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470086652354000-28",
+      "identity": "16777229:2304608833:directory"
+    },
+    {
+      "id": "output-252",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470094943476000-43",
+      "identity": "16777229:2304609273:directory"
+    },
+    {
+      "id": "output-253",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470096400975000-44",
+      "identity": "16777229:2304609448:directory"
+    },
+    {
+      "id": "output-254",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470099151130000-45",
+      "identity": "16777229:2304609635:directory"
+    },
+    {
+      "id": "output-255",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470100713028000-47",
+      "identity": "16777229:2304609731:directory"
+    },
+    {
+      "id": "output-256",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470101420626000-48",
+      "identity": "16777229:2304609780:directory"
+    },
+    {
+      "id": "output-257",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470100313786000-46",
+      "identity": "16777229:2304609848:directory"
+    },
+    {
+      "id": "output-258",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470102506823000-49",
+      "identity": "16777229:2304609904:directory"
+    },
+    {
+      "id": "output-259",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470103509614000-50",
+      "identity": "16777229:2304609976:directory"
+    },
+    {
+      "id": "output-260",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470104703856000-51",
+      "identity": "16777229:2304610074:directory"
+    },
+    {
+      "id": "output-261",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470106419977000-52",
+      "identity": "16777229:2304610261:directory"
+    },
+    {
+      "id": "output-262",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470107013727000-53",
+      "identity": "16777229:2304610284:directory"
+    },
+    {
+      "id": "output-263",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470107783868000-54",
+      "identity": "16777229:2304610450:directory"
+    },
+    {
+      "id": "output-264",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470108818690000-55",
+      "identity": "16777229:2304610543:directory"
+    },
+    {
+      "id": "output-265",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470109597978000-56",
+      "identity": "16777229:2304610604:directory"
+    },
+    {
+      "id": "output-266",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470111095849000-57",
+      "identity": "16777229:2304610875:directory"
+    },
+    {
+      "id": "output-267",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470111928628000-58",
+      "identity": "16777229:2304611321:directory"
+    },
+    {
+      "id": "output-268",
+      "path": ".chrono-harness/state/cache-test-failures/cache-86629-1791470113232224000-59",
+      "identity": "16777229:2304611686:directory"
+    },
+    {
+      "id": "output-269",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220865354000-17",
+      "identity": "16777229:2304627359:directory"
+    },
+    {
+      "id": "output-26cOxX",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-3090c7b9a4401127b49a388c184e498af8db37a7211fb0e40aa9f83497bf825a",
+      "identity": "16777229:2299818464:directory"
+    },
+    {
+      "id": "output-270",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220873125000-26",
+      "identity": "16777229:2304627434:directory"
+    },
+    {
+      "id": "output-271",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864875000-8",
+      "identity": "16777229:2304627716:directory"
+    },
+    {
+      "id": "output-272",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864903000-2",
+      "identity": "16777229:2304631298:directory"
+    },
+    {
+      "id": "output-273",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864864000-12",
+      "identity": "16777229:2304629898:directory"
+    },
+    {
+      "id": "output-274",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864746000-16",
+      "identity": "16777229:2304627792:directory"
+    },
+    {
+      "id": "output-275",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864855000-1",
+      "identity": "16777229:2304630858:directory"
+    },
+    {
+      "id": "output-277",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864766000-7",
+      "identity": "16777229:2304627836:directory"
+    },
+    {
+      "id": "output-278",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864747000-20",
+      "identity": "16777229:2304627861:directory"
+    },
+    {
+      "id": "output-279",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864821000-0",
+      "identity": "16777229:2304627921:directory"
+    },
+    {
+      "id": "output-280",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220865017000-5",
+      "identity": "16777229:2304627912:directory"
+    },
+    {
+      "id": "output-281",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220865495000-21",
+      "identity": "16777229:2304628213:directory"
+    },
+    {
+      "id": "output-282",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864766000-6",
+      "identity": "16777229:2304628416:directory"
+    },
+    {
+      "id": "output-283",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220864749000-3",
+      "identity": "16777229:2304629275:directory"
+    },
+    {
+      "id": "output-284",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470220865024000-13",
+      "identity": "16777229:2304629726:directory"
+    },
+    {
+      "id": "output-285",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226174168000-35",
+      "identity": "16777229:2304630512:directory"
+    },
+    {
+      "id": "output-286",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226205933000-38",
+      "identity": "16777229:2304631358:directory"
+    },
+    {
+      "id": "output-287",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226159164000-33",
+      "identity": "16777229:2304631514:directory"
+    },
+    {
+      "id": "output-288",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226161569000-34",
+      "identity": "16777229:2304631402:directory"
+    },
+    {
+      "id": "output-289",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470224163849000-29",
+      "identity": "16777229:2304631416:directory"
+    },
+    {
+      "id": "output-290",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226181472000-36",
+      "identity": "16777229:2304631447:directory"
+    },
+    {
+      "id": "output-291",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226158328000-32",
+      "identity": "16777229:2304631938:directory"
+    },
+    {
+      "id": "output-292",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226206419000-39",
+      "identity": "16777229:2304631430:directory"
+    },
+    {
+      "id": "output-293",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470226153089000-31",
+      "identity": "16777229:2304631559:directory"
+    },
+    {
+      "id": "output-294",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470230854477000-43",
+      "identity": "16777229:2304631883:directory"
+    },
+    {
+      "id": "output-295",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470232090266000-44",
+      "identity": "16777229:2304631892:directory"
+    },
+    {
+      "id": "output-296",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470233374442000-45",
+      "identity": "16777229:2304632087:directory"
+    },
+    {
+      "id": "output-297",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470233886978000-47",
+      "identity": "16777229:2304632154:directory"
+    },
+    {
+      "id": "output-298",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470234401152000-48",
+      "identity": "16777229:2304632293:directory"
+    },
+    {
+      "id": "output-299",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470236638105000-49",
+      "identity": "16777229:2304632526:directory"
+    },
+    {
+      "id": "output-29YyTn",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-79d43709f04f903dae22c26d8992c06f1ee66b07ef04b62571755b0d6571c604",
+      "identity": "16777229:2299820670:directory"
+    },
+    {
+      "id": "output-2GsqXS",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-3ac47c850bd13ad10c88cf724fd7a8d9cc625806a4f7278a8448d7e195a08537",
+      "identity": "16777229:2299804435:directory"
+    },
+    {
+      "id": "output-2W350G",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-258955e7fc1ddd2d96ce8d7adbb59a2f56a31a944acfb5a57c6c8408307d66f6",
+      "identity": "16777229:2299800438:directory"
+    },
+    {
+      "id": "output-2l0GVZ",
+      "path": ".chrono-harness/state/cache-test-failures/.tmp0VbATK",
+      "identity": "16777229:2299826874:directory"
+    },
+    {
+      "id": "output-2tiE62",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-9096831e0e115a84622e073f5f7b0a9f4919231aa06d5a41d56f7c8ce30aadab",
+      "identity": "16777229:2299790209:directory"
+    },
+    {
+      "id": "output-300",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470237002373000-50",
+      "identity": "16777229:2304632518:directory"
+    },
+    {
+      "id": "output-301",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470233752468000-46",
+      "identity": "16777229:2304632627:directory"
+    },
+    {
+      "id": "output-302",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470239008186000-51",
+      "identity": "16777229:2304632744:directory"
+    },
+    {
+      "id": "output-303",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470240292159000-53",
+      "identity": "16777229:2304632816:directory"
+    },
+    {
+      "id": "output-304",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470240118294000-52",
+      "identity": "16777229:2304632845:directory"
+    },
+    {
+      "id": "output-305",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470241713993000-54",
+      "identity": "16777229:2304632935:directory"
+    },
+    {
+      "id": "output-306",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470241898420000-55",
+      "identity": "16777229:2304632951:directory"
+    },
+    {
+      "id": "output-307",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470243305946000-56",
+      "identity": "16777229:2304633028:directory"
+    },
+    {
+      "id": "output-308",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470243535976000-57",
+      "identity": "16777229:2304633037:directory"
+    },
+    {
+      "id": "output-309",
+      "path": ".chrono-harness/state/cache-test-failures/cache-67500-1791470244875292000-58",
+      "identity": "16777229:2304633099:directory"
+    },
+    {
+      "id": "output-311",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066076000-3",
+      "identity": "16777229:2304650596:directory"
+    },
+    {
+      "id": "output-312",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066093000-5",
+      "identity": "16777229:2304651175:directory"
+    },
+    {
+      "id": "output-314",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066069000-13",
+      "identity": "16777229:2304650738:directory"
+    },
+    {
+      "id": "output-315",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066840000-16",
+      "identity": "16777229:2304651646:directory"
+    },
+    {
+      "id": "output-318",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066501000-9",
+      "identity": "16777229:2304651137:directory"
+    },
+    {
+      "id": "output-319",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066093000-23",
+      "identity": "16777229:2304651151:directory"
+    },
+    {
+      "id": "output-31OlV7",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-f5695ef65c2c28fc609d4b1ddec5d143f0ce2fe9b83499e9d8ccaa8a14a2899e",
+      "identity": "16777229:2299818065:directory"
+    },
+    {
+      "id": "output-320",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066059000-12",
+      "identity": "16777229:2304651236:directory"
+    },
+    {
+      "id": "output-321",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066478000-8",
+      "identity": "16777229:2304651167:directory"
+    },
+    {
+      "id": "output-322",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066800000-20",
+      "identity": "16777229:2304651451:directory"
+    },
+    {
+      "id": "output-323",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066040000-14",
+      "identity": "16777229:2304651775:directory"
+    },
+    {
+      "id": "output-324",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066772000-15",
+      "identity": "16777229:2304651210:directory"
+    },
+    {
+      "id": "output-325",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066044000-1",
+      "identity": "16777229:2304651226:directory"
+    },
+    {
+      "id": "output-326",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066039000-21",
+      "identity": "16777229:2304651268:directory"
+    },
+    {
+      "id": "output-328",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066044000-22",
+      "identity": "16777229:2304651282:directory"
+    },
+    {
+      "id": "output-329",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312066616000-10",
+      "identity": "16777229:2304651897:directory"
+    },
+    {
+      "id": "output-32s4ps",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-dc0795ad235e303b9614da114534f7114a56dc5280e9773c16f908a8a051066e",
+      "identity": "16777229:2299791843:directory"
+    },
+    {
+      "id": "output-330",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470312068480000-24",
+      "identity": "16777229:2304651325:directory"
+    },
+    {
+      "id": "output-332",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470316782062000-31",
+      "identity": "16777229:2304651468:directory"
+    },
+    {
+      "id": "output-333",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470313683041000-27",
+      "identity": "16777229:2304651539:directory"
+    },
+    {
+      "id": "output-334",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317417134000-35",
+      "identity": "16777229:2304651596:directory"
+    },
+    {
+      "id": "output-335",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317644246000-38",
+      "identity": "16777229:2304651627:directory"
+    },
+    {
+      "id": "output-336",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470318299765000-42",
+      "identity": "16777229:2304651706:directory"
+    },
+    {
+      "id": "output-337",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470316367838000-30",
+      "identity": "16777229:2304651718:directory"
+    },
+    {
+      "id": "output-338",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470318221103000-41",
+      "identity": "16777229:2304651925:directory"
+    },
+    {
+      "id": "output-339",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317608292000-37",
+      "identity": "16777229:2304651761:directory"
+    },
+    {
+      "id": "output-340",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317406592000-34",
+      "identity": "16777229:2304652043:directory"
+    },
+    {
+      "id": "output-341",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317441266000-36",
+      "identity": "16777229:2304651887:directory"
+    },
+    {
+      "id": "output-342",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470318104558000-40",
+      "identity": "16777229:2304651828:directory"
+    },
+    {
+      "id": "output-343",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317364924000-33",
+      "identity": "16777229:2304651840:directory"
+    },
+    {
+      "id": "output-344",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317935807000-39",
+      "identity": "16777229:2304652055:directory"
+    },
+    {
+      "id": "output-345",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470317336952000-32",
+      "identity": "16777229:2304651944:directory"
+    },
+    {
+      "id": "output-346",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470318591070000-43",
+      "identity": "16777229:2304651988:directory"
+    },
+    {
+      "id": "output-347",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470322052648000-47",
+      "identity": "16777229:2304652086:directory"
+    },
+    {
+      "id": "output-348",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470322979113000-48",
+      "identity": "16777229:2304652108:directory"
+    },
+    {
+      "id": "output-349",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470321784647000-46",
+      "identity": "16777229:2304652287:directory"
+    },
+    {
+      "id": "output-350",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470323641031000-49",
+      "identity": "16777229:2304652182:directory"
+    },
+    {
+      "id": "output-351",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470321705497000-45",
+      "identity": "16777229:2304652522:directory"
+    },
+    {
+      "id": "output-352",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470323820298000-50",
+      "identity": "16777229:2304652239:directory"
+    },
+    {
+      "id": "output-353",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470324489004000-51",
+      "identity": "16777229:2304652268:directory"
+    },
+    {
+      "id": "output-354",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470325128467000-52",
+      "identity": "16777229:2304652411:directory"
+    },
+    {
+      "id": "output-355",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470321319589000-44",
+      "identity": "16777229:2304652333:directory"
+    },
+    {
+      "id": "output-356",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470326008322000-54",
+      "identity": "16777229:2304652398:directory"
+    },
+    {
+      "id": "output-357",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470325830447000-53",
+      "identity": "16777229:2304652462:directory"
+    },
+    {
+      "id": "output-358",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470326186592000-55",
+      "identity": "16777229:2304652487:directory"
+    },
+    {
+      "id": "output-359",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470327612539000-56",
+      "identity": "16777229:2304652580:directory"
+    },
+    {
+      "id": "output-360",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470327805854000-57",
+      "identity": "16777229:2304652611:directory"
+    },
+    {
+      "id": "output-361",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470328506642000-58",
+      "identity": "16777229:2304652656:directory"
+    },
+    {
+      "id": "output-362",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470328708176000-59",
+      "identity": "16777229:2304652684:directory"
+    },
+    {
+      "id": "output-363",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470329500205000-60",
+      "identity": "16777229:2304652741:directory"
+    },
+    {
+      "id": "output-364",
+      "path": ".chrono-harness/state/cache-test-failures/cache-32034-1791470330120484000-61",
+      "identity": "16777229:2304652778:directory"
+    },
+    {
+      "id": "output-365",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442557256000-11",
+      "identity": "16777229:2304680109:directory"
+    },
+    {
+      "id": "output-366",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442556866000-4",
+      "identity": "16777229:2304679043:directory"
+    },
+    {
+      "id": "output-369",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442556584000-2",
+      "identity": "16777229:2304679656:directory"
+    },
+    {
+      "id": "output-370",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442557242000-6",
+      "identity": "16777229:2304680002:directory"
+    },
+    {
+      "id": "output-371",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442556555000-3",
+      "identity": "16777229:2304680054:directory"
+    },
+    {
+      "id": "output-372",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470444267963000-27",
+      "identity": "16777229:2304680446:directory"
+    },
+    {
+      "id": "output-373",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442557789000-17",
+      "identity": "16777229:2304680221:directory"
+    },
+    {
+      "id": "output-374",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442557056000-10",
+      "identity": "16777229:2304680664:directory"
+    },
+    {
+      "id": "output-375",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442556559000-7",
+      "identity": "16777229:2304680401:directory"
+    },
+    {
+      "id": "output-376",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442557265000-12",
+      "identity": "16777229:2304680520:directory"
+    },
+    {
+      "id": "output-378",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442557248000-9",
+      "identity": "16777229:2304680588:directory"
+    },
+    {
+      "id": "output-379",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470445481342000-28",
+      "identity": "16777229:2304680760:directory"
+    },
+    {
+      "id": "output-380",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470442562235000-26",
+      "identity": "16777229:2304680646:directory"
+    },
+    {
+      "id": "output-382",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448052938000-42",
+      "identity": "16777229:2304681698:directory"
+    },
+    {
+      "id": "output-383",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470447985704000-33",
+      "identity": "16777229:2304681644:directory"
+    },
+    {
+      "id": "output-385",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470447988451000-34",
+      "identity": "16777229:2304681415:directory"
+    },
+    {
+      "id": "output-386",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448041839000-39",
+      "identity": "16777229:2304680974:directory"
+    },
+    {
+      "id": "output-387",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448042992000-40",
+      "identity": "16777229:2304681369:directory"
+    },
+    {
+      "id": "output-388",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448441592000-43",
+      "identity": "16777229:2304681478:directory"
+    },
+    {
+      "id": "output-389",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448041089000-38",
+      "identity": "16777229:2304681341:directory"
+    },
+    {
+      "id": "output-390",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448051528000-41",
+      "identity": "16777229:2304681285:directory"
+    },
+    {
+      "id": "output-391",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470451216658000-45",
+      "identity": "16777229:2304681789:directory"
+    },
+    {
+      "id": "output-392",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470447084698000-29",
+      "identity": "16777229:2304681460:directory"
+    },
+    {
+      "id": "output-393",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448028261000-37",
+      "identity": "16777229:2304681526:directory"
+    },
+    {
+      "id": "output-394",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470448011162000-36",
+      "identity": "16777229:2304681583:directory"
+    },
+    {
+      "id": "output-395",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470451870853000-46",
+      "identity": "16777229:2304682005:directory"
+    },
+    {
+      "id": "output-396",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470447996521000-35",
+      "identity": "16777229:2304681658:directory"
+    },
+    {
+      "id": "output-397",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470453736697000-47",
+      "identity": "16777229:2304681740:directory"
+    },
+    {
+      "id": "output-398",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470454481273000-48",
+      "identity": "16777229:2304681779:directory"
+    },
+    {
+      "id": "output-399",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470455301277000-49",
+      "identity": "16777229:2304681862:directory"
+    },
+    {
+      "id": "output-3nw1Fr",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-72ffb2eddb1f6f3638c9b45bf153e72f433af200d6c86f0596b35ac55d494689",
+      "identity": "16777229:2299819004:directory"
+    },
+    {
+      "id": "output-400",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470455550292000-50",
+      "identity": "16777229:2304681852:directory"
+    },
+    {
+      "id": "output-401",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470456218739000-51",
+      "identity": "16777229:2304681942:directory"
+    },
+    {
+      "id": "output-402",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470456803454000-53",
+      "identity": "16777229:2304681995:directory"
+    },
+    {
+      "id": "output-403",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470456388416000-52",
+      "identity": "16777229:2304682067:directory"
+    },
+    {
+      "id": "output-404",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470456970700000-54",
+      "identity": "16777229:2304682039:directory"
+    },
+    {
+      "id": "output-405",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470457883655000-56",
+      "identity": "16777229:2304682101:directory"
+    },
+    {
+      "id": "output-406",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470457140501000-55",
+      "identity": "16777229:2304682142:directory"
+    },
+    {
+      "id": "output-407",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470458477678000-57",
+      "identity": "16777229:2304682186:directory"
+    },
+    {
+      "id": "output-408",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470459239125000-58",
+      "identity": "16777229:2304682216:directory"
+    },
+    {
+      "id": "output-409",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470460084600000-60",
+      "identity": "16777229:2304682260:directory"
+    },
+    {
+      "id": "output-41",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpnGydR1",
+      "identity": "16777229:2300039069:directory"
+    },
+    {
+      "id": "output-410",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470460255516000-61",
+      "identity": "16777229:2304682288:directory"
+    },
+    {
+      "id": "output-411",
+      "path": ".chrono-harness/state/cache-test-failures/cache-29262-1791470459413459000-59",
+      "identity": "16777229:2304682316:directory"
+    },
+    {
+      "id": "output-412",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572550163000-26",
+      "identity": "16777229:2304719271:directory"
+    },
+    {
+      "id": "output-415",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540425000-19",
+      "identity": "16777229:2304718974:directory"
+    },
+    {
+      "id": "output-417",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540733000-6",
+      "identity": "16777229:2304719080:directory"
+    },
+    {
+      "id": "output-419",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540655000-1",
+      "identity": "16777229:2304719178:directory"
+    },
+    {
+      "id": "output-420",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572542197000-22",
+      "identity": "16777229:2304719392:directory"
+    },
+    {
+      "id": "output-421",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540442000-21",
+      "identity": "16777229:2304719280:directory"
+    },
+    {
+      "id": "output-423",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540878000-14",
+      "identity": "16777229:2304719767:directory"
+    },
+    {
+      "id": "output-424",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470576659847000-27",
+      "identity": "16777229:2304719622:directory"
+    },
+    {
+      "id": "output-425",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540740000-7",
+      "identity": "16777229:2304719442:directory"
+    },
+    {
+      "id": "output-426",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540404000-18",
+      "identity": "16777229:2304719313:directory"
+    },
+    {
+      "id": "output-427",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540946000-4",
+      "identity": "16777229:2304719471:directory"
+    },
+    {
+      "id": "output-428",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470572540742000-24",
+      "identity": "16777229:2304719819:directory"
+    },
+    {
+      "id": "output-429",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579109467000-31",
+      "identity": "16777229:2304719631:directory"
+    },
+    {
+      "id": "output-430",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579156776000-32",
+      "identity": "16777229:2304719532:directory"
+    },
+    {
+      "id": "output-431",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470580319553000-41",
+      "identity": "16777229:2304719614:directory"
+    },
+    {
+      "id": "output-432",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579211286000-33",
+      "identity": "16777229:2304719689:directory"
+    },
+    {
+      "id": "output-433",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579269102000-38",
+      "identity": "16777229:2304719733:directory"
+    },
+    {
+      "id": "output-434",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579265504000-37",
+      "identity": "16777229:2304719724:directory"
+    },
+    {
+      "id": "output-435",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579269574000-39",
+      "identity": "16777229:2304719754:directory"
+    },
+    {
+      "id": "output-436",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579217262000-34",
+      "identity": "16777229:2304720054:directory"
+    },
+    {
+      "id": "output-437",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470578219364000-29",
+      "identity": "16777229:2304719898:directory"
+    },
+    {
+      "id": "output-438",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470580412660000-42",
+      "identity": "16777229:2304719887:directory"
+    },
+    {
+      "id": "output-439",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470580443039000-43",
+      "identity": "16777229:2304719789:directory"
+    },
+    {
+      "id": "output-440",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579600963000-40",
+      "identity": "16777229:2304719831:directory"
+    },
+    {
+      "id": "output-441",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470578951331000-30",
+      "identity": "16777229:2304719850:directory"
+    },
+    {
+      "id": "output-442",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470579243366000-36",
+      "identity": "16777229:2304719943:directory"
+    },
+    {
+      "id": "output-443",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470583961252000-46",
+      "identity": "16777229:2304719934:directory"
+    },
+    {
+      "id": "output-444",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470582612552000-45",
+      "identity": "16777229:2304720040:directory"
+    },
+    {
+      "id": "output-445",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470586957795000-49",
+      "identity": "16777229:2304720148:directory"
+    },
+    {
+      "id": "output-446",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470585652111000-47",
+      "identity": "16777229:2304720121:directory"
+    },
+    {
+      "id": "output-447",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470585869238000-48",
+      "identity": "16777229:2304720236:directory"
+    },
+    {
+      "id": "output-448",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470587760802000-50",
+      "identity": "16777229:2304720212:directory"
+    },
+    {
+      "id": "output-449",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470588663650000-51",
+      "identity": "16777229:2304720203:directory"
+    },
+    {
+      "id": "output-450",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470589813102000-53",
+      "identity": "16777229:2304720309:directory"
+    },
+    {
+      "id": "output-451",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470589056686000-52",
+      "identity": "16777229:2304720344:directory"
+    },
+    {
+      "id": "output-452",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470590049861000-54",
+      "identity": "16777229:2304720387:directory"
+    },
+    {
+      "id": "output-453",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470590853968000-55",
+      "identity": "16777229:2304720421:directory"
+    },
+    {
+      "id": "output-454",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470591074599000-56",
+      "identity": "16777229:2304720461:directory"
+    },
+    {
+      "id": "output-455",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470591848331000-58",
+      "identity": "16777229:2304720503:directory"
+    },
+    {
+      "id": "output-456",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470591323818000-57",
+      "identity": "16777229:2304720530:directory"
+    },
+    {
+      "id": "output-457",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470593213557000-59",
+      "identity": "16777229:2304720581:directory"
+    },
+    {
+      "id": "output-458",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470593600953000-60",
+      "identity": "16777229:2304720612:directory"
+    },
+    {
+      "id": "output-459",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470594410374000-61",
+      "identity": "16777229:2304720658:directory"
+    },
+    {
+      "id": "output-460",
+      "path": ".chrono-harness/state/cache-test-failures/cache-7286-1791470595290909000-62",
+      "identity": "16777229:2304720693:directory"
+    },
+    {
+      "id": "output-461",
+      "path": ".chrono-harness/state/preparation/registry-transport-f5ec9245f25ecd0b4bec902ab86f5cf665c1f7dfa35c82aa7a80223ce368dc67.json",
+      "identity": "16777229:2304802462:file"
+    },
+    {
+      "id": "output-463",
+      "path": ".chrono-harness/state/ci-test-failures/context-35336-1791470981054099000-0",
+      "identity": "16777229:2304838765:directory"
+    },
+    {
+      "id": "output-464",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040877000-20",
+      "identity": "16777229:2307498434:directory"
+    },
+    {
+      "id": "output-465",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040902000-0",
+      "identity": "16777229:2307498482:directory"
+    },
+    {
+      "id": "output-466",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040906000-1",
+      "identity": "16777229:2307498493:directory"
+    },
+    {
+      "id": "output-467",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040882000-19",
+      "identity": "16777229:2307498528:directory"
+    },
+    {
+      "id": "output-469",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040926000-2",
+      "identity": "16777229:2307498648:directory"
+    },
+    {
+      "id": "output-470",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040878000-15",
+      "identity": "16777229:2307499691:directory"
+    },
+    {
+      "id": "output-471",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040876000-13",
+      "identity": "16777229:2307498756:directory"
+    },
+    {
+      "id": "output-472",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479080590655000-27",
+      "identity": "16777229:2307498803:directory"
+    },
+    {
+      "id": "output-473",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040906000-23",
+      "identity": "16777229:2307499427:directory"
+    },
+    {
+      "id": "output-475",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079047242000-25",
+      "identity": "16777229:2307498880:directory"
+    },
+    {
+      "id": "output-476",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040898000-9",
+      "identity": "16777229:2307499611:directory"
+    },
+    {
+      "id": "output-477",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040927000-21",
+      "identity": "16777229:2307498932:directory"
+    },
+    {
+      "id": "output-478",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040876000-7",
+      "identity": "16777229:2307499168:directory"
+    },
+    {
+      "id": "output-479",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040901000-4",
+      "identity": "16777229:2307499662:directory"
+    },
+    {
+      "id": "output-480",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479083265367000-31",
+      "identity": "16777229:2307499064:directory"
+    },
+    {
+      "id": "output-481",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479079040884000-18",
+      "identity": "16777229:2307499196:directory"
+    },
+    {
+      "id": "output-482",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479084290320000-37",
+      "identity": "16777229:2307499316:directory"
+    },
+    {
+      "id": "output-483",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479083085272000-30",
+      "identity": "16777229:2307499359:directory"
+    },
+    {
+      "id": "output-484",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479084329898000-43",
+      "identity": "16777229:2307499494:directory"
+    },
+    {
+      "id": "output-485",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479082127756000-28",
+      "identity": "16777229:2307499565:directory"
+    },
+    {
+      "id": "output-486",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479084310901000-40",
+      "identity": "16777229:2307499772:directory"
+    },
+    {
+      "id": "output-487",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479084273414000-35",
+      "identity": "16777229:2307500251:directory"
+    },
+    {
+      "id": "output-488",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479084323414000-41",
+      "identity": "16777229:2307501265:directory"
+    },
+    {
+      "id": "output-489",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479083980128000-34",
+      "identity": "16777229:2307500982:directory"
+    },
+    {
+      "id": "output-490",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479084310851000-39",
+      "identity": "16777229:2307502055:directory"
+    },
+    {
+      "id": "output-491",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479086812815000-44",
+      "identity": "16777229:2307501182:directory"
+    },
+    {
+      "id": "output-492",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479088167007000-46",
+      "identity": "16777229:2307501513:directory"
+    },
+    {
+      "id": "output-493",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479087897491000-45",
+      "identity": "16777229:2307501303:directory"
+    },
+    {
+      "id": "output-494",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479089015968000-48",
+      "identity": "16777229:2307501441:directory"
+    },
+    {
+      "id": "output-495",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479088349789000-47",
+      "identity": "16777229:2307501782:directory"
+    },
+    {
+      "id": "output-496",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479090667113000-50",
+      "identity": "16777229:2307501927:directory"
+    },
+    {
+      "id": "output-497",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479090206847000-49",
+      "identity": "16777229:2307502123:directory"
+    },
+    {
+      "id": "output-498",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479091584619000-52",
+      "identity": "16777229:2307502216:directory"
+    },
+    {
+      "id": "output-499",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479090851565000-51",
+      "identity": "16777229:2307502237:directory"
+    },
+    {
+      "id": "output-500",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479092885278000-53",
+      "identity": "16777229:2307502284:directory"
+    },
+    {
+      "id": "output-501",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479093240987000-54",
+      "identity": "16777229:2307502314:directory"
+    },
+    {
+      "id": "output-502",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479093973057000-55",
+      "identity": "16777229:2307502651:directory"
+    },
+    {
+      "id": "output-503",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479094163151000-56",
+      "identity": "16777229:2307502788:directory"
+    },
+    {
+      "id": "output-504",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479094755514000-57",
+      "identity": "16777229:2307502855:directory"
+    },
+    {
+      "id": "output-505",
+      "path": ".chrono-harness/state/cache-test-failures/cache-84185-1791479095359364000-58",
+      "identity": "16777229:2307503174:directory"
+    },
+    {
+      "id": "output-506",
+      "path": ".chrono-harness/state/cache-test-failures/cache-5972-1791479184326341000-6",
+      "identity": "16777229:2307538176:directory"
+    },
+    {
+      "id": "output-507",
+      "path": ".chrono-harness/state/cache-test-failures/cache-5972-1791479184326408000-10",
+      "identity": "16777229:2307540015:directory"
+    },
+    {
+      "id": "output-508",
+      "path": ".chrono-harness/state/cache-test-failures/cache-5972-1791479184326396000-22",
+      "identity": "16777229:2307539017:directory"
+    },
+    {
+      "id": "output-509",
+      "path": ".chrono-harness/state/cache-test-failures/cache-5972-1791479184327132000-24",
+      "identity": "16777229:2307539303:directory"
+    },
+    {
+      "id": "output-510",
+      "path": ".chrono-harness/state/cache-test-failures/cache-5972-1791479184326324000-9",
+      "identity": "16777229:2307539456:directory"
+    },
+    {
+      "id": "output-511",
+      "path": ".chrono-harness/state/cache-test-failures/cache-5972-1791479184326658000-20",
+      "identity": "16777229:2307539555:directory"
+    },
+    {
+      "id": "output-58kQ9A",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-f91708fa96201dea23510376b450cd50f34e71c61e5252a75f6ad61d9e91645f",
+      "identity": "16777229:2299822068:directory"
+    },
+    {
+      "id": "output-62V5rX",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-a931a7db71cf962e706fe4b01250d4c2a908ec84afeec4b0bf904095d445a055",
+      "identity": "16777229:2299790381:directory"
+    },
+    {
+      "id": "output-6DhAlu",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-382a0114bf1f8daa13933896ac430adf5bbca3a3e584318791c8130875c09961",
+      "identity": "16777229:2299802819:directory"
+    },
+    {
+      "id": "output-7KCAsX",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-6dc2c1dacf446c006bd9c7691b7b392fae869fca06be2492743e4a4bb30ee424",
+      "identity": "16777229:2299866402:directory"
+    },
+    {
+      "id": "output-7YxCMV",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpv4fhX6",
+      "identity": "16777229:2299826488:directory"
+    },
+    {
+      "id": "output-7o1fVg",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-efd5621d209d18ae4ccf9bc6854f364450827734715bed1a80f5cde064a82393",
+      "identity": "16777229:2299803966:directory"
+    },
+    {
+      "id": "output-87oclz",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-267f9881d3077132db57fd03a36b9e7163a49e096a327a2ae7b91eb50fffe847",
+      "identity": "16777229:2299817862:directory"
+    },
+    {
+      "id": "output-A2K0gK",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-234f17ccb9a1b6b39f3c50d3c2bf22ea4f752ecc348b7cf9d0f34706b9198191",
+      "identity": "16777229:2299791781:directory"
+    },
+    {
+      "id": "output-Aso8RI",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpapilmf",
+      "identity": "16777229:2299826565:directory"
+    },
+    {
+      "id": "output-AwRPxs",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-7688a35cc56ac3e6e0018181043e3eb0098d5af4d877f750e00336e8958e0a3e",
+      "identity": "16777229:2299801679:directory"
+    },
+    {
+      "id": "output-C9sYJS",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpJbS0bP",
+      "identity": "16777229:2299826480:directory"
+    },
+    {
+      "id": "output-CD47Ph",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b2ad16c4e601103322707eef600677605a02f07e5c65c835aaced49fee288e90",
+      "identity": "16777229:2299790232:directory"
+    },
+    {
+      "id": "output-Cq9L0Z",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-50b01d1d6f06661ca7ce7b7c8e4b33b05586a6ccfae2e63584c706a218cec505",
+      "identity": "16777229:2299817206:directory"
+    },
+    {
+      "id": "output-D6q5B8",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-69934b68e66e621d29c576e0bfdcbd89a70bd9bdc75b4c0f6d3a9ec4695ca80a",
+      "identity": "16777229:2299797708:directory"
+    },
+    {
+      "id": "output-D79JQp",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-c354074ed30c697ce3193aaf3945b1c0940ed87a2705ee8cd0aabfa8ed2bcaff",
+      "identity": "16777229:2299806234:directory"
+    },
+    {
+      "id": "output-FJG8zh",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e07b102ea4fecb9e8ec2dd95760651b4b1bd07c0b9cddef9415a898e4d7272ef",
+      "identity": "16777229:2299808062:directory"
+    },
+    {
+      "id": "output-FbjCjI",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-92befa07216c8780fc00f392cb0a02f06df4ddc9db4769ad2ecef87fc01f41cb",
+      "identity": "16777229:2299789239:directory"
+    },
+    {
+      "id": "output-G2ajYp",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-af1487c870ee0a1458e31113a655306484a807eefedb4e692f99b0ea13276646",
+      "identity": "16777229:2299817209:directory"
+    },
+    {
+      "id": "output-GqpTbB",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b726b4eb56a37de750d2dc87cc60f564ed6d5b220ff91e6502318bb7d1ec7042",
+      "identity": "16777229:2299824119:directory"
+    },
+    {
+      "id": "output-HGNXUu",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpqr8mpH",
+      "identity": "16777229:2299826615:directory"
+    },
+    {
+      "id": "output-HIP0XH",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e5a0bda320510a0d461d8ed01b73df18e37b8d76bd88c3297cf261bacd270f70",
+      "identity": "16777229:2299816272:directory"
+    },
+    {
+      "id": "output-Hi3eao",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-267354da16756055f529f14df6e137c183d1bed274cbc5c11d28215a546a3d88",
+      "identity": "16777229:2299807598:directory"
+    },
+    {
+      "id": "output-IMpMJj",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b48b4efc2f9973931c7f3dd2ef723af9b3a4d8210f8386ffdc613a8db48dc4cc",
+      "identity": "16777229:2299789316:directory"
+    },
+    {
+      "id": "output-JnVU41",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-15dbe7ad4ed5713bd8d086199ee78e30d053801721a433ff11bda70292a1a18f",
+      "identity": "16777229:2299788471:directory"
+    },
+    {
+      "id": "output-K1OW8o",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-74e6581867738fd468b138652a622ad39f370bf08c21112991a37ccd101d1264",
+      "identity": "16777229:2299823671:directory"
+    },
+    {
+      "id": "output-K3zMSx",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-7dfeb524256f14911c030c7a4e90ad46608305c808000764e60d11cace09a5e5",
+      "identity": "16777229:2299789348:directory"
+    },
+    {
+      "id": "output-K6EmN3",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b40f03cbe94e4c1f4faf1cfe2317d80e5d8e74bf278c0c64b9ef1a2992e9a3f3",
+      "identity": "16777229:2299806617:directory"
+    },
+    {
+      "id": "output-KMIjCh",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpIxxNSQ",
+      "identity": "16777229:2299826743:directory"
+    },
+    {
+      "id": "output-LKVAem",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e3b153db87e6356578932ca4a225bd4fc230a687884d53838355d4a4199e0397",
+      "identity": "16777229:2299814275:directory"
+    },
+    {
+      "id": "output-LTa2U0",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-9d7a3dc566aeda144a8d2510dade0010f28f94f7f8a3d158d38fa6bb9a31b9f9",
+      "identity": "16777229:2299810690:directory"
+    },
+    {
+      "id": "output-LvU0u6",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpv9qBuh",
+      "identity": "16777229:2299826860:directory"
+    },
+    {
+      "id": "output-M9d762",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-57bb3602891923fdb8fe6e124848151c3e3b4ffc8d21a392001d381fd0013077",
+      "identity": "16777229:2299821875:directory"
+    },
+    {
+      "id": "output-MLrl8c",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-335e43f08871a7a52037927f90e6eddf92cc65aeafc7ced1aff0b290fa62099d",
+      "identity": "16777229:2299811440:directory"
+    },
+    {
+      "id": "output-NMG0Dq",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-ec46f526e1287eadd7df7e6eb7807ebdc8563287ab7a292ca0fae564c7292aa9",
+      "identity": "16777229:2299823229:directory"
+    },
+    {
+      "id": "output-NWWtCu",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-daa427fb1737e1a88340c955b9c8056399392e2737c9d506942a641b8e0fa6b6",
+      "identity": "16777229:2299800659:directory"
+    },
+    {
+      "id": "output-Nm32p6",
+      "path": ".chrono-harness/state/cache-test-failures/.tmp6zTsJV",
+      "identity": "16777229:2299826827:directory"
+    },
+    {
+      "id": "output-NupfNe",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-f7382fb4a3afa3b01d58deca225caff4d2cd3a5eb85097f179ea7665948e9eca",
+      "identity": "16777229:2299824045:directory"
+    },
+    {
+      "id": "output-Nv8Z2Y",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-3337247467b3b61307473eec6fbdbfb45d321511038aae73610292bac8357138",
+      "identity": "16777229:2299823430:directory"
+    },
+    {
+      "id": "output-OTZOVT",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpZNqs7d",
+      "identity": "16777229:2299826626:directory"
+    },
+    {
+      "id": "output-OhX3vi",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-c11d30300f1acddc5a1dbf640a51f025c28d6121ea7ec482c8df10f3c0cec8e5",
+      "identity": "16777229:2299822768:directory"
+    },
+    {
+      "id": "output-OpTQD9",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-9e52933b0c6bf5dd483d0e09c3e58c708093f7db3a5769817cabf99693e57f63",
+      "identity": "16777229:2299788300:directory"
+    },
+    {
+      "id": "output-OqsJMz",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b10862d650f630033bd05e287d8e6516da0201073ad7182fb59d559bde894891",
+      "identity": "16777229:2299790230:directory"
+    },
+    {
+      "id": "output-PC7aTF",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-6984c74657fee03004ab83e93ef3547d2a37e017a1d2d373b035cc85e020f6c3",
+      "identity": "16777229:2299816778:directory"
+    },
+    {
+      "id": "output-QGaQEs",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-26ff6701f885353f9963345bd0bb90809740359648802521b398a33bbfc4a4bd",
+      "identity": "16777229:2299816889:directory"
+    },
+    {
+      "id": "output-Qr1oC3",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d4f23096d88bae467efe301f7b1927d600b43119927a7e6f5a84b58a0f348af3",
+      "identity": "16777229:2299817682:directory"
+    },
+    {
+      "id": "output-QwbL9C",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-9aec0dcb596dc1a9914002eff987deed6463328a50850c94459d488e5ea8b972",
+      "identity": "16777229:2299809478:directory"
+    },
+    {
+      "id": "output-RA4P8P",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-7dd45e4fbf0e579f5f401143ce82fda8301b849a7936801c8545ccf423feaf25",
+      "identity": "16777229:2299817227:directory"
+    },
+    {
+      "id": "output-RSDdu4",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-4ccda5ad0cd2e00702fc836331c5405babb5ca7a67fb0dfe31690ac93adccfd3",
+      "identity": "16777229:2299823864:directory"
+    },
+    {
+      "id": "output-S9XdxK",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpaqpplx",
+      "identity": "16777229:2299826472:directory"
+    },
+    {
+      "id": "output-SBe6Nh",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-68aa98b01c50270df5b378851588d6b3d39afec3b713c7727582fd9523ec3629",
+      "identity": "16777229:2299791015:directory"
+    },
+    {
+      "id": "output-SQQDKJ",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-8986c0172e2c41a3862e169156c7584ea69cbd278a8bd1292eb63688c03b4368",
+      "identity": "16777229:2299820711:directory"
+    },
+    {
+      "id": "output-TRWmRW",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b0b5990d7cd721fb0ce06cdf4ba5893b683b98e79f82ce5de653c808242933a5",
+      "identity": "16777229:2299823213:directory"
+    },
+    {
+      "id": "output-TTuG4Y",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-0d0919f5075da90ec14a09d6c6defd2697fa838fdcba4cfc24e52b3b8fbcf695",
+      "identity": "16777229:2299820205:directory"
+    },
+    {
+      "id": "output-TUPYQ3",
+      "path": ".chrono-harness/state/cache-test-failures/.tmphRzX6R",
+      "identity": "16777229:2299826849:directory"
+    },
+    {
+      "id": "output-TlyeS0",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-ea71101370ca92212047a0ebd5041474d3726ed56f9fb20ecf1d99a32e41c7bf",
+      "identity": "16777229:2299791746:directory"
+    },
+    {
+      "id": "output-Tqb2bg",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-cfaf3940a869eb8197bcbc241a2742a95213521296345c826cd5c1b1cc2c5812",
+      "identity": "16777229:2299803038:directory"
+    },
+    {
+      "id": "output-U94LCk",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b4714616c1f115ac25814a98fc4e5e541c3b5876e759bd5e8267e9c50efeef99",
+      "identity": "16777229:2299815072:directory"
+    },
+    {
+      "id": "output-UEvXYj",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-7cdf656d0a311e742d67dbec1e06a68b7ad2adc767111d008d0009f27764c2d6",
+      "identity": "16777229:2299819856:directory"
+    },
+    {
+      "id": "output-UjS2Ld",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-377466165d1b35a46efa43b482844a139e27742649fd75aa82f1a52593c92498",
+      "identity": "16777229:2299808376:directory"
+    },
+    {
+      "id": "output-UnWsKn",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-c38e4caf7f5fca7ab73c441d1ebf8955ca44bd697c2347ad2d0d3d3b13db994e",
+      "identity": "16777229:2299822302:directory"
+    },
+    {
+      "id": "output-VrPivk",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-28805ec00334a08150678aa662b8137aacd37836ad3c92068596342907e9eb5c",
+      "identity": "16777229:2299814972:directory"
+    },
+    {
+      "id": "output-X1yQvL",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-8745fcafe996a1f0b0f87b369d13aea936503ec0e9d35b7244038963bebf5cdb",
+      "identity": "16777229:2299809461:directory"
+    },
+    {
+      "id": "output-XRSTGt",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-de02e5a15ead1ccc0a512c8fa36fe6df3e259a0031834882f2b9cf57c7005cd1",
+      "identity": "16777229:2299790940:directory"
+    },
+    {
+      "id": "output-XS22Vb",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-287dd46f1238b4dd44cd8df32a5f0f47574536d7df8e89cf6601b54d61c6857c",
+      "identity": "16777229:2299821617:directory"
+    },
+    {
+      "id": "output-YAKIPn",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-5d4c5d05302c682e6ccdd50e9f2c84564a91007ead28dfa78073223031a531c1",
+      "identity": "16777229:2299823752:directory"
+    },
+    {
+      "id": "output-YFpb4K",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-f175f2152e0d341b192b751a447943ef48661f2558326a76b00a2d4390e34ffe",
+      "identity": "16777229:2299805092:directory"
+    },
+    {
+      "id": "output-Yu6lKM",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-2238686c3bf9f6fe0f59fc9f3f96efc3cae7c4ccfe11b8a32952382fce7ecf98",
+      "identity": "16777229:2299789346:directory"
+    },
+    {
+      "id": "output-ZBxezP",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-37d797493f96d26d0cc4b75f23b22a5294603b0dac2fe72cc6f64179ce02e884",
+      "identity": "16777229:2299789044:directory"
+    },
+    {
+      "id": "output-Zeki9X",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-530d3bdd25d679b566560691e6972a3310224f1c1fe9fbb5101fc98540a15ab3",
+      "identity": "16777229:2299806691:directory"
+    },
+    {
+      "id": "output-a2pPcS",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-17d7529209e553773b9e2ff031733840f14e23e06fedb66d0cff6c92766b9cbb",
+      "identity": "16777229:2299808546:directory"
+    },
+    {
+      "id": "output-a9YWkl",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-3b7d2611497da44cad3134e961bc65aa16beeba8b46780c574ee4476e8991e2d",
+      "identity": "16777229:2299790859:directory"
+    },
+    {
+      "id": "output-aAo167",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-1649799e927220e43ecea4c302c88f4b0df6edd9385aafcc17b896cfe3f0a869",
+      "identity": "16777229:2299799324:directory"
+    },
+    {
+      "id": "output-ahSStx",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-fc2d8790a6cd67e43105a938c5f064c11e45f0d386c0b60b08798de809a003a6",
+      "identity": "16777229:2299810285:directory"
+    },
+    {
+      "id": "output-arIEST",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d50016a053f04cbc895ed2778b285408e7b9bfe477be7a2ae4ea123e74f67154",
+      "identity": "16777229:2299791113:directory"
+    },
+    {
+      "id": "output-b7qWVJ",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-85bb723c0f35bd474cc05f988de73a0f5edaccc28a4095623bac5e2f2f7c17c4",
+      "identity": "16777229:2299803528:directory"
+    },
+    {
+      "id": "output-bDWee3",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpsJ65EN",
+      "identity": "16777229:2299826475:directory"
+    },
+    {
+      "id": "output-bJRqiO",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e339bb768c825d87e2d6c1000267141a3e1fc86ffa6ed82ddce186ae0c8e495f",
+      "identity": "16777229:2299789061:directory"
+    },
+    {
+      "id": "output-bSz8c6",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-8d6f1f5a0baafd3cf458c2d48b1324bf394d3ddc4af7fa1d18864c3410c2dbcc",
+      "identity": "16777229:2299819171:directory"
+    },
+    {
+      "id": "output-cFZFV3",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-78356c46d3a87f28981b0d68b3b6ec33d5d347f6e7a0f96bcd4827abab215a58",
+      "identity": "16777229:2299789818:directory"
+    },
+    {
+      "id": "output-cQxKkJ",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d23a6e7cc75a4e7df812b9f479c53b555e1d020405b55c4d83212fb1ef4a8cf7",
+      "identity": "16777229:2299819356:directory"
+    },
+    {
+      "id": "output-dGaGBe",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-1bd2ca86b243d30de98f1cafc2c7be79da2aa3197b2b6f6d56bb318a4a933903",
+      "identity": "16777229:2299815956:directory"
+    },
+    {
+      "id": "output-dLdbh4",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-5de0849fefffe849732e2546f4c95f48a8bef82ec54e0b1a3a3dba839b57ccf1",
+      "identity": "16777229:2299808065:directory"
+    },
+    {
+      "id": "output-dM3O9Y",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-1f137692745627a06f18aa974a313f4223f6dd2cff32798ed05bdcf96dcadae5",
+      "identity": "16777229:2299810332:directory"
+    },
+    {
+      "id": "output-daR482",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpUSJtzp",
+      "identity": "16777229:2299826710:directory"
+    },
+    {
+      "id": "output-dmXOBv",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-6ac1b13c6e4d45592f98b2837cd26cf0519209b5ffe2216a6ce1158bf5e57dcf",
+      "identity": "16777229:2299811729:directory"
+    },
+    {
+      "id": "output-e0rCvr",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-3e28af0aba1d599b110771f4e5e892bbe6b5e6661e1e3da9e23abb52ff32c89b",
+      "identity": "16777229:2299808033:directory"
+    },
+    {
+      "id": "output-eFDFO6",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-f2d647253c083768716d212346b2df89ca84f58dc274c108b1293926af8c4dd5",
+      "identity": "16777229:2299791777:directory"
+    },
+    {
+      "id": "output-eUGDis",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpf69I6k",
+      "identity": "16777229:2299826477:directory"
+    },
+    {
+      "id": "output-fkRcz6",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-da8780314b2e9ca9bbed22be0c86f0d022753f5a178ddf610b8358aeb1f0613e",
+      "identity": "16777229:2299818850:directory"
+    },
+    {
+      "id": "output-fkeEMz",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpu6L5Lp",
+      "identity": "16777229:2299826670:directory"
+    },
+    {
+      "id": "output-fobtZC",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-c6988252fb244c3ec3a60585a0af7d79957e915df9a70056fa98b92fd802c4cc",
+      "identity": "16777229:2299804349:directory"
+    },
+    {
+      "id": "output-gDmFz1",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-c85e0753cef47c1de73520f211584a1f0386fd27eeccd98db427d881b1fb6799",
+      "identity": "16777229:2299809865:directory"
+    },
+    {
+      "id": "output-hs9A7Q",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-52c431b1ddd13e321eca94db8cd0a8f9f5424f3848ce72519f7b555a6c78ecfb",
+      "identity": "16777229:2299814876:directory"
+    },
+    {
+      "id": "output-i5995f",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d7dadf10b4e813483800df3cd131cadb108b28c5057d17c06099b1fe394af33b",
+      "identity": "16777229:2299790633:directory"
+    },
+    {
+      "id": "output-i6qbwP",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-cafdd33a077c34cc09bbf98195b1f46ceafecf61f079679177def6d4f35c4082",
+      "identity": "16777229:2299823189:directory"
+    },
+    {
+      "id": "output-iqNPO4",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-eb409a1915fcf4b4d68677f0078f98efe4fbd8326f8e8fd4b2872d3857f0d63e",
+      "identity": "16777229:2299819667:directory"
+    },
+    {
+      "id": "output-irwaAu",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-76495af03b569d13e2286f68023b1e78deda0bb353ff5e6f0e4e1dc3fe29f719",
+      "identity": "16777229:2299794337:directory"
+    },
+    {
+      "id": "output-jBxOP3",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-06fcac7587be6217dc8b3a71ddea3a23b9b5eb4098c2a02bf8e81a214903c271",
+      "identity": "16777229:2299803151:directory"
+    },
+    {
+      "id": "output-jLlmWt",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-7c39c489218d784d44ab71a11b13baad33c70eee10e7fa7ab8b5bbba2a6eb261",
+      "identity": "16777229:2299798878:directory"
+    },
+    {
+      "id": "output-k44O7O",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-ee6d4911968027543c7e6664f565d2150d1a3be43cde203d926d83721fa27dbe",
+      "identity": "16777229:2299802704:directory"
+    },
+    {
+      "id": "output-k54mSR",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-0ca4e9c2fe8620f7153d62a30c9b1b2c6280b502a81cbb75a529160952bf3d5b",
+      "identity": "16777229:2299809822:directory"
+    },
+    {
+      "id": "output-kiRGc7",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-0e03170b3cf14fcaae43a445b592621148b5b8e65a9beb36899f8ca913798ee2",
+      "identity": "16777229:2299819546:directory"
+    },
+    {
+      "id": "output-kvyyht",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b934484806f15f8c5daf196fa78c88ac720a59b018b91f8f40f2f93b984b91cd",
+      "identity": "16777229:2299793914:directory"
+    },
+    {
+      "id": "output-l0j3VB",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e3faca474439d9818d838dd8dc97ddf87a964b24f6824815a23088622296a81e",
+      "identity": "16777229:2299796041:directory"
+    },
+    {
+      "id": "output-lrFj29",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-a89a0f476d1d536d7e29d6358b3d5b9406c5dffcdd648347e1b027179baf36fe",
+      "identity": "16777229:2299817609:directory"
+    },
+    {
+      "id": "output-ltKN9D",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-0ddd0d2523af4de02e7cf82eb36b543cda0bbee8b6bc24ce23006cddd013cba4",
+      "identity": "16777229:2299798538:directory"
+    },
+    {
+      "id": "output-mfkENW",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-75e9f7efe90514b7734ec325754149709d4341fa7c094223d7b9dcba93dd03ab",
+      "identity": "16777229:2299812370:directory"
+    },
+    {
+      "id": "output-nTQLFO",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-12e1e606331477d6f7d610a224b2d4a85a90baed276bc8a410cc117740d21cd7",
+      "identity": "16777229:2299802083:directory"
+    },
+    {
+      "id": "output-nkqL2w",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-4dbb461d71757a78207a6a2b42b13e2d9d0e3c74c1c28846df143488c444b8fc",
+      "identity": "16777229:2299790374:directory"
+    },
+    {
+      "id": "output-oOp0pN",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-96f7f1d359c0adf78cc5d0628fe957e6495a33cc501768cfb755d344c698dc45",
+      "identity": "16777229:2299788990:directory"
+    },
+    {
+      "id": "output-odOJP4",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-9fe1622009f5ac7f022f62d21560803dac47c4fd51a6d53c9cb531a09d8e0919",
+      "identity": "16777229:2299824151:directory"
+    },
+    {
+      "id": "output-oy1IAY",
+      "path": ".chrono-harness/state/cache-test-failures/.tmptM9pvx",
+      "identity": "16777229:2299826996:directory"
+    },
+    {
+      "id": "output-pCElrn",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-6ce6239ce2512d94f8c3469de55efdd0d2cc98d53a159e9c6c2a2b499bfd7104",
+      "identity": "16777229:2299819563:directory"
+    },
+    {
+      "id": "output-pTin3k",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-58e46de01bc20ac4508dd93590e72a2703784a78465b8cf6fcf845fd8a6876d2",
+      "identity": "16777229:2299823874:directory"
+    },
+    {
+      "id": "output-phJ0vE",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-1739931b4faee3003e1dc069a4729baa13d79b30105a4af2fa7e97dc37cb64a9",
+      "identity": "16777229:2299789042:directory"
+    },
+    {
+      "id": "output-q1TTZv",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-10211b214e1d4bf33d207ed60c1e4c2aec9d07fd39a1656974970233b380df43",
+      "identity": "16777229:2299800350:directory"
+    },
+    {
+      "id": "output-rOzEoM",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpFNIPhB",
+      "identity": "16777229:2299826782:directory"
+    },
+    {
+      "id": "output-rVBvQx",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-622e0a82d091a5a932be02e91b522674a621db2a6f445a5b2b78746f59a63159",
+      "identity": "16777229:2299821872:directory"
+    },
+    {
+      "id": "output-sKKbkm",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-cb39fbf079b1cbc8ef82d03347bea68cacccae9a4a3943156fb96c9f1c41cbf7",
+      "identity": "16777229:2299823029:directory"
+    },
+    {
+      "id": "output-swM3Gb",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-1069922615800cb2d03fff22f46ec2ea34e76609ec112eb504fd4f51693dc384",
+      "identity": "16777229:2299789308:directory"
+    },
+    {
+      "id": "output-tk4iOP",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-9c06b29e0afd36551ad53e1e4cec3072425aaa5b273db2454c2fc0da91a0d007",
+      "identity": "16777229:2299800868:directory"
+    },
+    {
+      "id": "output-toVmVC",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-326c7738b2d708085f95c1a3d35b3e290421f6d99f343abeef8a8b424d202a98",
+      "identity": "16777229:2299810649:directory"
+    },
+    {
+      "id": "output-u91j8z",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-fe917e392e9356b02316891783a22f934768d23c6f37a6b5b0b2f79e55cd3768",
+      "identity": "16777229:2299806621:directory"
+    },
+    {
+      "id": "output-upcpQU",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-5a4ea6825721e975a355e090f597f8a40764b4a4d429ecf39a1f1b279567e6e9",
+      "identity": "16777229:2299790584:directory"
+    },
+    {
+      "id": "output-upxqGK",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-d9219002898f5a4ea9afdf970e06d96e2dd6ca71f396b9df30c7b1b51b9ed99f",
+      "identity": "16777229:2299815206:directory"
+    },
+    {
+      "id": "output-urDRvi",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e7fd7fbb1bd217e7c602cac5d4db20da154db9ef597d3d38e7dd640098065291",
+      "identity": "16777229:2299806616:directory"
+    },
+    {
+      "id": "output-vpKkpx",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-a856fe7027e9257438bcf4dd22699f80634120c02c92ea6e5149ec94ddf77734",
+      "identity": "16777229:2299823361:directory"
+    },
+    {
+      "id": "output-vzGqN1",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-fa64c75e965abb8734de1831472890e9ee80adfa5b917bc04fe263621aabccb2",
+      "identity": "16777229:2299811243:directory"
+    },
+    {
+      "id": "output-wU7BBn",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-6c778d725385207fe016ca70b5cfc51c943b3c6791aa206a309d8e82bf953654",
+      "identity": "16777229:2299806729:directory"
+    },
+    {
+      "id": "output-x2yxqf",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-0c4e07e89484f18a289a780bd1d6de1b88ba532b6c34aa3291aac8f5d73f2429",
+      "identity": "16777229:2299808660:directory"
+    },
+    {
+      "id": "output-xAjITq",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-071443cec7d9081b004807bc78b1e9715bed2aca15b3e90d7655ee4e6f956cea",
+      "identity": "16777229:2299822227:directory"
+    },
+    {
+      "id": "output-xZJfYD",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-b95d75248b1eb8a3dbb84e3c5ecde53065709633fa6c1ec0ff35f33a171d9d6a",
+      "identity": "16777229:2299802930:directory"
+    },
+    {
+      "id": "output-xcYN5y",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpezJt9x",
+      "identity": "16777229:2299826495:directory"
+    },
+    {
+      "id": "output-xycWfh",
+      "path": ".chrono-harness/state/cache-test-failures/.tmpOW9GDj",
+      "identity": "16777229:2299826483:directory"
+    },
+    {
+      "id": "output-yrVlss",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-e5d0763370a787441d299f534ee84b3161e69879e1c49e1af51f0bf4cb2e848a",
+      "identity": "16777229:2299820342:directory"
+    },
+    {
+      "id": "output-yuMrpa",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-33429fc333ef8589d5b86bab6307284e748a768204eeebcd9610645287b89081",
+      "identity": "16777229:2299823708:directory"
+    },
+    {
+      "id": "output-zHk77u",
+      "path": ".chrono-harness/state/worktree-test-failures/fixture-61961f58930385d77bd8d29133a766ad272de602d6aa3f340a9da1f4ccb9cc57",
+      "identity": "16777229:2299810765:directory"
+    }
+  ]
+}

@@ -639,14 +639,17 @@ fn retain_command_result(
             chrono_harness::retained_artifacts::retention::unique_path(&directory, "context-", "")
                 .unwrap();
         let owner = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let publication = chrono_harness::retained_artifacts::retention::create_adopted(
-            &owner,
-            "ci-fixture",
-            &destination,
-            true,
-            json!({"capture":"started","exit":output.status.code()}),
-        )
-        .unwrap();
+        let publication =
+            chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+                &owner,
+                "ci-fixture",
+                &destination,
+                true,
+                json!({"capture":"started","exit":output.status.code()}),
+                None,
+                "fixture-recheck",
+            )
+            .unwrap();
         chrono_harness::retained_artifacts::retention::write_adopted(
             publication.as_ref(),
             &destination.join("stdout.bin"),
@@ -689,7 +692,14 @@ fn retain_command_result(
             }
         }
         if let Some(publication) = publication {
-            publication.complete(json!({"capture":"completed","exit":output.status.code(),"original_results":"fixture files authoritative"})).unwrap();
+            let consumer = format!("fixture-recheck:{}", publication.id());
+            let outcome = json!({"capture":"completed","exit":output.status.code(),"original_results":"fixture files authoritative"});
+            if output.status.success() {
+                publication.complete_releasing_consumer(outcome, &consumer)
+            } else {
+                publication.complete(outcome)
+            }
+            .unwrap();
         }
         if !output.status.success() {
             eprintln!("original CI fixture evidence: {}", destination.display());

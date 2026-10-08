@@ -76,13 +76,13 @@ cargo install --locked --path crates/instructions
 chrono-instructions init --host-root "/path/to/existing-host"
 ```
 
-可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。逐条迁移后的 98 个内容叶子具有中文/英文 variant；16 个普通聚合保留原有 17 个稳定入口及 core.general，依赖显式；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
+可执行文件内嵌[通用规则 catalog](assets/instructions/catalog.json) 与 root-only 默认 manifest，复制二进制后也无需 checkout。逐条迁移后的 100 个内容叶子具有中文/英文 variant；16 个普通聚合保留原有 17 个稳定入口及 core.general，依赖显式；宿主 `.chrono-harness/instructions/` 采用独立 catalog、manifest 与空上下文。
 
-默认产生含 20 个叶子短流程的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。每项受治理操作只呈现一条当前登记路径，定制与演进通过登记及适用验证完成。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
+默认产生含 23 个叶子短流程的普通 `CLAUDE.md`，`AGENTS.md -> CLAUDE.md` 是字面相对链接。每项受治理操作只呈现一条当前登记路径，定制与演进通过登记及适用验证完成。新宿主可用 `--locale en` 绑定英文；`--methodology M` 保留自定义 UTF-8 方法为 opaque file atom，未声明语言时为 und；`--host-context C` 独立指定上下文。
 
 默认两种语言的短流程新根字节数及宿主定制边界见[实际消费者读数](docs/methodology-extraction.md#实际消费者边界)；完整双语库仍可供显式组合。
 
-日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。不选布局时按依赖先行的 DFS；可选具名布局显式组织标题和内容，必须完整覆盖非空闭包一次。默认双语共用五节同级的 `workflow` 布局；完整 `core.general/general` 的三部分、12 主题仍供自定义输出，本仓英文指南继续选择它。阅读层次不代表权威或执行顺序；聚焦 skill 仍平铺。缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
+日常编辑宿主 catalog 与输出计划，再运行 `chrono-instructions generate --host-root H`。计划可引用共享原子，选择语言并生成任意登记 Markdown 或聚焦 skill。不选布局时按依赖先行的 DFS；可选具名布局显式组织标题和内容，必须完整覆盖非空闭包一次。默认双语共用需求→审计→重构→开发四阶段的 `workflow` 布局，开发下含验证／SPEC 迭代和交付／清理两节；完整 `core.general/general` 的三部分、12 主题仍供自定义输出，本仓英文指南继续选择它。阅读层次不代表权威或执行顺序；聚焦 skill 仍平铺。缺失选中翻译、循环或无效引用均明确失败，无自动翻译或 fallback。可复制 schema 与组合配方见[生成合同](docs/instructions.md)。
 
 当前身份为 schema 2 / `atomic-rules/relative-alias/v3`。已知 read-both/v1 与 literal-core/relative-alias/v2 自动前向迁移，保留旧方法/上下文精确字节、路径与权限，不拆 prose 或改为默认。重复 init 省略选项保留采用数据，显式不同输入或 locale 拒绝；原子组合不能被 raw method 覆盖。
 

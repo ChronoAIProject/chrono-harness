@@ -79,6 +79,7 @@ struct Output {
     length: Option<u64>,
     lease: String,
     lease_id: String,
+    #[serde(deserialize_with = "crate::strict_json_value")]
     outcome: Value,
     phase: String,
     expires: u64,
@@ -101,7 +102,9 @@ struct Output {
 struct Ledger {
     policy_sha256: String,
     outputs: Vec<Output>,
+    #[serde(deserialize_with = "strict_roots")]
     roots: BTreeMap<String, Vec<String>>,
+    #[serde(deserialize_with = "strict_summaries")]
     summaries: Vec<Value>,
     cursor: usize,
     #[serde(default)]
@@ -109,12 +112,28 @@ struct Ledger {
     #[serde(default)]
     retired_leases: Vec<Node>,
 }
+fn strict_roots<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<BTreeMap<String, Vec<String>>, D::Error> {
+    serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
+}
+fn strict_summaries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Value>, D::Error> {
+    serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
+}
 pub struct Inventory {
     root: PathBuf,
     policy: Policy,
     policy_bytes: Vec<u8>,
     directory: PathBuf,
     round_metadata: Cell<Option<u64>>,
+}
+/// Exact existing owner identity supplied by a declared original consumer.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OriginalIdentity {
+    pub id: String,
+    pub path: String,
+    pub identity: String,
 }
 /// Holding this capability protects producer descendants too. Closing it never fabricates completion.
 pub struct Publication {
@@ -291,7 +310,9 @@ impl Inventory {
             return Err("retention metadata bound".into());
         }
         self.charge_metadata(raw.len() as u64)?;
-        let l: Ledger = decode(&raw)?;
+        // Typed fields reject duplicate/unknown members directly. Opaque JSON
+        // retains the same strict visitor, without materializing a second whole ledger.
+        let l: Ledger = serde_json::from_slice(&raw).map_err(|e| e.to_string())?;
         if l.policy_sha256 != policy_digest
             || l.outputs.len() > self.policy.max_entries
             || l.summaries.len() > self.policy.max_summaries
@@ -744,6 +765,15 @@ impl Inventory {
         }
         let gate = self.gate()?;
         let mut l = self.load()?;
+        self.reference_locked(&mut l, consumer, ids)?;
+        self.save(&l, &gate)
+    }
+    fn reference_locked(
+        &self,
+        l: &mut Ledger,
+        consumer: &str,
+        ids: &[String],
+    ) -> Result<(), String> {
         if ids.len() > self.policy.max_entries
             || (ids.is_empty() == false
                 && !l.roots.contains_key(consumer)
@@ -765,7 +795,128 @@ impl Inventory {
         } else {
             l.roots.insert(consumer.into(), ids.into());
         }
+        Ok(())
+    }
+    fn consumer_role(&self, consumer: &str) -> Result<String, String> {
+        if consumer.trim().is_empty() || consumer.len() > 247 {
+            return Err("invalid retention consumer identity".into());
+        }
+        Ok(format!("consumer:{consumer}"))
+    }
+    fn consumer_ids(&self, originals: &[OriginalIdentity]) -> Result<Vec<String>, String> {
+        let ids: BTreeSet<_> = originals.iter().map(|o| o.id.clone()).collect();
+        if originals.is_empty()
+            || originals.len() > self.policy.max_entries
+            || ids.len() != originals.len()
+        {
+            return Err("consumer originals empty, duplicated or over capacity".into());
+        }
+        for original in originals {
+            crate::relative_path(&original.path)?;
+            if original.path.len() > 4096
+                || original.id.is_empty()
+                || original.id.len() > 256
+                || original.identity.len() > 256
+            {
+                return Err("invalid bounded consumer original identity".into());
+            }
+        }
+        Ok(ids.into_iter().collect())
+    }
+    fn original_leases(
+        &self,
+        l: &Ledger,
+        originals: &[OriginalIdentity],
+        exclusive: bool,
+    ) -> Result<Vec<Lease>, String> {
+        let mut leases = Vec::new();
+        for original in originals {
+            let o = l
+                .outputs
+                .iter()
+                .find(|o| o.id == original.id)
+                .ok_or("required consumer original is unavailable")?;
+            if o.path != original.path
+                || o.identity != original.identity
+                || !matches!(o.phase.as_str(), "publishing" | "sealing" | "released")
+            {
+                return Err("required consumer original binding/phase changed".into());
+            }
+            let lease = Lease::acquire(
+                &self.directory.join(&o.lease),
+                Some(&o.lease_id),
+                false,
+                exclusive,
+                None,
+            )?
+            .ok_or("required consumer original has live producer/readers")?;
+            if identity(&no_symlink_parents(&self.root, &o.path)?)? != original.identity {
+                return Err("required consumer original identity changed".into());
+            }
+            leases.push(lease);
+        }
+        Ok(leases)
+    }
+    /// Durable roots survive interrupted repair work; ordinary entry never guesses release.
+    /// Existing roots can only be repeated, never silently replaced by a smaller declaration.
+    pub fn protect_consumer(
+        &self,
+        consumer: &str,
+        originals: &[OriginalIdentity],
+    ) -> Result<(), String> {
+        let role = self.consumer_role(consumer)?;
+        let ids = self.consumer_ids(originals)?;
+        let gate = self.gate()?;
+        let mut l = self.load()?;
+        if l.roots.get(&role).is_some_and(|previous| previous != &ids) {
+            return Err("consumer root differs; release its original declaration first".into());
+        }
+        let _leases = self.original_leases(&l, originals, false)?;
+        self.reference_locked(&mut l, &role, &ids)?;
         self.save(&l, &gate)
+    }
+    /// Called after the responsible consumer's exact, external domain receipt is verified.
+    /// Never changes expiry or original outcomes and never declares work complete.
+    pub fn release_consumer(
+        &self,
+        consumer: &str,
+        originals: &[OriginalIdentity],
+        declaration_digest: &str,
+        receipt_digest: &str,
+    ) -> Result<Value, String> {
+        if !crate::wire::is_digest(declaration_digest) || !crate::wire::is_digest(receipt_digest) {
+            return Err("consumer release evidence digest invalid".into());
+        }
+        let role = self.consumer_role(consumer)?;
+        let ids = self.consumer_ids(originals)?;
+        let gate = self.gate()?;
+        let mut l = self.load()?;
+        if !l.roots.contains_key(&role) {
+            let receipt = l
+                .summaries
+                .iter()
+                .find(|s| {
+                    s["schema"] == "chrono-retention-consumer-release/v1"
+                        && s["consumer"] == consumer
+                        && s["declaration_sha256"] == declaration_digest
+                        && s["receipt_sha256"] == receipt_digest
+                })
+                .ok_or("consumer protection/release receipt unavailable")?
+                .clone();
+            self.stable(&gate)?;
+            return Ok(receipt);
+        }
+        if l.roots.get(&role) != Some(&ids) {
+            return Err("consumer release root differs from exact declaration".into());
+        }
+        let _leases = self.original_leases(&l, originals, true)?;
+        self.reference_locked(&mut l, &role, &[])?;
+        let receipt = json!({"schema":"chrono-retention-consumer-release/v1","consumer":consumer,"declaration_sha256":declaration_digest,"receipt_sha256":receipt_digest,"original_count":ids.len(),"effects":"consumer-root-release-only","disposal":"not-attempted","completion":"not-established"});
+        l.summaries.push(receipt.clone());
+        let excess = l.summaries.len().saturating_sub(self.policy.max_summaries);
+        l.summaries.drain(..excess);
+        self.save(&l, &gate)?;
+        Ok(receipt)
     }
     /// Edges are not roots. Released historical cycles can be reclaimed.
     pub fn dependencies(&self, id: &str, references: &[String]) -> Result<(), String> {
@@ -831,7 +982,10 @@ impl Inventory {
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
-            if metadata_steps >= self.policy.max_nodes_per_round || !self.metadata_room() {
+            if metadata_steps >= self.policy.max_nodes_per_round
+                || !self.metadata_room()
+                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
+            {
                 break;
             }
             if l.outputs[index].phase == "reserving" {
@@ -851,6 +1005,7 @@ impl Inventory {
             if l.outputs[index].phase == "creating"
                 && metadata_steps < self.policy.max_nodes_per_round
                 && self.metadata_room()
+                && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
             {
                 let output = l.outputs[index].clone();
                 if let Ok(Some(owner)) = Lease::acquire(
@@ -873,6 +1028,7 @@ impl Inventory {
         while metadata_steps < self.policy.max_nodes_per_round
             && !l.retired_leases.is_empty()
             && self.metadata_room()
+            && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
         {
             metadata_steps += 1;
             let pending = l.retired_leases[0].clone();
@@ -1480,6 +1636,9 @@ impl Inventory {
 impl Publication {
     /// Attach the empty inode durably before publishing its exact destination.
     pub fn materialize(&self) -> Result<(), String> {
+        self.materialize_for_consumer(None)
+    }
+    fn materialize_for_consumer(&self, consumer: Option<&str>) -> Result<(), String> {
         self.lease.stable()?;
         let gate = self.inventory.gate()?;
         let mut l = self.inventory.load()?;
@@ -1520,6 +1679,14 @@ impl Publication {
         o.creation = None;
         o.phase = "publishing".into();
         let attached = o.identity.clone();
+        if let Some(consumer) = consumer {
+            let role = self.inventory.consumer_role(consumer)?;
+            if l.roots.contains_key(&role) {
+                return Err("creation consumer role already exists".into());
+            }
+            self.inventory
+                .reference_locked(&mut l, &role, &[self.id.clone()])?;
+        }
         self.inventory.save(&l, &gate)?;
         *self.identity.borrow_mut() = attached;
         Ok(())
@@ -1632,6 +1799,14 @@ impl Publication {
     }
     /// Keep producer status distinct from storage status; no synthetic success on interruption.
     pub fn complete(self, outcome: Value) -> Result<(), String> {
+        self.complete_with_release(outcome, None)
+    }
+    /// A successful producer can account its own consumer before relinquishing protection.
+    /// Failed/unknown captures use complete and leave the root for genuine repair/recheck.
+    pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
+        self.complete_with_release(outcome, Some(consumer))
+    }
+    fn complete_with_release(self, outcome: Value, consumer: Option<&str>) -> Result<(), String> {
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
             .len()
@@ -1681,6 +1856,19 @@ impl Publication {
             o.phase = "released".into();
         }
         o.expires = now()?.saturating_add(self.inventory.policy.keep_seconds);
+        if let Some(consumer) = consumer {
+            // Release only after all original accounting succeeded; any earlier error
+            // preserves the root and original partial producer outcome.
+            if o.manifest.bytes > self.byte_limit() {
+                self.inventory.save(&l, &gate)?;
+                return Err("output byte capacity exceeded; consumer original preserved".into());
+            }
+            let role = self.inventory.consumer_role(consumer)?;
+            if l.roots.get(&role) != Some(&vec![self.id.clone()]) {
+                return Err("producer consumer root differs".into());
+            }
+            self.inventory.reference_locked(&mut l, &role, &[])?;
+        }
         self.inventory.save(&l, &gate)?;
         if l.outputs
             .iter()
@@ -1752,6 +1940,42 @@ pub fn create_adopted_with_limit(
     outcome: Value,
     byte_limit: Option<u64>,
 ) -> Result<Option<Publication>, String> {
+    create_with_consumer(root, producer, path, tree, outcome, byte_limit, None)
+}
+/// Bind an actual consumer in the existing durable publication, before any
+/// content write. The producer supplies the role prefix; the owner mints its
+/// independent output identity. No extra inventory transaction is required.
+pub fn create_adopted_for_consumer(
+    root: &Path,
+    producer: &str,
+    path: &Path,
+    tree: bool,
+    outcome: Value,
+    byte_limit: Option<u64>,
+    consumer_prefix: &str,
+) -> Result<Option<Publication>, String> {
+    if consumer_prefix.trim().is_empty() || consumer_prefix.len() > 210 {
+        return Err("invalid bounded creation consumer prefix".into());
+    }
+    create_with_consumer(
+        root,
+        producer,
+        path,
+        tree,
+        outcome,
+        byte_limit,
+        Some(consumer_prefix),
+    )
+}
+fn create_with_consumer(
+    root: &Path,
+    producer: &str,
+    path: &Path,
+    tree: bool,
+    outcome: Value,
+    byte_limit: Option<u64>,
+    consumer_prefix: Option<&str>,
+) -> Result<Option<Publication>, String> {
     let canonical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let physical_path = fs::canonicalize(path.parent().ok_or("output parent")?)
         .map_err(|e| e.to_string())?
@@ -1772,7 +1996,8 @@ pub fn create_adopted_with_limit(
             };
             let publication =
                 inventory.reserve(producer, relative, outcome, &roots, Some(tree), byte_limit)?;
-            publication.materialize()?;
+            let consumer = consumer_prefix.map(|prefix| format!("{prefix}:{}", publication.id()));
+            publication.materialize_for_consumer(consumer.as_deref())?;
             return Ok(Some(publication));
         }
     }

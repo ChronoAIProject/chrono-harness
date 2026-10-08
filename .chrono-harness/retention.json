@@ -24,12 +24,12 @@
       ".chrono-harness/state/worktrees/"
     ]
   },
-  "keep_seconds": 604800,
+  "keep_seconds": 0,
   "max_entries": 512,
   "max_summaries": 128,
   "max_nodes_per_round": 256,
   "max_bytes_per_round": 67108864,
-  "max_millis_per_round": 1000,
+  "max_millis_per_round": 25,
   "max_output_bytes": 1073741824,
   "max_total_bytes": 8589934592,
   "max_manifest_nodes": 16384,

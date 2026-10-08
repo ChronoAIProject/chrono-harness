@@ -1,5 +1,5 @@
 //! Host-selected historical owner migration through the existing retention owner.
-use super::retention::{Inventory, POLICY_PATH};
+use super::retention::{Inventory, OriginalIdentity, POLICY_PATH};
 use crate::{CliOutput, decode, no_symlink_parents, ownership::Lease, sha256};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -33,6 +33,15 @@ pub(super) struct Historical {
     pub roots: Vec<String>,
     pub release: Option<Release>,
 }
+/// A host/consumer declaration, outside its disposable originals. No discovery.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Consumer {
+    schema: String,
+    consumer: String,
+    purpose: String,
+    originals: Vec<OriginalIdentity>,
+}
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
 enum Request {
@@ -46,6 +55,14 @@ enum Request {
     },
     Release {
         enrollment: String,
+    },
+    ProtectConsumer {
+        declaration: Evidence,
+    },
+    ReleaseConsumer {
+        declaration: Evidence,
+        receipt: Evidence,
+        pointer: String,
     },
     AcknowledgeDelivery {
         report: String,
@@ -96,6 +113,35 @@ fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>),
 fn execute(root: &Path, request: Request) -> Result<Value, String> {
     let inventory = Inventory::adopted(root)?.ok_or("host has not adopted output retention")?;
     match request {
+        Request::ProtectConsumer { declaration } => {
+            let consumer = consumer(root, &declaration)?;
+            inventory.protect_consumer(&consumer.consumer, &consumer.originals)?;
+            Ok(
+                json!({"schema":"chrono-retention-consumer-protection/v1","consumer":consumer.consumer,"purpose":consumer.purpose,"declaration_sha256":declaration.sha256,"original_count":consumer.originals.len(),"effects":"consumer-root-only","completion":"not-established"}),
+            )
+        }
+        Request::ReleaseConsumer {
+            declaration,
+            receipt,
+            pointer,
+        } => {
+            let consumer = consumer(root, &declaration)?;
+            outside_originals(&receipt.path, &consumer.originals)?;
+            let value: Value = decode(&evidence(root, &receipt)?)?;
+            if value.pointer(&pointer)
+                != Some(
+                    &json!({"consumer":consumer.consumer,"declaration_sha256":declaration.sha256,"state":"released"}),
+                )
+            {
+                return Err("responsible consumer has not released this exact declaration".into());
+            }
+            inventory.release_consumer(
+                &consumer.consumer,
+                &consumer.originals,
+                &declaration.sha256,
+                &receipt.sha256,
+            )
+        }
         Request::Maintain => inventory.maintain(),
         Request::MigratePolicy { previous_policy } => {
             inventory.migrate_policy(&evidence(root, &previous_policy)?)
@@ -170,6 +216,29 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
             artifact_digest,
         } => inventory.acknowledge_delivery(&report, &report_sha256, artifact_id, &artifact_digest),
     }
+}
+fn outside_originals(path: &str, originals: &[OriginalIdentity]) -> Result<(), String> {
+    crate::relative_path(path)?;
+    if originals
+        .iter()
+        .any(|o| path == o.path || path.starts_with(&format!("{}/", o.path)))
+    {
+        return Err(
+            "consumer declaration/release evidence must remain outside disposable originals".into(),
+        );
+    }
+    Ok(())
+}
+fn consumer(root: &Path, declaration: &Evidence) -> Result<Consumer, String> {
+    let consumer: Consumer = decode(&evidence(root, declaration)?)?;
+    if consumer.schema != "chrono-retention-consumer/v1"
+        || consumer.purpose.trim().is_empty()
+        || consumer.purpose.len() > 4096
+    {
+        return Err("consumer schema/purpose missing or bounded capacity exceeded".into());
+    }
+    outside_originals(&declaration.path, &consumer.originals)?;
+    Ok(consumer)
 }
 pub fn command(args: &[&str]) -> CliOutput {
     let result = (|| {

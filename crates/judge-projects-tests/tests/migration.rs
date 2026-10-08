@@ -83,7 +83,7 @@ fn execution_failure(
     let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
         fs::create_dir_all(&directory)?;
         let path = chrono_harness::retained_artifacts::retention::unique_path(&directory,"unexpected-execution-", ".json")?;
-        let publication = chrono_harness::retained_artifacts::retention::create_adopted(&source(),"migration-fixture",&path,false,serde_json::json!({"capture":"started","operation":"unexpected execution"}))?;
+        let publication = chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(&source(),"migration-fixture",&path,false,serde_json::json!({"capture":"started","operation":"unexpected execution"}),None,"fixture-recheck")?;
         let raw = serde_json::to_vec(result)?;
         let report_result = (|| -> Result<(), String> {
             if let Some(publication) = &publication { publication.check_length(raw.len() as u64)?; }
@@ -101,7 +101,7 @@ fn execution_failure(
         // inputs. Preserve those bytes before this temporary host is dropped.
         let nested = root.join(".chrono-harness/state/ci-test-failures");
         let destination = path.with_extension("ci-test-failures");
-        let nested_publication = chrono_harness::retained_artifacts::retention::create_adopted(&source(),"migration-fixture",&destination,true,serde_json::json!({"capture":"started","operation":"nested CI failure"})).map_err(std::io::Error::other)?;
+        let nested_publication = chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(&source(),"migration-fixture",&destination,true,serde_json::json!({"capture":"started","operation":"nested CI failure"}),None,"fixture-recheck").map_err(std::io::Error::other)?;
         let nested_result=copy_nested_receipts(&nested,&destination,nested_publication.as_ref());
         let nested_written=nested_result.is_ok();
         let evidence = match nested_result {

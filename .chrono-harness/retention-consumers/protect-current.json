@@ -1,0 +1,7 @@
+{
+  "operation": "protect-consumer",
+  "declaration": {
+    "path": ".chrono-harness/retention-consumers/current-repair-recheck.json",
+    "sha256": "111e90eb49409380c865470f80e894f21637f3e7253e1ede4eb94f4c3c757c49"
+  }
+}
