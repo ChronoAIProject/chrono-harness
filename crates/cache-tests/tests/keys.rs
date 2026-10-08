@@ -22,18 +22,39 @@ impl Host {
             chrono_harness::retained_artifacts::retention::unique_path(&retained, "cache-", "")
                 .unwrap();
         let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let publication = chrono_harness::retained_artifacts::retention::create_adopted(
+        let publication = chrono_harness::retained_artifacts::retention::create_adopted_with_limit(
             &root,
             "cache-fixture",
             &container,
             true,
             json!({"test_outcome":"not-established"}),
+            Some(32 * 1024 * 1024),
         )
         .unwrap();
         let directory = tempfile::tempdir_in(&container).unwrap();
         Self(Some(directory), publication)
     }
 
+    fn write(&self, path: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> Result<(), String> {
+        if let Some(publication) = &self.1 {
+            publication.replace_file(path.as_ref(), bytes.as_ref())
+        } else {
+            fs::write(path, bytes).map_err(|e| e.to_string())
+        }
+    }
+    fn copy(&self, input: impl AsRef<Path>, output: impl AsRef<Path>) -> Result<(), String> {
+        chrono_harness::retained_artifacts::retention::copy_adopted(
+            self.1.as_ref(),
+            input.as_ref(),
+            output.as_ref(),
+        )
+    }
+    fn directory(&self, path: impl AsRef<Path>) -> Result<(), String> {
+        chrono_harness::retained_artifacts::retention::directory_adopted(
+            self.1.as_ref(),
+            path.as_ref(),
+        )
+    }
     fn path(&self) -> &Path {
         self.0.as_ref().unwrap().path()
     }
@@ -67,9 +88,11 @@ impl Drop for Host {
 
 fn fixture() -> (Host, Value) {
     let root = Host::new();
-    fs::create_dir(root.path().join(".chrono-harness")).unwrap();
-    fs::write(root.path().join("compiler"), b"compiler-one").unwrap();
-    fs::write(root.path().join("source"), b"source-one").unwrap();
+    root.directory(root.path().join(".chrono-harness")).unwrap();
+    root.write(root.path().join("compiler"), b"compiler-one")
+        .unwrap();
+    root.write(root.path().join("source"), b"source-one")
+        .unwrap();
     let config = json!({"schema":"chrono-cache/v1","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
         "inputs":{
             "compiler":{"kind":"file","path":"compiler","presence":"present"},
@@ -84,16 +107,16 @@ fn fixture() -> (Host, Value) {
                 "artifacts":["target"],"compatibility_inputs":["compiler","profile"],"source_inputs":["source"],"restore":"compatible"},
             "other":{"owner":"other","producer":"build.other","consumers":["check.other"],
                 "artifacts":["other-target"],"compatibility_inputs":["compiler"],"source_inputs":["other"],"restore":"exact"}}});
-    register_artifacts(root.path(), &config);
+    register_artifacts(&root, &config);
     (root, config)
 }
 
-fn register_artifacts(root: &Path, config: &Value) {
+fn register_artifacts(root: &Host, config: &Value) {
     let rows: Vec<_> = config["artifacts"].as_object().unwrap().values()
         .filter(|a| a["external"] == false)
         .map(|a| json!({"path":a["path"],"owner":a["owner"],"kind":"fixture-output","tracked":false})).collect();
-    fs::write(
-        root.join(".chrono-harness/artifacts.json"),
+    root.write(
+        root.path().join(".chrono-harness/artifacts.json"),
         serde_json::to_vec(&json!({"artifacts":rows})).unwrap(),
     )
     .unwrap();
@@ -141,9 +164,9 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     assert!(!removed.exists());
 }
 
-fn adopt_consumer_contract(root: &Path, config: &mut Value) {
-    fs::write(
-        root.join(".chrono-harness/operations.json"),
+fn adopt_consumer_contract(root: &Host, config: &mut Value) {
+    root.write(
+        root.path().join(".chrono-harness/operations.json"),
         br#"{"build":["build.project"],"other":"build.other"}"#,
     )
     .unwrap();
@@ -159,9 +182,11 @@ fn adopt_consumer_contract(root: &Path, config: &mut Value) {
 fn source_changes_reuse_compatible_domain_and_compiler_changes_do_not() {
     let (root, config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
-    fs::write(root.path().join("unregistered"), b"unrelated").unwrap();
+    root.write(root.path().join("unregistered"), b"unrelated")
+        .unwrap();
     assert_eq!(first, plan(root.path(), &config, "check.one").unwrap());
-    fs::write(root.path().join("source"), b"source-two").unwrap();
+    root.write(root.path().join("source"), b"source-two")
+        .unwrap();
     let source = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(
         first["caches"]["project"]["key"],
@@ -171,7 +196,8 @@ fn source_changes_reuse_compatible_domain_and_compiler_changes_do_not() {
         first["caches"]["project"]["restore_keys"],
         source["caches"]["project"]["restore_keys"]
     );
-    fs::write(root.path().join("compiler"), b"compiler-two").unwrap();
+    root.write(root.path().join("compiler"), b"compiler-two")
+        .unwrap();
     let compiler = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(
         source["caches"]["project"]["restore_keys"],
@@ -222,7 +248,7 @@ fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
 #[test]
 fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    adopt_consumer_contract(&root, &mut config);
     let first = plan(root.path(), &config, "check.one").unwrap();
     config["caches"]["project"]["consumers"] = json!(["check.one", "check.two", "check.new"]);
     config["consumer_operations"]["check.new"] = config["consumer_operations"]["check.one"].clone();
@@ -235,9 +261,9 @@ fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
 #[test]
 fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    adopt_consumer_contract(&root, &mut config);
     let source = root.path().join(".chrono-harness/operations.json");
-    fs::write(
+    root.write(
         &source,
         br#"{"build":["build.project"],"other":"build.other"}"#,
     )
@@ -259,7 +285,8 @@ fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
     );
     // A retained cache subscription must fail as soon as the actual registered
     // plan no longer runs its producer; unavailable compiler inputs are later.
-    fs::write(&source, br#"{"build":["build.replacement"]}"#).unwrap();
+    root.write(&source, br#"{"build":["build.replacement"]}"#)
+        .unwrap();
     fs::remove_file(root.path().join("compiler")).unwrap();
     let error = plan(root.path(), &config, "check.one").unwrap_err();
     assert!(error.contains("E_CACHE_CONSUMER"), "{error}");
@@ -270,7 +297,7 @@ fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
 #[test]
 fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_values() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    adopt_consumer_contract(&root, &mut config);
     config["consumer_operations"] = json!({
         "check.one":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
         "check.two":[{"registry":".chrono-harness/operations.json","pointer":"/build"}],
@@ -284,7 +311,7 @@ fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_value
         json!({"operation":"build.project"}),
         json!(["build.project", 1]),
     ] {
-        fs::write(
+        root.write(
             &source,
             serde_json::to_vec(&json!({"build":value})).unwrap(),
         )
@@ -292,7 +319,8 @@ fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_value
         let error = plan(root.path(), &config, "check.one").unwrap_err();
         assert!(error.contains("E_CACHE_CONSUMER"), "{value}: {error}");
     }
-    fs::write(&source, br#"{"build":"build.project"}"#).unwrap();
+    root.write(&source, br#"{"build":"build.project"}"#)
+        .unwrap();
     assert!(plan(root.path(), &config, "check.one").is_ok());
     config["consumer_operations"]
         .as_object_mut()
@@ -353,9 +381,9 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
 #[test]
 fn a_consumer_registry_cannot_be_restored_as_a_cache_artifact() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    adopt_consumer_contract(&root, &mut config);
     config["artifacts"]["target"]["path"] = json!(".chrono-harness/operations.json");
-    register_artifacts(root.path(), &config);
+    register_artifacts(&root, &config);
     let error = plan(root.path(), &config, "check.one").unwrap_err();
     assert!(
         error.contains("E_CACHE_PATH") && error.contains("consumer registry"),
@@ -433,7 +461,7 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
     config["inputs"]["compiler"] = json!({"kind":"command","command":{
         "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":["echo","actual compiler"],"env":{},
         "timeout_seconds":5,"output_limit_bytes":4096},"inherit":[],"result":"stdout"});
-    fs::write(
+    root.write(
         root.path().join(".chrono-harness/cache.json"),
         serde_json::to_vec(&config).unwrap(),
     )
@@ -610,7 +638,7 @@ fn provider_cli_preserves_plan_probe_and_native_failure_observations_in_upload_d
 #[test]
 fn report_rejects_a_planner_executable_mismatch_before_publication() {
     let (root, config) = fixture();
-    fs::write(
+    root.write(
         root.path().join(".chrono-harness/cache.json"),
         serde_json::to_vec(&config).unwrap(),
     )
@@ -639,7 +667,8 @@ fn report_rejects_a_planner_executable_mismatch_before_publication() {
     let path = root.path().join(plan_path);
     let mut plan: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     plan["planner"]["sha256"] = json!("0".repeat(64));
-    fs::write(&path, serde_json::to_vec(&plan).unwrap()).unwrap();
+    root.write(&path, serde_json::to_vec(&plan).unwrap())
+        .unwrap();
     let steps = json!({
         "cache_0_restore":{"outcome":"success","outputs":{}},
         "cache_0_save":{"outcome":"skipped","outputs":{}},
@@ -681,7 +710,7 @@ fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     ] {
         let mut changed = config.clone();
         *changed.pointer_mut(pointer).unwrap() = json!("changed");
-        register_artifacts(root.path(), &changed);
+        register_artifacts(&root, &changed);
         let next = plan(root.path(), &changed, "check.one").unwrap();
         assert_ne!(
             first["caches"]["project"]["restore_keys"], next["caches"]["project"]["restore_keys"],
@@ -691,7 +720,7 @@ fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let mut changed = config.clone();
     changed["caches"]["project"]["owner"] = json!("changed-owner");
     changed["artifacts"]["target"]["owner"] = json!("changed-owner");
-    register_artifacts(root.path(), &changed);
+    register_artifacts(&root, &changed);
     assert_ne!(
         first["caches"],
         plan(root.path(), &changed, "check.one").unwrap()["caches"]
@@ -709,7 +738,7 @@ fn absent_inputs_are_explicit_and_empty_files_are_present() {
         absent["inputs"]["source"]["observation"]["presence"],
         "absent"
     );
-    fs::write(root.path().join("source"), b"").unwrap();
+    root.write(root.path().join("source"), b"").unwrap();
     assert!(
         plan(root.path(), &config, "check.one")
             .unwrap_err()
@@ -784,7 +813,7 @@ fn cache_paths_exclude_evidence_metadata_sources_and_overlapping_outputs() {
     ] {
         let mut changed = config.clone();
         changed["artifacts"]["target"]["path"] = json!(path);
-        register_artifacts(root.path(), &changed);
+        register_artifacts(&root, &changed);
         assert!(
             plan(root.path(), &changed, "check.one")
                 .unwrap_err()
@@ -795,7 +824,7 @@ fn cache_paths_exclude_evidence_metadata_sources_and_overlapping_outputs() {
     let mut changed = config.clone();
     changed["caches"]["project"]["artifacts"] = json!(["target", "overlap"]);
     changed["artifacts"]["overlap"] = json!({"owner":"project","path":"out/project/nested","kind":"compilation","external":false});
-    register_artifacts(root.path(), &changed);
+    register_artifacts(&root, &changed);
     assert!(
         plan(root.path(), &changed, "check.one")
             .unwrap_err()
@@ -814,7 +843,7 @@ fn host_artifacts_require_exact_existing_registration_and_external_caches_are_ex
         json!([{"path":"out/project","owner":"wrong-owner","tracked":false}]),
         json!([{"path":"out/project","owner":"project","tracked":false}, {"path":"out/project","owner":"project","tracked":false}]),
     ] {
-        fs::write(
+        root.write(
             &catalog,
             serde_json::to_vec(&json!({"artifacts":rows})).unwrap(),
         )
@@ -825,7 +854,7 @@ fn host_artifacts_require_exact_existing_registration_and_external_caches_are_ex
                 .contains("E_CACHE_ARTIFACT")
         );
     }
-    register_artifacts(root.path(), &config);
+    register_artifacts(&root, &config);
     let external = tempfile::tempdir().unwrap();
     config["artifacts"]["target"]["path"] = json!(fs::canonicalize(external.path()).unwrap());
     assert!(
@@ -876,7 +905,8 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
     config["inputs"]["profile"] =
         json!({"kind":"environment","name":"CHRONO_CACHE_TEST_PROFILE","presence":"present"});
     let path = root.path().join(".chrono-harness/cache.json");
-    fs::write(path, serde_json::to_vec(&config).unwrap()).unwrap();
+    root.write(path, serde_json::to_vec(&config).unwrap())
+        .unwrap();
     let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
     let run = |value: Option<&str>| {
         let mut command = Command::new(&binary);
@@ -957,16 +987,17 @@ fn cli_rejects_unknown_actions_and_ambiguous_options() {
 fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
     let (root, mut config) = fixture();
     config["caches"]["other"]["consumers"] = json!(["check.one"]);
-    fs::write(root.path().join("unavailable-other-input"), b"other source").unwrap();
+    root.write(root.path().join("unavailable-other-input"), b"other source")
+        .unwrap();
     config["artifacts"]["target"]["path"] = json!("outputs with spaces/target");
-    register_artifacts(root.path(), &config);
-    fs::write(
+    register_artifacts(&root, &config);
+    root.write(
         root.path().join(".chrono-harness/cache.json"),
         serde_json::to_vec(&config).unwrap(),
     )
     .unwrap();
     let output = root.path().join("github-output");
-    fs::write(&output, "existing=value\n").unwrap();
+    root.write(&output, "existing=value\n").unwrap();
     let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
     let invoke = |consumer: &str| {
         Command::new(&binary)
@@ -1036,7 +1067,7 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         plan(root.path(), &config, "check.one").unwrap(),
         "evidence times must not change keys"
     );
-    fs::write(&compiler, b"compiler-two").unwrap();
+    root.write(&compiler, b"compiler-two").unwrap();
     let next = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(
         first["caches"]["project"]["restore_keys"],
@@ -1052,9 +1083,10 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
 fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
     let (root, mut config) = fixture();
     let tools = root.path().join("tools");
-    fs::create_dir(&tools).unwrap();
+    root.directory(&tools).unwrap();
     let executable = tools.join("registered-probe");
-    fs::copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), &executable).unwrap();
+    root.copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), &executable)
+        .unwrap();
     config["inputs"]["compiler"] = json!({"kind":"command", "command":{
         "program":"registered-probe", "args":["echo","actual compiler"],
         "env":{"PATH":tools},"timeout_seconds":2,"output_limit_bytes":4096},
@@ -1118,14 +1150,15 @@ fn registered_source_keys_follow_only_explicit_transitive_filemap_edges() {
             {"path":"source","edges":[{"kind":"compile","to":"project:product"}]},
             {"path":"dependency","edges":[{"kind":"compile","to":"project:dependency"}]},
             {"path":"unavailable","edges":[{"kind":"compile","to":"project:unrelated"}]}]});
-    fs::write(root.path().join("dependency"), b"first dependency").unwrap();
+    root.write(root.path().join("dependency"), b"first dependency")
+        .unwrap();
     let invoke = |registry: &Value| {
-        fs::write(
+        root.write(
             root.path().join(".chrono-harness/FILEMAP.json"),
             serde_json::to_vec(registry).unwrap(),
         )
         .unwrap();
-        fs::write(
+        root.write(
             root.path().join(".chrono-harness/cache.json"),
             serde_json::to_vec(&config).unwrap(),
         )
@@ -1161,7 +1194,8 @@ fn registered_source_keys_follow_only_explicit_transitive_filemap_edges() {
     );
     registry["files"][2]["cost"] = json!("unrelated membership update");
     assert_eq!(first, invoke(&registry));
-    fs::write(root.path().join("dependency"), b"next dependency").unwrap();
+    root.write(root.path().join("dependency"), b"next dependency")
+        .unwrap();
     let changed = invoke(&registry);
     assert_ne!(
         first["caches"]["project"]["key"],
@@ -1244,7 +1278,8 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         serde_json::from_slice(&fs::read(host.join(".chrono-harness/cache.json")).unwrap())
             .unwrap();
     let root = Host::new();
-    fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
+    root.directory(root.path().join(".chrono-harness/ci"))
+        .unwrap();
     config["require_primary_checkout"] = json!(false);
     config["recover_failed_restores"] = json!(false);
     config["recover_unconfirmed_restores"] = json!(false);
@@ -1281,9 +1316,10 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         }
     }
     for path in files {
-        fs::copy(host.join(&path), root.path().join(&path)).unwrap();
+        root.copy(host.join(&path), root.path().join(&path))
+            .unwrap();
     }
-    register_artifacts(root.path(), &config);
+    register_artifacts(&root, &config);
     fs::rename(
         root.path().join(".chrono-harness/artifacts.json"),
         root.path()
@@ -1300,7 +1336,8 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
     let checks = root.path().join(".chrono-harness/ci/check.json");
     let mut changed: Value = serde_json::from_slice(&fs::read(&checks).unwrap()).unwrap();
     changed["policy"]["units"]["locality-fixture"] = json!({"tests":["test:fixture"]});
-    fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
+    root.write(&checks, serde_json::to_vec(&changed).unwrap())
+        .unwrap();
     assert_eq!(
         first["caches"],
         plan(root.path(), &config, "check.detect").unwrap()["caches"]
@@ -1313,7 +1350,8 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
     let bootstrap = root.path().join(".chrono-harness/ci/bootstrap-core.json");
     let mut changed: Value = serde_json::from_slice(&fs::read(&bootstrap).unwrap()).unwrap();
     changed["rust_incremental"] = json!(!changed["rust_incremental"].as_bool().unwrap());
-    fs::write(bootstrap, serde_json::to_vec(&changed).unwrap()).unwrap();
+    root.write(bootstrap, serde_json::to_vec(&changed).unwrap())
+        .unwrap();
     let build_change = plan(root.path(), &config, "check.detect").unwrap();
     assert_ne!(
         first["caches"]["detect.ci"]["restore_keys"],
@@ -1328,11 +1366,13 @@ fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() 
     let checks = root.path().join(".chrono-harness/ci/check.json");
     let original: Value = serde_json::from_slice(&fs::read(&checks).unwrap()).unwrap();
     for consumer in consumers {
-        fs::write(&checks, serde_json::to_vec(&original).unwrap()).unwrap();
+        root.write(&checks, serde_json::to_vec(&original).unwrap())
+            .unwrap();
         let first = plan(root.path(), &config, consumer).unwrap();
         let mut metadata = original.clone();
         metadata["policy"]["units"]["locality-fixture"] = json!({"tests":["test:fixture"]});
-        fs::write(&checks, serde_json::to_vec(&metadata).unwrap()).unwrap();
+        root.write(&checks, serde_json::to_vec(&metadata).unwrap())
+            .unwrap();
         assert_eq!(
             first["caches"],
             plan(root.path(), &config, consumer).unwrap()["caches"]
@@ -1343,7 +1383,8 @@ fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() 
         ] {
             let mut changed = original.clone();
             *changed.pointer_mut(pointer).unwrap() = value;
-            fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
+            root.write(&checks, serde_json::to_vec(&changed).unwrap())
+                .unwrap();
             let after = plan(root.path(), &config, consumer).unwrap();
             for (id, cache) in first["caches"].as_object().unwrap() {
                 assert_ne!(
@@ -1367,13 +1408,13 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
     config["inputs"]["profile"] =
         json!({"kind":"json-value","path":"settings.json","pointer":"/build"});
     let settings = root.path().join("settings.json");
-    fs::write(
+    root.write(
         &settings,
         br#"{"build":{"flags":["-g"],"incremental":true},"units":["one"]}"#,
     )
     .unwrap();
     let first = plan(root.path(), &config, "check.one").unwrap();
-    fs::write(
+    root.write(
         &settings,
         br#"{ "units": ["two"], "build": {"incremental":true,"flags":["-g"]} }"#,
     )
@@ -1388,20 +1429,21 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
         first["inputs"]["profile"]["source_file"],
         unrelated["inputs"]["profile"]["source_file"]
     );
-    fs::write(&settings, br#"{"build":null}"#).unwrap();
+    root.write(&settings, br#"{"build":null}"#).unwrap();
     assert_ne!(
         first["caches"],
         plan(root.path(), &config, "check.one").unwrap()["caches"]
     );
-    fs::write(&settings, b"{}").unwrap();
+    root.write(&settings, b"{}").unwrap();
     assert!(
         plan(root.path(), &config, "check.one")
             .unwrap_err()
             .contains("missing JSON value settings.json#/build")
     );
-    fs::write(&settings, b"invalid JSON").unwrap();
+    root.write(&settings, b"invalid JSON").unwrap();
     assert!(plan(root.path(), &config, "check.one").is_err());
-    fs::write(&settings, br#"{"a/b":{"~c":["selected"]}}"#).unwrap();
+    root.write(&settings, br#"{"a/b":{"~c":["selected"]}}"#)
+        .unwrap();
     config["inputs"]["profile"]["pointer"] = json!("/a~1b/~0c/0");
     assert!(plan(root.path(), &config, "check.one").is_ok());
     for pointer in ["build", "/a~2b", "/a~"] {
@@ -1414,8 +1456,9 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
     }
     config["inputs"]["profile"]["pointer"] = json!("");
     assert!(plan(root.path(), &config, "check.one").is_ok());
-    fs::create_dir_all(root.path().join("out/project")).unwrap();
-    fs::copy(&settings, root.path().join("out/project/settings.json")).unwrap();
+    root.directory(root.path().join("out/project")).unwrap();
+    root.copy(&settings, root.path().join("out/project/settings.json"))
+        .unwrap();
     config["inputs"]["profile"]["path"] = json!("out/project/settings.json");
     assert!(
         plan(root.path(), &config, "check.one")

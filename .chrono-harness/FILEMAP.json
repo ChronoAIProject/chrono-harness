@@ -3493,7 +3493,7 @@
       "path": "crates/ci/src/gather.rs",
       "owner": "ci",
       "surface": "product",
-      "cost": "unmeasured",
+      "cost": "registered transport attempts/time/stream bounds; adopted acquisition reservation and sealing; external allocation unknown until measured",
       "edges": [
         {
           "kind": "compile",
@@ -5058,7 +5058,7 @@
       "path": "crates/cache-tests/tests/keys.rs",
       "owner": "cache-tests",
       "surface": "test",
-      "cost": "unmeasured",
+      "cost": "unfiltered 45-test inventory; 32 MiB per fixture reservation; default concurrency retained; live compiler/planner inputs below 8 MiB observed",
       "edges": [
         {
           "kind": "compile",
@@ -5290,7 +5290,7 @@
       "path": "crates/cache-tests/tests/backend.rs",
       "owner": "cache-tests",
       "surface": "product",
-      "cost": "unmeasured",
+      "cost": "uses cache fixture reservation and current standalone cache producer; backend time/stream bounds from fixture config",
       "edges": [
         {
           "kind": "compile",
@@ -5322,7 +5322,7 @@
       "path": "crates/cache-tests/tests/recovery.rs",
       "owner": "cache-tests",
       "surface": "product",
-      "cost": "unmeasured",
+      "cost": "uses cache fixture reservation and actual standalone cache transport/recovery/report consumers",
       "edges": [
         {
           "kind": "compile",
@@ -5450,7 +5450,7 @@
       "path": "crates/runner/src/retained_artifacts/retention.rs",
       "owner": "runner",
       "surface": "product",
-      "cost": "unmeasured",
+      "cost": "finite host policy; per-output declared byte reservation and cumulative controlled byte/node admission; contention acceptance incomplete",
       "edges": [
         {
           "kind": "compile",
@@ -5462,7 +5462,7 @@
       "path": "crates/runner-tests/tests/retention.rs",
       "owner": "runner-tests",
       "surface": "test",
-      "cost": "unmeasured",
+      "cost": "finite Rust fixture policies, interruption children joined; reservation/exclusion regressions; runtime unmeasured",
       "edges": [
         {
           "kind": "compile",

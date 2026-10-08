@@ -1071,3 +1071,12 @@ cannot enroll as a disposable linked attachment. A linked checkout without the
 registered coordinator owner fails before build effects. This keeps clean native
 CI bootstrap possible without changing workflow topology or authorizing unsafe
 linked-checkout fallback.
+
+Output publishers may declare a smaller finite reservation within the adopted
+host ceiling; omitted declarations preserve the old full-ceiling admission.
+The capability binds its materialized path and inode. Controlled writes check
+that attachment, current policy, and cumulative byte/node bounds before effects.
+Ordinary output maintenance can defer a competing bounded pass; publication
+still requires admission. Reliable admission under default concurrent producers
+is not established. Compatible inventory rollout must exclude older strict
+writers, retaining their original state and existing source bindings.

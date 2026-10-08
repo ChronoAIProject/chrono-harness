@@ -4,7 +4,7 @@ use crate::{decode, no_symlink_parents, ownership::Lease, sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
     fs,
     io::{Read, Write},
@@ -90,6 +90,8 @@ struct Output {
     #[serde(default)]
     reserved_bytes: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    byte_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     creation: Option<Creation>,
     #[serde(default)]
     overflow_disposal: bool,
@@ -119,6 +121,10 @@ pub struct Publication {
     inventory: Inventory,
     id: String,
     lease: Lease,
+    byte_limit: u64,
+    path: String,
+    identity: RefCell<String>,
+    tree: bool,
     written: Cell<u64>,
     written_nodes: Cell<usize>,
 }
@@ -301,6 +307,8 @@ impl Inventory {
             crate::relative_path(&o.lease)?;
             if !ids.insert(o.id.clone())
                 || o.path.len() > 4096
+                || o.byte_limit
+                    .is_some_and(|n| n == 0 || n > self.policy.max_output_bytes)
                 || o.stack.len() > 129
                 || o.references.len() > self.policy.max_entries
                 || o.manifest.entries.len() > self.policy.max_manifest_nodes
@@ -407,7 +415,7 @@ impl Inventory {
                 let bytes = if o.manifest.sealed {
                     o.manifest.bytes.saturating_sub(o.removed_logical_bytes)
                 } else {
-                    self.policy.max_output_bytes
+                    o.byte_limit.unwrap_or(self.policy.max_output_bytes)
                 };
                 if bytes > self.policy.max_output_bytes {
                     return None;
@@ -437,7 +445,7 @@ impl Inventory {
         outcome: Value,
         roots: &[String],
     ) -> Result<Publication, String> {
-        self.reserve(producer, path, outcome, roots, None)
+        self.reserve(producer, path, outcome, roots, None, None)
     }
     /// Durable creation intent. No producer-visible output is created until its
     /// inode has been bound at the exact owner staging slot.
@@ -448,7 +456,7 @@ impl Inventory {
         tree: bool,
         outcome: Value,
     ) -> Result<Publication, String> {
-        self.reserve(producer, path, outcome, &[], Some(tree))
+        self.reserve(producer, path, outcome, &[], Some(tree), None)
     }
     fn reserve(
         self,
@@ -457,7 +465,12 @@ impl Inventory {
         outcome: Value,
         roots: &[String],
         create: Option<bool>,
+        requested_limit: Option<u64>,
     ) -> Result<Publication, String> {
+        let byte_limit = requested_limit.unwrap_or(self.policy.max_output_bytes);
+        if byte_limit == 0 || byte_limit > self.policy.max_output_bytes {
+            return Err("declared output reservation exceeds policy ceiling".into());
+        }
         crate::relative_path(path)?;
         if path == STATE || path.starts_with(&format!("{STATE}/")) {
             return Err("retention metadata is never a producer output".into());
@@ -480,6 +493,10 @@ impl Inventory {
                 "unregistered output producer/scope: {producer}: {path}"
             ));
         }
+        // Git source/index facts are independent of inventory admission. Query
+        // them before serializing the durable reservation; the destination is
+        // still checked and published without replacement under owner exclusion.
+        crate::artifact_disposal::source_safe(&self.root, path)?;
         let gate = self.gate()?;
         let mut l = self.load()?;
         if l.outputs.len() + l.retired_leases.len() >= self.policy.max_entries {
@@ -492,7 +509,6 @@ impl Inventory {
         }) {
             return Err("overlapping/already enrolled output identity".into());
         }
-        crate::artifact_disposal::source_safe(&self.root, path)?;
         let charged = l
             .outputs
             .iter()
@@ -500,11 +516,11 @@ impl Inventory {
                 n.checked_add(o.reserved_bytes.max(if o.manifest.sealed {
                     o.manifest.bytes.saturating_sub(o.removed_logical_bytes)
                 } else {
-                    self.policy.max_output_bytes
+                    o.byte_limit.unwrap_or(self.policy.max_output_bytes)
                 }))
             })
             .ok_or("retained byte accounting overflow")?;
-        if charged.saturating_add(self.policy.max_output_bytes) > self.policy.max_total_bytes {
+        if charged.saturating_add(byte_limit) > self.policy.max_total_bytes {
             return Err(
                 "protected total retained byte capacity; release references or maintain".into(),
             );
@@ -547,7 +563,8 @@ impl Inventory {
             stack: vec![],
             removed_logical_bytes: 0,
             manifest: Manifest::default(),
-            reserved_bytes: self.policy.max_output_bytes,
+            reserved_bytes: byte_limit,
+            byte_limit: requested_limit,
             creation: if create.is_some() {
                 Some(Creation {
                     parent_identity: identity(physical.parent().ok_or("output parent")?)?,
@@ -591,6 +608,16 @@ impl Inventory {
             inventory: self,
             id,
             lease,
+            byte_limit,
+            path: path.into(),
+            identity: RefCell::new(
+                l.outputs
+                    .last()
+                    .ok_or("publication missing")?
+                    .identity
+                    .clone(),
+            ),
+            tree,
             written: Cell::new(0),
             written_nodes: Cell::new(1),
         })
@@ -772,9 +799,33 @@ impl Inventory {
         self.round_metadata.set(None);
         result
     }
+    /// Ordinary entries coalesce concurrent reclamation without waiting behind
+    /// another bounded pass. Publication still acquires authoritative admission.
+    pub fn maintain_available(&self) -> Result<Value, String> {
+        let Some(gate) = Lease::acquire(
+            &self.directory.join("admission.lease"),
+            None,
+            true,
+            true,
+            None,
+        )?
+        else {
+            return Ok(
+                json!({"status":"busy","effects":"maintenance-deferred","completion":"not-established"}),
+            );
+        };
+        self.round_metadata
+            .set(Some(self.policy.max_metadata_bytes_per_round));
+        let result = self.maintain_locked(now()?, &gate);
+        self.round_metadata.set(None);
+        result
+    }
     fn maintain_round(&self, observed: u64) -> Result<Value, String> {
-        let began = Instant::now();
         let gate = self.gate()?;
+        self.maintain_locked(observed, &gate)
+    }
+    fn maintain_locked(&self, observed: u64, gate: &Lease) -> Result<Value, String> {
+        let began = Instant::now();
         let mut l = self.load()?;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
@@ -883,7 +934,7 @@ impl Inventory {
                     &self.root,
                     &output.path,
                     self.policy.max_manifest_nodes,
-                    self.policy.max_output_bytes,
+                    output.byte_limit.unwrap_or(self.policy.max_output_bytes),
                 ) {
                     accounting_errors.push(json!({"id":output.id,"reason":error}));
                     break;
@@ -914,12 +965,16 @@ impl Inventory {
             ) && report_exclusion.is_none()
             {
                 pending.push(o.id.clone());
+                continue;
             }
             // A finite window retains bytes that still exist; it cannot turn an
             // already removed successful fixture into permanent metadata.
             let absent = matches!(fs::symlink_metadata(self.root.join(&o.path)),Err(ref e) if e.kind()==std::io::ErrorKind::NotFound);
             if o.expires > observed && !absent {
                 pending.push(o.id.clone());
+                // Already retained by policy: probing its live-use exclusion
+                // adds no protection and serializes unrelated admissions.
+                continue;
             }
             match Lease::acquire(
                 &self.directory.join(&o.lease),
@@ -1265,7 +1320,7 @@ impl Inventory {
         }
         self.save(&l, &gate)?;
         Ok(
-            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"known_retained_allocated_bytes":l.outputs.iter().flat_map(|o|o.manifest.entries.iter()).filter_map(|e|e.allocated_bytes).sum::<u64>(),"unmeasured_allocated_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed || o.manifest.entries.iter().any(|e|e.allocated_bytes.is_none())).count(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"overflow_outputs":l.outputs.iter().filter(|o|o.manifest.bytes.saturating_sub(o.removed_logical_bytes)>self.policy.max_output_bytes).count(),"max_total_bytes":self.policy.max_total_bytes,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_entries,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
+            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"known_retained_allocated_bytes":l.outputs.iter().flat_map(|o|o.manifest.entries.iter()).filter_map(|e|e.allocated_bytes).sum::<u64>(),"unmeasured_allocated_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed || o.manifest.entries.iter().any(|e|e.allocated_bytes.is_none())).count(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"overflow_outputs":l.outputs.iter().filter(|o|o.manifest.bytes.saturating_sub(o.removed_logical_bytes)>o.byte_limit.unwrap_or(self.policy.max_output_bytes)).count(),"max_total_bytes":self.policy.max_total_bytes,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_entries,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
         )
     }
     fn recover_creation(
@@ -1464,7 +1519,10 @@ impl Publication {
         }
         o.creation = None;
         o.phase = "publishing".into();
-        self.inventory.save(&l, &gate)
+        let attached = o.identity.clone();
+        self.inventory.save(&l, &gate)?;
+        *self.identity.borrow_mut() = attached;
+        Ok(())
     }
     fn write_destination(&self, path: &Path, length: u64) -> Result<PathBuf, String> {
         let total = self
@@ -1476,13 +1534,12 @@ impl Publication {
         if self.written_nodes.get() >= self.inventory.policy.max_manifest_nodes {
             return Err("output node capacity exceeded before writing".into());
         }
-        let gate = self.inventory.gate()?;
-        let l = self.inventory.load()?;
-        let o = l
-            .outputs
-            .iter()
-            .find(|o| o.id == self.id && o.phase == "publishing")
-            .ok_or("output is not writable")?;
+        // The live publisher capability excludes disposal of its immutable
+        // attachment. Other inventory admissions cannot change this output.
+        self.inventory.stable(&self.lease)?;
+        if self.identity.borrow().is_empty() {
+            return Err("output is not materialized".into());
+        }
         let physical = fs::canonicalize(path.parent().ok_or("write parent")?)
             .map_err(|e| e.to_string())?
             .join(path.file_name().ok_or("write name")?);
@@ -1491,13 +1548,14 @@ impl Publication {
             .map_err(|_| "write outside adopted output")?
             .to_str()
             .ok_or("write path UTF8")?;
-        if relative != o.path && (!o.tree || !relative.starts_with(&format!("{}/", o.path))) {
+        if relative != self.path
+            && (!self.tree || !relative.starts_with(&format!("{}/", self.path)))
+        {
             return Err("write outside exact output".into());
         }
-        if identity(&self.inventory.root.join(&o.path))? != o.identity {
+        if identity(&self.inventory.root.join(&self.path))? != *self.identity.borrow() {
             return Err("publication output identity changed".into());
         }
-        self.inventory.stable(&gate)?;
         self.written.set(total);
         self.written_nodes.set(self.written_nodes.get() + 1);
         no_symlink_parents(&self.inventory.root, relative)
@@ -1520,6 +1578,19 @@ impl Publication {
             .create_new(true)
             .open(path)
             .map_err(|e| e.to_string())?;
+        file.write_all(bytes).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())
+    }
+    pub fn replace_file(&self, path: &Path, bytes: &[u8]) -> Result<(), String> {
+        let path = self.write_destination(path, bytes.len() as u64)?;
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+        }
+        let mut file = options.open(path).map_err(|e| e.to_string())?;
         file.write_all(bytes).map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())
     }
@@ -1547,7 +1618,7 @@ impl Publication {
     }
     /// An adopted producer checks this reservation before writing new output bytes.
     pub fn byte_limit(&self) -> u64 {
-        self.inventory.policy.max_output_bytes
+        self.byte_limit
     }
     pub fn check_length(&self, bytes: u64) -> Result<(), String> {
         self.lease.stable()?;
@@ -1585,6 +1656,7 @@ impl Publication {
             o.sha256 = Some(digest);
             o.length = Some(length);
         }
+        o.creation = None;
         o.outcome = outcome;
         o.phase = "sealing".into();
         let began = Instant::now();
@@ -1598,7 +1670,7 @@ impl Publication {
                 &self.inventory.root,
                 &o.path,
                 self.inventory.policy.max_manifest_nodes,
-                self.inventory.policy.max_output_bytes,
+                self.byte_limit,
             ) {
                 self.inventory.save(&l, &gate)?;
                 return Err(error);
@@ -1625,7 +1697,9 @@ impl Publication {
 }
 /// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
 pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?.map(|i| i.maintain()).transpose()
+    Inventory::adopted(root)?
+        .map(|i| i.maintain_available())
+        .transpose()
 }
 
 /// Enroll a real producer output in the adopted owner, recovering prior released work first.
@@ -1638,7 +1712,7 @@ pub fn begin_adopted(
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    inventory.maintain()?;
+    inventory.maintain_available()?;
     let physical_path = fs::canonicalize(path).map_err(|e| e.to_string())?;
     let relative = physical_path
         .strip_prefix(&inventory.root)
@@ -1666,6 +1740,18 @@ pub fn create_adopted(
     tree: bool,
     outcome: Value,
 ) -> Result<Option<Publication>, String> {
+    create_adopted_with_limit(root, producer, path, tree, outcome, None)
+}
+/// The producer declares a finite reservation within the host ceiling. Unknown
+/// external writers keep the default ceiling; this is not a physical quota.
+pub fn create_adopted_with_limit(
+    root: &Path,
+    producer: &str,
+    path: &Path,
+    tree: bool,
+    outcome: Value,
+    byte_limit: Option<u64>,
+) -> Result<Option<Publication>, String> {
     let canonical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let physical_path = fs::canonicalize(path.parent().ok_or("output parent")?)
         .map_err(|e| e.to_string())?
@@ -1678,13 +1764,14 @@ pub fn create_adopted(
     crate::relative_path(relative)?;
     if let Some(inventory) = Inventory::adopted(root)? {
         if inventory.accepts(producer, relative) {
-            inventory.maintain()?;
+            inventory.maintain_available()?;
             let roots = if producer == "lifecycle-original" {
                 vec![format!("recovery:{relative}")]
             } else {
                 vec![]
             };
-            let publication = inventory.reserve(producer, relative, outcome, &roots, Some(tree))?;
+            let publication =
+                inventory.reserve(producer, relative, outcome, &roots, Some(tree), byte_limit)?;
             publication.materialize()?;
             return Ok(Some(publication));
         }
@@ -1855,7 +1942,7 @@ fn publish_owned_with(
     if length > inventory.policy.max_output_bytes {
         return Err("output byte capacity exceeded before writing".into());
     }
-    inventory.maintain()?;
+    inventory.maintain_available()?;
     let _activity = inventory.report_activity()?;
     let _writer = Lease::acquire(
         &inventory.directory.join("report-writer.lease"),

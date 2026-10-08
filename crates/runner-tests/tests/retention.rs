@@ -1462,3 +1462,93 @@ fn interrupted_lifecycle_original_stays_rooted_for_its_actual_recovery_reader() 
         "not-established"
     );
 }
+
+#[test]
+fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound() {
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_output_bytes"] = json!(1024);
+    policy["max_total_bytes"] = json!(2048);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let mut live = Vec::new();
+    for n in 0..8 {
+        let path = h
+            .path()
+            .join(format!(".chrono-harness/state/fixtures/small-{n}"));
+        let p = retained_artifacts::retention::create_adopted_with_limit(
+            h.path(),
+            "fixture",
+            &path,
+            true,
+            json!({"operation":n}),
+            Some(256),
+        )
+        .unwrap()
+        .unwrap();
+        p.write_file(&path.join("data"), &[1; 128]).unwrap();
+        assert!(p.replace_file(&path.join("data"), &[2; 129]).is_err());
+        assert_eq!(fs::read(path.join("data")).unwrap(), [1; 128]);
+        live.push(p);
+    }
+    let refused = h.path().join(".chrono-harness/state/fixtures/ninth");
+    assert!(
+        retained_artifacts::retention::create_adopted_with_limit(
+            h.path(),
+            "fixture",
+            &refused,
+            true,
+            json!(null),
+            Some(1),
+        )
+        .err()
+        .unwrap()
+        .contains("total retained byte capacity")
+    );
+    assert!(!refused.exists());
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        8
+    );
+    for (n, p) in live.into_iter().enumerate() {
+        p.complete(json!({"exit":n})).unwrap();
+    }
+    let mut remaining = 8;
+    for _ in 0..8 {
+        let round = inventory(h.path()).maintain().unwrap();
+        assert!(round["nodes"].as_u64().unwrap() <= 256);
+        remaining = round["remaining_outputs"].as_u64().unwrap();
+        if remaining == 0 {
+            break;
+        }
+    }
+    assert_eq!(remaining, 0);
+    assert_eq!(ledger(h.path())["summaries"].as_array().unwrap().len(), 8);
+}
+#[test]
+fn ordinary_maintenance_defers_busy_exclusion_without_spending_another_round() {
+    let h = host(256, 16);
+    let i = inventory(h.path());
+    let gate = chrono_harness::ownership::Lease::acquire(
+        &h.path()
+            .join(".chrono-harness/state/output-retention-v1/admission.lease"),
+        None,
+        true,
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let began = std::time::Instant::now();
+    assert_eq!(
+        i.maintain_available().unwrap()["effects"],
+        "maintenance-deferred"
+    );
+    assert!(began.elapsed() < std::time::Duration::from_secs(1));
+    drop(gate);
+    assert_eq!(i.maintain_available().unwrap()["remaining_outputs"], 0);
+}

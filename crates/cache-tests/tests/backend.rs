@@ -2,7 +2,7 @@ use super::*;
 
 fn backend_fixture() -> (Host, Value) {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    adopt_consumer_contract(&root, &mut config);
     config["backend"] = backend();
     let mut prepared = plan(root.path(), &config, "check.one").unwrap();
     // The backend fixture calls the installed report binary below, so bind the
@@ -31,7 +31,7 @@ fn backend() -> Value {
 #[test]
 fn backend_policy_is_explicit_and_does_not_invalidate_build_keys_or_query_during_planning() {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
+    adopt_consumer_contract(&root, &mut config);
     let before = plan(root.path(), &config, "check.one").unwrap();
     config["backend"] = backend();
     let after = plan(root.path(), &config, "check.one").unwrap();
@@ -70,15 +70,20 @@ fn entry(key: &str) -> Value {
         "size_in_bytes":123,"created_at":"2026-01-01T00:00:00Z","last_accessed_at":"2026-01-01T00:00:00Z"})
 }
 
-fn run_report(root: &Path, prepared: &Value, response: &Value, save: &str) -> Value {
-    fs::write(
-        root.join("backend-response.json"),
+fn run_report(root: &Host, prepared: &Value, response: &Value, save: &str) -> Value {
+    root.write(
+        root.path().join("backend-response.json"),
         serde_json::to_vec(response).unwrap(),
     )
     .unwrap();
     let plan_path = ".chrono-harness/state/backend-plan.json";
-    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
-    fs::write(root.join(plan_path), serde_json::to_vec(prepared).unwrap()).unwrap();
+    root.directory(root.path().join(".chrono-harness/state"))
+        .unwrap();
+    root.write(
+        root.path().join(plan_path),
+        serde_json::to_vec(prepared).unwrap(),
+    )
+    .unwrap();
     let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{}},
         "cache_0_save":{"outcome":save,"outputs":{}},"work":{"outcome":"failure"}});
     let output = Command::new(
@@ -87,7 +92,7 @@ fn run_report(root: &Path, prepared: &Value, response: &Value, save: &str) -> Va
     .args([
         "report",
         "--host-root",
-        root.to_str().unwrap(),
+        root.path().to_str().unwrap(),
         "--plan",
         plan_path,
         "--steps-env",
@@ -111,13 +116,13 @@ fn run_report(root: &Path, prepared: &Value, response: &Value, save: &str) -> Va
     let result: Value = serde_json::from_slice(&output.stdout).unwrap();
     let report = &result["observation"];
     let retained: Value = serde_json::from_slice(
-        &fs::read(root.join(result["report"]["path"].as_str().unwrap())).unwrap(),
+        &fs::read(root.path().join(result["report"]["path"].as_str().unwrap())).unwrap(),
     )
     .unwrap();
     assert_eq!(report, &retained);
     assert_eq!(report["work"]["outcome"], "failure");
     let original = fs::read(
-        root.join(
+        root.path().join(
             report["backend"]["original"]["path"]
                 .as_str()
                 .expect("backend original must be retained"),
@@ -134,7 +139,7 @@ fn backend_presence_requires_original_exact_key_and_ref_evidence() {
     let (root, prepared) = backend_fixture();
     let key = prepared["caches"]["project"]["key"].as_str().unwrap();
     let report = run_report(
-        root.path(),
+        &root,
         &prepared,
         &json!([{"total_count":1,"actions_caches":[entry(key)]}]),
         "success",
@@ -209,7 +214,7 @@ fn backend_absence_ambiguity_and_query_failure_never_confirm_save() {
             }
             _ => json!({"not":"pages"}),
         };
-        let report = run_report(root.path(), &prepared, &response, "success");
+        let report = run_report(&root, &prepared, &response, "success");
         assert_eq!(
             report["caches"]["project"]["save"]["confirmed"], false,
             "{case}: {report}"
@@ -237,7 +242,7 @@ fn backend_is_not_queried_without_a_successful_native_save() {
         let (root, prepared) = backend_fixture();
         let key = prepared["caches"]["project"]["key"].as_str().unwrap();
         let report = run_report(
-            root.path(),
+            &root,
             &prepared,
             &json!([{"total_count":1,"actions_caches":[entry(key)]}]),
             outcome,
@@ -272,7 +277,7 @@ fn backend_pagination_retains_original_bytes_and_rejects_conflicting_identity() 
         {"total_count":2,"actions_caches":[first.clone()]},
         {"total_count":2,"actions_caches":[first.clone(),wanted.clone()]}
     ]);
-    let report = run_report(root.path(), &prepared, &pages, "success");
+    let report = run_report(&root, &prepared, &pages, "success");
     assert_eq!(
         report["caches"]["project"]["save"]["status"],
         "backend-entry-observed"
@@ -286,7 +291,7 @@ fn backend_pagination_retains_original_bytes_and_rejects_conflicting_identity() 
     );
     wanted["id"] = first["id"].clone();
     let conflict = run_report(
-        root.path(),
+        &root,
         &prepared,
         &json!([
             {"total_count":2,"actions_caches":[first]},
@@ -321,7 +326,7 @@ fn backend_bounded_process_failures_preserve_diagnostics_and_never_confirm_save(
                 prepared["backend"]["command"]["program"] = json!(root.path().join("missing-tool"))
             }
         }
-        let report = run_report(root.path(), &prepared, &json!([]), "success");
+        let report = run_report(&root, &prepared, &json!([]), "success");
         assert_eq!(
             report["backend"]["status"], "unavailable",
             "{case}: {report}"

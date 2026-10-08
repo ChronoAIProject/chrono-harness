@@ -885,3 +885,12 @@ the host's registration policy, and its success does not certify governance or C
 Filesystem failure reports completed changes; there is no cross-file transaction
 or concurrent-writer isolation. Preserve the original result and reconcile the
 reported paths before retrying; once migrated, ordinary generation is idempotent.
+
+For adopted v4 gather, the acquisition owner reserves and records its directory
+before download attempts. Failed retry directories remain originals. The current
+immutable gather report references that acquisition, and pointer replacement
+settles its previous root only after publication. External download bytes are
+accounted during sealing; controlled directory creation checks the publisher
+node bound. Protected overflow is preserved and reported separately from the
+transport result. Detector seed acquisition and complete native interruption,
+retry, and delivery acceptance remain separate unfinished boundaries.

@@ -27,6 +27,8 @@ struct Transport<'a> {
     digest: String,
     observations: Vec<Value>,
     resources: Option<Value>,
+    acquisition_path: Option<String>,
+    downloads: Option<chrono_harness::retained_artifacts::retention::Publication>,
 }
 
 impl<'a> Transport<'a> {
@@ -50,6 +52,8 @@ impl<'a> Transport<'a> {
             executable: exe.to_str().ok_or("non UTF-8 transport")?.into(),
             digest: file_identity(&exe)?.0,
             observations: vec![],
+            downloads: None,
+            acquisition_path: None,
             resources: c
                 .resource_observation
                 .as_ref()
@@ -112,7 +116,10 @@ impl<'a> Transport<'a> {
         if absolute.exists() {
             return Err("artifact download destination exists; retain original acquisition".into());
         }
-        fs::create_dir_all(&absolute).map_err(|e| e.to_string())?;
+        chrono_harness::retained_artifacts::retention::directory_adopted(
+            self.downloads.as_ref(),
+            &absolute,
+        )?;
         let policy = self.config.download_retry.clone();
         let attempts = policy.as_ref().map_or(1, |p| p.max_attempts);
         let mut stdout_remaining = self.config.output_limit_bytes;
@@ -120,7 +127,10 @@ impl<'a> Transport<'a> {
         for attempt in 1..=attempts {
             let destination = if policy.is_some() {
                 let path = format!("{directory}/attempt-{attempt}");
-                fs::create_dir(no_symlink_parents(self.root, &path)?).map_err(|e| e.to_string())?;
+                chrono_harness::retained_artifacts::retention::directory_adopted(
+                    self.downloads.as_ref(),
+                    &no_symlink_parents(self.root, &path)?,
+                )?;
                 path
             } else {
                 directory.into()
@@ -524,11 +534,25 @@ fn inner(
     let mut reports = vec![];
     let mut identities = vec![];
     let download_prefix = if c.collection.schema == "chrono-github-ci/v4" {
-        let retained = chrono_harness::prepared::retain_directory(
+        let parent = no_symlink_parents(root, &c.gather.download_directory)?;
+        fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
+        let retained =
+            chrono_harness::retained_artifacts::retention::unique_path(&parent, "gather-", "")?;
+        transport.downloads = chrono_harness::retained_artifacts::retention::create_adopted(
             root,
-            &c.gather.download_directory,
-            "gather-",
+            "check-original",
+            &retained,
+            true,
+            json!({"kind":"native-acquisition","outcome":"not-established"}),
         )?;
+        transport.acquisition_path = Some(
+            retained
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("acquisition path UTF8")?
+                .into(),
+        );
         format!(
             "{}/",
             retained
@@ -756,7 +780,13 @@ pub(super) fn gather(
     }
     let mut transport = Transport::new(root, &c.gather)?;
     let result = inner(root, path, c, repository, &mut transport);
-    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    // Seal acquisition independently of its check outcome. Failed attempts remain
+    // exact originals, and interruption keeps the creation intent recoverable.
+    let acquisition_path = transport.acquisition_path.take();
+    let storage_result = transport.downloads.take().map(|publication| publication.complete(
+        json!({"kind":"native-acquisition","result":result.as_ref().ok(),"error":result.as_ref().err(),"completion":"not-established"})
+    )).transpose();
+    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"storage_error":storage_result.as_ref().err(),"processes":transport.observations});
     if let Some(resources) = transport.resources {
         report["resources"] = resources;
         if let Some(summary) = c.gather.resource_observation.as_ref().and_then(|config| {
@@ -776,12 +806,32 @@ pub(super) fn gather(
             .path
         );
     }
+    let gather_original = report["retained_report"].as_str().map(str::to_owned);
+    let _slot = if let Some(original) = &gather_original {
+        chrono_harness::retained_artifacts::retention::reference_report(
+            root,
+            &c.gather.report_path,
+            original,
+            &acquisition_path.into_iter().collect::<Vec<_>>(),
+            None,
+        )?
+    } else {
+        None
+    };
     write_file(
         root,
         &c.gather.report_path,
         &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
     )?;
+    if let Some(original) = gather_original {
+        chrono_harness::retained_artifacts::retention::settle_report(
+            root,
+            &c.gather.report_path,
+            &original,
+        )?;
+    }
     result?;
+    storage_result?;
     Ok(serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n")
 }
 
