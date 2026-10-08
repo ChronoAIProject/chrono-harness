@@ -1,0 +1,172 @@
+{
+  "schema": "chrono-release/v1",
+  "version": "v0.1.0-beta.21",
+  "source_commit": "0d244808666cbb31f6a61fc8edb6fc2562e59be9",
+  "source_tree": "49c66c5ade91521d7e74801c75831e1bc15c4219",
+  "platforms": {
+    "linux-x86_64": {
+      "chrono-cache": {
+        "file": "chrono-cache-linux-x86_64",
+        "sha256": "bc6ac0320004c64894d259437167a228ea9dbef0d639e60501880b5ec9263722",
+        "size": 1768072
+      },
+      "chrono-ci": {
+        "file": "chrono-ci-linux-x86_64",
+        "sha256": "b99c587a432b4813e4ae2b780e7dff6bac03cac4882a0222e6269375520bab33",
+        "size": 5873376
+      },
+      "chrono-distribution": {
+        "file": "chrono-distribution-linux-x86_64",
+        "sha256": "c1e10bb3135035033e48960602b53930d0e82aa917183f17e03f014dd7aa3607",
+        "size": 986184
+      },
+      "chrono-harness": {
+        "file": "chrono-harness-linux-x86_64",
+        "sha256": "53b45c5abced8cf8fc981cf342f1c537556ad32154d043ad53318a270ca6b17e",
+        "size": 2672840
+      },
+      "chrono-inputs": {
+        "file": "chrono-inputs-linux-x86_64",
+        "sha256": "b019607b0847be44190199da36826929319d06028a5e83603f4c2a10e5a8ece9",
+        "size": 3005464
+      },
+      "chrono-instructions": {
+        "file": "chrono-instructions-linux-x86_64",
+        "sha256": "04e2b9969403765b2e1c671378d991360fe4150f31ae2226b2c59b8d4c5387b5",
+        "size": 942800
+      },
+      "chrono-judge-cargo": {
+        "file": "chrono-judge-cargo-linux-x86_64",
+        "sha256": "84d6301f62571b0818d85ff3e1f64086498cc3f2b3a7ac6e747dc249008a66c2",
+        "size": 4047096
+      },
+      "chrono-judge-ci": {
+        "file": "chrono-judge-ci-linux-x86_64",
+        "sha256": "6a690926b0003ddce6ea1142be9ddadde3e4179bd75c2bb66d6e521545c15db7",
+        "size": 3769752
+      },
+      "chrono-judge-cost": {
+        "file": "chrono-judge-cost-linux-x86_64",
+        "sha256": "d877d1b476a4426c03fea4bc042f0d14b01952b2dd807c504b4486978b791538",
+        "size": 2881176
+      },
+      "chrono-judge-filemap": {
+        "file": "chrono-judge-filemap-linux-x86_64",
+        "sha256": "3826634f5f88313045acca6620fff67324e67479c50a2ba9f0a68d4d9a24fc95",
+        "size": 3465824
+      },
+      "chrono-judge-mixed": {
+        "file": "chrono-judge-mixed-linux-x86_64",
+        "sha256": "047c04dc8455331964cfeb538c9f0cd036b58ca4e14a636c48dd0834e40cad6f",
+        "size": 2661528
+      },
+      "chrono-judge-projects": {
+        "file": "chrono-judge-projects-linux-x86_64",
+        "sha256": "4f3ac3a83001d8aa7a600103dfe93af2a23ca13057b8356b377f5edd917b016c",
+        "size": 4203672
+      },
+      "chrono-judge-registration": {
+        "file": "chrono-judge-registration-linux-x86_64",
+        "sha256": "a9d86ae23b1d8e7db28347a4e92bc54e631d36c5223e805e71bad21aaa28130c",
+        "size": 2805864
+      },
+      "chrono-judge-routes": {
+        "file": "chrono-judge-routes-linux-x86_64",
+        "sha256": "1c25d612486c1b2387a61bdbd17d7c7eb685e68505b72664f7678ba8f630b4f6",
+        "size": 3500056
+      },
+      "chrono-judge-workflow": {
+        "file": "chrono-judge-workflow-linux-x86_64",
+        "sha256": "e2ba48329be8ba2686f6b39b9b787055951838931cf9c8163493fb28be37342a",
+        "size": 4493504
+      },
+      "chrono-worktree": {
+        "file": "chrono-worktree-linux-x86_64",
+        "sha256": "5345bf65edd6c358def9864253238185a7656f4ec1997ddbd1fe94b789e8809d",
+        "size": 3320320
+      }
+    },
+    "macos-aarch64": {
+      "chrono-cache": {
+        "file": "chrono-cache-macos-aarch64",
+        "sha256": "b78db805bfb224c2cb323dfba69bf3ae835178f856e355fb4a63b13995a790d6",
+        "size": 1457104
+      },
+      "chrono-ci": {
+        "file": "chrono-ci-macos-aarch64",
+        "sha256": "06a58f276b46067d37e65b3966c30d72c8b349adf9789ac9fac96a0919a7ed87",
+        "size": 4707600
+      },
+      "chrono-distribution": {
+        "file": "chrono-distribution-macos-aarch64",
+        "sha256": "91af8957836b89cc3e41f2019443eb017b36caca96cb66f48aa6675ccad6a0aa",
+        "size": 785168
+      },
+      "chrono-harness": {
+        "file": "chrono-harness-macos-aarch64",
+        "sha256": "c27bbe0fc175618df3035e82f3d9d4bd0837c48644523b16a278cfe4809d2b3e",
+        "size": 2298400
+      },
+      "chrono-inputs": {
+        "file": "chrono-inputs-macos-aarch64",
+        "sha256": "e6707fa1b0b9169c6e3b31d895982b47b5c3722d305afeb59caeaf39507ef61e",
+        "size": 2371920
+      },
+      "chrono-instructions": {
+        "file": "chrono-instructions-macos-aarch64",
+        "sha256": "39c8ff88753071a788c3724436516a329da04c87bf7d54e43dd7d7c57e1ff587",
+        "size": 864176
+      },
+      "chrono-judge-cargo": {
+        "file": "chrono-judge-cargo-macos-aarch64",
+        "sha256": "34f860ce7901e9badd9058e2dcc310cbd473672d47c8e74d4b51d4470d13d13f",
+        "size": 3318240
+      },
+      "chrono-judge-ci": {
+        "file": "chrono-judge-ci-macos-aarch64",
+        "sha256": "91e59941240cf36ff9ee27ef502f0f9f688216747ded46a5c4109c8873eacb59",
+        "size": 3009536
+      },
+      "chrono-judge-cost": {
+        "file": "chrono-judge-cost-macos-aarch64",
+        "sha256": "f95214a2e8346d62ebfa36477d8279a947f71acf6c908b80e4f4f0620a00d4f8",
+        "size": 2382480
+      },
+      "chrono-judge-filemap": {
+        "file": "chrono-judge-filemap-macos-aarch64",
+        "sha256": "c78adb7d76549a64200c2f5be16f469a101ecd6586d83c20368e51f287f6bb19",
+        "size": 2825120
+      },
+      "chrono-judge-mixed": {
+        "file": "chrono-judge-mixed-macos-aarch64",
+        "sha256": "489caaf48cda5c593adf135b6fc4a38f84e1d12867cc5521b86e435a80ad45da",
+        "size": 2209744
+      },
+      "chrono-judge-projects": {
+        "file": "chrono-judge-projects-macos-aarch64",
+        "sha256": "4daf7c53e103fb1ef9fe0ce7af4767b82eb49934419efa602e10d803a0e84c9a",
+        "size": 3482848
+      },
+      "chrono-judge-registration": {
+        "file": "chrono-judge-registration-macos-aarch64",
+        "sha256": "25cf9ed984698369443698955480c3faa88df5b14727192feaa02fbd294e82b8",
+        "size": 2326672
+      },
+      "chrono-judge-routes": {
+        "file": "chrono-judge-routes-macos-aarch64",
+        "sha256": "d1e867419174e76c6de7772e31f50d5761ad83127f172538f2834ea0d72df0bf",
+        "size": 2882176
+      },
+      "chrono-judge-workflow": {
+        "file": "chrono-judge-workflow-macos-aarch64",
+        "sha256": "c517702f89ef8b117ac15ca9b1ca758c035adb2332b56905740c0d1699b16a30",
+        "size": 3707264
+      },
+      "chrono-worktree": {
+        "file": "chrono-worktree-macos-aarch64",
+        "sha256": "d0126e0894e256f032255078b6710fbb382082212c6f9f58088a3ddf67d4c96c",
+        "size": 2589792
+      }
+    }
+  }
+}

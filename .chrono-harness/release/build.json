@@ -59,7 +59,7 @@
         "asset": "chrono-harness",
         "destinations": [
           "crates/runner/target/debug/chrono-harness",
-          ".chrono-harness/bin/chrono-harness"
+          ".chrono-harness/bin/source/chrono-harness"
         ]
       },
       {
@@ -73,91 +73,91 @@
         "asset": "chrono-judge-ci",
         "destinations": [
           "crates/judge-ci/target/debug/chrono-judge-ci",
-          ".chrono-harness/bin/chrono-judge-ci"
+          ".chrono-harness/bin/source/chrono-judge-ci"
         ]
       },
       {
         "asset": "chrono-ci",
         "destinations": [
           "crates/ci/target/debug/chrono-ci",
-          ".chrono-harness/bin/chrono-ci"
+          ".chrono-harness/bin/source/chrono-ci"
         ]
       },
       {
         "asset": "chrono-judge-registration",
         "destinations": [
           "crates/judge-registration/target/debug/chrono-judge-registration",
-          ".chrono-harness/bin/chrono-judge-registration"
+          ".chrono-harness/bin/source/chrono-judge-registration"
         ]
       },
       {
         "asset": "chrono-judge-filemap",
         "destinations": [
           "crates/judge-filemap/target/debug/chrono-judge-filemap",
-          ".chrono-harness/bin/chrono-judge-filemap"
+          ".chrono-harness/bin/source/chrono-judge-filemap"
         ]
       },
       {
         "asset": "chrono-judge-routes",
         "destinations": [
           "crates/judge-routes/target/debug/chrono-judge-routes",
-          ".chrono-harness/bin/chrono-judge-routes"
+          ".chrono-harness/bin/source/chrono-judge-routes"
         ]
       },
       {
         "asset": "chrono-judge-projects",
         "destinations": [
           "crates/judge-projects/target/debug/chrono-judge-projects",
-          ".chrono-harness/bin/chrono-judge-projects"
+          ".chrono-harness/bin/source/chrono-judge-projects"
         ]
       },
       {
         "asset": "chrono-judge-cost",
         "destinations": [
           "crates/judge-cost/target/debug/chrono-judge-cost",
-          ".chrono-harness/bin/chrono-judge-cost"
+          ".chrono-harness/bin/source/chrono-judge-cost"
         ]
       },
       {
         "asset": "chrono-judge-mixed",
         "destinations": [
           "crates/judge-mixed/target/debug/chrono-judge-mixed",
-          ".chrono-harness/bin/chrono-judge-mixed"
+          ".chrono-harness/bin/source/chrono-judge-mixed"
         ]
       },
       {
         "asset": "chrono-judge-workflow",
         "destinations": [
           "crates/judge-workflow/target/debug/chrono-judge-workflow",
-          ".chrono-harness/bin/chrono-judge-workflow"
+          ".chrono-harness/bin/source/chrono-judge-workflow"
         ]
       },
       {
         "asset": "chrono-inputs",
         "destinations": [
           "crates/inputs/target/debug/chrono-inputs",
-          ".chrono-harness/bin/chrono-inputs"
+          ".chrono-harness/bin/source/chrono-inputs"
         ]
       },
       {
         "asset": "chrono-distribution",
         "destinations": [
           "crates/distribution/target/debug/chrono-distribution",
-          ".chrono-harness/bin/chrono-distribution"
+          ".chrono-harness/bin/source/chrono-distribution"
         ]
       },
       {
         "asset": "chrono-judge-cargo",
         "destinations": [
           "crates/judge-cargo/target/debug/chrono-judge-cargo",
-          ".chrono-harness/bin/chrono-judge-cargo"
+          ".chrono-harness/bin/source/chrono-judge-cargo"
         ]
       },
       {
         "asset": "chrono-worktree",
         "destinations": [
           "crates/worktree/target/debug/chrono-worktree",
-          ".chrono-harness/bin/chrono-worktree"
+          ".chrono-harness/bin/source/chrono-worktree"
         ]
       },
       {
@@ -537,7 +537,9 @@
       "id": "verify_host_bootstrap_tests",
       "kind": "verify",
       "operation": "host.bootstrap-tests",
-      "needs": [],
+      "needs": [
+        "build_distribution"
+      ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
       "rust_toolchain": false
     },
@@ -777,7 +779,7 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project\u2019s Rust fixture executables.",
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
       "release_assets": [
         "chrono-harness"
       ]
@@ -883,7 +885,7 @@
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host\u2019s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture\u2019s actual cost invocation.",
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -915,8 +917,10 @@
       "release_assets": []
     },
     "verify_host_bootstrap_tests": {
-      "need": "The original host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; it calls no released production executable.",
-      "release_assets": []
+      "need": "Exercise the current source distribution installer through the Python host startup consumer fixtures; public pinned installation is verified separately.",
+      "release_assets": [
+        "chrono-distribution"
+      ]
     },
     "verify_cache_tests": {
       "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",

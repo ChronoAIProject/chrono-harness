@@ -15,23 +15,23 @@
   "install": [
     {
       "source": "crates/runner/target/debug/chrono-harness",
-      "destination": ".chrono-harness/bin/chrono-harness"
+      "destination": ".chrono-harness/bin/source/chrono-harness"
     },
     {
       "source": "crates/judge-ci/target/debug/chrono-judge-ci",
-      "destination": ".chrono-harness/bin/chrono-judge-ci"
+      "destination": ".chrono-harness/bin/source/chrono-judge-ci"
     },
     {
       "source": "crates/ci/target/debug/chrono-ci",
-      "destination": ".chrono-harness/bin/chrono-ci"
+      "destination": ".chrono-harness/bin/source/chrono-ci"
     },
     {
       "source": "crates/worktree/target/debug/chrono-worktree",
-      "destination": ".chrono-harness/bin/chrono-worktree"
+      "destination": ".chrono-harness/bin/source/chrono-worktree"
     },
     {
       "source": "crates/judge-cargo/target/debug/chrono-judge-cargo",
-      "destination": ".chrono-harness/bin/chrono-judge-cargo"
+      "destination": ".chrono-harness/bin/source/chrono-judge-cargo"
     }
   ],
   "participation": {
@@ -44,5 +44,8 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true
+  "rust_incremental": true,
+  "distribution": {
+    "manifest": ".chrono-harness/distribution-release.json"
+  }
 }

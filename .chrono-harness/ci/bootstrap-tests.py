@@ -173,6 +173,14 @@ class Bootstrap(unittest.TestCase):
                 self.assertFalse((self.tools / "calls.json").exists())
                 self.assertFalse(self.state_path.exists())
 
+    def test_missing_distribution_declaration_stops_before_source_operations(self):
+        self.write_json(self.ci / "bootstrap.json", dict(
+            self.config, distribution={"manifest": ".chrono-harness/distribution-release.json"}))
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0, "missing immutable inputs were ignored")
+        self.assertFalse((self.root / "built-tool").exists())
+        self.assertFalse(self.state_path.exists())
+
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
         self.assertEqual(json.dumps(self.evidence()["source"], sort_keys=True),
@@ -309,6 +317,6 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    from bootstrap_shared_tests import SharedStartup
+    from bootstrap_shared_tests import SharedStartup, DistributionStartup
 
     unittest.main()

@@ -53,6 +53,24 @@ chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output 
 
 ## 宿主采用
 
+本产品宿主的 P1 启动采用固定 beta.21：公开发布源为
+`0d244808666cbb31f6a61fc8edb6fc2562e59be9`，树为
+`49c66c5ade91521d7e74801c75831e1bc15c4219`，保留的清单摘要为
+`7994ece6818d794da53e468e4b1a589033e3eec1362482f4205db5a7217d4724`（6629 字节）。
+`.chrono-harness/distribution.json` 由现有 `adopt` 生成，显式选 14 个启动／治理工具，
+不选 `chrono-cache`；现有 `chrono-cache-transport` 的源码构建和绑定独立保留。
+本地 core/default/detector 启动与原生共享启动使用同一安装登记。源码构建仍执行原操作，
+其安装输出位于 `bin/source/`，不能替代不同摘要的执行物。原安装回执保存发布源码身份；
+bootstrap 与共享转移另保存宿主候选身份和原始报告，二者不改标。
+发布验证的这 14 个源码安装路径也转至 `bin/source/`，原 source-target 路径、操作与
+实际发布资产仍保留。Python startup 测试显式依赖 `build_distribution` 的真实源码资产，
+两个原生发布 job 只下载该依赖；CI 源码 fixture 复用既有 source-output helper。
+
+这些宿主政策／启动程序同改属于 mixed-change。验证成本包括真实公开安装、Python
+启动消费者与原有源码控制、受影响登记／CI／所有权消费者以及调用方的 clean candidate
+规范检查与原生启动验收。P1 的固定执行物不启用 full 登记、不声明输入闭合，不表示
+P2/P3/P4、跨平台同判或完整 SPEC 已完成；提交、原生检查与落地由调用方负责。
+
 取得固定发布清单和对应平台的 `chrono-distribution` 后，显式选择要安装的工具：
 
 ```sh

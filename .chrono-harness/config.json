@@ -5,7 +5,7 @@
   "runner": {
     "path": ".chrono-harness/bin/chrono-harness",
     "version": "0.1.0",
-    "sha256": null
+    "sha256": "c27bbe0fc175618df3035e82f3d9d4bd0837c48644523b16a278cfe4809d2b3e"
   },
   "registries": {
     "judges": ".chrono-harness/judges.json",
@@ -19392,7 +19392,7 @@
     "status": "incomplete",
     "unresolved": [
       "The locally observed Cargo/rustc/rustfmt, compiler libraries, target libraries, native linker/delegates, SDK and package/configuration declarations are not yet provisioned/observed on native macos-26. Local absolute locations are local scope, not native bindings.",
-      "Fixed compatible candidate runner/judge/guard artifacts and exact executable bindings remain A3 prerequisites; original raw source actions are retained until A4 switches the full route.",
+      "Immutable beta.21 release tools and local runner/seven-judge executable byte bindings are adopted for P1 startup. Clean-candidate and native startup acceptance remain caller obligations; original source actions remain registered and the full governance/guard route is not activated.",
       "Genuine original base/candidate snapshots, unit/governance projections, native provisioning and original blob transports must be produced from their actual endpoints. Current local observations are not historical snapshots.",
       "Operating-system runtime/delegated libraries, non-Cargo/script/governance external input scopes and endpoint environment bindings need their actual producer evidence.",
       "Verdict-relevant time/randomness/external responses, timeout/resource evaluation and deterministic parity are not certified by these bounded observations. Ordinary full activation and universal deterministic parity remain distinct."

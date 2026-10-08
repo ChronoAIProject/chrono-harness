@@ -5,7 +5,7 @@
     {
       "id": "registration",
       "executable": ".chrono-harness/bin/chrono-judge-registration",
-      "sha256": null,
+      "sha256": "25cf9ed984698369443698955480c3faa88df5b14727192feaa02fbd294e82b8",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -20,7 +20,7 @@
     {
       "id": "filemap",
       "executable": ".chrono-harness/bin/chrono-judge-filemap",
-      "sha256": null,
+      "sha256": "c78adb7d76549a64200c2f5be16f469a101ecd6586d83c20368e51f287f6bb19",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -37,7 +37,7 @@
     {
       "id": "projects",
       "executable": ".chrono-harness/bin/chrono-judge-projects",
-      "sha256": null,
+      "sha256": "4daf7c53e103fb1ef9fe0ce7af4767b82eb49934419efa602e10d803a0e84c9a",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -56,7 +56,7 @@
     {
       "id": "routes",
       "executable": ".chrono-harness/bin/chrono-judge-routes",
-      "sha256": null,
+      "sha256": "d1e867419174e76c6de7772e31f50d5761ad83127f172538f2834ea0d72df0bf",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -74,7 +74,7 @@
     {
       "id": "cost",
       "executable": ".chrono-harness/bin/chrono-judge-cost",
-      "sha256": null,
+      "sha256": "f95214a2e8346d62ebfa36477d8279a947f71acf6c908b80e4f4f0620a00d4f8",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -92,7 +92,7 @@
     {
       "id": "mixed",
       "executable": ".chrono-harness/bin/chrono-judge-mixed",
-      "sha256": null,
+      "sha256": "489caaf48cda5c593adf135b6fc4a38f84e1d12867cc5521b86e435a80ad45da",
       "argv": [
         "--protocol",
         "chrono-judge/v1"
@@ -111,7 +111,7 @@
     {
       "id": "workflow",
       "executable": ".chrono-harness/bin/chrono-judge-workflow",
-      "sha256": null,
+      "sha256": "c517702f89ef8b117ac15ca9b1ca758c035adb2332b56905740c0d1699b16a30",
       "argv": [
         "--protocol",
         "chrono-judge/v1"

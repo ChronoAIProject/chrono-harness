@@ -1029,6 +1029,14 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -3613,6 +3621,14 @@
         {
           "kind": "runtime-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -6323,6 +6339,66 @@
         {
           "kind": "build-input",
           "to": "project:cache-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/distribution.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/distribution-release.json",
+      "owner": "repository",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/install.py",
+      "owner": "host-bootstrap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
         }
       ]
     }
@@ -44107,6 +44183,11 @@
       "kind": "build-input",
       "to": "project:runner",
       "from": "input:package.miniz_oxide.0.8.9.f047924b6a49d5d5"
+    },
+    {
+      "from": "project:distribution",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
     }
   ],
   "test_costs": [
@@ -44519,6 +44600,7 @@
     },
     "test:host-bootstrap-tests": {
       "operations": [
+        "build.distribution",
         "host.bootstrap-tests"
       ],
       "timeout_seconds": 900,

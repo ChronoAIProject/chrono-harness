@@ -318,7 +318,9 @@ class ReleaseUnits(unittest.TestCase):
                     if u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
                 else:
                     self.assertEqual(owner['language'],'python')
-                    if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution'])
+                    if u['operation'] in ['release.tests.integration','host.bootstrap-tests']:
+                        self.assertEqual(u['needs'],['build_distribution'])
+                        self.assertEqual(cfg['verification_consumers'][u['id']]['release_assets'],['chrono-distribution'])
                     else:self.assertEqual(u['needs'],[])
         self.assertEqual(len(projection['jobs']),sum(len(mapping) for mapping in cfg['native_jobs'].values()))
         jobs={j['id']:j for j in projection['jobs']}

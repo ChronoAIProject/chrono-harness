@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -13,6 +14,87 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from process_fds import inherited_fds
 
 PASS_FDS = inherited_fds()
+
+
+def host_path(root, declared, prefix=".chrono-harness/"):
+    path = Path(declared)
+    if (not isinstance(declared, str) or path.is_absolute() or ".." in path.parts
+            or path.as_posix() != declared or not declared.startswith(prefix)):
+        raise ValueError("invalid bootstrap host path")
+    target = root
+    for part in path.parts:
+        target /= part
+        if target.is_symlink():
+            raise ValueError("bootstrap host path contains a symlink")
+    return target
+
+
+def distribution_spec(root, config):
+    """Read the adopted installer contract; do not implement download/installation."""
+    if "distribution" not in config:
+        return None
+    declaration = config["distribution"]
+    if set(declaration) != {"manifest"}:
+        raise ValueError("invalid bootstrap distribution declaration")
+    raw = host_path(root, declaration["manifest"]).read_bytes()
+    release = json.loads(raw)
+    lock = json.loads(host_path(root, ".chrono-harness/distribution.json").read_bytes())
+    system = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
+    arch = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}.get(platform.machine())
+    key = str(system) + "-" + str(arch)
+    assets = release["platforms"][key]
+    if (lock["schema"] != "chrono-install/v1" or release["schema"] != "chrono-release/v1"
+            or lock["version"] != release["version"] or not lock["install"]
+            or lock["manifest"] != {"file": "release.json", "size": len(raw),
+                                    "sha256": hashlib.sha256(raw).hexdigest()}
+            or lock["installers"][key] != assets["chrono-distribution"]):
+        raise ValueError("bootstrap distribution manifest/installer binding differs")
+    installed, destinations = [], set()
+    for name, destination in sorted(lock["install"].items()):
+        host_path(root, destination, ".chrono-harness/bin/")
+        if destination in destinations:
+            raise ValueError("duplicate distribution destination")
+        destinations.add(destination)
+        asset = assets[name]
+        if asset["file"] != name + "-" + key:
+            raise ValueError("bootstrap distribution asset platform differs")
+        installed.append({"name": name, "path": destination,
+                          "sha256": asset["sha256"], "size": asset["size"]})
+    if any(item["destination"] in destinations for item in config["install"]):
+        raise ValueError("source install overlaps immutable enforcement executable")
+    return {"schema": "chrono-install-result/v1", "version": release["version"],
+            "source_commit": release["source_commit"], "source_tree": release["source_tree"],
+            "platform": key, "manifest": lock["manifest"], "installed": installed}
+
+
+def validate_distribution(root, config, raw, payloads=None):
+    expected = distribution_spec(root, config)
+    if expected is None or json.loads(raw) != expected:
+        raise ValueError("bootstrap requires original pinned distribution receipt")
+    for item in expected["installed"]:
+        if payloads is None:
+            target = host_path(root, item["path"], ".chrono-harness/bin/")
+            data = target.read_bytes()
+            if not target.stat().st_mode & 0o111:
+                raise ValueError("distribution executable lacks execute permission")
+        else:
+            data = payloads[item["path"]]
+        if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
+            raise ValueError("distribution executable differs: " + item["path"])
+    return expected
+
+
+def distribution_binding(raw):
+    return {"receipt_path": ".chrono-harness/state/distribution.json",
+            "receipt_sha256": hashlib.sha256(raw).hexdigest()}
+
+
+def installations(root, config):
+    selected = list(config["install"])
+    release = distribution_spec(root, config)
+    if release is not None:
+        selected += [{"destination": item["path"]} for item in release["installed"]]
+    return selected
 
 
 def report_destination(root, config):
@@ -131,6 +213,7 @@ def main():
     report_destination(root, config)
     if "rust_incremental" in config and type(config["rust_incremental"]) is not bool:
         raise ValueError("rust_incremental must be a boolean")
+    distribution_spec(root, config)
     participate(root, config_path, config)
     source_before = observe_source(root)
     if config["schema"] != "chrono-bootstrap/v1":
@@ -155,6 +238,15 @@ def main():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         installed.append({"path": item["destination"], "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
+    distribution = None
+    if "distribution" in config:
+        # The generated launcher and the existing Rust installer own actual installation.
+        launcher = host_path(root, ".chrono-harness/install.py")
+        subprocess.run([sys.executable, "-B", str(launcher), str(root)],
+                       check=True, pass_fds=PASS_FDS)
+        original = host_path(root, ".chrono-harness/state/distribution.json").read_bytes()
+        validate_distribution(root, config, original)
+        distribution = distribution_binding(original)
     source_after = observe_source(root)
     if source_before["error"] or source_after["error"]:
         source_state = "unavailable"
@@ -174,7 +266,10 @@ def main():
     }
     report = report_destination(root, config)
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}, indent=2) + "\n")
+    result = {"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}
+    if distribution is not None:
+        result["distribution"] = distribution
+    report.write_text(json.dumps(result, indent=2) + "\n")
 
 
 if __name__ == "__main__":

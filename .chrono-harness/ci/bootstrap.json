@@ -24,59 +24,59 @@
   "install": [
     {
       "source": "crates/runner/target/debug/chrono-harness",
-      "destination": ".chrono-harness/bin/chrono-harness"
+      "destination": ".chrono-harness/bin/source/chrono-harness"
     },
     {
       "source": "crates/judge-ci/target/debug/chrono-judge-ci",
-      "destination": ".chrono-harness/bin/chrono-judge-ci"
+      "destination": ".chrono-harness/bin/source/chrono-judge-ci"
     },
     {
       "source": "crates/ci/target/debug/chrono-ci",
-      "destination": ".chrono-harness/bin/chrono-ci"
+      "destination": ".chrono-harness/bin/source/chrono-ci"
     },
     {
       "source": "crates/judge-registration/target/debug/chrono-judge-registration",
-      "destination": ".chrono-harness/bin/chrono-judge-registration"
+      "destination": ".chrono-harness/bin/source/chrono-judge-registration"
     },
     {
       "source": "crates/judge-filemap/target/debug/chrono-judge-filemap",
-      "destination": ".chrono-harness/bin/chrono-judge-filemap"
+      "destination": ".chrono-harness/bin/source/chrono-judge-filemap"
     },
     {
       "source": "crates/judge-routes/target/debug/chrono-judge-routes",
-      "destination": ".chrono-harness/bin/chrono-judge-routes"
+      "destination": ".chrono-harness/bin/source/chrono-judge-routes"
     },
     {
       "source": "crates/judge-projects/target/debug/chrono-judge-projects",
-      "destination": ".chrono-harness/bin/chrono-judge-projects"
+      "destination": ".chrono-harness/bin/source/chrono-judge-projects"
     },
     {
       "source": "crates/judge-cost/target/debug/chrono-judge-cost",
-      "destination": ".chrono-harness/bin/chrono-judge-cost"
+      "destination": ".chrono-harness/bin/source/chrono-judge-cost"
     },
     {
       "source": "crates/judge-mixed/target/debug/chrono-judge-mixed",
-      "destination": ".chrono-harness/bin/chrono-judge-mixed"
+      "destination": ".chrono-harness/bin/source/chrono-judge-mixed"
     },
     {
       "source": "crates/judge-workflow/target/debug/chrono-judge-workflow",
-      "destination": ".chrono-harness/bin/chrono-judge-workflow"
+      "destination": ".chrono-harness/bin/source/chrono-judge-workflow"
     },
     {
       "source": "crates/inputs/target/debug/chrono-inputs",
-      "destination": ".chrono-harness/bin/chrono-inputs"
+      "destination": ".chrono-harness/bin/source/chrono-inputs"
     },
     {
       "source": "crates/distribution/target/debug/chrono-distribution",
-      "destination": ".chrono-harness/bin/chrono-distribution"
+      "destination": ".chrono-harness/bin/source/chrono-distribution"
     },
     {
       "source": "crates/judge-cargo/target/debug/chrono-judge-cargo",
-      "destination": ".chrono-harness/bin/chrono-judge-cargo"
+      "destination": ".chrono-harness/bin/source/chrono-judge-cargo"
     },
     {
       "source": "crates/worktree/target/debug/chrono-worktree",
-      "destination": ".chrono-harness/bin/chrono-worktree"
+      "destination": ".chrono-harness/bin/source/chrono-worktree"
     }
   ],
   "participation": {
@@ -89,5 +89,8 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true
+  "rust_incremental": true,
+  "distribution": {
+    "manifest": ".chrono-harness/distribution-release.json"
+  }
 }

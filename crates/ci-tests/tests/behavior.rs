@@ -562,14 +562,7 @@ fn example_bundle_adopts_without_source_checkout_dependency() {
 
 fn committed_example(message: &str) -> (tempfile::TempDir, tempfile::TempDir, String) {
     let root = copied_example();
-    let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/bin");
-    let bin = root.path().join(".chrono-harness/bin");
-    fs::create_dir_all(&bin).unwrap();
-    for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
-        fs::copy(installed.join(name), bin.join(name)).expect(
-            "bootstrap the registered candidate tools before running the copied-host tests",
-        );
-    }
+    units::install(root.path());
     git(root.path(), &["init", "-q", "-b", "dev"]);
     git(
         root.path(),

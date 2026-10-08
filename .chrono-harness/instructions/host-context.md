@@ -18,7 +18,7 @@
 /usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
 ```
 
-检查前从候选源码 bootstrap。本 macOS 宿主绑定 `/usr/bin/python3`／Python 3.9.6；Rust 版本、操作、安装产物归 bootstrap-core.json／projects.json，不以环境默认替代或改全局默认工具链。工具观察／摘要不证明完整来源。linked checkout 缺兼容协调者／所有权则在构建前失败；Git main 可初始化自己的工具。详见 [CI 启动](../../docs/ci.md#this-repository)及[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
+检查前从候选登记 bootstrap。core/default/detector 保留原源码构建操作，输出安装至 `.chrono-harness/bin/source/`；现有 distribution 安装器另按 `.chrono-harness/distribution.json` 与原字节 `distribution-release.json` 安装固定 beta.21 的 14 个工具至原执行路径。源码输出不能覆盖固定执行物；cache transport 仍按独立源码绑定安装。本 macOS 宿主绑定 `/usr/bin/python3`／Python 3.9.6；Rust 版本、操作、安装产物归 bootstrap-core.json／projects.json，不以环境默认替代或改全局默认工具链。bootstrap 原报告保存宿主源码身份，安装器原回执保存发布源码身份；共享启动保留二者并核实际字节。工具观察／摘要不证明完整来源。linked checkout 缺兼容协调者／所有权则在构建前失败；Git main 可初始化自己的工具。详见 [CI 启动](../../docs/ci.md#this-repository)及[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
 
 ### 本地／CI 检查
 
@@ -78,4 +78,4 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 产品过程证据采用可验证的 `chrono-retained-process/v2` 压缩传输；历史 inline／v1 原件与原 stdin 判法保留。宿主显式登记压缩库的包文件、archive／index 输入与 runner 依赖边，Cargo policies 采用实际 metadata 的原始解析。工作树原报告仍由生命周期生产者保存；console 使用 compact JSON，check 运输失败引用保留的原始过程，不复制大输出到错误文字。Cargo guard 在 stderr 产生有界的原始 phase／elapsed 观察，主宿主消费者保留有界终态与完整流；不删除检查、不改线程／选择器、不提高时限，也不根据静态成本归因 ENFILE。
 
-这些产品、专属消费者与宿主输入／FILEMAP 同改属于 mixed-change。实际验证成本包括受影响 Rust 原始测试、主宿主 34 个 metadata 与 native guard 消费者、历史迁移、指令生成及 bootstrap／projection owners；具体原始执行回执归 source handoff 与调用方规范检查。beta.21 保持 source preparation，须调用方完成 clean candidate 检查、原生 release 生产和准确产物核验，之后才可继续采用 runner／七判官／工具固定摘要及 startup。source 测试、codec 或版本号不表示 full 启用；运行时／native／非 Cargo 输入和真实两端快照等义务仍在。
+这些产品、专属消费者与宿主输入／FILEMAP 同改属于 mixed-change。beta.21 已有公开原生发布与固定字节；P1 只采用实际安装、runner／七判官固定摘要与现有 startup 消费者，保留原源码操作及报告。此次宿主启动程序／政策同改的验证成本包括真实公开安装、Python owner 行为与源码控制、受影响登记／CI／所有权消费者及指令生成；调用方仍须完成 clean candidate 规范检查、原生 detector／单元／汇总启动验收与落地。source 测试或安装成功不表示 full 启用；P2/P3/P4、运行时／native／非 Cargo 输入和真实两端快照等义务仍在。

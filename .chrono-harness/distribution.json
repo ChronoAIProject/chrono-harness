@@ -1,0 +1,42 @@
+{
+  "schema": "chrono-install/v1",
+  "version": "v0.1.0-beta.21",
+  "source": {
+    "kind": "https",
+    "base_url": "https://github.com/ChronoAIProject/chrono-harness/releases/download/v0.1.0-beta.21",
+    "curl": "/usr/bin/curl"
+  },
+  "manifest": {
+    "file": "release.json",
+    "sha256": "7994ece6818d794da53e468e4b1a589033e3eec1362482f4205db5a7217d4724",
+    "size": 6629
+  },
+  "installers": {
+    "linux-x86_64": {
+      "file": "chrono-distribution-linux-x86_64",
+      "sha256": "c1e10bb3135035033e48960602b53930d0e82aa917183f17e03f014dd7aa3607",
+      "size": 986184
+    },
+    "macos-aarch64": {
+      "file": "chrono-distribution-macos-aarch64",
+      "sha256": "91af8957836b89cc3e41f2019443eb017b36caca96cb66f48aa6675ccad6a0aa",
+      "size": 785168
+    }
+  },
+  "install": {
+    "chrono-ci": ".chrono-harness/bin/chrono-ci",
+    "chrono-distribution": ".chrono-harness/bin/chrono-distribution",
+    "chrono-harness": ".chrono-harness/bin/chrono-harness",
+    "chrono-inputs": ".chrono-harness/bin/chrono-inputs",
+    "chrono-judge-cargo": ".chrono-harness/bin/chrono-judge-cargo",
+    "chrono-judge-ci": ".chrono-harness/bin/chrono-judge-ci",
+    "chrono-judge-cost": ".chrono-harness/bin/chrono-judge-cost",
+    "chrono-judge-filemap": ".chrono-harness/bin/chrono-judge-filemap",
+    "chrono-judge-mixed": ".chrono-harness/bin/chrono-judge-mixed",
+    "chrono-judge-projects": ".chrono-harness/bin/chrono-judge-projects",
+    "chrono-judge-registration": ".chrono-harness/bin/chrono-judge-registration",
+    "chrono-judge-routes": ".chrono-harness/bin/chrono-judge-routes",
+    "chrono-judge-workflow": ".chrono-harness/bin/chrono-judge-workflow",
+    "chrono-worktree": ".chrono-harness/bin/chrono-worktree"
+  }
+}
