@@ -1885,7 +1885,9 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     let retained = h.root.join(report["retained_report"].as_str().unwrap());
     let original = fs::read(&retained).unwrap();
     assert!(original.len() > 1_000_000);
-    let process = &report["response"]["evidence"]["executed"][0]["process"];
+    // Complete streams are retained once in the receipt; the adjacent process
+    // field is a bounded identity/status projection for large operations.
+    let process = &report["response"]["evidence"]["executed"][0]["receipt"]["process"];
     let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
     assert_eq!(process["stdout_sha256"], sha256(&bytes));
     assert!(String::from_utf8_lossy(&bytes).contains("large-original-evidence"));
