@@ -314,3 +314,118 @@ fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!target.join("output λ").exists());
 }
+
+#[test]
+fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_drift_checks() {
+    let h = Host::new("payload");
+    let mut bytes = fs::read(h.root.join(CONFIG)).unwrap();
+    bytes.resize(2_022_211, b' ');
+    fs::write(h.root.join(CONFIG), &bytes).unwrap();
+    h.policy(|p| p["immutable_input_limits"] = value!({CONFIG:2_097_152}));
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("large-input");
+    let (code, report, error) = h.invoke("integration", "large-input", &target);
+    assert_eq!(code, 0, "{} {error}", report["error"]);
+    assert_eq!(fs::read(target.join(CONFIG)).unwrap(), bytes);
+    let processes = report["processes"].as_array().unwrap();
+    let data = processes
+        .iter()
+        .filter(|p| !p["immutable_input_transport"].is_null())
+        .collect::<Vec<_>>();
+    assert!(!data.is_empty());
+    for row in data {
+        assert_eq!(
+            row["immutable_input_transport"]["stdout_limit_bytes"],
+            2_022_211
+        );
+        assert_eq!(
+            row["immutable_input_transport"]["stderr_limit_bytes"],
+            1_048_576
+        );
+        assert_eq!(row["process"]["stdout_sha256"], sha256(&bytes));
+        assert_eq!(row["process"]["exit_code"], 0);
+    }
+    // Creation is allowed to leave unrelated dirty source files alone. Its
+    // governing worktree policy must still match the fixed source commit.
+    let policy = fs::read(h.root.join(POLICY)).unwrap();
+    fs::write(h.root.join(POLICY), [&policy[..], b"\n"].concat()).unwrap();
+    let second = h.parent.join("changed-input");
+    let (code, report, error) = h.invoke("integration", "changed-input", &second);
+    assert_ne!(code, 0, "{} {error}", report["error"]);
+    assert!(!second.exists());
+}
+
+#[test]
+fn immutable_input_limits_refuse_unregistered_or_over_bound_data_before_worktree_creation() {
+    for declared in [None, Some(2_022_210)] {
+        let h = Host::new("payload");
+        let mut bytes = fs::read(h.root.join(CONFIG)).unwrap();
+        bytes.resize(2_022_211, b' ');
+        fs::write(h.root.join(CONFIG), &bytes).unwrap();
+        if let Some(limit) = declared {
+            h.policy(|p| p["immutable_input_limits"] = value!({CONFIG:limit}));
+        }
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let target = h.parent.join("refused-input");
+        let (code, report, error) = h.invoke("integration", "refused-input", &target);
+        assert_ne!(code, 0, "{} {error}", report["error"]);
+        assert!(!target.exists());
+        assert!(
+            report["error"]
+                .as_str()
+                .unwrap()
+                .contains(if declared.is_some() {
+                    "declared limit"
+                } else {
+                    "output limit"
+                })
+        );
+        if declared.is_some() {
+            assert!(
+                report["processes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|p| p["immutable_input_transport"].is_null())
+            );
+        }
+    }
+}
+
+#[test]
+fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_sources() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let mut bytes = fs::read(h.root.join(CONFIG)).unwrap();
+    bytes.resize(2_022_211, b' ');
+    fs::write(h.root.join(CONFIG), &bytes).unwrap();
+    // An already enrolled target keeps its historical diagnostic policy.
+    h.policy(|p| p["output_limit_bytes"] = value!(2_097_152));
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("protected-input");
+    let (code, report, error) = h.invoke("integration", "protected-input", &target);
+    assert_eq!(code, 0, "{} {error}", report["error"]);
+    let original = h.ledger()["entries"][0].clone();
+    let head = git(&target, &["rev-parse", "HEAD"]);
+    let policy = fs::read(target.join(POLICY)).unwrap();
+    h.policy(|p| {
+        p["output_limit_bytes"] = value!(1_048_576);
+        p["immutable_input_limits"] = value!({CONFIG:2_097_152});
+    });
+    commit(&h.root);
+    cache(&target);
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{} {error}", report["error"]);
+    assert!(!target.join("output λ/cache").exists());
+    assert_eq!(fs::read(target.join(CONFIG)).unwrap(), bytes);
+    assert_eq!(fs::read(target.join(POLICY)).unwrap(), policy);
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["enrollment"], original["enrollment"]);
+    assert_eq!(entry["policy_migrations"], original["policy_migrations"]);
+    assert_eq!(entry["status"], "active");
+    assert!(entry["terminal"].is_null());
+}

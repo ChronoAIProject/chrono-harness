@@ -40,7 +40,7 @@ impl Runner {
         args: &[&str],
         input: &[u8],
     ) -> Result<ProcessResult, String> {
-        self.observe(root, args, input, false)
+        self.observe(root, args, input, false, None)
     }
     fn observe(
         &mut self,
@@ -48,6 +48,7 @@ impl Runner {
         args: &[&str],
         input: &[u8],
         literal_inventory: bool,
+        input_limit: Option<usize>,
     ) -> Result<ProcessResult, String> {
         let mut environment = self.environment.clone();
         if literal_inventory {
@@ -71,10 +72,24 @@ impl Runner {
             timeout_seconds: self.config.timeout_seconds,
             output_limit_bytes: self.config.output_limit_bytes,
         };
-        match run_process_observed(root, &spec, input, &self.tool.sha256) {
+        let result = match input_limit {
+            Some(limit) => chrono_harness::run_process_observed_data(
+                root,
+                &spec,
+                input,
+                &self.tool.sha256,
+                limit,
+            ),
+            None => run_process_observed(root, &spec, input, &self.tool.sha256),
+        };
+        match result {
             Ok(process) => {
-                self.processes
-                    .push(value!({"root":root,"argv":argv,"process":process}));
+                let mut record = value!({"root":root,"argv":argv,"process":process});
+                if let Some(limit) = input_limit {
+                    record["immutable_input_transport"] = value!({"stdout_limit_bytes":limit,
+                        "stderr_limit_bytes":self.config.output_limit_bytes});
+                }
+                self.processes.push(record);
                 if let Some(error) = &process.failure {
                     return Err(error.clone());
                 }
@@ -92,7 +107,7 @@ impl Runner {
         Self::output(process, args)
     }
     fn literal_inventory(&mut self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-        let process = self.observe(root, args, &[], true)?;
+        let process = self.observe(root, args, &[], true, None)?;
         Self::output(process, args)
     }
     fn output(process: ProcessResult, args: &[&str]) -> Result<Vec<u8>, String> {
@@ -166,7 +181,14 @@ impl Runner {
         }
         // Keep original successful reads within this operation. Mutable HEAD,
         // checkout bytes, attachment and policy comparisons still run each time.
-        let bytes = self.git(root, &["show", &format!("{oid}:{path}")])?;
+        let bytes = if let Some(limit) = self.config.immutable_input_limits.get(path).copied() {
+            facts::acquire_immutable_input(oid, path, limit, |args, input, transport| {
+                let process = self.observe(root, args, input, false, transport)?;
+                Self::output(process, args)
+            })?
+        } else {
+            self.git(root, &["show", &format!("{oid}:{path}")])?
+        };
         self.immutable_blobs.insert(key, bytes.clone());
         Ok(bytes)
     }
@@ -187,6 +209,20 @@ impl Runner {
                 ))
             })
             .cloned()
+            .collect::<Vec<_>>();
+        // Explicit data contracts bypass diagnostic-sized registry batching.
+        for path in &pending {
+            if self.config.immutable_input_limits.contains_key(path) {
+                self.blob(root, oid, path)?;
+            }
+        }
+        let pending = pending
+            .into_iter()
+            .filter(|path| {
+                !self
+                    .immutable_blobs
+                    .contains_key(&(root.to_path_buf(), oid.into(), path.clone()))
+            })
             .collect::<Vec<_>>();
         let acquired = facts::acquire_registry_blobs(
             oid,
