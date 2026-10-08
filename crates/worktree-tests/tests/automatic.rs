@@ -1215,3 +1215,178 @@ fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
     assert!(!target.exists());
     assert_eq!(fs::read(receipt).unwrap(), bytes);
 }
+
+#[test]
+fn lifecycle_report_storage_preserves_registered_failure_and_original_receipts() {
+    let h = Host::new("payload");
+    blocked_remove(&h, false);
+    h.kernel_cleanup();
+    let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    // Real registered JSON input, matching the demonstrated lifecycle blob class.
+    fm["cost_models"]["unknown"]["basis"] =
+        value!("unmeasured registered lifecycle input; ".repeat(12_000));
+    fs::write(h.root.join(FM), serde_json::to_vec_pretty(&fm).unwrap()).unwrap();
+    h.policy(|_| ());
+    let target = h.parent.join("measured-report");
+    assert_eq!(h.invoke("feature", "measured-report", &target).0, 0);
+    output(&target);
+    fs::write(h.parent.join("fail-remove"), "original failure").unwrap();
+    assert_ne!(
+        h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"]
+        )
+        .0,
+        0
+    );
+    let (exit, report, error) = h.auto("maintain", &[]);
+    assert_eq!(exit, 2, "{error}");
+    assert_eq!(report["status"], "failed");
+    let path = h.root.join(report["report_path"].as_str().unwrap());
+    let stored = fs::read(&path).unwrap();
+    let inline = serde_json::to_vec_pretty(&report).unwrap();
+    let child = &report["drain"][0]["report"];
+    let original = fs::read(
+        h.root
+            .join(child["prior_report"]["input"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(child["prior_report"]["input"]["sha256"], sha256(&original));
+    let failure = child["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["process"]["exit_code"] == 71)
+        .unwrap();
+    assert!(
+        failure["process"]["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("original automatic removal failure")
+    );
+    let mut original_stream_bytes = 0;
+    for current in [&report, child] {
+        for row in current["processes"].as_array().unwrap() {
+            if row["process"].is_null() {
+                continue;
+            }
+            for stream in ["stdout", "stderr"] {
+                let bytes: Vec<u8> =
+                    serde_json::from_value(row["process"][format!("{stream}_bytes")].clone())
+                        .unwrap();
+                original_stream_bytes += bytes.len();
+                assert_eq!(row["process"][format!("{stream}_sha256")], sha256(&bytes));
+            }
+        }
+    }
+    eprintln!(
+        "LIFECYCLE_STORAGE maintain_exit={exit} stored_bytes={} inline_pretty_bytes={} original_stream_bytes={original_stream_bytes} original_failed_receipt_bytes={} original_failed_receipt_sha256={}",
+        stored.len(),
+        inline.len(),
+        original.len(),
+        sha256(&original)
+    );
+    assert!(
+        stored.len() < inline.len() / 8,
+        "lifecycle reports must eliminate demonstrated stream amplification"
+    );
+    assert_eq!(
+        fs::read(
+            h.root
+                .join(child["prior_report"]["input"]["path"].as_str().unwrap())
+        )
+        .unwrap(),
+        original
+    );
+}
+
+#[test]
+fn lifecycle_managed_failure_recovers_every_byte_and_legacy_without_rewriting() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["protocol"]["stdout_limit_bytes"] = value!(1048576);
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    native_consumer(&h, "report-bytes-failure");
+    let target = h.parent.join("original-bytes");
+    assert_eq!(h.invoke("feature", "original-bytes", &target).0, 0);
+    let (exit, expanded, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(exit, 2, "{error}");
+    assert_eq!(expanded["managed_command_failed"], true);
+    let process = &expanded["managed_process"];
+    assert_eq!(process["exit_code"], 23);
+    assert_eq!(process["failure"], Value::Null);
+    let expected: Vec<u8> = (0..=255).cycle().take(256 * 2048).collect();
+    assert_eq!(process["stdout_bytes"], value!(expected));
+    assert_eq!(process["stderr_bytes"], value!(&expected[..256 * 1024]));
+    assert_eq!(process["stdout_sha256"], sha256(&expected));
+    assert_eq!(process["stderr_sha256"], sha256(&expected[..256 * 1024]));
+    let path = h.root.join(expanded["report_path"].as_str().unwrap());
+    let bytes = fs::read(&path).unwrap();
+    let stored = json(&bytes).unwrap();
+    assert_eq!(
+        stored["managed_process"]["encoding"],
+        "chrono-retained-process/v2"
+    );
+    assert_eq!(chrono_worktree::expand_report(&stored).unwrap(), expanded);
+    assert_eq!(chrono_worktree::compact_report(&expanded).unwrap(), stored);
+    let receipt = &expanded["managed_use_receipt"];
+    let original_receipt = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+    assert_eq!(receipt["sha256"], sha256(&original_receipt));
+    assert_eq!(
+        chrono_harness::full::expand_process(&json(&original_receipt).unwrap()["process"]).unwrap(),
+        *process
+    );
+    // A historical inline or v1 reader view must reconstruct the same process.
+    assert_eq!(chrono_worktree::expand_report(&expanded).unwrap(), expanded);
+    let mut legacy = expanded.clone();
+    for stream in ["stdout", "stderr"] {
+        let raw: Vec<u8> =
+            serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+        legacy["managed_process"][format!("{stream}_hex")] =
+            chrono_harness::full::artifact(&raw)["hex"].clone();
+        legacy["managed_process"]
+            .as_object_mut()
+            .unwrap()
+            .remove(stream);
+        legacy["managed_process"]
+            .as_object_mut()
+            .unwrap()
+            .remove(&format!("{stream}_bytes"));
+    }
+    legacy["managed_process"]["encoding"] = value!("chrono-retained-process/v1");
+    assert_eq!(chrono_worktree::expand_report(&legacy).unwrap(), expanded);
+    let legacy_path = h.root.join(".chrono-harness/state/legacy-report.json");
+    let legacy_bytes = serde_json::to_vec_pretty(&legacy).unwrap();
+    fs::write(&legacy_path, &legacy_bytes).unwrap();
+    assert_eq!(
+        chrono_worktree::expand_report(&json(&fs::read(&legacy_path).unwrap()).unwrap()).unwrap(),
+        expanded
+    );
+    assert_eq!(fs::read(&legacy_path).unwrap(), legacy_bytes);
+    let mut corrupt = stored.clone();
+    corrupt["managed_process"]["stdout_sha256"] = value!("0".repeat(64));
+    assert!(chrono_worktree::expand_report(&corrupt).is_err());
+    eprintln!(
+        "LIFECYCLE_BYTES use_exit={exit} stdout_original={} stderr_original={} stored_bytes={} inline_pretty_bytes={} stdout_sha256={} stderr_sha256={}",
+        expected.len(),
+        256 * 1024,
+        bytes.len(),
+        serde_json::to_vec_pretty(&expanded).unwrap().len(),
+        sha256(&expected),
+        sha256(&expected[..256 * 1024])
+    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(
+        fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap(),
+        original_receipt
+    );
+}

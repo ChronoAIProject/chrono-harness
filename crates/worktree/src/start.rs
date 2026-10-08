@@ -14,6 +14,45 @@ use std::{
 };
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
+/// Decode only the process-bearing fields of the lifecycle report contract.
+/// Historical inline reports remain readable without changing their stored bytes.
+pub fn expand_report(report: &Value) -> Result<Value, String> {
+    transform_report(report, chrono_harness::full::expand_process)
+}
+/// Reuse the runner's lossless stream transport for newly produced evidence.
+pub fn compact_report(report: &Value) -> Result<Value, String> {
+    transform_report(report, chrono_harness::full::compact_process)
+}
+fn transform_report(
+    report: &Value,
+    process: fn(&Value) -> Result<Value, String>,
+) -> Result<Value, String> {
+    let mut report = report.clone();
+    for pointer in ["/tool/version", "/managed_process"] {
+        if let Some(value) = report.pointer_mut(pointer).filter(|v| !v.is_null()) {
+            *value = process(value)?;
+        }
+    }
+    if let Some(rows) = report.get_mut("processes").and_then(Value::as_array_mut) {
+        for row in rows {
+            if let Some(value) = row.get_mut("process").filter(|v| !v.is_null()) {
+                *value = process(value)?;
+            }
+        }
+    }
+    if let Some(rows) = report.get_mut("drain").and_then(Value::as_array_mut) {
+        for row in rows {
+            if let Some(value) = row.get_mut("report") {
+                *value = transform_report(value, process)?;
+            }
+        }
+    }
+    if let Some(value) = report.pointer_mut("/prior_report/report") {
+        *value = transform_report(value, process)?;
+    }
+    Ok(report)
+}
+
 pub(crate) struct Runner {
     pub(crate) config: Config,
     pub(crate) birth_lease: Option<crate::ownership::Lease>,
@@ -74,7 +113,7 @@ impl Runner {
         match run_process_observed(root, &spec, input, &self.tool.sha256) {
             Ok(process) => {
                 self.processes
-                    .push(value!({"root":root,"argv":argv,"process":process}));
+                    .push(value!({"root":root,"argv":argv,"process":chrono_harness::full::compact_process(&value!(process))?}));
                 if let Some(error) = &process.failure {
                     return Err(error.clone());
                 }
@@ -691,6 +730,7 @@ pub(crate) fn with_report(
         Err(e) => report["error"] = value!(e),
     }
     report["processes"] = value!(runner.processes.clone());
+    report = compact_report(&report)?;
     if matches!(operation, "start" | "reconstruct") && report["status"] == success {
         if let Err(error) =
             crate::automatic::seal_birth(&mut runner, root, config_path, bytes, &report)

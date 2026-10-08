@@ -233,10 +233,11 @@ impl Host {
                 "policy_sha256":sha256(&fs::read(self.root.join(POLICY)).unwrap())
             })).unwrap()).unwrap();
         }
-        let report = json(&out.stdout).unwrap_or(Value::Null);
+        let stored_report = json(&out.stdout).unwrap_or(Value::Null);
+        let report = chrono_worktree::expand_report(&stored_report).unwrap();
         if !report.is_null() {
             assert_eq!(
-                report,
+                stored_report,
                 json(
                     &fs::read(
                         Path::new(report["source_root"].as_str().unwrap())

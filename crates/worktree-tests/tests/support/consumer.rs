@@ -50,6 +50,12 @@ fn main() -> ExitCode {
         "--version" => println!("fixture"),
         "noop" => (),
         "ordinary" => print!("ordinary-work"),
+        "report-bytes-failure" => {
+            let bytes: Vec<u8> = (0..=255).cycle().take(256 * 2048).collect();
+            io::stdout().write_all(&bytes).unwrap();
+            io::stderr().write_all(&bytes[..256 * 1024]).unwrap();
+            return ExitCode::from(23);
+        }
         "finished" => print!("finished"),
         "check" => {
             let response: serde_json::Value = serde_json::from_slice(

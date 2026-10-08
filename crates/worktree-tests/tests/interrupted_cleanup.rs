@@ -825,7 +825,8 @@ fn fixture_setup_panic_releases_and_joins_a_live_managed_consumer() {
     let joined = json(&fs::read(stdout.with_extension("joined.json")).unwrap()).unwrap();
     assert_eq!(joined["joined"], true);
     assert_eq!(joined["status"], "ExitStatus(unix_wait_status(0))");
-    let report = json(&fs::read(&stdout).unwrap()).unwrap();
+    let report =
+        chrono_worktree::expand_report(&json(&fs::read(&stdout).unwrap()).unwrap()).unwrap();
     assert_eq!(report["managed_process"]["stdout"], "joined-child");
     assert_eq!(report["managed_process"]["exit_code"], 0);
     assert!(report["managed_process"]["failure"].is_null());
@@ -1909,7 +1910,9 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
         .lines()
         .next()
         .unwrap();
-    let original = json(&fs::read(h.root.join(reference)).unwrap()).unwrap();
+    let original =
+        chrono_worktree::expand_report(&json(&fs::read(h.root.join(reference)).unwrap()).unwrap())
+            .unwrap();
     // The existing inner bootstrap wraps the build's exit 7 as its own exit 1;
     // preserve that wrapper result and its original build exception/streams.
     assert_eq!(original["managed_process"]["exit_code"], 1);

@@ -1852,7 +1852,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                                 &[],
                                 &digest,
                             )?;
-                            report["managed_process"] = value!(process);
+                            report["managed_process"] =
+                                chrono_harness::full::compact_process(&value!(process))?;
                             if process.failure.is_some() || process.exit_code != 0 {
                                 report["managed_command_failed"] = value!(true);
                                 return Err(format!(
@@ -1935,10 +1936,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process =
                         chrono_harness::run_process_observed(target, &command, &[], &digest)?;
-                    report["managed_process"] = value!(process);
+                    report["managed_process"] =
+                        chrono_harness::full::compact_process(&value!(process))?;
                     let mut manager = Manager::open(r, &coordinator, config_path, &bytes, token)?
                         .ok_or("cleanup policy disappeared during managed use")?;
-                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":process}))?;
+                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":report["managed_process"]}))?;
                     report["managed_use_receipt"] = value!(receipt);
                     let i = manager
                         .current_entry(target)

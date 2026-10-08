@@ -310,6 +310,7 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
     let inner = report
         .get("managed_process")
         .ok_or_else(|| format!("check participation refused: {}", report["error"]))?;
+    let inner = crate::full::expand_process(inner)?;
     if inner["failure"].as_str().is_some() {
         return Err(format!(
             "check process failed: {}; original lifecycle report {}",

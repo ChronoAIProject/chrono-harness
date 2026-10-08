@@ -159,6 +159,38 @@ CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
 remains `unestablished`. The partial `context` is an input for later work, not a
 complete check context or integration certificate.
 
+New lifecycle reports use the existing runner `chrono-retained-process/v2`
+lossless transport for Git observations, tool-version and managed-command streams,
+including nested drain reports and immutable managed-use results. Each stream is
+stored once as compressed hex with its original length and SHA-256; text and byte
+array aliases are reconstructed by `chrono_worktree::expand_report` (or the
+runner's `full::expand_process` for a single process). Exit, failure, argv,
+executable/environment identities and operation decisions retain their original
+meaning. Runner participation and the registered Python bootstrap consume this
+transport before forwarding original output. The original 64 MiB process ceiling,
+configured operation bounds and selection remain unchanged; decompression checks
+length, stream completion and digest. Historical inline and retained-process/v1
+reports remain readable without rewriting their original bytes or receipt digests.
+
+The Rust lifecycle regression invokes real registered start/finish/maintain on an
+isolated owned host with a repeated 468,000-byte JSON registration input and an
+actual failed Git removal. The pre-change maintain report occupied 18,625,114
+bytes for 963,390 original stream bytes; compressed storage occupied 535,917
+bytes (97.1% less) on the same fixture/input class. A registered failed managed
+command separately preserves every byte value in 524,288-byte stdout and
+262,144-byte stderr, original exit 23 and both digests. These are bounded local
+storage measurements, not native/coordinator rollout or an aggregate disk claim.
+
+Reports, nested metadata and immutable recovery receipts still accumulate per
+invocation. The surviving coordinator has no declared automatic count/time
+retention boundary for this evidence; compact storage does not retire reports.
+Only the existing explicitly selected artifact dispositions and terminal evidence
+permission authorize disposal. Existing no-finish quiescent-cache cleanup remains
+available through normal admitted entries, including after wrapper interruption.
+No historical report deletion, idle scheduler or general retention service is
+introduced. Compatible coordinator rollout and the original failed maintain rerun
+remain caller obligations; installed release enforcement pins are independent.
+
 The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
 remote policy drift, missing remotes, tool mismatch and real checkout hooks. The

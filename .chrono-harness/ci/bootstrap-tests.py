@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the real Python bootstrap entry with registered operations and SDK fixtures."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zlib
 
 sys.dont_write_bytecode = True
 SOURCE = Path(__file__).resolve().parent
@@ -17,6 +19,34 @@ from process_fds import inherited_fds
 
 PASS_FDS = inherited_fds()
 OPERATION = ".chrono-harness/ci/fixtures/bootstrap-operation.py"
+
+
+class LifecycleTransport(unittest.TestCase):
+    def test_original_bytes_and_legacy_streams_and_corruption(self):
+        spec = importlib.util.spec_from_file_location("bootstrap_transport", SOURCE / "bootstrap.py")
+        owner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(owner)
+        for data in (b"", bytes(range(256)) * 4096, b"original error\xff\x00"):
+            original = {"stdout_bytes": list(data), "stdout_sha256": hashlib.sha256(data).hexdigest()}
+            self.assertEqual(owner.process_stream(original, "stdout"), data)
+            for version in (1, 2):
+                process = {"encoding": "chrono-retained-process/v" + str(version),
+                           "stdout_sha256": original["stdout_sha256"]}
+                if version == 1:
+                    process["stdout_hex"] = data.hex()
+                else:
+                    process.update(stdout_zlib_hex=zlib.compress(data).hex(), stdout_length=len(data))
+                self.assertEqual(owner.process_stream(process, "stdout"), data)
+                corrupt = dict(process, stdout_sha256="0" * 64)
+                with self.assertRaises(ValueError):
+                    owner.process_stream(corrupt, "stdout")
+                if version == 2:
+                    for change in ({"stdout_length": len(data) + 1},
+                                   {"stdout_zlib_hex": process["stdout_zlib_hex"] + "00"},
+                                   {"stdout_length": 64 * 1024 * 1024 + 1},
+                                   {"stdout_bytes": []}):
+                        with self.assertRaises(ValueError):
+                            owner.process_stream(dict(process, **change), "stdout")
 
 
 class Bootstrap(unittest.TestCase):

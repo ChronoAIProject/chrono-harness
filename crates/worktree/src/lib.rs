@@ -13,6 +13,7 @@ mod recovery;
 mod remote;
 mod start;
 use chrono_harness::{CliOutput, decode, no_symlink_parents, relative_path};
+pub use start::{compact_report, expand_report};
 mod fetch_recovery;
 use serde::Deserialize;
 use std::{

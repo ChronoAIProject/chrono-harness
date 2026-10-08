@@ -540,6 +540,23 @@ three inventory checks plus directly affected owner tests and exhaustive group r
 
 ## Registered automatic lifecycle cleanup
 
+The lifecycle producer now reuses the runner lossless process codec at the actual
+Git/managed-command/report owners. Rust `expand_report` and the real runner and
+Python bootstrap consumers reconstruct original streams; historical inline/v1
+readers preserve original stored bytes/digests. The real registered failed-maintain
+regression measures 18,625,114 → 535,917 stored bytes for 963,390 original streams;
+a failed managed command covers all byte values, non-UTF8 output, exit 23, both
+hashes and immutable receipt preservation. The original process/operation bounds,
+full test inventory and no-finish cache recovery remain. This is a local source
+storage correction; evidence-retain has no automatic report count/time retirement
+boundary, so total report growth remains unresolved. No original report is deleted.
+Runner/worktree product and host bootstrap consumer changes are mixed; validation
+cost includes the unchanged full worktree suite, the existing runner codec case,
+bootstrap owner suite and registered inventory check. Compatible coordinator
+binary deployment/original maintain rerun, clean-candidate/native checks, release
+adoption and full SPEC/host activation remain caller obligations.
+
+
 The candidate worktree owner implements opt-in exact artifact policy, surviving
 coordinator state, successful birth enrollment, explicit import, registered-command
 managed use, terminal finish and shared finish/start/reconstruct/maintain drain.

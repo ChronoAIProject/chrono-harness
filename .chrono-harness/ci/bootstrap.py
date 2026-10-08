@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import zlib
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -143,6 +144,37 @@ def observe_source(root):
     return observed
 
 
+def process_stream(process, stream):
+    """Consume the runner's versioned lossless process transport, including legacy."""
+    encoding = process.get("encoding")
+    limit = 64 * 1024 * 1024
+    if encoding is None:
+        data = bytes(process[stream + "_bytes"])
+    else:
+        if encoding not in ("chrono-retained-process/v1", "chrono-retained-process/v2"):
+            raise ValueError("unsupported retained process encoding")
+        if any(key in process for key in ("stdout", "stderr", "stdout_bytes", "stderr_bytes")):
+            raise ValueError("retained process has inline aliases")
+        key = stream + ("_hex" if encoding.endswith("/v1") else "_zlib_hex")
+        text = process[key]
+        if len(text) > limit * 2 or len(text) % 2 or any(c not in "0123456789abcdefABCDEF" for c in text):
+            raise ValueError("invalid retained process hex/bound")
+        data = bytes.fromhex(text)
+        if encoding.endswith("/v2"):
+            if stream + "_hex" in process:
+                raise ValueError("retained process has conflicting encodings")
+            length = process[stream + "_length"]
+            if type(length) is not int or not 0 <= length <= limit:
+                raise ValueError("invalid retained process original length")
+            decoder = zlib.decompressobj()
+            data = decoder.decompress(data, length + 1)
+            if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail or len(data) != length:
+                raise ValueError("invalid retained process compressed stream/length")
+    if len(data) > limit or hashlib.sha256(data).hexdigest() != process[stream + "_sha256"]:
+        raise ValueError("retained process stream digest/bound mismatch")
+    return data
+
+
 def participate(root, config_path, config):
     adoption = config.get("participation")
     if adoption is None:
@@ -172,8 +204,10 @@ def participate(root, config_path, config):
         process = report["managed_process"]
     except (ValueError, KeyError):
         raise ValueError("bootstrap ownership refused: " + result.stdout.decode("utf-8", "replace") + result.stderr.decode("utf-8", "replace"))
-    sys.stdout.buffer.write(bytes(process["stdout_bytes"]))
-    sys.stderr.buffer.write(bytes(process["stderr_bytes"]))
+    stdout = process_stream(process, "stdout")
+    stderr = process_stream(process, "stderr")
+    sys.stdout.buffer.write(stdout)
+    sys.stderr.buffer.write(stderr)
     if report["status"] != "used" and report.get("managed_command_failed") is not True:
         raise ValueError("bootstrap lifecycle failed: " + str(report.get("error")) +
                          "; original report " + str(report.get("report_path")))

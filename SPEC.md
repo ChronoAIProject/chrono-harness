@@ -994,3 +994,5 @@ observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 hand
 
 
 自动清理政策的已登记 v2 内核附件可以显式迁移：从存活协调宿主调用 `chrono-worktree migrate --path <已登记工作树>`，在原 admission 与附件独占租约下核已提交的两端同政策／配置、原物理附件、有效 birth 和两端工件登记。原登记及回执不改写，另保留旧新输入原字节与固定提交的不可覆盖迁移记录；后续普通操作核整条关联并消费最终绑定。迁移不删除、不更新 Git、不设完成；active 开新缓存代际，retained 保持已保留状态并要求新的 finish。缺失／损坏原证据、未知租约、未封口 birth、待执行终态删除及协调锚／状态地址／政策地址搬迁不自动解释。发布迁移记录但尚未登记的中断允许按同一绑定重试；旧 binary 不得解释包含新迁移字段的 ledger。兼容 binary 部署、实际宿主切换、未登记写入加入及落地验证仍由调用方完成。
+
+生命周期报告生产者复用现役 runner 的 `chrono-retained-process/v2` 无损流合同，Git／版本／managed-command 及 drain 内嵌报告不再同时保存文本和字节数组别名；managed-use 原回执也由生产者压缩。Rust 生命周期 reader 恢复原字节／摘要、退出／失败与身份，runner check participation 和登记 Python bootstrap 在转发前消费编码。inline／v1 历史原件与回执摘要不改写，原过程上限、操作选择和清理决定保留。真实失败 maintain 与全字节 managed-command 的本地 Rust 消费验证、尺寸口径及原生／部署边界归 docs/worktree.md。存活协调宿主的报告／不可覆盖回执仍无自动数量／时间退休政策；压缩只减小每份新报告，不证明无限报告数增长已解决。现役无需 finish 的已登记静止缓存恢复／回收仍适用，不新增历史证据删除或通用 GC 服务。

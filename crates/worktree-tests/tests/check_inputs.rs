@@ -186,7 +186,10 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     let origin = json(&fs::read(dest.join(".chrono-harness/state/origin.json")).unwrap()).unwrap();
     let birth_bytes = fs::read(dest.join(origin["birth_report"].as_str().unwrap())).unwrap();
     assert_eq!(origin["birth_sha256"], sha256(&birth_bytes));
-    assert_eq!(json(&birth_bytes).unwrap(), birth);
+    assert_eq!(
+        chrono_worktree::expand_report(&json(&birth_bytes).unwrap()).unwrap(),
+        birth
+    );
     fs::write(dest.join("anything/data.txt"), "changed").unwrap();
     commit(&dest);
     let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
@@ -206,7 +209,10 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     let producer_path = report["preparation"]["result"]["evidence"]["report_path"]
         .as_str()
         .unwrap();
-    let producer = json(&fs::read(dest.join(producer_path)).unwrap()).unwrap();
+    let producer = chrono_worktree::expand_report(
+        &json(&fs::read(dest.join(producer_path)).unwrap()).unwrap(),
+    )
+    .unwrap();
     let identity = producer["processes"]
         .as_array()
         .unwrap()
@@ -737,7 +743,10 @@ fn reconstructed_destination_publishes_its_real_new_birth_association() {
     assert_eq!(context["branch_started_at"], birth["branch_started_at"]);
     let origin = json(&fs::read(root.join(".chrono-harness/state/origin.json")).unwrap()).unwrap();
     assert_eq!(
-        json(&fs::read(root.join(origin["birth_report"].as_str().unwrap())).unwrap()).unwrap(),
+        chrono_worktree::expand_report(
+            &json(&fs::read(root.join(origin["birth_report"].as_str().unwrap())).unwrap()).unwrap()
+        )
+        .unwrap(),
         birth
     );
 }
