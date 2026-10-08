@@ -48,6 +48,8 @@ pub struct Config {
     pub environment: Environment,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
+    #[serde(default)]
+    pub immutable_input_limits: BTreeMap<String, usize>,
     pub report_directory: String,
 }
 pub struct Start {
@@ -204,6 +206,12 @@ fn configuration(root: &Path, config_path: &str) -> Result<(Config, Vec<u8>), St
         relative_path(path)?;
         if !path.starts_with(".chrono-harness/") || path.starts_with(".chrono-harness/state/") {
             return Err("automatic cleanup policy must be a tracked .chrono-harness input".into());
+        }
+    }
+    for (path, limit) in &config.immutable_input_limits {
+        relative_path(path)?;
+        if *limit == 0 || *limit > 64 * 1024 * 1024 {
+            return Err("invalid declared immutable input limit".into());
         }
     }
     relative_path(&config.host_config)?;

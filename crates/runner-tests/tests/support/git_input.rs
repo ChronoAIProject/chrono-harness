@@ -29,6 +29,13 @@ fn main() {
     )
     .unwrap();
     let mode = case["mode"].as_str().unwrap();
+    if mode == "data-response" {
+        emit(
+            &fs::read(root.join("data-stdout")).unwrap(),
+            &fs::read(root.join("data-stderr")).unwrap(),
+            17,
+        );
+    }
     let exists = |name: &str| Path::new(name).exists();
     let drift = || fs::write(".git/config.worktree", "changed").unwrap();
     if joined.contains("rev-parse") {

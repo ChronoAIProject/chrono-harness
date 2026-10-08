@@ -88,6 +88,45 @@ insufficient framing space retain direct reads. Original process bytes and exits
 remain in the report on malformed or failed batches, before checkout effects.
 Only fully validated immutable bytes enter the operation-local cache; live HEAD,
 checkout, policy, attachment and ownership observations remain fresh.
+
+For an explicitly named immutable input larger than the ordinary diagnostic
+bound, v1/v2 policies may additionally declare `immutable_input_limits`, a map
+from exact repository-relative paths to positive byte limits of at most
+67,108,864 bytes. An omitted map preserves the original transport contract.
+This host declares `.chrono-harness/config.json` at 2,097,152 bytes while keeping
+`output_limit_bytes` at 1,048,576. These declarations grant acquisition capacity;
+they do not register files, outputs, consumers or cleanup eligibility.
+
+The existing blob owner first acquires fixed-commit object metadata under the
+ordinary output/time limits. Oversized inputs are refused before acquiring their
+content. For an admitted blob, only stdout uses its exact observed length
+(one byte for an empty blob); stderr and other Git commands retain the ordinary
+limit. The data command addresses the observed object OID, and Rust validates
+its complete Git blob hash and length. Both original processes, bytes, digests,
+exits and any partial failure remain in the report; the data process also records
+its stdout and stderr transport bounds. Failed or mismatched bytes never enter
+the immutable cache. The process owner and lease handoff remain unchanged.
+
+This is a mixed product/policy adoption. Install the compatible binary before
+committing this field in host policies; older strict decoders reject it. A larger
+input allowance does not waive committed policy equality, live checkout checks,
+artifact registration or migration. Complete input transport does not establish
+full input closure or deterministic parity.
+
+The Rust acquisition regression accepts an optional read-only
+`CHRONO_IMMUTABLE_INPUT_FIXTURE` to verify the original large host input, checking
+its fixed length and SHA-256 before use. Without that explicitly registered test
+input it exercises the same capacity boundary with synthetic bytes. This does
+not change the production input or its expected identity.
+
+Coordinator maintenance may acquire an existing enrollment with this data
+contract while preserving that target's committed configuration and HEAD. Its
+unchanged target policy inputs must still match the enrollment's current binding,
+and its cleanup policy hash must match the coordinator's policy. Changing only
+the coordinator's transport declaration does not authorize changing an enrollment
+or rewriting a previous attempt. If a pending cache attempt binds the old
+coordinator configuration, its existing reconciliation checks still apply.
+
 Successfully parsed trees at fixed OIDs share their original acquisition within
 one operation and root. Cleanup reuses that immutable tree across its guards;
 the index, physical source, policies, locks and usage checks retain their live
@@ -891,6 +930,17 @@ coordinator, state directory and ownership protocol stay fixed; relocating those
 identities is outside this transition. Legacy or missing kernel ownership and
 pending terminal disposal remain protected. Policy changes do not migrate entries
 implicitly.
+
+When two endpoints have different host configurations, preserve each host's
+registered sources and inputs. The migration comparison covers the explicitly
+bound cleanup policy and worktree configuration; it does not require copying the
+coordinator's complete host configuration. Every artifact selected by the adopted
+cleanup policy must already be registered at both endpoints. If one endpoint has
+no real producer for a selected output, do not invent that registration: choose an
+explicit policy limited to supported outputs, or leave that enrollment on its
+protected binding until its owning adoption is complete. This command has no
+per-enrollment policy override and never changes Git itself. Preserve original
+commits and outcomes when the caller creates compatible adoption commits.
 
 The original enrollment, birth policy hash, birth receipt, uses and prior cleanup
 attempts retain their identities. A separate immutable transition records old and

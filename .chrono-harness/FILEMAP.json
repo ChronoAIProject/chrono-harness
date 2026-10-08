@@ -7600,6 +7600,11 @@
       "to": "project:worktree-tests"
     },
     {
+      "from": "environment:CHRONO_IMMUTABLE_INPUT_FIXTURE",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
+    },
+    {
       "from": "script:workflow-inventory",
       "kind": "test-execution",
       "to": "test:workflow-inventory-tests"
