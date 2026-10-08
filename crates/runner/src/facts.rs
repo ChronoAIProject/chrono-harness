@@ -19,7 +19,8 @@ pub struct Entry {
     pub kind: String,
 }
 pub use crate::facts_binding::{
-    OpenFailure, Reader, RegistryBlob, acquire_registry_blobs, declaration as git_declaration,
+    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
+    declaration as git_declaration,
 };
 
 pub type Tree = BTreeMap<String, Entry>;

@@ -1473,3 +1473,288 @@ fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
             .is_ok()
     );
 }
+
+#[test]
+fn immutable_input_contract_reads_complete_large_bytes_with_original_processes() {
+    let h = Host::new(json!({"mode":"passthrough"}));
+    let original = if let Some(path) = std::env::var_os("CHRONO_IMMUTABLE_INPUT_FIXTURE") {
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(bytes.len(), 2_022_211);
+        assert_eq!(
+            sha256(&bytes),
+            "15f1ec444ed15be8d5979257bf1e092d78a95081ec43aa77f5b973b25b955346"
+        );
+        bytes
+    } else {
+        vec![b'x'; 2_022_211]
+    };
+    let path = ".chrono-harness/immutable-input.json";
+    fs::write(h.root.join(path), &original).unwrap();
+    let oid = commit(&h);
+    let git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();
+    let digest = sha256(&fs::read(&git).unwrap());
+    let mut spec = chrono_harness::CommandSpec {
+        program: git.to_str().unwrap().into(),
+        args: vec![
+            "--no-replace-objects".into(),
+            "show".into(),
+            format!("{oid}:{path}"),
+        ],
+        env: [
+            ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
+            ("GIT_CONFIG_GLOBAL".into(), "/dev/null".into()),
+        ]
+        .into(),
+        timeout_seconds: 30,
+        output_limit_bytes: 1_048_576,
+    };
+    let ordinary = chrono_harness::run_process_observed(&h.root, &spec, &[], &digest).unwrap();
+    assert_eq!(
+        ordinary.failure.as_deref(),
+        Some("process output limit exceeded")
+    );
+    assert_eq!(ordinary.stdout_bytes.len(), 1_048_576);
+    let mut receipts = vec![];
+    let acquired = chrono_harness::facts::acquire_immutable_input(
+        &oid,
+        path,
+        2_097_152,
+        |args, input, limit| {
+            spec.args = std::iter::once("--no-replace-objects".into())
+                .chain(args.iter().map(|s| s.to_string()))
+                .collect();
+            let process = match limit {
+                Some(limit) => {
+                    chrono_harness::run_process_observed_data(&h.root, &spec, input, &digest, limit)
+                }
+                None => chrono_harness::run_process_observed(&h.root, &spec, input, &digest),
+            }?;
+            let result = chrono_harness::observation::process_success(&process)
+                .map(|_| process.stdout_bytes.clone());
+            receipts.push(process);
+            result
+        },
+    )
+    .unwrap();
+    assert_eq!(acquired, original);
+    assert_eq!(receipts.len(), 2);
+    let content = &receipts[1];
+    assert_eq!(content.stdout_bytes, original);
+    assert_eq!(content.stdout_sha256, sha256(&original));
+    assert_eq!(content.exit_code, 0);
+    assert!(content.failure.is_none());
+    assert!(content.stderr_bytes.is_empty());
+    assert_eq!(content.stdin_sha256, sha256(b""));
+    println!(
+        "IMMUTABLE_INPUT bytes={} sha256={} diagnostic_limit={} data_declaration={} processes={}",
+        acquired.len(),
+        sha256(&acquired),
+        spec.output_limit_bytes,
+        2_097_152,
+        receipts.len()
+    );
+
+    let mut metadata_calls = 0;
+    let error = chrono_harness::facts::acquire_immutable_input(
+        &oid,
+        path,
+        original.len() - 1,
+        |args, input, limit| {
+            assert_eq!(
+                limit, None,
+                "oversized data must be refused before acquisition"
+            );
+            metadata_calls += 1;
+            spec.args = std::iter::once("--no-replace-objects".into())
+                .chain(args.iter().map(|s| s.to_string()))
+                .collect();
+            let process = chrono_harness::run_process_observed(&h.root, &spec, input, &digest)?;
+            chrono_harness::observation::process_success(&process)?;
+            Ok(process.stdout_bytes)
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("declared limit"), "{error}");
+    assert_eq!(metadata_calls, 1);
+
+    let mut calls = 0;
+    let mismatch = chrono_harness::facts::acquire_immutable_input(
+        &oid,
+        path,
+        original.len(),
+        |_, _, limit| {
+            calls += 1;
+            Ok(if limit.is_none() {
+                receipts[0].stdout_bytes.clone()
+            } else {
+                vec![b'y'; original.len()]
+            })
+        },
+    )
+    .unwrap_err();
+    assert_eq!(calls, 2);
+    assert!(mismatch.contains("differ from object metadata"));
+}
+
+#[test]
+fn immutable_input_data_transport_keeps_stderr_and_failure_bounds() {
+    let h = Host::new(json!({"mode":"data-response"}));
+    fs::write(h.root.join("data-stdout"), b"original partial\xff").unwrap();
+    fs::write(h.root.join("data-stderr"), b"original error\xfe").unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: h.tool.to_str().unwrap().into(),
+        args: vec![],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 1024,
+    };
+    let digest = sha256(&fs::read(&h.tool).unwrap());
+    for limit in [0, 64 * 1024 * 1024 + 1] {
+        assert!(
+            chrono_harness::run_process_observed_data(&h.root, &spec, &[], &digest, limit)
+                .unwrap_err()
+                .contains("transport bound")
+        );
+    }
+    let failed =
+        chrono_harness::run_process_observed_data(&h.root, &spec, &[], &digest, 2_097_152).unwrap();
+    assert_eq!(failed.exit_code, 17);
+    assert!(failed.failure.is_none());
+    assert_eq!(failed.stdout_bytes, b"original partial\xff");
+    assert_eq!(failed.stderr_bytes, b"original error\xfe");
+    fs::write(h.root.join("data-stderr"), vec![b'e'; 2048]).unwrap();
+    let bounded =
+        chrono_harness::run_process_observed_data(&h.root, &spec, &[], &digest, 2_097_152).unwrap();
+    assert_eq!(
+        bounded.failure.as_deref(),
+        Some("process output limit exceeded")
+    );
+    assert_eq!(bounded.stderr_bytes, vec![b'e'; 1024]);
+    assert_eq!(bounded.stderr_sha256, sha256(&vec![b'e'; 1024]));
+    fs::write(h.root.join("data-stderr"), b"").unwrap();
+    fs::write(h.root.join("data-stdout"), vec![b'x'; 1025]).unwrap();
+    let bounded =
+        chrono_harness::run_process_observed_data(&h.root, &spec, &[], &digest, 1024).unwrap();
+    assert_eq!(
+        bounded.failure.as_deref(),
+        Some("process output limit exceeded")
+    );
+    assert_eq!(bounded.stdout_bytes, vec![b'x'; 1024]);
+    assert!(
+        chrono_harness::run_process_observed_data(&h.root, &spec, &[], &"0".repeat(64), 2048)
+            .unwrap_err()
+            .contains("digest mismatch")
+    );
+}
+
+#[test]
+fn immutable_input_verifies_complete_sha1_and_sha256_blobs_including_empty_data() {
+    for (original, sha1) in [
+        (&b"hello\n"[..], "ce013625030ba8dba906f756967f9e9ca394464a"),
+        (&b""[..], "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
+    ] {
+        let framed = [format!("blob {}\0", original.len()).as_bytes(), original].concat();
+        for object in [sha1.to_string(), sha256(&framed)] {
+            let commit = "a".repeat(object.len());
+            let metadata = format!("{object} blob {}\n", original.len()).into_bytes();
+            // A successful result requires both exact length and the Git object
+            // hash, rather than just the process stream's SHA-256 receipt.
+            let variants = [
+                original.to_vec(),
+                original.iter().copied().chain([b'x']).collect(),
+                original
+                    .get(..original.len().saturating_sub(1))
+                    .unwrap()
+                    .to_vec(),
+                vec![b'y'; original.len()],
+            ];
+            for bytes in variants {
+                let mut calls = 0;
+                let result = chrono_harness::facts::acquire_immutable_input(
+                    &commit,
+                    "inputs/literal λ.json",
+                    1024,
+                    |args, input, bound| {
+                        calls += 1;
+                        if bound.is_none() {
+                            assert_eq!(args, ["cat-file", "--batch-check", "-z"]);
+                            assert_eq!(
+                                input,
+                                format!("{commit}:inputs/literal λ.json\0").as_bytes()
+                            );
+                            Ok(metadata.clone())
+                        } else {
+                            assert_eq!(bound, Some(original.len().max(1)));
+                            assert_eq!(args, ["cat-file", "blob", object.as_str()]);
+                            assert!(input.is_empty());
+                            Ok(bytes.clone())
+                        }
+                    },
+                );
+                assert_eq!(calls, 2);
+                if bytes == original {
+                    assert_eq!(result.unwrap(), original);
+                } else {
+                    assert!(result.unwrap_err().contains("differ from object metadata"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn immutable_input_rejects_invalid_metadata_and_preserves_acquisition_errors() {
+    let commit = "a".repeat(40);
+    let object = "ce013625030ba8dba906f756967f9e9ca394464a";
+    for metadata in [
+        vec![0xff],
+        format!("{object} blob 6").into_bytes(),
+        format!("{object} tree 6\n").into_bytes(),
+        format!("{object} blob 06\n").into_bytes(),
+        format!("{object} blob -1\n").into_bytes(),
+        format!("{object} blob 999999999999999999999999\n").into_bytes(),
+        format!("{object} blob 6\n{object} blob 6\n").into_bytes(),
+        format!("{} blob 6\n", "f".repeat(64)).into_bytes(),
+        format!("{} blob 6\n", "z".repeat(40)).into_bytes(),
+        format!("{commit}:absent missing\n").into_bytes(),
+    ] {
+        let mut calls = 0;
+        assert!(
+            chrono_harness::facts::acquire_immutable_input(
+                &commit,
+                "input",
+                1024,
+                |_, _, bound| {
+                    calls += 1;
+                    assert_eq!(
+                        bound, None,
+                        "invalid metadata must not launch a content read"
+                    );
+                    Ok(metadata.clone())
+                },
+            )
+            .is_err()
+        );
+        assert_eq!(calls, 1);
+    }
+    for fail_data in [false, true] {
+        let mut calls = 0;
+        let original_error = "original process failure: exit 17, binary stderr retained";
+        let error = chrono_harness::facts::acquire_immutable_input(
+            &commit,
+            "input",
+            1024,
+            |_, _, bound| {
+                calls += 1;
+                if fail_data && bound.is_none() {
+                    Ok(format!("{object} blob 6\n").into_bytes())
+                } else {
+                    Err(original_error.into())
+                }
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error, original_error);
+        assert_eq!(calls, if fail_data { 2 } else { 1 });
+    }
+}

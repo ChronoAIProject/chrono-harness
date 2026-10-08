@@ -593,6 +593,25 @@ impl Drop for OwnedProcess {
         let _ = self.child.wait();
     }
 }
+/// Acquire explicitly bounded input data on stdout without increasing stderr's
+/// diagnostic bound. The caller owns input eligibility, size and identity checks.
+/// Original process bytes, hashes, exit status and failures use the same engine.
+pub fn run_process_observed_data(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    stdout_limit: usize,
+) -> Result<ProcessResult, String> {
+    run_process_inner_with_stdout(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        stdout_limit,
+    )
+}
 fn run_process_inner(
     root: &Path,
     s: &CommandSpec,
@@ -600,7 +619,20 @@ fn run_process_inner(
     expected: Option<&str>,
     timeout: Duration,
 ) -> Result<ProcessResult, String> {
+    run_process_inner_with_stdout(root, s, input, expected, timeout, s.output_limit_bytes)
+}
+fn run_process_inner_with_stdout(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    expected: Option<&str>,
+    timeout: Duration,
+    stdout_limit: usize,
+) -> Result<ProcessResult, String> {
     validate_command(s)?;
+    if stdout_limit == 0 || stdout_limit > 64 * 1024 * 1024 {
+        return Err("invalid immutable input transport bound".into());
+    }
     if expected.is_some() && !Path::new(&s.program).is_absolute() {
         return Err("bound executable must be absolute; no ambient PATH resolution".into());
     }
@@ -718,7 +750,7 @@ fn run_process_inner(
         let stdout = reader(
             scope,
             child.stdout.take().ok_or("missing stdout")?,
-            limit,
+            stdout_limit,
             exceeded.clone(),
             monitor.clone(),
         );

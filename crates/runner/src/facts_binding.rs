@@ -222,6 +222,57 @@ pub fn acquire_registry_blobs(
         .collect())
 }
 
+/// Read one explicitly declared immutable input. Metadata remains diagnostic
+/// traffic; only the object's exact stdout receives the declared data bound.
+/// Both original processes are retained by the caller, including failures.
+pub fn acquire_immutable_input(
+    oid: &str,
+    path: &str,
+    limit: usize,
+    mut git: impl FnMut(&[&str], &[u8], Option<usize>) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    facts::full_oid(oid)?;
+    crate::relative_path(path)?;
+    if limit == 0 || limit > 64 * 1024 * 1024 {
+        return Err("invalid immutable input limit".into());
+    }
+    // NUL-framed queries preserve the exact registered path.
+    let query = format!("{oid}:{path}\0");
+    let metadata = git(&["cat-file", "--batch-check", "-z"], query.as_bytes(), None)?;
+    let text = std::str::from_utf8(&metadata).map_err(|_| "invalid immutable input metadata")?;
+    let fields: Vec<_> = text
+        .strip_suffix('\n')
+        .ok_or("missing immutable input metadata terminator")?
+        .split(' ')
+        .collect();
+    if fields.len() != 3 || fields[1] != "blob" || fields[0].len() != oid.len() {
+        return Err("expected exact immutable blob metadata".into());
+    }
+    facts::full_oid(fields[0])?;
+    let length = fields[2]
+        .parse::<usize>()
+        .map_err(|_| "invalid immutable input length")?;
+    if length.to_string() != fields[2] {
+        return Err("noncanonical immutable input length".into());
+    }
+    if length > limit {
+        return Err(format!(
+            "immutable input {path} has {length} bytes; declared limit is {limit}"
+        ));
+    }
+    let object = BlobObject {
+        oid: fields[0].into(),
+        length,
+    };
+    // Bind the data read to the observed object identity, never a moving ref.
+    // Empty blobs still need one byte of transport capacity to detect excess.
+    let bytes = git(&["cat-file", "blob", &object.oid], &[], Some(length.max(1)))?;
+    if !object.matches(&bytes) {
+        return Err("immutable input bytes differ from object metadata".into());
+    }
+    Ok(bytes)
+}
+
 /// Original binding observations when construction fails, without decoding diagnostics.
 #[derive(Debug)]
 pub struct OpenFailure {
