@@ -1,0 +1,346 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "TMPDIR",
+      "SDKROOT",
+      "DEVELOPER_DIR"
+    ],
+    "values": {
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "CARGO_TERM_COLOR": "never"
+    }
+  },
+  "operations": [
+    {
+      "id": "source.commit",
+      "program": "git",
+      "argv": [
+        "rev-parse",
+        "HEAD"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "source.tree",
+      "program": "git",
+      "argv": [
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "source.status",
+      "program": "git",
+      "argv": [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=normal"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.cargo",
+      "program": "cargo",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.rustc",
+      "program": "rustc",
+      "argv": [
+        "-vV"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.rustfmt",
+      "program": "rustfmt",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "rust.sysroot",
+      "program": "rustc",
+      "argv": [
+        "--print",
+        "sysroot"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "sdk.root",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--sdk",
+        "macosx",
+        "--show-sdk-path"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "developer.root",
+      "program": "/usr/bin/xcode-select",
+      "argv": [
+        "-p"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.linker",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "clang"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.ar",
+      "program": "/usr/bin/xcrun",
+      "argv": [
+        "--find",
+        "ar"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.git",
+      "program": "/usr/bin/git",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "tool.python",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "python.executable",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-c",
+        "import os,sys; print(os.path.realpath(sys.executable))"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "python.root",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-c",
+        "import sys; print(sys.base_prefix)"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "cargo.home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-c",
+        "import os; print(os.environ.get('CARGO_HOME') or os.path.join(os.environ['HOME'],'.cargo'))"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    },
+    {
+      "id": "runtime.os",
+      "program": "/usr/bin/sw_vers",
+      "argv": [],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 4194304
+    }
+  ],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "inputs.fetch.runner",
+      "inputs.metadata.runner",
+      "inputs.fetch.runner-tests",
+      "inputs.metadata.runner-tests",
+      "inputs.fetch.instructions",
+      "inputs.metadata.instructions",
+      "inputs.fetch.instructions-tests",
+      "inputs.metadata.instructions-tests",
+      "inputs.fetch.judge-ci",
+      "inputs.metadata.judge-ci",
+      "inputs.fetch.judge-ci-tests",
+      "inputs.metadata.judge-ci-tests",
+      "inputs.fetch.ci",
+      "inputs.metadata.ci",
+      "inputs.fetch.ci-tests",
+      "inputs.metadata.ci-tests",
+      "inputs.fetch.judge-registration",
+      "inputs.metadata.judge-registration",
+      "inputs.fetch.judge-registration-tests",
+      "inputs.metadata.judge-registration-tests",
+      "inputs.fetch.judge-filemap",
+      "inputs.metadata.judge-filemap",
+      "inputs.fetch.judge-filemap-tests",
+      "inputs.metadata.judge-filemap-tests",
+      "inputs.fetch.judge-routes",
+      "inputs.metadata.judge-routes",
+      "inputs.fetch.judge-routes-tests",
+      "inputs.metadata.judge-routes-tests",
+      "inputs.fetch.judge-projects",
+      "inputs.metadata.judge-projects",
+      "inputs.fetch.judge-projects-tests",
+      "inputs.metadata.judge-projects-tests",
+      "inputs.fetch.judge-cost",
+      "inputs.metadata.judge-cost",
+      "inputs.fetch.judge-cost-tests",
+      "inputs.metadata.judge-cost-tests",
+      "inputs.fetch.judge-mixed",
+      "inputs.metadata.judge-mixed",
+      "inputs.fetch.judge-mixed-tests",
+      "inputs.metadata.judge-mixed-tests",
+      "inputs.fetch.judge-workflow",
+      "inputs.metadata.judge-workflow",
+      "inputs.fetch.judge-workflow-tests",
+      "inputs.metadata.judge-workflow-tests",
+      "inputs.fetch.inputs",
+      "inputs.metadata.inputs",
+      "inputs.fetch.inputs-tests",
+      "inputs.metadata.inputs-tests",
+      "inputs.fetch.distribution",
+      "inputs.metadata.distribution",
+      "inputs.fetch.distribution-tests",
+      "inputs.metadata.distribution-tests",
+      "inputs.fetch.judge-cargo",
+      "inputs.metadata.judge-cargo",
+      "inputs.fetch.judge-cargo-tests",
+      "inputs.metadata.judge-cargo-tests",
+      "inputs.fetch.worktree",
+      "inputs.metadata.worktree",
+      "inputs.fetch.worktree-tests",
+      "inputs.metadata.worktree-tests",
+      "inputs.fetch.diagnostics",
+      "inputs.metadata.diagnostics",
+      "inputs.fetch.diagnostics-tests",
+      "inputs.metadata.diagnostics-tests",
+      "inputs.fetch.cache",
+      "inputs.metadata.cache",
+      "inputs.fetch.cache-tests",
+      "inputs.metadata.cache-tests"
+    ],
+    "tools": {
+      "cargo": "cargo"
+    },
+    "timeout_seconds": 120,
+    "output_limit_bytes": 4194304
+  },
+  "files": [
+    {
+      "id": "runtime.system-version",
+      "location": {
+        "path": "/System/Library/CoreServices/SystemVersion.plist"
+      }
+    },
+    {
+      "id": "runtime.dyld",
+      "location": {
+        "path": "/usr/lib/dyld"
+      }
+    },
+    {
+      "id": "tool.native-clang",
+      "location": {
+        "stdout": "tool.linker"
+      }
+    },
+    {
+      "id": "tool.native-ar",
+      "location": {
+        "stdout": "tool.ar"
+      }
+    },
+    {
+      "id": "tool.native-python",
+      "location": {
+        "stdout": "python.executable"
+      }
+    }
+  ],
+  "directories": [
+    {
+      "id": "rust",
+      "location": {
+        "stdout": "rust.sysroot"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "sdk",
+      "location": {
+        "stdout": "sdk.root"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "developer-toolchain",
+      "location": {
+        "stdout": "developer.root",
+        "suffix": "Toolchains/XcodeDefault.xctoolchain"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "python",
+      "location": {
+        "stdout": "python.root"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "cargo-registry",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "registry"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "runtime.shared-cache",
+      "location": {
+        "path": "/System/Library/dyld"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "runtime.cryptex-cache",
+      "location": {
+        "path": "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld"
+      },
+      "max_entries": 200000
+    }
+  ]
+}

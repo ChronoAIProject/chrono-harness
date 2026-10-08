@@ -32,5 +32,15 @@ path = "tests/snapshots.rs"
 name = "consumer"
 path = "tests/consumer.rs"
 
+[[bin]]
+name = "chrono-inputs-test-observe"
+path = "tests/support/observe.rs"
+test = false
+bench = false
+
+[[test]]
+name = "observations"
+path = "tests/observations.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3

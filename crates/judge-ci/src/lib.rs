@@ -286,6 +286,16 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             .values
             .get(&snapshot.effective_path)
             .ok_or("missing effective registration config")?;
+        let judges_path = config["registries"]["judges"]
+            .as_str()
+            .ok_or("judge registry path missing")?;
+        let judges = snapshot
+            .values
+            .get(judges_path)
+            .ok_or("judge registry missing")?;
+        for judge in judges["judges"].as_array().ok_or("judges missing")? {
+            nodes.insert(format!("judge:{}", text(judge, "id")?));
+        }
         for tool in config["tools"].as_array().ok_or("tools missing")? {
             nodes.insert(format!("tool:{}", text(tool, "id")?));
         }

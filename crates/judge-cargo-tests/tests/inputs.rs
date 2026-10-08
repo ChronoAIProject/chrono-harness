@@ -444,7 +444,7 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
             serde_json::to_vec(&json!({"expectation": context})).unwrap(),
         )
         .unwrap();
-        let guard = root.join(".chrono-harness/bin/chrono-judge-cargo");
+        let guard = root.join("crates/judge-cargo/target/debug/chrono-judge-cargo");
         let filemap: serde_json::Value =
             serde_json::from_slice(&fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap())
                 .unwrap();
@@ -718,6 +718,7 @@ fn main_host_declared_contexts_preserve_local_success_and_exact_binding_rejectio
         .keep();
     let mut config: serde_json::Value =
         serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    bind_main_host_source_guard(&root, &mut config);
     let input = config["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
@@ -910,6 +911,16 @@ fn retain_native_json(path: &std::path::Path, bytes: &[u8]) {
     original.persist_noclobber(path).unwrap();
 }
 
+fn bind_main_host_source_guard(root: &std::path::Path, config: &mut serde_json::Value) {
+    let guard = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == "cargo-guard")
+        .unwrap();
+    guard["program"] = json!(root.join("crates/judge-cargo/target/debug/chrono-judge-cargo"));
+}
+
 fn main_host_native_spec(
     root: &std::path::Path,
     consumer: &serde_json::Value,
@@ -918,9 +929,38 @@ fn main_host_native_spec(
     let policy: serde_json::Value =
         serde_json::from_slice(&fs::read(root.join(consumer["policy"].as_str().unwrap())).unwrap())
             .unwrap();
+    // Bind the real source consumer in a retained test-owned registration.
+    // Installed governance paths and all original Cargo input expectations stay fixed.
+    let retained = root.join(".chrono-harness/state/inputs");
+    fs::create_dir_all(&retained).unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("main-source-guard-")
+        .tempdir_in(&retained)
+        .unwrap()
+        .keep();
+    let config_path = directory.join("config.json");
+    let relative_config = config_path.strip_prefix(root).unwrap().to_str().unwrap();
+    let mut config: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    bind_main_host_source_guard(root, &mut config);
+    let mut projects: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.join(config["registries"]["projects"].as_str().unwrap())).unwrap(),
+    )
+    .unwrap();
+    for project in projects["projects"].as_array_mut().unwrap() {
+        for action in project["actions"].as_object_mut().unwrap().values_mut() {
+            if action["operation"] == consumer["operation"] {
+                action["argv"][4] = json!(relative_config);
+            }
+        }
+    }
+    let projects_path = directory.join("projects.json");
+    fs::write(&projects_path, serde_json::to_vec(&projects).unwrap()).unwrap();
+    config["registries"]["projects"] = json!(projects_path.strip_prefix(root).unwrap());
+    fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
     chrono_harness::CommandSpec {
         program: root
-            .join(".chrono-harness/bin/chrono-judge-cargo")
+            .join("crates/judge-cargo/target/debug/chrono-judge-cargo")
             .to_str()
             .unwrap()
             .into(),
@@ -929,7 +969,7 @@ fn main_host_native_spec(
             "--host-root".into(),
             root.to_str().unwrap().into(),
             "--config".into(),
-            ".chrono-harness/config.json".into(),
+            relative_config.into(),
             "--policy".into(),
             consumer["policy"].as_str().unwrap().into(),
             "--operation".into(),

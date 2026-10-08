@@ -2882,6 +2882,26 @@
             "--manifest-path",
             "crates/inputs/Cargo.toml"
           ]
+        },
+        "observe_native": {
+          "operation": "inputs.observe.native",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml",
+            "--bin",
+            "chrono-inputs",
+            "--",
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/native-observation.json",
+            "--output",
+            ".chrono-harness/state/inputs/native-observation.json"
+          ]
         }
       },
       "test_project": "inputs-tests",

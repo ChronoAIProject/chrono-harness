@@ -6449,6 +6449,58 @@
           "to": "script:host-bootstrap-tests"
         }
       ]
+    },
+    {
+      "path": "crates/inputs/src/observation.rs",
+      "owner": "inputs",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/observations.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/inputs-tests/tests/support/observe.rs",
+      "owner": "inputs-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/native-observation.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

@@ -236,9 +236,13 @@ fn migration_host_with_alias_collision(
             .unwrap_or_else(|e| panic!("copy declared fixture {path}: {e}"));
     }
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
-    for name in ["chrono-ci", "chrono-harness", "chrono-judge-ci"] {
+    for (project, name) in [
+        ("ci", "chrono-ci"),
+        ("runner", "chrono-harness"),
+        ("judge-ci", "chrono-judge-ci"),
+    ] {
         fs::copy(
-            source.join(format!(".chrono-harness/bin/{name}")),
+            source.join(format!("crates/{project}/target/debug/{name}")),
             root.join(format!(".chrono-harness/bin/{name}")),
         )
         .unwrap();

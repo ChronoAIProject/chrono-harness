@@ -57,3 +57,5 @@ v5 可在 `failure_evidence` 中按验证 operation 显式登记失败目录列�
 专属 owner 验证包括任意非 Rust 字面命令、原生元数据、独立 sibling、隔离本地调度、真实 distribution pack、非 UTF-8 原始失败、缺失／损坏／重封装错误 receipt、路径／mode、变更字节、当前失败与 carried attempt。测试不认证实际原生平台时限、普遍环境同判或公开采用。提交后的 canonical check、原生两平台执行及必要的重试、发布和 main/examples 采用仍须分别验证。
 
 v5 可在 `verification_consumers` 为验证单元登记 `need`（实际调用位置、需求和输出用途）及 `release_assets`。配方核该资产集合与 `needs` 对应的构建资产完全一致；不一致报 `E_RELEASE_CONSUMPTION`，非空依赖未说明则在原始回执和 stderr 报 `W_RELEASE_CONSUMPTION_UNVERIFIED`。本宿主 22 个验证单元全部采用合同；宿主回归检查覆盖登记全集，并对额外／缺失依赖作变异核验。通用 v5 仍兼容未采用合同的宿主。`declared` 只表示登记一致，不证明说明真实或依赖最少。消费审计须检查实际调用及共享 fixture，并在未提供其它发布二进制的条件下执行原始未过滤操作；源码搜索不能代替执行证据。
+
+真实源码消费者读取 `consumer_staging` 已声明的 `crates/<project>/target/debug/<binary>` 输出：migration fixture 的 CI／runner／judge-ci、release CLI 的 CI，以及主宿主 native Cargo guard 都使用候选源码产物。临时 fixture 可将这些字节复制到自己的 bin；主宿主固定执行物不被源码覆盖，本地已安装旧 pin 也不改变测试目标。源码构建身份与 immutable installer 回执的发布身份各自保留；原未过滤验证、选择器、线程、时限与输出上限保持。beta.22 尚未发布，失败的 e21 原生产者不构成兼容发布或采用证据；调用方须选择实际通过原生验证的兼容源码并核其真实产物。

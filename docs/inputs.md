@@ -286,30 +286,29 @@ work. Candidate artifact publication/binding and actual full plan/native
 activation remain subsequent steps. The current fixed command still uses scoped
 CI, and the full registrations remain proposed/incomplete.
 
-P2 extends this whitelist to the existing two Python projects, six Python
+The whitelist includes the existing two Python projects, six Python
 scripts and seven full judges: 49 executable consumers in total, retaining the
 34 Cargo roots. The local Python inventory lists the selected Xcode Python
 3.9.6 framework/executable and 783 standard-library files. Those files are also
 individual declared inputs with explicit consumer edges; the directory document
 does not discover dependencies at execution time. Enforcement binary inputs
-retain P1 beta.21 byte expectations separately from current source outputs.
+retain beta.21 byte expectations separately from current source outputs.
 Local `SystemVersion.plist` and `dyld` bytes bind only the `runtime-identity`
 domain. They leave `runtime-platform` unresolved because applicable shared-cache
 and delegated runtime inputs are not complete. Script delegated tools, native
 provisioning and original endpoint evidence remain unresolved, independently of
-these new bindings. No status is promoted by this source step.
+these new bindings. These bindings do not activate full governance.
 
-Before changing these declarations, the inputs owner captured the clean fixed
-`e21ded0dfa914db65d09479456205c3a8428bdad` local endpoint at
-`.chrono-harness/state/p2/e21-local-original.json` (SHA-256
-`375123c974e8f1952382945c5e5010194116c93553a98f10da7f27e54238c895`).
-All 3,181 original file observations matched that endpoint's declarations;
-655,422,063 present bytes were retained through content-addressed blobs.
-This original predates the new declarations. It cannot supply unobserved native
-identities or new candidate inputs. Caller must preserve the snapshot and its
-blobs, capture a clean committed candidate, and provide original native base
-observations through the existing composition sources. Capture success is not
-judge-chain acceptance or past business execution.
+Retained local originals remain at
+`.chrono-harness/state/p2/e21-local-original.json` for
+`e21ded0dfa914db65d09479456205c3a8428bdad` (SHA-256
+`375123c974e8f1952382945c5e5010194116c93553a98f10da7f27e54238c895`)
+and `.chrono-harness/state/p2/3083-local-original.json` for
+`3083a824476a094e5d6117c4c5447084415dc9d6` (SHA-256
+`12edd99d347b33714e98732a45fbe7cd73c0f4f7c2b9d225e9d0dee2d919bbb5`).
+They contain 3,181 and 3,980 file observations respectively, with the original
+content-addressed blobs under the inputs owner. Preserve both originals and
+blobs. Neither is native history, past business execution or full admission.
 
 The selector owner now supports separate `local`/`ci` declarations on the same
 OS/ARCH via `chrono-git-configs/v2`; snapshot v3 retains the source binding.
@@ -319,8 +318,53 @@ cannot rewrite e21's direct, local policy or manufacture a historical native
 observation. Missing native originals require a coherent committed provisioning
 endpoint before the later activation candidate.
 
-This source flight changes product adapters and host policy together. Its actual
-validation includes the Cargo pair and main native check, all three complete
-group inventories, formatting and host bootstrap/projection checks. A clean
-committed canonical run and native unit/collection acceptance remain caller
-obligations. None of these declarations asserts universal deterministic parity.
+Native declarations are acquired through the registered `inputs.observe.native`
+action. Run it in the macos-26 checkout after its registered bootstrap has
+provisioned Rust 1.95.0 and before declaring native expected identities:
+
+```sh
+cargo run --locked --manifest-path crates/inputs/Cargo.toml --bin chrono-inputs -- observe --host-root . --manifest .chrono-harness/inputs/native-observation.json --output .chrono-harness/state/inputs/native-observation.json
+```
+
+`chrono-input-observation/v1` explicitly lists probes, files, directory roots and
+entry bounds. `registered_operations` references the existing projects owner;
+its 34 original fetch/metadata pairs retain their argv and Cargo selection.
+The manifest owns acquisition environment values, separate from later effective
+business inheritance. The runner owns executable resolution/bytes, process
+bounds, original launch records and raw streams. The output and its
+`.processes/` directory retain the original manifest/projects bytes and all
+process evidence. Unknown or ambiguous operations, unbound tools, failed probes,
+nonregular files, unreadable roots and exceeded bounds fail. Failures retain
+available original results; exit 0 means `observed`, with governance
+`not-evaluated`. Existing output or process directories are never overwritten.
+
+Root inventories enumerate only declared acquisition roots and record actual
+regular-file digests and literal symlink targets in `chrono-input-directory/v2`.
+A missing root or file is an observed absence. Inventories neither choose tests
+nor add registration edges, and an absent root does not discharge an applicable
+runtime requirement. Toolchain, SDK, Python, Cargo registry and shared-cache
+observations supply native declaration data; they do not prove complete delegated
+reads or universal input closure. The report's source Git probes identify the
+observed checkout, including its actual dirty status. Native job provenance
+comes from the original CI producer/artifact binding, separately from those
+source observations. Preserve both.
+
+Use these observations to register native file locations, inventories, tool
+bindings, Cargo configuration and applicable runtime/delegated inputs at a clean
+committed provisioning endpoint. Capture that endpoint with the existing
+`capture` command and `CHRONO_CHECK_SOURCE=ci` once the source-aware selector is
+adopted. Preserve snapshot/blobs as the original native base for the later
+activation candidate; `pair`, `capture-governance` and `compose` consume those
+originals. The existing native-adoption owner retains event/job acquisition
+fields and forwards them outside business inheritance. Its source, lineage and
+composition references must be supplied before switching that route; direct
+scoped inheritance is not a substitute for this adoption.
+
+Product observation/scoped-graph code and host acquisition registration change
+together: this is a mixed product/host-policy change. Validation cost includes
+Rust observation behavior, original unfiltered projects/CI/Cargo consumers,
+registered graph/input consumers, formatting and instruction generation. Clean
+committed canonical checks, compatible publication/adoption and real native
+unit/collection acceptance remain separate obligations. Full registration and
+routing remain proposed/incomplete; these observations assert no deterministic
+parity or full SPEC completion.

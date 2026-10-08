@@ -1,5 +1,6 @@
 //! Snapshot transport, not dependency discovery or a governance verdict.
 mod composition;
+mod observation;
 use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, wire};
 pub use chrono_judge_registration::inputs::{
     SNAPSHOT_SCHEMA, SNAPSHOT_SCHEMA_V2, SNAPSHOT_SCHEMA_V3,
@@ -9,6 +10,7 @@ use chrono_judge_registration::{
     inputs::{Retained, observe_file, retained_shape, snapshot_schema_for, snapshot_shape},
 };
 pub use composition::{Manifest as CompositionManifest, Source as CompositionSource, compose};
+pub use observation::observe;
 use serde_json::{Value, json as value};
 use std::{
     collections::BTreeMap,
@@ -315,10 +317,11 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
         return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION")));
     }
     if args == ["--help"] {
-        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID] [--base OID --candidate OID]\nchrono-inputs capture-governance --host-root H --config P --base OID --candidate OID --manifest P --output P\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
+        return Ok("chrono-inputs observe --host-root H --manifest P --output P\nchrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID] [--base OID --candidate OID]\nchrono-inputs capture-governance --host-root H --config P --base OID --candidate OID --manifest P --output P\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
     }
     let command = args.first().ok_or("E_USAGE: capture or pair required")?;
     let allowed = match command.as_str() {
+        "observe" => vec!["--host-root", "--manifest", "--output"],
         "capture" => vec![
             "--host-root",
             "--config",
@@ -376,7 +379,9 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
             .ok_or_else(|| format!("E_USAGE: missing {key}"))
     };
     let root = fs::canonicalize(cwd.join(required("--host-root")?)).map_err(|e| e.to_string())?;
-    let result = if command == "capture" {
+    let result = if command == "observe" {
+        observe(&root, required("--manifest")?, required("--output")?)?
+    } else if command == "capture" {
         capture_projected(
             &root,
             required("--config")?,
