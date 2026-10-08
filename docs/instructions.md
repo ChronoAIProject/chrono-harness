@@ -15,13 +15,21 @@ chrono-instructions generate --host-root "/path/to/existing host"
 
 默认 init 采用编译时内嵌的 `assets/instructions/catalog.json` 与 root-only `default-manifest.json`，创建独立宿主 `.chrono-harness/instructions/catalog.json`、`manifest.json`、空 `host-context.md`。复制后的二进制无需 checkout。产品资产与宿主采用数据不是同一所有者；升级二进制不会覆盖已采用数据。采用新默认须明确比较并编辑宿主数据，然后 generate。
 
-默认根显式选择 22 个现有双语内容叶子，按 `workflow` 的目标与入口、登记与隔离、实施、检查与修复、演进与交付五节同级短流程呈现。每项受治理操作只暴露当前登记路径；定制先登记，方法演进更新登记并完成适用验证，保留一个正式入口。完整 116-atom 库、`core.general` 与 `general` 布局仍可选择用于自定义 Markdown／skills，不自动覆盖既有宿主的 manifest。
+默认根显式选择现有双语叶子，按 `workflow` 的需求→审计→重构→开发四阶段呈现；验证／SPEC 迭代和交付／清理是开发下级。先核实际需求／消费者、当前 SPEC、已有能力、唯一所有权、显式依赖影响和验证／CI／存储成本，再收窄改动。足够就复用，有据才在自然所有者重构，开发只补真实缺口；不要求全仓审计、全测或无条件重构。每项受治理操作只暴露当前登记路径；定制先登记，方法演进更新登记并完成适用验证，保留一个正式入口。完整原子库、`core.general` 与 `general` 布局仍可选择用于自定义 Markdown／skills，不自动覆盖既有宿主的 manifest。
 
 CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`generate --host-root H`。H 已存在，各选项仅一次，参数按 OS 路径运输。新宿主省略 locale 选择 zh-CN；显式 methodology 以一个 opaque file atom 保留，未指定 locale 则绑定 und（未指定语言），指定 locale 则明确绑定该语言而不翻译。初始 locale 必须已在嵌入 catalog 声明。默认 root title 仅属于默认 zh-CN 绑定；改用其他 locale 时省略此可选 title，作者可在 manifest 显式添加本地化 title。context 可独立选择。显式外部 M/C 必须可读 UTF-8 普通文件，可由调用者选择链接。
 
 已登记 init 的省略选项保留原数据；显式不同 context、raw method 或 root locale 拒绝，提示编辑源/输出计划再 generate。atomized root 不允许用 raw methodology 替换。源缺失、登记损坏不补默认。没有登记却已有保留源/控制文件时拒绝碰撞。public `init`、`init_with_defaults`、`generate`、`dispatch` 继续可用。
 
 退出 0 完成/无写入/帮助/版本；2 CLI 用法错误；1 输入/生成/IO/平台错误。成功报告实际改动数和 `no judges executed`。独立 `chrono-harness check` 已有 [CI slice](ci.md) 和有界 full 判官链，本宿主完整启用仍未完成；指令生成不证明 AI 已阅读、遵守、执行判官或通过检查。
+
+## 新默认的宿主采用边界
+
+新宿主执行 init 即采用该二进制内嵌默认；既有宿主升级二进制或重复 init 仍保留已采用 catalog、manifest、context 和根块外内容。没有自动升级／合并或更新子系统。
+
+既有宿主采用本方法时，以所选产品源码版本的 `assets/instructions/catalog.json`、`default-manifest.json` 为比较输入，在宿主自己的 catalog 中合入所需原子正文及 `workflow` 布局，再在 manifest 的 root 输出选择相应 roots／layout；保留自定义 atoms、locale、file 源、其他输出、上下文和块外内容。不要整份覆盖宿主 catalog／manifest。已有 opaque file 方法仍由原 file 所有者编辑；不要用 init 替换它。随后从宿主登记的 `instructions.generate` 入口 generate，核真实根、AGENTS 字面链接和所有选中 Markdown／skill 消费者，再重复生成核无写入。本仓采用的是自己的登记源与三个既有输出，产品默认仍只生成根。
+
+这一路径更新可读方法，不激活宿主判官、证明 AI 遵守或建立 full/native 验收。产品默认与宿主政策同改须明示两组变化及实际验证成本；本方法复用生成器及原行为测试，不增加表单、审批或工作流引擎。便携 cleanup 原子要求及时保护／加入／交接及中断恢复；本仓 automatic_cleanup/v2 的操作、租约、回执、兼容切换及保留条件继续由 host_context 与 [worktree](worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2) 维护。
 
 ## Schema 与可复制组合配方
 
@@ -35,13 +43,7 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
   "catalog": ".chrono-harness/instructions/catalog.json",
   "host_context": ".chrono-harness/instructions/host-context.md",
   "outputs": [
-    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":[
-      "goal.deliverable", "action.autonomy", "method.entry", "method.host-tools",
-      "registry.explicit", "judge.register", "core.small-projects", "candidate.isolation",
-      "reuse.search", "owner.canonical",
-      "delta.selection", "delta.candidate-judge", "delta.local-ci", "test.behavior", "test.same-language", "evidence.program-state", "evidence.failure",
-      "policy.evolution", "policy.mixed-warning", "candidate.landing", "artifact.results"
-    ],"title":"通用工作方法","layout":"workflow"},
+    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":["goal.deliverable","action.autonomy","candidate.isolation","reuse.search","registry.explicit","evidence.failure","cost.measure","owner.canonical","core.small-projects","method.host-tools","method.entry","judge.register","policy.evolution","policy.mixed-warning","delta.selection","delta.candidate-judge","delta.local-ci","test.behavior","test.same-language","evidence.program-state","candidate.landing","artifact.results","artifact.cleanup"],"title":"通用工作方法","layout":"workflow"},
     {"id":"general-en","path":"docs/generated/general-methods.en.md","format":"markdown","locale":"en","roots":["core.general"],"title":"General working methods","layout":"general"},
     {"id":"repair-skill","path":"skills/diagnose-recurring-failures/SKILL.md","format":"skill","locale":"en","roots":["core.repair-producer"],"skill":{"name":"diagnose-recurring-failures","description":"Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."}}
   ]
@@ -87,7 +89,7 @@ locale 拥有 root_frame 与 projection_notice；框架和正文必须使用所�
 
 先按原 roots/requires 求完整闭包、读取所选 variant 并验证，再要求布局恰好覆盖其所有非空正文一次。空按 UTF-8 字节长度判定，不 trim；不放置空 aggregate。缺少依赖正文、重复、未知或闭包外放置均报错，不能借布局扩大选择。各节先输出标题再输出显式列出的正文，间隔仍是两个 LF，正文原字节不变。空 atoms 可用作上层标题。所有输出完成预检与渲染后才进入原 publisher，失败不写源、输出、alias 或目录。
 
-**布局只组织阅读，不产生权威优先级或执行顺序承诺；requires 仍仅拥有内容依赖。** 产品 `workflow` 显式放置默认所选 22 个叶子，五节 depth 均为 1；保留中文 root title，因此中文根节标题为二级，初始英文无 title 时为一级，locale 行为不变。`general` 仍显式列出基本原则、工作方法、执行合同三部分及 12 个主题，覆盖完整 100 个内容叶子；本仓英文指南继续选择 `core.general/general`。主题成员不是扫描、ID 前缀或正文推断，也不是 header atom。宿主采用数据独立拥有；focused skill 不选择通用布局，仍按原 7 叶子闭包平铺。
+**布局只组织阅读，不产生权威优先级或执行顺序承诺；requires 仍仅拥有内容依赖。** 产品 `workflow` 显式放置默认所选叶子，四阶段 depth=1，开发下的验证与交付 depth=2；保留中文 root title，因此中文阶段为二级、其下为三级，初始英文无 title 时分别为一级／二级，locale 行为不变。`general` 仍显式列出基本原则、工作方法、执行合同三部分及 12 个主题，覆盖完整 100 个内容叶子；本仓英文指南继续选择 `core.general/general`。主题成员不是扫描、ID 前缀或正文推断，也不是 header atom。宿主采用数据独立拥有；focused skill 不选择通用布局，仍按原 7 叶子闭包平铺。
 
 ## 所有权、路径与退休
 
@@ -125,7 +127,7 @@ cargo check --tests --locked --manifest-path crates/instructions-tests/Cargo.tom
 cargo test --locked --manifest-path crates/instructions-tests/Cargo.toml
 ```
 
-产品默认根显式选择 22 个内容叶子，包含同语言测试规则及 sh／bash 可用 Python 测试的例外。空上下文新宿主的 zh-CN／en 根分别为 8440／9232 字节，完整英文 Markdown 为 35103 字节／100 叶子；[实际消费者边界](methodology-extraction.md#实际消费者边界) 列出本宿主根、上下文与 skill 的读数。内容编辑须复核完整载荷，不截尾、不借全局配置扩限。独立选择 `core.behavior` 也包含同语言测试要求；指南生成不等于语言配对判官已执法。
+产品默认根包含同语言测试规则及 sh／bash 可用 Python 测试的例外。[实际消费者边界](methodology-extraction.md#实际消费者边界) 列出本宿主根、上下文与 skill 的读数。内容编辑须复核完整载荷，不截尾、不借全局配置扩限。独立选择 `core.behavior` 也包含同语言测试要求；指南生成不等于语言配对判官已执法。
 
 专属行为测试覆盖图顺序/去重/错误、显式 locale、精确字节、布局重排/双语复用/深度/完整覆盖/预写入拒绝、ownership/path 预检、迁移、原文/alias/no-op、普通与注入失败恢复。test-support 无生产开关。真实复制二进制验证默认 init，再显式添加多输出配方；实际消费者读数及外部 skill 格式验证的适用边界见 [迁移说明](methodology-extraction.md#实际消费者边界)，不引入生产依赖，不证明语义。
 

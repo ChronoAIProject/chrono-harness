@@ -9,7 +9,7 @@ Generated from registered rules. Edit sources and regenerate, not this file alon
 
 ### Goals and autonomy
 
-Clarify delivery. Check goal, scope, constraints and observable acceptance before acting. Address the user’s original problem with the smallest sufficient approach.
+Clarify requirements. Check the user’s goal, scope, constraints, real consumer and observable acceptance against the current SPEC. Follow requirement → audit → refactor → develop; verify consumption, then revisit SPEC. Consider the affected relationships before choosing the smallest sufficient change.
 
 Disclose revisions. User corrections take precedence. On changed assumptions, goals or rules, update judgments; state which prior conclusions hold or fail and why. Do not silently rewrite history or substitute an old plan for a new goal.
 
@@ -39,7 +39,7 @@ Disclose provenance. Name actual skills/methods, or none, in method/review prove
 
 ### Ownership and assurance
 
-One natural owner. Name sole authorities/actual producers for definitions, state, outputs and operations; no second manual authority. Register links/aliases to real sources. Narrative cannot dictate program dependencies; history belongs in version control, provenance has no runtime authority.
+Refactor at the natural owner. Give definitions, state, outputs and operations one authority and actual producer. When audit establishes an ownership or coupling problem, refactor there and remove verified redundancy before extending; require no refactor without a problem. Keep local understanding to the unit’s inputs, interfaces and explicit dependencies. Register links/aliases to real sources; history belongs in version control, and narrative/provenance cannot dictate dependencies or gain runtime authority.
 
 Separate code and instances. Code owns types, logic, IO and validation; declarative instances, config/assets stay outside source, synthetic fixtures in tests. Code may own closed type vocabularies. Importance does not justify embedding instances; validate external schemas and required inputs.
 
@@ -55,7 +55,7 @@ Use proportionate controls. Derive affordable controls from real defects, ground
 
 ### Search and reuse
 
-Search existing work first. Search repo, pinned direct dependencies, then allowed external sources, including private definitions and valid failure findings. Verify versions, interfaces, assumptions, scope and evidence status; reuse suitable work. Invisible does not mean absent.
+Audit before extending. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change.
 
 Bound negative searches. State question, scope and method. Verify hits’ originals, versions, conditions and solved scope; separate source conclusions, own deductions and conjectures. No hit means only not found in searched scope; it proves no nonexistence, originality or completed search. Report missing search capability separately.
 
@@ -85,7 +85,7 @@ Convenient need not be necessary. Derive sufficient joint conditions from final 
 
 Inspect failures first. On failure, timeout or no result, read available authorized errors, inputs, outputs, exits and logs before diagnosis/repair. Verify input matches dispatch intent. Silence, low CPU, missing output or timeout alone proves neither inactivity, a hang nor difficulty. Without evidence, leave causes unverified.
 
-Repair recurring causes. Recurrence means the same symptom AND remedy. Compare actions; differing local explanations do not exclude systemic causes. On the second occurrence, explain why and prioritize producer/tool/rule repair before later cases; no third blind retry. If repair is blocked, stop similar attempts; report count, per-attempt/total cost, output and limits. Continue independent work. Do not weaken goals, acceptance or detection. Check known issues and valid remedies before investing.
+Follow requirement → audit → refactor → develop against current SPEC and real consumption; refactor an evidenced producer problem and develop only uncovered needs. Repair recurring causes. Recurrence means the same symptom AND remedy. Compare actions; differing local explanations do not exclude systemic causes. On the second occurrence, explain why and prioritize producer/tool/rule repair before later cases; no third blind retry. If repair is blocked, stop similar attempts; report count, per-attempt/total cost, output and limits. Continue independent work. Do not weaken goals, acceptance or detection. Check known issues and valid remedies before investing.
 
 Validate resumed context. For failed, rejected or stalled work, check stale labels, spent retries and expired premises. Continue only with valid-state evidence; otherwise rebuild valid context, retaining useful findings, not invalid state. Past restarts do not validate this one.
 
@@ -109,7 +109,7 @@ Honor temporary lifecycles. One-use probes, query snapshots and run artifacts fo
 
 Report results plainly. Use ordinary language by default, retaining material conditions, detail and open limits. State changes, actual checks, measurements and results; a synopsis cannot replace substance. Keep no thought transcripts, diaries, review dialogue, command streams, receipt copies or duplicate snapshots, even via links, archives or required reading. Results must stand alone without the session.
 
-Complete registered host cleanup. When the host explicitly adopts automatic_cleanup, start/reconstruct enroll new worktrees and drain terminal entries. Hold managed use for consuming commands with `.chrono-harness/bin/chrono-worktree use --operation <registered operation> --path <worktree>`. After joining all owned jobs and establishing completion/landing, the caller runs `.chrono-harness/bin/chrono-worktree finish --path <worktree>` from the surviving coordinator; retry independently with `.chrono-harness/bin/chrono-worktree maintain`. Retain needed evidence, unsaved source and unretained commits. Never infer deletion from age, directory names or idle time. The caller joins unregistered background writers; legacy or unknown state stays protected pending reconciliation. There is no periodic idle cleanup. With explicit v2 kernel ownership adoption, normal start/reconstruct/use/maintain and adopted check/bootstrap entries reclaim unfinished reproducible caches after registered consumers release their leases, even without finish or an orphan use token. Live descendants, source, branches, bin and evidence remain protected; cache disposal never claims completion. Enable only verified descriptor transfer routes; preserve legacy and incompatible consumers. Retain and report unrelated enrollment cleanup failures without blocking a valid current target; target and coordinator-state failures still block, and explicit maintain still fails. Normal entries recover an enrolled unsealed birth after actual exclusion and original attachment/policy validation, preserving missing/failed original outcomes without fabricating success. New consumption after a published cache attempt opens a new generation and retains prior intent/results. The caller owns ordered cutover of committed coordinator policy/config and compatible binaries.
+Clean promptly and preserve work. Use the host’s registered lifecycle entry to protect consumption, join all owned/background jobs, verify completion/landing and hand off. Adopted and verified automatic recovery/cleanup paths reclaim reproducible output after interrupted sessions promptly; do not rely only on remembering finish. Cache disposal never claims completion. Before deletion, check actual ownership, active use, required consumers and retention conditions; preserve source, unretained commits, needed evidence and original failures. Age, directory names and idle time prove no disposal eligibility. Host context and the lifecycle owner define operations, compatible rollout and recovery limits.
 
 ## Execution contracts
 
@@ -121,7 +121,7 @@ Consumption grants no authority. Integrity checks, indexing, compiler increments
 
 One current registered entry per activity. Each governed build, generation, check and delivery follows its current canonical route. Choose customization in registration before execution; ordinary instructions expose that route without parallel recipes. Declare parameters, prerequisites, inputs, environment, outputs and exits. Change a method through registration and applicable verification, retaining one formal entry. Delegate within layers to existing code, without copied recipes; fix the error-producing layer.
 
-Configure host tools explicitly. Register scripts, plugins, judges and config under host .chrono-harness/, replaceable and evolvable; no hardcoded host in general runtimes. Use supplied tools; no duplicate platforms or global config edits.
+Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config.
 
 Register judges first. Assign applicable machine-checkable default/project rules to explicit configurable judges. Register methods, decision rules and required inputs before acting. Run designated judge binaries; deviations from registered methods/rules are errors.
 
@@ -213,7 +213,7 @@ Bind query identity. Pin delivery targets; verify result/check/run ownership. Ol
 
 ### Costs and cache
 
-Measure costs before replanning. Measure input size, dependency scope and major costs; give method, units, window and comparison basis. Remove waste, poor representations and duplicate dependencies; remeasure. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals.
+Improve using measured costs. Check input size, dependency scope and build, validation, CI and storage costs; report method, units, window and comparison basis, leaving unknowns explicit. Remove waste, poor representations and duplicate dependencies, then remeasure and verify real host consumption. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals.
 
 Stop redundant checks. Deliver after sufficient checks of the same effective inputs, absent new concerns. For change, failure or invalid evidence, identify affected duties/scope before targeted checks. Rerun success does not erase failure; preserve unaffected evidence.
 

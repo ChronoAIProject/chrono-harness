@@ -26,14 +26,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "先明确交付。 行动前核对用户目标、范围、约束与可观察验收条件，确认解决原问题，再选最小充分方案。"
+            "text": "先明确需求。 行动前核对用户目标、范围、约束、真实消费者与可观察验收，对照当前 SPEC；按需求→审计→重构→开发推进，验证消费结果后再核 SPEC。全局考虑受影响关系，再选最小充分改动。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Clarify delivery. Check goal, scope, constraints and observable acceptance before acting. Address the user’s original problem with the smallest sufficient approach."
+            "text": "Clarify requirements. Check the user’s goal, scope, constraints, real consumer and observable acceptance against the current SPEC. Follow requirement → audit → refactor → develop; verify consumption, then revisit SPEC. Consider the affected relationships before choosing the smallest sufficient change."
           }
         }
       ]
@@ -236,14 +236,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "先查已有成果。 依次查本仓、固定版本的直接依赖、允许的外部来源，包括私有定义与有效失败结论；核版本、接口、假设、适用范围及证据状态。满足目标就复用，不把不可见当缺失。"
+            "text": "先审计再扩展。 对照需求、当前 SPEC、实际消费者、现有能力和保留证据，核所有权、显式依赖影响及验证／CI／存储成本。依次查本仓、固定版本直接依赖和允许外部来源，含私有定义与有效失败结论；核接口、假设及适用范围。足够就复用，不把不可见当缺失，不把全局考虑变成每次全仓审计或全测。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Search existing work first. Search repo, pinned direct dependencies, then allowed external sources, including private definitions and valid failure findings. Verify versions, interfaces, assumptions, scope and evidence status; reuse suitable work. Invisible does not mean absent."
+            "text": "Audit before extending. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change."
           }
         }
       ]
@@ -323,14 +323,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "第二次同症状同处置就修产生处。 同类须症状与处置动作都相同；逐项比较前后动作，局部解释不同不排除系统性。第二次解释重现原因，优先修生产者、工具或规则，再处理后续实例；不第三次盲试。暂不能修就停止同形投入，报次数、单次及总成本、产出和真实边界，转向独立工作；不降目标、验收或检测。投入前查既有问题及有效处置。"
+            "text": "按需求→审计→重构→开发核当前 SPEC 与实际消费；有据时重构产生处，只开发未覆盖需要。 第二次同症状同处置就修产生处。 同类须症状与处置动作都相同；逐项比较前后动作，局部解释不同不排除系统性。第二次解释重现原因，优先修生产者、工具或规则，再处理后续实例；不第三次盲试。暂不能修就停止同形投入，报次数、单次及总成本、产出和真实边界，转向独立工作；不降目标、验收或检测。投入前查既有问题及有效处置。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Repair recurring causes. Recurrence means the same symptom AND remedy. Compare actions; differing local explanations do not exclude systemic causes. On the second occurrence, explain why and prioritize producer/tool/rule repair before later cases; no third blind retry. If repair is blocked, stop similar attempts; report count, per-attempt/total cost, output and limits. Continue independent work. Do not weaken goals, acceptance or detection. Check known issues and valid remedies before investing."
+            "text": "Follow requirement → audit → refactor → develop against current SPEC and real consumption; refactor an evidenced producer problem and develop only uncovered needs. Repair recurring causes. Recurrence means the same symptom AND remedy. Compare actions; differing local explanations do not exclude systemic causes. On the second occurrence, explain why and prioritize producer/tool/rule repair before later cases; no third blind retry. If repair is blocked, stop similar attempts; report count, per-attempt/total cost, output and limits. Continue independent work. Do not weaken goals, acceptance or detection. Check known issues and valid remedies before investing."
           }
         }
       ]
@@ -343,14 +343,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "一项内容一个自然所有者。 明确定义、状态、输出、操作的唯一权威与实际生产者，不另立手工权威。链接、别名显式登记并指向真源，不由叙事反定程序依赖。历史归版本库，来源说明不获运行时权威。"
+            "text": "在自然所有者重构。 定义、状态、输出、操作各有唯一权威与实际生产者。审计证实归属或耦合问题时，先在该处重构、移除已证冗余，再扩展；无问题不强制重构。让局部改动只需自身输入、接口和显式依赖的信息。链接／别名登记并指向真源；历史归版本库，叙事与来源说明不反定程序依赖或获运行时权威。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "One natural owner. Name sole authorities/actual producers for definitions, state, outputs and operations; no second manual authority. Register links/aliases to real sources. Narrative cannot dictate program dependencies; history belongs in version control, provenance has no runtime authority."
+            "text": "Refactor at the natural owner. Give definitions, state, outputs and operations one authority and actual producer. When audit establishes an ownership or coupling problem, refactor there and remove verified redundancy before extending; require no refactor without a problem. Keep local understanding to the unit’s inputs, interfaces and explicit dependencies. Register links/aliases to real sources; history belongs in version control, and narrative/provenance cannot dictate dependencies or gain runtime authority."
           }
         }
       ]
@@ -531,14 +531,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "宿主显式配置工具。 脚本、插件、判官及配置在宿主 `.chrono-harness/` 登记，可替换演进，不将宿主实例写死进通用运行时。用已有能力，不重建同类平台或改全局配置。"
+            "text": "只开发真实缺口。 现有能力不足时，绑定实际消费者和验收再开发，不造空调用、重复平台或未来扩展层。产品共性与宿主政策分居；脚本、插件、判官及配置由宿主在 `.chrono-harness/` 显式登记，可替换演进，不写死宿主实例或改全局配置。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Configure host tools explicitly. Register scripts, plugins, judges and config under host .chrono-harness/, replaceable and evolvable; no hardcoded host in general runtimes. Use supplied tools; no duplicate platforms or global config edits."
+            "text": "Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config."
           }
         }
       ]
@@ -993,14 +993,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "因成本改计划前先测。 测输入规模、依赖范围、主要成本，报方法、单位、窗口及可比口径。先消除无用工作、错误表示、重复依赖，再量改进；不靠抬预算、反复跑、删必要测试或降目标换成功。"
+            "text": "用实测成本改进。 核输入规模、依赖范围及构建／验证／CI／存储成本，报方法、单位、窗口和可比口径；未知写未知。先消除无用工作、错误表示、重复依赖，再量改进并验真实宿主消费。不靠抬预算、反复跑、删必要测试或降目标换成功。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Measure costs before replanning. Measure input size, dependency scope and major costs; give method, units, window and comparison basis. Remove waste, poor representations and duplicate dependencies; remeasure. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals."
+            "text": "Improve using measured costs. Check input size, dependency scope and build, validation, CI and storage costs; report method, units, window and comparison basis, leaving unknowns explicit. Remove waste, poor representations and duplicate dependencies, then remeasure and verify real host consumption. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals."
           }
         }
       ]
@@ -2463,14 +2463,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "按宿主登记完成清理。 宿主明确采用 automatic_cleanup 后，start/reconstruct 自动登记新工作树并排空已完成项；消费命令用 `chrono-worktree use --operation <已登记操作> --path <工作树>` 持有使用保护。调用方加入所有自有任务、确认完成／落地后，在存活协调宿主运行 `chrono-worktree finish --path <工作树>`；独立重试用 `chrono-worktree maintain`。保留所需证据、未保存源码及未保留提交；不能靠年龄、目录名或空闲推断可删除。未登记后台写入归调用方加入，旧版／未知身份先保留并协调；没有定时空闲清理。 显式采用 v2 内核所有权后，普通 start/reconstruct/use/maintain 及已采用 check/bootstrap 在登记消费者释放租约后自动回收未 finish 的可重建缓存，包括没有遗留 use token 的中断；活子孙、源码、分支、bin 与证据保留，缓存回收不宣称完成。只启用已实际验证的描述符转交链；旧版与不兼容消费者保留。无关登记项的清理失败保留回执并报告，不阻断合法当前目标；目标与协调状态失败继续阻断，显式 maintain 仍报失败。未封口的已登记 birth 在实际排除及原附件／政策验证后由普通入口恢复，原缺失／失败结果保留且不制造原成功；已发布缓存尝试后新消费开启新代际并保留旧 intent/result。协调者已提交 policy/config 与兼容 binary 的有序切换归调用方。"
+            "text": "及时清理，保全工作。 按宿主登记的生命周期入口保护消费、加入所有自有及后台任务、核完成／落地并交接。会话中断后的可重建产物由已采用且验证的自动恢复／清理路径及时回收，不只靠记得 finish；缓存回收不宣称完成。删除前核实际所有权、活跃使用、必要消费者与保留条件；保留源码、未保留提交、必要证据及失败原件，不凭年龄、目录名或空闲猜可删除。具体操作、兼容部署与恢复边界归宿主上下文和生命周期所有者。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Complete registered host cleanup. When the host explicitly adopts automatic_cleanup, start/reconstruct enroll new worktrees and drain terminal entries. Hold managed use for consuming commands with `chrono-worktree use --operation <registered operation> --path <worktree>`. After joining all owned jobs and establishing completion/landing, the caller runs `chrono-worktree finish --path <worktree>` from the surviving coordinator; retry independently with `chrono-worktree maintain`. Retain needed evidence, unsaved source and unretained commits. Never infer deletion from age, directory names or idle time. The caller joins unregistered background writers; legacy or unknown state stays protected pending reconciliation. There is no periodic idle cleanup. With explicit v2 kernel ownership adoption, normal start/reconstruct/use/maintain and adopted check/bootstrap entries reclaim unfinished reproducible caches after registered consumers release their leases, even without finish or an orphan use token. Live descendants, source, branches, bin and evidence remain protected; cache disposal never claims completion. Enable only verified descriptor transfer routes; preserve legacy and incompatible consumers. Retain and report unrelated enrollment cleanup failures without blocking a valid current target; target and coordinator-state failures still block, and explicit maintain still fails. Normal entries recover an enrolled unsealed birth after actual exclusion and original attachment/policy validation, preserving missing/failed original outcomes without fabricating success. New consumption after a published cache attempt opens a new generation and retains prior intent/results. The caller owns ordered cutover of committed coordinator policy/config and compatible binaries."
+            "text": "Clean promptly and preserve work. Use the host’s registered lifecycle entry to protect consumption, join all owned/background jobs, verify completion/landing and hand off. Adopted and verified automatic recovery/cleanup paths reclaim reproducible output after interrupted sessions promptly; do not rely only on remembering finish. Cache disposal never claims completion. Before deletion, check actual ownership, active use, required consumers and retention conditions; preserve source, unretained commits, needed evidence and original failures. Age, directory names and idle time prove no disposal eligibility. Host context and the lifecycle owner define operations, compatible rollout and recovery limits."
           }
         }
       ]
@@ -2812,36 +2812,16 @@
           "titles": [
             {
               "locale": "zh-CN",
-              "text": "目标与入口"
+              "text": "需求"
             },
             {
               "locale": "en",
-              "text": "Goal and entry"
+              "text": "Requirement"
             }
           ],
           "atoms": [
             "goal.deliverable",
             "action.autonomy",
-            "method.entry",
-            "method.host-tools"
-          ]
-        },
-        {
-          "depth": 1,
-          "titles": [
-            {
-              "locale": "zh-CN",
-              "text": "登记与隔离"
-            },
-            {
-              "locale": "en",
-              "text": "Registration and isolation"
-            }
-          ],
-          "atoms": [
-            "registry.explicit",
-            "judge.register",
-            "core.small-projects",
             "candidate.isolation"
           ]
         },
@@ -2850,16 +2830,18 @@
           "titles": [
             {
               "locale": "zh-CN",
-              "text": "实施"
+              "text": "审计"
             },
             {
               "locale": "en",
-              "text": "Implementation"
+              "text": "Audit"
             }
           ],
           "atoms": [
             "reuse.search",
-            "owner.canonical"
+            "registry.explicit",
+            "evidence.failure",
+            "cost.measure"
           ]
         },
         {
@@ -2867,11 +2849,48 @@
           "titles": [
             {
               "locale": "zh-CN",
-              "text": "检查与修复"
+              "text": "重构"
             },
             {
               "locale": "en",
-              "text": "Checks and repair"
+              "text": "Refactor"
+            }
+          ],
+          "atoms": [
+            "owner.canonical",
+            "core.small-projects"
+          ]
+        },
+        {
+          "depth": 1,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "开发"
+            },
+            {
+              "locale": "en",
+              "text": "Develop"
+            }
+          ],
+          "atoms": [
+            "method.host-tools",
+            "method.entry",
+            "judge.register",
+            "policy.evolution",
+            "policy.mixed-warning"
+          ]
+        },
+        {
+          "depth": 2,
+          "titles": [
+            {
+              "locale": "zh-CN",
+              "text": "验证与 SPEC 迭代"
+            },
+            {
+              "locale": "en",
+              "text": "Verification and SPEC iteration"
             }
           ],
           "atoms": [
@@ -2880,25 +2899,22 @@
             "delta.local-ci",
             "test.behavior",
             "test.same-language",
-            "evidence.program-state",
-            "evidence.failure"
+            "evidence.program-state"
           ]
         },
         {
-          "depth": 1,
+          "depth": 2,
           "titles": [
             {
               "locale": "zh-CN",
-              "text": "演进与交付"
+              "text": "交付与清理"
             },
             {
               "locale": "en",
-              "text": "Evolution and delivery"
+              "text": "Delivery and cleanup"
             }
           ],
           "atoms": [
-            "policy.evolution",
-            "policy.mixed-warning",
             "candidate.landing",
             "artifact.results",
             "artifact.cleanup"
