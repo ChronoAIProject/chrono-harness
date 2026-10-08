@@ -208,6 +208,41 @@ fn check(h: &Host, pair: &Value) -> (i32, Value) {
         },
     )
 }
+
+#[test]
+fn context_selected_original_inputs_reach_the_actual_seven_judge_chain() {
+    let mut h = fixture();
+    native_v3(&mut h);
+    select_config(&mut h, NEW_TARGET);
+    h.values.insert(CONFIG.into(),json!({"schema":"chrono-git-configs/v2",
+        "platforms":{format!("{}-{}",std::env::consts::OS,std::env::consts::ARCH):{"local":NEW_TARGET}}}));
+    h.save();
+    h.base = h.candidate.clone();
+    fs::write(
+        h.root().join("p/product.py"),
+        "def double(n): return 2*n\n# candidate bytes\n",
+    )
+    .unwrap();
+    h.save();
+    let pair = snapshots(&h);
+    assert_eq!(pair["base"]["selection"]["check_source"], "local");
+    assert_eq!(
+        pair["candidate"]["selection"]["schema"],
+        "chrono-registry-selection/v2"
+    );
+    let (exit, report) = check(&h, &pair);
+    assert_eq!(exit, 0, "{}", report["findings"]);
+    assert_eq!(report["judges"].as_array().unwrap().len(), 7);
+    let mut substituted = pair.clone();
+    substituted["base"]["selection"]["check_source"] = json!("ci");
+    let (exit, rejected) = check(&h, &substituted);
+    assert_ne!(exit, 0, "{rejected}");
+    assert!(
+        rejected["executed_operations"]
+            .as_array()
+            .is_none_or(|ops| ops.is_empty())
+    );
+}
 #[test]
 fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_bytes() {
     let h = fixture();

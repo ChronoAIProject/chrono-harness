@@ -4,6 +4,51 @@ use chrono_judge_filemap::{IMPACT_SCHEMA, Impact};
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
 use support::*;
+
+#[test]
+fn actual_host_python_input_policy_has_valid_edges_and_preserves_cargo_independence() {
+    let root = source();
+    let config_path = ".chrono-harness/config.json";
+    let config = chrono_harness::json(&fs::read(root.join(config_path)).unwrap()).unwrap();
+    let mut values = Values::new();
+    for path in facts::registry_paths(&config, config_path).unwrap() {
+        values.insert(
+            path.clone(),
+            chrono_harness::json(&fs::read(root.join(path)).unwrap()).unwrap(),
+        );
+    }
+    let old = chrono_judge_registration::Registrations::load(&values, config_path).unwrap();
+    let (_, findings) = chrono_judge_filemap::produce(&old, &old, config_path, &[]);
+    assert!(findings.is_empty(), "{findings:?}");
+    let input = values.get_mut(config_path).unwrap()["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|input| input["id"] == "python.runtime.lib/python3.9/json/__init__.py")
+        .unwrap();
+    input["sha256"] = json!("f".repeat(64));
+    let candidate = chrono_judge_registration::Registrations::load(&values, config_path).unwrap();
+    let (impact, findings) = chrono_judge_filemap::produce(&old, &candidate, config_path, &[]);
+    assert!(findings.is_empty(), "{findings:?}");
+    assert!(
+        impact
+            .tests
+            .iter()
+            .any(|test| test == "test:host-bootstrap-tests")
+    );
+    assert!(
+        impact
+            .tests
+            .iter()
+            .any(|test| test == "test:release-build-tests")
+    );
+    assert!(
+        !impact
+            .tests
+            .iter()
+            .any(|test| test == "test:runner-tests" || test == "test:cache-tests")
+    );
+}
 struct Host {
     dir: tempfile::TempDir,
     base: String,

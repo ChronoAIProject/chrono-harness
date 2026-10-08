@@ -286,6 +286,39 @@ work. Candidate artifact publication/binding and actual full plan/native
 activation remain subsequent steps. The current fixed command still uses scoped
 CI, and the full registrations remain proposed/incomplete.
 
+P2 extends this whitelist to the existing two Python projects, six Python
+scripts and seven full judges: 49 executable consumers in total, retaining the
+34 Cargo roots. The local Python inventory lists the selected Xcode Python
+3.9.6 framework/executable and 783 standard-library files. Those files are also
+individual declared inputs with explicit consumer edges; the directory document
+does not discover dependencies at execution time. Enforcement binary inputs
+retain P1 beta.21 byte expectations separately from current source outputs.
+Local `SystemVersion.plist` and `dyld` bytes bind only the `runtime-identity`
+domain. They leave `runtime-platform` unresolved because applicable shared-cache
+and delegated runtime inputs are not complete. Script delegated tools, native
+provisioning and original endpoint evidence remain unresolved, independently of
+these new bindings. No status is promoted by this source step.
+
+Before changing these declarations, the inputs owner captured the clean fixed
+`e21ded0dfa914db65d09479456205c3a8428bdad` local endpoint at
+`.chrono-harness/state/p2/e21-local-original.json` (SHA-256
+`375123c974e8f1952382945c5e5010194116c93553a98f10da7f27e54238c895`).
+All 3,181 original file observations matched that endpoint's declarations;
+655,422,063 present bytes were retained through content-addressed blobs.
+This original predates the new declarations. It cannot supply unobserved native
+identities or new candidate inputs. Caller must preserve the snapshot and its
+blobs, capture a clean committed candidate, and provide original native base
+observations through the existing composition sources. Capture success is not
+judge-chain acceptance or past business execution.
+
+The selector owner now supports separate `local`/`ci` declarations on the same
+OS/ARCH via `chrono-git-configs/v2`; snapshot v3 retains the source binding.
+The canonical host has not adopted that selector or a full route. Provisioning
+an actual native policy must precede capturing its fixed base: a later selector
+cannot rewrite e21's direct, local policy or manufacture a historical native
+observation. Missing native originals require a coherent committed provisioning
+endpoint before the later activation candidate.
+
 This source flight changes product adapters and host policy together. Its actual
 validation includes the Cargo pair and main native check, all three complete
 group inventories, formatting and host bootstrap/projection checks. A clean

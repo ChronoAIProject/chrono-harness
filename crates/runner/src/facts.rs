@@ -257,14 +257,7 @@ fn registry_snapshot_start(
         values: BTreeMap::from([(path.into(), config)]),
         entry_path: path.into(),
         effective_path: effective_path.clone(),
-        selection: selection.map(|s| {
-            let mut observation = s.observation;
-            if let Some(object) = observation.as_object_mut() {
-                object.remove("sha256");
-                object.insert("schema".into(), value!("chrono-registry-selection/v1"));
-            }
-            observation
-        }),
+        selection: selection.map(|s| crate::facts_configs::registry_selection(s.observation)),
     };
     if effective_path != path {
         snapshot

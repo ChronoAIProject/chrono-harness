@@ -1179,7 +1179,7 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
     // keeps the literal entry path so route identity and registry provenance
     // still bind the caller's selector; policy checks use the stable selected
     // direct full-v3 profile.
-    let (root, config_path, _profile) = if entry_profile["schema"] == "chrono-git-configs/v1" {
+    let (root, config_path, _profile) = if facts_configs::is_selector(&entry_profile) {
         let (root, entry_path) = root_for_config(config, Some(&root))?;
         let (_, _, selected, _) = facts_configs::load(&root, &entry_path)?;
         (root, entry_path, selected)

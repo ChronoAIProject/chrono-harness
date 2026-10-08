@@ -197,6 +197,39 @@ macOS checks and native Linux push/PR units and collection, preserving independe
 workflows and explicit SDK configuration; see [native adoption](native-ci-adoption.md#native-git-policy-adoption)
 for exact candidates, events and limits.
 
+`chrono-git-configs/v2` adds the existing canonical check source dimension for
+hosts whose local and native consumers share one OS/ARCH:
+
+```json
+{
+  "schema": "chrono-git-configs/v2",
+  "platforms": {
+    "macos-aarch64": {
+      "local": ".chrono-harness/git/local.json",
+      "ci": ".chrono-harness/git/native.json"
+    }
+  }
+}
+```
+
+Only `local` and `ci` are accepted. The reader selects the actual
+`CHRONO_CHECK_SOURCE`, defaulting an absent variable to `local`, as the short
+entry already does. Empty/unknown values, missing source bindings, unregistered
+platforms, nested selectors and invalid targets fail. All entries are checked;
+only the selected direct v3/v4 policy is read. V1 selection remains unchanged.
+The check source is rechecked before/after Git consumption and recorded in
+`chrono-git-config-selection/v2` and `chrono-registry-selection/v2` bindings.
+Snapshot v3 carries the latter unchanged through capture, pair and composition;
+an original captured for another source is rejected. This dimension selects
+declarations; it does not observe native tool/SDK bytes or prove input parity.
+
+P2 supplies this source interface because the product host's local and
+macos-26 consumers are both macOS arm64. The host still uses its existing direct
+scoped configuration. Actual native declarations, original endpoint acquisition,
+compatible released consumers and subsequent route adoption are required before
+this example can become its canonical selector. Beta.21 and the already fixed
+beta.22 release source do not contain this new interface.
+
 ## Guarding declared Git inputs
 
 Config v3 can opt into a versioned guard without changing old snapshots:

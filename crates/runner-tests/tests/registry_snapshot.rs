@@ -7,6 +7,86 @@ mod checkout;
 
 const CONFIG: &str = ".chrono-harness/config with spaces.json";
 
+#[test]
+fn local_and_ci_on_the_same_platform_keep_distinct_fixed_policy_identities() {
+    let (dir, originals, _) = fixture();
+    let root = dir.path();
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    let selector = ".chrono-harness/contexts.json";
+    let targets = [".chrono-harness/local.json", ".chrono-harness/native.json"];
+    let mut policy: serde_json::Value = serde_json::from_slice(&originals[CONFIG]).unwrap();
+    policy["schema_version"] = json!(4);
+    for (source, target) in ["local", "ci"].iter().zip(targets) {
+        policy["observed_context"] = json!(source);
+        fs::write(root.join(target), serde_json::to_vec(&policy).unwrap()).unwrap();
+    }
+    let mapping = json!({"schema":"chrono-git-configs/v2",
+        "platforms":{platform.clone():{"local":targets[0],"ci":targets[1]}}});
+    fs::write(root.join(selector), serde_json::to_vec(&mapping).unwrap()).unwrap();
+    let oid = commit(root);
+    let run = |source: Option<&str>, oid: &str| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-cli-child"));
+        command
+            .current_dir(root)
+            .args(["registry-snapshot", oid, selector])
+            .env_remove("CHRONO_CHECK_SOURCE");
+        if let Some(source) = source {
+            command.env("CHRONO_CHECK_SOURCE", source);
+        }
+        command.output().unwrap()
+    };
+    for (source, expected, target) in [
+        (None, "local", targets[0]),
+        (Some("local"), "local", targets[0]),
+        (Some("ci"), "ci", targets[1]),
+    ] {
+        let result = run(source, &oid);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let v: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(v["effective_path"], target);
+        assert_eq!(v["entry_path"], selector);
+        assert_eq!(v["selection"]["schema"], "chrono-registry-selection/v2");
+        assert_eq!(v["selection"]["check_source"], expected);
+        assert_eq!(v["selection"]["platform"], platform);
+        assert_eq!(v["identity"]["selection"], v["selection"]);
+        assert_eq!(v["values"][target]["observed_context"], expected);
+        assert!(
+            v["values"]
+                .get(if expected == "ci" {
+                    targets[0]
+                } else {
+                    targets[1]
+                })
+                .is_none()
+        );
+    }
+    for source in ["", "native", " local"] {
+        assert_eq!(run(Some(source), &oid).status.code(), Some(2));
+    }
+    let mut missing = mapping;
+    missing["platforms"][&platform]
+        .as_object_mut()
+        .unwrap()
+        .remove("ci");
+    fs::write(root.join(selector), serde_json::to_vec(&missing).unwrap()).unwrap();
+    let absent = commit(root);
+    let failed = run(Some("ci"), &absent);
+    assert_eq!(failed.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("no registered check source ci"));
+    assert!(
+        run(Some("ci"), &oid).status.success(),
+        "fixed original selector stays usable"
+    );
+    missing["platforms"][&platform]["unexpected"] = json!(targets[1]);
+    fs::write(root.join(selector), serde_json::to_vec(&missing).unwrap()).unwrap();
+    let unknown = commit(root);
+    assert_eq!(run(Some("local"), &unknown).status.code(), Some(2));
+}
+
 fn git(root: &Path, args: &[&str]) -> String {
     let result = Command::new("git")
         .arg("-C")
