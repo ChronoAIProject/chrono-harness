@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::{fs, path::Path, process::Command};
 
 struct Host(
-    tempfile::TempDir,
+    Option<tempfile::TempDir>,
     Option<chrono_harness::retained_artifacts::retention::Publication>,
 );
 
@@ -18,25 +18,36 @@ impl Host {
         let retained = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.chrono-harness/state/cache-test-failures");
         fs::create_dir_all(&retained).unwrap();
-        let directory = tempfile::tempdir_in(retained).unwrap();
+        let container =
+            chrono_harness::retained_artifacts::retention::unique_path(&retained, "cache-", "")
+                .unwrap();
         let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+        let publication = chrono_harness::retained_artifacts::retention::create_adopted(
             &root,
             "cache-fixture",
-            directory.path(),
+            &container,
+            true,
             json!({"test_outcome":"not-established"}),
         )
         .unwrap();
-        Self(directory, publication)
+        let directory = tempfile::tempdir_in(&container).unwrap();
+        Self(Some(directory), publication)
     }
 
     fn path(&self) -> &Path {
-        self.0.path()
+        self.0.as_ref().unwrap().path()
     }
 }
 
 impl Drop for Host {
     fn drop(&mut self) {
+        if !std::thread::panicking() {
+            if let Some(directory) = self.0.take() {
+                if let Err(error) = directory.close() {
+                    eprintln!("Cache fixture cleanup incomplete: {error}");
+                }
+            }
+        }
         if let Some(publication) = self.1.take() {
             if let Err(error) = publication.complete(json!({"test_outcome":if std::thread::panicking() {"failed"} else {"completed"},"original_results":"fixture files authoritative"})) {
                 eprintln!("Cache fixture lifetime publication failed: {error}");
@@ -44,7 +55,7 @@ impl Drop for Host {
         }
         if std::thread::panicking() {
             use std::io::Write;
-            self.0.disable_cleanup(true);
+            self.0.as_mut().unwrap().disable_cleanup(true);
             let _ = writeln!(
                 std::io::stderr(),
                 "Cache test original host: {}",

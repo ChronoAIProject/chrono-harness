@@ -635,30 +635,41 @@ fn retain_command_result(
     };
     {
         fs::create_dir_all(&directory).unwrap();
-        let destination = tempfile::Builder::new()
-            .prefix("context-")
-            .tempdir_in(&directory)
-            .unwrap()
-            .keep();
+        let destination =
+            chrono_harness::retained_artifacts::retention::unique_path(&directory, "context-", "")
+                .unwrap();
         let owner = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+        let publication = chrono_harness::retained_artifacts::retention::create_adopted(
             &owner,
             "ci-fixture",
             &destination,
+            true,
             json!({"capture":"started","exit":output.status.code()}),
         )
         .unwrap();
-        fs::write(destination.join("stdout.bin"), &output.stdout).unwrap();
-        fs::write(destination.join("stderr.bin"), &output.stderr).unwrap();
-        fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"status":output.status.to_string(),"joined":true})).unwrap()).unwrap();
+        chrono_harness::retained_artifacts::retention::write_adopted(
+            publication.as_ref(),
+            &destination.join("stdout.bin"),
+            &output.stdout,
+        )
+        .unwrap();
+        chrono_harness::retained_artifacts::retention::write_adopted(
+            publication.as_ref(),
+            &destination.join("stderr.bin"),
+            &output.stderr,
+        )
+        .unwrap();
+        chrono_harness::retained_artifacts::retention::write_adopted(publication.as_ref(), &destination.join("binding.json"), &serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"status":output.status.to_string(),"joined":true})).unwrap()).unwrap();
         retain_context_state(
             &root.join(".chrono-harness/state"),
             &destination.join("original-state"),
+            publication.as_ref(),
         );
         // Retain each command's actual configuration beside its original state.
         retain_context_state(
             &root.join(".chrono-harness/ci"),
             &destination.join("configuration/ci"),
+            publication.as_ref(),
         );
         for name in [
             "config.json",
@@ -669,7 +680,12 @@ fn retain_command_result(
         ] {
             let path = root.join(".chrono-harness").join(name);
             if path.is_file() {
-                fs::copy(path, destination.join("configuration").join(name)).unwrap();
+                chrono_harness::retained_artifacts::retention::copy_adopted(
+                    publication.as_ref(),
+                    &path,
+                    &destination.join("configuration").join(name),
+                )
+                .unwrap();
             }
         }
         if let Some(publication) = publication {
@@ -680,18 +696,28 @@ fn retain_command_result(
         }
     }
 }
-fn retain_context_state(root: &Path, destination: &Path) {
+fn retain_context_state(
+    root: &Path,
+    destination: &Path,
+    publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
+) {
     if !root.is_dir() {
         return;
     }
-    fs::create_dir_all(destination).unwrap();
+    chrono_harness::retained_artifacts::retention::directory_adopted(publication, destination)
+        .unwrap();
     for row in fs::read_dir(root).unwrap() {
         let row = row.unwrap();
         let kind = row.file_type().unwrap();
         if kind.is_dir() {
-            retain_context_state(&row.path(), &destination.join(row.file_name()));
+            retain_context_state(&row.path(), &destination.join(row.file_name()), publication);
         } else if kind.is_file() {
-            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+            chrono_harness::retained_artifacts::retention::copy_adopted(
+                publication,
+                &row.path(),
+                &destination.join(row.file_name()),
+            )
+            .unwrap();
         }
     }
 }

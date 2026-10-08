@@ -11,6 +11,8 @@ pub(super) struct Entry {
     pub stamp: String,
     pub bytes: u64,
     pub directory: bool,
+    #[serde(default)]
+    pub allocated_bytes: Option<u64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -38,7 +40,7 @@ fn stamp(m: &fs::Metadata) -> String {
         m.ctime_nsec()
     )
 }
-fn observe(root: &Path, path: &str) -> Result<Entry, String> {
+pub(super) fn observe(root: &Path, path: &str) -> Result<Entry, String> {
     let physical = entry_path(root, path)?;
     let m = fs::symlink_metadata(&physical).map_err(|e| e.to_string())?;
     if !m.is_dir() && !m.is_file() && !m.file_type().is_symlink() {
@@ -50,6 +52,10 @@ fn observe(root: &Path, path: &str) -> Result<Entry, String> {
         stamp: stamp(&m),
         bytes: if m.is_dir() { 0 } else { m.len() },
         directory: m.is_dir(),
+        allocated_bytes: {
+            use std::os::unix::fs::MetadataExt;
+            m.blocks().checked_mul(512)
+        },
     })
 }
 impl Manifest {
@@ -60,7 +66,7 @@ impl Manifest {
         root: &Path,
         path: &str,
         limit: usize,
-        byte_limit: u64,
+        _byte_limit: u64,
     ) -> Result<(), String> {
         if self.sealed {
             return Ok(());
@@ -68,9 +74,6 @@ impl Manifest {
         if self.entries.is_empty() {
             let entry = observe(root, path)?;
             self.bytes = entry.bytes;
-            if self.bytes > byte_limit {
-                return Err("output byte capacity exceeded; preserve original".into());
-            }
             self.entries.push(entry.clone());
             if entry.directory {
                 self.pending.push(Cursor {
@@ -135,9 +138,6 @@ impl Manifest {
                     .bytes
                     .checked_add(entry.bytes)
                     .ok_or("tree byte overflow")?;
-                if bytes > byte_limit {
-                    return Err("output byte capacity exceeded; preserve original".into());
-                }
                 self.bytes = bytes;
                 cursor.offset = next_offset;
                 self.entries.push(entry.clone());

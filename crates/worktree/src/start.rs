@@ -667,31 +667,34 @@ pub(crate) fn with_report(
         config.output_limit_bytes,
     )?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut output = tempfile::Builder::new()
-        .prefix(&format!("{operation}-"))
-        .suffix(".json")
-        .tempfile_in(&dir)
-        .map_err(|e| e.to_string())?;
-    let name = output
-        .path()
+    let output_path = chrono_harness::retained_artifacts::retention::unique_path(
+        &dir,
+        &format!("{operation}-"),
+        ".json",
+    )?;
+    let name = output_path
         .file_stem()
-        .unwrap()
+        .ok_or("report name")?
         .to_str()
-        .unwrap()
+        .ok_or("report name UTF8")?
         .to_string();
-    let report_path = output
-        .path()
+    let report_path = output_path
         .strip_prefix(&root)
         .map_err(|e| e.to_string())?
         .to_str()
-        .ok_or("report path UTF-8")?
+        .ok_or("report path UTF8")?
         .to_string();
-    let report_publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+    let report_publication = chrono_harness::retained_artifacts::retention::create_adopted(
         root,
         "lifecycle-original",
-        output.path(),
+        &output_path,
+        false,
         value!({"operation":operation,"outcome":"not-established"}),
     )?;
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .open(&output_path)
+        .map_err(|e| e.to_string())?;
     let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
@@ -764,8 +767,7 @@ pub(crate) fn with_report(
         publication.check_length(data.len() as u64)?;
     }
     output.write_all(&data).map_err(|e| e.to_string())?;
-    output.as_file().sync_all().map_err(|e| e.to_string())?;
-    output.keep().map_err(|e| e.to_string())?;
+    output.sync_all().map_err(|e| e.to_string())?;
     if let Some(publication) = report_publication {
         publication.complete(
             value!({"operation":operation,"status":report["status"],"error":report["error"]}),

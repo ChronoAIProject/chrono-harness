@@ -3,6 +3,33 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+/// Publish an identity already durably enrolled at an exact staging slot.
+/// Both supported kernel operations refuse to replace an occupied destination.
+pub fn publish_entry(staged: &Path, destination: &Path) -> Result<(), String> {
+    use std::{ffi::CString, os::unix::ffi::OsStrExt};
+    let source = CString::new(staged.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+    let target = CString::new(destination.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    let result = unsafe { libc::renamex_np(source.as_ptr(), target.as_ptr(), libc::RENAME_EXCL) };
+    #[cfg(target_os = "linux")]
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            target.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    return Err("identity publication is unsupported on this platform".into());
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error().to_string())
+    }
+}
 /// Identity of an exact entry; links are identities of the link, never its target.
 pub fn identity(path: &Path) -> Result<String, String> {
     let m = fs::symlink_metadata(path).map_err(|e| e.to_string())?;

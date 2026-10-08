@@ -371,32 +371,50 @@ impl Drop for ShortHost {
                 Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("../../.chrono-harness/state/ci-test-failures")
             });
-        fn copy(source: &Path, destination: &Path) -> std::io::Result<()> {
-            fs::create_dir_all(destination)?;
+        fn copy(
+            source: &Path,
+            destination: &Path,
+            publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
+        ) -> std::io::Result<()> {
+            chrono_harness::retained_artifacts::retention::directory_adopted(
+                publication,
+                destination,
+            )
+            .map_err(std::io::Error::other)?;
             for entry in fs::read_dir(source)? {
                 let entry = entry?;
                 let target = destination.join(entry.file_name());
                 if entry.file_type()?.is_dir() {
-                    copy(&entry.path(), &target)?;
+                    copy(&entry.path(), &target, publication)?;
                 } else if entry.file_type()?.is_file() {
-                    fs::copy(entry.path(), target)?;
+                    chrono_harness::retained_artifacts::retention::copy_adopted(
+                        publication,
+                        &entry.path(),
+                        &target,
+                    )
+                    .map_err(std::io::Error::other)?;
                 }
             }
             Ok(())
         }
         let target = directory.join(sha256(self.root.as_os_str().as_encoded_bytes()));
         let capture = || -> std::io::Result<()> {
-            fs::create_dir_all(&target)?;
+            fs::create_dir_all(&directory)?;
             let owner = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
                 .map_err(std::io::Error::other)?;
-            let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+            let publication = chrono_harness::retained_artifacts::retention::create_adopted(
                 &owner,
                 "ci-fixture",
                 &target,
+                true,
                 json!({"test_outcome":"failed","capture":"started"}),
             )
             .map_err(std::io::Error::other)?;
-            copy(&self.root.join(".chrono-harness/state"), &target)?;
+            copy(
+                &self.root.join(".chrono-harness/state"),
+                &target,
+                publication.as_ref(),
+            )?;
             if let Some(publication) = publication {
                 publication.complete(json!({"test_outcome":"failed","capture":"completed","original_results":"fixture files authoritative"})).map_err(std::io::Error::other)?;
             }

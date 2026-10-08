@@ -25,6 +25,368 @@ fn ledger(root: &Path) -> Value {
     .unwrap()
 }
 #[test]
+fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/not-created";
+    let publication = inventory(h.path())
+        .plan(
+            "fixture",
+            path,
+            true,
+            json!({"exit":null,"operation":"create"}),
+        )
+        .unwrap();
+    assert!(!h.path().join(path).exists());
+    assert_eq!(ledger(h.path())["outputs"][0]["phase"], "creating");
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        1
+    );
+    drop(publication);
+    let round = retained_artifacts::retention::maintain_adopted(h.path())
+        .unwrap()
+        .unwrap();
+    assert_eq!(round["remaining_outputs"], 0);
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["original"]["operation"],
+        "create"
+    );
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_entries"] = json!(1);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    inventory(h.path()).migrate_policy(&serde_json::to_vec(&json!({"schema":"chrono-output-retention/v1","producers":{"fixture":[".chrono-harness/state/fixtures/"]},"keep_seconds":0,"max_entries":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
+    let live = inventory(h.path())
+        .plan("fixture", path, true, json!(null))
+        .unwrap();
+    let refused = h.path().join(".chrono-harness/state/fixtures/refused");
+    assert!(
+        retained_artifacts::retention::create_adopted(
+            h.path(),
+            "fixture",
+            &refused,
+            true,
+            json!(null)
+        )
+        .is_err()
+    );
+    assert!(!refused.exists());
+    drop(live);
+}
+
+#[test]
+fn controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes() {
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_output_bytes"] = json!(128);
+    policy["max_total_bytes"] = json!(256);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let path = h.path().join(".chrono-harness/state/fixtures/copied");
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &path,
+        true,
+        json!({"original_exit":101}),
+    )
+    .unwrap()
+    .unwrap();
+    let input = h.path().join("input");
+    fs::write(&input, [3; 129]).unwrap();
+    assert!(
+        publication
+            .copy_file(&input, &path.join("too-large"))
+            .unwrap_err()
+            .contains("before writing")
+    );
+    assert!(!path.join("too-large").exists());
+    fs::write(&input, [3; 64]).unwrap();
+    publication.copy_file(&input, &path.join("first")).unwrap();
+    publication
+        .write_file(&path.join("second"), &[4; 64])
+        .unwrap();
+    assert!(publication.write_file(&path.join("third"), &[5]).is_err());
+    assert!(!path.join("third").exists());
+    publication
+        .complete(json!({"exit":101,"error":"original failure"}))
+        .unwrap();
+    let round = inventory(h.path()).maintain().unwrap();
+    assert_eq!(round["removed_logical_bytes"], 128);
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
+        101
+    );
+}
+
+#[test]
+fn released_byte_overflow_is_accounted_and_reclaimed_under_unchanged_policy() {
+    let h = host(8, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_output_bytes"] = json!(128);
+    policy["max_total_bytes"] = json!(256);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let path = tree(h.path(), "external-build");
+    let p = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .unwrap();
+    inventory(h.path())
+        .reference("current", &[p.id().into()])
+        .unwrap();
+    fs::write(h.path().join(&path).join("build.bin"), [8; 2048]).unwrap();
+    assert!(p.complete(json!({"exit":7})).is_err());
+    let accounted = inventory(h.path()).maintain().unwrap();
+    assert_eq!(accounted["reserved_logical_bytes"], 2048);
+    assert_eq!(accounted["overflow_outputs"], 1);
+    assert!(
+        accounted["known_retained_allocated_bytes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    assert!(h.path().join(&path).exists());
+    inventory(h.path()).reference("current", &[]).unwrap();
+    for _ in 0..8 {
+        let round = retained_artifacts::retention::maintain_adopted(h.path())
+            .unwrap()
+            .unwrap();
+        assert!(round["nodes"].as_u64().unwrap() <= 8);
+        if round["remaining_outputs"] == 0 {
+            break;
+        }
+    }
+    assert!(!h.path().join(path).exists());
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
+        7
+    );
+}
+#[test]
+fn released_original_larger_than_verification_round_is_not_permanently_blocked() {
+    let h = host(8, 4);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_bytes_per_round"] = json!(64);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let path = ".chrono-harness/state/fixtures/large-original";
+    fs::write(h.path().join(path), [9; 4096]).unwrap();
+    let p = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
+    let id = p.id().to_string();
+    p.complete(json!({"exit":101})).unwrap();
+    let reader = inventory(h.path()).consume(&id).unwrap();
+    assert_eq!(
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
+        1
+    );
+    drop(reader);
+    let round = inventory(h.path()).maintain().unwrap();
+    assert_eq!(round["remaining_outputs"], 0);
+    assert_eq!(round["removed_logical_bytes"], 4096);
+    assert_eq!(round["verified_bytes"], 0);
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
+        101
+    );
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["large_original_recheck"],
+        "sealed-identity-and-content-stamp; digest-not-reread"
+    );
+}
+
+#[test]
+fn killed_creation_intent_recovers_on_ordinary_entry_without_a_callback() {
+    use std::io::BufRead;
+    let h = host(8, 4);
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"))
+        .args([h.path().to_str().unwrap(), "creation-intent"])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut reader = std::io::BufReader::new(child.stdout.take().unwrap());
+    let mut id = String::new();
+    reader.read_line(&mut id).unwrap();
+    assert!(id.starts_with("output-"));
+    let live = inventory(h.path()).maintain().unwrap();
+    assert_eq!(live["remaining_outputs"], 1);
+    child.kill().unwrap();
+    assert!(!child.wait().unwrap().success());
+    for _ in 0..4 {
+        if retained_artifacts::retention::maintain_adopted(h.path())
+            .unwrap()
+            .unwrap()["remaining_outputs"]
+            == 0
+        {
+            break;
+        }
+    }
+    assert_eq!(ledger(h.path())["outputs"].as_array().unwrap().len(), 0);
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["publication"],
+        "interrupted-creation"
+    );
+}
+
+#[test]
+fn released_manifest_overflow_makes_bounded_progress_without_policy_growth() {
+    let h = host(4, 4);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_manifest_nodes"] = json!(4);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let path = tree(h.path(), "many-build-files");
+    let p = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .unwrap();
+    inventory(h.path())
+        .reference("build-reader", &[p.id().into()])
+        .unwrap();
+    for n in 0..20 {
+        fs::write(h.path().join(&path).join(format!("{n}.bin")), [7; 32]).unwrap();
+    }
+    assert!(
+        p.complete(json!({"exit":101,"error":"build original"}))
+            .is_err()
+    );
+    inventory(h.path()).maintain().unwrap();
+    assert_eq!(fs::read_dir(h.path().join(&path)).unwrap().count(), 20);
+    inventory(h.path()).reference("build-reader", &[]).unwrap();
+    let mut removed = 0;
+    for _ in 0..64 {
+        let round = retained_artifacts::retention::maintain_adopted(h.path())
+            .unwrap()
+            .unwrap();
+        assert!(round["nodes"].as_u64().unwrap() <= 4);
+        assert!(
+            round["metadata_bytes"].as_u64().unwrap()
+                <= policy["max_metadata_bytes_per_round"]
+                    .as_u64()
+                    .unwrap_or(64 * 1024 * 1024)
+        );
+        removed += round["removed_logical_bytes"].as_u64().unwrap();
+        if round["remaining_outputs"] == 0 {
+            break;
+        }
+    }
+    assert!(!h.path().join(path).exists());
+    assert_eq!(removed, 640);
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
+        101
+    );
+    assert_eq!(
+        fs::read_dir(h.path().join(".chrono-harness/state/output-retention-v1"))
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().starts_with("output-"))
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn creation_destination_replacement_is_preserved_and_controlled_nodes_are_refused() {
+    let h = host(8, 4);
+    let path = ".chrono-harness/state/fixtures/planned";
+    let p = inventory(h.path())
+        .plan("fixture", path, false, json!({"exit":null}))
+        .unwrap();
+    fs::write(h.path().join(path), b"unrelated replacement").unwrap();
+    assert!(p.materialize().is_err());
+    drop(p);
+    let round = inventory(h.path()).maintain().unwrap();
+    assert_eq!(round["remaining_outputs"], 1);
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"unrelated replacement"
+    );
+    assert!(
+        round["accounting_errors"]
+            .to_string()
+            .contains("identity changed")
+    );
+    let h = host(8, 4);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_manifest_nodes"] = json!(2);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let path = h.path().join(".chrono-harness/state/fixtures/two-nodes");
+    let p = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &path,
+        true,
+        json!(null),
+    )
+    .unwrap()
+    .unwrap();
+    p.write_file(&path.join("first"), b"first").unwrap();
+    assert!(
+        p.create_directory(&path.join("excess"))
+            .unwrap_err()
+            .contains("before writing")
+    );
+    assert!(!path.join("excess").exists());
+    p.complete(json!({"exit":0})).unwrap();
+}
+
+#[test]
+fn preparation_write_refusal_leaves_owner_intent_and_ordinary_recovery() {
+    let h = report_host();
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_output_bytes"] = json!(128);
+    policy["max_total_bytes"] = json!(256);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        chrono_harness::prepared::retain_bytes(h.path(), "refused-", &[7; 129])
+            .unwrap_err()
+            .contains("before writing")
+    );
+    let before = ledger(h.path());
+    assert_eq!(before["outputs"].as_array().unwrap().len(), 1);
+    assert_eq!(before["outputs"][0]["phase"], "publishing");
+    let path = before["outputs"][0]["path"].as_str().unwrap();
+    assert_eq!(fs::metadata(h.path().join(path)).unwrap().len(), 0);
+    retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
+    assert!(!h.path().join(path).exists());
+    assert_eq!(
+        ledger(h.path())["summaries"][0]["original_outcome"]["completion"],
+        "not-established"
+    );
+}
+
+#[test]
 fn ordinary_entry_reclaims_completed_nested_outputs_with_real_savings() {
     let h = host(256, 16);
     let p = tree(h.path(), "sdk");
@@ -1093,10 +1455,8 @@ fn interrupted_lifecycle_original_stays_rooted_for_its_actual_recovery_reader() 
         1
     );
     drop(reader);
-    assert_eq!(
-        inventory(h.path()).maintain_at(u64::MAX).unwrap()["remaining_outputs"],
-        0
-    );
+    let final_round = inventory(h.path()).maintain_at(u64::MAX).unwrap();
+    assert_eq!(final_round["remaining_outputs"], 0, "{final_round}");
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["completion"],
         "not-established"

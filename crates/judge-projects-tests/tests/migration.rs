@@ -50,15 +50,21 @@ fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
 fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     migration_host_with_alias_collision(false)
 }
-fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+fn copy_nested_receipts(
+    from: &std::path::Path,
+    to: &std::path::Path,
+    publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
+) -> std::io::Result<()> {
     let kind = fs::symlink_metadata(from)?.file_type();
     if kind.is_file() {
-        fs::copy(from, to)?;
+        chrono_harness::retained_artifacts::retention::copy_adopted(publication, from, to)
+            .map_err(std::io::Error::other)?;
     } else if kind.is_dir() {
-        fs::create_dir(to)?;
+        chrono_harness::retained_artifacts::retention::directory_adopted(publication, to)
+            .map_err(std::io::Error::other)?;
         for entry in fs::read_dir(from)? {
             let entry = entry?;
-            copy_nested_receipts(&entry.path(), &to.join(entry.file_name()))?;
+            copy_nested_receipts(&entry.path(), &to.join(entry.file_name()), publication)?;
         }
     } else {
         return Err(std::io::Error::other(format!(
@@ -76,13 +82,13 @@ fn execution_failure(
     let directory = source().join(".chrono-harness/state/migration-tests");
     let retained = (|| -> Result<String, Box<dyn std::error::Error>> {
         fs::create_dir_all(&directory)?;
-        let (mut file, path) = tempfile::Builder::new()
-            .prefix("unexpected-execution-")
-            .suffix(".json")
-            .tempfile_in(&directory)?
-            .keep()?;
-        let publication = chrono_harness::retained_artifacts::retention::begin_adopted(&source(),"migration-fixture",&path,serde_json::json!({"capture":"started","operation":"unexpected execution"})).map_err(std::io::Error::other)?;
-        let report_result=serde_json::to_writer(&mut file,result);
+        let path = chrono_harness::retained_artifacts::retention::unique_path(&directory,"unexpected-execution-", ".json")?;
+        let publication = chrono_harness::retained_artifacts::retention::create_adopted(&source(),"migration-fixture",&path,false,serde_json::json!({"capture":"started","operation":"unexpected execution"}))?;
+        let raw = serde_json::to_vec(result)?;
+        let report_result = (|| -> Result<(), String> {
+            if let Some(publication) = &publication { publication.check_length(raw.len() as u64)?; }
+            fs::write(&path,&raw).map_err(|e|e.to_string())
+        })();
         let report_written=report_result.is_ok();
         let mut summary = match report_result {
             Ok(()) => format!("original execution retained at {}", path.display()),
@@ -95,9 +101,8 @@ fn execution_failure(
         // inputs. Preserve those bytes before this temporary host is dropped.
         let nested = root.join(".chrono-harness/state/ci-test-failures");
         let destination = path.with_extension("ci-test-failures");
-        fs::create_dir_all(&destination)?;
-        let nested_publication = chrono_harness::retained_artifacts::retention::begin_adopted(&source(),"migration-fixture",&destination,serde_json::json!({"capture":"started","operation":"nested CI failure"})).map_err(std::io::Error::other)?;
-        let nested_result=copy_nested_receipts(&nested,&destination);
+        let nested_publication = chrono_harness::retained_artifacts::retention::create_adopted(&source(),"migration-fixture",&destination,true,serde_json::json!({"capture":"started","operation":"nested CI failure"})).map_err(std::io::Error::other)?;
+        let nested_result=copy_nested_receipts(&nested,&destination,nested_publication.as_ref());
         let nested_written=nested_result.is_ok();
         let evidence = match nested_result {
             Ok(()) => format!("nested CI evidence retained at {}", destination.display()),

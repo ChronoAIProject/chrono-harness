@@ -577,41 +577,30 @@ pub fn retain_bytes(root: &Path, prefix: &str, bytes: &[u8]) -> Result<String, S
     use std::io::Write;
     let dir = no_symlink_parents(root, ".chrono-harness/state/preparation")?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut f = tempfile::Builder::new()
-        .prefix(prefix)
-        .suffix(".json")
-        .tempfile_in(&dir)
+    let path = crate::retained_artifacts::retention::unique_path(&dir, prefix, ".json")?;
+    let publication = crate::retained_artifacts::retention::create_adopted(
+        root,
+        "check-original",
+        &path,
+        false,
+        json!({"publication":"started","outcome":"not-established"}),
+    )?;
+    if let Some(publication) = &publication {
+        publication.check_length(bytes.len() as u64)?;
+    }
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
         .map_err(|e| e.to_string())?;
-    let publication =
-        if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
-            let relative = f
-                .path()
-                .strip_prefix(root)
-                .map_err(|e| e.to_string())?
-                .to_str()
-                .ok_or("evidence path UTF-8")?;
-            if inventory.accepts("check-original", relative) {
-                Some(inventory.begin(
-                    "check-original",
-                    relative,
-                    json!({"publication":"started","outcome":"not-established"}),
-                )?)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
     f.write_all(bytes).map_err(|e| e.to_string())?;
-    f.as_file().sync_all().map_err(|e| e.to_string())?;
+    f.sync_all().map_err(|e| e.to_string())?;
     if let Some(publication) = publication {
         publication.complete(
             json!({"kind":"preparation-original","sha256":sha256(bytes),"length":bytes.len()}),
         )?;
     }
-    let (_, path) = f.keep().map_err(|e| e.to_string())?;
     Ok(path
-        .strip_prefix(root)
+        .strip_prefix(fs::canonicalize(root).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?
         .to_str()
         .ok_or("evidence path UTF-8")?

@@ -58,6 +58,14 @@ fn default_manifest_nodes() -> usize {
 struct Node {
     path: String,
     identity: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entry: Option<manifest::Entry>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Creation {
+    parent_identity: String,
+    staged: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +89,10 @@ struct Output {
     manifest: Manifest,
     #[serde(default)]
     reserved_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    creation: Option<Creation>,
+    #[serde(default)]
+    overflow_disposal: bool,
 }
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -107,6 +119,8 @@ pub struct Publication {
     inventory: Inventory,
     id: String,
     lease: Lease,
+    written: Cell<u64>,
+    written_nodes: Cell<usize>,
 }
 fn now() -> Result<u64, String> {
     Ok(SystemTime::now()
@@ -297,10 +311,17 @@ impl Inventory {
                     .is_some_and(|scopes| scopes.iter().any(|p| o.path.starts_with(p)))
                 || !matches!(
                     o.phase.as_str(),
-                    "reserving" | "publishing" | "sealing" | "released" | "disposing"
+                    "reserving" | "creating" | "publishing" | "sealing" | "released" | "disposing"
                 )
             {
                 return Err("invalid retained output inventory; preserve originals".into());
+            }
+            if let Some(creation) = &o.creation {
+                if creation.staged != format!("creation-{}", o.id)
+                    || !matches!(o.phase.as_str(), "reserving" | "creating")
+                {
+                    return Err("invalid output creation intent; preserve originals".into());
+                }
             }
             let mut manifest_paths = BTreeSet::new();
             for entry in &o.manifest.entries {
@@ -318,6 +339,13 @@ impl Inventory {
                     && (!o.tree || !node.path.starts_with(&format!("{}/", o.path)))
                 {
                     return Err("disposal cursor outside exact output identity".into());
+                }
+                if node
+                    .entry
+                    .as_ref()
+                    .is_some_and(|entry| entry.path != node.path || entry.identity != node.identity)
+                {
+                    return Err("overflow cursor original identity differs".into());
                 }
             }
         }
@@ -358,7 +386,7 @@ impl Inventory {
         .ok_or("live report producer/consumer prevents retention migration")?;
         let mut owners = Vec::new();
         for output in &l.outputs {
-            if output.phase == "reserving" {
+            if matches!(output.phase.as_str(), "reserving" | "creating") {
                 return Err("recover reserved output before policy migration".into());
             }
             owners.push(
@@ -408,6 +436,27 @@ impl Inventory {
         path: &str,
         outcome: Value,
         roots: &[String],
+    ) -> Result<Publication, String> {
+        self.reserve(producer, path, outcome, roots, None)
+    }
+    /// Durable creation intent. No producer-visible output is created until its
+    /// inode has been bound at the exact owner staging slot.
+    pub fn plan(
+        self,
+        producer: &str,
+        path: &str,
+        tree: bool,
+        outcome: Value,
+    ) -> Result<Publication, String> {
+        self.reserve(producer, path, outcome, &[], Some(tree))
+    }
+    fn reserve(
+        self,
+        producer: &str,
+        path: &str,
+        outcome: Value,
+        roots: &[String],
+        create: Option<bool>,
     ) -> Result<Publication, String> {
         crate::relative_path(path)?;
         if path == STATE || path.starts_with(&format!("{STATE}/")) {
@@ -461,10 +510,20 @@ impl Inventory {
             );
         }
         let physical = no_symlink_parents(&self.root, path)?;
-        let m = fs::symlink_metadata(&physical).map_err(|e| e.to_string())?;
-        if !m.is_file() && !m.is_dir() {
-            return Err("output must be a physical file/directory".into());
-        }
+        let (output_identity, tree) = if let Some(tree) = create {
+            match fs::symlink_metadata(&physical) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                Err(e) => return Err(e.to_string()),
+                Ok(_) => return Err("creation destination already exists; preserve it".into()),
+            }
+            (String::new(), tree)
+        } else {
+            let m = fs::symlink_metadata(&physical).map_err(|e| e.to_string())?;
+            if !m.is_file() && !m.is_dir() {
+                return Err("output must be a physical file/directory".into());
+            }
+            (identity(&physical)?, m.is_dir())
+        };
         let id = format!("output-{}", l.next_id);
         l.next_id = l.next_id.checked_add(1).ok_or("output id capacity")?;
         let lease_path = self.directory.join(&id);
@@ -475,8 +534,8 @@ impl Inventory {
             id: id.clone(),
             producer: producer.into(),
             path: path.into(),
-            identity: identity(&physical)?,
-            tree: m.is_dir(),
+            identity: output_identity,
+            tree,
             sha256: None,
             length: None,
             lease: id.clone(),
@@ -489,6 +548,15 @@ impl Inventory {
             removed_logical_bytes: 0,
             manifest: Manifest::default(),
             reserved_bytes: self.policy.max_output_bytes,
+            creation: if create.is_some() {
+                Some(Creation {
+                    parent_identity: identity(physical.parent().ok_or("output parent")?)?,
+                    staged: format!("creation-{id}"),
+                })
+            } else {
+                None
+            },
+            overflow_disposal: false,
         };
         for role in roots {
             if role.is_empty()
@@ -511,13 +579,20 @@ impl Inventory {
             .last_mut()
             .ok_or("publication reservation missing")?;
         last.lease_id = lease.id().into();
-        last.phase = "publishing".into();
+        last.phase = if create.is_some() {
+            "creating"
+        } else {
+            "publishing"
+        }
+        .into();
         self.save(&l, &gate)?;
         drop(gate);
         Ok(Publication {
             inventory: self,
             id,
             lease,
+            written: Cell::new(0),
+            written_nodes: Cell::new(1),
         })
     }
     /// A complete producer/collector operation protects its explicitly adopted report family.
@@ -713,8 +788,34 @@ impl Inventory {
                 let path = self.directory.join(&l.outputs[index].lease);
                 if let Some(capability) = Lease::acquire(&path, None, true, true, None)? {
                     l.outputs[index].lease_id = capability.id().into();
-                    l.outputs[index].phase = "publishing".into();
+                    l.outputs[index].phase = if l.outputs[index].creation.is_some() {
+                        "creating"
+                    } else {
+                        "publishing"
+                    }
+                    .into();
                     self.save(&l, &gate)?;
+                }
+            }
+            if l.outputs[index].phase == "creating"
+                && metadata_steps < self.policy.max_nodes_per_round
+                && self.metadata_room()
+            {
+                let output = l.outputs[index].clone();
+                if let Ok(Some(owner)) = Lease::acquire(
+                    &self.directory.join(&output.lease),
+                    Some(&output.lease_id),
+                    false,
+                    true,
+                    None,
+                ) {
+                    metadata_steps += 1;
+                    match self.recover_creation(&mut l.outputs[index], &gate, &owner) {
+                        Ok(()) => self.save(&l, &gate)?,
+                        Err(error) => {
+                            accounting_errors.push(json!({"id":output.id,"reason":error}))
+                        }
+                    }
                 }
             }
         }
@@ -751,7 +852,10 @@ impl Inventory {
             {
                 break;
             }
-            if l.outputs[index].manifest.sealed || l.outputs[index].phase == "reserving" {
+            if l.outputs[index].manifest.sealed
+                || l.outputs[index].overflow_disposal
+                || matches!(l.outputs[index].phase.as_str(), "reserving" | "creating")
+            {
                 continue;
             }
             let output = l.outputs[index].clone();
@@ -801,6 +905,9 @@ impl Inventory {
         let mut rooted = BTreeSet::new();
         let mut pending: Vec<_> = l.roots.values().flatten().cloned().collect();
         for o in &l.outputs {
+            if matches!(o.phase.as_str(), "reserving" | "creating") {
+                pending.push(o.id.clone());
+            }
             if matches!(
                 o.producer.as_str(),
                 "check-original" | "full-original" | "lifecycle-original"
@@ -905,17 +1012,138 @@ impl Inventory {
                 }
                 while self.metadata_room()
                     && !l.outputs[i].manifest.sealed
+                    && !l.outputs[i].overflow_disposal
                     && nodes < self.policy.max_nodes_per_round
                     && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
                 {
                     nodes += 1;
-                    l.outputs[i].manifest.step(
+                    if let Err(error) = l.outputs[i].manifest.step(
                         &self.root,
                         &o.path,
                         self.policy.max_manifest_nodes,
                         self.policy.max_output_bytes,
-                    )?;
+                    ) {
+                        if o.tree && error.contains("capacity") {
+                            l.outputs[i].overflow_disposal = true;
+                            l.outputs[i].phase = "disposing".into();
+                            self.save(&l, &gate)?;
+                            break;
+                        }
+                        return Err(error);
+                    }
                     self.save(&l, &gate)?;
+                }
+                if l.outputs[i].overflow_disposal {
+                    while self.metadata_room()
+                        && nodes < self.policy.max_nodes_per_round
+                        && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
+                    {
+                        nodes += 1;
+                        if l.outputs[i].stack.is_empty() {
+                            let entry = manifest::observe(&self.root, &o.path)?;
+                            l.outputs[i].stack.push(Node {
+                                path: o.path.clone(),
+                                identity: o.identity.clone(),
+                                entry: Some(entry),
+                            });
+                            self.save(&l, &gate)?;
+                        }
+                        let pending = l.outputs[i]
+                            .stack
+                            .last()
+                            .cloned()
+                            .ok_or("overflow disposal cursor")?;
+                        let physical =
+                            crate::artifact_disposal::entry_path(&self.root, &pending.path)?;
+                        match fs::symlink_metadata(&physical) {
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                                l.outputs[i].stack.pop();
+                                self.save(&l, &gate)?;
+                                if pending.path == o.path {
+                                    return Ok(true);
+                                }
+                                continue;
+                            }
+                            Err(e) => return Err(e.to_string()),
+                            Ok(_) => (),
+                        }
+                        if identity(&physical)? != pending.identity {
+                            return Err(
+                                "overflow descendant identity changed; preserve replacement".into(),
+                            );
+                        }
+                        let entry = pending
+                            .entry
+                            .as_ref()
+                            .ok_or("overflow cursor lacks original entry")?;
+                        Manifest::validate(entry, &self.root)?;
+                        if let Some(known) = l.outputs[i]
+                            .manifest
+                            .entries
+                            .iter()
+                            .find(|e| e.path == pending.path)
+                        {
+                            Manifest::validate(known, &self.root)?;
+                        }
+                        if entry.directory {
+                            if let Some(child) =
+                                fs::read_dir(&physical).map_err(|e| e.to_string())?.next()
+                            {
+                                if l.outputs[i].stack.len() >= 128 {
+                                    return Err(
+                                        "overflow disposal depth capacity; preserve remainder"
+                                            .into(),
+                                    );
+                                }
+                                let name = child
+                                    .map_err(|e| e.to_string())?
+                                    .file_name()
+                                    .into_string()
+                                    .map_err(|_| "overflow path UTF8")?;
+                                let child = manifest::observe(
+                                    &self.root,
+                                    &format!("{}/{name}", pending.path),
+                                )?;
+                                l.outputs[i].stack.push(Node {
+                                    path: child.path.clone(),
+                                    identity: child.identity.clone(),
+                                    entry: Some(child),
+                                });
+                                self.save(&l, &gate)?;
+                                continue;
+                            }
+                        }
+                        crate::artifact_disposal::dispose_entry(
+                            &self.root,
+                            &pending.path,
+                            &pending.identity,
+                            || {
+                                self.stable(&gate)?;
+                                lease.stable()?;
+                                crate::artifact_disposal::source_safe(&self.root, &o.path)?;
+                                if identity(&root)? != o.identity {
+                                    return Err("output changed before overflow disposal".into());
+                                }
+                                Manifest::validate(entry, &self.root)
+                            },
+                        )?;
+                        bytes = bytes.saturating_add(entry.bytes);
+                        l.outputs[i].removed_logical_bytes = l.outputs[i]
+                            .removed_logical_bytes
+                            .saturating_add(entry.bytes);
+                        l.outputs[i].reserved_bytes =
+                            l.outputs[i].reserved_bytes.saturating_sub(entry.bytes);
+                        l.outputs[i]
+                            .manifest
+                            .entries
+                            .retain(|e| e.path != pending.path);
+                        l.outputs[i].stack.pop();
+                        self.save(&l, &gate)?;
+                        if pending.path == o.path {
+                            return Ok(true);
+                        }
+                    }
+                    return Ok(false);
                 }
                 if !l.outputs[i].manifest.sealed {
                     return Ok(false);
@@ -946,6 +1174,8 @@ impl Inventory {
                     }
                     Manifest::validate(&entry, &self.root)?;
                     if !o.tree
+                        && o.sha256.is_some()
+                        && entry.bytes <= self.policy.max_bytes_per_round
                         && entry.bytes
                             > self
                                 .policy
@@ -956,7 +1186,10 @@ impl Inventory {
                             "output exceeds remaining round byte bound; preserve remainder".into(),
                         );
                     }
-                    if !o.tree {
+                    if !o.tree
+                        && o.sha256.is_some()
+                        && entry.bytes <= self.policy.max_bytes_per_round
+                    {
                         verified_bytes += entry.bytes;
                         if let Some(expected) = &o.sha256 {
                             if crate::file_identity(&path)?
@@ -995,7 +1228,7 @@ impl Inventory {
             match effect {
                 Ok(true) => {
                     let o = l.outputs.remove(i);
-                    let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null});
+                    let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
                     disposed.push(summary.clone());
                     l.summaries.push(summary);
                     let excess = l.summaries.len().saturating_sub(self.policy.max_summaries);
@@ -1006,6 +1239,7 @@ impl Inventory {
                     l.retired_leases.push(Node {
                         path: o.lease,
                         identity: identity(&lease_path)?,
+                        entry: None,
                     });
                     self.save(&l, &gate)?;
                     drop(lease);
@@ -1031,8 +1265,70 @@ impl Inventory {
         }
         self.save(&l, &gate)?;
         Ok(
-            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"max_total_bytes":self.policy.max_total_bytes,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_entries,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
+            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"known_retained_allocated_bytes":l.outputs.iter().flat_map(|o|o.manifest.entries.iter()).filter_map(|e|e.allocated_bytes).sum::<u64>(),"unmeasured_allocated_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed || o.manifest.entries.iter().any(|e|e.allocated_bytes.is_none())).count(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"overflow_outputs":l.outputs.iter().filter(|o|o.manifest.bytes.saturating_sub(o.removed_logical_bytes)>self.policy.max_output_bytes).count(),"max_total_bytes":self.policy.max_total_bytes,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_entries,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
         )
+    }
+    fn recover_creation(
+        &self,
+        output: &mut Output,
+        gate: &Lease,
+        owner: &Lease,
+    ) -> Result<(), String> {
+        let creation = output.creation.clone().ok_or("creation intent missing")?;
+        let target = no_symlink_parents(&self.root, &output.path)?;
+        if identity(target.parent().ok_or("output parent")?)? != creation.parent_identity {
+            return Err("creation parent identity changed; preserve output".into());
+        }
+        self.stable(gate)?;
+        owner.stable()?;
+        match fs::symlink_metadata(&target) {
+            Ok(_) if output.identity.is_empty() || identity(&target)? != output.identity => {
+                return Err("creation destination identity changed; preserve replacement".into());
+            }
+            Ok(_) => (),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Only this registered empty staging slot is recoverable before
+                // inode attachment. Content writes cannot precede attachment.
+                let staged = self.directory.join(&creation.staged);
+                match fs::symlink_metadata(&staged) {
+                    Ok(m) => {
+                        let empty = if output.tree && m.is_dir() {
+                            fs::read_dir(&staged)
+                                .map_err(|e| e.to_string())?
+                                .next()
+                                .is_none()
+                        } else {
+                            !output.tree && m.is_file() && m.len() == 0
+                        };
+                        if !empty
+                            || (!output.identity.is_empty()
+                                && identity(&staged)? != output.identity)
+                        {
+                            return Err(
+                                "creation staging identity/content changed; preserve original"
+                                    .into(),
+                            );
+                        }
+                        crate::artifact_disposal::dispose_entry(
+                            &self.directory,
+                            &creation.staged,
+                            &identity(&staged)?,
+                            || {
+                                self.stable(gate)?;
+                                owner.stable()
+                            },
+                        )?;
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+                    Err(e) => return Err(e.to_string()),
+                }
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+        output.outcome = json!({"original":output.outcome,"publication":"interrupted-creation","completion":"not-established"});
+        output.phase = "sealing".into();
+        output.creation = None;
+        Ok(())
     }
     pub(super) fn historical(
         &self,
@@ -1127,6 +1423,128 @@ impl Inventory {
     }
 }
 impl Publication {
+    /// Attach the empty inode durably before publishing its exact destination.
+    pub fn materialize(&self) -> Result<(), String> {
+        self.lease.stable()?;
+        let gate = self.inventory.gate()?;
+        let mut l = self.inventory.load()?;
+        let o = l
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == self.id)
+            .ok_or("creation intent missing")?;
+        let creation = o.creation.clone().ok_or("output is already materialized")?;
+        let target = no_symlink_parents(&self.inventory.root, &o.path)?;
+        if identity(target.parent().ok_or("output parent")?)? != creation.parent_identity {
+            return Err("creation parent identity changed; preserve output".into());
+        }
+        self.inventory.stable(&gate)?;
+        let staged = self.inventory.directory.join(&creation.staged);
+        if o.tree {
+            fs::create_dir(&staged).map_err(|e| e.to_string())?;
+        } else {
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&staged)
+                .map_err(|e| e.to_string())?
+                .sync_all()
+                .map_err(|e| e.to_string())?;
+        }
+        o.identity = identity(&staged)?;
+        self.inventory.save(&l, &gate)?;
+        crate::artifact_disposal::publish_entry(&staged, &target)?;
+        let o = l
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == self.id)
+            .ok_or("creation intent missing")?;
+        if identity(&target)? != o.identity {
+            return Err("created output identity changed".into());
+        }
+        o.creation = None;
+        o.phase = "publishing".into();
+        self.inventory.save(&l, &gate)
+    }
+    fn write_destination(&self, path: &Path, length: u64) -> Result<PathBuf, String> {
+        let total = self
+            .written
+            .get()
+            .checked_add(length)
+            .ok_or("output byte overflow")?;
+        self.check_length(total)?;
+        if self.written_nodes.get() >= self.inventory.policy.max_manifest_nodes {
+            return Err("output node capacity exceeded before writing".into());
+        }
+        let gate = self.inventory.gate()?;
+        let l = self.inventory.load()?;
+        let o = l
+            .outputs
+            .iter()
+            .find(|o| o.id == self.id && o.phase == "publishing")
+            .ok_or("output is not writable")?;
+        let physical = fs::canonicalize(path.parent().ok_or("write parent")?)
+            .map_err(|e| e.to_string())?
+            .join(path.file_name().ok_or("write name")?);
+        let relative = physical
+            .strip_prefix(&self.inventory.root)
+            .map_err(|_| "write outside adopted output")?
+            .to_str()
+            .ok_or("write path UTF8")?;
+        if relative != o.path && (!o.tree || !relative.starts_with(&format!("{}/", o.path))) {
+            return Err("write outside exact output".into());
+        }
+        if identity(&self.inventory.root.join(&o.path))? != o.identity {
+            return Err("publication output identity changed".into());
+        }
+        self.inventory.stable(&gate)?;
+        self.written.set(total);
+        self.written_nodes.set(self.written_nodes.get() + 1);
+        no_symlink_parents(&self.inventory.root, relative)
+    }
+    pub fn create_directory(&self, path: &Path) -> Result<(), String> {
+        match fs::symlink_metadata(path) {
+            Ok(m) if m.is_dir() => return Ok(()),
+            Ok(_) => return Err("fixture directory identity/type changed".into()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.to_string()),
+        }
+        self.create_directory(path.parent().ok_or("fixture directory parent")?)?;
+        let path = self.write_destination(path, 0)?;
+        fs::create_dir(path).map_err(|e| e.to_string())
+    }
+    pub fn write_file(&self, path: &Path, bytes: &[u8]) -> Result<(), String> {
+        let path = self.write_destination(path, bytes.len() as u64)?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        file.write_all(bytes).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())
+    }
+    pub fn copy_file(&self, input: &Path, destination: &Path) -> Result<(), String> {
+        let mut input = fs::File::open(input).map_err(|e| e.to_string())?;
+        let metadata = input.metadata().map_err(|e| e.to_string())?;
+        if !metadata.is_file() {
+            return Err("fixture input must be a regular file".into());
+        }
+        let path = self.write_destination(destination, metadata.len())?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        let copied = std::io::copy(&mut (&mut input).take(metadata.len()), &mut file)
+            .map_err(|e| e.to_string())?;
+        let mut extra = [0];
+        if copied != metadata.len() || input.read(&mut extra).map_err(|e| e.to_string())? != 0 {
+            return Err("fixture input length changed during bounded copy".into());
+        }
+        file.set_permissions(metadata.permissions())
+            .map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())
+    }
     /// An adopted producer checks this reservation before writing new output bytes.
     pub fn byte_limit(&self) -> u64 {
         self.inventory.policy.max_output_bytes
@@ -1191,7 +1609,18 @@ impl Publication {
             o.phase = "released".into();
         }
         o.expires = now()?.saturating_add(self.inventory.policy.keep_seconds);
-        self.inventory.save(&l, &gate)
+        self.inventory.save(&l, &gate)?;
+        if l.outputs
+            .iter()
+            .find(|o| o.id == self.id)
+            .is_some_and(|o| o.manifest.bytes > self.byte_limit())
+        {
+            return Err(
+                "output byte capacity exceeded; original accounted and preserved until released"
+                    .into(),
+            );
+        }
+        Ok(())
     }
 }
 /// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
@@ -1227,6 +1656,97 @@ pub fn begin_adopted(
     inventory
         .begin_rooted(producer, relative, outcome, &roots)
         .map(Some)
+}
+/// Create only after admission and a recoverable owner intent. Unadopted hosts
+/// keep their existing output semantics, without enrolling unknown paths.
+pub fn create_adopted(
+    root: &Path,
+    producer: &str,
+    path: &Path,
+    tree: bool,
+    outcome: Value,
+) -> Result<Option<Publication>, String> {
+    let canonical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let physical_path = fs::canonicalize(path.parent().ok_or("output parent")?)
+        .map_err(|e| e.to_string())?
+        .join(path.file_name().ok_or("output name")?);
+    let relative = physical_path
+        .strip_prefix(&canonical_root)
+        .map_err(|_| "output outside adopted host")?
+        .to_str()
+        .ok_or("output path UTF8")?;
+    crate::relative_path(relative)?;
+    if let Some(inventory) = Inventory::adopted(root)? {
+        if inventory.accepts(producer, relative) {
+            inventory.maintain()?;
+            let roots = if producer == "lifecycle-original" {
+                vec![format!("recovery:{relative}")]
+            } else {
+                vec![]
+            };
+            let publication = inventory.reserve(producer, relative, outcome, &roots, Some(tree))?;
+            publication.materialize()?;
+            return Ok(Some(publication));
+        }
+    }
+    if tree {
+        fs::create_dir(path).map_err(|e| e.to_string())?;
+    } else {
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(None)
+}
+/// Choose an address without creating it; creation belongs to the same publisher.
+pub fn unique_path(directory: &Path, prefix: &str, suffix: &str) -> Result<PathBuf, String> {
+    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if prefix.contains('/') || suffix.contains('/') {
+        return Err("output address prefix/suffix".into());
+    }
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let directory = fs::canonicalize(directory).map_err(|e| e.to_string())?;
+    Ok(directory.join(format!(
+        "{prefix}{}-{time}-{}{suffix}",
+        std::process::id(),
+        SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    )))
+}
+pub fn copy_adopted(
+    publication: Option<&Publication>,
+    input: &Path,
+    output: &Path,
+) -> Result<(), String> {
+    if let Some(publication) = publication {
+        publication.copy_file(input, output)
+    } else {
+        fs::copy(input, output)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+pub fn write_adopted(
+    publication: Option<&Publication>,
+    output: &Path,
+    bytes: &[u8],
+) -> Result<(), String> {
+    if let Some(publication) = publication {
+        publication.write_file(output, bytes)
+    } else {
+        fs::write(output, bytes).map_err(|e| e.to_string())
+    }
+}
+pub fn directory_adopted(publication: Option<&Publication>, output: &Path) -> Result<(), String> {
+    if let Some(publication) = publication {
+        publication.create_directory(output)
+    } else {
+        fs::create_dir_all(output).map_err(|e| e.to_string())
+    }
 }
 /// A registered reader protects an enrolled original. Unknown legacy evidence retains old semantics.
 pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
@@ -1335,6 +1855,7 @@ fn publish_owned_with(
     if length > inventory.policy.max_output_bytes {
         return Err("output byte capacity exceeded before writing".into());
     }
+    inventory.maintain()?;
     let _activity = inventory.report_activity()?;
     let _writer = Lease::acquire(
         &inventory.directory.join("report-writer.lease"),
@@ -1346,13 +1867,8 @@ fn publish_owned_with(
     .ok_or("report original publisher busy")?;
     let target = no_symlink_parents(root, path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
-    let mut file = match fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&target)
-    {
-        Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+    match fs::symlink_metadata(&target) {
+        Ok(_) => {
             if crate::file_identity(&target)? != (digest.to_owned(), length) {
                 return Err("addressed original bytes mismatch".into());
             }
@@ -1360,13 +1876,21 @@ fn publish_owned_with(
             // Reuse leaves the first immutable operation outcome intact.
             return Ok(true);
         }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
         Err(e) => return Err(e.to_string()),
-    };
-    let publication = inventory.begin(
+    }
+    let publication = inventory.plan(
         producer,
         path,
+        false,
         json!({"publication":"started","outcome":"not-established"}),
     )?;
+    publication.materialize()?;
+    publication.check_length(length)?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .open(&target)
+        .map_err(|e| e.to_string())?;
     write_content(&mut file)?;
     file.sync_all().map_err(|e| e.to_string())?;
     publication.complete(outcome)?;

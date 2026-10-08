@@ -1098,21 +1098,19 @@ pub fn prepare_request(
         reader.checkout_excluding(root, candidate, &facts::artifact_directories(cfg)?)?;
     let state = no_symlink_parents(root, ".chrono-harness/state")?;
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
-    let snapshot = tempfile::Builder::new()
-        .prefix("base-")
-        .tempdir_in(&state)
-        .map_err(|e| e.to_string())?;
-    let snapshot_publication = crate::retained_artifacts::retention::begin_adopted(
+    let snapshot = crate::retained_artifacts::retention::unique_path(&state, "base-", "")?;
+    let snapshot_publication = crate::retained_artifacts::retention::create_adopted(
         root,
         "full-original",
-        snapshot.path(),
+        &snapshot,
+        true,
         value!({"kind":"base-snapshot","base":base,"outcome":"not-established"}),
     )?;
     reader.export_limited(
         root,
         base,
         &a,
-        snapshot.path(),
+        &snapshot,
         snapshot_publication
             .as_ref()
             .map(|p| p.byte_limit())
@@ -1121,7 +1119,6 @@ pub fn prepare_request(
     if let Some(publication) = snapshot_publication {
         publication.complete(value!({"kind":"base-snapshot","base":base,"identity":"fixed-source-data","completion":"not-established"}))?;
     }
-    let snapshot = snapshot.keep();
     if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
         if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
             inventory.reference_paths(
@@ -1267,15 +1264,11 @@ pub fn check_prepared(
         .to_owned()
         + "/";
     let retained_report = crate::prepare_publication(root, &report_path)?;
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&retained_report)
-        .map_err(|e| e.to_string())?;
-    let retained_publication = crate::retained_artifacts::retention::begin_adopted(
+    let retained_publication = crate::retained_artifacts::retention::create_adopted(
         root,
         "full-original",
         &retained_report,
+        false,
         value!({"publication":"started","outcome":"not-established"}),
     )?;
     let timeout = cfg["protocol"]["timeout_seconds"]

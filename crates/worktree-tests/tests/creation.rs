@@ -35,18 +35,28 @@ struct Host {
     remote: PathBuf,
     parent: PathBuf,
 }
-fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> {
+fn retain_fixture_state(
+    root: &Path,
+    destination: &Path,
+    publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
+) -> std::io::Result<()> {
     if !root.is_dir() {
         return Ok(());
     }
-    fs::create_dir_all(destination)?;
+    chrono_harness::retained_artifacts::retention::directory_adopted(publication, destination)
+        .map_err(std::io::Error::other)?;
     for row in fs::read_dir(root)? {
         let row = row?;
         let kind = row.file_type()?;
         if kind.is_dir() {
-            retain_fixture_state(&row.path(), &destination.join(row.file_name()))?;
+            retain_fixture_state(&row.path(), &destination.join(row.file_name()), publication)?;
         } else if kind.is_file() {
-            fs::copy(row.path(), destination.join(row.file_name()))?;
+            chrono_harness::retained_artifacts::retention::copy_adopted(
+                publication,
+                &row.path(),
+                &destination.join(row.file_name()),
+            )
+            .map_err(std::io::Error::other)?;
         }
     }
     Ok(())
@@ -65,17 +75,19 @@ impl Drop for Host {
             sha256(self.root.as_os_str().as_encoded_bytes())
         ));
         let retain = || -> std::io::Result<()> {
-            fs::create_dir_all(&destination)?;
-            let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+            fs::create_dir_all(&directory)?;
+            let publication = chrono_harness::retained_artifacts::retention::create_adopted(
                 &source(),
                 "worktree-fixture",
                 &destination,
+                true,
                 value!({"producer":"worktree fixture capture","outcome":"not-established"}),
             )
             .map_err(std::io::Error::other)?;
             retain_fixture_state(
                 &self.root.join(".chrono-harness/state"),
                 &destination.join("coordinator-state"),
+                publication.as_ref(),
             )?;
             for name in [
                 "git-mutation.stdout",
@@ -85,7 +97,12 @@ impl Drop for Host {
             ] {
                 let path = self.parent.join(name);
                 if path.is_file() {
-                    fs::copy(path, destination.join(name))?;
+                    chrono_harness::retained_artifacts::retention::copy_adopted(
+                        publication.as_ref(),
+                        &path,
+                        &destination.join(name),
+                    )
+                    .map_err(std::io::Error::other)?;
                 }
             }
             // Only explicitly enrolled fixtures, never live worker artifacts.
@@ -105,6 +122,7 @@ impl Drop for Host {
                                 "enrollment-{}",
                                 sha256(target.as_os_str().as_encoded_bytes())
                             )),
+                            publication.as_ref(),
                         )?;
                     }
                 }

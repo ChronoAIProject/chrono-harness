@@ -11,6 +11,23 @@ fn main() {
     }
     let root = std::env::args().nth(1).unwrap();
     let root = Path::new(&root);
+    if std::env::args().nth(2).as_deref() == Some("creation-intent") {
+        let publication = Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .plan(
+                "fixture",
+                ".chrono-harness/state/fixtures/killed-before-create",
+                true,
+                json!({"operation":"creation","exit":null}),
+            )
+            .unwrap();
+        println!("{}", publication.id());
+        std::io::stdout().flush().unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(45));
+        drop(publication);
+        return;
+    }
     if let Some(previous) = std::env::args().nth(2) {
         let result = Inventory::adopted(root)
             .unwrap()
