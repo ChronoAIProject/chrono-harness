@@ -1552,3 +1552,70 @@ fn ordinary_maintenance_defers_busy_exclusion_without_spending_another_round() {
     drop(gate);
     assert_eq!(i.maintain_available().unwrap()["remaining_outputs"], 0);
 }
+
+#[test]
+fn ordinary_concurrent_publications_admit_against_retained_inventory() {
+    let h = host(256, 128);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(604800);
+    policy["max_entries"] = json!(512);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    // Real completed producers supply the retained history; no fabricated ledger
+    // state or enlarged admission/maintenance limit supplies the test's capacity.
+    for n in 0..420 {
+        let path = tree(h.path(), &format!("retained-{n}"));
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        publication
+            .complete(json!({"exit":0,"original":"x".repeat(1024)}))
+            .unwrap();
+    }
+    let start = std::sync::Barrier::new(28);
+    let results = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..28)
+            .map(|n| {
+                let start = &start;
+                let root = h.path();
+                scope.spawn(move || {
+                    start.wait();
+                    let path = root.join(format!(".chrono-harness/state/fixtures/current-{n}"));
+                    let publication = retained_artifacts::retention::create_adopted_with_limit(
+                        root,
+                        "fixture",
+                        &path,
+                        true,
+                        json!({"operation":n}),
+                        Some(32 * 1024 * 1024),
+                    )?
+                    .ok_or("adoption missing")?;
+                    publication.write_file(&path.join("original"), b"required original")?;
+                    publication.complete(json!({"exit":0}))
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    if results.iter().any(Result::is_err) {
+        let original = h.keep();
+        panic!("{results:?}; original fixture {}", original.display());
+    }
+    assert_eq!(ledger(h.path())["outputs"].as_array().unwrap().len(), 448);
+    for n in 0..28 {
+        assert_eq!(
+            fs::read(h.path().join(format!(
+                ".chrono-harness/state/fixtures/current-{n}/original"
+            )))
+            .unwrap(),
+            b"required original"
+        );
+    }
+}

@@ -136,8 +136,7 @@ fn now() -> Result<u64, String> {
 }
 use crate::artifact_disposal::identity;
 
-fn write(path: &Path, value: &impl Serialize) -> Result<(), String> {
-    let raw = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     if raw.len() as u64 > MAX_STATE {
         return Err("retention metadata bound; preserve outputs".into());
     }
@@ -159,7 +158,7 @@ fn write(path: &Path, value: &impl Serialize) -> Result<(), String> {
         options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
     }
     let mut f = options.open(&temporary).map_err(|e| e.to_string())?;
-    f.write_all(&raw).map_err(|e| e.to_string())?;
+    f.write_all(raw).map_err(|e| e.to_string())?;
     f.sync_all().map_err(|e| e.to_string())?;
     fs::rename(temporary, path).map_err(|e| e.to_string())?;
     Ok(())
@@ -371,8 +370,9 @@ impl Inventory {
     }
     fn save(&self, l: &Ledger, gate: &Lease) -> Result<(), String> {
         self.stable(gate)?;
-        self.charge_metadata(serde_json::to_vec(l).map_err(|e| e.to_string())?.len() as u64)?;
-        write(&self.directory.join("inventory.json"), l)
+        let raw = serde_json::to_vec(l).map_err(|e| e.to_string())?;
+        self.charge_metadata(raw.len() as u64)?;
+        write(&self.directory.join("inventory.json"), &raw)
     }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// every existing output must still be declared, and all old producers/readers must be excluded.

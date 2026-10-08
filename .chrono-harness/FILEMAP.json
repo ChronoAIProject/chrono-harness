@@ -5450,7 +5450,7 @@
       "path": "crates/runner/src/retained_artifacts/retention.rs",
       "owner": "runner",
       "surface": "product",
-      "cost": "finite host policy; per-output declared byte reservation and cumulative controlled byte/node admission; contention acceptance incomplete",
+      "cost": "finite host policy; one serialized inventory buffer per durable save and metadata charge; per-output reservation and controlled byte/node admission",
       "edges": [
         {
           "kind": "compile",
@@ -5462,7 +5462,7 @@
       "path": "crates/runner-tests/tests/retention.rs",
       "owner": "runner-tests",
       "surface": "test",
-      "cost": "finite Rust fixture policies, interruption children joined; reservation/exclusion regressions; runtime unmeasured",
+      "cost": "finite Rust fixture policies, interruption children joined; 420 retained producer outputs and 28 concurrent 32 MiB reservations; original 41 tests preserved; contention fixture runtime 30.01 s on macOS Rust 1.95.0",
       "edges": [
         {
           "kind": "compile",
