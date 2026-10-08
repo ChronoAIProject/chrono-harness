@@ -12,6 +12,9 @@ pub(super) struct Binding {
     root: PathBuf,
     files: Vec<(PathBuf, String)>,
     links: BTreeMap<String, Link>,
+    directories: Vec<(PathBuf, Vec<String>)>,
+    file_targets: BTreeSet<PathBuf>,
+    directory_targets: BTreeSet<PathBuf>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -31,6 +34,12 @@ enum Kind {
 
 impl Binding {
     pub(super) fn unchanged(&self) -> Result {
+        crate::guard::measure(
+            &format!("directory-unchanged:{}", self.source.display()),
+            || self.unchanged_inner(),
+        )
+    }
+    fn unchanged_inner(&self) -> Result {
         if fs::canonicalize(&self.source).map_err(error)? != self.root {
             return Err(error(format!(
                 "toolchain directory root changed during guarded operation: {}",
@@ -56,6 +65,14 @@ impl Binding {
                     path.display()
                 )));
             }
+        }
+        for (path, entries) in &self.directories {
+            let relative = path
+                .strip_prefix(&self.root)
+                .map_err(error)?
+                .to_str()
+                .ok_or_else(|| error("non UTF-8 empty directory"))?;
+            directory_entries(&self.root, relative, entries)?;
         }
         self.check_links()
     }
@@ -92,10 +109,8 @@ impl Binding {
                 return Err(error("directory link resolution changed"));
             }
             let covered = match link.kind {
-                Kind::File => target.is_file() && self.files.iter().any(|(p, _)| *p == target),
-                Kind::Directory => {
-                    target.is_dir() && self.files.iter().any(|(p, _)| p.starts_with(&target))
-                }
+                Kind::File => target.is_file() && self.file_targets.contains(&target),
+                Kind::Directory => target.is_dir() && self.directory_targets.contains(&target),
             };
             if !covered {
                 return Err(error(
@@ -164,6 +179,14 @@ struct DirectoryManifest {
     root: String,
     files: Vec<DirectoryFile>,
     symlinks: Option<Vec<Link>>,
+    directories: Option<Vec<DirectoryEntries>>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryEntries {
+    path: String,
+    entries: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -173,7 +196,7 @@ struct DirectoryFile {
     sha256: String,
 }
 
-fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
+fn physical_path(root: &Path, relative: &str) -> Result<PathBuf> {
     chrono_harness::relative_path(relative)?;
     let mut path = root.to_path_buf();
     for component in Path::new(relative).components() {
@@ -195,6 +218,10 @@ fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
             Err(e) => return Err(error(e)),
         }
     }
+    Ok(path)
+}
+fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
+    let path = physical_path(root, relative)?;
     if !path.is_file() {
         return Err(error(format!(
             "directory inventory entry is not a file: {}",
@@ -203,8 +230,50 @@ fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
     }
     Ok(path)
 }
+fn directory_entries(root: &Path, relative: &str, expected: &[String]) -> Result<PathBuf> {
+    let path = physical_path(root, relative)?;
+    let declared: BTreeSet<_> = expected.iter().cloned().collect();
+    if declared.len() != expected.len()
+        || expected.iter().any(|s| {
+            s.is_empty()
+                || s == "."
+                || s == ".."
+                || s.contains('/')
+                || s.contains('\\')
+                || s.contains('\0')
+        })
+    {
+        return Err(error("invalid/duplicate directory child declaration"));
+    }
+    let actual: BTreeSet<_> = fs::read_dir(&path)
+        .map_err(error)?
+        .map(|entry| {
+            entry
+                .map_err(error)?
+                .file_name()
+                .into_string()
+                .map_err(|_| error("non UTF-8 directory child"))
+        })
+        .collect::<Result<_>>()?;
+    if actual != declared {
+        return Err(error(format!(
+            "directory children differ from declaration: {}",
+            path.display()
+        )));
+    }
+    Ok(path)
+}
 
 pub(super) fn bind(
+    root: &Path,
+    declaration: &DirectoryInventory,
+    manifest: &Path,
+) -> Result<(Binding, DirectoryEvidence)> {
+    crate::guard::measure(&format!("directory-bind:{}", declaration.root), || {
+        bind_inner(root, declaration, manifest)
+    })
+}
+fn bind_inner(
     root: &Path,
     declaration: &DirectoryInventory,
     manifest: &Path,
@@ -226,13 +295,16 @@ pub(super) fn bind(
     }
     let value = json(&fs::read(manifest).map_err(error)?)?;
     let has_links = value.get("symlinks").is_some();
+    let has_directories = value.get("directories").is_some();
     let parsed: DirectoryManifest = serde_json::from_value(value).map_err(error)?;
     if !matches!(
         parsed.schema.as_str(),
-        "chrono-input-directory/v1" | "chrono-input-directory/v2"
+        "chrono-input-directory/v1" | "chrono-input-directory/v2" | "chrono-input-directory/v3"
     ) || parsed.root != declaration.root
         || (parsed.schema == "chrono-input-directory/v1" && has_links)
-        || (parsed.schema == "chrono-input-directory/v2" && parsed.symlinks.is_none())
+        || (parsed.schema != "chrono-input-directory/v1" && parsed.symlinks.is_none())
+        || (parsed.schema != "chrono-input-directory/v3" && has_directories)
+        || (parsed.schema == "chrono-input-directory/v3" && parsed.directories.is_none())
     {
         return Err(error("directory inventory manifest schema/root mismatch"));
     }
@@ -259,6 +331,16 @@ pub(super) fn bind(
         return Err(error("directory inventory must contain a file"));
     }
     let file_count = files.len();
+    let mut directories = Vec::new();
+    for entry in parsed.directories.unwrap_or_default() {
+        if !seen.insert(entry.path.clone()) {
+            return Err(error("directory inventory contains a duplicate path"));
+        }
+        directories.push((
+            directory_entries(&directory, &entry.path, &entry.entries)?,
+            entry.entries,
+        ));
+    }
     let mut links = BTreeMap::new();
     for link in parsed.symlinks.unwrap_or_default() {
         chrono_harness::relative_path(&link.path)?;
@@ -270,11 +352,27 @@ pub(super) fn bind(
         }
         links.insert(link.path.clone(), link);
     }
+    // Index exactly the existing declared coverage; this does not scan or
+    // expand the whitelist. SDK alias checks otherwise repeatedly scan files.
+    let file_targets = files.iter().map(|(p, _)| p.clone()).collect();
+    let mut directory_targets: BTreeSet<_> = directories.iter().map(|(p, _)| p.clone()).collect();
+    for (path, _) in &files {
+        for parent in path
+            .ancestors()
+            .skip(1)
+            .take_while(|p| p.starts_with(&directory))
+        {
+            directory_targets.insert(parent.to_path_buf());
+        }
+    }
     let binding = Binding {
         source,
         root: directory,
         files,
         links,
+        directories,
+        file_targets,
+        directory_targets,
     };
     binding.check_links()?;
     Ok((

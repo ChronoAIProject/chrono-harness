@@ -133,6 +133,38 @@ fn policy_migration_requires_committed_matching_target_and_coordinator() {
 }
 
 #[test]
+fn output_bound_migration_preserves_enrollment_and_requires_matching_committed_policies() {
+    let (h, target) = fixture();
+    let original = h.ledger()["entries"][0].clone();
+    let birth = h.root.join(
+        original["enrollment"]["sealed_receipt"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let birth_bytes = fs::read(&birth).unwrap();
+    let policy = json(&fs::read(source().join(POLICY)).unwrap()).unwrap();
+    h.policy(|p| p["output_limit_bytes"] = policy["output_limit_bytes"].clone());
+    assert_ne!(
+        h.auto("migrate", &["--path", target.to_str().unwrap()]).0,
+        0
+    );
+    assert_eq!(h.ledger()["entries"][0], original);
+    adopt(&h, &target);
+    assert_ne!(h.auto("maintain", &[]).0, 0);
+    assert_eq!(h.ledger()["entries"][0], original);
+    let migrated = migrate(&h, &target);
+    assert_eq!(migrated["policy_migration"]["status"], "adopted");
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["enrollment"], original["enrollment"]);
+    assert_eq!(entry["ownership"]["id"], original["ownership"]["id"]);
+    assert_eq!(entry["policy_sha256"], original["policy_sha256"]);
+    assert_eq!(entry["policy_migrations"].as_array().unwrap().len(), 1);
+    assert!(entry["terminal"].is_null());
+    assert_eq!(fs::read(&birth).unwrap(), birth_bytes);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+}
+
+#[test]
 fn policy_migration_obeys_original_live_kernel_lease() {
     let (h, target) = fixture();
     advance(&h);

@@ -39,6 +39,32 @@ Consumers reject missing/mismatched binding observations before invoking Git.
 Process bounds apply per invocation; accumulated report storage is not a total
 run memory/disk quota.
 
+New Git process observations use `chrono-retained-process/v2`. Each original
+stream appears once as zlib-compressed hexadecimal bytes, with its original byte
+length and SHA-256. The shared codec caps decoded streams at the existing 64 MiB
+process maximum and rejects incomplete streams, trailing compressed bytes, false
+lengths, digest changes and mixed stream aliases. A stream whose compressed bytes
+exceed the original maximum retains its supported v1 view. Metadata, ownership carriers,
+exit codes and failures remain unchanged. `full::expand_process` constructs only
+transient byte/text views. Historical inline and v1 hexadecimal observations
+remain readable without rewriting their originals.
+
+New full requests declare the v2 predecessor encoding in the original first
+stdin. Both full and scoped DAG transport use that declaration; retained
+validation rebuilds historical full-inline and scoped-v1 stdin when the marker
+is absent. Unit and collection owners still retain original stdout/stderr and
+validate their digests and cumulative registered budgets. Current full report
+publication, unit admission, completion and workflow certificates also charge the
+original judge stream lengths alongside metadata; historical inline/v1 reports
+keep their original serialized-byte contract. Compression does not
+waive an output bound or remove an original artifact/upload requirement.
+
+The dedicated registry regression acquires all five current product-host
+registries at two real Git endpoints and decodes every complete process receipt
+under the existing 8 MiB bound. Full DAG, original failure and collection tests
+exercise the shared consumer boundary. These are source transport checks; a clean
+committed full host and native judge-chain acceptance remain separate obligations.
+
 A bound Reader reuses successful blob bytes for the same full immutable OID and
 exact requested path only after that Reader's existing `verify_oid` has observed
 the exact requested commit identity and a valid full tree OID. Reads before this

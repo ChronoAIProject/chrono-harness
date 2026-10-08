@@ -404,7 +404,7 @@ pub(super) fn collect(
                 serde_json::from_value(row["receipt"].clone()).map_err(|e| e.to_string())?;
             chrono_judge_routes::compare(&plan, operation, Some(&receipt))?;
             if row["operation"] != operation.method.operation
-                || row["process"] != object!(receipt.process)
+                || row["process"] != super::process_projection(&receipt.process)
                 || receipt.process.exit_code != 0
                 || receipt.process.failure.is_some()
                 || !response.results.iter().any(|r| {

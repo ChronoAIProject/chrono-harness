@@ -1,0 +1,2048 @@
+{
+  "schema": "chrono-cargo-inputs/v6",
+  "root": "diagnostics",
+  "projects": [
+    {
+      "project": "diagnostics",
+      "manifest": "crates/diagnostics/Cargo.toml",
+      "lockfile": "crates/diagnostics/Cargo.lock",
+      "output": "crates/diagnostics/target/",
+      "ancestor_manifests": []
+    }
+  ],
+  "metadata": {
+    "tool": "cargo",
+    "argv": [
+      "metadata",
+      "--locked",
+      "--offline",
+      "--format-version",
+      "1",
+      "--filter-platform",
+      "aarch64-apple-darwin",
+      "--manifest-path",
+      "crates/diagnostics/Cargo.toml"
+    ]
+  },
+  "operations": {
+    "guard.build.diagnostics": {
+      "tool": "cargo",
+      "argv": [
+        "build",
+        "--locked",
+        "--manifest-path",
+        "crates/diagnostics/Cargo.toml"
+      ]
+    },
+    "guard.check.diagnostics": {
+      "tool": "cargo",
+      "argv": [
+        "check",
+        "--locked",
+        "--manifest-path",
+        "crates/diagnostics/Cargo.toml"
+      ]
+    }
+  },
+  "target": "aarch64-apple-darwin",
+  "target_mode": "native",
+  "configuration_files": [
+    {
+      "path": "/.cargo/config",
+      "input": null
+    },
+    {
+      "path": "/.cargo/config.toml",
+      "input": null
+    },
+    {
+      "path": "/Users/.cargo/config",
+      "input": null
+    },
+    {
+      "path": "/Users/.cargo/config.toml",
+      "input": null
+    },
+    {
+      "path": "/Users/auricstudio/.cargo/config",
+      "input": null
+    },
+    {
+      "path": "/Users/auricstudio/.cargo/config.toml",
+      "input": null
+    },
+    {
+      "path": "/Users/auricstudio/chrono-harness-worktrees/.cargo/config",
+      "input": null
+    },
+    {
+      "path": "/Users/auricstudio/chrono-harness-worktrees/.cargo/config.toml",
+      "input": null
+    },
+    {
+      "path": ".cargo/config",
+      "input": null
+    },
+    {
+      "path": ".cargo/config.toml",
+      "input": null
+    }
+  ],
+  "configuration_ancestors": "inventory",
+  "cargo_input": "tool.cargo",
+  "compiler": {
+    "tool": "rustc",
+    "input": "tool.rustc"
+  },
+  "toolchain": {
+    "sysroot": {
+      "root": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "manifest": "toolchain.rust.inventory"
+    },
+    "backend": [
+      "toolchain.rust-driver"
+    ],
+    "linker": {
+      "tool": "linker",
+      "input": "tool.linker",
+      "environment": "CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER"
+    },
+    "sdks": [
+      {
+        "root": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+        "manifest": "toolchain.sdk.inventory",
+        "environment": "SDKROOT"
+      },
+      {
+        "root": "/Applications/Xcode.app/Contents/Developer",
+        "manifest": "toolchain.developer.inventory",
+        "environment": "DEVELOPER_DIR"
+      }
+    ],
+    "build_script_inputs": [
+      "toolchain.ar",
+      "toolchain.ld",
+      "toolchain.libtool",
+      "toolchain.dsymutil"
+    ]
+  },
+  "packages": [
+    {
+      "id": "cfg-if@1.0.5",
+      "name": "cfg-if",
+      "version": "1.0.5",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.cfg-if.1.0.5.2e9d962a08321605",
+      "inputs": [
+        "package.cfg-if.1.0.5.06572a96a58dc510",
+        "package.cfg-if.1.0.5.13ee4b2252c9e516",
+        "package.cfg-if.1.0.5.1b7a45280246f35f",
+        "package.cfg-if.1.0.5.2e9d962a08321605",
+        "package.cfg-if.1.0.5.30a6712231dd51e3",
+        "package.cfg-if.1.0.5.421f8eecf75a1acd",
+        "package.cfg-if.1.0.5.4967a07438301854",
+        "package.cfg-if.1.0.5.4dc7b68391aabbf4",
+        "package.cfg-if.1.0.5.71cabc4177e41ea8",
+        "package.cfg-if.1.0.5.97d1f04c4fdf3167",
+        "package.cfg-if.1.0.5.b1a35a68f14e6962",
+        "package.cfg-if.1.0.5.b335630551682c19",
+        "package.cfg-if.1.0.5.bc37d034bad56458",
+        "package.cfg-if.1.0.5.dd4fbda47e51f1e3",
+        "package.cfg-if.1.0.5.e81e13daadd1745d"
+      ],
+      "checksum": "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "diagnostics",
+      "name": "chrono-diagnostics",
+      "version": "0.1.0",
+      "source": null,
+      "project": "diagnostics",
+      "manifest_input": null,
+      "inputs": [],
+      "checksum": null,
+      "features": [],
+      "dependencies": [
+        {
+          "package": "serde@1.0.229",
+          "name": "serde",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "serde_json@1.0.151",
+          "name": "serde_json",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "time@0.3.47",
+          "name": "time",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "tracing@0.1.44",
+          "name": "tracing",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "tracing-subscriber@0.3.20",
+          "name": "tracing_subscriber",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deranged@0.5.8",
+      "name": "deranged",
+      "version": "0.5.8",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.deranged.0.5.8.2e9d962a08321605",
+      "inputs": [
+        "package.deranged.0.5.8.13ee4b2252c9e516",
+        "package.deranged.0.5.8.2e9d962a08321605",
+        "package.deranged.0.5.8.30a6712231dd51e3",
+        "package.deranged.0.5.8.421f8eecf75a1acd",
+        "package.deranged.0.5.8.4967a07438301854",
+        "package.deranged.0.5.8.4dc7b68391aabbf4",
+        "package.deranged.0.5.8.510339cdebb78cf9",
+        "package.deranged.0.5.8.81ee71f96cec8c72",
+        "package.deranged.0.5.8.a0262fea108af44a",
+        "package.deranged.0.5.8.b1a35a68f14e6962",
+        "package.deranged.0.5.8.b335630551682c19"
+      ],
+      "checksum": "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c",
+      "features": [
+        "default",
+        "powerfmt"
+      ],
+      "dependencies": [
+        {
+          "package": "powerfmt@0.2.0",
+          "name": "powerfmt",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "itoa@1.0.18",
+      "name": "itoa",
+      "version": "1.0.18",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.itoa.1.0.18.2e9d962a08321605",
+      "inputs": [
+        "package.itoa.1.0.18.07985fdcade0e64d",
+        "package.itoa.1.0.18.13ee4b2252c9e516",
+        "package.itoa.1.0.18.1b7a45280246f35f",
+        "package.itoa.1.0.18.1cfccd828fdcaa7a",
+        "package.itoa.1.0.18.2e9d962a08321605",
+        "package.itoa.1.0.18.30a6712231dd51e3",
+        "package.itoa.1.0.18.421f8eecf75a1acd",
+        "package.itoa.1.0.18.4967a07438301854",
+        "package.itoa.1.0.18.4dc7b68391aabbf4",
+        "package.itoa.1.0.18.7b19987f13f75d72",
+        "package.itoa.1.0.18.b1a35a68f14e6962",
+        "package.itoa.1.0.18.b335630551682c19",
+        "package.itoa.1.0.18.b803fcb7f17ed923",
+        "package.itoa.1.0.18.bc37d034bad56458",
+        "package.itoa.1.0.18.c8af4eb11f24f2d4"
+      ],
+      "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "lazy_static@1.5.0",
+      "name": "lazy_static",
+      "version": "1.5.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.lazy_static.1.5.0.2e9d962a08321605",
+      "inputs": [
+        "package.lazy_static.1.5.0.050effdd7a421fc7",
+        "package.lazy_static.1.5.0.0cf0ae8587316070",
+        "package.lazy_static.1.5.0.13ee4b2252c9e516",
+        "package.lazy_static.1.5.0.1b7a45280246f35f",
+        "package.lazy_static.1.5.0.2e9d962a08321605",
+        "package.lazy_static.1.5.0.30a6712231dd51e3",
+        "package.lazy_static.1.5.0.421f8eecf75a1acd",
+        "package.lazy_static.1.5.0.45643816d7b38f97",
+        "package.lazy_static.1.5.0.4967a07438301854",
+        "package.lazy_static.1.5.0.4dc7b68391aabbf4",
+        "package.lazy_static.1.5.0.7b19987f13f75d72",
+        "package.lazy_static.1.5.0.829d851dfceb12ee",
+        "package.lazy_static.1.5.0.85fd211db13d10e1",
+        "package.lazy_static.1.5.0.a8f25464c390c42b",
+        "package.lazy_static.1.5.0.b1a35a68f14e6962",
+        "package.lazy_static.1.5.0.b335630551682c19",
+        "package.lazy_static.1.5.0.bc37d034bad56458",
+        "package.lazy_static.1.5.0.bc9ccfd4c038d204",
+        "package.lazy_static.1.5.0.d18f96aade79fc45",
+        "package.lazy_static.1.5.0.e942584668f707a0",
+        "package.lazy_static.1.5.0.fa7821af633f058d",
+        "package.lazy_static.1.5.0.fbf96b1d98fc0664"
+      ],
+      "checksum": "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "memchr@2.8.3",
+      "name": "memchr",
+      "version": "2.8.3",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.memchr.2.8.3.2e9d962a08321605",
+      "inputs": [
+        "package.memchr.2.8.3.0b164e36899e4db3",
+        "package.memchr.2.8.3.0e3a3d1c5038242a",
+        "package.memchr.2.8.3.0eb76a52d91cb366",
+        "package.memchr.2.8.3.13ee4b2252c9e516",
+        "package.memchr.2.8.3.13fe25867445a786",
+        "package.memchr.2.8.3.1a90c00c66d1712d",
+        "package.memchr.2.8.3.1f339aeb58093669",
+        "package.memchr.2.8.3.21147374d80950e3",
+        "package.memchr.2.8.3.242c87e94bc0e81a",
+        "package.memchr.2.8.3.2468517b1cd2b899",
+        "package.memchr.2.8.3.24a0a33b8020169a",
+        "package.memchr.2.8.3.2749364fba21f6be",
+        "package.memchr.2.8.3.2837ec830a2e8b2c",
+        "package.memchr.2.8.3.28a488c5e595b7cd",
+        "package.memchr.2.8.3.2e9d962a08321605",
+        "package.memchr.2.8.3.2f2bd68e0e094d4a",
+        "package.memchr.2.8.3.30a6712231dd51e3",
+        "package.memchr.2.8.3.315c02cd05738da1",
+        "package.memchr.2.8.3.35dd501674c29ffd",
+        "package.memchr.2.8.3.3d5bcaca908664a7",
+        "package.memchr.2.8.3.400d38e5cfee1812",
+        "package.memchr.2.8.3.421f8eecf75a1acd",
+        "package.memchr.2.8.3.43e7cb4676d9c028",
+        "package.memchr.2.8.3.460483abdc699825",
+        "package.memchr.2.8.3.4967a07438301854",
+        "package.memchr.2.8.3.4a4316f0d7111ee0",
+        "package.memchr.2.8.3.4dc7b68391aabbf4",
+        "package.memchr.2.8.3.4ed04667df7b7658",
+        "package.memchr.2.8.3.4ff673578dd06edb",
+        "package.memchr.2.8.3.54e8e9bcb1546d79",
+        "package.memchr.2.8.3.56bb96304fd62437",
+        "package.memchr.2.8.3.5bab506d4c31874c",
+        "package.memchr.2.8.3.5d061bb7594eecf0",
+        "package.memchr.2.8.3.606e833d21ab2f75",
+        "package.memchr.2.8.3.6350ddbd92436b0a",
+        "package.memchr.2.8.3.68891ec3a71c84c3",
+        "package.memchr.2.8.3.700ae7834749d6e5",
+        "package.memchr.2.8.3.7417e7f1f9825bb3",
+        "package.memchr.2.8.3.77ca749b4d0a3eb3",
+        "package.memchr.2.8.3.77cb35e143685fcd",
+        "package.memchr.2.8.3.89a767156271ee52",
+        "package.memchr.2.8.3.8e72def9f6874497",
+        "package.memchr.2.8.3.8fa572d3a8a727d4",
+        "package.memchr.2.8.3.9851d920f5f9e936",
+        "package.memchr.2.8.3.9e3a5893a18f34bc",
+        "package.memchr.2.8.3.a34cf03fffd3b704",
+        "package.memchr.2.8.3.a947c9d2523f34e5",
+        "package.memchr.2.8.3.aa507f4639ae83cd",
+        "package.memchr.2.8.3.b1a35a68f14e6962",
+        "package.memchr.2.8.3.b335630551682c19",
+        "package.memchr.2.8.3.b85d40dae0aabf1b",
+        "package.memchr.2.8.3.bc37d034bad56458",
+        "package.memchr.2.8.3.c2e7cbffdf2b3dd8",
+        "package.memchr.2.8.3.d02353b5b2995888",
+        "package.memchr.2.8.3.d72d483707efd0b5",
+        "package.memchr.2.8.3.eca12c0a30e25b4b",
+        "package.memchr.2.8.3.f63ad04d6ecc8286",
+        "package.memchr.2.8.3.f7bc4c1336d57f45",
+        "package.memchr.2.8.3.f82b67c697849826",
+        "package.memchr.2.8.3.ff26cda2e8130eeb"
+      ],
+      "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+      "features": [
+        "alloc",
+        "std"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "num-conv@0.2.2",
+      "name": "num-conv",
+      "version": "0.2.2",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.num-conv.0.2.2.2e9d962a08321605",
+      "inputs": [
+        "package.num-conv.0.2.2.13ee4b2252c9e516",
+        "package.num-conv.0.2.2.2e9d962a08321605",
+        "package.num-conv.0.2.2.30a6712231dd51e3",
+        "package.num-conv.0.2.2.421f8eecf75a1acd",
+        "package.num-conv.0.2.2.4967a07438301854",
+        "package.num-conv.0.2.2.4dc7b68391aabbf4",
+        "package.num-conv.0.2.2.81ee71f96cec8c72",
+        "package.num-conv.0.2.2.b1a35a68f14e6962",
+        "package.num-conv.0.2.2.b335630551682c19"
+      ],
+      "checksum": "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "once_cell@1.21.4",
+      "name": "once_cell",
+      "version": "1.21.4",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.once_cell.1.21.4.2e9d962a08321605",
+      "inputs": [
+        "package.once_cell.1.21.4.06572a96a58dc510",
+        "package.once_cell.1.21.4.0b4ea9fad3cc589f",
+        "package.once_cell.1.21.4.13ee4b2252c9e516",
+        "package.once_cell.1.21.4.1b7a45280246f35f",
+        "package.once_cell.1.21.4.268dbfd7221d1ec0",
+        "package.once_cell.1.21.4.2e9d962a08321605",
+        "package.once_cell.1.21.4.30a6712231dd51e3",
+        "package.once_cell.1.21.4.405b9636ccf95444",
+        "package.once_cell.1.21.4.421f8eecf75a1acd",
+        "package.once_cell.1.21.4.48317036cf8e3212",
+        "package.once_cell.1.21.4.4967a07438301854",
+        "package.once_cell.1.21.4.4dc7b68391aabbf4",
+        "package.once_cell.1.21.4.5fb7e6a61d19d7af",
+        "package.once_cell.1.21.4.65f139f70ad97aeb",
+        "package.once_cell.1.21.4.6710286f05cddcb1",
+        "package.once_cell.1.21.4.6acd45bb8439e88d",
+        "package.once_cell.1.21.4.804b5ce3ae2d262d",
+        "package.once_cell.1.21.4.931984fc678467bc",
+        "package.once_cell.1.21.4.944291df2c9c0635",
+        "package.once_cell.1.21.4.964204aa2ae4971b",
+        "package.once_cell.1.21.4.a14703c8ad56d93d",
+        "package.once_cell.1.21.4.b1a35a68f14e6962",
+        "package.once_cell.1.21.4.b1ec89bd2022a3ed",
+        "package.once_cell.1.21.4.b335630551682c19",
+        "package.once_cell.1.21.4.baa8801de07792ee",
+        "package.once_cell.1.21.4.bc37d034bad56458",
+        "package.once_cell.1.21.4.d31808fd9b50c688",
+        "package.once_cell.1.21.4.e1ecba188306dec8",
+        "package.once_cell.1.21.4.eb1a71d3072f7cb2",
+        "package.once_cell.1.21.4.ef7eeb1ba4cd1246"
+      ],
+      "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+      "features": [
+        "alloc",
+        "default",
+        "race",
+        "std"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "pin-project-lite@0.2.16",
+      "name": "pin-project-lite",
+      "version": "0.2.16",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.pin-project-lite.0.2.16.2e9d962a08321605",
+      "inputs": [
+        "package.pin-project-lite.0.2.16.039abf3240362d27",
+        "package.pin-project-lite.0.2.16.063437d76f75a91a",
+        "package.pin-project-lite.0.2.16.06572a96a58dc510",
+        "package.pin-project-lite.0.2.16.073f1d7b82c9838b",
+        "package.pin-project-lite.0.2.16.1b7a45280246f35f",
+        "package.pin-project-lite.0.2.16.1bf404991ea5fd49",
+        "package.pin-project-lite.0.2.16.1c703810af304399",
+        "package.pin-project-lite.0.2.16.1e945b89ea291b41",
+        "package.pin-project-lite.0.2.16.2ad65ac288c06257",
+        "package.pin-project-lite.0.2.16.2b07cf4a3763a7e2",
+        "package.pin-project-lite.0.2.16.2b3b450e7390f6a8",
+        "package.pin-project-lite.0.2.16.2e36ca06eff32a3b",
+        "package.pin-project-lite.0.2.16.2e9d962a08321605",
+        "package.pin-project-lite.0.2.16.2ff65d781a45d65d",
+        "package.pin-project-lite.0.2.16.30a6712231dd51e3",
+        "package.pin-project-lite.0.2.16.3673e8b9c31e79cc",
+        "package.pin-project-lite.0.2.16.37dd3c105d9e270a",
+        "package.pin-project-lite.0.2.16.3b67da117d414aae",
+        "package.pin-project-lite.0.2.16.3f47e9d325236ca3",
+        "package.pin-project-lite.0.2.16.413fbabaa67acb81",
+        "package.pin-project-lite.0.2.16.421f8eecf75a1acd",
+        "package.pin-project-lite.0.2.16.439fac894cc5c323",
+        "package.pin-project-lite.0.2.16.44bd018df453234c",
+        "package.pin-project-lite.0.2.16.4619150b32d74be7",
+        "package.pin-project-lite.0.2.16.4967a07438301854",
+        "package.pin-project-lite.0.2.16.4bbf08346cd116b4",
+        "package.pin-project-lite.0.2.16.4dc7b68391aabbf4",
+        "package.pin-project-lite.0.2.16.4dfda42404dc657d",
+        "package.pin-project-lite.0.2.16.55c8d5b978df92ad",
+        "package.pin-project-lite.0.2.16.5a123cad7a03bbc9",
+        "package.pin-project-lite.0.2.16.5bb3015f49579600",
+        "package.pin-project-lite.0.2.16.5bdb04a9ea237b80",
+        "package.pin-project-lite.0.2.16.5f0dbd010920a4d2",
+        "package.pin-project-lite.0.2.16.621b75b96baa2997",
+        "package.pin-project-lite.0.2.16.626a47b4879b3cb0",
+        "package.pin-project-lite.0.2.16.654c0ae3d6d8467f",
+        "package.pin-project-lite.0.2.16.6be7962bd440539a",
+        "package.pin-project-lite.0.2.16.6fbc3baee152f4de",
+        "package.pin-project-lite.0.2.16.701cb58e1d402e02",
+        "package.pin-project-lite.0.2.16.7086bc33bddb1fea",
+        "package.pin-project-lite.0.2.16.776414e67b376f42",
+        "package.pin-project-lite.0.2.16.78974da105a0333f",
+        "package.pin-project-lite.0.2.16.7b19987f13f75d72",
+        "package.pin-project-lite.0.2.16.7fde34c8662bc096",
+        "package.pin-project-lite.0.2.16.824811d88e41378a",
+        "package.pin-project-lite.0.2.16.839593fce53b7a29",
+        "package.pin-project-lite.0.2.16.86fde8c71233350a",
+        "package.pin-project-lite.0.2.16.88d2b420a2e3134b",
+        "package.pin-project-lite.0.2.16.8f7e3b718564fe7b",
+        "package.pin-project-lite.0.2.16.9901c84a38f8b60e",
+        "package.pin-project-lite.0.2.16.9970804d0554ee98",
+        "package.pin-project-lite.0.2.16.9f2260b0906acd5c",
+        "package.pin-project-lite.0.2.16.a2ce0b474a15d5d4",
+        "package.pin-project-lite.0.2.16.b050b03b25aff5c3",
+        "package.pin-project-lite.0.2.16.b1a35a68f14e6962",
+        "package.pin-project-lite.0.2.16.b325b4f558d52ba7",
+        "package.pin-project-lite.0.2.16.b335630551682c19",
+        "package.pin-project-lite.0.2.16.b88df5d636c3a1c4",
+        "package.pin-project-lite.0.2.16.bc76a8ff341d4019",
+        "package.pin-project-lite.0.2.16.c1674008f3a92f01",
+        "package.pin-project-lite.0.2.16.c2b9b37eb38ae0ab",
+        "package.pin-project-lite.0.2.16.c6b0244dacc5a048",
+        "package.pin-project-lite.0.2.16.c796dace4f79fda2",
+        "package.pin-project-lite.0.2.16.cc97c14f5a311462",
+        "package.pin-project-lite.0.2.16.d73aa7a98741baa1",
+        "package.pin-project-lite.0.2.16.d8c8bd3cca427d14",
+        "package.pin-project-lite.0.2.16.dc29d397553e8b68",
+        "package.pin-project-lite.0.2.16.dd005a017dc18388",
+        "package.pin-project-lite.0.2.16.de35cd653ee14bab",
+        "package.pin-project-lite.0.2.16.dfc6e38b28488608",
+        "package.pin-project-lite.0.2.16.e92f3bff28d0a329",
+        "package.pin-project-lite.0.2.16.eb07c1208e152a60",
+        "package.pin-project-lite.0.2.16.ed300817a9c951d9",
+        "package.pin-project-lite.0.2.16.edc5751a7896f755",
+        "package.pin-project-lite.0.2.16.eee5404c396abd1a",
+        "package.pin-project-lite.0.2.16.f2ad4643ddae3a5e",
+        "package.pin-project-lite.0.2.16.f5770defac4b989e",
+        "package.pin-project-lite.0.2.16.f7456f396b01b329",
+        "package.pin-project-lite.0.2.16.f9976f24b3f7fdaf",
+        "package.pin-project-lite.0.2.16.fba7d4c62b880c53",
+        "package.pin-project-lite.0.2.16.fd5636ac7ea851e2"
+      ],
+      "checksum": "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "powerfmt@0.2.0",
+      "name": "powerfmt",
+      "version": "0.2.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.powerfmt.0.2.0.2e9d962a08321605",
+      "inputs": [
+        "package.powerfmt.0.2.0.048acdf888699462",
+        "package.powerfmt.0.2.0.0ea61fe57008e2c8",
+        "package.powerfmt.0.2.0.2e9d962a08321605",
+        "package.powerfmt.0.2.0.30a6712231dd51e3",
+        "package.powerfmt.0.2.0.36852baf1b73d053",
+        "package.powerfmt.0.2.0.421f8eecf75a1acd",
+        "package.powerfmt.0.2.0.4967a07438301854",
+        "package.powerfmt.0.2.0.4dc7b68391aabbf4",
+        "package.powerfmt.0.2.0.4ff673578dd06edb",
+        "package.powerfmt.0.2.0.81ee71f96cec8c72",
+        "package.powerfmt.0.2.0.b1a35a68f14e6962",
+        "package.powerfmt.0.2.0.b335630551682c19"
+      ],
+      "checksum": "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "proc-macro2@1.0.107",
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.proc-macro2.1.0.107.2e9d962a08321605",
+      "inputs": [
+        "package.proc-macro2.1.0.107.07985fdcade0e64d",
+        "package.proc-macro2.1.0.107.13ee4b2252c9e516",
+        "package.proc-macro2.1.0.107.14ba54738cb8ce56",
+        "package.proc-macro2.1.0.107.1b7a45280246f35f",
+        "package.proc-macro2.1.0.107.2ace21cd2aa8ba25",
+        "package.proc-macro2.1.0.107.2b1bde2cf3a858b7",
+        "package.proc-macro2.1.0.107.2e9d962a08321605",
+        "package.proc-macro2.1.0.107.2f87fc3ce2c9d381",
+        "package.proc-macro2.1.0.107.30a6712231dd51e3",
+        "package.proc-macro2.1.0.107.37b6a09db32945a0",
+        "package.proc-macro2.1.0.107.407d798bc6cc8a99",
+        "package.proc-macro2.1.0.107.421f8eecf75a1acd",
+        "package.proc-macro2.1.0.107.4431e1275bb49e96",
+        "package.proc-macro2.1.0.107.4967a07438301854",
+        "package.proc-macro2.1.0.107.4dc7b68391aabbf4",
+        "package.proc-macro2.1.0.107.5583e398a8deec11",
+        "package.proc-macro2.1.0.107.7619015054bd1399",
+        "package.proc-macro2.1.0.107.7b0ed5660f04a395",
+        "package.proc-macro2.1.0.107.7b19987f13f75d72",
+        "package.proc-macro2.1.0.107.80b13006448d5157",
+        "package.proc-macro2.1.0.107.8b9f493d05db4d5d",
+        "package.proc-macro2.1.0.107.9daa02d6b0b919c3",
+        "package.proc-macro2.1.0.107.b1a35a68f14e6962",
+        "package.proc-macro2.1.0.107.b335630551682c19",
+        "package.proc-macro2.1.0.107.b36e5dab91de9ae3",
+        "package.proc-macro2.1.0.107.b803fcb7f17ed923",
+        "package.proc-macro2.1.0.107.bc37d034bad56458",
+        "package.proc-macro2.1.0.107.c8580aa5cca497d1",
+        "package.proc-macro2.1.0.107.d0d98998092552a1",
+        "package.proc-macro2.1.0.107.d5dc334db642a401",
+        "package.proc-macro2.1.0.107.d73c9aae3702e1d8",
+        "package.proc-macro2.1.0.107.df5ac4f00616e2c4",
+        "package.proc-macro2.1.0.107.f4f09bcc2830b434",
+        "package.proc-macro2.1.0.107.fc233e4b5ef357d0"
+      ],
+      "checksum": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9",
+      "features": [
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "package": "unicode-ident@1.0.26",
+          "name": "unicode_ident",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quote@1.0.47",
+      "name": "quote",
+      "version": "1.0.47",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.quote.1.0.47.2e9d962a08321605",
+      "inputs": [
+        "package.quote.1.0.47.07985fdcade0e64d",
+        "package.quote.1.0.47.09a39bc5d3085fba",
+        "package.quote.1.0.47.13ee4b2252c9e516",
+        "package.quote.1.0.47.13f372837c60d5a4",
+        "package.quote.1.0.47.1b52e09d25e19844",
+        "package.quote.1.0.47.1b7a45280246f35f",
+        "package.quote.1.0.47.1bf404991ea5fd49",
+        "package.quote.1.0.47.20fcd54acb26581c",
+        "package.quote.1.0.47.24667402575bab8c",
+        "package.quote.1.0.47.26d295082886ff28",
+        "package.quote.1.0.47.2b1bde2cf3a858b7",
+        "package.quote.1.0.47.2e9d962a08321605",
+        "package.quote.1.0.47.30a6712231dd51e3",
+        "package.quote.1.0.47.3356faf3be16235e",
+        "package.quote.1.0.47.421f8eecf75a1acd",
+        "package.quote.1.0.47.4967a07438301854",
+        "package.quote.1.0.47.4dc7b68391aabbf4",
+        "package.quote.1.0.47.4ff673578dd06edb",
+        "package.quote.1.0.47.6717cb2ea43c0050",
+        "package.quote.1.0.47.703dc9cec8e0c787",
+        "package.quote.1.0.47.7b19987f13f75d72",
+        "package.quote.1.0.47.7cdfd6314091d9ce",
+        "package.quote.1.0.47.9adfcf4d2b772165",
+        "package.quote.1.0.47.9cf7dddb9cad298b",
+        "package.quote.1.0.47.a902267f7937bfc8",
+        "package.quote.1.0.47.aa691d2e41f98fff",
+        "package.quote.1.0.47.b1a35a68f14e6962",
+        "package.quote.1.0.47.b335630551682c19",
+        "package.quote.1.0.47.b78f82116333a941",
+        "package.quote.1.0.47.b803fcb7f17ed923",
+        "package.quote.1.0.47.bc37d034bad56458",
+        "package.quote.1.0.47.c1bcd29d84d7fe55",
+        "package.quote.1.0.47.c875d3cb38acba18",
+        "package.quote.1.0.47.d0d98998092552a1",
+        "package.quote.1.0.47.d37919db90e8d28d",
+        "package.quote.1.0.47.eb1cdc5bc9e14f58"
+      ],
+      "checksum": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001",
+      "features": [
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "serde@1.0.229",
+      "name": "serde",
+      "version": "1.0.229",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.serde.1.0.229.2e9d962a08321605",
+      "inputs": [
+        "package.serde.1.0.229.08340222738b5100",
+        "package.serde.1.0.229.0ffe3a5d176e75e5",
+        "package.serde.1.0.229.13ee4b2252c9e516",
+        "package.serde.1.0.229.15bcfc5d870aa9d5",
+        "package.serde.1.0.229.169cae062f8fb335",
+        "package.serde.1.0.229.1b7a45280246f35f",
+        "package.serde.1.0.229.1fe3dde341a24e82",
+        "package.serde.1.0.229.217bf295dcfced8f",
+        "package.serde.1.0.229.222916dd8ac3b4af",
+        "package.serde.1.0.229.23bf4bdb327c0342",
+        "package.serde.1.0.229.2e9d962a08321605",
+        "package.serde.1.0.229.3091d77d354d928c",
+        "package.serde.1.0.229.30a6712231dd51e3",
+        "package.serde.1.0.229.392032780ad6d191",
+        "package.serde.1.0.229.3b458ab6f71a3979",
+        "package.serde.1.0.229.421f8eecf75a1acd",
+        "package.serde.1.0.229.43653fc7be1483a2",
+        "package.serde.1.0.229.4967a07438301854",
+        "package.serde.1.0.229.4dc7b68391aabbf4",
+        "package.serde.1.0.229.57117de83e19984e",
+        "package.serde.1.0.229.5e0940170582d088",
+        "package.serde.1.0.229.8028c332ff001286",
+        "package.serde.1.0.229.94fc8837001b0848",
+        "package.serde.1.0.229.9ba7c19a3784c4cb",
+        "package.serde.1.0.229.a104891e08e3feca",
+        "package.serde.1.0.229.a72f3e4d169a3e06",
+        "package.serde.1.0.229.a873999fb4ea8bba",
+        "package.serde.1.0.229.ab2fd97807566330",
+        "package.serde.1.0.229.b1a35a68f14e6962",
+        "package.serde.1.0.229.b335630551682c19",
+        "package.serde.1.0.229.baccb65c82519d97",
+        "package.serde.1.0.229.d0d98998092552a1",
+        "package.serde.1.0.229.e986f644760fae08",
+        "package.serde.1.0.229.ffc01980604b41c1"
+      ],
+      "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+      "features": [
+        "default",
+        "derive",
+        "serde_derive",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "package": "serde_core@1.0.229",
+          "name": "serde_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "serde_derive@1.0.229",
+          "name": "serde_derive",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "serde_core@1.0.229",
+      "name": "serde_core",
+      "version": "1.0.229",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.serde_core.1.0.229.2e9d962a08321605",
+      "inputs": [
+        "package.serde_core.1.0.229.0c7686abb23bae64",
+        "package.serde_core.1.0.229.135812403671c810",
+        "package.serde_core.1.0.229.13ee4b2252c9e516",
+        "package.serde_core.1.0.229.1b7a45280246f35f",
+        "package.serde_core.1.0.229.1dfb3245e1b21f0e",
+        "package.serde_core.1.0.229.217bf295dcfced8f",
+        "package.serde_core.1.0.229.26e3674e946fcaf5",
+        "package.serde_core.1.0.229.2e9d962a08321605",
+        "package.serde_core.1.0.229.30a6712231dd51e3",
+        "package.serde_core.1.0.229.3149c7736c9fa4c8",
+        "package.serde_core.1.0.229.315c02cd05738da1",
+        "package.serde_core.1.0.229.421f8eecf75a1acd",
+        "package.serde_core.1.0.229.4967a07438301854",
+        "package.serde_core.1.0.229.4dc7b68391aabbf4",
+        "package.serde_core.1.0.229.6832027ea0e40080",
+        "package.serde_core.1.0.229.6d72c43d2a4f16c7",
+        "package.serde_core.1.0.229.6fcd0829a449c803",
+        "package.serde_core.1.0.229.971d052b1b105133",
+        "package.serde_core.1.0.229.9f17d898fd10bd8a",
+        "package.serde_core.1.0.229.b1a35a68f14e6962",
+        "package.serde_core.1.0.229.b335630551682c19",
+        "package.serde_core.1.0.229.c875d3cb38acba18",
+        "package.serde_core.1.0.229.c894060392b8b530",
+        "package.serde_core.1.0.229.d0d98998092552a1",
+        "package.serde_core.1.0.229.d6adfba5b9892574",
+        "package.serde_core.1.0.229.dbaaf5b1bf402d57",
+        "package.serde_core.1.0.229.e817061a7a55b08f",
+        "package.serde_core.1.0.229.ea8fde3384c847de"
+      ],
+      "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
+      "features": [
+        "alloc",
+        "result",
+        "std"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "serde_derive@1.0.229",
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.serde_derive.1.0.229.2e9d962a08321605",
+      "inputs": [
+        "package.serde_derive.1.0.229.02292e8d776b8c5c",
+        "package.serde_derive.1.0.229.11b0655574f555a2",
+        "package.serde_derive.1.0.229.13ee4b2252c9e516",
+        "package.serde_derive.1.0.229.1b7a45280246f35f",
+        "package.serde_derive.1.0.229.1f10d025d6057b87",
+        "package.serde_derive.1.0.229.218bc9eb1c5b0bb9",
+        "package.serde_derive.1.0.229.2ae06ef74ffb5c36",
+        "package.serde_derive.1.0.229.2b4a988bd855b03f",
+        "package.serde_derive.1.0.229.2e9d962a08321605",
+        "package.serde_derive.1.0.229.30a6712231dd51e3",
+        "package.serde_derive.1.0.229.3aac14897e88bc6a",
+        "package.serde_derive.1.0.229.421f8eecf75a1acd",
+        "package.serde_derive.1.0.229.4967a07438301854",
+        "package.serde_derive.1.0.229.4dc7b68391aabbf4",
+        "package.serde_derive.1.0.229.5e1effa3f6942e5a",
+        "package.serde_derive.1.0.229.64454336f8a150ad",
+        "package.serde_derive.1.0.229.6bbcb038217d1126",
+        "package.serde_derive.1.0.229.726399e4d7a6671c",
+        "package.serde_derive.1.0.229.761d59a25bb1165e",
+        "package.serde_derive.1.0.229.8a647d79200f20a2",
+        "package.serde_derive.1.0.229.930afbda6d8bb622",
+        "package.serde_derive.1.0.229.9cae4c2d8dd90528",
+        "package.serde_derive.1.0.229.a18d56b08458fc09",
+        "package.serde_derive.1.0.229.a72f3e4d169a3e06",
+        "package.serde_derive.1.0.229.a9463680bdf3fa72",
+        "package.serde_derive.1.0.229.ae038bfbd31ad2a4",
+        "package.serde_derive.1.0.229.b1a35a68f14e6962",
+        "package.serde_derive.1.0.229.b335630551682c19",
+        "package.serde_derive.1.0.229.b3946cc7466bd8bc",
+        "package.serde_derive.1.0.229.b9d1d6ac796e7296",
+        "package.serde_derive.1.0.229.baa01dbc0a25fdb5",
+        "package.serde_derive.1.0.229.bd670a00fb4dcc6e",
+        "package.serde_derive.1.0.229.c0d97c4dfc2727a0",
+        "package.serde_derive.1.0.229.dc6b7555e687618b",
+        "package.serde_derive.1.0.229.e4c553aef54c032f",
+        "package.serde_derive.1.0.229.e6d7d9e650153ac1",
+        "package.serde_derive.1.0.229.ec086fc8382c91de"
+      ],
+      "checksum": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348",
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "quote@1.0.47",
+          "name": "quote",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "syn@3.0.6",
+          "name": "syn",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "serde_json@1.0.151",
+      "name": "serde_json",
+      "version": "1.0.151",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.serde_json.1.0.151.2e9d962a08321605",
+      "inputs": [
+        "package.serde_json.1.0.151.02292e8d776b8c5c",
+        "package.serde_json.1.0.151.03bd3e74461b9f88",
+        "package.serde_json.1.0.151.04a61f6515fe61e6",
+        "package.serde_json.1.0.151.062b0cc21cc81c8c",
+        "package.serde_json.1.0.151.0a4658b4e6a8a3b3",
+        "package.serde_json.1.0.151.0cfaab09627193aa",
+        "package.serde_json.1.0.151.0ea2be3199a67182",
+        "package.serde_json.1.0.151.0f01e37bb20c7ae2",
+        "package.serde_json.1.0.151.0f1460beef0eefd1",
+        "package.serde_json.1.0.151.1009329ba1eb2ed1",
+        "package.serde_json.1.0.151.110e61eb735b79c7",
+        "package.serde_json.1.0.151.11df276b87281c2c",
+        "package.serde_json.1.0.151.13afb2727bfe7a26",
+        "package.serde_json.1.0.151.13badb5b8fb37a3e",
+        "package.serde_json.1.0.151.13ee4b2252c9e516",
+        "package.serde_json.1.0.151.14ab295a6e264025",
+        "package.serde_json.1.0.151.1607fceedc86cbe6",
+        "package.serde_json.1.0.151.16333ff432fde0ea",
+        "package.serde_json.1.0.151.1670c27428fbe2a9",
+        "package.serde_json.1.0.151.19aef5c27bc64439",
+        "package.serde_json.1.0.151.1b2a7ff12571f5bb",
+        "package.serde_json.1.0.151.1b7a45280246f35f",
+        "package.serde_json.1.0.151.1bf404991ea5fd49",
+        "package.serde_json.1.0.151.1c0e2dc191f555c6",
+        "package.serde_json.1.0.151.1cae4d640adfd5a7",
+        "package.serde_json.1.0.151.2117ac54ce8ff5da",
+        "package.serde_json.1.0.151.22b2f3830333eae0",
+        "package.serde_json.1.0.151.2e9d962a08321605",
+        "package.serde_json.1.0.151.305e90e76856cf83",
+        "package.serde_json.1.0.151.30a6712231dd51e3",
+        "package.serde_json.1.0.151.315c02cd05738da1",
+        "package.serde_json.1.0.151.3393914462d9e7f9",
+        "package.serde_json.1.0.151.3440bae17f254e8f",
+        "package.serde_json.1.0.151.38d70a1d460e4cb3",
+        "package.serde_json.1.0.151.3be3224c8e149c47",
+        "package.serde_json.1.0.151.3cada0ee0c7187ee",
+        "package.serde_json.1.0.151.3fb0ec07156fd5a3",
+        "package.serde_json.1.0.151.3fb683d54e6e88e3",
+        "package.serde_json.1.0.151.4196ea0750cbb6e3",
+        "package.serde_json.1.0.151.421f8eecf75a1acd",
+        "package.serde_json.1.0.151.45a97b44721300ef",
+        "package.serde_json.1.0.151.4618e64932a9c569",
+        "package.serde_json.1.0.151.4967a07438301854",
+        "package.serde_json.1.0.151.4a84458b6324e67e",
+        "package.serde_json.1.0.151.4bc73dd48e6ccc80",
+        "package.serde_json.1.0.151.4dc7b68391aabbf4",
+        "package.serde_json.1.0.151.553ade317f2ded6c",
+        "package.serde_json.1.0.151.55df6a01e56d4fb8",
+        "package.serde_json.1.0.151.6be367da6cf1b486",
+        "package.serde_json.1.0.151.6f79ced0c23d4bfc",
+        "package.serde_json.1.0.151.6fc2b196b28e1ecf",
+        "package.serde_json.1.0.151.712ab322cafb6037",
+        "package.serde_json.1.0.151.72eea05022835267",
+        "package.serde_json.1.0.151.7b17211a63e79f88",
+        "package.serde_json.1.0.151.7b19987f13f75d72",
+        "package.serde_json.1.0.151.82e688138b9848de",
+        "package.serde_json.1.0.151.83be64680580eeef",
+        "package.serde_json.1.0.151.84870587c927a6c8",
+        "package.serde_json.1.0.151.8cd7ae57a839389c",
+        "package.serde_json.1.0.151.93f83a239c2a5da1",
+        "package.serde_json.1.0.151.97e25e2a0e41c578",
+        "package.serde_json.1.0.151.982a5b7c76a64da5",
+        "package.serde_json.1.0.151.98a3c6e34b75c0d7",
+        "package.serde_json.1.0.151.9bcd5599ec5fa8b6",
+        "package.serde_json.1.0.151.9f2f0567fa73b9d4",
+        "package.serde_json.1.0.151.a15a58ab87780b59",
+        "package.serde_json.1.0.151.a2c427b15618d895",
+        "package.serde_json.1.0.151.a6c1f31be0dfeb45",
+        "package.serde_json.1.0.151.a9463680bdf3fa72",
+        "package.serde_json.1.0.151.b1a35a68f14e6962",
+        "package.serde_json.1.0.151.b335630551682c19",
+        "package.serde_json.1.0.151.b39a66de2d3ae501",
+        "package.serde_json.1.0.151.b72b355f690ad1ff",
+        "package.serde_json.1.0.151.b803fcb7f17ed923",
+        "package.serde_json.1.0.151.bbbddb5d12ab943d",
+        "package.serde_json.1.0.151.bc37d034bad56458",
+        "package.serde_json.1.0.151.c1cbee23d1a6988f",
+        "package.serde_json.1.0.151.c46aa1dfcc1c3049",
+        "package.serde_json.1.0.151.d099d551b9f4f6e0",
+        "package.serde_json.1.0.151.d0d98998092552a1",
+        "package.serde_json.1.0.151.d6f2d6e5e8573103",
+        "package.serde_json.1.0.151.d753522d858c2306",
+        "package.serde_json.1.0.151.e0c65cbff4c89d0e",
+        "package.serde_json.1.0.151.e2e8afa68ee61067",
+        "package.serde_json.1.0.151.e6b3b33de8ee0f04",
+        "package.serde_json.1.0.151.eca12c0a30e25b4b",
+        "package.serde_json.1.0.151.f2611b870d3acfbe",
+        "package.serde_json.1.0.151.f5613ff66dd29a05",
+        "package.serde_json.1.0.151.f60756f2955de6a1",
+        "package.serde_json.1.0.151.f9a785fe5ea95fc7"
+      ],
+      "checksum": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "package": "itoa@1.0.18",
+          "name": "itoa",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "memchr@2.8.3",
+          "name": "memchr",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "serde_core@1.0.229",
+          "name": "serde_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "zmij@1.0.23",
+          "name": "zmij",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sharded-slab@0.1.7",
+      "name": "sharded-slab",
+      "version": "0.1.7",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.sharded-slab.0.1.7.2e9d962a08321605",
+      "inputs": [
+        "package.sharded-slab.0.1.7.06572a96a58dc510",
+        "package.sharded-slab.0.1.7.07985fdcade0e64d",
+        "package.sharded-slab.0.1.7.0fdb95c720e3bc78",
+        "package.sharded-slab.0.1.7.17bdc18095697793",
+        "package.sharded-slab.0.1.7.198ccf25971309a9",
+        "package.sharded-slab.0.1.7.1cfccd828fdcaa7a",
+        "package.sharded-slab.0.1.7.206b9ce276ab5971",
+        "package.sharded-slab.0.1.7.216b2b7bfde9416c",
+        "package.sharded-slab.0.1.7.294fa088fb0ea271",
+        "package.sharded-slab.0.1.7.2b1bde2cf3a858b7",
+        "package.sharded-slab.0.1.7.2e4086c65c54b325",
+        "package.sharded-slab.0.1.7.2e9d962a08321605",
+        "package.sharded-slab.0.1.7.30a6712231dd51e3",
+        "package.sharded-slab.0.1.7.315c02cd05738da1",
+        "package.sharded-slab.0.1.7.33ccd4e433770425",
+        "package.sharded-slab.0.1.7.35dd501674c29ffd",
+        "package.sharded-slab.0.1.7.3660170d8388716e",
+        "package.sharded-slab.0.1.7.3ebe98259c453dee",
+        "package.sharded-slab.0.1.7.44e47ea9be0c5379",
+        "package.sharded-slab.0.1.7.4967a07438301854",
+        "package.sharded-slab.0.1.7.4bc73dd48e6ccc80",
+        "package.sharded-slab.0.1.7.4dc7b68391aabbf4",
+        "package.sharded-slab.0.1.7.5799c5a86ea11c8e",
+        "package.sharded-slab.0.1.7.87db21a973eed4fe",
+        "package.sharded-slab.0.1.7.b1a35a68f14e6962",
+        "package.sharded-slab.0.1.7.b335630551682c19",
+        "package.sharded-slab.0.1.7.b803fcb7f17ed923",
+        "package.sharded-slab.0.1.7.bb513e7cae5fbd26",
+        "package.sharded-slab.0.1.7.bc37d034bad56458",
+        "package.sharded-slab.0.1.7.c2274ce88c91a10b",
+        "package.sharded-slab.0.1.7.c693279643b8cd5d",
+        "package.sharded-slab.0.1.7.cb252a827f419943",
+        "package.sharded-slab.0.1.7.cd0328764bf4d92f",
+        "package.sharded-slab.0.1.7.d2da5059e77dd8be",
+        "package.sharded-slab.0.1.7.d33e979799a45c7c",
+        "package.sharded-slab.0.1.7.d6a46f739698521f",
+        "package.sharded-slab.0.1.7.e2c4a44dcec8e365",
+        "package.sharded-slab.0.1.7.f08a7d56f88f1a6d"
+      ],
+      "checksum": "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6",
+      "features": [],
+      "dependencies": [
+        {
+          "package": "lazy_static@1.5.0",
+          "name": "lazy_static",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "syn@3.0.6",
+      "name": "syn",
+      "version": "3.0.6",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.syn.3.0.6.2e9d962a08321605",
+      "inputs": [
+        "package.syn.3.0.6.06fac4d64e96cf6a",
+        "package.syn.3.0.6.09c6f144e00f3008",
+        "package.syn.3.0.6.0a89b933fe162e36",
+        "package.syn.3.0.6.0fadd2fcc341f1e6",
+        "package.syn.3.0.6.13badb5b8fb37a3e",
+        "package.syn.3.0.6.13ee4b2252c9e516",
+        "package.syn.3.0.6.17b3b3375c7fff11",
+        "package.syn.3.0.6.1b7a45280246f35f",
+        "package.syn.3.0.6.1ee0d70ac7eab907",
+        "package.syn.3.0.6.249d71ed72080b00",
+        "package.syn.3.0.6.2784b41b570af778",
+        "package.syn.3.0.6.2845a2ca6adb6096",
+        "package.syn.3.0.6.28eab00977f7e293",
+        "package.syn.3.0.6.2e9d962a08321605",
+        "package.syn.3.0.6.30641b1f1864aa0b",
+        "package.syn.3.0.6.30a6712231dd51e3",
+        "package.syn.3.0.6.3109ade530a82ce1",
+        "package.syn.3.0.6.315c02cd05738da1",
+        "package.syn.3.0.6.315ee47c058a654a",
+        "package.syn.3.0.6.3393914462d9e7f9",
+        "package.syn.3.0.6.343b32120ef91ed6",
+        "package.syn.3.0.6.36ffc56a8c56fa67",
+        "package.syn.3.0.6.3d5c88539ff3a320",
+        "package.syn.3.0.6.4211452d969b5448",
+        "package.syn.3.0.6.421f8eecf75a1acd",
+        "package.syn.3.0.6.42b4376a594c912a",
+        "package.syn.3.0.6.47fb672958bbd580",
+        "package.syn.3.0.6.4858c8e24a51bcd3",
+        "package.syn.3.0.6.4967a07438301854",
+        "package.syn.3.0.6.4bacafd85c54965c",
+        "package.syn.3.0.6.4bdeaa6a059d63a9",
+        "package.syn.3.0.6.4dc7b68391aabbf4",
+        "package.syn.3.0.6.4f31c3f5a667182c",
+        "package.syn.3.0.6.4f41ae2071112f0d",
+        "package.syn.3.0.6.4ff673578dd06edb",
+        "package.syn.3.0.6.502d4be097095a36",
+        "package.syn.3.0.6.5288b6684e38d4cd",
+        "package.syn.3.0.6.5439614440ae875f",
+        "package.syn.3.0.6.5583e398a8deec11",
+        "package.syn.3.0.6.5764ce9e34b55792",
+        "package.syn.3.0.6.59deb26ca6e3571b",
+        "package.syn.3.0.6.5ee7de328707fb88",
+        "package.syn.3.0.6.5f23d76928db0347",
+        "package.syn.3.0.6.61f81540a48efbd8",
+        "package.syn.3.0.6.63e4a32005d14798",
+        "package.syn.3.0.6.661a73ac3bcc7264",
+        "package.syn.3.0.6.7224cdff8df2950f",
+        "package.syn.3.0.6.72ef898a77aa664f",
+        "package.syn.3.0.6.75f3b50ffda06377",
+        "package.syn.3.0.6.76ada62566331039",
+        "package.syn.3.0.6.804206cfcbcf6717",
+        "package.syn.3.0.6.829a37a54110f03c",
+        "package.syn.3.0.6.8339cdb41c191526",
+        "package.syn.3.0.6.8696d3367dab0323",
+        "package.syn.3.0.6.876df7789d966823",
+        "package.syn.3.0.6.885d660419e87342",
+        "package.syn.3.0.6.889931e2f075d196",
+        "package.syn.3.0.6.8b4ca62519863b76",
+        "package.syn.3.0.6.8c1d027476a6f0df",
+        "package.syn.3.0.6.95af6f1e347e3499",
+        "package.syn.3.0.6.95e91d98fe886b80",
+        "package.syn.3.0.6.97e25e2a0e41c578",
+        "package.syn.3.0.6.9963c3bad45dfdc6",
+        "package.syn.3.0.6.9a495d86a6a29564",
+        "package.syn.3.0.6.9c9ff065188b152f",
+        "package.syn.3.0.6.a22c35bd258998da",
+        "package.syn.3.0.6.aa691d2e41f98fff",
+        "package.syn.3.0.6.b0b225c369065e6c",
+        "package.syn.3.0.6.b146839883401087",
+        "package.syn.3.0.6.b1a35a68f14e6962",
+        "package.syn.3.0.6.b1aa245d1ef202eb",
+        "package.syn.3.0.6.b1d82de938c8711d",
+        "package.syn.3.0.6.b22c1e170dda114e",
+        "package.syn.3.0.6.b3014a1904f0f17c",
+        "package.syn.3.0.6.b335630551682c19",
+        "package.syn.3.0.6.b351594dee70add8",
+        "package.syn.3.0.6.b395391dbac7e80f",
+        "package.syn.3.0.6.b6acfd7b1c4dfada",
+        "package.syn.3.0.6.b965299854670da8",
+        "package.syn.3.0.6.bad1336c9011c4c0",
+        "package.syn.3.0.6.bdabf7dbef7f3273",
+        "package.syn.3.0.6.c36a614c378edb3b",
+        "package.syn.3.0.6.c54553ddb5d10369",
+        "package.syn.3.0.6.c78737975b8976cb",
+        "package.syn.3.0.6.cba902a65fafa04b",
+        "package.syn.3.0.6.cbdc42b15472e316",
+        "package.syn.3.0.6.ce4e3f87da05491a",
+        "package.syn.3.0.6.ce4e97b9e65315da",
+        "package.syn.3.0.6.cff824422aa8220b",
+        "package.syn.3.0.6.d2c9f7390a5f2ec5",
+        "package.syn.3.0.6.d73c9aae3702e1d8",
+        "package.syn.3.0.6.d7495e7d7c7a72b9",
+        "package.syn.3.0.6.dbd3bc9e5a73385b",
+        "package.syn.3.0.6.e10e618e4c896e0c",
+        "package.syn.3.0.6.e14f113b44c56e19",
+        "package.syn.3.0.6.e2d09e849a138a3d",
+        "package.syn.3.0.6.e47dc5ac75eba9b9",
+        "package.syn.3.0.6.e5e91a4c12e95766",
+        "package.syn.3.0.6.e64298ddc2d1fbf7",
+        "package.syn.3.0.6.e73f0648b6ce8aad",
+        "package.syn.3.0.6.e8f6492f3eaf16c1",
+        "package.syn.3.0.6.f494b337fb6b2251",
+        "package.syn.3.0.6.f7082b5eb691c3ae",
+        "package.syn.3.0.6.fc2c24c504ae4e5f",
+        "package.syn.3.0.6.ff1f2f2db711b38f"
+      ],
+      "checksum": "8593e8e72159ed2257d083c7a454a85cbf854f37a0966d8d483aff8c8a3ebcee",
+      "features": [
+        "clone-impls",
+        "derive",
+        "parsing",
+        "printing",
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "package": "proc-macro2@1.0.107",
+          "name": "proc_macro2",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "quote@1.0.47",
+          "name": "quote",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "unicode-ident@1.0.26",
+          "name": "unicode_ident",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thread_local@1.1.9",
+      "name": "thread_local",
+      "version": "1.1.9",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.thread_local.1.1.9.2e9d962a08321605",
+      "inputs": [
+        "package.thread_local.1.1.9.06572a96a58dc510",
+        "package.thread_local.1.1.9.0fe690747c19edfe",
+        "package.thread_local.1.1.9.13ee4b2252c9e516",
+        "package.thread_local.1.1.9.1b7a45280246f35f",
+        "package.thread_local.1.1.9.2e9d962a08321605",
+        "package.thread_local.1.1.9.30a6712231dd51e3",
+        "package.thread_local.1.1.9.421f8eecf75a1acd",
+        "package.thread_local.1.1.9.4967a07438301854",
+        "package.thread_local.1.1.9.4dc7b68391aabbf4",
+        "package.thread_local.1.1.9.5a6de484d8cf9fcc",
+        "package.thread_local.1.1.9.b1a35a68f14e6962",
+        "package.thread_local.1.1.9.b335630551682c19",
+        "package.thread_local.1.1.9.b803fcb7f17ed923",
+        "package.thread_local.1.1.9.bc37d034bad56458",
+        "package.thread_local.1.1.9.d3333dabe88ae725",
+        "package.thread_local.1.1.9.e3146130dabad576",
+        "package.thread_local.1.1.9.e6f8d8f0b6891b61"
+      ],
+      "checksum": "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185",
+      "features": [],
+      "dependencies": [
+        {
+          "package": "cfg-if@1.0.5",
+          "name": "cfg_if",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time@0.3.47",
+      "name": "time",
+      "version": "0.3.47",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.time.0.3.47.2e9d962a08321605",
+      "inputs": [
+        "package.time.0.3.47.00e7c22c01fc855c",
+        "package.time.0.3.47.0240cc3b19bb025e",
+        "package.time.0.3.47.08081b404c27ca7f",
+        "package.time.0.3.47.0808f0ca20acc7f0",
+        "package.time.0.3.47.0fb43ac389a36b39",
+        "package.time.0.3.47.11d2da1037286b48",
+        "package.time.0.3.47.13ee4b2252c9e516",
+        "package.time.0.3.47.17ba31230c02e4fc",
+        "package.time.0.3.47.1971f27445ad85ec",
+        "package.time.0.3.47.20053b7cbfba6341",
+        "package.time.0.3.47.22afbd5a9bd0a3c2",
+        "package.time.0.3.47.2571253ab9789169",
+        "package.time.0.3.47.27524e566d90af3e",
+        "package.time.0.3.47.27f21142e79cf25d",
+        "package.time.0.3.47.2d1c7323fd7e6c17",
+        "package.time.0.3.47.2e9d962a08321605",
+        "package.time.0.3.47.2f31e9564d54374a",
+        "package.time.0.3.47.2f6520a628020d3e",
+        "package.time.0.3.47.2fe3e6b20459fe89",
+        "package.time.0.3.47.30a6712231dd51e3",
+        "package.time.0.3.47.30ee773d4d02659b",
+        "package.time.0.3.47.3148ea60d426bc1f",
+        "package.time.0.3.47.315c02cd05738da1",
+        "package.time.0.3.47.33b5443d338b32d6",
+        "package.time.0.3.47.361ba46ad36b60b2",
+        "package.time.0.3.47.37782602fb9dbd3e",
+        "package.time.0.3.47.38a0335c97896b6a",
+        "package.time.0.3.47.3ce637afab504e60",
+        "package.time.0.3.47.3d5e91be99659fc3",
+        "package.time.0.3.47.3e0b2e44344217f1",
+        "package.time.0.3.47.4007187965c1fea4",
+        "package.time.0.3.47.40af2a2233eada38",
+        "package.time.0.3.47.41a4f53373cd0332",
+        "package.time.0.3.47.421f8eecf75a1acd",
+        "package.time.0.3.47.432ae8e52a775c6b",
+        "package.time.0.3.47.487ee2634d82da88",
+        "package.time.0.3.47.4967a07438301854",
+        "package.time.0.3.47.4ad223b8af5d30fc",
+        "package.time.0.3.47.4c7135e6c15f1e7c",
+        "package.time.0.3.47.4d4b47ccf909317c",
+        "package.time.0.3.47.4dc7b68391aabbf4",
+        "package.time.0.3.47.4f0c0a16b3e42073",
+        "package.time.0.3.47.51664524b82175f7",
+        "package.time.0.3.47.51f21ed4c440f4ae",
+        "package.time.0.3.47.52210051db71fe65",
+        "package.time.0.3.47.537d73173e97a355",
+        "package.time.0.3.47.546445ba0195bb1f",
+        "package.time.0.3.47.546c044036168116",
+        "package.time.0.3.47.547a12dbbe288be9",
+        "package.time.0.3.47.564f331451e8e5e0",
+        "package.time.0.3.47.56e31fedb78630e6",
+        "package.time.0.3.47.57f133213131931b",
+        "package.time.0.3.47.5a4d8cd43033a3e3",
+        "package.time.0.3.47.5a9d64cb7f823f06",
+        "package.time.0.3.47.5e909674a803289a",
+        "package.time.0.3.47.5f972709a1c23f18",
+        "package.time.0.3.47.60e41aadb6e2aeed",
+        "package.time.0.3.47.6270199f0f8c6aad",
+        "package.time.0.3.47.665e81c3bf2b71f7",
+        "package.time.0.3.47.68cb612a518b2b4b",
+        "package.time.0.3.47.6a757dfd5f59d0e3",
+        "package.time.0.3.47.6c255f22414f0b54",
+        "package.time.0.3.47.6cc7314926c04744",
+        "package.time.0.3.47.6ddab12ed6a28b0e",
+        "package.time.0.3.47.6e1c6e88da6ea140",
+        "package.time.0.3.47.6eea78ab7c2ed83d",
+        "package.time.0.3.47.6f8888aa2d582048",
+        "package.time.0.3.47.70531751a7ebca9e",
+        "package.time.0.3.47.707cd1b0685839c1",
+        "package.time.0.3.47.75262074ef4c59a3",
+        "package.time.0.3.47.76ee4e0a9914bf0e",
+        "package.time.0.3.47.78f411e591f87775",
+        "package.time.0.3.47.7e2bdc50f2c56617",
+        "package.time.0.3.47.7f107b63f57ecb04",
+        "package.time.0.3.47.80af6367908b38e7",
+        "package.time.0.3.47.81ee71f96cec8c72",
+        "package.time.0.3.47.8226be01230138a9",
+        "package.time.0.3.47.82982ef1996dbe91",
+        "package.time.0.3.47.8770b9c1b36fe50f",
+        "package.time.0.3.47.893b4e46e28c6c01",
+        "package.time.0.3.47.8b1ebe48dbaf1e41",
+        "package.time.0.3.47.8c059410a491147f",
+        "package.time.0.3.47.8c96fee978000c84",
+        "package.time.0.3.47.8cbdd9f509a49e29",
+        "package.time.0.3.47.8d4a54d8f928f1a7",
+        "package.time.0.3.47.8da86900ce5e9e0d",
+        "package.time.0.3.47.8ed94fe1642b85e4",
+        "package.time.0.3.47.90986e06c4c03a8d",
+        "package.time.0.3.47.91b05ea93a92fa36",
+        "package.time.0.3.47.9249b7113570438a",
+        "package.time.0.3.47.92efc835088dd36e",
+        "package.time.0.3.47.935343ec86cadbce",
+        "package.time.0.3.47.9548334239ea7115",
+        "package.time.0.3.47.97eeaae565ddd91b",
+        "package.time.0.3.47.9aedddfa19feadf7",
+        "package.time.0.3.47.9b20f32fd9a88544",
+        "package.time.0.3.47.9b763bad39e21ebe",
+        "package.time.0.3.47.9c8a7a1cd43017c6",
+        "package.time.0.3.47.9d1fcc71b3620026",
+        "package.time.0.3.47.9d960fe9baf34254",
+        "package.time.0.3.47.9db63b80a2c6c850",
+        "package.time.0.3.47.9f5c8ab0a3cd512d",
+        "package.time.0.3.47.a018b9bae52a2ef6",
+        "package.time.0.3.47.a01bbb8dc83c8fd7",
+        "package.time.0.3.47.a0262fea108af44a",
+        "package.time.0.3.47.a05e14519913da1b",
+        "package.time.0.3.47.a0aca0208f4e83a0",
+        "package.time.0.3.47.a314562ab08cf84f",
+        "package.time.0.3.47.a8ffd92c81678fad",
+        "package.time.0.3.47.a91c6ba2a85abbff",
+        "package.time.0.3.47.a93e498419582a2e",
+        "package.time.0.3.47.ac0489fcfa7743bb",
+        "package.time.0.3.47.b1a2f9a0b553cf6f",
+        "package.time.0.3.47.b1a35a68f14e6962",
+        "package.time.0.3.47.b2c699bf11bab932",
+        "package.time.0.3.47.b335630551682c19",
+        "package.time.0.3.47.b3c3538c88537163",
+        "package.time.0.3.47.b3d1afcd229c96be",
+        "package.time.0.3.47.b43aff97428783c2",
+        "package.time.0.3.47.b4593531fbf7cd07",
+        "package.time.0.3.47.b4651c9ef361ee82",
+        "package.time.0.3.47.b5b859a6266c62c7",
+        "package.time.0.3.47.b76d92eb5a1810e2",
+        "package.time.0.3.47.bb815116cb681464",
+        "package.time.0.3.47.bc0dce8b34f13152",
+        "package.time.0.3.47.bc8a9450345165ea",
+        "package.time.0.3.47.c12b45c9d75d0d55",
+        "package.time.0.3.47.c21109eeae124928",
+        "package.time.0.3.47.c32dd979444d1ae8",
+        "package.time.0.3.47.c6b468b777c25bcf",
+        "package.time.0.3.47.c7e026c9d89d6a26",
+        "package.time.0.3.47.c8cf0b18e714f5fe",
+        "package.time.0.3.47.ca59e4e222d692b7",
+        "package.time.0.3.47.ce03b56396346182",
+        "package.time.0.3.47.ceb1242d2042dec0",
+        "package.time.0.3.47.cfec27eeae2a2cc4",
+        "package.time.0.3.47.d185a775e4c123c5",
+        "package.time.0.3.47.d247e36b8926c878",
+        "package.time.0.3.47.d28cf85d7079c10f",
+        "package.time.0.3.47.d520d7824f972266",
+        "package.time.0.3.47.db07a0f98582f9c7",
+        "package.time.0.3.47.db4000d9e8bf29c6",
+        "package.time.0.3.47.dc16bba9587ea054",
+        "package.time.0.3.47.dd6119c933585603",
+        "package.time.0.3.47.de4ba173a592d8dc",
+        "package.time.0.3.47.de73824c75ee6203",
+        "package.time.0.3.47.e60ba73079421ec2",
+        "package.time.0.3.47.eec87d1bf17598ab",
+        "package.time.0.3.47.f04500e66db6a219",
+        "package.time.0.3.47.f05841f543c38ce4",
+        "package.time.0.3.47.f2da759c06676419",
+        "package.time.0.3.47.f43f218cc5fee246",
+        "package.time.0.3.47.f4f7795aacb2ad55",
+        "package.time.0.3.47.f597c3ef5b27249b",
+        "package.time.0.3.47.f6f646048ff165e4",
+        "package.time.0.3.47.f8556ca15b85cff0",
+        "package.time.0.3.47.f86ee8404e08a8af",
+        "package.time.0.3.47.f8d8cd9e3c2b63d0",
+        "package.time.0.3.47.fa109ea15c55328f",
+        "package.time.0.3.47.fb9b9b83f18e4431",
+        "package.time.0.3.47.fdc60b5f7a6f6d7e",
+        "package.time.0.3.47.ffec5942b21ffe43"
+      ],
+      "checksum": "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c",
+      "features": [
+        "alloc",
+        "default",
+        "formatting",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "package": "deranged@0.5.8",
+          "name": "deranged",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "itoa@1.0.18",
+          "name": "itoa",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "num-conv@0.2.2",
+          "name": "num_conv",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "powerfmt@0.2.0",
+          "name": "powerfmt",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "serde_core@1.0.229",
+          "name": "serde_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "time-core@0.1.8",
+          "name": "time_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "time-macros@0.2.27",
+          "name": "time_macros",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "time-core@0.1.8",
+      "name": "time-core",
+      "version": "0.1.8",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.time-core.0.1.8.2e9d962a08321605",
+      "inputs": [
+        "package.time-core.0.1.8.13ee4b2252c9e516",
+        "package.time-core.0.1.8.2e9d962a08321605",
+        "package.time-core.0.1.8.30a6712231dd51e3",
+        "package.time-core.0.1.8.4007187965c1fea4",
+        "package.time-core.0.1.8.421f8eecf75a1acd",
+        "package.time-core.0.1.8.4967a07438301854",
+        "package.time-core.0.1.8.4dc7b68391aabbf4",
+        "package.time-core.0.1.8.80af6367908b38e7",
+        "package.time-core.0.1.8.81ee71f96cec8c72",
+        "package.time-core.0.1.8.b1a35a68f14e6962",
+        "package.time-core.0.1.8.d42cae02d6ab6561"
+      ],
+      "checksum": "7694e1cfe791f8d31026952abf09c69ca6f6fa4e1a1229e18988f06a04a12dca",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "time-macros@0.2.27",
+      "name": "time-macros",
+      "version": "0.2.27",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.time-macros.0.2.27.2e9d962a08321605",
+      "inputs": [
+        "package.time-macros.0.2.27.13ee4b2252c9e516",
+        "package.time-macros.0.2.27.1d0e4769bd030199",
+        "package.time-macros.0.2.27.2b281565c5ed29ea",
+        "package.time-macros.0.2.27.2e9d962a08321605",
+        "package.time-macros.0.2.27.30a6712231dd51e3",
+        "package.time-macros.0.2.27.421f8eecf75a1acd",
+        "package.time-macros.0.2.27.45de5c979ef9b401",
+        "package.time-macros.0.2.27.4967a07438301854",
+        "package.time-macros.0.2.27.4dc7b68391aabbf4",
+        "package.time-macros.0.2.27.6c255f22414f0b54",
+        "package.time-macros.0.2.27.6ddab12ed6a28b0e",
+        "package.time-macros.0.2.27.722c7e14032cdb3b",
+        "package.time-macros.0.2.27.791b71b16b936c79",
+        "package.time-macros.0.2.27.81ee71f96cec8c72",
+        "package.time-macros.0.2.27.870707967c14ea0c",
+        "package.time-macros.0.2.27.8cbfaca2d0cf6031",
+        "package.time-macros.0.2.27.9358a259773420d7",
+        "package.time-macros.0.2.27.97e25e2a0e41c578",
+        "package.time-macros.0.2.27.9cf7dddb9cad298b",
+        "package.time-macros.0.2.27.a18bebc6072fb29e",
+        "package.time-macros.0.2.27.a1d7ad4817e88e8a",
+        "package.time-macros.0.2.27.b1a35a68f14e6962",
+        "package.time-macros.0.2.27.b41286503702456a",
+        "package.time-macros.0.2.27.cfec27eeae2a2cc4",
+        "package.time-macros.0.2.27.d5c937cd8a62d6d5",
+        "package.time-macros.0.2.27.dea6b5915f456921"
+      ],
+      "checksum": "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215",
+      "features": [
+        "formatting"
+      ],
+      "dependencies": [
+        {
+          "package": "num-conv@0.2.2",
+          "name": "num_conv",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "time-core@0.1.8",
+          "name": "time_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tracing@0.1.44",
+      "name": "tracing",
+      "version": "0.1.44",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.tracing.0.1.44.2e9d962a08321605",
+      "inputs": [
+        "package.tracing.0.1.44.0492962ad205b9dc",
+        "package.tracing.0.1.44.06572a96a58dc510",
+        "package.tracing.0.1.44.075e778ac5e23834",
+        "package.tracing.0.1.44.0789d250de250987",
+        "package.tracing.0.1.44.0b6a2c3ab34af63b",
+        "package.tracing.0.1.44.0eb09a7abd06bda9",
+        "package.tracing.0.1.44.0f4945b050591b42",
+        "package.tracing.0.1.44.117f5e52f7246f4e",
+        "package.tracing.0.1.44.1360c2b662a3c5e4",
+        "package.tracing.0.1.44.13ee4b2252c9e516",
+        "package.tracing.0.1.44.1f3764730c411662",
+        "package.tracing.0.1.44.21f1556ef451d2c7",
+        "package.tracing.0.1.44.29699d2f438ee28d",
+        "package.tracing.0.1.44.2df36bb856ce93f0",
+        "package.tracing.0.1.44.2e9d962a08321605",
+        "package.tracing.0.1.44.2f0349b21284db0c",
+        "package.tracing.0.1.44.30a6712231dd51e3",
+        "package.tracing.0.1.44.315c02cd05738da1",
+        "package.tracing.0.1.44.34522767252e6aaa",
+        "package.tracing.0.1.44.35171dd020e8683e",
+        "package.tracing.0.1.44.3704abcf5cf86b64",
+        "package.tracing.0.1.44.3a93b96ea988b4e8",
+        "package.tracing.0.1.44.3c11a7b43b2b647f",
+        "package.tracing.0.1.44.3f39436c1fd33846",
+        "package.tracing.0.1.44.4066a6c72996d322",
+        "package.tracing.0.1.44.41a69ca550b0ce58",
+        "package.tracing.0.1.44.428b4df987111e45",
+        "package.tracing.0.1.44.457be093fb4a3354",
+        "package.tracing.0.1.44.45914adc4b23e365",
+        "package.tracing.0.1.44.48c37bca92121e31",
+        "package.tracing.0.1.44.4967a07438301854",
+        "package.tracing.0.1.44.4d9f27dd8f1649ab",
+        "package.tracing.0.1.44.4dc7b68391aabbf4",
+        "package.tracing.0.1.44.4f4b09f2ab7a1c4f",
+        "package.tracing.0.1.44.516eef3052dac319",
+        "package.tracing.0.1.44.55dca7717daf026f",
+        "package.tracing.0.1.44.5818cc9024a16651",
+        "package.tracing.0.1.44.58e8683f96b23cbd",
+        "package.tracing.0.1.44.597f4c3869f2c870",
+        "package.tracing.0.1.44.5a26364f11900ec8",
+        "package.tracing.0.1.44.5bb408f268f88b53",
+        "package.tracing.0.1.44.5c0c0c2ea91b751b",
+        "package.tracing.0.1.44.5ef2c81a8f0f6800",
+        "package.tracing.0.1.44.603ae6bdc6db24bf",
+        "package.tracing.0.1.44.608cae588bbbac3e",
+        "package.tracing.0.1.44.638608d2976c5bbb",
+        "package.tracing.0.1.44.69d3b920656db67a",
+        "package.tracing.0.1.44.73322de40f763f3f",
+        "package.tracing.0.1.44.76701c0a6935b362",
+        "package.tracing.0.1.44.7c6f192aa3231f64",
+        "package.tracing.0.1.44.851a8814770444e2",
+        "package.tracing.0.1.44.855b91f2b4a08978",
+        "package.tracing.0.1.44.898191c9b6cf8435",
+        "package.tracing.0.1.44.8ba34466edcc1ab6",
+        "package.tracing.0.1.44.8dfe935aa1e1fe0a",
+        "package.tracing.0.1.44.913ac3ee8c376835",
+        "package.tracing.0.1.44.95d81e8d2f944325",
+        "package.tracing.0.1.44.9c1ba295b4ebc3f1",
+        "package.tracing.0.1.44.9cd21a1a62b67522",
+        "package.tracing.0.1.44.9f3163d1efd8df8a",
+        "package.tracing.0.1.44.9f7e82757da9fcf3",
+        "package.tracing.0.1.44.a27f314d4df7a194",
+        "package.tracing.0.1.44.a5aee068827dde41",
+        "package.tracing.0.1.44.b1a35a68f14e6962",
+        "package.tracing.0.1.44.b1d82de938c8711d",
+        "package.tracing.0.1.44.b335630551682c19",
+        "package.tracing.0.1.44.b557c53de2d4b1b1",
+        "package.tracing.0.1.44.b6fa78478b93965d",
+        "package.tracing.0.1.44.b9863ea30df25c45",
+        "package.tracing.0.1.44.bc0ab3eb760c5707",
+        "package.tracing.0.1.44.bc1a488a2112607a",
+        "package.tracing.0.1.44.c50199d67d2a2247",
+        "package.tracing.0.1.44.c6006c13803102b2",
+        "package.tracing.0.1.44.c693279643b8cd5d",
+        "package.tracing.0.1.44.c7582239b442f34e",
+        "package.tracing.0.1.44.c86cf2a67f63cca4",
+        "package.tracing.0.1.44.c8a0bdbc03f2a12e",
+        "package.tracing.0.1.44.cbd1ff93da5f69b0",
+        "package.tracing.0.1.44.cc6d09c3b786f4c0",
+        "package.tracing.0.1.44.d45a73dd8e34734e",
+        "package.tracing.0.1.44.d5244d24ccd2d176",
+        "package.tracing.0.1.44.d890d0173ca21309",
+        "package.tracing.0.1.44.da2a46d9f5f1ae9c",
+        "package.tracing.0.1.44.dec32534583a1498",
+        "package.tracing.0.1.44.dfb524e9b52c29e3",
+        "package.tracing.0.1.44.dffd7c6dcb78ed26",
+        "package.tracing.0.1.44.e048fc2cfce02839",
+        "package.tracing.0.1.44.e17c81fb7644122c",
+        "package.tracing.0.1.44.e6bb2851391c346f",
+        "package.tracing.0.1.44.ea2df8f33241e5aa",
+        "package.tracing.0.1.44.ec63e65814600097",
+        "package.tracing.0.1.44.ed487621e7bb7f26",
+        "package.tracing.0.1.44.f1f4ae8573fa8dda",
+        "package.tracing.0.1.44.f22e5b10db063413"
+      ],
+      "checksum": "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100",
+      "features": [
+        "std"
+      ],
+      "dependencies": [
+        {
+          "package": "pin-project-lite@0.2.16",
+          "name": "pin_project_lite",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "tracing-core@0.1.36",
+          "name": "tracing_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tracing-core@0.1.36",
+      "name": "tracing-core",
+      "version": "0.1.36",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.tracing-core.0.1.36.2e9d962a08321605",
+      "inputs": [
+        "package.tracing-core.0.1.36.01c970eb2874b61a",
+        "package.tracing-core.0.1.36.06572a96a58dc510",
+        "package.tracing-core.0.1.36.13ee4b2252c9e516",
+        "package.tracing-core.0.1.36.14da7c350de5742e",
+        "package.tracing-core.0.1.36.15000e5c1083af86",
+        "package.tracing-core.0.1.36.1f3764730c411662",
+        "package.tracing-core.0.1.36.259b094b0384a74f",
+        "package.tracing-core.0.1.36.2c735de0f6b4c533",
+        "package.tracing-core.0.1.36.2e9d962a08321605",
+        "package.tracing-core.0.1.36.2f0349b21284db0c",
+        "package.tracing-core.0.1.36.30a6712231dd51e3",
+        "package.tracing-core.0.1.36.355ee422ef28d3ea",
+        "package.tracing-core.0.1.36.41a0a2aa11cb8347",
+        "package.tracing-core.0.1.36.44e47ea9be0c5379",
+        "package.tracing-core.0.1.36.457be093fb4a3354",
+        "package.tracing-core.0.1.36.4967a07438301854",
+        "package.tracing-core.0.1.36.4dc7b68391aabbf4",
+        "package.tracing-core.0.1.36.69d3b920656db67a",
+        "package.tracing-core.0.1.36.72ee318b1bca8451",
+        "package.tracing-core.0.1.36.851a8814770444e2",
+        "package.tracing-core.0.1.36.b02ff3ecb7b47c22",
+        "package.tracing-core.0.1.36.b146839883401087",
+        "package.tracing-core.0.1.36.b1a35a68f14e6962",
+        "package.tracing-core.0.1.36.b1d82de938c8711d",
+        "package.tracing-core.0.1.36.b335630551682c19",
+        "package.tracing-core.0.1.36.bf526efa5dcda068",
+        "package.tracing-core.0.1.36.c693279643b8cd5d",
+        "package.tracing-core.0.1.36.c6a3f1f7b31a9ba4",
+        "package.tracing-core.0.1.36.ec7fb9a607fe12d9"
+      ],
+      "checksum": "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a",
+      "features": [
+        "once_cell",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "package": "once_cell@1.21.4",
+          "name": "once_cell",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tracing-subscriber@0.3.20",
+      "name": "tracing-subscriber",
+      "version": "0.3.20",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.tracing-subscriber.0.3.20.2e9d962a08321605",
+      "inputs": [
+        "package.tracing-subscriber.0.3.20.0023b1bdd1606541",
+        "package.tracing-subscriber.0.3.20.011b920710777030",
+        "package.tracing-subscriber.0.3.20.055ad70a9389ee56",
+        "package.tracing-subscriber.0.3.20.05e1614c39d33d48",
+        "package.tracing-subscriber.0.3.20.06572a96a58dc510",
+        "package.tracing-subscriber.0.3.20.07a0e72221182018",
+        "package.tracing-subscriber.0.3.20.08c8c540c65b5d8a",
+        "package.tracing-subscriber.0.3.20.0c77e1735f3cfa86",
+        "package.tracing-subscriber.0.3.20.0e4735671c433e23",
+        "package.tracing-subscriber.0.3.20.0f8149f21f995e1b",
+        "package.tracing-subscriber.0.3.20.13ee4b2252c9e516",
+        "package.tracing-subscriber.0.3.20.179a76dbe5397658",
+        "package.tracing-subscriber.0.3.20.1fdf2f49cbb56427",
+        "package.tracing-subscriber.0.3.20.21c444926fc1977d",
+        "package.tracing-subscriber.0.3.20.2515601b8c1b34ef",
+        "package.tracing-subscriber.0.3.20.276b24299e06251d",
+        "package.tracing-subscriber.0.3.20.29c04bfd0ba3dcfb",
+        "package.tracing-subscriber.0.3.20.2e9d962a08321605",
+        "package.tracing-subscriber.0.3.20.2fe42eb9f7b84dce",
+        "package.tracing-subscriber.0.3.20.30a6712231dd51e3",
+        "package.tracing-subscriber.0.3.20.315c02cd05738da1",
+        "package.tracing-subscriber.0.3.20.33cb896c8580a38e",
+        "package.tracing-subscriber.0.3.20.34114c0d90e247d6",
+        "package.tracing-subscriber.0.3.20.38339fe056e0fbeb",
+        "package.tracing-subscriber.0.3.20.3d324710ba49d50d",
+        "package.tracing-subscriber.0.3.20.4007187965c1fea4",
+        "package.tracing-subscriber.0.3.20.412e19642b335b50",
+        "package.tracing-subscriber.0.3.20.4205427fe7a46be4",
+        "package.tracing-subscriber.0.3.20.44e47ea9be0c5379",
+        "package.tracing-subscriber.0.3.20.45adada0dcc40964",
+        "package.tracing-subscriber.0.3.20.46eab7b845cdb010",
+        "package.tracing-subscriber.0.3.20.47ade65968e3f8bb",
+        "package.tracing-subscriber.0.3.20.485a047aad7fff56",
+        "package.tracing-subscriber.0.3.20.4967a07438301854",
+        "package.tracing-subscriber.0.3.20.49e5a967f64cab2b",
+        "package.tracing-subscriber.0.3.20.4dc7b68391aabbf4",
+        "package.tracing-subscriber.0.3.20.569f3d88c1611386",
+        "package.tracing-subscriber.0.3.20.5ef9d1b8b18e3ab6",
+        "package.tracing-subscriber.0.3.20.64db72cff531e283",
+        "package.tracing-subscriber.0.3.20.66365fd3f1693adb",
+        "package.tracing-subscriber.0.3.20.66cf04afc7f085b6",
+        "package.tracing-subscriber.0.3.20.68b7360d50f85357",
+        "package.tracing-subscriber.0.3.20.6c076b94ba231054",
+        "package.tracing-subscriber.0.3.20.6cbfa98f93675fe4",
+        "package.tracing-subscriber.0.3.20.7086c537fecc8a84",
+        "package.tracing-subscriber.0.3.20.71b5f4ed97161159",
+        "package.tracing-subscriber.0.3.20.75f182e20a873d3f",
+        "package.tracing-subscriber.0.3.20.7cd34fce3f493634",
+        "package.tracing-subscriber.0.3.20.7ed88db63eeffb90",
+        "package.tracing-subscriber.0.3.20.85de5a721f7d38d1",
+        "package.tracing-subscriber.0.3.20.8aec0ea5e493dade",
+        "package.tracing-subscriber.0.3.20.8bb1ea0e55df5a85",
+        "package.tracing-subscriber.0.3.20.8e49f9f3d56cc284",
+        "package.tracing-subscriber.0.3.20.90dd2134d4dbb26d",
+        "package.tracing-subscriber.0.3.20.949675b0bb33a393",
+        "package.tracing-subscriber.0.3.20.9ad0f30b6752d575",
+        "package.tracing-subscriber.0.3.20.a128e80591c403ad",
+        "package.tracing-subscriber.0.3.20.a28dc4122c18b796",
+        "package.tracing-subscriber.0.3.20.a2f87798de892601",
+        "package.tracing-subscriber.0.3.20.a338f13021d72be8",
+        "package.tracing-subscriber.0.3.20.a69ad29374406ff6",
+        "package.tracing-subscriber.0.3.20.a8e3d6272ecdb96a",
+        "package.tracing-subscriber.0.3.20.aa541563ca552cc8",
+        "package.tracing-subscriber.0.3.20.aac9d3dd955381eb",
+        "package.tracing-subscriber.0.3.20.ace8dca5ca471e1b",
+        "package.tracing-subscriber.0.3.20.b1a35a68f14e6962",
+        "package.tracing-subscriber.0.3.20.b335630551682c19",
+        "package.tracing-subscriber.0.3.20.b9f3a8308fdab4ec",
+        "package.tracing-subscriber.0.3.20.bc23c7af0210908a",
+        "package.tracing-subscriber.0.3.20.be8828e7b5bb38d5",
+        "package.tracing-subscriber.0.3.20.c2d1c2bc502c439d",
+        "package.tracing-subscriber.0.3.20.c693279643b8cd5d",
+        "package.tracing-subscriber.0.3.20.c743880d3424b375",
+        "package.tracing-subscriber.0.3.20.d385ad488f9df1db",
+        "package.tracing-subscriber.0.3.20.d48e8b3f7a4ea900",
+        "package.tracing-subscriber.0.3.20.e3899e7dd478e8f9",
+        "package.tracing-subscriber.0.3.20.e5d4bffa62b392c2",
+        "package.tracing-subscriber.0.3.20.e77f75452dcac9ce",
+        "package.tracing-subscriber.0.3.20.e9990c5ecba81c59",
+        "package.tracing-subscriber.0.3.20.eaeed62b438e3eea",
+        "package.tracing-subscriber.0.3.20.eb5b393edfaeef58",
+        "package.tracing-subscriber.0.3.20.ee110865c301d0d9",
+        "package.tracing-subscriber.0.3.20.f21eeb422c41654d",
+        "package.tracing-subscriber.0.3.20.f556fc5fddc7fdea",
+        "package.tracing-subscriber.0.3.20.f88413998c030db5",
+        "package.tracing-subscriber.0.3.20.fc9da2c29545ee33"
+      ],
+      "checksum": "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5",
+      "features": [
+        "alloc",
+        "registry",
+        "sharded-slab",
+        "std",
+        "thread_local"
+      ],
+      "dependencies": [
+        {
+          "package": "sharded-slab@0.1.7",
+          "name": "sharded_slab",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "thread_local@1.1.9",
+          "name": "thread_local",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "tracing-core@0.1.36",
+          "name": "tracing_core",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unicode-ident@1.0.26",
+      "name": "unicode-ident",
+      "version": "1.0.26",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.unicode-ident.1.0.26.2e9d962a08321605",
+      "inputs": [
+        "package.unicode-ident.1.0.26.07985fdcade0e64d",
+        "package.unicode-ident.1.0.26.13ee4b2252c9e516",
+        "package.unicode-ident.1.0.26.1b7a45280246f35f",
+        "package.unicode-ident.1.0.26.2d17c1d5338ad6d4",
+        "package.unicode-ident.1.0.26.2da917ccfb02949c",
+        "package.unicode-ident.1.0.26.2e9d962a08321605",
+        "package.unicode-ident.1.0.26.30a6712231dd51e3",
+        "package.unicode-ident.1.0.26.421f8eecf75a1acd",
+        "package.unicode-ident.1.0.26.4967a07438301854",
+        "package.unicode-ident.1.0.26.4a061a587837fcd1",
+        "package.unicode-ident.1.0.26.4dc7b68391aabbf4",
+        "package.unicode-ident.1.0.26.500b708c66d3482f",
+        "package.unicode-ident.1.0.26.618cd5b83d62060b",
+        "package.unicode-ident.1.0.26.6209bedfffea3d23",
+        "package.unicode-ident.1.0.26.66b726e556352826",
+        "package.unicode-ident.1.0.26.73114a400bd10945",
+        "package.unicode-ident.1.0.26.7e2242c3db034b92",
+        "package.unicode-ident.1.0.26.8861fc18384b66b8",
+        "package.unicode-ident.1.0.26.896da62487b1af33",
+        "package.unicode-ident.1.0.26.a4ce3988b0706239",
+        "package.unicode-ident.1.0.26.b1a35a68f14e6962",
+        "package.unicode-ident.1.0.26.b335630551682c19",
+        "package.unicode-ident.1.0.26.b3def89f695aabc2",
+        "package.unicode-ident.1.0.26.b803fcb7f17ed923",
+        "package.unicode-ident.1.0.26.bc37d034bad56458",
+        "package.unicode-ident.1.0.26.d11b9a1ce2106665",
+        "package.unicode-ident.1.0.26.eacff3b15860ba8e"
+      ],
+      "checksum": "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954",
+      "features": [],
+      "dependencies": []
+    },
+    {
+      "id": "zmij@1.0.23",
+      "name": "zmij",
+      "version": "1.0.23",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "project": null,
+      "manifest_input": "package.zmij.1.0.23.2e9d962a08321605",
+      "inputs": [
+        "package.zmij.1.0.23.134a6eac3c6450c7",
+        "package.zmij.1.0.23.13ee4b2252c9e516",
+        "package.zmij.1.0.23.172747fc43e38d33",
+        "package.zmij.1.0.23.1cfccd828fdcaa7a",
+        "package.zmij.1.0.23.2e9d962a08321605",
+        "package.zmij.1.0.23.30a6712231dd51e3",
+        "package.zmij.1.0.23.421f8eecf75a1acd",
+        "package.zmij.1.0.23.4967a07438301854",
+        "package.zmij.1.0.23.4dc7b68391aabbf4",
+        "package.zmij.1.0.23.7b19987f13f75d72",
+        "package.zmij.1.0.23.932f46a6f64f9aca",
+        "package.zmij.1.0.23.a0262fea108af44a",
+        "package.zmij.1.0.23.b1a35a68f14e6962",
+        "package.zmij.1.0.23.b335630551682c19",
+        "package.zmij.1.0.23.b803fcb7f17ed923",
+        "package.zmij.1.0.23.bc37d034bad56458",
+        "package.zmij.1.0.23.bcb1a070f63dd6e5",
+        "package.zmij.1.0.23.d0d98998092552a1"
+      ],
+      "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+      "features": [],
+      "dependencies": []
+    }
+  ],
+  "timeout_seconds": 600,
+  "output_limit_bytes": 4194304
+}

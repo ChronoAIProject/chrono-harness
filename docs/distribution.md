@@ -12,7 +12,7 @@ v5 的验证单元通过 `needs` 显式选择所需构建，可以为空；只�
 
 v3 另须显式列 `rust_components`（可为空）；本仓选择 rustfmt 以运行迁移消费者内登记的 format 操作。v3 必须声明 `consumer_staging.release_plan`、`host_config` 和非空 `bindings`。每项显式选择 release plan 的资产名与测试消费者目的路径；目的必须属于宿主唯一的 `tracked: false` artifact，不能重复、互相嵌套或与任何发布源路径重叠。拒绝路径越界及路径组件中的 symlink。源码身份读取后、构建前，实际 `git ls-files` 拒绝已跟踪的目的路径；这项读数属于运行证据，失败会产生失败报告。其它结构预检失败不启动子进程。
 
-构建后把发布可执行文件的原始字节和 mode 暂存到显式目的路径。当前配方为 15 个发布工具逐项登记构建消费路径与宿主安装消费路径，并显式选择全部 15 个生产项目各自的专属测试项目，包括 instructions、FILEMAP、routes、cost 和 mixed。它们包含 Git 绑定、声明文件核验、保留输入、七判官与 integration/delivery 的实际 CLI 消费者；库调用测试仍只验证各自的实际调用范围。测试选择来自配方中的操作白名单，不按目录或发布资产推断。 产品消费者的合成宿主在 fixture 中显式采用本平台的解释器版本；历史快照不变，错误版本的反例仍执行。本仓 macOS 的固定版本登记由独立登记的宿主 migration script 测试验证，不把该宿主实例当作 Linux 产品测试的环境。
+构建后把发布可执行文件的原始字节和 mode 暂存到显式目的路径。当前配方为 16 个发布工具逐项登记构建消费路径与宿主安装消费路径，并登记每个平台 22 个验证单元，其中显式选择全部 16 个生产项目各自的专属测试项目，包括 instructions、FILEMAP、routes、cost 和 mixed。它们包含 Git 绑定、声明文件核验、保留输入、七判官与 integration/delivery 的实际 CLI 消费者；库调用测试仍只验证各自的实际调用范围。测试选择来自配方中的操作白名单，不按目录或发布资产推断。 产品消费者的合成宿主在 fixture 中显式采用本平台的解释器版本；历史快照不变，错误版本的反例仍执行。本仓 macOS 的固定版本登记由独立登记的宿主 migration script 测试验证，不把该宿主实例当作 Linux 产品测试的环境。
 
 新配方发射 `chrono-native-build/v4`，保留 v3 的状态和原始过程证据，并增加 `consumer_staging`：资产/源/目的绑定、暂存时源身份，以及暂存后、每项验证前后、打包前后的文件摘要、大小、mode、读取错误和匹配结论。任一身份变化或缺失阻止成功发布；失败子进程后仍观察身份，保留原退出码，后置观察不能掩盖它。复制失败也保留实际可读状态。此处验证有界时点的字节身份；不认证两个观察之间无临时替换、完整输入闭包或每个库测试都调用 CLI。
 
@@ -52,6 +52,24 @@ chrono-distribution assemble --input MAC_PACKAGE --input LINUX_PACKAGE --output 
 [beta.19](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.19) 已公开发布，固定源码 `f8f28119096e9b50b2456024b473b252ea5f7cdd`、源码树 `0c51ad5c88c04a3e78be5f4edb1ed4b4f3c63e13`，与 PR #96 的 dev 落地相同。它分发显式生成目录的 Git 清单排除，覆盖 full／initial／scoped、registration、projects 和迁移消费者，并与 worktree 共用字面排除规则。[原生发布检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36674223982)在全部 15 个专属测试项目中通过 macOS arm64 的 606 项、Linux x86_64 的 601 项测试；差异仍为 5 项已有 macOS 文件系统用例。每个平台核对 36 个成功进程、30 个暂存目的路径、34 轮身份观察与 15 个工具资产。发布后核对全部 35 个资产的摘要与大小，并核对标签实际指向上述源提交；匿名下载的清单和两平台安装器也匹配原始产物。合并清单 SHA-256 为 `857caddfba0ebfe0ec5780c7a31217b30ef0c65bff1b2b6152c8587bf439c731`，6252 字节。完整输入闭包、完整宿主治理和确定性同判仍未认证。
 
 ## 宿主采用
+
+本产品宿主的 P1 启动采用固定 beta.21：公开发布源为
+`0d244808666cbb31f6a61fc8edb6fc2562e59be9`，树为
+`49c66c5ade91521d7e74801c75831e1bc15c4219`，保留的清单摘要为
+`7994ece6818d794da53e468e4b1a589033e3eec1362482f4205db5a7217d4724`（6629 字节）。
+`.chrono-harness/distribution.json` 由现有 `adopt` 生成，显式选 14 个启动／治理工具，
+不选 `chrono-cache`；现有 `chrono-cache-transport` 的源码构建和绑定独立保留。
+本地 core/default/detector 启动与原生共享启动使用同一安装登记。源码构建仍执行原操作，
+其安装输出位于 `bin/source/`，不能替代不同摘要的执行物。原安装回执保存发布源码身份；
+bootstrap 与共享转移另保存宿主候选身份和原始报告，二者不改标。
+发布验证的这 14 个源码安装路径也转至 `bin/source/`，原 source-target 路径、操作与
+实际发布资产仍保留。Python startup 测试显式依赖 `build_distribution` 的真实源码资产，
+两个原生发布 job 只下载该依赖；CI 源码 fixture 复用既有 source-output helper。
+
+这些宿主政策／启动程序同改属于 mixed-change。验证成本包括真实公开安装、Python
+启动消费者与原有源码控制、受影响登记／CI／所有权消费者以及调用方的 clean candidate
+规范检查与原生启动验收。P1 的固定执行物不启用 full 登记、不声明输入闭合，不表示
+P2/P3/P4、跨平台同判或完整 SPEC 已完成；提交、原生检查与落地由调用方负责。
 
 取得固定发布清单和对应平台的 `chrono-distribution` 后，显式选择要安装的工具：
 

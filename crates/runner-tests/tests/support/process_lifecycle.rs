@@ -249,11 +249,39 @@ fn terminated(with_streams: bool) {
     unreachable!("SIGKILL must terminate the fixture");
 }
 
+fn retained(case: &str) {
+    fs::write("retained.pid", std::process::id().to_string()).unwrap();
+    std::io::stdout()
+        .write_all(b"original stdout\xff\n")
+        .unwrap();
+    std::io::stdout().flush().unwrap();
+    std::io::stderr().write_all(b"CHRONO_CARGO_PHASE {\"phase\":\"consumer\",\"event\":\"begin\"}\noriginal stderr\xfe\n").unwrap();
+    std::io::stderr().flush().unwrap();
+    if case == "pause-launcher" {
+        // Suspend only after the engine has actually retained both originals.
+        let start = now();
+        while fs::read("original.stderr").unwrap_or_default().is_empty()
+            || fs::read("original.stdout").unwrap_or_default().is_empty()
+            || !Path::new("launch.json").exists()
+        {
+            assert!(now() - start < 5.0);
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(unsafe { libc::kill(libc::getppid(), libc::SIGSTOP) }, 0);
+    }
+    if case != "normal" {
+        assert!(matches!(case, "stall" | "pause-launcher"));
+        thread::sleep(Duration::from_secs(30));
+        fs::write("escaped", "escaped").unwrap();
+    }
+}
+
 fn main() {
     let mut arguments = std::env::args().skip(1);
     match arguments.next().unwrap().as_str() {
         "marker" => fs::write(arguments.next().unwrap(), "yes").unwrap(),
         "terminated" => terminated(arguments.next().as_deref() == Some("streams")),
+        "retained" => retained(&arguments.next().unwrap()),
         "exit" => std::process::exit(arguments.next().unwrap().parse().unwrap()),
         "child" => child(),
         "controller" => controller(&arguments.next().unwrap()),

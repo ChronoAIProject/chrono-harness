@@ -1289,6 +1289,83 @@ fn preparation_retains_environment_identities_without_credential_values() {
 }
 
 #[test]
+fn native_collect_rejects_invalid_acquisition_bound_before_git_preparation() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut h = ShortHost::new();
+    h.modify(".chrono-harness/config.json", |c| {
+        c["protocol"]["timeout_seconds"] = json!(5)
+    });
+    let host_path = ".chrono-harness/config.json";
+    let profile_path = ".chrono-harness/ci/check.json";
+    let provider_path = ".chrono-harness/ci/units.json";
+    let host_bytes = fs::read(h.root.join(host_path)).unwrap();
+    let host: Value = serde_json::from_slice(&host_bytes).unwrap();
+    let mut provider: Value =
+        serde_json::from_slice(&fs::read(h.root.join(provider_path)).unwrap()).unwrap();
+    let context = h
+        .root
+        .join(provider["collection"]["context_path"].as_str().unwrap());
+    let event = h.root.join(".chrono-harness/state/event.json");
+    json_file(
+        &h.root,
+        ".chrono-harness/state/event.json",
+        &json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false}),
+    );
+    fs::rename(h.root.join(".git"), h.root.join("unavailable-git")).unwrap();
+    assert!(!context.exists());
+    for wait in [5, 6] {
+        provider["gather"]["wait_seconds"] = json!(wait);
+        provider["gather"]["poll_seconds"] = json!(1);
+        json_file(&h.root, provider_path, &provider);
+        let selection = prepared::Selection::Collect;
+        let req = prepared::InputRequest {
+            schema: prepared::REQUEST.into(),
+            host_root: h.root.clone(),
+            source: "ci".into(),
+            host_config: host_path.into(),
+            host_config_sha256: sha256(&host_bytes),
+            effective_config: host_path.into(),
+            effective_config_sha256: sha256(&host_bytes),
+            profile: profile_path.into(),
+            profile_sha256: sha256(&fs::read(h.root.join(profile_path)).unwrap()),
+            native_artifacts: prepared::native_artifacts(&h.root, &host, "ci", &selection).unwrap(),
+            selection,
+            prepared: None,
+        };
+        let action = prepared::declaration(&host).unwrap().inputs.ci.unwrap();
+        let mut child = Command::new(h.root.join(".chrono-harness/bin/chrono-ci"))
+            .current_dir(&h.root)
+            .args(action.argv)
+            .env("GITHUB_EVENT_NAME", "push")
+            .env("GITHUB_EVENT_PATH", &event)
+            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .env("GITHUB_REPOSITORY", "owner/host")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&req).unwrap())
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "{stderr}");
+        assert!(
+            stderr.contains("registered acquisition timeout"),
+            "{stderr}"
+        );
+        assert!(out.stdout.is_empty());
+        assert!(!context.exists());
+    }
+}
+
+#[test]
 fn generated_native_collect_gathers_inside_short_check_and_repeats_without_business() {
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/config.json", |c| {
@@ -1885,7 +1962,9 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     let retained = h.root.join(report["retained_report"].as_str().unwrap());
     let original = fs::read(&retained).unwrap();
     assert!(original.len() > 1_000_000);
-    let process = &report["response"]["evidence"]["executed"][0]["process"];
+    // Complete streams are retained once in the receipt; the adjacent process
+    // field is a bounded identity/status projection for large operations.
+    let process = &report["response"]["evidence"]["executed"][0]["receipt"]["process"];
     let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
     assert_eq!(process["stdout_sha256"], sha256(&bytes));
     assert!(String::from_utf8_lossy(&bytes).contains("large-original-evidence"));

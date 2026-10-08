@@ -642,6 +642,94 @@ fn report_rejects_a_planner_executable_mismatch_before_publication() {
 }
 
 #[test]
+fn registered_startup_planner_survives_release_consumer_staging() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read = |path: &str| -> Value {
+        serde_json::from_slice(&fs::read(source.join(path)).unwrap()).unwrap()
+    };
+    let bootstrap = read(".chrono-harness/ci/bootstrap-cache.json");
+    let release = read(".chrono-harness/release/build.json");
+    let binding = release["consumer_staging"]["bindings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["asset"] == "chrono-cache")
+        .unwrap();
+    for registration in [
+        ".chrono-harness/ci/units.json",
+        ".chrono-harness/ci/release.json",
+    ] {
+        let host = read(registration);
+        let program = host["persistent_cache"]["program"].as_str().unwrap();
+        assert_eq!(bootstrap["install"][0]["destination"], program);
+        let (root, config) = fixture();
+        let executable = root.path().join(program);
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::copy(
+            source.join(bootstrap["install"][0]["source"].as_str().unwrap()),
+            &executable,
+        )
+        .unwrap();
+        fs::write(
+            root.path().join(".chrono-harness/cache.json"),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        let plan_path = ".chrono-harness/state/cache/check.one/plan.json";
+        let planned = Command::new(&executable)
+            .args([
+                "plan",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--config",
+                ".chrono-harness/cache.json",
+                "--consumer",
+                "check.one",
+                "--plan-output",
+                plan_path,
+            ])
+            .output()
+            .unwrap();
+        assert!(planned.status.success(), "{planned:?}");
+        // Apply the real declared business destinations with a distinct executable
+        // fixture, reproducing the debug-to-release replacement boundary.
+        for destination in binding["destinations"].as_array().unwrap() {
+            let destination = root.path().join(destination.as_str().unwrap());
+            fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            fs::copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), destination).unwrap();
+        }
+        let report = || {
+            Command::new(&executable).args([
+            "report", "--host-root", root.path().to_str().unwrap(), "--plan", plan_path,
+            "--report-directory", ".chrono-harness/state/cache/check.one/", "--steps-env",
+            "CACHE_TEST_STEPS", "--work", "work",
+        ]).env("CACHE_TEST_STEPS", json!({"cache_0_restore":{"outcome":"success","outputs":{}},"cache_0_save":{"outcome":"skipped","outputs":{}},"work":{"outcome":"success"}}).to_string()).output().unwrap()
+        };
+        let out = report();
+        assert!(out.status.success(), "{registration}: {out:?}");
+        let result: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(
+            result["observation"]["current_executable_verification"]["status"],
+            "matched"
+        );
+        let mut plan: Value =
+            serde_json::from_slice(&fs::read(root.path().join(plan_path)).unwrap()).unwrap();
+        plan["planner"]["sha256"] = json!("0".repeat(64));
+        fs::write(
+            root.path().join(plan_path),
+            serde_json::to_vec(&plan).unwrap(),
+        )
+        .unwrap();
+        let rejected = report();
+        assert!(!rejected.status.success());
+        assert!(
+            String::from_utf8_lossy(&rejected.stderr)
+                .contains("differs from the planner executable")
+        );
+    }
+}
+
+#[test]
 fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let (root, config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
@@ -1003,11 +1091,39 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         "args":["file",compiler],"env":{},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"file-path"});
     let first = plan(root.path(), &config, "check.one").unwrap();
+    let repeated = plan(root.path(), &config, "check.one").unwrap();
     assert_eq!(
-        first,
-        plan(root.path(), &config, "check.one").unwrap(),
-        "evidence times must not change keys"
+        first["caches"], repeated["caches"],
+        "original process receipts must not change cache or restore keys"
     );
+    assert_eq!(
+        first["inputs"]["compiler"]["observation"],
+        repeated["inputs"]["compiler"]["observation"]
+    );
+    for prepared in [&first, &repeated] {
+        let original = prepared["inputs"]["compiler"]["original"].as_str().unwrap();
+        let raw = fs::read(root.path().join(original)).unwrap();
+        assert!(original.ends_with(&format!("{:x}.json", Sha256::digest(&raw))));
+        let process: Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(process["exit_code"], 0);
+        assert!(process["failure"].is_null());
+        for stream in ["stdout", "stderr"] {
+            let bytes: Vec<u8> =
+                serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+            assert_eq!(
+                process[format!("{stream}_sha256")],
+                format!("{:x}", Sha256::digest(&bytes))
+            );
+            assert_eq!(
+                process[stream].as_str().unwrap(),
+                String::from_utf8_lossy(&bytes).as_ref()
+            );
+        }
+        assert_eq!(
+            process["sha256"],
+            prepared["inputs"]["compiler"]["observation"]["executable_sha256"]
+        );
+    }
     fs::write(&compiler, b"compiler-two").unwrap();
     let next = plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(

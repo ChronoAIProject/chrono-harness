@@ -21,12 +21,32 @@ inherited or owned descriptor still releases the kernel lease.
 
 FILEMAP v2 owns `execution_plans`: a map from `test:ID` to
 `{operations: [operation-ID, ...], timeout_seconds, output_limit_bytes}`.
+An optional `operation_bounds` map supplies complete
+`{timeout_seconds, output_limit_bytes}` contracts for named operations already in
+that sequence. Missing entries inherit the original plan defaults; absent or empty
+maps preserve the historical serialized plan identity. Unknown operations, missing
+bound fields, nonpositive bounds and output limits above 64 MiB reject. This is an
+explicit per-plan declaration, without operation-name special cases or dependency
+inference.
 Sequences are nonempty, ordered and duplicate-free. Actions, tools and argv remain
 in projects/scripts. Plans must include the unique test execute method. Prerequisites
 exist only when listed. Routes merges selected sequences as precedence constraints,
 runs shared operations once, and rejects cycles or conflicting shared bounds before
 tool observation or operation launch. Bounds are positive; each output stream is
 limited to 64 MiB. A timeout is an infrastructure failure, not a functional result.
+Shared operations must have equal resolved contracts in every selected plan;
+an explicit bound does not resolve another consumer's disagreement. Routes neither
+takes the maximum nor the minimum. Override additions, changes and removals retain
+plan DELTA impact in full and scoped checks, and collection reconstructs both the
+registered overrides and resolved operation bounds without business execution.
+
+The repository startup plan declares `build.distribution` at its existing
+600-second/1048576-byte distribution contract while `host.bootstrap-tests` inherits
+its original 900-second/1048576-byte plan defaults. The distribution and release
+integration plans keep their original 600-second defaults, operations and test
+methods. This product/host policy change requires a compatible published decoder
+before clean committed local/native acceptance; fixed beta.21 binaries reject the
+new field. Source checks do not constitute that publication or host activation.
 
 FILEMAP v2 may additionally declare one `execution_scheduling` policy:
 

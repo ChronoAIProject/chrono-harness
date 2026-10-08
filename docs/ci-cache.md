@@ -41,6 +41,13 @@ fails closed. The transport currently requires a primary Git checkout; linked
 worktree restore/save needs a lease spanning the entire transport and remains
 unsupported.
 
+The host cache bootstrap installs its planner/reporter at
+`.chrono-harness/bin/chrono-cache-transport`. Both check and release cache
+registrations use that same executable throughout preparation, recovery and
+reporting. Business bootstrap and release staging keep their existing
+`chrono-cache` destinations. This prevents release staging from replacing the
+planner before reporting; the executable identity check remains enforced.
+
 This host explicitly sets `CARGO_INCREMENTAL=1` for its canonical check actions.
 The core, full and cache seed bootstrap registrations and the v5 release recipe set
 `rust_incremental: true`; their existing build invocations receive the matching

@@ -256,7 +256,7 @@ fn json_file(root: &Path, path: &str, value: &Value) {
     fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
 
-fn install(root: &Path) {
+pub(super) fn install(root: &Path) {
     install_tools(
         root,
         &[

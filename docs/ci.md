@@ -14,7 +14,10 @@ and result publication. `judge-registration` owns full-format registration check
 and consumes those shared mechanics through an explicit adapter. Its
 `selection_explanation.extra_selections` explains legacy rules, with
 `legacy_only_selections` identifying selections outside test-execution edges;
-these do not become full-policy edges. See [the impact contract](filemap-impact.md).
+these do not become full-policy edges. Large derived predecessor/path maps are
+bounded in the response with an explicit omission marker and count; the
+registered graph and seed set remain the source for recomputing a witness.
+See [the impact contract](filemap-impact.md).
 `ci` owns the GitHub workflow projection and event input
 preparation. It does not select tests or judge outcomes. `instructions` remains
 independent and its catalogs, layouts and relative root alias are unchanged.
@@ -41,11 +44,25 @@ or certify complete Git input closure.
 Run from the repository root. This macOS host explicitly binds `/usr/bin/python3` with the exact `Python 3.9.6` contract for bootstrap and migration (also in the scoped tool map). Bootstrap requires that interpreter, Git, and rustup; it
 installs Rust 1.95.0 if unavailable, independently ensures its rustfmt component
 (including on a preinstalled minimal toolchain), and builds the explicitly listed bootstrap
-operations using `.chrono-harness/projects.json`, then copies declared binaries.
+operations using `.chrono-harness/projects.json`, then copies their declared
+outputs under `.chrono-harness/bin/source/`. The core, detector and default
+profiles separately invoke the existing distribution installer for the explicit
+beta.21 selection in `.chrono-harness/distribution.json`. The retained release
+manifest fixes asset bytes and release commit/tree; enforcement paths under
+`.chrono-harness/bin/` receive those assets. Source outputs cannot overlap an
+adopted enforcement destination. Cache transport retains its separate source
+binding and original report.
 It does not duplicate Cargo build recipes or discover projects.
 Toolchain operations name the configured version explicitly and do not change
 the global default toolchain. Bootstrap these tools before the dedicated CI tests;
-their copied-host regressions consume the installed candidate binaries.
+their copied-host regressions consume the installed pinned binaries. Source
+builds/tests continue to check current implementation sources and do not replace
+the selected enforcement executable.
+CI copied-host fixtures use the existing source-output installer helper. The
+Python startup suite declares `build.distribution` before its real installer
+fixtures; it uses that source executable, while public installation is a separate
+startup check. Release verification stages the selected source tools beneath
+`bin/source/`, retaining the original source-target bindings and operations.
 
 ```sh
 /usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
@@ -62,7 +79,8 @@ canonical judgment command is **identical locally and in generated CI**:
 
 The final bootstrap argument selects an explicit host CI configuration. Omitting
 it preserves the full bootstrap default. Generated unit/collection workflows
-select runner, judge-ci, ci and the local worktree input producer; remaining builds come from the unchanged
+retain the original runner, judge-ci, ci, worktree and Cargo judge source builds,
+and install the explicit release tool selection; remaining builds come from the unchanged
 complete test plans. Run units concurrently in separate checkouts. A local check
 without `--unit` executes the whole selected DELTA under FILEMAP scheduling; the same entry with
 value-less `--collect` prepares the declared manifest and verifies unit evidence without running business operations.
@@ -124,7 +142,11 @@ admits only its registered short spelling and rejects partial overrides.
 
 Always bootstrap from the candidate checkout before checking it. The runner
 reports the actual runner/judge/operation executable hashes; bootstrap records
-Cargo/rustc versions and installed binary hashes. These observations do not
+Cargo/rustc versions and installed source-output hashes. Its separate distribution
+binding references the original `.chrono-harness/state/distribution.json` receipt;
+that receipt records the release source rather than the host candidate. Shared
+startup preserves both original reports and validates the pinned bytes before
+installation and at the existing verification points. These observations do not
 constitute reproducible-build or complete binary-provenance certification.
 A parentless commit can instead use `--candidate FULL_OID --initial` without
 `--base`. The report explicitly says `initial-inventory`; it does not fabricate

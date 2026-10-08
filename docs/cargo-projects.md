@@ -1,5 +1,31 @@
 # Optional Cargo project judge
 
+The main-host metadata consumer registers `inputs.fetch.*` actions as package
+acquisition prerequisites for its 34 original `inputs.metadata.*` actions.
+Acquisition fetches the complete locked package graph for the same manifest,
+including host and target dependencies; metadata keeps its declared target and
+remains locked and offline. Both processes retain launch records and original streams
+under `.chrono-harness/state/inputs/`, including failures and enclosing
+termination. The release recipe carries that directory for failed
+`test.judge-cargo-tests` operations. An empty package inventory is a controlled
+reproduction of a missing prerequisite. Diagnosing a native metadata failure
+requires its original inner process streams; a local reproduction alone does
+not identify that failure's cause.
+
+The real main-host guard runs in both local and native CI test contexts.
+`CHRONO_CHECK_SOURCE` and the release producer's run/attempt/job and local marker
+select the expectations declared in `cargo/observe.json`. Local consumption must
+pass all original guard assertions. Native CI must reject the fixed developer
+Cargo binding with the exact registered input error before metadata or business
+execution. Expected input bytes remain fixed. This validates the product's host
+boundary; it does not activate full governance on the native runner.
+
+**Mixed-change warning:** These host prerequisites and transport bindings change
+alongside their Rust consumer tests and release evidence registration. Validation
+includes the original affected Rust suites, Python release/bootstrap tests and
+workflow projections. Local source checks do not establish native acceptance,
+full activation or publication.
+
 `judge-cargo` / `judge-cargo-tests` is an independent production/test pair. Generic
 registration and projects have no dependency on it or on TOML. A host adopts the
 adapter by registering its binary, arguments, policy input and FILEMAP edges. A
@@ -88,6 +114,17 @@ binary and version, runs locked/offline metadata, compares resolution against th
 declarations, and only then runs the declared Cargo consumer. It checks input
 identities again after metadata and after the consumer. The ordinary full and
 scoped execution paths require no Cargo-specific callback or schema field.
+
+The guard emits bounded `CHRONO_CARGO_PHASE` JSON lines on stderr at the start
+and terminal return of input preparation, each declared directory bind/recheck,
+tool probes, native-host observation, metadata, validation and consumer execution.
+Terminal observations include elapsed milliseconds and whether the phase returned
+or raised an error. A missing terminal line remains an incomplete observation;
+silence is not evidence of a hang. The original process report continues to own
+child exits, failures and stream identities. Timing does not skip any input check.
+The product-host native metadata test observes the guard through the existing
+bounded process engine, retains its stdout/stderr and terminal process report,
+and reserves time within its existing registered test budget to publish a timeout.
 
 The configuration policy has schema `chrono-cargo-inputs/v3` and these required fields.
 The fixed v2 inventory contract remains supported with its original absolute
@@ -205,9 +242,13 @@ locked/offline mode, feature selection and ordered `--config` file arguments.
 `--filter-platform`, while consumers require `--target`. The initial argument
 grammar also accepts `--frozen`, `--features`, `--all-features`,
 `--no-default-features`, `--release`, `--profile`, `--lib`, `--bins`, `--tests`,
-`--all-targets`, `--examples` and `--benches` where applicable. Unlisted flags,
-inline configuration assignments and arguments after `--` are rejected; supporting
-them requires an explicit adapter extension. Cargo still determines whether a
+`--all-targets`, `--examples` and `--benches` where applicable. Named `--test`, `--bin`, `--example` and `--bench` selectors are supported,
+including repeated named suites. `test` and `bench` accept one positional filter.
+Registered `test`, `bench` and `run` tails after `--` are forwarded unchanged to
+the child; they do not alter Cargo feature/configuration selection. This retains
+libtest listing, exact filters, skips, threads, original assertion failures and
+application arguments. Other unlisted Cargo flags and inline configuration
+assignments are rejected. Cargo still determines whether a
 particular accepted combination is legal and retains its real failure.
 
 The registered outer action must invoke this guard with the exact root, config,
@@ -321,3 +362,64 @@ The full host remains proposed until the host registers and activates this
 policy. Dedicated tests cover a real Rust sysroot, linker, SDK inventory,
 build-script input, selection conflicts and directory/input drift through the
 ordinary Cargo operation.
+
+## Native consumers and offline environment (v6)
+
+`chrono-cargo-inputs/v6` retains every v5 binding and requires `target_mode`,
+either `explicit` or `native`. Explicit mode retains `--target`. Native mode
+requires its absence, rejects `CARGO_BUILD_TARGET` and parsed Cargo
+`build.target`/`env.CARGO_BUILD_TARGET`, and retains an additional real compiler
+`-vV` process at `native_target`. Its single observed `host:` must equal the
+declared target before metadata or consumer execution. Metadata continues to
+use the declared `--filter-platform`. Native mode keeps the original native
+Cargo output layout, including `target/debug`; it does not rewrite output paths.
+
+V6 accepts the original locked command without an offline flag when its explicit
+effective environment sets `CARGO_NET_OFFLINE` to exactly `true`. Otherwise the
+existing locked/offline flags remain required. V2–v5 reject `target_mode`, even
+null, and keep their original target/offline requirements. Formatting retains
+its Cargo/rustfmt contract and is not a supported guarded verb.
+
+`chrono-input-directory/v3` retains the v2 file and literal-alias inventories
+and requires `directories`, an array of `{path, entries}` declarations. Paths
+are physical directories and entries are their exact immediate child names,
+including an empty list. Such a directory may supply a directory-alias target
+even when it contains no registered regular file. The owner checks physical
+parents and exact child membership before and after the real consumer. Added
+children, missing/replaced directories, duplicate/invalid names and alias drift
+fail while preserving the original consumer result. Older inventory schemas
+reject the new field. This closes the real macOS SDK's empty and alias-only
+directory targets; it is not a discovery or hidden-input completeness proof.
+
+The product host stages v6 policies for its 34 existing Cargo roots under
+[`.chrono-harness/cargo/`](../.chrono-harness/cargo/observe.json). Each original
+source build/check/test/run and unfiltered release action remains available;
+`guarded_*` actions declare the same consumer argv, with offline selection in
+the environment. Existing group inventory still uses its original complete and
+disjoint listing operations. Switching the full execution plans and inventory
+to compatible guarded actions remains activation work.
+
+The explicit local compiler, resolver archive/index, extracted package, SDK,
+linker/delegate and configuration declarations are source-backed observations,
+not native CI identities or endpoint snapshots. Compiler/SDK directory manifests
+remain separately identified under `.chrono-harness/inputs/local/`. The dedicated
+Rust consumer observes each explicitly named main metadata operation, retains
+its original streams under host state, and exercises the registered main native
+check on its declared platform. This is local source validation. Native
+provisioning, runtime-platform scope, genuine historical/current snapshots and
+fixed compatible artifacts remain prerequisites; full host enforcement stays
+proposed/incomplete. Product code contains no host layout or platform recipe.
+
+The native consumer explicitly asks the existing process engine to retain raw
+stdout/stderr as they are read, within the original output bound. Its atomic
+launch record identifies the actual executable, argv, environment, stdin and
+spawned child. Enclosing termination can leave these streams as partial originals.
+Returned process and terminal JSON are published atomically and preserve the
+engine's actual observations; when both are absent, the child terminal remains
+unobserved by those receipts. Complete runs still compare retained bytes
+with the original process result and preserve the existing metadata and native
+assertions. The registered Cargo operation remains bounded at 900 seconds;
+the per-test timer cannot account for preceding test binaries. Rust regressions
+exercise enclosing termination of the real registered native guard and a stalled
+fixture, including interruption before terminal publication. These bounded source
+checks do not diagnose a past timeout or replace clean canonical/native acceptance.

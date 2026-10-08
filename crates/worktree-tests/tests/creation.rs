@@ -443,6 +443,51 @@ fn assert_bound_registry_process(report: &Value, row: &Value) {
 }
 
 #[test]
+fn adopted_output_bound_reads_the_complete_product_host_registries() {
+    let h = Host::new("payload");
+    let mut expected = Values::new();
+    for path in [CONFIG, FM, PROJECTS, JUDGES, WORKFLOW] {
+        let bytes = fs::read(source().join(path)).unwrap();
+        expected.insert(path.into(), json(&bytes).unwrap());
+        fs::write(h.root.join(path), bytes).unwrap();
+    }
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("complete-main-registration");
+    let (code, failed, error) = h.invoke("integration", "complete-main", &target);
+    assert_ne!(code, 0, "legacy bound unexpectedly passed: {error}");
+    assert_eq!(failed["error"], "process output limit exceeded");
+    assert!(!target.exists());
+    let original_failure = fs::read(h.root.join(failed["report_path"].as_str().unwrap())).unwrap();
+
+    let policy = json(&fs::read(source().join(POLICY)).unwrap()).unwrap();
+    let limit = policy["output_limit_bytes"].as_u64().unwrap() as usize;
+    for path in [CONFIG, FM, PROJECTS, JUDGES, WORKFLOW] {
+        assert!(fs::metadata(source().join(path)).unwrap().len() < limit as u64);
+    }
+    h.policy(|p| p["output_limit_bytes"] = value!(limit));
+    let head = git(&h.root, &["rev-parse", "HEAD"]);
+    let (code, report, error) = h.invoke("integration", "complete-main", &target);
+    assert_eq!(code, 0, "{} {error}", report["error"]);
+    assert_eq!(report["source_commit"], head);
+    assert_eq!(report["base"], head);
+    let digest = chrono_harness::wire::digest(&value!(expected)).unwrap();
+    assert_eq!(report["source_registry_digest"], digest);
+    assert_eq!(report["registry_digest"], digest);
+    assert_fixed_registry_reads(&report, &h.root, &h.root, &head, &expected);
+    for path in [CONFIG, FM, PROJECTS, JUDGES, WORKFLOW] {
+        assert_eq!(
+            fs::read(target.join(path)).unwrap(),
+            fs::read(source().join(path)).unwrap()
+        );
+    }
+    assert_eq!(
+        fs::read(h.root.join(failed["report_path"].as_str().unwrap())).unwrap(),
+        original_failure
+    );
+}
+
+#[test]
 fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     let h = Host::new("arbitrary/input.data");
     let policy = fs::read(h.root.join(POLICY)).unwrap();

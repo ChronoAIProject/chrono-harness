@@ -338,7 +338,9 @@ never discovers host SDKs, imports, directories or language boundaries.
 
 This host's detector produces the registered core startup tools for the unit and
 collection jobs. Its cache preparation builds `chrono-cache`; its bootstrap calls
-the existing core profile once and publishes all five installed tools. Consumer
+the existing core profile once, retaining its five source outputs and installing
+the explicitly selected immutable beta.21 governance tools through the existing
+distribution installer. Consumer
 jobs validate and install the selected profiles, then verify them at the original
 cache/core preparation points. Their canonical checks and business build plans
 remain unchanged. Local and release bootstraps keep their registered source builds.
@@ -363,6 +365,13 @@ configuration/profile bytes, original bootstrap reports, and file digests, sizes
 and executable modes. It validates the complete transfer before replacing tools,
 restores executable modes lost by artifact transport, and retains exact producer
 reports beside explicit import provenance. Installation is not a local build.
+The optional bootstrap `distribution.manifest` selects a retained release
+manifest whose bytes must match the existing installer lock. The source report
+keeps the host candidate identity and source-output set; the separate original
+installer receipt keeps release commit/tree, platform and asset identities.
+Transfer validation checks the receipt and all release bytes against that pinned
+manifest, rather than accepting a source-output digest as an enforcement binding.
+Import preserves the installer receipt bytes without adding a host-source label.
 Point-of-use verification rejects installed drift. Missing/changed bindings,
 source/config/platform mismatches, symlinks, damaged payloads and failed publication
 stop the job. This covers registered startup outputs, not complete compiler/SDK

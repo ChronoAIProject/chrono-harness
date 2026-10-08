@@ -1,0 +1,375 @@
+{
+  "schema": "chrono-input-directory/v2",
+  "root": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
+  "files": [
+    {
+      "path": "bin/cargo",
+      "sha256": "c512bff73c86143b557463f021d0c3d5b0490d97d65040ba59ea2b3427784758"
+    },
+    {
+      "path": "bin/cargo-fmt",
+      "sha256": "00f31e9dea5dc9c165472b76fd80d405ab851e955be08dc1448fdd4d2043828d"
+    },
+    {
+      "path": "bin/rustc",
+      "sha256": "b829b733131d4e1673eeebd1f34d06ae1e9ff4977b051313cf42e2a9e79ecf1c"
+    },
+    {
+      "path": "bin/rustfmt",
+      "sha256": "2462eda2ece5926a3b09538850c6c21ffd9100c3bc4573093c9e9b0f60785c6f"
+    },
+    {
+      "path": "lib/librustc-stable_rt.asan.dylib",
+      "sha256": "8bcf06d48726932f7ff7ef30cb5aa7d45a11614b6101543ec18ab41aa1692f9f"
+    },
+    {
+      "path": "lib/librustc-stable_rt.lsan.dylib",
+      "sha256": "976d82808e5cd9a7fb71fc4bcf4cc5ed31b957f0ba9d82e1580e2d288172e54c"
+    },
+    {
+      "path": "lib/librustc-stable_rt.rtsan.dylib",
+      "sha256": "1e791dfea52b4d6dc441f75784605eefe8b5099f8f9dd70fe2c16db1d87d8854"
+    },
+    {
+      "path": "lib/librustc-stable_rt.tsan.dylib",
+      "sha256": "2f48772b6ba4150ac7c864dd1dccba81960be9d0e3904f40e8e58c98f3c0eed1"
+    },
+    {
+      "path": "lib/librustc_driver-eea6b8737cd03a8e.dylib",
+      "sha256": "d41766d9ed6e9c7959eeb7678b9a6bb301f70948664cd39a8a0d2d83ad23d54e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/ld.lld",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/ld64.lld",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/lld-link",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/gcc-ld/wasm-ld",
+      "sha256": "415de9de6d3b522b3410e8c24409d95aff703511b4700f427faa7d85378fac68"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/rust-lld",
+      "sha256": "96df7b3559f741be99cc2047cfaff84eeb5367dc9268a87c22ac9d376d98c60b"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/rust-objcopy",
+      "sha256": "eaef4f1b3d003e17e16174cfb471ee7eb811d749a9f6cf70c6d590849cd51f28"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/bin/wasm-component-ld",
+      "sha256": "5ed46177a30d2f0e6e6b79c9140d2fe65dbd1b7cc53f7bf81243955a474655f6"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libaddr2line-97baf34dac76a634.rlib",
+      "sha256": "3cdef70bb1438277a4b5a6f3f6f03e5594c998ba39dc5a6ef88efc8a5a3eb30a"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libaddr2line-97baf34dac76a634.rmeta",
+      "sha256": "1b2d75a6b7a73c772e51393f38c8e92e915f2f770b07476625abca4c366bfcd9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libadler2-b3027e57d0f1d7f0.rlib",
+      "sha256": "87f4eda749e87b8bc2a8ac6f1e74de01ba7f90ea1d8d7a8b0f937766dee2a265"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libadler2-b3027e57d0f1d7f0.rmeta",
+      "sha256": "092e6bc112958d41ad77628276ef0a9382151b69a852d88b785358126c1c6103"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liballoc-27f2e54513492a5b.rlib",
+      "sha256": "5e6f6cfbaf3eed434035b39c90d82d214ca0d4b67b86f30b7a88837ce375f538"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liballoc-27f2e54513492a5b.rmeta",
+      "sha256": "903ae4b01101b6170cfadfa3f9bbfd742dca8a8a0980c3f4260992dc22c6422e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcfg_if-f48fb0bfdb32cc1e.rlib",
+      "sha256": "a0f675b68e381ac0162796ab12b1337823bd03fe89ab421bf2f24cfb7e83f295"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcfg_if-f48fb0bfdb32cc1e.rmeta",
+      "sha256": "0be5c69bb0aad664a28c5bf0b55ec83ad287c7f723a62b3dda09462ffe5762f9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcompiler_builtins-da5ac53f4a183f75.rlib",
+      "sha256": "10c965331110c1c53556eab71fe6db80f199a71c1f746d68eafba96f4ac841cb"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcompiler_builtins-da5ac53f4a183f75.rmeta",
+      "sha256": "40f541962fbbb796f9880575f500fd4671a8f95c15b055fcf4a7f80672b3a05c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcore-871f345264ba13dd.rlib",
+      "sha256": "40074b19e085ce8ee9559582a6be145d7bb99de0b12fd095c1d12f21710198e9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libcore-871f345264ba13dd.rmeta",
+      "sha256": "030e6ab0c084d0454e8ee762c3671c923f32b7529ab5800dd6edd00b7c822ff5"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgetopts-4409557bcb151114.rlib",
+      "sha256": "a228c0296878b52e413e0033da608e7abe8d90844599d60e542b1dc168f66693"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgetopts-4409557bcb151114.rmeta",
+      "sha256": "e9ffe810438d3fddf6c48ba171a34efd1a112b503b138cd8efced803eba2f9db"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgimli-710b978a6e7f8872.rlib",
+      "sha256": "fec448f05ee8447c7f7b566533226b85bc50372e59b40c551658c01e9d4509cd"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libgimli-710b978a6e7f8872.rmeta",
+      "sha256": "25406e647171676f1d9045e11cd75fdbc54b7f6719633ef963b230352bd33d2f"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libhashbrown-76edcfff92e1fd47.rlib",
+      "sha256": "5687e4940e1413bde9e1c07a3a7ec9b4e21864ed4c766287705032f1cd37e1c9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libhashbrown-76edcfff92e1fd47.rmeta",
+      "sha256": "b692236b1136ae34c8a44c188723f83f277cf65c699afea8da3ac1f9657c823e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liblibc-2d1423290f1ed328.rlib",
+      "sha256": "b15dfaad6c0cc1e205dd73604c58dcfc3f7742a987139408d3fe3fb86598886a"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/liblibc-2d1423290f1ed328.rmeta",
+      "sha256": "54e6e4fb403cab60693b58ba28a0aeeec29768961e89461e7734b9e0adcc22f4"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libmemchr-98367e4b3983da35.rlib",
+      "sha256": "0ad82f8c8303ac7181eba8700ea08fa100e95811e75945963cad4995bd07c41e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libmemchr-98367e4b3983da35.rmeta",
+      "sha256": "a25663bf6cea4beaf999e7c132cfda68278a1f920f06596768f8a6fcc974eaa7"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libminiz_oxide-571d19c55fdaabed.rlib",
+      "sha256": "47990188ad00c76e4a98e68a68ac4db35d83583a1e5307c392dd77ac086ffb73"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libminiz_oxide-571d19c55fdaabed.rmeta",
+      "sha256": "ceabd7f5f1a6312cc943f0df0c412deef37f4ce4ac9519f31d67fab8d83b6293"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libobject-a29b3bb9e63ad803.rlib",
+      "sha256": "53adada58ec7893351c75d596f50d44e852ce6e51e28f967be2146e47d2b3912"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libobject-a29b3bb9e63ad803.rmeta",
+      "sha256": "30aa90c25108092f34032b5a81d86ab9e8068286809477e6bb6ba8578232c85e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_abort-5a568c11acd6701d.rlib",
+      "sha256": "0f31eb022bd8856e2ddc689e993f460528f545ecd275f1acf502d16fd5ce7c66"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_abort-5a568c11acd6701d.rmeta",
+      "sha256": "e0fba69860b9919e8ae0a7db3094d570f65d441db7ff31f81f9b22de77c6e6a8"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-f63ec5b6ab7e4580.rlib",
+      "sha256": "a0c61395d268ce723a23067b56ff526ee239b987b9c1a210d24cfdb3feaa66ae"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-f63ec5b6ab7e4580.rmeta",
+      "sha256": "c9fec36e61a03f3a058b963bce8fc0270fd64bb88804fedb79ad0cc1fe2ff56a"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libproc_macro-b2df7becc8165bcb.rlib",
+      "sha256": "07fa79b4c10f55291bc9d7c76c2976461cedb2d4b55da06b8fd40718024387d1"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libproc_macro-b2df7becc8165bcb.rmeta",
+      "sha256": "9eb0c59443c16eb55756081c8ab6f7ce947a8c2d90247125ca99a558532b8a91"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libprofiler_builtins-6649f735c9ab3586.rlib",
+      "sha256": "4aa38191d27769b2309212fd6a5329584e7c422925f1d52c5e99b9fa8239fa2f"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libprofiler_builtins-6649f735c9ab3586.rmeta",
+      "sha256": "e9ce13623f5c02db388598f4dca35412d6c0b1fab84fced60897a8e928b7b31b"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.asan.dylib",
+      "sha256": "8bcf06d48726932f7ff7ef30cb5aa7d45a11614b6101543ec18ab41aa1692f9f"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.lsan.dylib",
+      "sha256": "976d82808e5cd9a7fb71fc4bcf4cc5ed31b957f0ba9d82e1580e2d288172e54c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.rtsan.dylib",
+      "sha256": "1e791dfea52b4d6dc441f75784605eefe8b5099f8f9dd70fe2c16db1d87d8854"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc-stable_rt.tsan.dylib",
+      "sha256": "2f48772b6ba4150ac7c864dd1dccba81960be9d0e3904f40e8e58c98f3c0eed1"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_demangle-1b0862f4834fc89c.rlib",
+      "sha256": "e480d2ddf08e8622abea05f42e2093b31250cd7945e8bf39e54b4ca815c67d4b"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_demangle-1b0862f4834fc89c.rmeta",
+      "sha256": "75312713519df442b6c4d111c8f2eddb87a34373f855cff3f861e1fe7810b0f2"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_literal_escaper-5f2e6c3644adb640.rlib",
+      "sha256": "6d98c24bce3f7345b87eaab9e3fe0788ddd7dd67eca6f7bebd212e1d60d3585c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_literal_escaper-5f2e6c3644adb640.rmeta",
+      "sha256": "785a790d39a86ab805936d370fc4f8c704eeb33aa39ec7ac22324514c7b63d2c"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_alloc-6df298fbf7f6f10b.rlib",
+      "sha256": "801e21d7f401446243861c48f41b72d6aa1db8642f03b25e33b6029c85d3b3cf"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_alloc-6df298fbf7f6f10b.rmeta",
+      "sha256": "ad7b9bba122e71d2f0013089de2cd571d26078a959d6c883d705507caa7f6479"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_core-78867bca7a418012.rlib",
+      "sha256": "049c04df5d4b50a3b49649c2d9556dc77306c87c248f1b1a2ea5c7d5d33d6952"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_core-78867bca7a418012.rmeta",
+      "sha256": "998049e865c8b155cb8581cfa2880b1aee538dc209bd628b09e71a1edd6b0f0d"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_std-036ed47b4c729746.rlib",
+      "sha256": "a1ed9aedd8c46493c69b5562c52a3fc59ae97b9b0220a47485621cfe0ba71a2e"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/librustc_std_workspace_std-036ed47b4c729746.rmeta",
+      "sha256": "979db35bb06b10f40cc6aabf1b6cd166be1ba01ec1ba11c45b92a725af968ca9"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd-09bec66e14073fe6.dylib",
+      "sha256": "c2d7f24d421eb1c074b4d8ea7e3322772681cd6bee9dde89557421808b174fc4"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd-09bec66e14073fe6.rlib",
+      "sha256": "4ad1c4e712b013147dca4e6cf0c30360959f5999f18bd51e45e0735d3054a464"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd-09bec66e14073fe6.rmeta",
+      "sha256": "51a386f4d4eb86fc195bd2b1680820c299c50ce793bb9332ad10e2576ed13e29"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd_detect-c2d961f54f972754.rlib",
+      "sha256": "f9ceffd236e2931df942d4d0c54dabe32bb53e30988732da240439b00b836ac0"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libstd_detect-c2d961f54f972754.rmeta",
+      "sha256": "b2a74d6fd5f082fab4d51d39af772de019f75f990af341a0c88fef63a05317ca"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libsysroot-f22a1b6cb0a0e8ac.rlib",
+      "sha256": "f73e5600e44154b429c40776f2ce710901abf33a468a9cfa4074e1b95c70bcbc"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libsysroot-f22a1b6cb0a0e8ac.rmeta",
+      "sha256": "7dde3483e581f277661d0acf57ae83ed1a4de7b7fea22962403d05743b462365"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libtest-edb0939a1f950e0e.rlib",
+      "sha256": "f8978661ef23ec0ad7afd86e42edad4830176612baf3f281a64c35a7b7aef0b2"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libtest-edb0939a1f950e0e.rmeta",
+      "sha256": "41e463d491e0b3439f2bd118856f6263e6591312b23c9fa5e7a5d766cc21ea65"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libunwind-05d4ae7ab29d97df.rlib",
+      "sha256": "a42bb45c33ec5c82969c61095452facd71c85647afda64f9848b9643342dc029"
+    },
+    {
+      "path": "lib/rustlib/aarch64-apple-darwin/lib/libunwind-05d4ae7ab29d97df.rmeta",
+      "sha256": "3f42a8292442a11409e0a7c41f107d806d4f4216f289b5b6dec91f179f1d8f2d"
+    },
+    {
+      "path": "lib/rustlib/components",
+      "sha256": "70d9bbeaa7c3f292df055b612c7ba259c4343d573a1feaebe9a3633ceb94ef15"
+    },
+    {
+      "path": "lib/rustlib/etc/gdb_load_rust_pretty_printers.py",
+      "sha256": "a32e7857651bc7ed7c52dfc71131cbbea01a5cd1886399876032c4de60fa4886"
+    },
+    {
+      "path": "lib/rustlib/etc/gdb_lookup.py",
+      "sha256": "818a6b374ccadd535bf0c30b0fbf17861fdfe231d42bd7069d8cffff7a571b97"
+    },
+    {
+      "path": "lib/rustlib/etc/gdb_providers.py",
+      "sha256": "75cef8535fe4e581a036e4860c1b1fb28c32dab43afadd348c20f94c169a4382"
+    },
+    {
+      "path": "lib/rustlib/etc/lldb_commands",
+      "sha256": "fd612f214b349941ee37153fbf5e6b698a20abf1fb470d9bc29f7e5d0330c4f6"
+    },
+    {
+      "path": "lib/rustlib/etc/lldb_lookup.py",
+      "sha256": "70ecb41fa5f72718d5ef10a12f038d00de5616de1e5ac0fec4ee145625152916"
+    },
+    {
+      "path": "lib/rustlib/etc/lldb_providers.py",
+      "sha256": "6acd9ff6b02fcab177057d9690b41d56740fc470de4f5bd1d0bc087d4e03d761"
+    },
+    {
+      "path": "lib/rustlib/etc/rust_types.py",
+      "sha256": "60f1a53d1fb0b6b394440588b94f36a472f5303965a58b87d1240c8aa4c81762"
+    },
+    {
+      "path": "lib/rustlib/manifest-cargo-aarch64-apple-darwin",
+      "sha256": "5b2160ec3635b8c8f3129f12cbeee078d55d882f9362313e56e9fd484febe8ba"
+    },
+    {
+      "path": "lib/rustlib/manifest-clippy-preview-aarch64-apple-darwin",
+      "sha256": "266e3ebcb2cfa74930e774ac54d80e089f3d1ac299b085c7800114fc653502b9"
+    },
+    {
+      "path": "lib/rustlib/manifest-rust-docs-aarch64-apple-darwin",
+      "sha256": "ae787db8ea2efc4a60ba138622558dac5472579c79778ab904596e5a5482dc0d"
+    },
+    {
+      "path": "lib/rustlib/manifest-rust-std-aarch64-apple-darwin",
+      "sha256": "d0ef7387bfd744f75b117a32678b91b570fcd6c8990e537eacca713fa0fb63c2"
+    },
+    {
+      "path": "lib/rustlib/manifest-rustc-aarch64-apple-darwin",
+      "sha256": "e907eb77896d1e82c6261b8cbbaa923dfe2a13bbaafcf68d38ef536786a9bacd"
+    },
+    {
+      "path": "lib/rustlib/manifest-rustfmt-preview-aarch64-apple-darwin",
+      "sha256": "f131ba42a6667b5237b9fdca791e2da1fecd7b5cabf522b50efe5113aaaa60d7"
+    },
+    {
+      "path": "lib/rustlib/multirust-channel-manifest.toml",
+      "sha256": "46c1f8d1bcef24174217545ece8c22eb395a42e3534f618736c17a759a31e255"
+    },
+    {
+      "path": "lib/rustlib/multirust-config.toml",
+      "sha256": "b8ab656bbce4a9f748168ea30f768dcbe4b692616f1014029146bb63b6fdb009"
+    },
+    {
+      "path": "lib/rustlib/rust-installer-version",
+      "sha256": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+    }
+  ],
+  "symlinks": []
+}

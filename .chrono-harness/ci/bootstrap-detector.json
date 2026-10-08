@@ -11,7 +11,7 @@
   "install": [
     {
       "source": "crates/ci/target/debug/chrono-ci",
-      "destination": ".chrono-harness/bin/chrono-ci"
+      "destination": ".chrono-harness/bin/source/chrono-ci"
     }
   ],
   "participation": {
@@ -24,5 +24,8 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true
+  "rust_incremental": true,
+  "distribution": {
+    "manifest": ".chrono-harness/distribution-release.json"
+  }
 }

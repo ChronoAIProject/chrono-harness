@@ -302,12 +302,26 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             .unwrap()
         };
         let mut config = read_host("config");
-        config["schema_version"] = json!(1);
-        config.as_object_mut().unwrap().remove("facts_git");
+        // This fixture changes the entry argv, not the current closure schema.
+        // Use the schema supporting input bindings, with this fixture's own inputs.
+        config["schema_version"] = json!(3);
         config["canonical_check"] = json!({"operation":"validate.delta", "argv":[]});
-        config["tools"] = json!([]);
+        let actual_git = fixture_git();
+        let version = Command::new(&actual_git).arg("--version").output().unwrap();
+        assert!(version.status.success());
+        config["facts_git"] = json!({"tool":"inventory-git", "input":"inventory-git-bytes"});
+        config["tools"] = json!([{"id":"inventory-git", "program":actual_git,
+            "resolution":"PATH-once", "version_argv":["--version"],
+            "expected_version":String::from_utf8(version.stdout).unwrap().trim()}]);
         config["semantic_fields"] = json!([]);
-        config["environment"] = json!({"inherit":["PATH"], "values":{}, "inputs":[]});
+        config["environment"] = json!({"inherit":["PATH"], "values":{}, "inputs":[
+            {"id":"inventory-git-bytes", "location":actual_git, "presence":"present",
+             "sha256":chrono_harness::sha256(&fs::read(&actual_git).unwrap())}]});
+        // The root fixture has its own real Git consumer, not the main host's
+        // Cargo/SDK consumers. Keep the supported binding schema and register it.
+        config["input_closure"] = json!({"status":"incomplete", "unresolved":["fixture initial inventory only"],
+            "bindings":[{"id":"inventory-git-facts", "consumer":"judge:inventory", "kind":"git-facts",
+                "inputs":["tool:inventory-git", "input:inventory-git-bytes", "environment:PATH"]}]});
         config["artifacts"] = json!([
             {"path":".chrono-harness/bin/","owner":"repository","kind":"executable","tracked":false},
             {"path":".chrono-harness/state/","owner":"repository","kind":"evidence","tracked":false}
@@ -346,7 +360,11 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             .into_iter().map(|path| json!({"path":path,"owner":"repository","surface":"documentation","cost":"unknown","edges":[]})).collect();
         write(
             &root.join(".chrono-harness/FILEMAP.json"),
-            &json!({"schema_version":2,"status":"proposed","files":files,"project_edges":[],"test_costs":[],"execution_plans":{},"cost_models":{"unknown":{"cpu_ms":null,"wall_ms":null,"peak_rss_bytes":null,"io_bytes":null,"basis":"fixture unknown"}}}),
+            &json!({"schema_version":2,"status":"proposed","files":files,"project_edges":[
+                {"from":"tool:inventory-git","kind":"runtime-input","to":"judge:inventory"},
+                {"from":"input:inventory-git-bytes","kind":"judge-trigger","to":"judge:inventory"},
+                {"from":"environment:PATH","kind":"runtime-input","to":"judge:inventory"}
+            ],"test_costs":[],"execution_plans":{},"cost_models":{"unknown":{"cpu_ms":null,"wall_ms":null,"peak_rss_bytes":null,"io_bytes":null,"basis":"fixture unknown"}}}),
         );
         fs::write(
             root.join(".gitignore"),

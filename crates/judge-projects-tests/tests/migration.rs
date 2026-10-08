@@ -34,6 +34,42 @@ fn adopt_fixture_tool(root: &std::path::Path, config: &mut Value, id: &str) -> o
     observed
 }
 fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
+    // Only the candidate fixture gets a native execution binding. Historical
+    // bytes and methods remain fixed, and the version is declared before probing.
+    let platform = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "Darwin/arm64",
+        ("linux", "x86_64") => "Linux/x86_64",
+        other => panic!("unregistered migration execution host: {other:?}"),
+    };
+    let hosts: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/migrations/test-hosts.json")).unwrap(),
+    )
+    .unwrap();
+    let declared = &hosts["execution_tools"][platform]["cargo"];
+    let cargo = config["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["id"] == "cargo")
+        .unwrap();
+    cargo["program"] = declared["program"].clone();
+    cargo["expected_version"] = declared["expected_version"].clone();
+    let mut env: BTreeMap<String, String> = std::env::vars().collect();
+    env.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
+    let observed = observation::tool(
+        root,
+        cargo["program"].as_str().unwrap(),
+        &["--version".into()],
+        &env,
+        30,
+        1048576,
+    )
+    .unwrap();
+    observation::process_success(&observed.version).unwrap();
+    assert_eq!(
+        observed.version.stdout.trim_end(),
+        cargo["expected_version"]
+    );
     adopt_fixture_tool(root, config, "python3");
     let git_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
     let git_input = config["facts_git"]["input"].as_str().unwrap().to_owned();
@@ -635,7 +671,8 @@ fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
                 "{error}"
             );
             assert_eq!(
-                diagnostic["observation"]["processes"][0]["stdout"],
+                chrono_harness::full::expand_process(&diagnostic["observation"]["processes"][0])
+                    .unwrap()["stdout"],
                 format!(
                     "{}\n",
                     config["tools"]

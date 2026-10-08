@@ -914,6 +914,100 @@ fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() 
 }
 
 #[test]
+fn process_encoding_preserves_actual_binary_failure_and_rejects_conflicting_views() {
+    let stdout: Vec<u8> = (0..=255).collect();
+    let stderr: Vec<u8> = (0..=255).rev().collect();
+    let (_dir, request, binding) = fixture(value!({"kind":"raw", "consume_request":true,
+        "stdout":stdout, "stderr":stderr, "exit":17}));
+    let failure = wire::invoke_detailed(
+        &request,
+        &binding,
+        &Default::default(),
+        FIXTURE_TIMEOUT_SECONDS,
+        4096,
+    )
+    .unwrap_err();
+    let process = failure.process.unwrap();
+    assert_eq!(process.exit_code, 17);
+    assert_eq!(process.stdout_bytes, stdout);
+    assert_eq!(process.stderr_bytes, stderr);
+    let original = serde_json::to_value(&process).unwrap();
+    let compact = chrono_harness::full::compact_process(&original).unwrap();
+    assert_eq!(
+        chrono_harness::full::expand_process(&compact).unwrap(),
+        original
+    );
+    assert_eq!(
+        chrono_harness::full::compact_process(&compact).unwrap(),
+        compact
+    );
+    assert_eq!(
+        chrono_harness::full::expand_process(&original).unwrap(),
+        original
+    );
+    for alias in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+        let mut conflict = compact.clone();
+        conflict[alias] = original[alias].clone();
+        assert!(chrono_harness::full::expand_process(&conflict).is_err());
+    }
+    let mut legacy = original.clone();
+    for stream in ["stdout", "stderr"] {
+        let raw: Vec<u8> =
+            serde_json::from_value(legacy[format!("{stream}_bytes")].clone()).unwrap();
+        legacy[format!("{stream}_hex")] = chrono_harness::full::artifact(&raw)["hex"].clone();
+        legacy.as_object_mut().unwrap().remove(stream);
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove(&format!("{stream}_bytes"));
+    }
+    legacy["encoding"] = value!("chrono-retained-process/v1");
+    assert_eq!(
+        chrono_harness::full::expand_process(&legacy).unwrap(),
+        original
+    );
+    for field in [
+        "stdout_length",
+        "stdout_zlib_hex",
+        "stdout_sha256",
+        "stdout_hex",
+    ] {
+        let mut corrupt = compact.clone();
+        corrupt[field] = match field {
+            "stdout_length" => value!(64 * 1024 * 1024 + 1u64),
+            "stdout_zlib_hex" => value!(format!("{}00", compact[field].as_str().unwrap())),
+            "stdout_hex" => value!("00"),
+            _ => value!("0".repeat(64)),
+        };
+        assert!(
+            chrono_harness::full::expand_process(&corrupt).is_err(),
+            "{field}"
+        );
+    }
+    let mut truncated = compact.clone();
+    truncated["stdout_zlib_hex"] = value!(&compact["stdout_zlib_hex"].as_str().unwrap()[..8]);
+    assert!(chrono_harness::full::expand_process(&truncated).is_err());
+    let mut short_length = compact.clone();
+    short_length["stdout_length"] = value!(1);
+    assert!(chrono_harness::full::expand_process(&short_length).is_err());
+    let report = value!({"judges":[{"process":compact}]});
+    let metadata_bytes = serde_json::to_vec(&report).unwrap().len() as u64;
+    assert_eq!(
+        chrono_harness::full::report_transport_bytes(&report, metadata_bytes).unwrap(),
+        metadata_bytes + stdout.len() as u64 + stderr.len() as u64
+    );
+    let historic = value!({"judges":[{"process":legacy}]});
+    let historic_bytes = serde_json::to_vec(&historic).unwrap().len() as u64;
+    assert_eq!(
+        chrono_harness::full::report_transport_bytes(&historic, historic_bytes).unwrap(),
+        historic_bytes
+    );
+    let mut inconsistent = original.clone();
+    inconsistent["stdout"] = value!("a different text view");
+    assert!(chrono_harness::full::compact_process(&inconsistent).is_err());
+}
+
+#[test]
 fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
     let bytes: Vec<u8> = (0..=255).collect();
     let expected = concat!(
@@ -982,7 +1076,8 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
     req.candidate.root = fs::canonicalize(&req.candidate.root).unwrap();
     req.base.root = req.candidate.root.clone();
     req.scope = Some(chrono_harness::units::Scope::Unit { unit: "one".into() });
-    req.observations = value!({"environment":{"effective":{}}});
+    req.observations =
+        value!({"process_encoding":"chrono-retained-process/v2","environment":{"effective":{}}});
     first.id = "a".into();
     let bindings: Vec<_> = [
         ("a", vec![]),
@@ -1045,6 +1140,225 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
 }
 // Real nested runner launch: the outer process must finish only after its owned
 // operation has been terminated. The PID is produced by that actual operation.
+#[test]
+fn retained_nested_helper() {
+    let Ok(root) = std::env::var("CHRONO_RETAINED_FIXTURE") else {
+        return;
+    };
+    let root = std::path::Path::new(&root);
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec![
+            "retained".into(),
+            std::env::var("CHRONO_RETAINED_CASE").unwrap(),
+        ],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let result = chrono_harness::run_process_observed_retained(
+        root,
+        &spec,
+        &[],
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+        &chrono_harness::ProcessEvidence {
+            stdout: &root.join("original.stdout"),
+            stderr: &root.join("original.stderr"),
+            launch: &root.join("launch.json"),
+        },
+    )
+    .unwrap();
+    let mut terminal = tempfile::NamedTempFile::new_in(root).unwrap();
+    serde_json::to_writer(&mut terminal, &result).unwrap();
+    terminal
+        .persist_noclobber(root.join("terminal.json"))
+        .unwrap();
+}
+
+#[test]
+fn retained_originals_match_complete_streams_and_launch_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["retained".into(), "normal".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
+    };
+    let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
+    let paths = chrono_harness::ProcessEvidence {
+        stdout: &root.path().join("original.stdout"),
+        stderr: &root.path().join("original.stderr"),
+        launch: &root.path().join("launch.json"),
+    };
+    let result = chrono_harness::run_process_observed_retained(
+        root.path(),
+        &spec,
+        b"original stdin",
+        &digest,
+        &paths,
+    )
+    .unwrap();
+    assert_eq!(result.exit_code, 0);
+    assert!(result.failure.is_none());
+    assert_eq!(fs::read(paths.stdout).unwrap(), b"original stdout\xff\n");
+    assert_eq!(fs::read(paths.stderr).unwrap(), result.stderr_bytes);
+    assert_eq!(
+        sha256(&fs::read(paths.stdout).unwrap()),
+        result.stdout_sha256
+    );
+    assert_eq!(
+        sha256(&fs::read(paths.stderr).unwrap()),
+        result.stderr_sha256
+    );
+    let launch: serde_json::Value =
+        serde_json::from_slice(&fs::read(paths.launch).unwrap()).unwrap();
+    assert_eq!(launch["argv"], value!(result.argv));
+    assert_eq!(launch["cwd"], value!(result.cwd));
+    assert_eq!(launch["sha256"], digest);
+    assert_eq!(launch["environment"], value!(result.environment));
+    assert_eq!(launch["environment_digest"], result.environment_digest);
+    assert_eq!(launch["stdin_sha256"], sha256(b"original stdin"));
+    assert_eq!(launch["timeout_seconds"], 30);
+    assert_eq!(launch["output_limit_bytes"], 4096);
+    assert_eq!(
+        launch["child_pid"].as_u64().unwrap().to_string(),
+        fs::read_to_string(root.path().join("retained.pid")).unwrap()
+    );
+    assert!(
+        chrono_harness::run_process_observed_retained(root.path(), &spec, &[], &digest, &paths)
+            .is_err()
+    );
+    assert_eq!(
+        fs::read(paths.stdout).unwrap(),
+        result.stdout_bytes,
+        "existing originals must not be overwritten"
+    );
+}
+
+#[test]
+fn retained_originals_survive_enclosing_timeout_even_without_terminal_publication() {
+    for case in ["stall", "pause-launcher"] {
+        let root = tempfile::tempdir().unwrap();
+        let exe = std::env::current_exe().unwrap();
+        let spec = chrono_harness::CommandSpec {
+            program: exe.to_string_lossy().into(),
+            args: vec![
+                "--exact".into(),
+                "retained_nested_helper".into(),
+                "--nocapture".into(),
+            ],
+            env: [
+                (
+                    "CHRONO_RETAINED_FIXTURE".into(),
+                    root.path().to_string_lossy().into(),
+                ),
+                ("CHRONO_RETAINED_CASE".into(), case.into()),
+            ]
+            .into(),
+            timeout_seconds: 2,
+            output_limit_bytes: 4096,
+        };
+        let result = chrono_harness::run_process_observed(
+            root.path(),
+            &spec,
+            &[],
+            &sha256(&fs::read(&exe).unwrap()),
+        )
+        .unwrap();
+        assert!(
+            result
+                .failure
+                .as_deref()
+                .unwrap()
+                .starts_with("process timed out"),
+            "{result:?}"
+        );
+        // The cooperative helper can return before enclosing cleanup kills it.
+        // Preserve that observed exit independently from the enclosing failure.
+        if case == "pause-launcher" {
+            assert_ne!(result.exit_code, 0);
+        }
+        assert_eq!(
+            fs::read(root.path().join("original.stdout")).unwrap(),
+            b"original stdout\xff\n"
+        );
+        assert_eq!(fs::read(root.path().join("original.stderr")).unwrap(), b"CHRONO_CARGO_PHASE {\"phase\":\"consumer\",\"event\":\"begin\"}\noriginal stderr\xfe\n");
+        let launch: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.path().join("launch.json")).unwrap()).unwrap();
+        assert_eq!(
+            launch["timeout_seconds"], 30,
+            "the enclosing deadline, not the child's bound, fired"
+        );
+        if case == "pause-launcher" {
+            assert!(
+                !root.path().join("terminal.json").exists(),
+                "no unobserved child terminal may be fabricated"
+            );
+        } else if root.path().join("terminal.json").exists() {
+            let terminal: chrono_harness::ProcessResult =
+                serde_json::from_slice(&fs::read(root.path().join("terminal.json")).unwrap())
+                    .unwrap();
+            assert_ne!(terminal.exit_code, 0);
+            assert!(
+                terminal
+                    .failure
+                    .as_deref()
+                    .unwrap()
+                    .contains("enclosing owner")
+            );
+        }
+        assert!(!root.path().join("escaped").exists());
+        let pid: libc::pid_t = fs::read_to_string(root.path().join("retained.pid"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            unsafe { libc::kill(pid, 0) },
+            -1,
+            "owned child survived enclosing completion"
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ESRCH)
+        );
+    }
+}
+
+#[test]
+fn retained_originals_keep_the_existing_stream_limit_and_failure() {
+    let root = tempfile::tempdir().unwrap();
+    let spec = chrono_harness::CommandSpec {
+        program: PROCESS_FIXTURE.into(),
+        args: vec!["retained".into(), "normal".into()],
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 8,
+    };
+    let paths = chrono_harness::ProcessEvidence {
+        stdout: &root.path().join("original.stdout"),
+        stderr: &root.path().join("original.stderr"),
+        launch: &root.path().join("launch.json"),
+    };
+    let result = chrono_harness::run_process_observed_retained(
+        root.path(),
+        &spec,
+        &[],
+        &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
+        &paths,
+    )
+    .unwrap();
+    assert_eq!(
+        result.failure.as_deref(),
+        Some("process output limit exceeded")
+    );
+    assert_eq!(fs::read(paths.stdout).unwrap(), result.stdout_bytes);
+    assert_eq!(fs::read(paths.stderr).unwrap(), result.stderr_bytes);
+    assert_eq!(result.stdout_bytes, b"original");
+    // The stdout overflow can terminate the child before all stderr is read.
+    assert!(b"CHRONO_C".starts_with(&result.stderr_bytes));
+}
+
 #[test]
 fn owned_nested_helper() {
     let Ok(root) = std::env::var("CHRONO_NESTED_FIXTURE") else {
@@ -1954,10 +2268,20 @@ fn failed_handoff_receive_child_helper() {
         error.contains("observer receive"),
         "missing receiving endpoint diagnostic: {error}"
     );
-    // macOS reports EMSGSIZE when it cannot externalize SCM_RIGHTS into
-    // the exhausted receiving descriptor table; retain that original errno.
+    // macOS may report EMSGSIZE or EMFILE when it cannot externalize
+    // SCM_RIGHTS into the exhausted receiving descriptor table. The observer
+    // retains the actual recvmsg errno, separately from the child's spawn errno.
     assert!(
-        error.contains(&format!("os error {}", libc::EMSGSIZE)),
+        error
+            .split("last recvmsg error: ")
+            .nth(1)
+            .is_some_and(
+                |receive| [libc::EMSGSIZE, libc::EMFILE].iter().any(|errno| receive
+                    .split(';')
+                    .next()
+                    .unwrap()
+                    .contains(&format!("os error {errno}")))
+            ),
         "missing original recvmsg errno: {error}"
     );
     assert!(error.contains("observer incomplete handoffs"), "{error}");

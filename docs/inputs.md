@@ -153,7 +153,11 @@ traversal. Ordinary IO uses temporary files and publication without clobbering;
 power-loss recovery and concurrent mutation of source files remain outside this
 contract.
 
-Set context `retained_inputs` to the produced pair path. Registration accepts
+Set context `retained_inputs` to the produced pair path. For ordinary local full
+checks, the optional worktree `check_inputs.full_inputs.retained_inputs` binding
+lets the existing producer retain and reference that output without editing the
+birth origin; see [the worktree owner contract](worktree.md#current-full-check-input-references).
+Registration accepts
 either the existing inline `{bytes: [...]}` representation or exactly one
 `{blob, sha256, length}` reference. It checks the snapshot's endpoint/config binding,
 declared file IDs, original blob digest/length and current candidate disk identity.
@@ -262,3 +266,28 @@ snapshots remain original; unbound digests cannot acquire absence semantics.
 The runtime does not generate a host's config conversion algorithm. This implementation does
 not activate the repository's proposed full configuration or establish complete
 compiler/backend/linker/SDK/build-script inputs.
+
+## Product-host source declarations
+
+The product host now has explicit local input IDs, consumer bindings and FILEMAP
+paths for its 34 Cargo roots. Registration records the extracted package files
+and the actual offline resolver archive/index bytes, compiler and formatter
+executables, rustc driver/sysroot libraries, linker/delegates, SDK inventories,
+configuration presence/absence and the selected environment. Shared package
+inputs follow the existing explicit compile owners; redundant direct paths were
+removed while retaining the same input reachability. No executor uses directory
+or Cargo metadata discovery to select dependencies or tests.
+
+These declarations are currently local macOS observations. Their absolute
+locations do not bind a native runner, and directory manifests do not substitute
+for original endpoint snapshots. Required native provisioning, runtime-platform,
+retained-endpoint and non-Cargo/governance scopes remain explicit unresolved
+work. Candidate artifact publication/binding and actual full plan/native
+activation remain subsequent steps. The current fixed command still uses scoped
+CI, and the full registrations remain proposed/incomplete.
+
+This source flight changes product adapters and host policy together. Its actual
+validation includes the Cargo pair and main native check, all three complete
+group inventories, formatting and host bootstrap/projection checks. A clean
+committed canonical run and native unit/collection acceptance remain caller
+obligations. None of these declarations asserts universal deterministic parity.

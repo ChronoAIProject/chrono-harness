@@ -106,14 +106,7 @@ pub fn order(
         let plan = plans
             .get(test)
             .ok_or_else(|| format!("E_ROUTE_MISSING: execution plan {test}"))?;
-        if plan.operations.is_empty()
-            || plan.operations.iter().collect::<BTreeSet<_>>().len() != plan.operations.len()
-            || plan.timeout_seconds == 0
-            || plan.output_limit_bytes == 0
-            || plan.output_limit_bytes > 64 * 1024 * 1024
-        {
-            return Err(format!("E_EXECUTION_PLAN: {test}"));
-        }
+        plan.validate().map_err(|e| format!("{e}: {test}"))?;
         let action = execute
             .get(test)
             .ok_or_else(|| format!("E_ROUTE_MISSING: unique execute action for {test}"))?;
@@ -122,6 +115,7 @@ pub fn order(
         }
         let mut previous = None;
         for id in &plan.operations {
+            let bounds = plan.bounds(id);
             let defs = methods
                 .get(id)
                 .ok_or_else(|| format!("E_ROUTE_MISSING: {id}"))?;
@@ -131,11 +125,11 @@ pub fn order(
             let op = operations.entry(id.clone()).or_insert_with(|| Operation {
                 method: defs[0].clone(),
                 predecessors: BTreeSet::new(),
-                timeout_seconds: plan.timeout_seconds,
-                output_limit_bytes: plan.output_limit_bytes,
+                timeout_seconds: bounds.timeout_seconds,
+                output_limit_bytes: bounds.output_limit_bytes,
             });
-            if op.timeout_seconds != plan.timeout_seconds
-                || op.output_limit_bytes != plan.output_limit_bytes
+            if op.timeout_seconds != bounds.timeout_seconds
+                || op.output_limit_bytes != bounds.output_limit_bytes
             {
                 return Err(format!("E_PLAN_BOUNDS: inconsistent shared operation {id}"));
             }

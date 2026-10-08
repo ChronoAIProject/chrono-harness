@@ -7,6 +7,17 @@ mod input_coverage;
 
 const CONFIG: &str = ".chrono-harness/config.json";
 
+fn error_processes(error: &str) -> Vec<Value> {
+    let observed: Value =
+        serde_json::from_str(error.trim().strip_prefix("E_CHECK: E_GIT_FACTS: ").unwrap()).unwrap();
+    observed["observation"]["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| chrono_harness::full::expand_process(p).unwrap())
+        .collect()
+}
+
 fn quoted(path: &Path) -> String {
     format!("'{}'", path.to_str().unwrap().replace('\'', "'\\''"))
 }
@@ -201,6 +212,7 @@ fn full_check_uses_registered_git_for_acquisition_and_registration() {
         "both runner and registration must read both endpoints: {trace}"
     );
     for p in report["git_facts"]["processes"].as_array().unwrap() {
+        let p = chrono_harness::full::expand_process(p).unwrap();
         assert_eq!(p["sha256"], json!(sha256(&fs::read(&h.program).unwrap())));
         assert_eq!(p["exit_code"], 0);
         for stream in ["stdout", "stderr"] {
@@ -264,6 +276,7 @@ fn full_and_initial_artifact_inventory_respects_git_bounds_without_listing_outpu
                 .collect();
             assert!(!inventories.is_empty());
             for inventory in inventories {
+                let inventory = chrono_harness::full::expand_process(inventory).unwrap();
                 assert_eq!(inventory["stdout_bytes"], json!([]));
                 assert_eq!(inventory["stdout_sha256"], sha256(b""));
                 assert_eq!(inventory["exit_code"], 0);
@@ -361,7 +374,13 @@ fn registered_git_rejects_digest_and_version_before_object_acquisition() {
             );
         } else {
             assert_eq!(h.trace().trim(), "--version");
-            assert!(error.contains("git version"));
+            let processes = error_processes(&error);
+            assert!(
+                processes[0]["stdout"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("git version")
+            );
         }
     }
 }
@@ -398,15 +417,17 @@ fn registered_git_failure_retains_original_output_and_exit() {
     );
     let (exit, report, error) = h.run(false);
     assert_ne!(exit, 0, "{report}");
-    assert!(
-        error.contains("E_GIT_FACTS") && error.contains("selected-facts-failure"),
-        "{error}"
-    );
-    assert!(error.contains("\"exit_code\":17"), "{error}");
-    assert!(
-        error.contains("\"stdout_bytes\":[97,0,98]"),
-        "raw process bytes must survive: {error}"
-    );
+    assert!(error.contains("E_GIT_FACTS"), "{error}");
+    let processes = error_processes(&error);
+    let process = processes.last().unwrap();
+    assert_eq!(process["exit_code"], 17);
+    assert_eq!(process["stderr"], "selected-facts-failure");
+    assert_eq!(process["stdout_bytes"], json!([97, 0, 98]));
+    for stream in ["stdout", "stderr"] {
+        let bytes: Vec<u8> =
+            serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+        assert_eq!(process[format!("{stream}_sha256")], sha256(&bytes));
+    }
 }
 
 #[test]
@@ -539,7 +560,7 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
                 serde_json::from_str(error.trim().strip_prefix("E_CHECK: E_GIT_FACTS: ").unwrap())
                     .unwrap();
             let processes = observed["observation"]["processes"].as_array().unwrap();
-            let process = processes.last().unwrap();
+            let process = chrono_harness::full::expand_process(processes.last().unwrap()).unwrap();
             if fault == "timeout" {
                 assert_eq!(processes.len(), 1, "timeout must stop before object reads");
                 assert_eq!(process["argv"], json!([h.program, "--version"]));
@@ -572,7 +593,10 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
             }
         }
         if fault == "output" {
-            assert!(error.contains("0123456789"), "{error}");
+            let processes = error_processes(&error);
+            let process = processes.last().unwrap();
+            assert!(process["stdout"].as_str().unwrap().contains("0123456789"));
+            assert_eq!(process["stdout_bytes"].as_array().unwrap().len(), 8192);
         }
     }
 }

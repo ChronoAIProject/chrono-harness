@@ -146,6 +146,7 @@ fn includes(
     compiler_binding: bool,
     linker_environment: Option<&str>,
     sysroot_binding: bool,
+    native_target: bool,
 ) -> Result<Vec<Include>> {
     let config: toml::Value = fs::read_to_string(path)
         .map_err(error)?
@@ -169,6 +170,10 @@ fn includes(
         let mut build_keys = vec!["rustc", "rustc-wrapper", "rustc-workspace-wrapper"];
         if sysroot_binding {
             build_keys.push("rustflags");
+        }
+        if native_target {
+            build_keys.push("target");
+            environment_keys.push("CARGO_BUILD_TARGET");
         }
         for (table, keys) in [("build", &build_keys[..]), ("env", &environment_keys[..])] {
             for key in keys {
@@ -239,6 +244,7 @@ pub(crate) fn check(
     compiler_binding: bool,
     linker_environment: Option<&str>,
     sysroot_binding: bool,
+    native_target: bool,
     input: impl Fn(&str) -> Result<PathBuf>,
 ) -> Result<Checked> {
     let home = environment
@@ -371,9 +377,15 @@ pub(crate) fn check(
             )));
         }
         pending.push((path.clone(), true));
-        for include in includes(&path, compiler_binding, linker_environment, sysroot_binding)?
-            .into_iter()
-            .rev()
+        for include in includes(
+            &path,
+            compiler_binding,
+            linker_environment,
+            sysroot_binding,
+            native_target,
+        )?
+        .into_iter()
+        .rev()
         {
             let spelling = path.parent().unwrap().join(include.path);
             let target = normalized(&spelling)?;

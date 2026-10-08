@@ -523,9 +523,18 @@ impl Reader {
         match &self.bound {
             None => Value::Null,
             Some(b) => {
+                let processes: Vec<_> = self
+                    .processes
+                    .borrow()
+                    .iter()
+                    .map(|process| {
+                        crate::full::compact_process(&value!(process))
+                            .expect("process engine preserves original stream identities")
+                    })
+                    .collect();
                 let mut observed = value!({"schema":"chrono-git-facts/v1","config_path":b.config_path,
                 "config_sha256":sha256(&b.config_bytes),"binding":b.binding,"environment":b.environment,
-                "processes":*self.processes.borrow(),"input_closure_complete":false});
+                "processes":processes,"input_closure_complete":false});
                 if let Some(guard) = &b.guard {
                     observed["inputs"] = guard.observation.clone();
                 }
