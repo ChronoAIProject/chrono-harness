@@ -19,6 +19,7 @@ fn read(
     if !policy.artifacts.iter().any(|a| path.starts_with(a)) {
         return Err("collection input is not a declared artifact".into());
     }
+    let _use = chrono_harness::retained_artifacts::retention::read_guard(root, path)?;
     let resolved = chrono_harness::no_symlink_parents(root, path)?;
     let meta = fs::symlink_metadata(&resolved).map_err(|e| e.to_string())?;
     if !meta.is_file() {
@@ -71,6 +72,8 @@ pub(super) fn collect(
     declarations: &Value,
     environment_policy: &Value,
 ) -> Result<Response, String> {
+    let _report_activity =
+        chrono_harness::retained_artifacts::retention::report_activity(&req.host_root)?;
     let p = &snapshot.policy;
     let units = p
         .units
@@ -120,6 +123,7 @@ pub(super) fn collect(
         exit_code: None,
     }];
     let mut verified = vec![];
+    let mut retained_originals = Vec::new();
     let retained_streams = chrono_harness::units::stream_publication(config);
     let report_schema = if retained_streams {
         chrono_harness::scoped_report::SCHEMA
@@ -175,6 +179,7 @@ pub(super) fn collect(
             if original["retained_report"] != reference.original.path {
                 return Err(format!("original report path mismatch: {}", input.unit));
             }
+            retained_originals.push(path);
             (original, limits.report_bytes - raw.len() as u64)
         } else {
             (published, 0)
@@ -404,7 +409,7 @@ pub(super) fn collect(
                 serde_json::from_value(row["receipt"].clone()).map_err(|e| e.to_string())?;
             chrono_judge_routes::compare(&plan, operation, Some(&receipt))?;
             if row["operation"] != operation.method.operation
-                || row["process"] != object!(receipt.process)
+                || row["process"] != super::process_projection(&receipt.process)
                 || receipt.process.exit_code != 0
                 || receipt.process.failure.is_some()
                 || !response.results.iter().any(|r| {
@@ -459,7 +464,7 @@ pub(super) fn collect(
         results,
         evidence: object!({"scope":config.schema,"execution_scope":req.scope,"base":req.base,"candidate":req.candidate,
             "global_selected":selected,"required_units":required,"manifest_sha256":sha256(&manifest_bytes),"reports":verified,
-            "collection_limits":limits,
+            "collection_limits":limits,"retained_originals":retained_originals,
             "executed":[],"acceptance":"global collection; no business operations executed",
             "input_closure":"incomplete: report identity pins are caller supplied; build provenance and external input closure are not certified",
             "parity":"unestablished"}),

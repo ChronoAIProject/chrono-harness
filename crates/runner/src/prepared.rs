@@ -276,14 +276,37 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
             .ok_or("participation output bound")? as usize,
     };
     let process = run_process_observed(root, &spec, &[], &file_identity(&program)?.0)?;
+    let original_failure = |message: String| -> String {
+        let retained = (|| {
+            retain_original(
+                root,
+                ".chrono-harness/state/preparation/",
+                "participation",
+                &serde_json::to_vec(&crate::full::compact_process(
+                    &serde_json::to_value(&process).map_err(|e| e.to_string())?,
+                )?)
+                .map_err(|e| e.to_string())?,
+            )
+        })();
+        match retained {
+            Ok(original) => format!(
+                "{message}; original process {} (sha256 {})",
+                original.path, original.sha256
+            ),
+            Err(error) => format!(
+                "{message}; cannot retain original participation: {error}; stdout sha256 {}, stderr sha256 {}",
+                process.stdout_sha256, process.stderr_sha256
+            ),
+        }
+    };
     if process.failure.is_some() {
-        return Err(format!(
-            "check participation failed: {:?}; stdout {}; stderr {}",
-            process.failure, process.stdout, process.stderr
-        ));
+        return Err(original_failure(format!(
+            "check participation failed: {:?}",
+            process.failure
+        )));
     }
     let report: Value = crate::json(&process.stdout_bytes)
-        .map_err(|e| format!("check participation result: {e}; {}", process.stderr))?;
+        .map_err(|e| original_failure(format!("check participation result: {e}")))?;
     let inner = report
         .get("managed_process")
         .ok_or_else(|| format!("check participation refused: {}", report["error"]))?;
@@ -523,6 +546,15 @@ fn invoke(
             original.path
         )
     })?;
+    if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+        inventory.dependencies_paths(
+            &original.path,
+            &p.originals
+                .iter()
+                .map(|o| o.path.clone())
+                .collect::<Vec<_>>(),
+        )?;
+    }
     Ok((p, original))
 }
 pub fn retain(root: &Path, prefix: &str, v: &Value) -> Result<String, String> {
@@ -550,7 +582,33 @@ pub fn retain_bytes(root: &Path, prefix: &str, bytes: &[u8]) -> Result<String, S
         .suffix(".json")
         .tempfile_in(&dir)
         .map_err(|e| e.to_string())?;
+    let publication =
+        if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
+            let relative = f
+                .path()
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("evidence path UTF-8")?;
+            if inventory.accepts("check-original", relative) {
+                Some(inventory.begin(
+                    "check-original",
+                    relative,
+                    json!({"publication":"started","outcome":"not-established"}),
+                )?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
     f.write_all(bytes).map_err(|e| e.to_string())?;
+    f.as_file().sync_all().map_err(|e| e.to_string())?;
+    if let Some(publication) = publication {
+        publication.complete(
+            json!({"kind":"preparation-original","sha256":sha256(bytes),"length":bytes.len()}),
+        )?;
+    }
     let (_, path) = f.keep().map_err(|e| e.to_string())?;
     Ok(path
         .strip_prefix(root)

@@ -292,8 +292,8 @@ pub fn judge(req: &Request, path: &str) -> Response {
             response.findings.push(Finding {
                 code: message.split(':').next().unwrap_or("E_CARGO").into(),
                 level: "error".into(),
-                message,
-                delta_refs: vec![format!("file:{path}")],
+                message: format!("{message}; policy {path}"),
+                delta_refs: vec!["/registries/candidate".into()],
                 causes: vec![],
             });
         }

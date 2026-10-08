@@ -148,6 +148,83 @@ fn integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metada
 }
 
 #[test]
+fn adopted_full_reports_keep_current_snapshot_and_retire_replaced_original_closure() {
+    let mut h = host();
+    let policy = chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    h.values.insert(policy.into(), json!({
+        "schema":"chrono-output-retention/v1",
+        "producers":{"check-original":[".chrono-harness/state/"],"full-original":[".chrono-harness/state/"]},
+        "keep_seconds":0,"max_entries":512,"max_summaries":128,
+        "max_nodes_per_round":256,"max_bytes_per_round":67108864,"max_millis_per_round":1000
+    }));
+    let mut row = file(policy, json!([]));
+    row["surface"] = json!("judge-policy");
+    h.values.get_mut(FM).unwrap()["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(row);
+    h.save();
+    let (exit, first) = run(&h, "integration", None, |_| {});
+    passed(exit, &first);
+    let first_path = first["report_path"].as_str().unwrap();
+    let original_bytes = fs::metadata(h.root().join(first_path)).unwrap().len();
+    let (exit, second) = run(&h, "integration", None, |_| {});
+    passed(exit, &second);
+    let current_path = second["report_path"].as_str().unwrap();
+    assert_ne!(first_path, current_path);
+    let owner = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root())
+        .unwrap()
+        .unwrap();
+    for _ in 0..16 {
+        owner.maintain().unwrap();
+        if !h.root().join(first_path).exists() {
+            break;
+        }
+    }
+    assert!(!h.root().join(first_path).exists());
+    assert!(h.root().join(current_path).exists());
+    let inventory: Value = serde_json::from_slice(
+        &fs::read(
+            h.root()
+                .join(".chrono-harness/state/output-retention-v1/inventory.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        inventory["roots"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .all(|role| !role.starts_with("full-recovery:"))
+    );
+    let current = inventory["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == current_path)
+        .unwrap();
+    assert!(!current["references"].as_array().unwrap().is_empty());
+    for id in current["references"].as_array().unwrap() {
+        let output = inventory["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["id"] == *id)
+            .unwrap();
+        assert!(h.root().join(output["path"].as_str().unwrap()).exists());
+    }
+    let retired = inventory["summaries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == first_path)
+        .unwrap();
+    assert_eq!(retired["removed_logical_bytes"], original_bytes);
+    assert_eq!(retired["original_outcome"]["exit_code"], 0);
+}
+
+#[test]
 fn retained_delivery_retry_expires_independently_born_producer_at_current_nanosecond() {
     use chrono_harness::{
         full,

@@ -5421,6 +5421,154 @@
           "to": "test:ci-tests"
         }
       ]
+    },
+    {
+      "path": "crates/runner/src/ownership.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/artifact_disposal.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/retained_artifacts/retention.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/retention.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "docs/artifact-retention.md",
+      "owner": "repository",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/retention.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-ci"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/support/retention_child.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/retained_artifacts/manifest.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "bounded by retention policy; measured acceptance pending",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner/src/retained_artifacts/retention_command.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "bounded by retention policy; measured acceptance pending",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -8048,6 +8196,11 @@
       "from": "project:runner",
       "kind": "runtime-input",
       "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "compile",
+      "to": "project:cache-tests"
     }
   ],
   "test_costs": [

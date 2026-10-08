@@ -502,6 +502,7 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
             .iter()
             .find(|p| p["exit_code"] == 29 || p["exit_code"] == 31)
             .unwrap();
+        let failed = chrono_harness::full::expand_process(failed).unwrap();
         let b: Vec<u8> = serde_json::from_value(failed["stderr_bytes"].clone()).unwrap();
         assert!(b[0] >= 254);
         assert_eq!(failed["stderr_sha256"], sha256(&b));

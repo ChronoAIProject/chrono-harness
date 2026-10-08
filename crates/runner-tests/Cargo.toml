@@ -6,12 +6,12 @@ publish = false
 autotests = false
 
 [dependencies]
+chrono-harness = { path = "../runner" }
 serde_json = "1"
 libc = "0.2"
 sha2 = "0.10"
 
 [dev-dependencies]
-chrono-harness = { path = "../runner" }
 tempfile = "3"
 
 [[test]]
@@ -62,5 +62,15 @@ bench = false
 [[bin]]
 name = "chrono-test-git-input"
 path = "tests/support/git_input.rs"
+test = false
+bench = false
+
+[[test]]
+name = "retention"
+path = "tests/retention.rs"
+
+[[bin]]
+name = "chrono-test-retention-child"
+path = "tests/support/retention_child.rs"
 test = false
 bench = false

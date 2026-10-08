@@ -101,7 +101,7 @@ fn adopt_short_host(
             "runtime-input",
             "judge:registration",
         ));
-    let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["HOME"],"values":{"PATH":h.values[CONFIG]["environment"]["values"]["PATH"],"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"delivery"}}});
+    let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["HOME"],"values":{"PATH":h.values[CONFIG]["environment"]["values"]["PATH"],"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"delivery"},"full_inputs":{"retained_inputs":".chrono-harness/state/inputs.json"}}});
     let common = json!({"schema":"chrono-github-ci/v4","workflow_path":".github/workflows/collection.yml","name":"Full collection","runs_on":"fixture-native","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["/bin/true"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"facts_config":CONFIG,"context_path":".chrono-harness/state/collection/event.json","artifact_directory":".chrono-harness/state/collection/"});
     let mut provider = json!({"schema":"chrono-github-units/v2","collection":common,"units":{},"full_contexts":{"collection":".chrono-harness/state/collection/full.json","units":{}},"gather":{"program":tools.path().join("mock-gh"),"inherit_environment":[],"credential_environment":[],"environment":{},"timeout_seconds":30,"output_limit_bytes":1048576,"wait_seconds":1,"poll_seconds":1,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}});
     for id in ["one", "two"] {
@@ -473,19 +473,10 @@ fn make_local_lane(
     // Produce the fixed endpoint snapshots before starting the real branch
     // clock. Its short freshness window measures producer behavior, not fixture
     // snapshot setup competing with the other registered tests.
-    git_facts::prepare_bound(&h, "integration", None);
-    // short(..., None) explicitly removes this selector from the real caller.
-    // Its retained snapshots must describe that local invocation even when the
-    // test package itself was launched by the native CI check.
-    let inputs_path = root.join(".chrono-harness/state/inputs.json");
-    let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
-    for endpoint in ["base", "candidate"] {
-        inputs[endpoint]["environment"]["CHRONO_CHECK_SOURCE"] = Value::Null;
-    }
-    fs::write(inputs_path, serde_json::to_vec(&inputs).unwrap()).unwrap();
+    capture_local_pair(&h);
     // Real birth producer in an isolated fixture; no hand-filled successful birth.
     git(&root, &["checkout", "-q", "dev"]);
-    let lane = tools.path().join("local-lane");
+    let lane = tools.path().join(format!("local-{kind}-lane"));
     let timestamp = || {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -547,11 +538,6 @@ fn make_local_lane(
         &lane.join(".chrono-harness/state"),
     );
     timing["state_copied_ns"] = json!(timestamp());
-    let origin_path = lane.join(".chrono-harness/state/origin.json");
-    let mut origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
-    origin["retained_inputs"] = json!(".chrono-harness/state/inputs.json");
-    fs::write(&origin_path, serde_json::to_vec(&origin).unwrap()).unwrap();
-    timing["origin_bound_ns"] = json!(timestamp());
     fs::write(
         lane.join(".chrono-harness/state/freshness-setup.json"),
         serde_json::to_vec(&timing).unwrap(),
@@ -559,11 +545,156 @@ fn make_local_lane(
     .unwrap();
     (h, tools, lane)
 }
+fn capture_local_pair(h: &Host) {
+    let root = h.root();
+    let inputs = source().join("crates/inputs/target/debug/chrono-inputs");
+    for (endpoint, oid) in [("base", &h.base), ("candidate", &h.candidate)] {
+        git(&root, &["checkout", "-q", "--detach", oid]);
+        let output = Command::new(&inputs)
+            .current_dir(&root)
+            .env("DECLARED_EMPTY", "")
+            .env_remove("DECLARED_ABSENT")
+            .env_remove("CHRONO_CHECK_SOURCE")
+            .args([
+                "capture",
+                "--host-root",
+                ".",
+                "--config",
+                CONFIG,
+                "--commit",
+                oid,
+                "--output",
+                &format!(".chrono-harness/state/local-{endpoint}.json"),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{endpoint} capture: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = Command::new(inputs)
+        .current_dir(&root)
+        .args([
+            "pair",
+            "--host-root",
+            ".",
+            "--base-snapshot",
+            ".chrono-harness/state/local-base.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/local-candidate.json",
+            "--output",
+            ".chrono-harness/state/inputs.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "pair: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 #[test]
 fn real_short_full_local_units_collection_and_delivery() {
-    let (_h, tools, lane) = local_short_lane(None);
+    let (h, tools, lane) = local_short_lane(None);
     let origin_path = lane.join(".chrono-harness/state/origin.json");
-    let mut origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
+    let origin_bytes = fs::read(&origin_path).unwrap();
+    let origin: Value = chrono_harness::json(&origin_bytes).unwrap();
+    assert!(origin["retained_inputs"].is_null());
+    assert!(origin["integration_evidence"].is_null());
+    let pair_path = lane.join(".chrono-harness/state/inputs.json");
+    let pair_bytes = fs::read(&pair_path).unwrap();
+    fs::remove_file(&pair_path).unwrap();
+    let before = marker(tools.path());
+    for args in [
+        vec!["check"],
+        vec!["check", "--unit", "one"],
+        vec!["check", "--collect"],
+    ] {
+        let (exit, missing) = short(&lane, &args, None);
+        assert_eq!(exit, 2);
+        assert!(
+            missing["stderr"]
+                .as_str()
+                .unwrap()
+                .contains("full retained inputs")
+        );
+    }
+    assert_eq!(marker(tools.path()), before);
+    fs::write(&pair_path, &pair_bytes).unwrap();
+    let mut misbound = chrono_harness::json(&pair_bytes).unwrap();
+    misbound["candidate"]["commit"] = json!(h.base);
+    fs::write(&pair_path, serde_json::to_vec(&misbound).unwrap()).unwrap();
+    let (exit, rejected) = short(&lane, &["check"], None);
+    assert_ne!(exit, 0);
+    assert!(
+        rejected["findings"]
+            .to_string()
+            .contains("E_EVIDENCE_UNRESOLVED")
+            && rejected["findings"].to_string().contains("wrong endpoint"),
+        "{}",
+        rejected["findings"]
+    );
+    assert_eq!(marker(tools.path()), before);
+    fs::write(&pair_path, &pair_bytes).unwrap();
+    let pair = chrono_harness::json(&pair_bytes).unwrap();
+    let blob_path = lane.join(pair["candidate"]["files"]["data"]["blob"].as_str().unwrap());
+    let original_blob = fs::read(&blob_path).unwrap();
+    fs::write(&blob_path, b"drifted retained input").unwrap();
+    let (exit, drifted) = short(&lane, &["check"], None);
+    assert_ne!(exit, 0);
+    assert!(
+        drifted["findings"]
+            .to_string()
+            .contains("retained content identity mismatch"),
+        "{}",
+        drifted["findings"]
+    );
+    assert_eq!(marker(tools.path()), before);
+    fs::write(&blob_path, original_blob).unwrap();
+    let data = h.values[CONFIG]["environment"]["inputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["id"] == "data")
+        .unwrap();
+    let data_path = lane.join(data["location"].as_str().unwrap());
+    let original_data = fs::read(&data_path).unwrap();
+    fs::write(&data_path, b"drifted current input").unwrap();
+    let (exit, drifted) = short(&lane, &["check"], None);
+    assert_ne!(exit, 0);
+    assert!(
+        drifted["findings"].to_string().contains("candidate input"),
+        "{}",
+        drifted["findings"]
+    );
+    assert_eq!(marker(tools.path()), before);
+    fs::write(data_path, original_data).unwrap();
+    let (exit, bare) = short(&lane, &["check"], None);
+    passed(exit, &bare);
+    assert_eq!(bare["judges"].as_array().unwrap().len(), 7);
+    let references = &bare["preparation"]["result"]["evidence"]["full_inputs"];
+    assert_eq!(
+        references["retained_inputs"]["source"]["path"],
+        ".chrono-harness/state/inputs.json"
+    );
+    assert_eq!(
+        references["retained_inputs"]["source"]["sha256"],
+        sha256(&pair_bytes)
+    );
+    assert_eq!(
+        fs::read(
+            lane.join(
+                references["retained_inputs"]["retained"]["path"]
+                    .as_str()
+                    .unwrap()
+            )
+        )
+        .unwrap(),
+        pair_bytes
+    );
+    assert_eq!(fs::read(&origin_path).unwrap(), origin_bytes);
     let before = marker(tools.path());
     let (exit, one) = short(&lane, &["check", "--unit", "one"], None);
     passed(exit, &one);
@@ -666,16 +797,87 @@ fn real_short_full_local_units_collection_and_delivery() {
     let certificate = fs::read(lane.join(".chrono-harness/state/integration.json")).unwrap();
     fs::write(&business, &bytes).unwrap();
     fs::set_permissions(&business, fs::Permissions::from_mode(0o755)).unwrap();
-    origin["run_kind"] = json!("delivery");
-    origin["integration_evidence"] = json!(sha256(&certificate));
-    fs::write(&origin_path, serde_json::to_vec(&origin).unwrap()).unwrap();
-    let (exit, delivery) = short(&lane, &["check"], None);
+    assert_eq!(fs::read(&origin_path).unwrap(), origin_bytes);
+    let (_h, tools, delivery_lane) = make_local_lane(h, tools, "feature");
+    provision_integration(&lane, &delivery_lane);
+    let delivery_origin =
+        fs::read(delivery_lane.join(".chrono-harness/state/origin.json")).unwrap();
+    let certificate_path = delivery_lane.join(".chrono-harness/state/integration.json");
+    fs::remove_file(&certificate_path).unwrap();
+    let (exit, missing) = short(&delivery_lane, &["check"], None);
+    assert_eq!(exit, 1);
+    assert!(
+        missing["findings"]
+            .to_string()
+            .contains("E_INTEGRATION_REQUIRED"),
+        "{}",
+        missing["findings"]
+    );
+    fs::write(&certificate_path, &certificate).unwrap();
+    let mut bad_certificate = chrono_harness::json(&certificate).unwrap();
+    bad_certificate["base"] = json!("0".repeat(40));
+    fs::write(
+        &certificate_path,
+        serde_json::to_vec(&bad_certificate).unwrap(),
+    )
+    .unwrap();
+    let (exit, misbound) = short(&delivery_lane, &["check"], None);
+    assert_eq!(exit, 1);
+    assert!(
+        misbound["findings"]
+            .to_string()
+            .contains("E_INTEGRATION_MISMATCH"),
+        "{}",
+        misbound["findings"]
+    );
+    fs::write(&certificate_path, &certificate).unwrap();
+    let producer_report = chrono_harness::json(&certificate).unwrap()["producer"]["report_path"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let producer_path = delivery_lane.join(producer_report);
+    let producer_bytes = fs::read(&producer_path).unwrap();
+    fs::remove_file(&producer_path).unwrap();
+    let (exit, incomplete) = short(&delivery_lane, &["check"], None);
+    assert_eq!(exit, 1);
+    assert!(
+        incomplete["findings"]
+            .to_string()
+            .contains("E_INTEGRATION_MISMATCH"),
+        "{}",
+        incomplete["findings"]
+    );
+    fs::write(producer_path, producer_bytes).unwrap();
+    let (exit, delivery) = short(&delivery_lane, &["check"], None);
     passed(exit, &delivery);
     assert_eq!(workflow(&delivery)["mode"], "delivery");
     assert_eq!(
-        fs::read(lane.join(".chrono-harness/state/integration.json")).unwrap(),
+        fs::read(delivery_lane.join(".chrono-harness/state/integration.json")).unwrap(),
         certificate
     );
+    assert_eq!(
+        fs::read(delivery_lane.join(".chrono-harness/state/origin.json")).unwrap(),
+        delivery_origin
+    );
+    assert_eq!(fs::read(&origin_path).unwrap(), origin_bytes);
+    let _ = tools;
+}
+fn provision_integration(source: &Path, destination: &Path) {
+    // Transport genuine completed producer evidence, preserving the consumer's birth.
+    for entry in fs::read_dir(source.join(".chrono-harness/state")).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_name() == "origin.json" || entry.file_name() == "origins" {
+            continue;
+        }
+        let target = destination
+            .join(".chrono-harness/state")
+            .join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            fs::copy(entry.path(), target).unwrap();
+        }
+    }
 }
 
 // Deterministic times are fixture input data, not native observations. The
@@ -1177,11 +1379,8 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
     )
     .unwrap();
     commit(&lane);
-    let origin_path = lane.join(".chrono-harness/state/origin.json");
-    let mut origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
     // Obtain genuine current captures while retaining the original historical base snapshot.
     let inputs_path = lane.join(".chrono-harness/state/inputs.json");
-    let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
     let captured = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(&lane)
         .env("DECLARED_EMPTY", "")
@@ -1205,10 +1404,31 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
         "{}",
         String::from_utf8_lossy(&captured.stderr)
     );
-    inputs["candidate"] = chrono_harness::json(&captured.stdout).unwrap();
-    fs::write(&inputs_path, serde_json::to_vec(&inputs).unwrap()).unwrap();
-    origin["integration_evidence"] = Value::Null;
-    fs::write(origin_path, serde_json::to_vec(&origin).unwrap()).unwrap();
+    let paired = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        .current_dir(&lane)
+        .args([
+            "pair",
+            "--host-root",
+            ".",
+            "--base-snapshot",
+            ".chrono-harness/state/local-base.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/feature-current.json",
+            "--output",
+            ".chrono-harness/state/feature-current-inputs.json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        paired.status.success(),
+        "{}",
+        String::from_utf8_lossy(&paired.stderr)
+    );
+    fs::copy(
+        lane.join(".chrono-harness/state/feature-current-inputs.json"),
+        inputs_path,
+    )
+    .unwrap();
     let (exit, rejected) = short(&lane, &["check"], None);
     assert_ne!(exit, 0);
     assert!(

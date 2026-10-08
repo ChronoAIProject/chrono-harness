@@ -111,6 +111,14 @@ pub fn retain_original(
     directory(dir)?;
     units::id(prefix)?;
     let path = format!("{dir}{prefix}-{}.json", sha256(bytes));
+    if crate::retained_artifacts::retention::publish_original(
+        root,
+        &path,
+        bytes,
+        serde_json::json!({"kind":"addressed-original","sha256":sha256(bytes),"length":bytes.len()}),
+    )? {
+        return original(root, &path);
+    }
     let target = no_symlink_parents(root, &path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
     match fs::OpenOptions::new()
@@ -153,6 +161,7 @@ pub fn read_original(
     transport: Option<&ArtifactTransport>,
 ) -> Result<Vec<u8>, String> {
     let path = original_path(o, transport)?;
+    let _use = crate::retained_artifacts::retention::read_guard(root, &path)?;
     let target = no_symlink_parents(root, &path)?;
     let meta = fs::symlink_metadata(&target)
         .map_err(|e| format!("missing original evidence {path}: {e}"))?;

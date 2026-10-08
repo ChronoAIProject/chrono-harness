@@ -737,6 +737,7 @@ pub(super) fn gather(
     c: &units::Config,
     repository: &str,
 ) -> Result<String, String> {
+    let _report_activity = chrono_harness::retained_artifacts::retention::report_activity(root)?;
     units::validate(c)?;
     let parts: Vec<_> = repository.split('/').collect();
     if parts.len() != 2

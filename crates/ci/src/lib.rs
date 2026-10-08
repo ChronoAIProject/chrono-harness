@@ -33,6 +33,8 @@ pub struct Config {
     pub upload_artifact_action: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_hidden_files: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub retention_delivery: bool,
     pub timeout_minutes: u32,
     pub bootstrap: Vec<String>,
     pub runner: String,
@@ -410,6 +412,7 @@ on:
             {normal}
           fi
       - name: Preserve actual check evidence
+        id: chrono_evidence_upload
         if: ${{{{ always() }}}}
         uses: {upload}
         with:
@@ -429,6 +432,21 @@ on:
         normal = invoke(c, false) + &suffix,
         artifacts = scalar(&c.artifact_directory)
     );
+    let rendered = if c.retention_delivery {
+        let selected = match scope {
+            Some(chrono_harness::units::Scope::Unit { unit }) => unit.as_str(),
+            Some(chrono_harness::units::Scope::Collect { .. }) => "collect",
+            None => "all",
+        };
+        format!(
+            "{rendered}      - name: Acknowledge delivered original evidence\n        if: ${{{{ always() && steps.chrono_evidence_upload.outcome == 'success' }}}}\n        shell: bash\n        env:\n          CHRONO_DELIVERED_ARTIFACT: ${{{{ steps.chrono_evidence_upload.outputs.artifact-id }}}}\n          CHRONO_DELIVERED_DIGEST: ${{{{ steps.chrono_evidence_upload.outputs.artifact-digest }}}}\n        run: |\n          {} retention --host-root . --delivered-check {} --scope {} --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST\n",
+            shell(&c.runner),
+            shell(&c.check_config),
+            shell(selected)
+        )
+    } else {
+        rendered.replace("        id: chrono_evidence_upload\n", "")
+    };
     if c.schema == "chrono-github-ci/v4" {
         let start = rendered
             .find("      - name: Prepare fixed event inputs")

@@ -405,6 +405,17 @@ impl Reader {
         })
     }
     pub fn export(&self, root: &Path, oid: &str, t: &Tree, dest: &Path) -> Result<(), String> {
+        self.export_limited(root, oid, t, dest, u64::MAX)
+    }
+    /// Preserve the exact source bytes while enforcing the output owner's reservation before writes.
+    pub fn export_limited(
+        &self,
+        root: &Path,
+        oid: &str,
+        t: &Tree,
+        dest: &Path,
+        max_bytes: u64,
+    ) -> Result<(), String> {
         if self.can_reuse_oid(oid) {
             let paths = t
                 .iter()
@@ -413,6 +424,7 @@ impl Reader {
                 .collect::<Vec<_>>();
             self.immutable_blobs(root, oid, &paths)?;
         }
+        let mut written = 0u64;
         for (path, e) in t {
             if e.kind != "blob" {
                 continue;
@@ -420,6 +432,12 @@ impl Reader {
             let p = no_symlink_parents(dest, path)?;
             fs::create_dir_all(p.parent().ok_or("snapshot parent")?).map_err(|e| e.to_string())?;
             let bytes = self.blob(root, oid, path)?;
+            written = written
+                .checked_add(bytes.len() as u64)
+                .ok_or("snapshot byte accounting overflow")?;
+            if written > max_bytes {
+                return Err("snapshot output byte capacity exceeded before writing".into());
+            }
             if e.mode == "120000" {
                 #[cfg(unix)]
                 std::os::unix::fs::symlink(utf8(bytes)?, &p).map_err(|e| e.to_string())?;

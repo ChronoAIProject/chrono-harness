@@ -1278,6 +1278,11 @@ impl Manager {
         Ok(())
     }
     fn drain(&mut self, exclude: &[PathBuf], report: &mut Value) -> Result<(), String> {
+        report["output_retention"] = value!(
+            chrono_harness::retained_artifacts::retention::maintain_adopted(
+                &self.policy.coordinator_root
+            )?
+        );
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
         let mut failures = vec![];
@@ -2135,6 +2140,16 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
     let target = no_symlink_parents(&root, path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    write_json(&target, report, true)?;
+    let raw = serde_json::to_vec_pretty(report).map_err(|e| e.to_string())?;
+    if !chrono_harness::retained_artifacts::retention::publish_owned_original(
+        &root,
+        "lifecycle-original",
+        path,
+        &raw,
+        serde_json::json!({"operation":report["operation"],"status":report["status"],"error":report["error"]}),
+    )? {
+        write_json(&target, report, true)?;
+    }
+    crate::recovery::settle_report(&root, report)?;
     Ok(())
 }

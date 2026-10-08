@@ -640,6 +640,14 @@ fn retain_command_result(
             .tempdir_in(&directory)
             .unwrap()
             .keep();
+        let owner = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
+        let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+            &owner,
+            "ci-fixture",
+            &destination,
+            json!({"capture":"started","exit":output.status.code()}),
+        )
+        .unwrap();
         fs::write(destination.join("stdout.bin"), &output.stdout).unwrap();
         fs::write(destination.join("stderr.bin"), &output.stderr).unwrap();
         fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"status":output.status.to_string(),"joined":true})).unwrap()).unwrap();
@@ -663,6 +671,9 @@ fn retain_command_result(
             if path.is_file() {
                 fs::copy(path, destination.join("configuration").join(name)).unwrap();
             }
+        }
+        if let Some(publication) = publication {
+            publication.complete(json!({"capture":"completed","exit":output.status.code(),"original_results":"fixture files authoritative"})).unwrap();
         }
         if !output.status.success() {
             eprintln!("original CI fixture evidence: {}", destination.display());
@@ -823,4 +834,18 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     for unit in provider["units"].as_object().unwrap().values() {
         assert_eq!(unit["bootstrap"][0], tool["program"]);
     }
+}
+
+#[test]
+fn opted_in_delivery_acknowledgement_uses_the_actual_successful_upload_outputs() {
+    let mut declaration = config();
+    let old = chrono_ci::render(&declaration, ".chrono-harness/ci/workflow.json").unwrap();
+    assert!(!old.contains("Acknowledge delivered"));
+    declaration.retention_delivery = true;
+    let projected = chrono_ci::render(&declaration, ".chrono-harness/ci/workflow.json").unwrap();
+    assert!(projected.contains("id: chrono_evidence_upload"));
+    assert!(projected.contains("always() && steps.chrono_evidence_upload.outcome == 'success'"));
+    assert!(projected.contains("steps.chrono_evidence_upload.outputs.artifact-id"));
+    assert!(projected.contains("steps.chrono_evidence_upload.outputs.artifact-digest"));
+    assert!(projected.contains("retention --host-root . --delivered-check"));
 }

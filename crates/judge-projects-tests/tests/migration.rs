@@ -81,7 +81,10 @@ fn execution_failure(
             .suffix(".json")
             .tempfile_in(&directory)?
             .keep()?;
-        let mut summary = match serde_json::to_writer(&mut file, result) {
+        let publication = chrono_harness::retained_artifacts::retention::begin_adopted(&source(),"migration-fixture",&path,serde_json::json!({"capture":"started","operation":"unexpected execution"})).map_err(std::io::Error::other)?;
+        let report_result=serde_json::to_writer(&mut file,result);
+        let report_written=report_result.is_ok();
+        let mut summary = match report_result {
             Ok(()) => format!("original execution retained at {}", path.display()),
             Err(error) => format!(
                 "original execution retention incomplete at {}: {error}",
@@ -92,13 +95,19 @@ fn execution_failure(
         // inputs. Preserve those bytes before this temporary host is dropped.
         let nested = root.join(".chrono-harness/state/ci-test-failures");
         let destination = path.with_extension("ci-test-failures");
-        let evidence = match copy_nested_receipts(&nested, &destination) {
+        fs::create_dir_all(&destination)?;
+        let nested_publication = chrono_harness::retained_artifacts::retention::begin_adopted(&source(),"migration-fixture",&destination,serde_json::json!({"capture":"started","operation":"nested CI failure"})).map_err(std::io::Error::other)?;
+        let nested_result=copy_nested_receipts(&nested,&destination);
+        let nested_written=nested_result.is_ok();
+        let evidence = match nested_result {
             Ok(()) => format!("nested CI evidence retained at {}", destination.display()),
             Err(error) => format!(
                 "nested CI evidence retention incomplete at {}: {error}",
                 destination.display()
             ),
         };
+        if let Some(publication)=publication { publication.complete(serde_json::json!({"original_outcome":"unexpected execution","capture":if report_written {"completed"} else {"incomplete"}})).map_err(std::io::Error::other)?; }
+        if let Some(publication)=nested_publication { publication.complete(serde_json::json!({"original_outcome":"nested CI failure","capture":if nested_written {"completed"} else {"incomplete"}})).map_err(std::io::Error::other)?; }
         summary.push_str(&format!("; {evidence}"));
         Ok(summary)
     })()
@@ -635,7 +644,8 @@ fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
                 "{error}"
             );
             assert_eq!(
-                diagnostic["observation"]["processes"][0]["stdout"],
+                chrono_harness::full::expand_process(&diagnostic["observation"]["processes"][0])
+                    .unwrap()["stdout"],
                 format!(
                     "{}\n",
                     config["tools"]

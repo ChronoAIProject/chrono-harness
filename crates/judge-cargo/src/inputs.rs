@@ -66,6 +66,7 @@ pub(crate) struct Contract {
     pub metadata: Command,
     pub operations: BTreeMap<String, Command>,
     target: String,
+    target_mode: Option<TargetMode>,
     configuration_files: Vec<crate::configuration::Declaration>,
     configuration_ancestors: Option<crate::configuration::Ancestors>,
     cargo_input: Option<String>,
@@ -74,6 +75,13 @@ pub(crate) struct Contract {
     packages: Vec<Package>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
+}
+
+#[derive(Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+enum TargetMode {
+    Native,
+    Explicit,
 }
 
 #[derive(Clone, Serialize)]
@@ -156,7 +164,14 @@ struct Options {
     all: bool,
     no_default: bool,
 }
-fn command(argv: &[String], manifest: &str, target: &str, metadata: bool) -> Result<Options> {
+fn command(
+    argv: &[String],
+    manifest: &str,
+    target: &str,
+    metadata: bool,
+    native: bool,
+    offline_environment: bool,
+) -> Result<Options> {
     let first = argv
         .first()
         .map(String::as_str)
@@ -168,13 +183,19 @@ fn command(argv: &[String], manifest: &str, target: &str, metadata: bool) -> Res
         return Err(error("unsupported Cargo consuming command"));
     }
     let (mut locked, mut offline, mut seen_manifest, mut seen_target, mut format) =
-        (false, false, false, false, false);
+        (false, offline_environment, false, false, false);
+    let mut filter = false;
     let mut out = Options::default();
     let mut i = 1;
     while i < argv.len() {
         let flag = argv[i].as_str();
         i += 1;
         match flag {
+            "--" if !metadata && matches!(first, "test" | "bench" | "run") => {
+                // The registered argv owns the entire child tail. It cannot
+                // alter Cargo resolution/configuration after this delimiter.
+                break;
+            }
             "--locked" => locked = true,
             "--offline" => offline = true,
             "--frozen" => {
@@ -187,7 +208,7 @@ fn command(argv: &[String], manifest: &str, target: &str, metadata: bool) -> Res
             | "--benches"
                 if !metadata => {}
             "--config" | "--features" | "--manifest-path" | "--filter-platform" | "--target"
-            | "--format-version" | "--profile" => {
+            | "--format-version" | "--profile" | "--test" | "--bin" | "--example" | "--bench" => {
                 let value = argv
                     .get(i)
                     .ok_or_else(|| error("Cargo option requires a value"))?;
@@ -210,18 +231,33 @@ fn command(argv: &[String], manifest: &str, target: &str, metadata: bool) -> Res
                     "--filter-platform" if metadata && value == target && !seen_target => {
                         seen_target = true
                     }
-                    "--target" if !metadata && value == target && !seen_target => {
+                    "--target" if !metadata && !native && value == target && !seen_target => {
                         seen_target = true
                     }
                     "--format-version" if metadata && value == "1" && !format => format = true,
                     "--profile" if !metadata => {}
+                    "--test" | "--bin" | "--example" | "--bench"
+                        if !metadata && !value.is_empty() && !value.starts_with('-') => {}
                     _ => return Err(error(format!("mismatched/duplicate Cargo option {flag}"))),
                 }
+            }
+            _ if !metadata
+                && matches!(first, "test" | "bench")
+                && !flag.starts_with('-')
+                && !flag.is_empty()
+                && !filter =>
+            {
+                filter = true;
             }
             _ => return Err(error(format!("unsupported Cargo option {flag}"))),
         }
     }
-    if !(locked && offline && seen_manifest && seen_target && (!metadata || format)) {
+    if !(locked
+        && offline
+        && seen_manifest
+        && (seen_target || (!metadata && native))
+        && (!metadata || format))
+    {
         return Err(error(
             "Cargo requires locked offline mode, exact manifest/target and metadata v1",
         ));
@@ -315,16 +351,24 @@ pub(crate) fn prepare(
                 && contract.compiler.is_some()
                 && contract.toolchain.is_some()
         }
+        "chrono-cargo-inputs/v6" => {
+            contract.configuration_ancestors.is_some()
+                && contract.cargo_input.is_some()
+                && contract.compiler.is_some()
+                && contract.toolchain.is_some()
+                && contract.target_mode.is_some()
+        }
         _ => false,
     };
     if !version_valid
+        || (contract.schema != "chrono-cargo-inputs/v6" && value.get("target_mode").is_some())
         || contract.target.is_empty()
         || contract.timeout_seconds == 0
         || contract.output_limit_bytes == 0
         || contract.output_limit_bytes > 64 * 1024 * 1024
     {
         return Err(error(
-            "invalid chrono-cargo-inputs/v2, v3, v4 or v5 contract schema/ancestor policy/tool bindings/target/process limits",
+            "invalid chrono-cargo-inputs/v2, v3, v4, v5 or v6 contract schema/ancestor policy/tool bindings/target/process limits",
         ));
     }
     let root_package = contract
@@ -360,17 +404,29 @@ pub(crate) fn prepare(
             "metadata and operation must use the same registered tool",
         ));
     }
+    let native = contract.target_mode == Some(TargetMode::Native);
+    let offline_environment = contract.schema == "chrono-cargo-inputs/v6"
+        && environment.get("CARGO_NET_OFFLINE").map(String::as_str) == Some("true");
+    if native && environment.contains_key("CARGO_BUILD_TARGET") {
+        return Err(error(
+            "native target selection cannot also use CARGO_BUILD_TARGET",
+        ));
+    }
     let observing = command(
         &contract.metadata.argv,
         &root_project.manifest,
         &contract.target,
         true,
+        false,
+        offline_environment,
     )?;
     if command(
         &backing.argv,
         &root_project.manifest,
         &contract.target,
         false,
+        native,
+        offline_environment,
     )? != observing
     {
         return Err(error(
@@ -696,6 +752,7 @@ pub(crate) fn prepare(
             .as_ref()
             .map(|toolchain| toolchain.linker.environment.as_str()),
         contract.toolchain.is_some(),
+        native,
         input,
     )?;
     let selected: BTreeSet<_> = contract
@@ -844,6 +901,12 @@ pub(crate) fn prepare(
         strict_inputs: strict_inputs.into_inner(),
         directories,
     })
+}
+
+impl Contract {
+    pub(crate) fn native_target(&self) -> Option<&str> {
+        (self.target_mode == Some(TargetMode::Native)).then_some(self.target.as_str())
+    }
 }
 impl Check {
     pub(crate) fn unchanged(&self) -> Result {

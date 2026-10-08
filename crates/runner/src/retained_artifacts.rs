@@ -12,6 +12,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub mod retention;
+pub mod retention_command;
+
 pub const SCHEMA: &str = "chrono-retained-blob/v1";
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,6 +47,7 @@ fn target(root: &Path, b: &Blob, transport: Option<&ArtifactTransport>) -> Resul
 }
 /// Stream into the declared upload root, retaining content identity and deduplicating original bytes.
 pub fn stage(root: &Path, input: &Path, directory: &str) -> Result<Value, String> {
+    let _activity = retention::report_activity(root)?;
     units::artifact_path(directory)?;
     if !directory.ends_with('/') {
         return Err("retained artifact directory must end /".into());
@@ -56,11 +60,30 @@ pub fn stage(root: &Path, input: &Path, directory: &str) -> Result<Value, String
     {
         return Err("original artifact must be a regular file".into());
     }
+    let relative = input.strip_prefix(root).ok().and_then(|p| p.to_str());
+    let _input = relative
+        .map(|p| retention::read_guard(root, p))
+        .transpose()?
+        .flatten();
+    let (expected, length) = file_identity(input)?;
+    let storage = format!("{directory}blobs/{expected}");
+    if retention::publish_owned_file(
+        root,
+        "check-original",
+        &storage,
+        input,
+        &expected,
+        length,
+        json!({"kind":"retained-blob","sha256":expected,"length":length}),
+    )? {
+        return Ok(json!({"schema":SCHEMA,"storage":storage,"sha256":expected,"length":length}));
+    }
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
     let (sha256, length) =
         copy_hashed(fs::File::open(input).map_err(|e| e.to_string())?, &mut tmp)?;
     let storage = format!("{directory}blobs/{sha256}");
     let output = no_symlink_parents(root, &storage)?;
+    let mut created = false;
     if output.exists() {
         if file_identity(&output)? != (sha256.clone(), length) {
             return Err("retained artifact address collision".into());
@@ -70,6 +93,22 @@ pub fn stage(root: &Path, input: &Path, directory: &str) -> Result<Value, String
             || file_identity(&output)? != (sha256.clone(), length)
         {
             return Err(e.to_string());
+        }
+    } else {
+        created = true;
+    }
+    if let Some(inventory) = retention::Inventory::adopted(root)? {
+        if created
+            && inventory.accepts("check-original", &storage)
+            && !inventory.enrolled(&storage)?
+        {
+            let publication = inventory.begin(
+                "check-original",
+                &storage,
+                json!({"publication":"staged","original_sha256":sha256,"length":length}),
+            )?;
+            publication
+                .complete(json!({"kind":"retained-blob","sha256":sha256,"length":length}))?;
         }
     }
     Ok(json!({"schema":SCHEMA,"storage":storage,"sha256":sha256,"length":length}))
@@ -113,7 +152,14 @@ pub fn identity(
         return Ok((crate::sha256(&raw), raw.len() as u64));
     }
     let b = descriptor(a)?;
-    let observed = file_identity(&target(root, &b, transport)?)?;
+    let physical = target(root, &b, transport)?;
+    let relative = physical
+        .strip_prefix(root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("original path UTF8")?;
+    let _use = retention::read_guard(root, relative)?;
+    let observed = file_identity(&physical)?;
     if observed != (b.sha256.clone(), b.length) {
         return Err(format!("original artifact digest/length: {address}"));
     }
@@ -137,6 +183,12 @@ pub fn bytes(
         return Err("original JSON/process artifact bound".into());
     }
     let p = target(root, &b, transport)?;
+    let relative = p
+        .strip_prefix(root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("original path UTF8")?;
+    let _use = retention::read_guard(root, relative)?;
     if !fs::symlink_metadata(&p)
         .map_err(|e| e.to_string())?
         .is_file()
@@ -200,10 +252,14 @@ pub fn copy_to(
         );
     }
     let b = descriptor(a)?;
-    let observed = copy_hashed(
-        fs::File::open(target(root, &b, transport)?).map_err(|e| e.to_string())?,
-        output,
-    )?;
+    let physical = target(root, &b, transport)?;
+    let relative = physical
+        .strip_prefix(root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("original path UTF8")?;
+    let _use = retention::read_guard(root, relative)?;
+    let observed = copy_hashed(fs::File::open(physical).map_err(|e| e.to_string())?, output)?;
     if observed != (b.sha256, b.length) {
         return Err("original artifact digest/length".into());
     }

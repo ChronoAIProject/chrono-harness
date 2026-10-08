@@ -65,6 +65,14 @@ impl Drop for Host {
             sha256(self.root.as_os_str().as_encoded_bytes())
         ));
         let retain = || -> std::io::Result<()> {
+            fs::create_dir_all(&destination)?;
+            let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+                &source(),
+                "worktree-fixture",
+                &destination,
+                value!({"producer":"worktree fixture capture","outcome":"not-established"}),
+            )
+            .map_err(std::io::Error::other)?;
             retain_fixture_state(
                 &self.root.join(".chrono-harness/state"),
                 &destination.join("coordinator-state"),
@@ -100,6 +108,9 @@ impl Drop for Host {
                         )?;
                     }
                 }
+            }
+            if let Some(publication) = publication {
+                publication.complete(value!({"capture":"completed","test_outcome":if std::thread::panicking() {"failed"} else {"original reports authoritative"}})).map_err(std::io::Error::other)?;
             }
             Ok(())
         };

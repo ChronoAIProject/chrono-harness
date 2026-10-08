@@ -943,3 +943,47 @@ fn v2_languages_schema_only_adoption_checks_existing_declarations() {
     fail(&h.check(&b, &c), "E_TEST_LANGUAGE");
     assert_eq!(h.calls(), 0);
 }
+
+mod process_projection {
+    use chrono_harness::ProcessResult;
+    use chrono_judge_ci::process_projection;
+    use std::collections::BTreeMap;
+
+    fn process(stdout_bytes: Vec<u8>, stderr_bytes: Vec<u8>) -> ProcessResult {
+        ProcessResult {
+            argv: vec!["tool".into()],
+            cwd: "/tmp/host".into(),
+            environment: BTreeMap::new(),
+            environment_digest: "environment".into(),
+            ownership_fds: None,
+            stdin_sha256: "stdin".into(),
+            stdout_sha256: "stdout".into(),
+            stderr_sha256: "stderr".into(),
+            stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
+            stdout_bytes,
+            stderr_bytes,
+            failure: None,
+            exit_code: 0,
+            executable: "/bin/tool".into(),
+            sha256: "tool".into(),
+        }
+    }
+
+    #[test]
+    fn process_projection_retains_small_streams() {
+        let projected = process_projection(&process(vec![b'a'; 3], vec![b'b'; 2]));
+        assert_eq!(projected["stdout_bytes"], serde_json::json!([97, 97, 97]));
+        assert!(projected.get("stdout_omitted").is_none());
+    }
+
+    #[test]
+    fn process_projection_keeps_large_streams_in_receipt_only() {
+        let projected = process_projection(&process(vec![b'a'; 4097], vec![]));
+        assert!(projected.get("stdout_bytes").is_none());
+        assert!(projected.get("stderr_bytes").is_none());
+        assert_eq!(projected["stdout_omitted"], serde_json::json!(true));
+        assert_eq!(projected["stderr_omitted"], serde_json::json!(true));
+        assert_eq!(projected["stdout_sha256"], serde_json::json!("stdout"));
+    }
+}

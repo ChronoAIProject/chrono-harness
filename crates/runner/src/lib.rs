@@ -1,4 +1,5 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
+pub mod artifact_disposal;
 mod canonical_request;
 mod checkout;
 pub mod facts;
@@ -15,6 +16,7 @@ pub mod full;
 pub mod initial;
 pub mod input_file;
 pub mod observation;
+pub mod ownership;
 pub mod parity;
 pub mod prepared;
 #[cfg(unix)]
@@ -511,6 +513,7 @@ pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<Process
         input,
         None,
         Duration::from_secs(s.timeout_seconds),
+        None,
     )?)
 }
 /// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
@@ -526,6 +529,7 @@ pub fn run_process_bound(
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
+        None,
     )?)
 }
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
@@ -547,6 +551,7 @@ pub fn run_process_observed(
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
+        None,
     )
 }
 /// Preserve a caller's finer acquisition deadline through the same engine.
@@ -557,7 +562,31 @@ pub fn run_process_observed_for(
     digest: &str,
     timeout: Duration,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(root, s, input, Some(digest), timeout)
+    run_process_inner(root, s, input, Some(digest), timeout, None)
+}
+/// Explicit originals for a consumer that can be terminated by an enclosing owner.
+/// Stream files contain only bytes actually read, within the unchanged output bound.
+/// A launch record is not a terminal receipt; absent terminal evidence stays unknown.
+pub struct ProcessEvidence<'a> {
+    pub stdout: &'a Path,
+    pub stderr: &'a Path,
+    pub launch: &'a Path,
+}
+pub fn run_process_observed_retained(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<ProcessResult, String> {
+    run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        Some(evidence),
+    )
 }
 // The existing process engine owns termination on errors and unwinding too.
 struct OwnedProcess {
@@ -599,6 +628,7 @@ fn run_process_inner(
     input: &[u8],
     expected: Option<&str>,
     timeout: Duration,
+    evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, String> {
     validate_command(s)?;
     if expected.is_some() && !Path::new(&s.program).is_absolute() {
@@ -618,6 +648,13 @@ fn run_process_inner(
     if expected.is_some_and(|v| v != hash) {
         return Err("prelaunch executable digest mismatch".into());
     }
+    let (stdout_original, stderr_original) = match evidence {
+        Some(paths) => (
+            Some(fs::File::create_new(paths.stdout).map_err(|e| format!("stdout original: {e}"))?),
+            Some(fs::File::create_new(paths.stderr).map_err(|e| format!("stderr original: {e}"))?),
+        ),
+        None => (None, None),
+    };
     let mut command = Command::new(&executable);
     if expected.is_some() {
         command.env_clear();
@@ -660,6 +697,29 @@ fn run_process_inner(
             joined: false,
         };
         let pid = child.id();
+        if let Some(paths) = evidence {
+            let record = serde_json::json!({
+                "schema": "chrono-process-launch/v1",
+                "launcher_pid": std::process::id(), "child_pid": pid,
+                "argv": std::iter::once(executable.to_string_lossy().into_owned()).chain(s.args.clone()).collect::<Vec<_>>(),
+                "cwd": root, "executable": executable, "sha256": hash,
+                "environment": environment, "environment_digest": wire::digest(&environment)?,
+                "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
+                "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
+            });
+            let mut original = tempfile::NamedTempFile::new_in(
+                paths
+                    .launch
+                    .parent()
+                    .ok_or("launch original parent missing")?,
+            )
+            .map_err(|e| format!("launch original: {e}"))?;
+            serde_json::to_writer(&mut original, &record).map_err(|e| e.to_string())?;
+            original.flush().map_err(|e| e.to_string())?;
+            original
+                .persist_noclobber(paths.launch)
+                .map_err(|e| format!("launch original: {e}"))?;
+        }
         let stdin = child.stdin.take().ok_or("missing process stdin")?;
         let writer = if input.is_empty() {
             // Preserve the child's input pipe and publish EOF directly; there
@@ -691,6 +751,7 @@ fn run_process_inner(
             limit: usize,
             flag: Arc<AtomicBool>,
             monitor: W,
+            mut original: Option<fs::File>,
         ) -> std::thread::ScopedJoinHandle<'scope, std::io::Result<Vec<u8>>> {
             scope.spawn(move || {
                 let result = (|| {
@@ -705,6 +766,11 @@ fn run_process_inner(
                             monitor();
                         }
                         let keep = n.min(limit.saturating_sub(out.len()));
+                        if let Some(file) = &mut original {
+                            // File is unbuffered: enclosing termination cannot discard
+                            // bytes already retained by a completed write.
+                            file.write_all(&buf[..keep])?;
+                        }
                         out.extend_from_slice(&buf[..keep]);
                     }
                     Ok(out)
@@ -721,6 +787,7 @@ fn run_process_inner(
             limit,
             exceeded.clone(),
             monitor.clone(),
+            stdout_original,
         );
         let stderr = reader(
             scope,
@@ -728,6 +795,7 @@ fn run_process_inner(
             limit,
             exceeded.clone(),
             monitor,
+            stderr_original,
         );
         // Read the shared clock first: this evidence cutoff cannot extend the
         // existing monitor deadline, including a delay between the two reads.
@@ -991,6 +1059,7 @@ pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     ["spec","status"]=>CliOutput{exit_code:0,stdout:"SPEC_STATUS=draft\nENFORCEMENT=not-implemented\nHOST_REGISTRIES=proposed\nCI_CHECK=chrono-ci-check/v1\nV1_TRANSPORT=implemented\nREGISTRATION=implemented\nCONTRACT=SPEC.md\n".into(),stderr:String::new()},
     ["check",rest @ ..]=>match check(rest, entry){Ok(output)=>output,Err(e)=>CliOutput{exit_code:2,stdout:String::new(),stderr:format!("E_CHECK: {e}\n")}},
     ["parity",rest @ ..]=>parity_command(rest),
+    ["retention",rest @ ..]=>retained_artifacts::retention_command::command(rest),
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
 }
@@ -1020,6 +1089,8 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
             },
             _ => unreachable!(),
         };
+        retained_artifacts::retention::maintain_adopted(&root)?;
+        let _report_activity = retained_artifacts::retention::report_activity(&root)?;
         let (req, p, binding) = prepared::prepare(&root, selection)?;
         let retention = prepared::retention_directory(&req);
         let result = execute_check(
@@ -1144,6 +1215,7 @@ fn execute_check(
     entry: Value,
     preparation: Option<Value>,
 ) -> Result<(u8, String), String> {
+    retained_artifacts::retention::maintain_adopted(&root)?;
     let (_, _, profile, _) = facts_configs::load(&root, &config_path)?;
     let full_units = if scope.is_some() && profile["schema"] != units::PROFILE {
         units::full_execution_units(&profile)?
@@ -1308,6 +1380,7 @@ fn execute_check(
             &input,
             None,
             Duration::from_secs(c.judge.timeout_seconds),
+            None,
         )
     };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -1363,6 +1436,25 @@ fn execute_check(
     } else {
         None
     };
+    let collected_originals: Vec<String> =
+        if matches!(report["request"]["scope"]["kind"].as_str(), Some("collect")) {
+            report["response"]["evidence"]["retained_originals"]
+                .as_array()
+                .map(|paths| {
+                    paths
+                        .iter()
+                        .map(|p| {
+                            p.as_str()
+                                .ok_or_else(|| "collection original path".to_owned())
+                                .map(str::to_owned)
+                        })
+                        .collect::<Result<Vec<_>, String>>()
+                })
+                .transpose()?
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
     let console = if retained_streams {
         let projection = serde_json::json!({
             "retained_report": report["retained_report"],
@@ -1385,17 +1477,55 @@ fn execute_check(
     fs::create_dir_all(report_path.parent().ok_or("report parent missing")?)
         .map_err(|e| e.to_string())?;
     if let Some(path) = retained_report {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(no_symlink_parents(&root, &path)?)
-            .map_err(|e| e.to_string())?;
-        file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        if !retained_artifacts::retention::publish_original(
+            &root,
+            &path,
+            text.as_bytes(),
+            serde_json::json!({"request_id":request_id,"exit_code":code,"transport_failure":report["transport_failure"]}),
+        )? {
+            let mut file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(no_symlink_parents(&root, &path)?)
+                .map_err(|e| e.to_string())?;
+            file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        let preparation = &report["request"]["observations"]["preparation"];
+        let mut originals = collected_originals;
+        for values in [
+            &preparation["result"]["originals"],
+            &preparation["receipts"],
+        ] {
+            if let Some(values) = values.as_array() {
+                for value in values {
+                    originals.push(
+                        value["path"]
+                            .as_str()
+                            .ok_or("declared original path")?
+                            .to_owned(),
+                    );
+                }
+            }
+        }
+        for stream in ["stdout_original", "stderr_original"] {
+            if let Some(path) = report["judge"][stream]["path"].as_str() {
+                originals.push(path.to_owned());
+            }
+        }
+        let pending_native =
+            (preparation["request"]["source"] == "ci").then_some(request_id.as_str());
+        let _publication = retained_artifacts::retention::reference_report(
+            &root,
+            &output_path,
+            &path,
+            &originals,
+            pending_native,
+        )?;
         if units::reference_publication(&c)? {
             let reference = units::ReportReference {
                 schema: units::REPORT_REFERENCE.into(),
                 original: prepared::Original {
-                    path,
+                    path: path.clone(),
                     sha256: sha256(text.as_bytes()),
                 },
             };
@@ -1404,8 +1534,12 @@ fn execute_check(
                 serde_json::to_vec(&reference).map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;
+            retained_artifacts::retention::settle_report(&root, &output_path, &path)?;
             return Ok((code, console.unwrap_or(text)));
         }
+        fs::write(report_path, &text).map_err(|e| e.to_string())?;
+        retained_artifacts::retention::settle_report(&root, &output_path, &path)?;
+        return Ok((code, text));
     }
     fs::write(report_path, &text).map_err(|e| e.to_string())?;
     Ok((code, text))

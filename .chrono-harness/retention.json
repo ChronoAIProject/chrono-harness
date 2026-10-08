@@ -1,0 +1,37 @@
+{
+  "schema": "chrono-output-retention/v1",
+  "producers": {
+    "worktree-fixture": [
+      ".chrono-harness/state/worktree-test-failures/",
+      ".chrono-harness/state/worktree-test-receipts/"
+    ],
+    "cache-fixture": [
+      ".chrono-harness/state/cache-test-failures/"
+    ],
+    "ci-fixture": [
+      ".chrono-harness/state/ci-test-failures/"
+    ],
+    "migration-fixture": [
+      ".chrono-harness/state/migration-tests/"
+    ],
+    "check-original": [
+      ".chrono-harness/state/"
+    ],
+    "full-original": [
+      ".chrono-harness/state/"
+    ],
+    "lifecycle-original": [
+      ".chrono-harness/state/worktrees/"
+    ]
+  },
+  "keep_seconds": 604800,
+  "max_entries": 512,
+  "max_summaries": 128,
+  "max_nodes_per_round": 256,
+  "max_bytes_per_round": 67108864,
+  "max_millis_per_round": 1000,
+  "max_output_bytes": 1073741824,
+  "max_total_bytes": 8589934592,
+  "max_manifest_nodes": 16384,
+  "max_metadata_bytes_per_round": 67108864
+}

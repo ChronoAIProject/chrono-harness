@@ -1,7 +1,7 @@
 //! Explicit CI policy: fixed Git snapshots, registered old/new impact graph, candidate operations.
 use chrono_harness::{
-    CheckConfig, CheckResult, PROTOCOL, Request, Response, Status, decode, json, relative_path,
-    sha256,
+    CheckConfig, CheckResult, PROTOCOL, ProcessResult, Request, Response, Status, decode, json,
+    relative_path, sha256,
 };
 use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,34 @@ use std::fs;
 use std::path::Path;
 mod collect;
 mod units;
+
+/// The receipt is the canonical owner of complete process evidence.  The
+/// adjacent `process` field in an executed row is a compatibility projection
+/// used for status/identity consumers; large streams are kept only once, in
+/// `receipt.process`, so a large DELTA cannot exhaust the judge transport
+/// merely by repeating the same bytes.
+const INLINE_PROCESS_STREAM_BYTES: usize = 4096;
+
+pub fn process_projection(process: &ProcessResult) -> Value {
+    let mut value = serde_json::to_value(process).expect("process result is serializable");
+    if process
+        .stdout_bytes
+        .len()
+        .saturating_add(process.stderr_bytes.len())
+        > INLINE_PROCESS_STREAM_BYTES
+    {
+        let object = value
+            .as_object_mut()
+            .expect("serialized process result is an object");
+        object.remove("stdout_bytes");
+        object.remove("stderr_bytes");
+        object.remove("stdout");
+        object.remove("stderr");
+        object.insert("stdout_omitted".into(), Value::Bool(true));
+        object.insert("stderr_omitted".into(), Value::Bool(true));
+    }
+    value
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -695,8 +723,82 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
+    // A large DELTA can make the predecessor map quadratic in the number of
+    // seeds.  Keep the complete explanation for ordinary changes, but publish
+    // a digest/count for oversized derived paths.  The registered graph,
+    // seeds, traversed edges and selected tests remain available in the same
+    // response; omission is explicit and fail-closed consumers can require a
+    // smaller scope when they need every witness path inline.
+    let graph::Closure {
+        reached,
+        predecessors,
+        traversed,
+    } = closure;
+    // Estimate the derived map from registered node/seed cardinalities only.
+    // No second JSON traversal is allowed here: the graph itself may be large
+    // enough that serialising it merely to decide whether to omit it would
+    // exhaust the judge before the bounded response is written.
+    let predecessor_count = predecessors.values().map(BTreeMap::len).sum::<usize>();
+    let estimated_predecessor_entries = seeds.len().saturating_mul(reached.len());
+    let predecessors_omitted = estimated_predecessor_entries > 16_384
+        || predecessor_count > 16_384
+        || reached.len() > 8_192
+        || traversed.len() > 16_384;
+    // Once the predecessor map exceeds the inline budget, retain only bounded
+    // structural counts for the derived closure as well. Re-emitting the
+    // reached/traversed maps would recreate the same quadratic transport
+    // pressure even after removing predecessors.
+    let paths_omitted = predecessors_omitted;
+    let closure_value = if paths_omitted {
+        object!({
+            "predecessors_omitted": true,
+            "predecessor_count": predecessor_count,
+            "reached_omitted": true,
+            "reached_count": reached.len(),
+            "traversed_omitted": true,
+            "traversed_count": traversed.len()
+        })
+    } else if predecessors_omitted {
+        object!({
+            "reached": reached,
+            "traversed": traversed,
+            "predecessors_omitted": true,
+            "predecessor_count": predecessor_count
+        })
+    } else {
+        object!({
+            "reached": reached,
+            "predecessors": predecessors,
+            "traversed": traversed
+        })
+    };
+    let mut explanation = object!({
+        "scope":"chrono-ci-check/v1-adapter",
+        "edges": if paths_omitted {
+            object!({
+                "omitted": true,
+                "count": edges.len()
+            })
+        } else {
+            object!(edges)
+        },
+        "seeds":seed_nodes,
+        "seed_causes":seeds,
+        "closure":closure_value,
+        "extra_selections":extras,
+        "legacy_only_selections":legacy_only
+    });
+    if predecessors_omitted {
+        explanation["predecessor_transport"] = object!({
+            "omitted": true,
+            "count": predecessor_count,
+            "source": "registered FILEMAP graph plus explicit seeds"
+        });
+    }
+    if paths_omitted {
+        explanation["closure_transport"] = object!({"omitted":true});
+    }
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());
     }
@@ -1457,7 +1559,11 @@ fn evaluate(
                 }),
             });
             if let Some(receipt) = &result.receipt {
-                executed.push(object!({"operation":result.operation,"process":receipt.process,"receipt":receipt}));
+                executed.push(object!({
+                    "operation": result.operation,
+                    "process": process_projection(&receipt.process),
+                    "receipt": receipt
+                }));
             }
         }
         for (old, replacement) in &removed {

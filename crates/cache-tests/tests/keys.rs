@@ -8,14 +8,26 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{fs, path::Path, process::Command};
 
-struct Host(tempfile::TempDir);
+struct Host(
+    tempfile::TempDir,
+    Option<chrono_harness::retained_artifacts::retention::Publication>,
+);
 
 impl Host {
     fn new() -> Self {
         let retained = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.chrono-harness/state/cache-test-failures");
         fs::create_dir_all(&retained).unwrap();
-        Self(tempfile::tempdir_in(retained).unwrap())
+        let directory = tempfile::tempdir_in(retained).unwrap();
+        let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
+        let publication = chrono_harness::retained_artifacts::retention::begin_adopted(
+            &root,
+            "cache-fixture",
+            directory.path(),
+            json!({"test_outcome":"not-established"}),
+        )
+        .unwrap();
+        Self(directory, publication)
     }
 
     fn path(&self) -> &Path {
@@ -25,6 +37,11 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
+        if let Some(publication) = self.1.take() {
+            if let Err(error) = publication.complete(json!({"test_outcome":if std::thread::panicking() {"failed"} else {"completed"},"original_results":"fixture files authoritative"})) {
+                eprintln!("Cache fixture lifetime publication failed: {error}");
+            }
+        }
         if std::thread::panicking() {
             use std::io::Write;
             self.0.disable_cleanup(true);

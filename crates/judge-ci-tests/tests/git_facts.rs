@@ -113,12 +113,20 @@ impl BoundHost {
     }
 }
 
+fn expanded_facts(mut observed: Value) -> Value {
+    for process in observed["processes"].as_array_mut().unwrap() {
+        *process = chrono_harness::full::expand_process(process).unwrap();
+    }
+    observed
+}
+
 fn assert_process_bytes(observation: &Value) {
     let processes = observation["processes"]
         .as_array()
         .expect("bound process records");
     assert!(!processes.is_empty());
     for p in processes {
+        let p = chrono_harness::full::expand_process(p).unwrap();
         for stream in ["stdout", "stderr"] {
             let bytes: Vec<u8> =
                 serde_json::from_value(p[format!("{stream}_bytes")].clone()).unwrap();
@@ -139,9 +147,9 @@ fn scoped_v2_cli_binds_git_and_preserves_registered_execution() {
     assert_eq!(response["evidence"]["scope"], "chrono-ci-check/v2");
     assert_eq!(response["evidence"]["selected"], json!(["test:suite"]));
     assert_eq!(h.host.calls(), 1);
-    let facts = &response["evidence"]["git_facts"];
+    let facts = expanded_facts(response["evidence"]["git_facts"].clone());
     assert_eq!(facts["binding"]["path"], json!(h.program));
-    assert_process_bytes(facts);
+    assert_process_bytes(&facts);
     assert_eq!(
         facts["processes"].as_array().unwrap().len(),
         h.trace().lines().count()
@@ -238,10 +246,10 @@ fn scoped_cli_platform_selection_keeps_execution_and_docs_locality() {
         let candidate = h.host.commit();
         let (exit, report, error) = h.cli(&candidate);
         assert_eq!(exit, 0, "{error} {report}");
-        let facts = &report["response"]["evidence"]["git_facts"];
+        let facts = expanded_facts(report["response"]["evidence"]["git_facts"].clone());
         assert_eq!(facts["selection"]["path"], FACTS);
         assert_eq!(facts["config_path"], ".chrono-harness/native scoped.json");
-        assert_process_bytes(facts);
+        assert_process_bytes(&facts);
         assert_eq!(h.host.calls(), usize::from(changed == "src.txt"));
         assert_eq!(facts["input_closure_complete"], false);
     }
@@ -276,8 +284,8 @@ fn scoped_v2_failed_read_keeps_original_bytes_and_exit() {
     let response = h.host.check(&h.base, &candidate);
     fail(&response, "Git facts process exit 17");
     assert_eq!(h.host.calls(), 0);
-    let facts = &response.evidence["git_facts"];
-    assert_process_bytes(facts);
+    let facts = expanded_facts(response.evidence["git_facts"].clone());
+    assert_process_bytes(&facts);
     let last = facts["processes"].as_array().unwrap().last().unwrap();
     assert_eq!(last["exit_code"], 17);
     assert_eq!(last["stdout_bytes"], json!([97, 0, 98]));
@@ -316,8 +324,8 @@ fn scoped_v2_rejects_bound_input_and_fixed_policy_drift() {
         if fault == "digest" {
             assert!(h.trace().is_empty());
         } else {
-            let facts = &response.evidence["git_facts"];
-            assert_process_bytes(facts);
+            let facts = expanded_facts(response.evidence["git_facts"].clone());
+            assert_process_bytes(&facts);
             if fault == "version" {
                 let processes = facts["processes"].as_array().unwrap();
                 assert_eq!(processes.len(), 1);
@@ -549,8 +557,8 @@ fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
         };
         fail(&result, expected);
         assert_eq!(h.host.calls(), 0);
-        let facts = &result.evidence["git_facts"];
-        assert_process_bytes(facts);
+        let facts = expanded_facts(result.evidence["git_facts"].clone());
+        assert_process_bytes(&facts);
         let processes = facts["processes"].as_array().unwrap();
         let last = processes.last().unwrap();
         if fault == "version-exit" {
@@ -595,8 +603,8 @@ fn scoped_artifact_inventory_does_not_spend_git_output_bound_on_declared_outputs
     let result = h.host.check(&h.base, &candidate);
     pass(&result);
     assert_eq!(h.host.calls(), 1);
-    let facts = &result.evidence["git_facts"];
-    assert_process_bytes(facts);
+    let facts = expanded_facts(result.evidence["git_facts"].clone());
+    assert_process_bytes(&facts);
     let inventories: Vec<_> = facts["processes"]
         .as_array()
         .unwrap()

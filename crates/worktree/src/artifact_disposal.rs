@@ -118,7 +118,8 @@ pub(crate) fn dispose(
             continue;
         }
         // Internal links are unlinked; their external targets are never traversed.
-        fs::remove_dir_all(path).map_err(|e| format!("artifact disposal {name}: {e}"))?;
+        chrono_harness::artifact_disposal::dispose_directory(path)
+            .map_err(|e| format!("artifact disposal {name}: {e}"))?;
         match fs::symlink_metadata(path) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
             Err(e) => return Err(e.to_string()),
