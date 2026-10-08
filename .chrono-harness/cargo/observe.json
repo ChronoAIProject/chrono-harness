@@ -40,5 +40,7 @@
     "platform": "macos-aarch64",
     "policy": ".chrono-harness/cargo/runner.json",
     "operation": "guard.check.runner"
-  }
+  },
+  "prerequisite_action": "inputs_fetch",
+  "prerequisite_cost": "unmeasured"
 }

@@ -642,6 +642,94 @@ fn report_rejects_a_planner_executable_mismatch_before_publication() {
 }
 
 #[test]
+fn registered_startup_planner_survives_release_consumer_staging() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let read = |path: &str| -> Value {
+        serde_json::from_slice(&fs::read(source.join(path)).unwrap()).unwrap()
+    };
+    let bootstrap = read(".chrono-harness/ci/bootstrap-cache.json");
+    let release = read(".chrono-harness/release/build.json");
+    let binding = release["consumer_staging"]["bindings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["asset"] == "chrono-cache")
+        .unwrap();
+    for registration in [
+        ".chrono-harness/ci/units.json",
+        ".chrono-harness/ci/release.json",
+    ] {
+        let host = read(registration);
+        let program = host["persistent_cache"]["program"].as_str().unwrap();
+        assert_eq!(bootstrap["install"][0]["destination"], program);
+        let (root, config) = fixture();
+        let executable = root.path().join(program);
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::copy(
+            source.join(bootstrap["install"][0]["source"].as_str().unwrap()),
+            &executable,
+        )
+        .unwrap();
+        fs::write(
+            root.path().join(".chrono-harness/cache.json"),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        let plan_path = ".chrono-harness/state/cache/check.one/plan.json";
+        let planned = Command::new(&executable)
+            .args([
+                "plan",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--config",
+                ".chrono-harness/cache.json",
+                "--consumer",
+                "check.one",
+                "--plan-output",
+                plan_path,
+            ])
+            .output()
+            .unwrap();
+        assert!(planned.status.success(), "{planned:?}");
+        // Apply the real declared business destinations with a distinct executable
+        // fixture, reproducing the debug-to-release replacement boundary.
+        for destination in binding["destinations"].as_array().unwrap() {
+            let destination = root.path().join(destination.as_str().unwrap());
+            fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            fs::copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), destination).unwrap();
+        }
+        let report = || {
+            Command::new(&executable).args([
+            "report", "--host-root", root.path().to_str().unwrap(), "--plan", plan_path,
+            "--report-directory", ".chrono-harness/state/cache/check.one/", "--steps-env",
+            "CACHE_TEST_STEPS", "--work", "work",
+        ]).env("CACHE_TEST_STEPS", json!({"cache_0_restore":{"outcome":"success","outputs":{}},"cache_0_save":{"outcome":"skipped","outputs":{}},"work":{"outcome":"success"}}).to_string()).output().unwrap()
+        };
+        let out = report();
+        assert!(out.status.success(), "{registration}: {out:?}");
+        let result: Value = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(
+            result["observation"]["current_executable_verification"]["status"],
+            "matched"
+        );
+        let mut plan: Value =
+            serde_json::from_slice(&fs::read(root.path().join(plan_path)).unwrap()).unwrap();
+        plan["planner"]["sha256"] = json!("0".repeat(64));
+        fs::write(
+            root.path().join(plan_path),
+            serde_json::to_vec(&plan).unwrap(),
+        )
+        .unwrap();
+        let rejected = report();
+        assert!(!rejected.status.success());
+        assert!(
+            String::from_utf8_lossy(&rejected.stderr)
+                .contains("differs from the planner executable")
+        );
+    }
+}
+
+#[test]
 fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let (root, config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();

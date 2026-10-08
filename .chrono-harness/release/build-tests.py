@@ -424,6 +424,21 @@ class UnitFailureRetention(unittest.TestCase):
         shutil.rmtree(self.root/'state')
         self.assertEqual((self.output/files[0]['path']).read_bytes(),raw)
 
+    def test_main_metadata_originals_follow_the_registered_release_failure_consumer(self):
+        cfg=json.loads((ROOT/BUILD).read_bytes())
+        directories=cfg['failure_evidence'].get('test.judge-cargo-tests')
+        self.assertEqual(directories,['.chrono-harness/state/inputs/'])
+        raw=b'error: no matching package; offline metadata\n'
+        setup='Path(".chrono-harness/state/inputs/main-metadata-fixture").mkdir(parents=True);Path(".chrono-harness/state/inputs/main-metadata-fixture/runner.stderr").write_bytes('+repr(raw)+');'
+        report,_=self.failed_child(b'outer metadata assertion failure\n',{'original.verify':directories},setup)
+        retained=report['processes'][0]['registered_failure_evidence']
+        self.assertEqual(retained['status'],'retained')
+        self.assertEqual(len(retained['files']),1)
+        original=retained['files'][0]
+        self.assertEqual(original['source'],'.chrono-harness/state/inputs/main-metadata-fixture/runner.stderr')
+        self.assertEqual((self.output/original['path']).read_bytes(),raw)
+        self.assertEqual(original['sha256'],hashlib.sha256(raw).hexdigest())
+
     def test_registered_failure_copy_error_preserves_original_child_exit(self):
         (self.output/'failure-evidence').mkdir()
         (self.output/'failure-evidence/registered').write_bytes(b'blocked output')

@@ -176,6 +176,10 @@
         {
           "kind": "runtime-input",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -1005,6 +1009,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },
@@ -3316,6 +3324,10 @@
         {
           "kind": "test-execution",
           "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },
@@ -4681,6 +4693,14 @@
         {
           "kind": "test-execution",
           "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
         }
       ]
     },
@@ -5231,6 +5251,10 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
         }
       ]
     },

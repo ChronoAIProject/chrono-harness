@@ -329,10 +329,7 @@ fn native_v6_keeps_the_original_output_layout_and_checks_real_host_and_offline_s
 
 #[test]
 fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
-    use chrono_harness::{
-        CommandSpec, ProcessEvidence, observation, run_process_observed,
-        run_process_observed_retained,
-    };
+    use chrono_harness::{ProcessEvidence, observation, run_process_observed_retained};
     use std::{
         collections::BTreeMap,
         time::{SystemTime, UNIX_EPOCH},
@@ -346,6 +343,7 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/cargo/observe.json")).unwrap())
             .unwrap();
     assert_eq!(declaration["schema"], "chrono-host-cargo-observation/v1");
+    assert_eq!(declaration["prerequisite_action"], "inputs_fetch");
     let mut environment = BTreeMap::new();
     for key in [
         "PATH",
@@ -399,36 +397,31 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
         let action = &row["actions"]["inputs_metadata"];
         assert_eq!(action["operation"], format!("inputs.metadata.{identity}"));
         assert_eq!(action["tool"], "cargo");
-        let argv: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
-        let process = run_process_observed(
+        let fetch = &row["actions"]["inputs_fetch"];
+        assert_eq!(fetch["operation"], format!("inputs.fetch.{identity}"));
+        assert_eq!(fetch["tool"], "cargo");
+        let acquired = main_host_input_process(
             &root,
-            &CommandSpec {
-                program: tool.path.to_str().unwrap().into(),
-                args: argv,
-                env: environment.clone(),
-                timeout_seconds: 120,
-                output_limit_bytes: 4 * 1024 * 1024,
-            },
-            &[],
-            &tool.sha256,
-        )
-        .unwrap();
-        fs::write(
-            directory.join(format!("{identity}.stdout")),
-            &process.stdout_bytes,
-        )
-        .unwrap();
-        fs::write(
-            directory.join(format!("{identity}.stderr")),
-            &process.stderr_bytes,
-        )
-        .unwrap();
-        fs::write(
-            directory.join(format!("{identity}.json")),
-            serde_json::to_vec_pretty(&process).unwrap(),
-        )
-        .unwrap();
-        observation::process_success(&process).unwrap();
+            &tool,
+            fetch,
+            &environment,
+            &directory,
+            &format!("{identity}.fetch"),
+        );
+        observation::process_success(&acquired).unwrap_or_else(|error| {
+            panic!(
+                "{identity} acquisition: {error}; original {}",
+                directory.display()
+            )
+        });
+        let process =
+            main_host_input_process(&root, &tool, action, &environment, &directory, identity);
+        observation::process_success(&process).unwrap_or_else(|error| {
+            panic!(
+                "{identity} metadata: {error}; original {}",
+                directory.display()
+            )
+        });
         let metadata: serde_json::Value = serde_json::from_slice(&process.stdout_bytes).unwrap();
         assert_eq!(metadata["version"], 1);
         assert_eq!(
@@ -540,6 +533,138 @@ fn main_host_declared_metadata_operations_retain_actual_resolution_streams() {
                 .contains("host: aarch64-apple-darwin")
         );
     }
+}
+
+fn main_host_input_process(
+    root: &std::path::Path,
+    tool: &chrono_harness::observation::Tool,
+    action: &serde_json::Value,
+    environment: &std::collections::BTreeMap<String, String>,
+    directory: &std::path::Path,
+    name: &str,
+) -> chrono_harness::ProcessResult {
+    let process = chrono_harness::run_process_observed_retained(
+        root,
+        &chrono_harness::CommandSpec {
+            program: tool.path.to_str().unwrap().into(),
+            args: serde_json::from_value(action["argv"].clone()).unwrap(),
+            env: environment.clone(),
+            timeout_seconds: 120,
+            output_limit_bytes: 4 * 1024 * 1024,
+        },
+        &[],
+        &tool.sha256,
+        &chrono_harness::ProcessEvidence {
+            stdout: &directory.join(format!("{name}.stdout")),
+            stderr: &directory.join(format!("{name}.stderr")),
+            launch: &directory.join(format!("{name}.launch.json")),
+        },
+    )
+    .unwrap_or_else(|error| panic!("{name} launch: {error}; original {}", directory.display()));
+    fs::write(
+        directory.join(format!("{name}.json")),
+        serde_json::to_vec(&process).unwrap(),
+    )
+    .unwrap();
+    process
+}
+
+#[test]
+fn main_host_offline_metadata_requires_registered_package_acquisition() {
+    use chrono_harness::observation;
+    use std::collections::BTreeMap;
+    let root = fs::canonicalize(source()).unwrap();
+    let projects: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
+            .unwrap();
+    let row = projects["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["id"] == "runner")
+        .unwrap();
+    let retained = root.join(".chrono-harness/state/inputs");
+    fs::create_dir_all(&retained).unwrap();
+    let directory = tempfile::Builder::new()
+        .prefix("main-metadata-acquisition-")
+        .tempdir_in(&retained)
+        .unwrap()
+        .keep();
+    // Package caches are rebuildable test artifacts, separate from the original
+    // process evidence uploaded on failure. Their size must not consume its cap.
+    let cargo_home = tempfile::Builder::new()
+        .prefix("metadata-package-inventory-")
+        .tempdir_in(root.join("crates/judge-cargo-tests/target"))
+        .unwrap();
+    let mut environment: BTreeMap<String, String> = std::env::vars()
+        .filter(|(key, _)| {
+            ["PATH", "HOME", "RUSTUP_HOME", "TMPDIR", "SDKROOT"].contains(&key.as_str())
+        })
+        .collect();
+    environment.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
+    environment.insert(
+        "CARGO_HOME".into(),
+        cargo_home.path().to_str().unwrap().into(),
+    );
+    let tool = observation::tool(
+        &root,
+        "cargo",
+        &["--version".into()],
+        &environment,
+        120,
+        4 * 1024 * 1024,
+    )
+    .unwrap();
+    observation::process_success(&tool.version).unwrap();
+    let absent = main_host_input_process(
+        &root,
+        &tool,
+        &row["actions"]["inputs_metadata"],
+        &environment,
+        &directory,
+        "before",
+    );
+    assert!(
+        observation::process_success(&absent).is_err(),
+        "empty package inventory unexpectedly resolved"
+    );
+    assert!(
+        absent.stderr.contains("no matching package") && absent.stderr.contains("offline"),
+        "{}; original {}",
+        absent.stderr,
+        directory.display()
+    );
+    let fetch = &row["actions"]["inputs_fetch"];
+    assert_eq!(fetch["operation"], "inputs.fetch.runner");
+    let acquired = main_host_input_process(&root, &tool, fetch, &environment, &directory, "fetch");
+    observation::process_success(&acquired).unwrap_or_else(|error| {
+        panic!(
+            "registered acquisition: {error}; original {}",
+            directory.display()
+        )
+    });
+    let resolved = main_host_input_process(
+        &root,
+        &tool,
+        &row["actions"]["inputs_metadata"],
+        &environment,
+        &directory,
+        "after",
+    );
+    observation::process_success(&resolved).unwrap_or_else(|error| {
+        panic!(
+            "offline resolution after acquisition: {error}; original {}",
+            directory.display()
+        )
+    });
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&resolved.stdout_bytes).unwrap()["version"],
+        1
+    );
+    println!(
+        "controlled main-host acquisition originals: {}",
+        directory.display()
+    );
 }
 
 // Shared by the original native consumer and the enclosing-termination regression.

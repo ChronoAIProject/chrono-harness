@@ -1,5 +1,22 @@
 # Optional Cargo project judge
 
+The main-host metadata consumer registers `inputs.fetch.*` actions as package
+acquisition prerequisites for its 34 original `inputs.metadata.*` actions.
+Acquisition uses the same locked manifest and declared target; metadata remains
+locked and offline. Both processes retain launch records and original streams
+under `.chrono-harness/state/inputs/`, including failures and enclosing
+termination. The release recipe carries that directory for failed
+`test.judge-cargo-tests` operations. An empty package inventory is a controlled
+reproduction of a missing prerequisite. Diagnosing a native metadata failure
+requires its original inner process streams; a local reproduction alone does
+not identify that failure's cause.
+
+**Mixed-change warning:** These host prerequisites and transport bindings change
+alongside their Rust consumer tests and release evidence registration. Validation
+includes the original affected Rust suites, Python release/bootstrap tests and
+workflow projections. Local source checks do not establish native acceptance,
+full activation or publication.
+
 `judge-cargo` / `judge-cargo-tests` is an independent production/test pair. Generic
 registration and projects have no dependency on it or on TOML. A host adopts the
 adapter by registering its binary, arguments, policy input and FILEMAP edges. A

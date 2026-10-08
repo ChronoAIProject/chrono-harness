@@ -129,6 +129,18 @@
             "--operation",
             "guard.check.runner"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.runner",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -241,6 +253,18 @@
             ".chrono-harness/cargo/runner-tests.json",
             "--operation",
             "guard.test.runner-tests"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
           ]
         }
       },
@@ -390,6 +414,18 @@
             "--operation",
             "guard.instructions.generate"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.instructions",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -503,6 +539,18 @@
             "--operation",
             "guard.test.instructions-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -588,6 +636,18 @@
             ".chrono-harness/cargo/judge-ci.json",
             "--operation",
             "guard.check.judge-ci"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
           ]
         }
       },
@@ -702,6 +762,18 @@
             "--operation",
             "guard.test.judge-ci-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -809,6 +881,18 @@
             ".chrono-harness/cargo/ci.json",
             "--operation",
             "guard.check.ci"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.ci",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
           ]
         }
       },
@@ -923,6 +1007,18 @@
             "--operation",
             "guard.test.ci-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1008,6 +1104,18 @@
             ".chrono-harness/cargo/judge-registration.json",
             "--operation",
             "guard.check.judge-registration"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
           ]
         }
       },
@@ -1122,6 +1230,18 @@
             "--operation",
             "guard.test.judge-registration-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1207,6 +1327,18 @@
             ".chrono-harness/cargo/judge-filemap.json",
             "--operation",
             "guard.check.judge-filemap"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
           ]
         }
       },
@@ -1321,6 +1453,18 @@
             "--operation",
             "guard.test.judge-filemap-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1406,6 +1550,18 @@
             ".chrono-harness/cargo/judge-routes.json",
             "--operation",
             "guard.check.judge-routes"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
           ]
         }
       },
@@ -1520,6 +1676,18 @@
             "--operation",
             "guard.test.judge-routes-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1605,6 +1773,18 @@
             ".chrono-harness/cargo/judge-projects.json",
             "--operation",
             "guard.check.judge-projects"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
           ]
         }
       },
@@ -1777,6 +1957,18 @@
             "--operation",
             "guard.test.projects.migration"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust",
@@ -1865,6 +2057,18 @@
             ".chrono-harness/cargo/judge-cost.json",
             "--operation",
             "guard.check.judge-cost"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
           ]
         }
       },
@@ -1979,6 +2183,18 @@
             "--operation",
             "guard.test.judge-cost-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-cost",
@@ -2064,6 +2280,18 @@
             ".chrono-harness/cargo/judge-mixed.json",
             "--operation",
             "guard.check.judge-mixed"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
           ]
         }
       },
@@ -2178,6 +2406,18 @@
             "--operation",
             "guard.test.judge-mixed-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-mixed",
@@ -2263,6 +2503,18 @@
             ".chrono-harness/cargo/judge-workflow.json",
             "--operation",
             "guard.check.judge-workflow"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
           ]
         }
       },
@@ -2561,6 +2813,18 @@
             "--operation",
             "guard.test.workflow.short"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-workflow",
@@ -2651,6 +2915,18 @@
             ".chrono-harness/cargo/inputs.json",
             "--operation",
             "guard.check.inputs"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.inputs",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
           ]
         }
       },
@@ -2765,6 +3041,18 @@
             "--operation",
             "guard.test.inputs-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "inputs",
@@ -2850,6 +3138,18 @@
             ".chrono-harness/cargo/distribution.json",
             "--operation",
             "guard.check.distribution"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.distribution",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
           ]
         }
       },
@@ -2964,6 +3264,18 @@
             "--operation",
             "guard.test.distribution-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "distribution",
@@ -3049,6 +3361,18 @@
             ".chrono-harness/cargo/judge-cargo.json",
             "--operation",
             "guard.check.judge-cargo"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
           ]
         }
       },
@@ -3163,6 +3487,18 @@
             "--operation",
             "guard.test.judge-cargo-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-cargo",
@@ -3248,6 +3584,18 @@
             ".chrono-harness/cargo/worktree.json",
             "--operation",
             "guard.check.worktree"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.worktree",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
           ]
         }
       },
@@ -3433,6 +3781,18 @@
             "--operation",
             "guard.test.worktree.adoption"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "worktree",
@@ -3581,6 +3941,18 @@
             "--operation",
             "guard.check.diagnostics"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
         }
       },
       "test_project": "diagnostics-tests",
@@ -3694,6 +4066,18 @@
             "--operation",
             "guard.test.diagnostics-tests"
           ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "diagnostics",
@@ -3779,6 +4163,18 @@
             ".chrono-harness/cargo/cache.json",
             "--operation",
             "guard.check.cache"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.cache",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
           ]
         }
       },
@@ -3892,6 +4288,18 @@
             ".chrono-harness/cargo/cache-tests.json",
             "--operation",
             "guard.test.cache-tests"
+          ]
+        },
+        "inputs_fetch": {
+          "operation": "inputs.fetch.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "fetch",
+            "--locked",
+            "--target",
+            "aarch64-apple-darwin",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
           ]
         }
       },

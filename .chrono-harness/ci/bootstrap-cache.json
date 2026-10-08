@@ -12,7 +12,7 @@
   "install": [
     {
       "source": "crates/cache/target/debug/chrono-cache",
-      "destination": ".chrono-harness/bin/chrono-cache"
+      "destination": ".chrono-harness/bin/chrono-cache-transport"
     }
   ],
   "participation": {

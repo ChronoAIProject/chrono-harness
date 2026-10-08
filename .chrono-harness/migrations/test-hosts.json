@@ -1,4 +1,18 @@
 {
   "Darwin/arm64": ".chrono-harness/config.json",
-  "Linux/x86_64": ".chrono-harness/migrations/fixtures/linux-host.json"
+  "Linux/x86_64": ".chrono-harness/migrations/fixtures/linux-host.json",
+  "execution_tools": {
+    "Darwin/arm64": {
+      "cargo": {
+        "program": "cargo",
+        "expected_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+      }
+    },
+    "Linux/x86_64": {
+      "cargo": {
+        "program": "cargo",
+        "expected_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+      }
+    }
+  }
 }

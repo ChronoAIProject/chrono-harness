@@ -748,6 +748,9 @@
     ],
     "test.judge-workflow-tests": [
       ".chrono-harness/state/workflow-test-failures/"
+    ],
+    "test.judge-cargo-tests": [
+      ".chrono-harness/state/inputs/"
     ]
   },
   "verification_consumers": {
