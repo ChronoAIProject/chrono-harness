@@ -429,6 +429,20 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     return Err("change detection did not succeed".into());
                 }
             }
+            if matches!(req.selection, Selection::Collect) {
+                let policy: Value = decode(
+                    &fs::read(no_symlink_parents(root, &req.effective_config)?)
+                        .map_err(|e| e.to_string())?,
+                )?;
+                if c.job_gating.is_none()
+                    && policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
+                        <= c.gather.wait_seconds
+                {
+                    return Err(
+                        "native gathering wait must fit the registered acquisition timeout".into(),
+                    );
+                }
+            }
             let mut evidence = if req.selection == Selection::All {
                 units::prepare_all(root, path, &c, &event, &payload, &revision)?
             } else {
@@ -451,18 +465,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 &serde_json::to_vec_pretty(&evidence).map_err(|e| e.to_string())?,
             )?;
             if matches!(req.selection, Selection::Collect) {
-                let policy: Value = decode(
-                    &fs::read(no_symlink_parents(root, &req.effective_config)?)
-                        .map_err(|e| e.to_string())?,
-                )?;
-                if c.job_gating.is_none()
-                    && policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
-                        <= c.gather.wait_seconds
-                {
-                    return Err(
-                        "native gathering wait must fit the registered acquisition timeout".into(),
-                    );
-                }
                 let repository = named_env(&opts, "--repository-env")?;
                 let gathered = super::gather::gather(root, path, &c, &repository)?;
                 let gathered: Value = decode(gathered.as_bytes())?;
