@@ -95,17 +95,22 @@ reads. Failed or malformed trees never enter the cache, and a later operation
 acquires its own evidence.
 
 The product host declares a 2 MiB process output bound in
-`.chrono-harness/worktree.json`. Its real Cargo input configuration and FILEMAP
-each exceed the previous 1 MiB bound; partitioning a registry list cannot split
-one Git blob. The existing reader transports the complete original bytes under
-the new bound. Input IDs, package inventories, consumer edges and source actions
-are preserved; this does not enable full governance or supply native inputs.
+`.chrono-harness/worktree.json`. Its configuration and FILEMAP use compact JSON
+records and scalar arrays so each complete committed blob fits that unchanged
+bound; partitioning a registry list cannot split one Git blob. This formatting
+preserves every parsed declaration, input ID, package inventory, consumer edge,
+execution plan and source action. Historical snapshots and original process
+evidence retain their original bytes. The existing reader still rejects an
+oversized blob; this representation does not enable full governance or supply
+native inputs.
 
 **Mixed-change warning:** Host process policy and Rust consumer/migration tests
 change together.
 They exercise the actual product-host registry bytes in fixed fixture commits,
 retain the original low-bound failure, and verify the existing enrollment
-transition. The caller must commit matching worktree policy bytes in the surviving
+transition. The complete-registry consumer also checks that every current blob
+fits the adopted bound and that the retained parsed digest covers every input.
+The caller must commit matching worktree policy bytes in the surviving
 coordinator and enrolled target, deploy a compatible lifecycle binary, and run
 the registered `migrate --path` transition before retrying the fixed bootstrap
 and check. A target-only policy edit remains refused. These source checks are
