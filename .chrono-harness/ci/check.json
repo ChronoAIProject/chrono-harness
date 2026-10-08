@@ -380,6 +380,7 @@
       ],
       "build.distribution": [
         "distribution",
+        "host-bootstrap",
         "release-build-integration"
       ],
       "fmt.worktree": [
