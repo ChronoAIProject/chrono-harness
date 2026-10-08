@@ -180,6 +180,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-routes-tests"
         }
       ]
     },
@@ -212,6 +216,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-routes-tests"
         }
       ]
     },
@@ -44604,7 +44612,13 @@
         "host.bootstrap-tests"
       ],
       "timeout_seconds": 900,
-      "output_limit_bytes": 1048576
+      "output_limit_bytes": 1048576,
+      "operation_bounds": {
+        "build.distribution": {
+          "timeout_seconds": 600,
+          "output_limit_bytes": 1048576
+        }
+      }
     },
     "test:cache-tests": {
       "operations": [
