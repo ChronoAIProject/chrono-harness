@@ -6,6 +6,10 @@ Ordinary full-check acceptance means the DELTA satisfies the active registered c
 
 Local/CI must use the same registered command. Universal equal verdicts remain conditional on equal complete effective inputs and deterministic evaluation. The separate parity comparator requires `completeness_proven:true` and complete verdict-bearing observations; absent these stronger premises, parity remains unestablished without gating ordinary full check. Pairwise observations alone do not prove universal determinism. This correction changes contract wording and default content, without changing runtime, schema or test behavior or completing full host adoption.
 
+Current host adoption remains direct/scoped. The effective-input registry is nonempty (3,980 declared inputs), while full registration, required native/runtime bindings and genuine retained native endpoints remain incomplete. The installed distribution is beta.21; the beta.22 release plan is unpublished, as scoped by [the release owner](release-ci.md). Source generation and source tests do not adopt compatible release bytes or activate full governance.
+
+Compact JSON keeps the current config at 2,022,211 bytes within the 2 MiB reader bound. This repairs that representation failure; repeated input vectors and their structural growth/coupling remain unresolved. No input closure, scalability or coupling claim follows from compaction. The input/registration owners still need a consumer-backed refactor with preserved bindings, original input/evidence and measured costs.
+
 Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crates/judge-registration-tests/tests/registration_contract.rs`; **L** = `crates/runner-tests/tests/cli_contract.rs`; **C** = `crates/judge-ci-tests/tests/behavior.rs`; **F** = `crates/judge-filemap-tests/tests/impact.rs`; **P** = `crates/judge-filemap-tests/tests/consumer.rs`; **W** = `crates/judge-workflow-tests/tests/{branch,consumer}.rs`; instruction and CI generator tests live in their dedicated test projects. Tests in G invoke the built runner and separately built registration executable against real synthetic Git commits, including real host registry material. Production build prerequisites are explicit in the CI binding. P runs actual runner → registration → filemap subprocesses on committed bounded hosts with absent historical binaries and exact report source pointers. F checks witnesses against independently specified endpoint edges. No peer/independent review evidence is claimed.
 
 | SPEC section | State | Producer and direct evidence | Remaining obligation |
@@ -33,7 +37,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 13 acceptance | partial | row map below | all pending row obligations remain |
 | 14 boundaries | implemented documentation | README/SPEC/this map | update as later increments land |
 | 15 generic reference experience | partial | existing fixed-source references; no reference repo modifications | apply remaining generic workflow lessons |
-| 16 instructions | implemented existing scope | instructions and dedicated tests, current docs/instructions.md | existing documented platform/crash/concurrency limitations remain |
+| 16 instructions | implemented portable requirement → audit → refactor → develop content and main-host source adoption | existing bilingual catalog atoms/workflow layout, owned host catalog/manifest, generated root/English/skill; dedicated generation suite and concrete update route in docs/instructions.md | generator does not prove AI behavior; existing hosts keep customization and adopt defaults explicitly; documented platform/crash/concurrency limits and full/native acceptance remain |
 
 Rows below follow §13 in order; scoped evidence is explicitly limited to that profile.
 
@@ -498,8 +502,9 @@ Implemented source and scoped host projection: opt-in `chrono-job-gating/v1` on
 units v1/v2 produces one detector, explicit job-level conditional unit jobs and
 an `always()` aggregate needing all jobs. The sole required check is the aggregate;
 actual checks still use the fixed short entries and final original-report judge.
-The product host now generates one parent with 18 units and retires the exact
-16 owned obsolete projections. Git supplies complete trees and registered blobs without a file-count gate. Legacy
+The product host generates one parent with 26 explicitly registered units
+(the inventory belongs to `.chrono-harness/ci/check.json` and `units.json`)
+and retires the exact owned obsolete projections. Git supplies complete trees and registered blobs without a file-count gate. Legacy
 providers and previously published native evidence retain their meanings.
 
 Dedicated real-Git/actual-command coverage is in

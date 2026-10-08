@@ -12,7 +12,7 @@ Harness 的本质：每项受治理操作只提供一条当前已登记的规范
 定制在执行前通过登记选定这条路径；日常指令只呈现当前路径，不并列提供替代配方。
 AI 先把路径、归属、依赖、成本、操作及判定方式登记为白名单，再通过该方式处理任务。
 改进方法先更新登记并完成适用验证，仍保留一个正式入口；AI 自由实现产品逻辑并自主更新判官。
-默认指令按目标与入口、登记与隔离、实施、检查与修复、演进与交付的短流程排列。
+默认指令按需求→审计→重构→开发组织；验证实际消费后再核 SPEC。全局考虑是先核需求、现有能力、所有权、显式依赖影响及验证／CI／存储成本，再收窄实现，不是每次全仓审计或全测。现有能力足够就复用；审计证实归属或耦合问题才先在自然所有者重构，开发只补真实消费者尚未覆盖的需要。
 缺少登记、重复入口、执行结果与登记不符必须有明确错误，不能靠“智能推断”补全。
 系统信任 AI 非恶意，处理的是遗漏、漂移、错误和演进成本；AI 自主登记、修复和推进。
 AI 拥有构建、测试、更新约束和分支重建所需权限，没有人工审批、签字或确认步骤。
@@ -201,7 +201,7 @@ PATH 用于一次解析具名工具，HOME/CARGO_HOME/RUSTUP_HOME 用于已声�
 包括 HOME/CARGO_HOME 下配置、rust-toolchain、间接依赖、fixture、外部数据及环境变量。
 会影响裁决的随机种子、时钟值、网络响应和超时/资源条件也须显式固定并登记为有效输入。
 文件输入用 FILEMAP 或 environment.inputs 登记；后者以 input:<id> 显式连接消费者，不推断边。
-当前 input_closure 为 incomplete，inputs 为空；补齐宿主声明范围内的工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。
+宿主实际采用状态与缺口归 docs/spec-coverage.md 及现役输入登记；不能从已有输入数量推出完整闭包。补齐宿主声明范围内的工具、输入、关系与证据后才可声明 declared-complete，unresolved 必须为空。
 declared-complete 是可信 AI 对该范围承担责任的工程声明；真实工具链、SDK、配置及其它已知适用输入义务仍保留。判官不自动发现隐含依赖，声明通过不证明普遍输入完备。
 Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`、可执行消费者
 `project:<id>`、`script:<id>`、`test:<id>` 或 `judge:<id>`、非空 `kind` 以及非空
@@ -407,7 +407,7 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 
 同一入口的 `--collect MANIFEST` 只重建当前义务并核所需原始单元报告，不能重跑业务测试。它检查完整报告集合、固定端点／配置／执行物 pin、原始判官输出、计划身份及候选操作／顺序／边界、工具观察、逐操作原始回执和成功状态；缺漏、重复、陈旧或失败报告不得全局通过。执行物 pin 由明确调用输入承担，不宣称据此证明构建产地、外部输入完整或跨环境同判。
 
-`chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；公开 beta.12 起提供该扩展，beta.13 继续提供；产品仓库按登记将完整测试计划分配给显式单元，当前通过 `job_gating` 投影为一份 parent 内的独立条件 job；启动核心及共享操作也由宿主登记。
+`chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；产品仓库按登记将完整测试计划分配给显式单元，当前通过 `job_gating` 投影为一份 parent 内的独立条件 job；启动核心及共享操作也由宿主登记。
 
 `job_gating` 是 `chrono-github-units/v1` scoped／v2 full 的显式可选采用；缺字段保持旧语义，不追溯重解释历史证据。检测复用 judge-ci collection inventory；full 调度复用 FILEMAP/routes 的纯声明选测及两端 assignment，SDK 输入快照仍归实际 full 准入。检测不得调用业务 check/probe、选全兜底或推断目录／语言／import；允许按宿主显式 source inputs 启动产品本身。Git 完整树／登记 blob 在不物化全部宿主源时可读，PR 固定 event base/head、默认 push 完整 before/after，既有 integration `push_baselines` 保留并由 detector 一次固定。浅 blobless depth2 是可用起点，缺端点明确补取；禁止静默 HEAD^／merge-base 和 workflow paths／paths-ignore。完整 Git DELTA 不设路径数量门，超过平台 API 路径上限仍完整处理。aggregate 的 Rust provider 必须拒绝 detection 失败及任一 required 单元非 success（含 cancelled、missing、unexpected skip）；仅 nonrequired 单元允许 skip。汇总仍经固定 `check --collect` 核原始报告及最终判官，不以 GitHub 状态代替准入。单元重跑保留同一 parent 的原 detector／成功前置 attempt，逐项核最新实际 job 与相应 original artifact attempt；不轮询其它 workflow 或等待自己完成。旧投影只按明确登记和精确源字节退休，init/generate/migrate 保留自定义并拒覆盖 user files。详细字段、原生环境登记、full context／external input 与历史 decoder 的未完成边界见 [CI units](docs/ci-units.md)。
 
@@ -963,11 +963,11 @@ CI event preparation supports explicit push_baselines prefixes and named baselin
 
 ## 16. 宿主指令生成（已实现）
 
-`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由 100 个双语内容叶子和 16 个普通空文本 aggregate 组成，原有 17 个 core 稳定入口及 core.general 全部保留；旧主题入口只组合原职责，新增便携方法由 core.general 显式选择。聚焦 skill 只选择修复产生处及其证据/复用前提（7 个内容叶子）。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
+`chrono-instructions init --host-root H` 从内嵌产品 catalog/default manifest 采用独立宿主数据，默认只生成中文根正文与 AGENTS 字面相对链接。通用方法由双语内容叶子与普通空文本 aggregate 组成，既有 core 稳定入口及 core.general 保留；旧主题入口只组合原职责。聚焦 skill 选择修复产生处及其证据／复用前提。无需运行时 checkout、自动语言推断、网络翻译、包解析或新平台。
 
 `core.ownership` 显式组合投影条件与消费义务，`core.behavior` 显式组合同语言测试要求与实际 CI 事件；单独选择旧入口仍提供原职责。默认新宿主的双语短流程根及本仓完整英文指南的读数见 [迁移说明](docs/methodology-extraction.md#实际消费者边界)；这是内容消费验证，不是通用运行时预算门。
 
-当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。产品默认和本仓根 manifest 显式列出 22 个现有内容叶子，并选用 workflow 的五节同级短流程。完整 general 三部分/12 主题布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 仍选择全部 100 个叶子，聚焦 skill 保持原平铺。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
+当前 schema 2 / atomic-rules/relative-alias/v3 的 output plan 显式声明输出身份、路径、格式、locale、根引用及必要元数据。不选布局时确定性 DFS 依赖先行、共享 atom 每输出仅一次。可选 catalog.layouts / output.layout 保留旧字段语义；具名双语标题与显式内容放置组织阅读，不赋予权威或执行顺序。选择时校验标题语言、深度及非空闭包恰好一次覆盖，全部预检后才写入；引用/循环/重复身份与选中闭包缺翻译报具体错误。产品默认和本仓根 manifest 显式选择现有内容叶子，以 workflow 的需求、审计、重构、开发四阶段组织，验证／SPEC 迭代与交付／清理归开发下级。完整 general 布局和 core.general 保留供自定义 Markdown／skills；本仓 general-en 选择完整库，聚焦 skill 保持原平铺。清理原子只承载便携生命周期责任，宿主操作、部署及恢复限制归登记 host_context 与现役生命周期文档。source variant 是 inline 或宿主 .chrono-harness 下的 file，原 UTF-8 字节保留。程序不认证翻译语义等价或组合的语义完整性。
 
 根受管块保留宿主块外原文、sole donor 和预期整份比较语义。Markdown/skill 为带身份 envelope 的整文件投影，未拥有/畸形现有文件预写入拒绝。skill frontmatter 从首字节开始，元数据显式验证。当前 manifest 是唯一管理计划，删条目/改名保留旧输出，由授权 AI 显式退休；不建立历史 ledger 或扫描删除器。
 

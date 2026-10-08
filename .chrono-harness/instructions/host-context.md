@@ -6,7 +6,7 @@
 
 本仓维护 Rust harness 产品和独立宿主采用数据。[SPEC](../../SPEC.md) 是尚未全部实现的产品合同，当前结果与缺口归[覆盖表](../../docs/spec-coverage.md)。生产／专属测试项目各有独立 manifest、lock、target，无根 workspace；独立 Python 脚本及测试也显式配对。
 
-产品默认归 `assets/instructions/catalog.json`、`assets/instructions/default-manifest.json`；本宿主选择归本目录的 [catalog](catalog.json)、[manifest](manifest.json) 和本上下文。产品资产是编译／测试输入，宿主数据与现有投影是运行输入；升级二进制或重复 init 不覆盖宿主选择，采用新默认须编辑宿主源。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 `CLAUDE.md`，不手改投影。
+产品默认归 `assets/instructions/catalog.json`、`assets/instructions/default-manifest.json`；本宿主选择归本目录的 [catalog](catalog.json)、[manifest](manifest.json) 和本上下文。产品资产是编译／测试输入，宿主数据与现有投影是运行输入；升级二进制或重复 init 不覆盖宿主选择，采用新默认须比较所选产品版本的 catalog／default-manifest，保留定制后编辑宿主源并 generate；具体步骤归[指令所有者](../../docs/instructions.md#新默认的宿主采用边界)，不是自动更新。CLAUDE.md 是生成的中文根，AGENTS.md 是字面相对链接 `CLAUDE.md`，不手改投影。
 
 [FILEMAP](../FILEMAP.json) 是唯一执行计划源，逐文件登记所有者、输入、消费者、边与成本；不从路径、语言或调用推断选测。routes 规划、绑定工具，projects 核配对、隔离和真实回执；scoped CI 复用该链。只按 DELTA 与两端显式依赖选检查，漏登须修登记，不全测兜底。
 
@@ -38,7 +38,7 @@
 cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-instructions -- generate --host-root .
 ```
 
-这是 projects.json 的 `instructions.generate` action。改宿主 catalog、manifest、登记 file 源或上下文后运行；schema 2／`atomic-rules/relative-alias/v3`、22 叶子短根及同 manifest 的英文／skill 输出合同归[指令所有者](../../docs/instructions.md)。生成／短 prose 不证明 AI 阅读、遵守、翻译等价或执行检查。[实际消费范围](../../docs/methodology-extraction.md#实际消费者边界)还含上下文与块外内容，不截断规则或改全局配置。
+这是 projects.json 的 `instructions.generate` action。本宿主采用四阶段方法；全局核实际需求、SPEC、能力、所有权、显式影响与成本后收窄实现，验证真实消费者并再核 SPEC。改宿主 catalog、manifest、登记 file 源或上下文后运行；schema 2／`atomic-rules/relative-alias/v3`、需求→审计→重构→开发短根及同 manifest 的英文／skill 输出合同归[指令所有者](../../docs/instructions.md)。生成／短 prose 不证明 AI 阅读、遵守、翻译等价或执行检查。[实际消费范围](../../docs/methodology-extraction.md#实际消费者边界)还含上下文与块外内容，不截断规则或改全局配置。
 
 ### 受保护消费与完成
 

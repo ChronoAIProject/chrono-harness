@@ -6,7 +6,7 @@
 
 处置表按来源顺序有 882 行：121 generalized、396 duplicate、208 excluded、157 context；直接逐字 migrated 为 0。725 个义务／例外处置和 157 个上下文范围各有定位。duplicate 指共用内容所有者，不是“主题相同”；同一叶子可承载多处相同义务。地图枚举完整和引用有效只证明所声明的覆盖，不是发现所有语义遗漏的机器证明。
 
-[产品 catalog](../assets/instructions/catalog.json) 有 100 个作者编写的 zh-CN/en 内容叶子、16 个普通空文本聚合。原有 17 个核心入口已逐一对照固定基线的原职责，core.general 也可继续引用；core.repair-producer 与 core.small-projects 仍为内容叶子，其余旧入口按原职责成为聚合。完整指南每个叶子只渲染一次，新增条件方法由 core.general 直接显式选入。catalog 的独立 `general` 布局以三部分（基本原则、工作方法、执行合同）、12 个主题显式放置全部 100 个正文，继续供完整 Markdown／skills 组合。本仓英文指南保留此布局。产品与本宿主默认根显式选择 22 个现有叶子，用新增双语 `workflow` 布局按目标与入口、登记与隔离、实施、检查与修复、演进与交付五节同级呈现。阅读层次不赋予权威优先级或执行顺序；布局不是 requires，也不改变独立入口。聚焦 [重复故障诊断 skill](../skills/diagnose-recurring-failures/SKILL.md) 的闭包是 7 个内容叶子和 2 个前提聚合，保留“同症状 AND 同处置，第二次修产生处”的触发，不引入无关方法。没有新增默认 skill 或提供方安装平台。
+[产品 catalog](../assets/instructions/catalog.json) 有 100 个作者编写的 zh-CN/en 内容叶子、16 个普通空文本聚合。原有 17 个核心入口已逐一对照固定基线的原职责，core.general 也可继续引用；core.repair-producer 与 core.small-projects 仍为内容叶子，其余旧入口按原职责成为聚合。完整指南每个叶子只渲染一次，新增条件方法由 core.general 直接显式选入。catalog 的独立 `general` 布局以三部分（基本原则、工作方法、执行合同）、12 个主题显式放置全部 100 个正文，继续供完整 Markdown／skills 组合。本仓英文指南保留此布局。产品与本宿主默认根显式选择 23 个现有叶子，复用双语 `workflow` 布局按需求、审计、重构、开发四阶段呈现，验证／SPEC 迭代与交付／清理为开发下级。阅读层次不赋予权威优先级或执行顺序；布局不是 requires，也不改变独立入口。聚焦 [重复故障诊断 skill](../skills/diagnose-recurring-failures/SKILL.md) 的闭包是 7 个内容叶子和 2 个前提聚合，保留“同症状 AND 同处置，第二次修产生处”的触发，不引入无关方法。没有新增默认 skill 或提供方安装平台。
 
 中文与英文由作者分别编写，须核对触发、must/may、AND/OR、作用域和证据限制。普通句首标题组织正文；默认根选择短流程，完整库与稳定入口仍保留。映射与双语文本的编辑核验是单点证据；独立全源与双语审计尚未完成。指令生成器只校验显式图、引用、locale 和输出运输，不翻译、不证明语义等价，也不执行治理判官；独立 harness 已有有界判官、DELTA 执行和 scoped CI，本宿主 full 启用仍未完成。
 
@@ -49,16 +49,16 @@
 
 | 消费者 | 字节／内容叶子数 | 结构 |
 | --- | --- | --- |
-| 新宿主 zh-CN 根 | 8440 / 22 | workflow 五节同级，67 行 |
-| 新宿主 en 根 | 9232 / 22 | workflow 五节同级，65 行 |
-| 本仓 zh-CN 根 | 8500 / 22 | workflow 五节同级，67 行 |
-| 本仓完整英文 Markdown | 35103 / 100 | general 三部分／12 主题 |
-| 本仓聚焦 skill | 2821 / 7 | 独立诊断闭包，23 行 |
-| 本仓另读的 host-context | 10202 / 不适用 | 当前入口、限制与任务文档链接，75 行 |
+| 新宿主 zh-CN 根 | 8351 / 23 | workflow 四阶段，开发下含验证／交付，71 行 |
+| 新宿主 en 根 | 9320 / 23 | 同一显式层次，69 行 |
+| 本仓 zh-CN 根 | 8351 / 23 | workflow 四阶段，71 行 |
+| 本仓完整英文 Markdown | 34999 / 100 | general 三部分／12 主题 |
+| 本仓聚焦 skill | 3242 / 7 | 独立诊断闭包，23 行 |
+| 本仓另读的 host-context | 16174 / 不适用 | 当前入口、限制与任务文档链接，85 行 |
 
-默认根显式选择 22 个内容叶子。catalog 含 116 个 atom，其中 100 个双语内容叶子、16 个聚合；`test.same-language` 同时属于默认根和 `core.behavior` 的依赖闭包，在两个布局的验证主题中呈现。catalog 也承载产品 SPEC 的通用约束；固定来源处置表不承担这些产品规则的出处。
+默认根显式选择 23 个既有内容叶子，新增选择已有 `cost.measure`，没有新增 atom 或聚合层。catalog 含 116 个 atom，其中 100 个双语内容叶子、16 个聚合；`test.same-language` 同时属于默认根和 `core.behavior` 的依赖闭包，在两个布局的验证主题中呈现。需求→审计→重构→开发由既有原子正文及 `workflow` 层次承载；具体 cleanup 部署／操作留在现役 host-context 和生命周期文档。catalog 也承载产品 SPEC 与用户当前要求的通用约束；固定来源处置表不承担这些产品规则的出处。
 
-现有宿主的 manifest、catalog 与块外内容由宿主维护，安装新二进制或重复 init 不替换既有选择；采用新规则须明确更新 canonical 数据并生成。AGENTS.md 是字面相对链接 `CLAUDE.md`，不另存一份规则正文。
+现有宿主的 manifest、catalog 与块外内容由宿主维护，安装新二进制或重复 init 不替换既有选择；采用新规则须按[现有源更新路径](instructions.md#新默认的宿主采用边界)比较所选产品版本、保留定制并编辑 canonical 数据后生成。AGENTS.md 是字面相对链接 `CLAUDE.md`，不另存一份规则正文。
 
 专属测试覆盖图、locale、布局、严格 JSON、输出所有权、路径、alias、迁移及 IO／回滚。这里的实际消费读数限于 macOS arm64 的本地生成与初始化；不证明翻译等价、AI 已阅读、实时注入、其它平台或完整 SPEC 交付。
 
