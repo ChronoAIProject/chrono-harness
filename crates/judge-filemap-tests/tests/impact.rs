@@ -17,6 +17,45 @@ fn run(a: &Values, b: &Values, d: &[chrono_harness::wire::Delta]) -> (Impact, Ve
 fn tests(i: &Impact) -> Vec<&str> {
     i.required_tests.iter().map(|t| t.node.as_str()).collect()
 }
+#[test]
+fn operation_override_add_change_and_remove_keep_explicit_plan_impact() {
+    let mut original = values();
+    original.get_mut(FM).unwrap()["schema_version"] = json!(2);
+    original.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t": {
+        "operations":["execute.t"], "timeout_seconds":900,"output_limit_bytes":1048576
+    }});
+    let mut overridden = original.clone();
+    overridden.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"] =
+        json!({"execute.t":{"timeout_seconds":600,"output_limit_bytes":1048576}});
+    let mut changed = overridden.clone();
+    changed.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"]["execute.t"]["timeout_seconds"] =
+        json!(601);
+    let (disconnected, findings) = run(&original, &overridden, &[]);
+    assert!(findings.is_empty(), "{findings:?}");
+    assert!(tests(&disconnected).is_empty());
+    for endpoint in [&mut original, &mut overridden, &mut changed] {
+        endpoint.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"from":"project:t","kind":"test-execution","to":"test:t"}));
+    }
+    for (before, after) in [
+        (&original, &overridden),
+        (&overridden, &changed),
+        (&overridden, &original),
+    ] {
+        let (impact, findings) = run(before, after, &[]);
+        assert!(findings.is_empty(), "{findings:?}");
+        assert_eq!(tests(&impact), ["test:t"]);
+        assert!(
+            impact
+                .changes
+                .iter()
+                .any(|c| c.record.ends_with("/execution_plans/test:t")
+                    && c.fields.iter().any(|f| f.starts_with("/operation_bounds")))
+        );
+    }
+}
 fn oracle_edges(rows: &[(&str, EdgeKind, &str)]) -> BTreeSet<Edge> {
     rows.iter()
         .map(|(a, k, b)| Edge {

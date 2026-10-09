@@ -24,6 +24,7 @@ fn p(ops: &[&str]) -> Plan {
         operations: ops.iter().map(|s| s.to_string()).collect(),
         timeout_seconds: 10,
         output_limit_bytes: 4096,
+        operation_bounds: BTreeMap::new(),
     }
 }
 #[test]
@@ -43,6 +44,163 @@ fn shared_prerequisites_order_and_dedup() {
             .map(|o| o.method.operation.as_str())
             .collect::<Vec<_>>(),
         ["shared", "a", "b"]
+    );
+}
+#[test]
+fn explicit_prerequisite_bounds_preserve_each_consumer_default_and_reject_disagreement() {
+    let mut plans: BTreeMap<String, Plan> = serde_json::from_value(json!({
+        "test:distribution": {"operations":["build", "distribution"],
+            "timeout_seconds":600,"output_limit_bytes":1048576},
+        "test:startup": {"operations":["build", "startup"],
+            "timeout_seconds":900,"output_limit_bytes":1048576,
+            "operation_bounds":{"build":{"timeout_seconds":600,"output_limit_bytes":1048576}}}
+    }))
+    .unwrap();
+    let methods = ["build", "distribution", "startup"]
+        .into_iter()
+        .map(|id| (id.into(), vec![method(id, vec![])]))
+        .collect();
+    let exec = BTreeMap::from([
+        ("test:distribution".into(), "distribution".into()),
+        ("test:startup".into(), "startup".into()),
+    ]);
+    let selected = plans.keys().cloned().collect();
+    let (chosen, ops) = order(&selected, &plans, &methods, &exec).unwrap();
+    assert_eq!(chosen["test:startup"].timeout_seconds, 900);
+    assert_eq!(
+        ops.iter()
+            .map(|o| (
+                o.method.operation.as_str(),
+                o.timeout_seconds,
+                o.output_limit_bytes
+            ))
+            .collect::<Vec<_>>(),
+        [
+            ("build", 600, 1048576),
+            ("distribution", 600, 1048576),
+            ("startup", 900, 1048576)
+        ]
+    );
+    assert_eq!(ops[2].predecessors, ["build".into()].into());
+    let directory = tempfile::tempdir().unwrap();
+    let collection = chrono_judge_routes::prepare_collection(
+        directory.path(),
+        json!({}),
+        &selected,
+        &plans,
+        &methods,
+        &exec,
+        BTreeMap::new(),
+    )
+    .unwrap();
+    assert!(collection.tools.is_empty());
+    assert_eq!(collection.selected, chosen);
+    assert_eq!(
+        serde_json::to_value(&collection.operations).unwrap(),
+        serde_json::to_value(&ops).unwrap()
+    );
+    let decoded: chrono_judge_routes::Execution =
+        serde_json::from_value(serde_json::to_value(collection).unwrap()).unwrap();
+    decoded.validate().unwrap();
+    let original = serde_json::to_value(&plans).unwrap();
+    for bounds in [
+        json!({"timeout_seconds":601,"output_limit_bytes":1048576}),
+        json!({"timeout_seconds":600,"output_limit_bytes":1048577}),
+    ] {
+        let mut conflicting = original.clone();
+        conflicting["test:startup"]["operation_bounds"]["build"] = bounds;
+        let conflicting = serde_json::from_value(conflicting).unwrap();
+        assert!(
+            order(&selected, &conflicting, &methods, &exec)
+                .unwrap_err()
+                .contains("E_PLAN_BOUNDS")
+        );
+    }
+    plans.get_mut("test:startup").unwrap().timeout_seconds = 901;
+    let (_, ops) = order(&selected, &plans, &methods, &exec).unwrap();
+    assert_eq!(ops[0].timeout_seconds, 600);
+    assert_eq!(ops[2].timeout_seconds, 901);
+}
+
+#[test]
+fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
+    use chrono_judge_registration::execution::{Bounds, methods, plans, test_bindings};
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let filemap =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap())
+            .unwrap();
+    let projects =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
+            .unwrap();
+    let mut plans = plans(&filemap).unwrap();
+    // Current main startup needs no distribution build. Model the existing
+    // full-host consumer's explicit prerequisite without changing main policy.
+    let startup = plans.get_mut("test:host-bootstrap-tests").unwrap();
+    assert_eq!(startup.operations, ["host.bootstrap-tests"]);
+    assert!(startup.operation_bounds.is_empty());
+    startup.operations.insert(0, "build.distribution".into());
+    startup.operation_bounds.insert(
+        "build.distribution".into(),
+        Bounds {
+            timeout_seconds: 600,
+            output_limit_bytes: 1048576,
+        },
+    );
+    let execute = test_bindings(&projects)
+        .unwrap()
+        .into_iter()
+        .map(|(id, bindings)| {
+            assert_eq!(bindings.len(), 1);
+            (id, bindings[0].operation.clone())
+        })
+        .collect();
+    let selected = [
+        "test:host-bootstrap-tests",
+        "test:distribution-tests",
+        "test:release-build-integration",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    let (_, operations) = order(&selected, &plans, &methods(&projects).unwrap(), &execute).unwrap();
+    assert_eq!(
+        operations
+            .iter()
+            .filter(|o| o.method.operation == "build.distribution")
+            .count(),
+        1
+    );
+    for (operation, timeout) in [
+        ("build.distribution", 600),
+        ("host.bootstrap-tests", 900),
+        ("test.distribution-tests", 600),
+        ("release.tests.integration", 600),
+    ] {
+        let op = operations
+            .iter()
+            .find(|o| o.method.operation == operation)
+            .unwrap();
+        assert_eq!(op.timeout_seconds, timeout, "{operation}");
+        assert_eq!(op.output_limit_bytes, 1048576, "{operation}");
+    }
+    assert_eq!(
+        plans["test:host-bootstrap-tests"].operations,
+        ["build.distribution", "host.bootstrap-tests"]
+    );
+    assert_eq!(plans["test:host-bootstrap-tests"].timeout_seconds, 900);
+    for test in ["test:distribution-tests", "test:release-build-integration"] {
+        assert_eq!(plans[test].timeout_seconds, 600);
+        assert!(plans[test].operation_bounds.is_empty());
+    }
+    plans
+        .get_mut("test:host-bootstrap-tests")
+        .unwrap()
+        .operation_bounds
+        .clear();
+    assert!(
+        order(&selected, &plans, &methods(&projects).unwrap(), &execute)
+            .unwrap_err()
+            .contains("E_PLAN_BOUNDS: inconsistent shared operation build.distribution")
     );
 }
 #[test]
