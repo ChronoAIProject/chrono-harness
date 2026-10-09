@@ -69,7 +69,7 @@ fn share_report_alias(
     let staged = format!("{path}.shared-{}", std::process::id());
     let staged = no_symlink_parents(root, &staged)?;
     fs::hard_link(&original, &staged).map_err(|e| e.to_string())?;
-    let replace = (|| {
+    let replace: Result<(), String> = (|| {
         if file_identity(&alias)? != identity || file_identity(&original)? != identity {
             return Err("downloaded report alias changed before sharing".into());
         }
