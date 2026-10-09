@@ -1109,14 +1109,22 @@ does not embed the previous report's bytes or parsed history.
 The reference-bearing fields are `terminal_input`, `prior_report.input`,
 `prior_cache_attempt.intent_input`, `prior_cache_attempt.result.input`,
 `original_report.result.input`, `unreferenced_original_receipt.input`, and
-`original_result.input`. Inline current results in `drain[].report` use the same
-contract. Receipt consumption checks these explicit references transitively,
+`original_result.input`, and `drain[].input`. Current drain rows retain the exact
+child report through that descriptor and the existing `receipt`, with the child's
+`status` and `error` available in the parent. They do not embed the child's parsed
+report. Consumers needing cleanup effects or original process observations read
+the addressed child and verify its length and digest; canonical check and bootstrap
+continue to consume the unchanged parent `managed_process` streams and status.
+Receipt consumption checks these explicit references transitively,
 deduplicating reads within the check. Missing, changed, incorrectly bound or
 symlinked inputs refuse cleanup; an opaque partial result is preserved without
 requiring valid JSON. Historical inline evidence remains readable. Explicit
 maintenance outside automatic lifecycle retains its existing report shape.
 This bounds historical embedding, not the number or total size of necessary
 original observations; retention and disposal remain governed by host policy.
+Historical `drain[].report` remains supported by the current reference verifier.
+The stdout protocol bound is unchanged. Parent publication still fails on its own
+IO or transport errors, and a retained child failure remains a cleanup failure.
 
 Later start/reconstruct/maintain and managed admission can dispose unfinished
 quiescent caches, including a successful use with no orphan token. EX permits

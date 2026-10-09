@@ -82,6 +82,45 @@ fn output(target: &Path) {
 }
 
 #[test]
+fn addressed_drain_originals_remain_required_for_birth_consumption() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    let first = h.parent.join("drained-first");
+    let next = h.parent.join("consumer-next");
+    assert_eq!(h.invoke("feature", "drained-first", &first).0, 0);
+    output(&first);
+    let (code, birth, error) = h.invoke("feature", "consumer-next", &next);
+    assert_eq!(code, 0, "{birth} {error}");
+    let input = &birth["drain"][0]["input"];
+    let original_path = h.root.join(input["path"].as_str().unwrap());
+    let original = fs::read(&original_path).unwrap();
+    assert_eq!(sha256(&original), input["sha256"]);
+    let args = [
+        "--path",
+        next.to_str().unwrap(),
+        "--operation",
+        "use.consumer",
+    ];
+    for missing in [false, true] {
+        if missing {
+            fs::remove_file(&original_path).unwrap();
+        } else {
+            fs::write(&original_path, b"changed original").unwrap();
+        }
+        let (code, refused, error) = h.auto("use", &args);
+        assert_eq!(code, 2, "{refused} {error}");
+        assert!(refused["managed_process"].is_null());
+        assert!(next.join("payload").exists());
+        fs::write(&original_path, &original).unwrap();
+    }
+    let (code, used, error) = h.auto("use", &args);
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
+    assert_eq!(fs::read(original_path).unwrap(), original);
+}
+
+#[test]
 fn automatic_birth_enrollment_and_active_retained_checkout_survives_start() {
     let h = Host::new("some language/input.odd");
     h.automatic("evidence-retain");
@@ -121,7 +160,7 @@ fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     );
     assert_eq!(code, 0, "{r} {e}");
     assert!(!target.exists());
-    let effect = &r["drain"][0]["report"];
+    let effect = &drain_report(&r["drain"][0]);
     assert_eq!(effect["worktree_removal"], "verified-absent");
     assert_eq!(effect["artifact_disposals"][0]["bytes_before"], 8192);
     assert_eq!(effect["artifact_disposals"][0]["bytes_after"], 0);
@@ -185,11 +224,11 @@ fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
     assert_eq!(code, 0, "{r} {e}");
     assert!(!target.exists());
     assert_eq!(
-        r["drain"][0]["report"]["artifact_disposals"][0]["bytes_before"],
+        drain_report(&r["drain"][0])["artifact_disposals"][0]["bytes_before"],
         8192
     );
     assert_eq!(
-        r["drain"][0]["report"]["artifact_disposals"][0]["bytes_after"],
+        drain_report(&r["drain"][0])["artifact_disposals"][0]["bytes_after"],
         0
     );
     let first = h.ledger()["entries"][0].clone();
@@ -241,11 +280,11 @@ fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
         assert!(!target.exists());
         assert_eq!(r["drain"].as_array().unwrap().len(), 1);
         assert_eq!(
-            r["drain"][0]["report"]["branch_ref"],
+            drain_report(&r["drain"][0])["branch_ref"],
             format!("feature/{branch}")
         );
         assert_eq!(
-            r["drain"][0]["report"]["worktree_removal"],
+            drain_report(&r["drain"][0])["worktree_removal"],
             "verified-absent"
         );
         assert_eq!(h.ledger()["entries"][0], first);
@@ -345,7 +384,7 @@ fn automatic_cache_only_preserves_evidence_dirty_and_unretained_work() {
         assert_eq!(code, 0, "{reason}: {r} {e}");
         assert!(target.exists());
         assert!(!target.join("output λ").exists());
-        assert!(r["drain"][0]["report"]["preserved_reason"].is_string());
+        assert!(drain_report(&r["drain"][0])["preserved_reason"].is_string());
         if reason == "evidence" {
             assert!(target.join(".chrono-harness/state/receipt").exists());
         }
@@ -401,7 +440,7 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
             &["--path", target.to_str().unwrap(), "--dispose-evidence"],
         );
         assert_ne!(code, 0, "{failed} {e}");
-        let original = &failed["drain"][0]["report"];
+        let original = &drain_report(&failed["drain"][0]);
         assert_eq!(original["status"], "failed");
         assert_eq!(original["worktree_removal"], "attempted-unverified");
         assert_eq!(original["worktree_removed"], false);
@@ -426,7 +465,7 @@ fn automatic_partial_failure_original_reporting_and_later_start_retry() {
             assert_eq!(code, 0, "{} {error}", admitted["error"]);
             assert!(independent.exists());
             assert!(!admitted["cleanup_failures"].as_array().unwrap().is_empty());
-            assert_eq!(admitted["drain"][0]["report"]["status"], "failed");
+            assert_eq!(drain_report(&admitted["drain"][0])["status"], "failed");
             assert_eq!(fs::read(&receipt).unwrap(), bytes);
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
@@ -458,7 +497,7 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
             &["--path", target.to_str().unwrap(), "--dispose-evidence"],
         );
         assert_ne!(code, 0, "{failed} {error}");
-        let report = &failed["drain"][0]["report"];
+        let report = &drain_report(&failed["drain"][0]);
         let original_path = h.root.join(report["report_path"].as_str().unwrap());
         let original = fs::read(&original_path).unwrap();
         let bound = original.len() * 3;
@@ -466,7 +505,7 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
         for retry in 0..3 {
             let (code, failed, error) = h.auto("maintain", &[]);
             assert_ne!(code, 0, "{failed} {error}");
-            let report = &failed["drain"][0]["report"];
+            let report = &drain_report(&failed["drain"][0]);
             assert_eq!(report["status"], "failed");
             assert!(report["processes"].as_array().unwrap().iter().any(|p| {
                 p["process"]["exit_code"] == 71
@@ -948,7 +987,7 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
         &["--path", target.to_str().unwrap(), "--dispose-evidence"],
     );
     assert_ne!(code, 0, "{r} {e}");
-    let original = &r["drain"][0]["report"];
+    let original = &drain_report(&r["drain"][0]);
     assert_eq!(
         original["artifact_disposals"][0]["status"],
         "verified-absent"
@@ -969,7 +1008,7 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
     assert!(!target.exists());
     assert_eq!(fs::read(receipt).unwrap(), bytes);
     assert_eq!(
-        r["drain"][0]["report"]["artifact_disposals"][0]["status"],
+        drain_report(&r["drain"][0])["artifact_disposals"][0]["status"],
         "already-absent"
     );
 }

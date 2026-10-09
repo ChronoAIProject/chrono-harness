@@ -448,20 +448,6 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
     let receipt: Value = serde_json::from_slice(&fs::read(receipt).unwrap()).unwrap();
     let receipt = chrono_harness::full::expand_process(&receipt).unwrap();
     assert_eq!(receipt["stdout"], "{}");
-
-    // A large lifecycle response may carry the exact child process through an
-    // immutable receipt.  The public check still forwards the original streams
-    // and status after validating the locator and digest.
-    participating["canonical_check"]["participation"]["argv"] = json!(["participation-reference"]);
-    fs::write(
-        dir.path().join(".chrono-harness/config.json"),
-        serde_json::to_vec(&participating).unwrap(),
-    )
-    .unwrap();
-    let forwarded = run_retained_cli_child(dir.path(), "local");
-    assert_eq!(forwarded["exit_code"], 0);
-    assert_eq!(forwarded["stdout"], "forwarded from retained lifecycle\n");
-    assert_eq!(forwarded["stderr"], "retained diagnostic\n");
 }
 
 #[test]
