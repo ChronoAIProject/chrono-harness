@@ -862,8 +862,10 @@ and every new output collision before writing. It preserves the destination JSON
 exactly, writes the new projections, removes only obsolete previous workflows and
 retires the distinct previous source only when its bytes match the explicit input.
 A host-edited old projection or colliding new file fails before any write. Unrelated
-files are preserved. Initial-inventory, full-governance and release-provider
-transitions are rejected by this command; it never silently weakens those contracts.
+files are preserved. Initial inventory cannot transition into unit collection.
+The same owner supports the separate inventory-preserving standalone v4 transition
+described in [CI](ci.md#standalone-initial-host-transition); full-governance and
+release-provider transitions remain rejected.
 
 For an update at the same source path, retain the previous source bytes before
 editing (a run-local file belongs beneath `.chrono-harness/state/`). Supply its
@@ -888,7 +890,8 @@ reported paths before retrying; once migrated, ordinary generation is idempotent
 
 For older prepared native uploads whose selected `chrono-check-report/v1` file
 is a byte-identical copy of its explicitly bound `retained_report`, gather keeps
-both paths readable on one inode within the same isolated downloaded artifact.
+both paths readable on one inode within the same isolated downloaded artifact
+for reports up to 64 MiB; larger reports remain unshared.
 It verifies the mapped original, full SHA256/length and selected alias before
 atomic replacement by a hard link. Gather records the shared paths separately
 from transport observations, including when a later native failure prevents

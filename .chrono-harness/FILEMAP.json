@@ -5625,6 +5625,18 @@
           "to": "project:worktree-tests"
         }
       ]
+    },
+    {
+      "path": "crates/ci-tests/tests/initial_short.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

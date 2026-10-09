@@ -409,3 +409,107 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
         );
     }
 }
+
+#[test]
+fn standalone_v4_preserves_explicit_initial_inventory_and_fixed_bare_entry() {
+    let host = tempfile::tempdir().unwrap();
+    let inputs = tempfile::tempdir().unwrap();
+    let input = inputs.path().join("source.json");
+    let mut c = source();
+    c["schema"] = json!("chrono-github-ci/v4");
+    c["facts_config"] = json!(".chrono-harness/registry.json");
+    write(&input, &c);
+    assert!(init(host.path(), &input).unwrap());
+    assert!(!generate(host.path(), ".chrono-harness/ci/github.json", false).unwrap());
+    assert!(!generate(host.path(), ".chrono-harness/ci/github.json", true).unwrap());
+    let workflow =
+        fs::read_to_string(host.path().join(c["workflow_path"].as_str().unwrap())).unwrap();
+    assert!(workflow.contains("CHRONO_CHECK_SOURCE: ci"));
+    assert!(workflow.contains("'.chrono-harness/bin/chrono-harness' 'check'\n"));
+    assert!(!workflow.contains("--initial"));
+    assert_eq!(
+        serde_json::from_slice::<Value>(
+            &fs::read(
+                host.path()
+                    .join(c["initial_inventory"]["path"].as_str().unwrap())
+            )
+            .unwrap()
+        )
+        .unwrap(),
+        c["initial_inventory"]["profile"]
+    );
+}
+
+mod initial_short;
+
+#[test]
+fn standalone_initial_migration_preserves_inventory_and_refuses_edits_or_weakening() {
+    for case in [
+        "valid",
+        "inventory-change",
+        "inventory-drift",
+        "workflow-edit",
+    ] {
+        let host = tempfile::tempdir().unwrap();
+        let inputs = tempfile::tempdir().unwrap();
+        let input = inputs.path().join("source.json");
+        let old = source();
+        write(&input, &old);
+        init(host.path(), &input).unwrap();
+        let prior = ".chrono-harness/state/previous.json";
+        fs::create_dir_all(host.path().join(".chrono-harness/state")).unwrap();
+        fs::copy(
+            host.path().join(".chrono-harness/ci/github.json"),
+            host.path().join(prior),
+        )
+        .unwrap();
+        let inventory = host
+            .path()
+            .join(old["initial_inventory"]["path"].as_str().unwrap());
+        let before = fs::read(&inventory).unwrap();
+        let mut next = old.clone();
+        next["schema"] = json!("chrono-github-ci/v4");
+        next["facts_config"] = json!(".chrono-harness/registry.json");
+        if case == "inventory-change" {
+            next["initial_inventory"]["profile"]["judges"][0]["sha256"] = json!("b".repeat(64));
+        }
+        if case == "inventory-drift" {
+            fs::write(&inventory, b"host edit").unwrap();
+        }
+        if case == "workflow-edit" {
+            fs::write(
+                host.path().join(old["workflow_path"].as_str().unwrap()),
+                b"host workflow edit",
+            )
+            .unwrap();
+        }
+        write(&host.path().join(".chrono-harness/ci/github.json"), &next);
+        let workflow_before =
+            fs::read(host.path().join(old["workflow_path"].as_str().unwrap())).unwrap();
+        let result = chrono_ci::migrate::migrate(
+            host.path(),
+            prior,
+            ".chrono-harness/ci/github.json",
+            ".chrono-harness/ci/github.json",
+        );
+        if case == "valid" {
+            assert!(result.is_ok(), "{result:?}");
+            assert_eq!(fs::read(&inventory).unwrap(), before);
+            assert!(!generate(host.path(), ".chrono-harness/ci/github.json", false).unwrap());
+            assert!(!generate(host.path(), ".chrono-harness/ci/github.json", true).unwrap());
+        } else {
+            assert!(result.is_err(), "accepted {case}");
+            assert_eq!(
+                fs::read(host.path().join(old["workflow_path"].as_str().unwrap())).unwrap(),
+                workflow_before
+            );
+        }
+        assert_eq!(
+            serde_json::from_slice::<Value>(
+                &fs::read(host.path().join(".chrono-harness/ci/github.json")).unwrap()
+            )
+            .unwrap(),
+            next
+        );
+    }
+}

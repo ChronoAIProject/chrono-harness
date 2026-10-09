@@ -1077,3 +1077,84 @@ fn scoped_signal_termination_reports_the_process_failure_before_empty_json() {
     assert_eq!(report["judge"]["exit_code"], -1);
     assert_eq!(report["judge"]["stdout_bytes"], json!([]));
 }
+
+#[test]
+fn prepared_initial_identity_requires_the_explicit_profile_and_standalone_scope() {
+    use chrono_harness::prepared::{self, InputRequest, PreparedCheck, ProfileBinding, Selection};
+    let mut request = InputRequest {
+        schema: prepared::REQUEST.into(),
+        host_root: Path::new("/host").into(),
+        source: "local".into(),
+        host_config: ".chrono-harness/config.json".into(),
+        host_config_sha256: "1".repeat(64),
+        effective_config: ".chrono-harness/config.json".into(),
+        effective_config_sha256: "1".repeat(64),
+        profile: ".chrono-harness/ci/delta.json".into(),
+        profile_sha256: "2".repeat(64),
+        initial_profile: Some(ProfileBinding {
+            path: ".chrono-harness/ci/initial.json".into(),
+            sha256: "3".repeat(64),
+        }),
+        selection: Selection::All,
+        native_artifacts: None,
+        prepared: None,
+    };
+    let mut result = PreparedCheck {
+        schema: prepared::RESPONSE.into(),
+        request_sha256: chrono_harness::sha256(&serde_json::to_vec(&request).unwrap()),
+        source: "local".into(),
+        profile: ".chrono-harness/ci/initial.json".into(),
+        base: None,
+        candidate: "a".repeat(40),
+        initial: true,
+        context: None,
+        scope: None,
+        evidence: json!({"report_path":"original"}),
+        originals: vec![],
+    };
+    prepared::validate_result_identity(&request, &result).unwrap();
+    result.profile = request.profile.clone();
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "initial may not certify the DELTA profile"
+    );
+    result.profile = ".chrono-harness/ci/initial.json".into();
+    request.initial_profile = None;
+    result.request_sha256 = chrono_harness::sha256(&serde_json::to_vec(&request).unwrap());
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "no implicit initial profile"
+    );
+    request.initial_profile = Some(ProfileBinding {
+        path: result.profile.clone(),
+        sha256: "3".repeat(64),
+    });
+    for selection in [
+        Selection::Unit {
+            unit: "business".into(),
+        },
+        Selection::Collect,
+    ] {
+        request.selection = selection;
+        result.request_sha256 = chrono_harness::sha256(&serde_json::to_vec(&request).unwrap());
+        assert!(
+            prepared::validate_result_identity(&request, &result).is_err(),
+            "initial is a standalone inventory"
+        );
+    }
+    request.selection = Selection::All;
+    result.request_sha256 = chrono_harness::sha256(&serde_json::to_vec(&request).unwrap());
+    result.initial = false;
+    result.base = Some("b".repeat(40));
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "DELTA cannot use the inventory profile"
+    );
+    result.profile = request.profile.clone();
+    prepared::validate_result_identity(&request, &result).unwrap();
+    request.initial_profile.as_mut().unwrap().sha256 = "4".repeat(64);
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "both profile identities are request-bound"
+    );
+}

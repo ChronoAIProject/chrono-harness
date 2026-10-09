@@ -920,7 +920,9 @@ eligible siblings.
 Admission and the original exclusive enrollment lease protect this transition.
 Its separate immutable receipt preserves the raw declaration and original
 attachment, records the ownership delta, and keeps historical producer outcome
-`unknown`. Original enrollment, uses and disposal results are unchanged. A
+`unknown`. Historical producer and disposal outcomes are preserved. The existing
+`reconcile_uses` may append interrupted-use history and remove stale use tokens;
+mutable enrollment/uses are not guaranteed byte-identical. A
 published receipt without a ledger update can be retried with the same binding;
 repeat adoption of managed paths adds no history and performs no disposal. The
 existing pending cache generation and ordinary drain reclaim the newly managed
@@ -1203,9 +1205,25 @@ the same finite plan rechecks survivors and records absent aliases as observed
 absence, without inventing which interrupted attempt removed them. Original
 failures, enrollment, source and refs remain unchanged. Exit 0 means this exact
 finite disposition completed; unresolved members or binding failures exit 2.
-Logical removal counts do not establish physical shared-volume disk release.
+The `removed` count includes only fully verified completions. A post-unlink
+verification failure can increment `failed` after an effect recorded by its
+pre-effect intent; zero `removed` does not prove no unlink occurred. The exact
+referenced custody declaration and authority remain required retained inputs;
+reports do not guarantee a self-contained or independently immutable declaration
+copy. Logical removal counts do not establish physical shared-volume disk release.
 
 Worktree test fixture retention remains explicitly requested by
 `CHRONO_WORKTREE_TEST_RECEIPTS` or panic. Successful default fixtures do not copy
 all state. Retained fixture assertions and failure diagnosis remain consumers
 until their current custodian explicitly ends those copied-path obligations.
+
+### Local initial input preparation
+
+The registered `check-inputs` action supports config schema4's optional separate
+`canonical_check.initial_profile`. It binds both profile digests to committed
+HEAD and records physical commit parents through the existing observed Git owner.
+A genuine parentless candidate prepares standalone inventory with no base, fetch,
+origin or full context. Nonroots retain the registered target fetch and ordinary
+DELTA/context contract. Missing targets and shallow histories do not become roots.
+The bare runner entry validates the original preparation before the existing
+initial judge runs; the producer itself never publishes inventory success.

@@ -122,6 +122,7 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
 }
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     let head = git(root, &["rev-parse", "HEAD"]);
+    let cfg = json(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
     let req = InputRequest {
         schema: prepared::REQUEST.into(),
         host_root: root.into(),
@@ -132,6 +133,12 @@ fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
         effective_config_sha256: sha256(&fs::read(root.join(CONFIG)).unwrap()),
         profile: CONFIG.into(),
         profile_sha256: sha256(&fs::read(root.join(CONFIG)).unwrap()),
+        initial_profile: cfg["canonical_check"]["initial_profile"]
+            .as_str()
+            .map(|path| prepared::ProfileBinding {
+                path: path.into(),
+                sha256: sha256(&fs::read(root.join(path)).unwrap()),
+            }),
         selection: Selection::All,
         native_artifacts: None,
         prepared: None,
@@ -852,4 +859,74 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
             assert!(!stderr.contains("Original check error:"));
         }
     }
+}
+
+#[test]
+fn local_physical_root_uses_bound_inventory_without_fetch_and_shallow_child_needs_base() {
+    let h = Host::new("registered data");
+    bind(&h);
+    let profile = ".chrono-harness/initial.json";
+    let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    cfg["canonical_check"]["initial_profile"] = value!(profile);
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&cfg).unwrap()).unwrap();
+    let initial = value!({"schema":"chrono-initial-check/v1","host_config":CONFIG,"timeout_seconds":30,"stdout_limit_bytes":1048576,"judges":[{"id":"inventory","executable":".chrono-harness/bin/context-judge","version":"fixture","sha256":sha256(&fs::read(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")).unwrap()),"argv":[],"selector":"every-initial","after":[],"modes":["inventory"]}]});
+    fs::write(h.root.join(profile), serde_json::to_vec(&initial).unwrap()).unwrap();
+    let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    fm["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(profile, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    commit(&h.root);
+    let tree = git(&h.root, &["rev-parse", "HEAD^{tree}"]);
+    let root_oid = git(
+        &h.root,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            &tree,
+            "-m",
+            "physical root",
+        ],
+    );
+    git(&h.root, &["update-ref", "HEAD", &root_oid]);
+    git(&h.remote, &["update-ref", "-d", "refs/heads/dev"]);
+    install(&h.root);
+    let (out, result) = inputs(&h.root);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let result = result.unwrap();
+    assert!(result.initial);
+    assert!(result.base.is_none() && result.context.is_none() && result.scope.is_none());
+    assert_eq!(result.profile, profile);
+    prepared::validate_originals(&h.root, &result, None).unwrap();
+    let producer = json(
+        &fs::read(
+            h.root
+                .join(result.evidence["report_path"].as_str().unwrap()),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(producer["parents"].as_array().unwrap().is_empty());
+    assert!(producer.get("fetch_ref").is_none());
+    fs::write(h.root.join("registered data"), "nonroot\n").unwrap();
+    let child = commit(&h.root);
+    fs::write(h.root.join(".git/shallow"), format!("{child}\n")).unwrap();
+    assert_eq!(
+        git(&h.root, &["rev-list", "--parents", "-1", "HEAD"]),
+        child
+    );
+    let (out, result) = inputs(&h.root);
+    assert!(!out.status.success());
+    assert!(result.is_none());
+    let text = String::from_utf8_lossy(&out.stderr);
+    assert!(text.contains("fetch"), "{text}");
+    assert!(!text.contains("initial profile binding missing"));
 }

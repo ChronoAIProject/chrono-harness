@@ -174,6 +174,9 @@ pub fn check(
     let reader = facts::Reader::for_config(root, &profile.host_config)?;
     reader.verify_config(root, candidate)?;
     let tree = reader.verify_oid(root, candidate)?;
+    if reader.blob(root, candidate, profile_path)? != bytes {
+        return Err("initial profile differs from candidate".into());
+    }
     if !reader.parents(root, candidate)?.is_empty() {
         return Err("initial inventory requires parentless commit".into());
     }
@@ -182,6 +185,19 @@ pub fn check(
     let cfg = registries
         .get(&identity.effective_path)
         .ok_or("missing effective initial configuration")?;
+    if cfg["schema_version"] == 4 {
+        crate::prepared::validate_binding(
+            root,
+            cfg,
+            profile_path,
+            None,
+            candidate,
+            true,
+            &None,
+            None,
+            &entry["preparation"],
+        )?;
+    }
     let mut environment = BTreeMap::<String, String>::new();
     let mut inherited = BTreeMap::<String, Option<String>>::new();
     for key in cfg["environment"]["inherit"]
@@ -200,6 +216,10 @@ pub fn check(
         .ok_or("environment.values")?
     {
         environment.insert(key.clone(), val.as_str().ok_or("environment value")?.into());
+    }
+    for key in crate::prepared::credential_environment(cfg)? {
+        environment.remove(&key);
+        inherited.remove(&key);
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner = Executable {
@@ -270,21 +290,27 @@ pub fn check(
             }
         }
     }
-    let state = no_symlink_parents(root, ".chrono-harness/state")?;
+    let directory = if cfg["schema_version"] == 4 {
+        let req: crate::prepared::InputRequest =
+            serde_json::from_value(request.observations["entry"]["preparation"]["request"].clone())
+                .map_err(|e| e.to_string())?;
+        req.native_artifacts
+            .map(|a| a.directory)
+            .unwrap_or_else(|| ".chrono-harness/state/".into())
+    } else {
+        ".chrono-harness/state/".into()
+    };
+    let state = no_symlink_parents(root, directory.trim_end_matches('/'))?;
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
-    let report = value!({"schema":"chrono-initial-report/v1","git_facts":reader.observation(),"scope":"initial-inventory",
+    let mut report = value!({"schema":"chrono-initial-report/v1","git_facts":reader.observation(),"scope":"initial-inventory",
         "status":match status {Status::Pass|Status::Warn=>"complete",Status::Fail=>"failed",Status::Error=>"error"},
         "base":null,"delta":null,"candidate":candidate,"candidate_tree":tree,"governance":"not-evaluated",
         "previous_enforcement":"none","parity":"unestablished","profile_path":profile_path,"profile_sha256":request.profile_sha256,
-        "registry_digest":request.registry_digest,"runner":runner,"environment":request.observations["environment"],"judges":records});
+        "registry_digest":request.registry_digest,"runner":runner,"environment":request.observations["environment"],"entry":request.observations["entry"],"preparation":request.observations["entry"]["preparation"],"judges":records});
+    let retained = format!("{directory}initial-{}.json", wire::digest(&report)?);
+    report["retained_report"] = value!(retained);
     let text = serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n";
-    let unique = no_symlink_parents(
-        root,
-        &format!(
-            ".chrono-harness/state/initial-{}.json",
-            wire::digest(&report)?
-        ),
-    )?;
+    let unique = no_symlink_parents(root, &retained)?;
     if unique.exists() {
         if fs::read(&unique).map_err(|e| e.to_string())? != text.as_bytes() {
             return Err("initial report identity collision".into());
@@ -300,7 +326,7 @@ pub fn check(
             .map_err(|e| e.to_string())?;
     }
     fs::write(
-        no_symlink_parents(root, ".chrono-harness/state/initial-report.json")?,
+        no_symlink_parents(root, &format!("{directory}initial-report.json"))?,
         &text,
     )
     .map_err(|e| e.to_string())?;

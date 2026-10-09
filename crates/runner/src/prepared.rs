@@ -41,6 +41,8 @@ pub struct Canonical {
     pub operation: String,
     pub argv: Vec<String>,
     pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_profile: Option<String>,
     pub inputs: Inputs,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub participation: Option<Action>,
@@ -80,10 +82,18 @@ pub struct InputRequest {
     pub effective_config_sha256: String,
     pub profile: String,
     pub profile_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_profile: Option<ProfileBinding>,
     pub selection: Selection,
     pub native_artifacts: Option<NativeArtifacts>,
     // Local collection uses the CI collection owner after local endpoints were observed.
     pub prepared: Option<PreparedCheck>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileBinding {
+    pub path: String,
+    pub sha256: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -109,6 +119,20 @@ pub struct PreparedCheck {
     pub originals: Vec<Original>,
 }
 impl InputRequest {
+    pub fn profile_for(&self, initial: bool) -> Result<&str, String> {
+        if initial {
+            if self.selection != Selection::All {
+                return Err("initial inventory requires the standalone bare check".into());
+            }
+            Ok(&self
+                .initial_profile
+                .as_ref()
+                .ok_or("initial profile binding missing")?
+                .path)
+        } else {
+            Ok(&self.profile)
+        }
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.schema != REQUEST
             || !matches!(self.source.as_str(), "local" | "ci")
@@ -143,6 +167,22 @@ impl InputRequest {
         let c = declaration(&cfg)?;
         if c.profile != self.profile {
             return Err("check input profile disagrees with binding".into());
+        }
+        if c.initial_profile.as_deref() != self.initial_profile.as_ref().map(|p| p.path.as_str()) {
+            return Err("initial profile disagrees with binding".into());
+        }
+        if let Some(p) = &self.initial_profile {
+            if file_identity(&no_symlink_parents(&self.host_root, &p.path)?)?.0 != p.sha256 {
+                return Err("initial profile identity drift".into());
+            }
+            let profile: crate::initial::Profile = decode(
+                &fs::read(no_symlink_parents(&self.host_root, &p.path)?)
+                    .map_err(|e| e.to_string())?,
+            )?;
+            profile.validate()?;
+            if profile.host_config != self.host_config {
+                return Err("initial profile host binding mismatch".into());
+            }
         }
         let dir = retention_directory(self);
         if !cfg["artifacts"]
@@ -188,6 +228,15 @@ pub fn declaration(config: &Value) -> Result<Canonical, String> {
     if !c.profile.starts_with(".chrono-harness/") || c.profile.starts_with(".chrono-harness/state/")
     {
         return Err("short profile must be a host policy".into());
+    }
+    if let Some(p) = &c.initial_profile {
+        relative_path(p)?;
+        if !p.starts_with(".chrono-harness/")
+            || p.starts_with(".chrono-harness/state/")
+            || p == &c.profile
+        {
+            return Err("initial profile must be a separate host policy".into());
+        }
     }
     let inherit: Vec<String> = serde_json::from_value(config["environment"]["inherit"].clone())
         .map_err(|e| e.to_string())?;
@@ -601,8 +650,9 @@ pub fn validate_result_identity(req: &InputRequest, p: &PreparedCheck) -> Result
     if p.schema != RESPONSE
         || p.request_sha256 != sha256(&serde_json::to_vec(req).map_err(|e| e.to_string())?)
         || p.source != req.source
-        || p.profile != req.profile
+        || p.profile != req.profile_for(p.initial)?
         || p.initial == p.base.is_some()
+        || (p.initial && (p.context.is_some() || p.scope.is_some()))
         || !req.selection.matches(&p.scope)
         || !p.evidence.is_object()
         || p.evidence.as_object().is_none_or(|o| o.is_empty())
@@ -629,6 +679,20 @@ pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), Stri
     facts::full_oid(&p.candidate)?;
     if let Some(b) = &p.base {
         facts::full_oid(b)?;
+    }
+    if p.initial {
+        let reader = facts::Reader::for_config(&req.host_root, &req.host_config)?;
+        reader.verify_config(&req.host_root, &p.candidate)?;
+        if !reader.parents(&req.host_root, &p.candidate)?.is_empty() {
+            return Err("prepared initial candidate has parents".into());
+        }
+        let profile = req
+            .initial_profile
+            .as_ref()
+            .ok_or("initial profile binding missing")?;
+        if sha256(&reader.blob(&req.host_root, &p.candidate, &profile.path)?) != profile.sha256 {
+            return Err("initial profile differs from candidate".into());
+        }
     }
     Ok(())
 }
@@ -659,6 +723,16 @@ pub fn prepare(
         effective_config_sha256: sha256(&bytes),
         profile: c.profile.clone(),
         profile_sha256: file_identity(&no_symlink_parents(root, &c.profile)?)?.0,
+        initial_profile: c
+            .initial_profile
+            .as_ref()
+            .map(|path| -> Result<ProfileBinding, String> {
+                Ok(ProfileBinding {
+                    path: path.clone(),
+                    sha256: file_identity(&no_symlink_parents(root, path)?)?.0,
+                })
+            })
+            .transpose()?,
         native_artifacts: native_artifacts(root, &cfg, source, &selection)?,
         selection,
         prepared: None,

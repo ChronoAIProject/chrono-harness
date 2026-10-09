@@ -58,7 +58,7 @@ pub fn validate_binding(
     }
     if binding["schema"] != "chrono-prepared-check/v1"
         || req.host_root != root
-        || c.profile != profile
+        || req.profile_for(initial)? != profile
         || p.profile != profile
         || p.base.as_deref() != base
         || p.candidate != candidate

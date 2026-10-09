@@ -518,6 +518,21 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             }) {
                 return Err("native producer/upload contract mismatch".into());
             }
+            if c.initial_inventory.as_ref().map(|p| p.path.as_str())
+                != req.initial_profile.as_ref().map(|p| p.path.as_str())
+            {
+                return Err("native initial profile binding mismatch".into());
+            }
+            if let (Some(inventory), Some(binding)) = (&c.initial_inventory, &req.initial_profile) {
+                let raw = fs::read(no_symlink_parents(root, &binding.path)?)
+                    .map_err(|e| e.to_string())?;
+                if sha256(&raw) != binding.sha256
+                    || decode::<Value>(&raw)?
+                        != serde_json::to_value(&inventory.profile).map_err(|e| e.to_string())?
+                {
+                    return Err("native initial inventory differs from bound profile".into());
+                }
+            }
             generate(root, path, true)?;
             let evidence = super::prepare(root, &c, &event, &payload, &revision)?;
             publish(
@@ -545,7 +560,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             schema: prepared::RESPONSE.into(),
             request_sha256: sha256(&serde_json::to_vec(&req).map_err(|e| e.to_string())?),
             source: req.source.clone(),
-            profile: req.profile.clone(),
+            profile: req
+                .profile_for(evidence["initial"].as_bool().unwrap_or(false))?
+                .into(),
             base: evidence["base"].as_str().map(str::to_owned),
             candidate: evidence["candidate"]
                 .as_str()
@@ -562,6 +579,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     facts.verify_config(root, &p.candidate)?;
     if facts.blob(root, &p.candidate, path)? != config_bytes {
         return Err("input producer configuration differs from candidate".into());
+    }
+    if let Some(binding) = &req.initial_profile {
+        if sha256(&facts.blob(root, &p.candidate, &binding.path)?) != binding.sha256 {
+            return Err("native initial profile differs from candidate".into());
+        }
     }
     let mut p = p;
     if p.source == "ci" {

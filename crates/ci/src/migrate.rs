@@ -13,10 +13,10 @@ fn source_path(path: &str) -> Result<(), String> {
 fn previous(root: &Path, input: &str, source: &str) -> Result<BTreeMap<String, String>, String> {
     match load_projection(&no_symlink_parents(root, input)?)? {
         Projection::Units(c) => units::render(&c, source),
-        Projection::Check(c) if c.schema == "chrono-github-ci/v1" => {
+        Projection::Check(c) if c.schema == "chrono-github-ci/v1" || c.initial_inventory.is_some() => {
             Ok(BTreeMap::from([(c.workflow_path.clone(), render(&c, source)?)]))
         }
-        _ => Err("migration supports scoped v1 and unit sources; initial/full/release contracts require their own explicit migration".into()),
+        _ => Err("migration supports scoped v1, explicit standalone initial and unit sources; full/release contracts require their own explicit migration".into()),
     }
 }
 
@@ -40,11 +40,31 @@ pub fn migrate(root: &Path, input: &str, old_source: &str, source: &str) -> Resu
     let old_bytes = fs::read(no_symlink_parents(root, input)?).map_err(|e| e.to_string())?;
     let source_bytes = fs::read(no_symlink_parents(root, source)?).map_err(|e| e.to_string())?;
     let old = previous(root, input, old_source)?;
-    let Projection::Units(next) = load_projection(&no_symlink_parents(root, source)?)? else {
-        return Err("migration target must be an explicitly configured unit provider".into());
+    let prior_inventory = match load_projection(&no_symlink_parents(root, input)?)? {
+        Projection::Check(c) => inventory_output(&c)?.map(|(p, b)| (p.to_owned(), b)),
+        _ => None,
     };
-    units::profile(root, &next)?;
-    let new = units::render(&next, source)?;
+    let new = match load_projection(&no_symlink_parents(root, source)?)? {
+        Projection::Units(next) if prior_inventory.is_none() => {
+            units::profile(root, &next)?;
+            units::render(&next, source)?
+        }
+        Projection::Check(next)
+            if next.schema == "chrono-github-ci/v4" && prior_inventory.is_some() =>
+        {
+            let inventory = inventory_output(&next)?.map(|(p, b)| (p.to_owned(), b));
+            if inventory != prior_inventory {
+                return Err("standalone short migration must preserve the exact initial inventory declaration".into());
+            }
+            let (path, bytes) = inventory.as_ref().unwrap();
+            exact(root, path, bytes)?;
+            BTreeMap::from([(next.workflow_path.clone(), render(&next, source)?)])
+        }
+        _ => return Err(
+            "migration target must be explicit units or standalone v4 preserving initial inventory"
+                .into(),
+        ),
+    };
 
     // A prior declaration is authority only for its exact still-present projection.
     // Check the complete old and new output sets before the first write or removal.

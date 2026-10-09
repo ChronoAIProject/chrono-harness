@@ -1443,7 +1443,7 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
         let retention = prepared::retention_directory(&req);
         let result = execute_check(
             root.clone(),
-            req.profile,
+            p.profile,
             p.base,
             p.candidate,
             p.initial,
@@ -1609,6 +1609,7 @@ fn execute_check(
         if !initial || context.is_some() {
             return Err("initial inventory requires --initial without --base or --context".into());
         }
+        entry["preparation"] = serde_json::to_value(preparation).map_err(|e| e.to_string())?;
         return initial::check(&root, &config_path, &candidate, entry);
     }
     if !matches!(

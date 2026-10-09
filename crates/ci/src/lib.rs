@@ -153,7 +153,7 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
         ("chrono-github-ci/v1", None, None)
             | ("chrono-github-ci/v2", Some(_), None)
             | ("chrono-github-ci/v3", _, Some(_))
-            | ("chrono-github-ci/v4", None, Some(_))
+            | ("chrono-github-ci/v4", _, Some(_))
     ) {
         return Err("unsupported CI provider/schema".into());
     }
