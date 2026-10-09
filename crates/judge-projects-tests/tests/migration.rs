@@ -60,7 +60,7 @@ fn historical_input() -> &'static history::Snapshot {
                 declaration["program"]
                     .as_str()
                     .ok_or("fixture Git program")?,
-                &serde_json::from_value(declaration["version_argv"].clone())
+                &serde_json::from_value::<Vec<String>>(declaration["version_argv"].clone())
                     .map_err(|e| e.to_string())?,
                 &environment,
                 binding.timeout_seconds,
