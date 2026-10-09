@@ -142,7 +142,7 @@ null 摘要只允许 draft；不能被解释为“任意二进制都已通过验
 | --- | --- |
 | runner | `{path, version, sha256}`；path 为指定入口，sha256 为 64 位小写 hex 或 draft null |
 | registries | judges/projects/filemap/workflow 四个唯一 JSON 路径 |
-| canonical_check | v1–v3 `{operation, argv: string[]}`；v4 adds `profile` and `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
+| canonical_check | v1–v3 `{operation, argv: string[]}`；v4 adds `profile`、可选独立 `initial_profile` 和 `inputs.local/ci` actions `{operation,tool,argv}`；唯一 `validate.delta` 路由 |
 | tools | `{id, program, resolution, version_argv, expected_version}[]`；版本为字符串，draft 可为 null |
 | facts_git | config v3/v4 必填 `{tool, input, guard?}`，前两项分别引用唯一 tools 与 present 文件输入；可选 guard 见下；v1/v2 不接纳此字段，包括 null |
 | environment | `{inherit: string[], values: object, inputs: object[]}`；v4 可加 `credential_environment: string[]`，声明仅用于输入取得、不转发给 Git／判官的 inherit 凭据；v1 输入 `{id, location, sha256}`，v2/v3/v4 输入为 `{id, location, presence: "present", sha256}` 或 `{id, location, presence: "absent"}`；变量及输入文件白名单 |
@@ -401,7 +401,7 @@ parity 保持 `unestablished`。实际判官仍裁决 context 其余语义与缺
 
 无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 job；当前目标是一份 parent workflow，先 detector，再 job-level if 单元，最后 `always()` aggregate（needs detector 与全部单元），仅 aggregate 为 required check。旧登记在显式迁移前保留各独立 workflow 合同。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各单元具有独立检查名、checkout、启动命令、边界、报告及重跑。单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输工件或推断单元间依赖。
 
-现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；bare check 保留全局 DELTA。固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。旧合同显式拼写仅留给旧登记。full 独立短单元／汇总已接入显式 execution_units 与原始证据；当前实现不宣称 native 完成或完整 SPEC 验收。
+现役 config schema4 支持固定 root invocation `check`、`check --unit ID`、无值 `check --collect`；非根 bare check 保留全局 DELTA，显式 standalone 初始化绑定见 §12。固定配置／原生 selector、bound Git、工具／环境／协议约束及 source-local/CI action 在执行前解析；`CHRONO_CHECK_SOURCE` 必须显式继承，无值／local 和 ci 各有唯一登记生产者，无混合覆盖、猜范围或手工 prepare。runner 分别保留真实 argv/cwd 与 PreparedCheck 的配置、端点、scope、context 原字节／语义摘要及原始生产证据，执行现役判官；canonical consumers 拒绝伪造展开 argv 和 selector 不一致。worktree v2 的 start/reconstruct 自动发布目的地 birth association，full unscoped 的 schema2 context 保留原 fork／birth，观察当前 HEAD／target／时间，引用实际历史输入，缺证据失败。local collection 由 CI owner 根据显式报告路径及独立执行物 pin 产生登记 manifest，无业务调度；provider v4/full provider v2 生成同一短 check step。旧合同显式拼写仅留给旧登记。full 独立短单元／汇总已接入显式 execution_units 与原始证据；当前实现不宣称 native 完成或完整 SPEC 验收。
 
 现役源码扩展 `chrono-ci-check/v3` 的 `policy.units` 与 `shared_operations`。判官先完成两端 DELTA、移除／替代义务及全局所选操作图验证，再按 `--unit ID` 过滤执行；不能借单元过滤隐藏全局操作环。单元报告分别列本单元所选、全局所选、交给其它单元、所需单元及真正不需要的义务。某单元成功只承担自身结果，其失败不取消不相关 workflow。本地及该 workflow 均追加完全相同的 `--unit ID` 到登记 check 指令；v1/v2 原调用行为保留。
 
@@ -867,7 +867,7 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 base.status 为 proposed 时记录 previous_enforcement:none，不能回填之前的成功；根提交之外不得伪造空 base。
 草案与 active 的迁移都不执行旧判官；启用必须补齐宿主声明的治理／输入范围并满足 registration 要求，input_closure 为 declared-complete 且无 unresolved。此工程声明不要求普遍隐藏输入证明；现役判官仍可报告 completeness_proven:false。
 
-宿主可显式登记 `chrono-initial-check/v1` 初始化配置，包含完整登记的 `host_config`、具名 `judges` 及进程上限，使用同一 `chrono-harness check --config P --candidate OID --initial` 入口。本地和 CI 在初始化时仍须使用相同配置和指令。普通完整配置不自动降级到该模式；初始化配置拒绝 `--base` 与 `--context`，读取真实 commit header 排除非根提交，包括浅历史及 Git replace 覆盖造成的伪根。
+宿主可显式登记 `chrono-initial-check/v1` 初始化配置，包含完整登记的 `host_config`、具名 `judges` 及进程上限。schema4 的 `canonical_check.initial_profile` 将它与 DELTA `profile` 分别绑定候选字节，standalone v4 provider 显式保留同一 `initial_inventory`，本地和 CI 均使用登记的 bare check。生产者先核真实 Git 拓扑／事件：真正无父提交进入单候选清单，非根仍须真实 base 并检查 DELTA；缺绑定或 base 失败。空业务清单保留为空，不转入 unit/collection；已有非空 scoped v3 unit 初始化仍保留原显式合同。旧登记保留其 `check --config P --candidate OID --initial` 合同。普通完整配置不自动降级到该模式；初始化配置拒绝 `--base` 与 `--context`，读取真实 commit header 排除非根提交，包括浅历史及 Git replace 覆盖造成的伪根。
 
 初始化绑定采用 `every-initial` / `inventory`，通过 `chrono-initial-judge/v1` 只传候选端点、配置与登记摘要、实际 checkout／runner／环境观察和显式前驱结果。没有 base、DELTA 或猜测的判官，复用已有进程调用、摘要、严格 JSON 与退出码校验。默认 registration 初始化判官要求草案状态，复用登记引用检查并检查整个初始文件清单；它不执行项目测试、不证明输入闭包，也不启用治理。扩展判官和脚本通过该配置的显式 DAG 登记。
 

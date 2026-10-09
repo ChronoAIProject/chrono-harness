@@ -405,18 +405,30 @@ A root commit can explicitly use a separate host profile under `.chrono-harness/
 ```
 
 Register this profile itself in FILEMAP, commit the complete initial inventory,
-and invoke the same entry locally and in CI:
+and bind it as schema4's `canonical_check.initial_profile`, alongside the normal
+DELTA `profile`. The standalone v4 provider explicitly declares the same
+inventory path and generated profile. The sole adopted entry locally and in CI is:
 
 ```sh
-.chrono-harness/bin/chrono-harness check --config .chrono-harness/initial.json --candidate FULL_OID --initial
+.chrono-harness/bin/chrono-harness check
 ```
 
-This explicit profile rejects `--base` and `--context`. It does not change ordinary
-full or scoped profiles. The runner reads actual commit headers, so a nonroot
+The registered input owners select inventory only for a genuine parentless
+candidate from physical Git topology or native event evidence; nonroots retain
+the normal DELTA profile and require their registered base. Both profile paths
+and digests, the real bare entry, candidate configuration and producer originals
+remain bound. Missing initial binding is an error, with no fallback. Empty
+business inventory needs no units; existing nonempty scoped unit initialization
+keeps its separate explicit contract. Legacy registrations retain their explicit
+initial CLI contract. See [standalone adoption](ci.md#standalone-initial-host-transition).
+
+This explicit profile rejects `--base` and `--context`. The runner reads actual commit headers, so a nonroot
 commit cannot enter this mode merely because history is shallow or a Git replacement
 overlay hides its original parents. Shared immutable Git facts disable replacement
 objects; the scoped CI judge and event preparer reuse the same parent reader. Each declared
-judge runs with the full host config's explicit environment. `after` is a declared
+judge runs with the full host config's explicit environment, omitting schema4's
+declared acquisition-only credentials with the existing Git environment identity.
+`after` is a declared
 DAG; failed predecessors block dependents. Paths, languages and judge IDs do not
 select extra checks. Existing process bounds, byte digests, strict response JSON,
 request identities and exact status/exit validation remain in force. `{candidate}`
@@ -445,11 +457,13 @@ The `chrono-initial-report/v1` report says `scope: initial-inventory`, has
 `governance: not-evaluated`. `status: complete` means the configured inventory
 checks completed successfully (exit 0); `failed` and `error` retain nonzero exits.
 Judge responses preserve pass/warn/fail/error and original process receipts.
-Reports are retained by content identity under `.chrono-harness/state/`, with the
-latest copy at `initial-report.json`; stdout contains the same JSON value. No
+Reports are retained by content identity under the selected native upload root,
+or `.chrono-harness/state/` locally, with the latest copy at `initial-report.json`.
+The short console locates the immutable original; the legacy entry emits JSON. No
 registry status or input declaration is rewritten. Full bootstrap provenance,
-automatic initial-profile generation, activation and complete native parity remain
-outstanding.
+activation, compatible public installation and live native initial-event
+acceptance remain outstanding. Owned generation and local/native-producer fixture
+checks do not establish complete native parity.
 
 ## Historical transition and the scoped CI consumer
 
