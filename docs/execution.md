@@ -557,6 +557,31 @@ same-kind ci-tests edges. Their effect survives. Adding verification to the ci-t
 plan also runs it for pre-existing ci-tests-only triggers. Selection equivalence
 and measured costs are not claimed; costs remain unknown.
 
+The migration test's whole historical host is an explicit input in
+`.chrono-harness/migrations/projects-history.json`: commit
+`4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`, tree
+`5c8d85c1df63ad1f8d30724d78ab986a185b12a1`, and remote `origin`.
+Its Rust fixture acquisition uses the current host's declared Git bytes/version
+and the existing bounded process and immutable-blob readers. It checks the fixed
+commit/tree locally, probes only that tree's blobs with lazy fetching disabled,
+and fetches the exact missing blob OIDs in one explicit bounded request. Failed
+probes, transport errors, remaining missing blobs and identity drift fail with
+original process receipts; there is no retry, ref discovery or ancestry fetch.
+Missing commit/tree metadata also fails locally. The four historical assertions
+then consume one in-memory acquired snapshot, preserving original historical
+bytes, aliases and ambiguity, version/method binding and workflow drift checks.
+Ordinary reentry with complete local objects requires no remote access.
+
+Acquisition keeps the existing 120-second/1-MiB per-process bounds and caps the
+single fetch's object argv at 64 KiB. Receipts, including expected failed local
+promisor regressions, remain in `.chrono-harness/state/migration-tests/`; fixture
+directories are temporary, and compiled outputs remain in the already registered
+test target. FILEMAP binds the manifest and Rust helper to the migration consumer;
+this is host test-input policy, not a new product history or dependency-discovery
+contract. The original PR169 native migration/collection failure is retained;
+local fixture acceptance does not establish a successful native rerun or delivery.
+Remote transfer bytes, billing and full input closure remain unmeasured.
+
 Current host operation sequences live only in FILEMAP. Scoped CI consumes v2 plans
 through routes' planner and projects' executor/receipt path. Historical v1 bindings
 are a named decoder input and remain supported for existing v1 example profiles.

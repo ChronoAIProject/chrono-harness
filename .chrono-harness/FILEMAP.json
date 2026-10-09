@@ -5649,6 +5649,38 @@
           "to": "project:ci-tests"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/migrations/projects-history.json",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/history.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
+        }
+      ]
     }
   ],
   "project_edges": [
