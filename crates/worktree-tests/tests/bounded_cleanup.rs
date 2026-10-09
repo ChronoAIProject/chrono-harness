@@ -255,8 +255,8 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
         let h = cargo_host();
         cargo_plan(&h.root, Some(stage));
         let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
-        let child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
-        await_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
+        let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
+        child.await_managed_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
         assert!(maintained.to_string().contains("live registered consumers"));
@@ -358,13 +358,17 @@ fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_o
     assert!(!h.root.join("output λ").exists());
     assert!(protected.join("remaining").exists());
     assert!(
-        partial
+        drain_report(&partial["drain"][0])
             .to_string()
             .contains("failed-partial-effects-possible")
     );
     let (code, retried, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{retried} {error}");
-    assert!(retried.to_string().contains("already-absent"));
+    assert!(
+        drain_report(&retried["drain"][0])
+            .to_string()
+            .contains("already-absent")
+    );
     assert!(!protected.exists());
     assert_eq!(
         fs::read(h.root.join(failed["report_path"].as_str().unwrap())).unwrap(),
@@ -444,7 +448,7 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     assert!(!h.root.join("output λ").exists());
     assert!(h.root.join("nested/cache/unknown-history").exists());
     assert!(
-        finished
+        drain_report(&finished["drain"][0])
             .to_string()
             .contains("pre-existing output has no adopted consumer release")
     );
@@ -631,7 +635,11 @@ fn main_historical_custody_publication_retry_and_partial_disposal_preserve_origi
     let original_result_bytes = fs::read(&original_result).unwrap();
     let (code, cleaned, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{cleaned} {error}");
-    assert!(cleaned.to_string().contains("already-absent"));
+    assert!(
+        drain_report(&cleaned["drain"][0])
+            .to_string()
+            .contains("already-absent")
+    );
     assert!(!h.root.join("nested/cache").exists());
     assert_eq!(fs::read(original_result).unwrap(), original_result_bytes);
     assert_eq!(fs::read(&path).unwrap(), bytes);
