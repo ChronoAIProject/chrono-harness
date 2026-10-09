@@ -244,7 +244,7 @@ fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
     );
     assert!(
         h.root
-            .join(report["managed_use_receipt"].as_str().unwrap())
+            .join(report["managed_use_receipt"]["path"].as_str().unwrap())
             .is_file()
     );
 }
