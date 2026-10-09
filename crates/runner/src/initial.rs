@@ -217,9 +217,14 @@ pub fn check(
     {
         environment.insert(key.clone(), val.as_str().ok_or("environment value")?.into());
     }
-    for key in crate::prepared::credential_environment(cfg)? {
-        environment.remove(&key);
-        inherited.remove(&key);
+    let credentials = crate::prepared::credential_environment(cfg)?;
+    for key in &credentials {
+        environment.remove(key);
+        inherited.insert(key.clone(), None);
+    }
+    let mut observed_environment = value!({"inherited":inherited,"effective":environment});
+    if cfg["schema_version"] == 4 {
+        observed_environment["omitted_credentials"] = value!(credentials);
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner = Executable {
@@ -243,7 +248,7 @@ pub fn check(
         registry_digest: wire::digest(&registries)?,
         checkout: reader.checkout_excluding(root, candidate, &facts::artifact_directories(cfg)?)?,
         runner: runner.clone(),
-        observations: value!({"git_facts":reader.observation(),"entry":entry,"environment":{"inherited":inherited,"effective":environment},
+        observations: value!({"git_facts":reader.observation(),"entry":entry,"environment":observed_environment,
             "registry_binding":{"entry_path":identity.entry_path,"effective_path":identity.effective_path,"selection":identity.selection}}),
         prior_results: vec![],
     };

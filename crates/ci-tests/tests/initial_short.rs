@@ -4,10 +4,19 @@ use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
 struct Host {
-    _temporary: tempfile::TempDir,
+    temporary: Option<tempfile::TempDir>,
     root: PathBuf,
     remote: PathBuf,
     candidate: String,
+}
+impl Drop for Host {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            if let Some(temporary) = self.temporary.take() {
+                eprintln!("Original failed host: {}", temporary.keep().display());
+            }
+        }
+    }
 }
 impl Host {
     fn new(unregistered: bool, binding: bool) -> Self {
@@ -64,7 +73,7 @@ impl Host {
                 json!(".chrono-harness/ci/root inventory.json");
         }
         cfg["semantic_fields"] = json!([]);
-        cfg["environment"] = json!({"inherit":["PATH","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_program,"presence":"present","sha256":sha256(&fs::read(&git_program).unwrap())}]});
+        cfg["environment"] = json!({"inherit":["PATH","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","ACQUISITION_SECRET"],"credential_environment":["ACQUISITION_SECRET"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_program,"presence":"present","sha256":sha256(&fs::read(&git_program).unwrap())}]});
         cfg["protocol"]["timeout_seconds"] = json!(30);
         cfg["artifacts"] = json!([
             {"path":".chrono-harness/bin/","owner":"repository","kind":"executable","tracked":false},
@@ -140,7 +149,7 @@ impl Host {
         generate(&root, ".chrono-harness/ci/github.json", false).unwrap();
         let candidate = commit(&root);
         Self {
-            _temporary: temporary,
+            temporary: Some(temporary),
             root,
             remote,
             candidate,
@@ -150,6 +159,7 @@ impl Host {
         let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&self.root)
             .arg("check")
+            .env("ACQUISITION_SECRET", "fixture acquisition credential")
             .env_remove(prepared::SOURCE);
         c
     }
@@ -183,15 +193,15 @@ fn commit(root: &Path) -> String {
     git(root, &["rev-parse", "HEAD"])
 }
 fn report(root: &Path, path: &str, out: &std::process::Output, exit: i32) -> Value {
+    let raw = fs::read(root.join(path)).unwrap();
+    let r: Value = serde_json::from_slice(&raw).unwrap();
     assert_eq!(
         out.status.code(),
         Some(exit),
-        "{} {}",
+        "{} {} {r}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
-    let raw = fs::read(root.join(path)).unwrap();
-    let r: Value = serde_json::from_slice(&raw).unwrap();
     let console = String::from_utf8_lossy(&out.stdout);
     let original = r["retained_report"].as_str().unwrap_or(path);
     assert!(console.contains(original), "{console}");
@@ -216,6 +226,21 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
             assert!(r["base"].is_null() && r["delta"].is_null());
             assert_eq!(r["candidate"], h.candidate);
             assert_eq!(r["entry"]["argv"].as_array().unwrap().len(), 2);
+            assert_eq!(
+                r["environment"]["omitted_credentials"],
+                json!(["ACQUISITION_SECRET"])
+            );
+            assert!(r["environment"]["inherited"]["ACQUISITION_SECRET"].is_null());
+            assert!(
+                r["judges"][0]["process"]["environment"]
+                    .get("ACQUISITION_SECRET")
+                    .is_none()
+            );
+            assert!(
+                !serde_json::to_string(r)
+                    .unwrap()
+                    .contains("fixture acquisition credential")
+            );
             let binding = &r["preparation"];
             assert_eq!(
                 binding["result"]["profile"],
@@ -350,5 +375,19 @@ fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
         json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":h.candidate,"created":true}),
     );
     assert_eq!(native.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&native.stderr).contains("candidate has parents"));
+    let console = String::from_utf8_lossy(&native.stderr);
+    let acquisition = console
+        .lines()
+        .find_map(|line| line.strip_prefix("Original acquisition: "))
+        .expect("short diagnostic must locate the original producer failure");
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(h.root.join(acquisition)).unwrap()).unwrap();
+    let original =
+        serde_json::from_value::<Vec<u8>>(receipt["process"]["stderr_bytes"].clone()).unwrap();
+    assert!(String::from_utf8_lossy(&original).contains("candidate has parents"));
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/native/initial-report.json")
+            .exists()
+    );
 }
