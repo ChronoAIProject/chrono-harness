@@ -93,9 +93,10 @@ For an explicitly named immutable input larger than the ordinary diagnostic
 bound, v1/v2 policies may additionally declare `immutable_input_limits`, a map
 from exact repository-relative paths to positive byte limits of at most
 67,108,864 bytes. An omitted map preserves the original transport contract.
-This host declares `.chrono-harness/config.json` at 2,097,152 bytes while keeping
-`output_limit_bytes` at 1,048,576. These declarations grant acquisition capacity;
-they do not register files, outputs, consumers or cleanup eligibility.
+This host declares `.chrono-harness/config.json` and
+`.chrono-harness/FILEMAP.json` at 2,097,152 bytes while keeping
+`output_limit_bytes` at 1,048,576. These declarations grant acquisition
+capacity; they do not register files, outputs, consumers or cleanup eligibility.
 
 The existing blob owner first acquires fixed-commit object metadata under the
 ordinary output/time limits. Oversized inputs are refused before acquiring their
