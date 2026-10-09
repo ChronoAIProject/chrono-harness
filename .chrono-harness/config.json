@@ -95,7 +95,7 @@
     },
     {
       "id": "chrono-worktree",
-      "program": ".chrono-harness/bin/chrono-worktree",
+      "program": ".chrono-harness/bin/chrono-worktree-custody-b0aa56f",
       "resolution": "PATH-once",
       "version_argv": [
         "--version"

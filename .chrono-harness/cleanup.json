@@ -147,5 +147,6 @@
       "path": "crates/diagnostics-tests/target/",
       "disposition": "dispose"
     }
-  ]
+  ],
+  "main_cache_only": true
 }
