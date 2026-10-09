@@ -129,6 +129,7 @@ fn history_spec() -> (chrono_harness::CommandSpec, String) {
 fn partial_history_fixture() -> (tempfile::TempDir, tempfile::TempDir, history::Binding) {
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "-q"]);
+    git(remote.path(), &["config", "uploadpack.allowFilter", "true"]);
     fs::write(remote.path().join("original bytes λ"), [0, 255, 10, 42]).unwrap();
     #[cfg(unix)]
     std::os::unix::fs::symlink("original bytes λ", remote.path().join("alias")).unwrap();
@@ -293,7 +294,9 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
     let cold_snapshot = history::acquire(cold.path(), &binding, spec, &digest).unwrap();
     assert_eq!(cold_snapshot.tree, snapshot.tree);
     assert_eq!(cold_snapshot.blobs, snapshot.blobs);
-    assert!(fetch_count(&cold_snapshot.processes) <= 2);
+    assert_eq!(fetch_count(&cold_snapshot.processes), 2);
+    assert!(!cold.path().join(".git/shallow").exists());
+    assert!(!cold.path().join(".git/FETCH_HEAD").exists());
     assert!(
         cold_snapshot
             .processes
