@@ -270,7 +270,7 @@ fn retained_reference_cli_subprocess_helper() {
     );
 }
 
-fn run_retained_cli_child(root: &Path) -> Value {
+fn run_retained_cli_child(root: &Path, source: &str) -> Value {
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -279,6 +279,7 @@ fn run_retained_cli_child(root: &Path) -> Value {
             "--nocapture",
         ])
         .current_dir(root)
+        .env(chrono_harness::prepared::SOURCE, source)
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
@@ -288,6 +289,25 @@ fn run_retained_cli_child(root: &Path) -> Value {
         .find_map(|line| line.strip_prefix("CHRONO_CLI_HELPER_RESULT:"))
         .expect("CLI helper result");
     serde_json::from_str(line).unwrap()
+}
+
+#[test]
+fn retained_reference_local_fixture_preserves_assertions_under_each_enclosing_source() {
+    for source in ["local", "ci"] {
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "retained_reference_cli_registers_process_evidence_before_judge_spawn",
+                "--nocapture",
+            ])
+            .env(chrono_harness::prepared::SOURCE, source)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "enclosing source {source}: {output:?}"
+        );
+    }
 }
 
 #[test]
@@ -348,7 +368,21 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
         serde_json::to_vec(&profile).unwrap(),
     )
     .unwrap();
-    let output = run_retained_cli_child(dir.path());
+    // This fixture registers only a local producer. Native selection must still
+    // reject that declaration before a judge or report can be published.
+    let missing_native = run_retained_cli_child(dir.path(), "ci");
+    assert_eq!(missing_native["exit_code"], 2);
+    assert!(
+        missing_native["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("native input binding missing"),
+        "{}",
+        missing_native["stderr"]
+    );
+    assert!(!dir.path().join(".chrono-harness/state/check.json").exists());
+
+    let output = run_retained_cli_child(dir.path(), "local");
     assert_eq!(output["exit_code"], 0, "{}", output["stderr"]);
     let reference: Value = serde_json::from_slice(
         &fs::read(dir.path().join(".chrono-harness/state/check.json")).unwrap(),
@@ -391,7 +425,7 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
         serde_json::to_vec(&participating).unwrap(),
     )
     .unwrap();
-    let refused = run_retained_cli_child(dir.path());
+    let refused = run_retained_cli_child(dir.path(), "local");
     assert_eq!(refused["exit_code"], 2);
     assert!(
         refused["stderr"]
