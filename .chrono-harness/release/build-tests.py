@@ -27,8 +27,8 @@ def put(p, value):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(value, indent=2) + '\n')
 
-def retain_failed_fixture(test, directory):
-    destination=os.environ.get('CHRONO_TEST_FAILURE_DIRECTORY')
+def retain_failed_fixture(test, directory, destination=None):
+    destination=destination or os.environ.get('CHRONO_TEST_FAILURE_DIRECTORY')
     result=test._outcome.result
     failed=any(case is test and error is not None for case,error in getattr(test._outcome,'errors',[]))
     failed=failed or any(case is test for case,_ in result.failures+result.errors)
@@ -318,7 +318,7 @@ class ReleaseUnits(unittest.TestCase):
                     if u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
                 else:
                     self.assertEqual(owner['language'],'python')
-                    if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution'])
+                    if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution','build_cache'])
                     else:self.assertEqual(u['needs'],[])
         self.assertEqual(len(projection['jobs']),sum(len(mapping) for mapping in cfg['native_jobs'].values()))
         jobs={j['id']:j for j in projection['jobs']}
@@ -536,8 +536,72 @@ class UnitFailureRetention(unittest.TestCase):
         self.assertIsNone(execution.report['failure']['exit_code'])
         self.assertFalse((self.output/'receipt.json').is_file())
 
+class CacheTransport(unittest.TestCase):
+    def test_release_staging_preserves_the_actual_cache_transport_executable(self):
+        temporary=tempfile.TemporaryDirectory(prefix='release cache transport λ ')
+        self.addCleanup(temporary.cleanup)
+        self.addCleanup(retain_failed_fixture,self,temporary.name,ROOT/'.chrono-harness/state/release-test-failures')
+        root=Path(temporary.name)
+        cfg=json.loads((ROOT/BUILD).read_bytes())
+        plan=json.loads((ROOT/PLAN).read_bytes())
+        spec=importlib.util.spec_from_file_location('cache_release_recipe',SCRIPT)
+        recipe=importlib.util.module_from_spec(spec)
+        exec(compile(SCRIPT.read_bytes(),str(SCRIPT),'exec'),recipe.__dict__)
+        put(root/PLAN,plan)
+        put(root/cfg['consumer_staging']['host_config'],json.loads((ROOT/cfg['consumer_staging']['host_config']).read_bytes()))
+        asset=root/plan['assets']['chrono-cache'];asset.parent.mkdir(parents=True)
+        shutil.copy2(ROOT/'crates/cache/target/debug/chrono-cache',asset)
+        bootstrap=json.loads((ROOT/'.chrono-harness/ci/bootstrap-cache.json').read_bytes())
+        transport=root/bootstrap['install'][0]['destination'];transport.parent.mkdir(parents=True)
+        shutil.copy2(asset,transport)
+        original=(transport.stat().st_dev,transport.stat().st_ino,sha(transport))
+        config='.chrono-harness/cache.json'
+        put(root/config,{'schema':'chrono-cache/v2','namespace':'release-regression',
+            'artifact_registry':cfg['consumer_staging']['host_config'],
+            'inputs':{'profile':{'kind':'literal','value':'fixture'},'source':{'kind':'literal','value':'fixed-source'}},
+            'artifacts':{'target':{'owner':'cache-tests','path':'crates/cache-tests/target/','kind':'compilation','external':False}},
+            'caches':{'tests':{'owner':'cache-tests','producer':'test.cache-tests','consumers':['release.verify'],
+                'artifacts':['target'],'compatibility_inputs':['profile'],'source_inputs':['source'],'restore':'compatible'}},
+            'consumer_operations':{'release.verify':[{'registry':BUILD,'pointer':'/verification_operations'}]},
+            'require_primary_checkout':True,'recover_failed_restores':True})
+        put(root/BUILD,cfg)
+        subprocess.run([cfg['tools']['git'],'init','-q',str(root)],check=True,capture_output=True)
+        captures=root/'original-processes';captures.mkdir()
+        def run(program,args,steps=None,expected=0):
+            env=dict(os.environ)
+            if steps is not None:env['CHRONO_RELEASE_REGRESSION_STEPS']=json.dumps(steps)
+            out=subprocess.run([str(program),*args],cwd=root,env=env,capture_output=True)
+            prefix=captures/str(len(list(captures.glob('*.json'))))
+            prefix.with_suffix('.stdout').write_bytes(out.stdout)
+            prefix.with_suffix('.stderr').write_bytes(out.stderr)
+            put(prefix.with_suffix('.json'),{'argv':[str(program),*args],'exit':out.returncode})
+            self.assertEqual(out.returncode,expected,out.stderr)
+            return out
+        plan_path='.chrono-harness/state/cache/plan.json'
+        planned=run(transport,['plan','--host-root',str(root),'--config',config,'--consumer','release.verify'])
+        (root/plan_path).parent.mkdir(parents=True,exist_ok=True)
+        (root/plan_path).write_bytes(planned.stdout)
+        steps={'cache_0_restore':{'outcome':'success','outputs':{}},'cache_0_save':{'outcome':'skipped','outputs':{}},'work':{'outcome':'success'}}
+        run(transport,['recover','--host-root',str(root),'--config',config,'--plan',plan_path,'--steps-env','CHRONO_RELEASE_REGRESSION_STEPS'],steps)
+        staging=recipe.selected_staging(recipe.staging_plan(root,cfg),{'chrono-cache':{}})
+        recipe.stage(root,staging)
+        staging['observations']=[]
+        self.assertTrue(recipe.observe(root,staging,'staged'))
+        consumer=root/'crates/cache/target/debug/chrono-cache'
+        consumed=json.loads(run(consumer,['plan','--host-root',str(root),'--config',config,'--consumer','release.verify']).stdout)
+        self.assertEqual(consumed['planner']['sha256'],sha(asset))
+        reported=run(transport,['report','--host-root',str(root),'--plan',plan_path,'--steps-env','CHRONO_RELEASE_REGRESSION_STEPS','--work','work','--report-directory','.chrono-harness/state/cache/report/'],steps)
+        report=json.loads(reported.stdout)['observation']
+        self.assertEqual(report['current_executable_verification']['status'],'matched')
+        self.assertEqual((transport.stat().st_dev,transport.stat().st_ino,sha(transport)),original,
+            'release staging replaced the executable used by the surrounding cache transport')
+        self.assertTrue(recipe.observe(root,staging,'after-verification'))
+
 GROUP='all'
-INTEGRATION_TEST='__main__.ReleaseUnits.test_real_distribution_packs_the_accepted_original_asset_vector'
+INTEGRATION_TESTS={
+    '__main__.ReleaseUnits.test_real_distribution_packs_the_accepted_original_asset_vector',
+    '__main__.CacheTransport.test_release_staging_preserves_the_actual_cache_transport_executable',
+}
 
 def cases(suite):
     for item in suite:
@@ -554,9 +618,9 @@ def load_tests(loader, standard_tests, pattern):
         suite.addTests(loader.loadTestsFromModule(module))
     tests=list(cases(suite))
     identities=[test.id() for test in tests]
-    if len(set(identities))!=len(identities) or identities.count(INTEGRATION_TEST)!=1:
+    if len(set(identities))!=len(identities) or not INTEGRATION_TESTS <= set(identities):
         raise ValueError('release test groups require unique members and the registered integration case')
-    selected=[test for test in tests if GROUP=='all' or (test.id()==INTEGRATION_TEST)==(GROUP=='integration')]
+    selected=[test for test in tests if GROUP=='all' or (test.id() in INTEGRATION_TESTS)==(GROUP=='integration')]
     if not selected or any(getattr(test,'__unittest_skip__',False) or getattr(getattr(test,test._testMethodName),'__unittest_skip__',False) for test in selected):
         raise ValueError('registered release group must be nonempty and unskipped')
     return unittest.TestSuite(selected)

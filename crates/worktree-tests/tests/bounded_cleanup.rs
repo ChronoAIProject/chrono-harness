@@ -119,11 +119,11 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
             "--operation",
             "use.consumer",
         ];
-        let child = super::interrupted_cleanup::CapturedChild::spawn(
+        let mut child = super::interrupted_cleanup::CapturedChild::spawn(
             &mut h.auto_command("use", &args),
             &h.root,
         );
-        await_file(&target.join(".chrono-harness/state/retained-rebuild-active"));
+        child.await_file(&target.join(".chrono-harness/state/retained-rebuild-active"));
         let observations = cost(&target);
         let cold = value!(&observations.as_array().unwrap()[..2]);
         let retained = value!(&observations.as_array().unwrap()[2..]);
