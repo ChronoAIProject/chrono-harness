@@ -18,7 +18,10 @@
     }
   },
   "timeout_seconds": 120,
-  "output_limit_bytes": 2097152,
+  "output_limit_bytes": 1048576,
+  "immutable_input_limits": {
+    ".chrono-harness/config.json": 2097152
+  },
   "report_directory": ".chrono-harness/state/worktrees/",
   "check_inputs": {
     "origin_path": ".chrono-harness/state/origin.json",
