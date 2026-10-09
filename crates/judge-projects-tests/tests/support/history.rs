@@ -69,6 +69,40 @@ pub fn acquire(
             }
             Ok((index, bytes))
         };
+        let probe = [
+            "cat-file".into(),
+            "--batch-check=%(objectname) %(objecttype)".into(),
+        ];
+        let commit_query = format!("{}\n", binding.commit);
+        let commit_present = |bytes: &[u8]| -> Result<bool, String> {
+            if bytes == format!("{} commit\n", binding.commit).as_bytes() {
+                Ok(true)
+            } else if bytes == format!("{} missing\n", binding.commit).as_bytes() {
+                Ok(false)
+            } else {
+                Err("expected exact historical commit or missing probe".into())
+            }
+        };
+        if !commit_present(&git(&probe, commit_query.as_bytes())?.1)? {
+            // A depth-two event checkout need not contain this separate pinned
+            // input. Acquire its metadata explicitly, without changing refs or
+            // shallow boundaries, then acquire only its missing fixture blobs.
+            git(
+                &[
+                    "fetch".into(),
+                    "--no-tags".into(),
+                    "--no-write-fetch-head".into(),
+                    "--no-auto-maintenance".into(),
+                    "--filter=blob:none".into(),
+                    binding.remote.clone(),
+                    binding.commit.clone(),
+                ],
+                &[],
+            )?;
+            if !commit_present(&git(&probe, commit_query.as_bytes())?.1)? {
+                return Err("historical test commit remains missing after explicit fetch".into());
+            }
+        }
         let actual_tree = git(
             &["rev-parse".into(), format!("{}^{{tree}}", binding.commit)],
             &[],
@@ -100,10 +134,6 @@ pub fn acquire(
             .iter()
             .map(|oid| format!("{oid}\n"))
             .collect::<String>();
-        let probe = [
-            "cat-file".into(),
-            "--batch-check=%(objectname) %(objecttype)".into(),
-        ];
         let missing = missing_blobs(&objects, &git(&probe, query.as_bytes())?.1)?;
         if !missing.is_empty() {
             let args = [

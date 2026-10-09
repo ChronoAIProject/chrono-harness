@@ -209,8 +209,9 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
     ];
     let before = chrono_harness::run_process_observed(local.path(), &spec, &[], &digest).unwrap();
     assert_ne!(before.exit_code, 0);
+    assert!(before.failure.is_none(), "{:?}", before.failure);
     assert!(
-        before.stderr.contains("promisor remote"),
+        before.stderr.contains(missing_remote.to_str().unwrap()),
         "{}",
         before.stderr
     );
@@ -282,6 +283,27 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
             .permissions()
             .readonly()
     );
+    let cold = tempfile::tempdir().unwrap();
+    git(cold.path(), &["init", "-q"]);
+    git(
+        cold.path(),
+        &["remote", "add", "origin", remote.path().to_str().unwrap()],
+    );
+    let (spec, digest) = history_spec();
+    let cold_snapshot = history::acquire(cold.path(), &binding, spec, &digest).unwrap();
+    assert_eq!(cold_snapshot.tree, snapshot.tree);
+    assert_eq!(cold_snapshot.blobs, snapshot.blobs);
+    assert!(fetch_count(&cold_snapshot.processes) <= 2);
+    assert!(
+        cold_snapshot
+            .processes
+            .iter()
+            .any(|p| p.argv.iter().any(|arg| arg == "--filter=blob:none"))
+    );
+    retain_history(
+        &cold_snapshot.processes,
+        "regression: missing pinned commit acquired explicitly",
+    );
 }
 
 #[test]
@@ -327,7 +349,7 @@ fn historical_fixture_retains_failed_fetch_and_rejects_identity_drift() {
     let failure = history::acquire(local.path(), &wrong, spec, &digest)
         .err()
         .unwrap();
-    assert_eq!(fetch_count(&failure.processes), 0);
+    assert_eq!(fetch_count(&failure.processes), 1);
     assert_ne!(failure.processes.last().unwrap().exit_code, 0);
 }
 fn adopt_fixture_tool(root: &std::path::Path, config: &mut Value, id: &str) -> observation::Tool {

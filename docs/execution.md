@@ -564,10 +564,13 @@ The migration test's whole historical host is an explicit input in
 Its Rust fixture acquisition uses the current host's declared Git bytes/version
 and the existing bounded process and immutable-blob readers. It checks the fixed
 commit/tree locally, probes only that tree's blobs with lazy fetching disabled,
-and fetches the exact missing blob OIDs in one explicit bounded request. Failed
+and fetches the exact missing blob OIDs in one explicit bounded request. An absent
+pinned commit first receives its own explicit `--filter=blob:none` metadata fetch,
+with no ref update or shallow-boundary change; the server may include ancestor
+metadata in that fixed commit's transfer. Failed
 probes, transport errors, remaining missing blobs and identity drift fail with
-original process receipts; there is no retry, ref discovery or ancestry fetch.
-Missing commit/tree metadata also fails locally. The four historical assertions
+original process receipts; there is no retry or ref discovery. Wrong/malformed
+commit probes and missing tree metadata still fail. The four historical assertions
 then consume one in-memory acquired snapshot, preserving original historical
 bytes, aliases and ambiguity, version/method binding and workflow drift checks.
 Ordinary reentry with complete local objects requires no remote access.
