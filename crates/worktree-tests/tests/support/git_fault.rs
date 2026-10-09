@@ -442,6 +442,12 @@ fn main() {
                 return;
             }
         }
+        "inventory-failure" => {
+            if home.join("fail-inventory").is_file() && arg(1, "worktree") && arg(2, "list") {
+                eprintln!("original inventory failure");
+                std::process::exit(71);
+            }
+        }
         "identity-fault" => {
             let fault = home.join("identity-fault");
             let cwd = std::env::current_dir().unwrap();

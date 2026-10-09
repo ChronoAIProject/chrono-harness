@@ -606,6 +606,24 @@ Committed composition, supported native platforms and complete host adoption
 remain acceptance obligations.
 Legacy v1 records remain protected; no retrospective ownership is fabricated.
 
+The bounded Git worktree inventory closes the shared-drain visibility gap for
+Git-registered rows without current enrollment. `Manager::drain` observes the
+bound runner's owner inventory before effects and reports path/current HEAD/branch,
+locked/prunable state, available physical identity and explicit preservation or
+attachment-blocking reasons. Only exact non-disposed enrollment attachments match;
+birth HEAD/branch do not define mutable checkout identity. Observation grants no
+ownership, lease or terminal state. Existing cleanup/retention/effect checks remain
+the deletion authority. Rust real-Git regressions cover failed and interrupted
+ledgerless births, dirty/locked/prunable rows, changed gitfile/metadata and unreadable
+attachments, advanced HEAD/main branch changes, explicit import, known cache and
+terminal cleanup, fatal inventory failure and protected live consumers. The
+existing adopted-short-check fixture also checks an unowned locked validation row
+through the public canonical CLI and its owner report; generated CI keeps that
+same registered test group and command. No new consumer or workflow is introduced.
+This is a visibility improvement, not automatic import or arbitrary filesystem
+reclamation. Full host activation, complete input closure, generated-CI/native
+parity and custody of active external validation checkouts remain unfinished.
+
 Automatic retry evidence uses versioned retained-input references, preserving
 immutable receipts in place and storing opaque partial bytes once at the surviving
 coordinator. The dedicated worktree regressions

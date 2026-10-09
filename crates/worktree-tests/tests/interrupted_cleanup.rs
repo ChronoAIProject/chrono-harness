@@ -1417,6 +1417,29 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("normal-check");
     let other = h.parent.join("interrupted-other");
+    let unowned = h.parent.join("external-validation");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "external-validation",
+            unowned.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    output(&unowned);
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "external validation",
+            unowned.to_str().unwrap(),
+        ],
+    );
     assert_eq!(h.invoke("integration", "normal-check", &target).0, 0);
     assert_eq!(h.invoke("feature", "interrupted-other", &other).0, 0);
     super::check_inputs::install(&target);
@@ -1471,7 +1494,21 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     );
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/check-holder")).unwrap());
-    assert_eq!(h.auto("maintain", &[]).0, 0);
+    let (code, inventory, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{inventory} {error}");
+    let observed = super::automatic::inventory_row(&inventory, &unowned);
+    assert_eq!(observed["status"], "preserved");
+    assert_eq!(observed["locked"], true);
+    assert_eq!(observed["enrollment_match"], false);
+    assert!(unowned.join("output λ/cache").exists());
+    assert!(
+        inventory["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"] == value!(target)
+                && row["preserved_reason"] == "live registered consumers hold enrollment lease")
+    );
     assert!(target.join("output λ/cache").exists());
     fs::write(
         target.join(".chrono-harness/state/check-release"),
@@ -1503,6 +1540,13 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
             .starts_with("check-")
         {
             let report = json(&fs::read(&path).unwrap()).unwrap();
+            let observed = super::automatic::inventory_row(&report, &unowned);
+            assert_eq!(observed["enrollment_match"], false);
+            assert_eq!(observed["locked"], true);
+            assert_eq!(
+                super::automatic::inventory_row(&report, &target)["preserved_reason"],
+                "invoking source or destination"
+            );
             let mut calls = std::collections::BTreeMap::<String, usize>::new();
             for process in report["processes"].as_array().unwrap() {
                 *calls.entry(process["argv"].to_string()).or_default() += 1;

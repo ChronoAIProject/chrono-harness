@@ -839,6 +839,36 @@ drain after validating policy/identity, excluding the invoking source and intend
 destination. Unrelated drain failures retain their original reports and do not block valid
 admission; target identity and coordinator publication failures still block.
 
+At the beginning of that shared drain, the bound Git runner reads one
+`worktree list --porcelain -z` inventory. The parent report's
+`worktree_inventory` rows contain the exact registered `path`, `head`, `branch`,
+`locked` and `prunable` flags, the original `git` fields (including lock/prune
+reasons), and available `checkout_identity` and physical `attachment` fields.
+`enrollment_match` requires the exact path and attachment of a non-disposed ledger
+entry in this common repository. Current HEAD/branch observations are recorded;
+birth HEAD/branch are not universal physical identities. Main and active consumers
+can legitimately advance or switch them.
+
+Rows without a current enrollment are `preserved` with an explicit-import reason;
+unreadable or changed attachments are `blocked` with `attachment_error` and a
+preservation reason. The coordinator and explicit source/destination exclusions
+are reported as protected. This observation never imports, acquires a consumer
+lease, marks terminal or reclaims an unknown row. Explicit `import` remains the
+ownership transition for an existing linked checkout; old disposed generations
+grant no ownership over a reused path. A blocked inventory row is a diagnostic,
+not a new deletion or admission policy. Inventory command and report-publication
+failures are fatal. Existing enrolled cleanup still takes leases and rechecks
+identity, retention and effects; unrelated cleanup failures retain their existing
+admission behavior, while explicit maintain/finish remains fail-closed.
+
+The inventory describes the beginning of drain, not the post-cleanup tree. It
+covers only Git-registered rows, not orphan directories or arbitrary external
+writers. Dirty work, branches, unretained commits and evidence in an unowned row
+remain untouched. It cannot take custody of an active external validation checkout
+or reconstruct its missing history. Local and generated CI retain the existing
+canonical check entry; local fixture evidence does not establish native parity,
+complete input closure or full host activation.
+
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:
 

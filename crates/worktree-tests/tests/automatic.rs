@@ -81,6 +81,197 @@ fn output(target: &Path) {
     fs::write(target.join("output λ/data"), vec![42u8; 8192]).unwrap();
 }
 
+pub(super) fn inventory_row<'a>(report: &'a Value, target: &Path) -> &'a Value {
+    report["worktree_inventory"]
+        .as_array()
+        .expect("shared drain must publish its Git inventory")
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .expect("Git-registered worktree must be reported")
+}
+
+#[test]
+fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    native_git(&h, "inventory-failure", value!({}));
+    let target = h.parent.join("inventory-failure");
+    assert_eq!(h.invoke("feature", "inventory-failure", &target).0, 0);
+    output(&target);
+    let ledger = h.ledger();
+    fs::write(h.parent.join("fail-inventory"), "fail").unwrap();
+    for command in ["maintain", "use"] {
+        let extra = if command == "use" {
+            vec![
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ]
+        } else {
+            vec![]
+        };
+        let (code, report, error) = h.auto(command, &extra);
+        assert_eq!(code, 2, "{report} {error}");
+        assert!(
+            report["error"]
+                .as_str()
+                .unwrap()
+                .contains("original inventory failure")
+        );
+        assert_eq!(report["cleanup_failures"], value!([]));
+        assert_eq!(report["worktree_inventory"], value!([]));
+        assert!(report["managed_process"].is_null());
+        assert_eq!(h.ledger(), ledger);
+        assert!(target.join("output λ/data").exists());
+    }
+}
+
+#[test]
+fn automatic_inventory_preserves_ledgerless_dirty_locked_and_prunable_worktrees() {
+    for fault in ["dirty", "locked", "prunable"] {
+        let h = Host::new("payload");
+        h.kernel_cleanup();
+        let target = h.parent.join("unowned");
+        git(
+            &h.root,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "unowned",
+                target.to_str().unwrap(),
+                "HEAD",
+            ],
+        );
+        output(&target);
+        fs::write(target.join("payload"), "unretained commit").unwrap();
+        commit(&target);
+        let head = git(&target, &["rev-parse", "HEAD"]);
+        let gitfile = fs::read(target.join(".git")).unwrap();
+        match fault {
+            "dirty" => fs::write(target.join("payload"), "real dirty work").unwrap(),
+            "locked" => {
+                git(
+                    &h.root,
+                    &[
+                        "worktree",
+                        "lock",
+                        "--reason",
+                        "live external validation",
+                        target.to_str().unwrap(),
+                    ],
+                );
+            }
+            _ => {
+                fs::rename(&target, h.parent.join("preserved-missing-checkout")).unwrap();
+            }
+        }
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{fault}: {report} {error}");
+        let row = inventory_row(&report, &target);
+        assert_eq!(row["head"], head);
+        assert_eq!(row["branch"], "refs/heads/unowned");
+        assert_eq!(row["enrollment_match"], false);
+        assert!(
+            row["preserved_reason"]
+                .as_str()
+                .unwrap()
+                .contains("no current enrollment")
+        );
+        assert_eq!(row["locked"], fault == "locked");
+        assert_eq!(row["prunable"], fault == "prunable");
+        assert_eq!(
+            row["status"],
+            if fault == "prunable" {
+                "blocked"
+            } else {
+                "preserved"
+            }
+        );
+        assert_eq!(h.ledger()["entries"], value!([]));
+        assert_eq!(git(&h.root, &["rev-parse", "refs/heads/unowned"]), head);
+        let retained = if fault == "prunable" {
+            h.parent.join("preserved-missing-checkout")
+        } else {
+            target.clone()
+        };
+        assert_eq!(fs::read(retained.join(".git")).unwrap(), gitfile);
+        assert!(retained.join("output λ/data").exists());
+        if fault == "dirty" {
+            assert_eq!(
+                fs::read_to_string(retained.join("payload")).unwrap(),
+                "real dirty work"
+            );
+        }
+        let main = inventory_row(&report, &h.root);
+        assert_eq!(main["status"], "preserved");
+        assert_eq!(main["preserved_reason"], "coordinator worktree");
+    }
+}
+
+#[test]
+fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
+    for fault in ["advanced", "gitfile", "metadata", "unreadable"] {
+        let h = Host::new("payload");
+        h.kernel_cleanup();
+        let target = h.parent.join("enrolled");
+        assert_eq!(h.invoke("feature", "enrolled", &target).0, 0);
+        output(&target);
+        let metadata = PathBuf::from(git(&target, &["rev-parse", "--absolute-git-dir"]));
+        match fault {
+            "advanced" => {
+                fs::write(target.join("payload"), "new committed source").unwrap();
+                commit(&target);
+            }
+            "gitfile" => {
+                fs::rename(target.join(".git"), h.parent.join("original-gitfile")).unwrap();
+                fs::write(
+                    target.join(".git"),
+                    fs::read(h.parent.join("original-gitfile")).unwrap(),
+                )
+                .unwrap();
+            }
+            "metadata" => {
+                let original = metadata.with_extension("original");
+                fs::rename(&metadata, &original).unwrap();
+                retain_fixture_state(&original, &metadata).unwrap();
+            }
+            _ => {
+                fs::write(target.join(".git"), "unreadable attachment").unwrap();
+            }
+        }
+        let ledger = h.ledger();
+        let (code, report, error) = h.auto("maintain", &[]);
+        let row = inventory_row(&report, &target);
+        if fault == "advanced" {
+            assert_eq!(code, 0, "{report} {error}");
+            assert_eq!(row["status"], "enrolled");
+            assert_eq!(row["enrollment_match"], true);
+            assert_eq!(row["head"], git(&target, &["rev-parse", "HEAD"]));
+            assert!(!target.join("output λ").exists());
+            assert_eq!(h.ledger()["entries"][0]["status"], "active");
+            assert!(h.ledger()["entries"][0]["terminal"].is_null());
+        } else {
+            assert_ne!(code, 0, "{fault}: {report} {error}");
+            assert_eq!(row["status"], "blocked");
+            assert_eq!(row["enrollment_match"], false);
+            assert!(
+                row["preserved_reason"]
+                    .as_str()
+                    .unwrap()
+                    .contains("attachment")
+            );
+            assert!(target.join("output λ/data").exists());
+            assert_eq!(
+                h.ledger()["entries"][0]["attachment"],
+                ledger["entries"][0]["attachment"]
+            );
+        }
+    }
+}
+
 #[test]
 fn addressed_drain_originals_remain_required_for_birth_consumption() {
     let h = Host::new("payload");
@@ -160,6 +351,7 @@ fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     );
     assert_eq!(code, 0, "{r} {e}");
     assert!(!target.exists());
+    assert_eq!(inventory_row(&r, &target)["enrollment_match"], true);
     let effect = &drain_report(&r["drain"][0]);
     assert_eq!(effect["worktree_removal"], "verified-absent");
     assert_eq!(effect["artifact_disposals"][0]["bytes_before"], 8192);
@@ -312,6 +504,11 @@ fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
                     "dev",
                 ],
             );
+            let (code, observed, error) = h.auto("maintain", &[]);
+            assert_eq!(code, 0, "{observed} {error}");
+            assert_eq!(inventory_row(&observed, &target)["enrollment_match"], false);
+            assert_eq!(inventory_row(&observed, &target)["status"], "preserved");
+            assert_eq!(h.ledger()["entries"], value!(entries));
             let (code, r, e) = h.auto("import", &["--path", target.to_str().unwrap()]);
             assert_eq!(code, 0, "{r} {e}");
             assert_eq!(h.ledger()["entries"][2]["enrollment"]["kind"], "import");
@@ -406,6 +603,10 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
     h.automatic("evidence-retain");
     // Import the unchanged legacy checkout, without inventing a birth or rewriting its source.
     assert!(!target.join(AUTO_POLICY).exists());
+    let (code, observed, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(inventory_row(&observed, &target)["enrollment_match"], false);
+    assert_eq!(h.ledger()["entries"], value!([]));
     assert_ne!(h.auto("finish", &["--path", target.to_str().unwrap()]).0, 0);
     let (code, r, e) = h.auto("import", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{r} {e}");
@@ -1021,6 +1222,11 @@ fn automatic_failed_birth_and_missing_state_are_protected() {
     let failed = h.parent.join("failed");
     assert_ne!(h.invoke("feature", "failed", &failed).0, 0);
     assert!(failed.exists());
+    assert_eq!(h.ledger()["entries"], value!([]));
+    let (code, observed, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(inventory_row(&observed, &failed)["status"], "preserved");
+    assert_eq!(inventory_row(&observed, &failed)["enrollment_match"], false);
     assert_eq!(h.ledger()["entries"], value!([]));
     assert_ne!(h.auto("finish", &["--path", failed.to_str().unwrap()]).0, 0);
     assert!(failed.exists());

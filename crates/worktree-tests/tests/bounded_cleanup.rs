@@ -491,9 +491,17 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{used} {error}");
     git(&h.root, &["checkout", "-q", "--detach"]);
+    assert_eq!(
+        super::automatic::inventory_row(&used, &h.root)["enrollment_match"],
+        true
+    );
     let refs = git(&h.root, &["show-ref"]);
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    assert_eq!(
+        super::automatic::inventory_row(&finished, &h.root)["enrollment_match"],
+        true
+    );
     assert_eq!(git(&h.root, &["show-ref"]), refs);
     assert!(!h.root.join("output λ").exists());
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
