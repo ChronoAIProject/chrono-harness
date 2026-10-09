@@ -704,3 +704,13 @@ non-UTF8 roundtrips, business/transport failures, corruption, missing uploads wi
 all local originals removed, and zero business reruns during collection. Host
 adoption and validation remain subject to the same candidate and native checks;
 this does not remove nested business-receipt or acquisition duplication.
+
+
+The worktree owner now has an explicit historical-main current-custody transition
+on the existing migrate entry. It preserves original enrollment/outcomes, binds an
+exact operator declaration and uses the adopted exclusion and cache drain.
+Dedicated Rust behavior cases cover selected reclamation, live/source/unknown
+protection, published-transition recovery, partial disposal and ordinary reentry.
+This source increment does not establish true-dev canonical/native acceptance,
+report-custody adoption, PR delivery or complete SPEC acceptance. Actual host
+reclamation and deployment observations belong to the caller's retained evidence.

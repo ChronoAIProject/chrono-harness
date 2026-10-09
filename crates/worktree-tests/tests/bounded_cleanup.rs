@@ -454,3 +454,148 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{used} {error}");
 }
+
+fn historical_host() -> Host {
+    let h = main_host();
+    for path in ["output λ", "nested/cache"] {
+        fs::create_dir_all(h.root.join(path)).unwrap();
+        fs::write(h.root.join(path).join("old-output"), "rebuildable history").unwrap();
+    }
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    h
+}
+
+fn custody_plan(h: &Host, artifacts: &[&str]) -> String {
+    let path = ".chrono-harness/state/current-custody.json";
+    let plan = value!({"schema":"chrono-main-cache-custody/v1", "path":h.root,
+        "head":git(&h.root, &["rev-parse", "HEAD"]).trim(), "artifacts":artifacts,
+        "current_consumers_released":true,
+        "reason":"Current fixture operator joined its consumers and assumes custody; past producer outcome is unknown"});
+    fs::write(h.root.join(path), serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
+    path.into()
+}
+
+fn custody(h: &Host, plan: &str) -> (i32, Value, String) {
+    h.auto(
+        "migrate",
+        &["--path", h.root.to_str().unwrap(), "--adopt-cache", plan],
+    )
+}
+
+#[test]
+fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enrollment() {
+    let h = historical_host();
+    let original = h.ledger()["entries"][0].clone();
+    let plan = custody_plan(&h, &["nested/cache/"]);
+    let (code, adopted, error) = custody(&h, &plan);
+    assert_eq!(code, 0, "{adopted} {error}");
+    assert_eq!(adopted["cache_adoption"]["status"], "adopted");
+    assert!(h.root.join("nested/cache/old-output").exists());
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["enrollment"], original["enrollment"]);
+    assert_eq!(entry["status"], "active");
+    assert!(entry["terminal"].is_null());
+    let (code, cleaned, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{cleaned} {error}");
+    assert!(!h.root.join("nested/cache").exists());
+    assert!(
+        h.root.join("output λ/old-output").exists(),
+        "unselected historical output stays protected"
+    );
+    assert_eq!(
+        fs::read_to_string(h.root.join("payload")).unwrap(),
+        "literal host input; no dependency inference\n"
+    );
+    let (code, repeated, error) = custody(&h, &plan);
+    assert_eq!(code, 0, "{repeated} {error}");
+    assert_eq!(repeated["cache_adoption"]["status"], "already-managed");
+    assert_eq!(
+        h.ledger()["entries"][0]["main_cache_adoptions"],
+        entry["main_cache_adoptions"]
+    );
+    assert_eq!(h.auto("maintain", &[]).1["drain"], value!([]));
+}
+
+#[test]
+fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protection() {
+    let h = historical_host();
+    let plan = custody_plan(&h, &["nested/cache/"]);
+    let entry = h.ledger()["entries"][0].clone();
+    let held = fs::File::open(h.root.join(entry["ownership"]["path"].as_str().unwrap())).unwrap();
+    held.lock_shared().unwrap();
+    assert_ne!(custody(&h, &plan).0, 0);
+    drop(held);
+    assert_eq!(h.ledger()["entries"][0], entry);
+    for names in [
+        vec!["payload/"],
+        vec!["unregistered/"],
+        vec![".chrono-harness/state/"],
+        vec!["nested/cache/", "nested/cache/"],
+    ] {
+        let invalid = custody_plan(&h, &names);
+        assert_ne!(custody(&h, &invalid).0, 0);
+        assert!(h.root.join("nested/cache/old-output").exists());
+    }
+    git(&h.root, &["add", "-f", "nested/cache/old-output"]);
+    let plan = custody_plan(&h, &["nested/cache/"]);
+    let (code, refused, error) = custody(&h, &plan);
+    assert_ne!(code, 0, "{refused} {error}");
+    assert!(refused.to_string().contains("tracked paths"));
+    assert!(h.root.join("nested/cache/old-output").exists());
+    // An unresolved independent historical object does not veto eligible siblings.
+    let plan = custody_plan(&h, &["output λ/"]);
+    assert_eq!(custody(&h, &plan).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(!h.root.join("output λ").exists());
+    assert!(h.root.join("nested/cache/old-output").exists());
+}
+
+#[test]
+fn main_historical_custody_publication_retry_and_partial_disposal_preserve_originals() {
+    use std::os::unix::fs::PermissionsExt;
+    let h = historical_host();
+    let plan = custody_plan(&h, &["output λ/", "nested/cache/"]);
+    let ledger = h
+        .root
+        .join(".chrono-harness/state/automatic-cleanup/ledger.json");
+    let prior = fs::read(&ledger).unwrap();
+    let (code, first, error) = custody(&h, &plan);
+    assert_eq!(code, 0, "{first} {error}");
+    let receipt = &first["cache_adoption"]["receipt"];
+    let path = h.root.join(receipt["path"].as_str().unwrap());
+    let bytes = fs::read(&path).unwrap();
+    // Durable receipt exists, but adoption's ledger publication was interrupted.
+    fs::write(&ledger, prior).unwrap();
+    let (code, retry, error) = custody(&h, &plan);
+    assert_eq!(code, 0, "{retry} {error}");
+    assert_eq!(retry["cache_adoption"]["receipt"], *receipt);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    fs::set_permissions(
+        h.root.join("nested/cache"),
+        fs::Permissions::from_mode(0o500),
+    )
+    .unwrap();
+    let (code, partial, error) = h.auto("maintain", &[]);
+    fs::set_permissions(
+        h.root.join("nested/cache"),
+        fs::Permissions::from_mode(0o700),
+    )
+    .unwrap();
+    assert_ne!(code, 0, "{partial} {error}");
+    assert!(!h.root.join("output λ").exists());
+    let original_result = h
+        .root
+        .join(partial["drain"][0]["receipt"]["path"].as_str().unwrap());
+    let original_result_bytes = fs::read(&original_result).unwrap();
+    let (code, cleaned, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{cleaned} {error}");
+    assert!(cleaned.to_string().contains("already-absent"));
+    assert!(!h.root.join("nested/cache").exists());
+    assert_eq!(fs::read(original_result).unwrap(), original_result_bytes);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    // The same ordinary entry protects the next producer and later reclaims its outputs.
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    assert!(h.root.join("output λ/cache").exists());
+    assert_eq!(h.auto("use", &["--operation", "test.consumer"]).0, 0);
+    assert!(!h.root.join("output λ").exists());
+}

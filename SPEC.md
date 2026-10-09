@@ -1032,3 +1032,6 @@ observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 hand
 
 
 自动清理政策的已登记 v2 内核附件可以显式迁移：从存活协调宿主调用 `chrono-worktree migrate --path <已登记工作树>`，在原 admission 与附件独占租约下核已提交的两端同政策／配置、原物理附件、有效 birth 和两端工件登记。原登记及回执不改写，另保留旧新输入原字节与固定提交的不可覆盖迁移记录；后续普通操作核整条关联并消费最终绑定。迁移不删除、不更新 Git、不设完成；active 开新缓存代际，retained 保持已保留状态并要求新的 finish。缺失／损坏原证据、未知租约、未封口 birth、待执行终态删除及协调锚／状态地址／政策地址搬迁不自动解释。发布迁移记录但尚未登记的中断允许按同一绑定重试；旧 binary 不得解释包含新迁移字段的 ledger。兼容 binary 部署、实际宿主切换、未登记写入加入及落地验证仍由调用方完成。
+
+
+Git main 的已登记历史可重建工件可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。原 admission／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，不改写原 enrollment、结果或 terminal。已托管项重入不增历史，未登记的独立对象不否决已选择的合法兄弟；发布中断可按同绑定重试。接管本身不删除，新 pending 代际由现有普通入口／maintain drain 回收；后续普通构建及中断恢复继续使用同一租约。该局部源与行为合同不证明 native、全 SPEC、PR 或发布完成。

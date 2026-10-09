@@ -5589,6 +5589,18 @@
           "to": "project:ci-tests"
         }
       ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/cache_adoption.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
     }
   ],
   "project_edges": [

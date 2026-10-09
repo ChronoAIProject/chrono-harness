@@ -194,9 +194,13 @@ including failure evidence; an early bootstrap failure may leave only job logs.
 ## Publication and retry boundary
 
 Preparation preflights both context/report outputs before writing either.
-Identical existing bytes are reusable; differing bytes are a collision and are
-not overwritten for v1. V2 retains immutable originals and replaces the declared
-current projections through the existing writer. Git acquisition changes subsequent observations, so rerunning
+Identical existing bytes are reusable. For v1, when context bytes and every
+semantic preparation observation agree, differences only in invocation
+`launcher_pid`, `child_pid`, or `ownership_fds` reuse the original prepared report;
+the new attempt's complete original report is retained separately. Other differing
+bytes collide and are not overwritten. V2 retains immutable originals and replaces
+the declared current projections through the existing writer. Git acquisition
+changes subsequent observations, so rerunning
 after a fetch can collide with the retained first preparation report. Use a
 fresh explicit run location/checkout and retain the earlier artifacts. Do not
 discard old evidence to pretend that the first invocation never happened.

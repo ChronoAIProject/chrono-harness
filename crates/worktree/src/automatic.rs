@@ -1,4 +1,5 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
+mod cache_adoption;
 mod migration;
 mod producer;
 use crate::{
@@ -122,6 +123,8 @@ struct Entry {
     cache_attempts: Vec<CacheAttempt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     policy_migrations: Vec<Receipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    main_cache_adoptions: Vec<Receipt>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     cache_only: bool,
 }
@@ -640,6 +643,7 @@ impl Manager {
             return Err("enrolled target policy/configuration changed; preserve work for explicit migration".into());
         }
         if e.cache_only {
+            self.main_cache_owned(e)?;
             let owned: Vec<String> = serde_json::from_value(
                 e.enrollment["main_cache_artifacts"].clone(),
             )
@@ -898,6 +902,7 @@ impl Manager {
             ownership,
             cache_attempts: vec![],
             policy_migrations: vec![],
+            main_cache_adoptions: vec![],
             cache_only,
         };
         self.check_entry(r, &entry, &head, None)?;
@@ -1279,16 +1284,18 @@ impl Manager {
             .ok_or("cache disposal requires kernel ownership")?;
         let head = r.oid(&e.path, "HEAD")?;
         self.check_entry(r, &e, &head, None)?;
+        let owned = if e.cache_only {
+            Some(self.main_cache_owned(&e)?)
+        } else {
+            None
+        };
         let names: Vec<_> = self
             .policy
             .artifacts
             .iter()
             .filter(|a| {
                 a.disposition == Disposition::Dispose
-                    && (!e.cache_only
-                        || e.enrollment["main_cache_artifacts"]
-                            .as_array()
-                            .is_some_and(|paths| paths.contains(&value!(a.path))))
+                    && owned.as_ref().is_none_or(|paths| paths.contains(&a.path))
             })
             .map(|a| a.path.clone())
             .collect();
@@ -1345,8 +1352,11 @@ impl Manager {
         report["head"] = value!(head);
         report["worktree_removal"] = value!("preserved");
         report["branch_removal"] = value!("not-requested");
-        report["protected_historical_artifacts"] =
-            e.enrollment["protected_historical_artifacts"].clone();
+        report["protected_historical_artifacts"] = if e.cache_only {
+            self.protected_main_history(&e)?
+        } else {
+            Value::Null
+        };
         report["preserved_reason"] =
             value!("unfinished resumable enrollment; only registered disposable outputs selected");
         report["artifact_disposals"] = value!([]);
@@ -1945,6 +1955,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--retained-commit",
             "--unit",
             "--bootstrap-config",
+            "--adopt-cache",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -1966,6 +1977,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (values.contains_key("--retained-commit") && operation != "finish")
         || (operation == "maintain" && values.contains_key("--path"))
         || (operation == "migrate" && !values.contains_key("--path"))
+        || (values.contains_key("--adopt-cache") && operation != "migrate")
     {
         return Err("invalid lifecycle command arguments".into());
     }
@@ -2019,7 +2031,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     "import",
                     value!({"report_path":report["report_path"],"historical_birth":"not-claimed"}),
                 ),
-                "migrate" => manager.migrate(r, target.as_ref().unwrap(), report),
+                "migrate" => {
+                    let target = target.as_ref().unwrap();
+                    manager.migrate(r, target, report)?;
+                    if let Some(plan) = values.get("--adopt-cache") {
+                        manager.adopt_main_cache(r, target, plan, report)?;
+                    }
+                    Ok(())
+                }
                 "finish" => {
                     manager.finish(
                         r,

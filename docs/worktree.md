@@ -904,6 +904,31 @@ release remain explicitly protected historical objects. Enrollment owns the
 absent, individually registered outputs before managed production starts; this
 is not a migration of the current host's historical targets or producers.
 
+For historical outputs, the same owner accepts an explicit current-custody
+transition through `migrate --path /exact/main --adopt-cache STATE_PATH`.
+The strict `chrono-main-cache-custody/v1` declaration under registered host state
+contains `path` (the physical main checkout), its full current `head`, exact
+`artifacts` paths, `current_consumers_released: true`, and a nonempty `reason`.
+The current operator must actually join or exclude prior unmanaged consumers and
+state its present custody decision. This is an engineering transition, not an
+assertion that a past producer finished, succeeded, sealed, or released anything.
+Only the active adopted main enrollment and registered `dispose` outputs qualify;
+source/index paths, bin/evidence, unknown paths and live adopted consumers refuse
+adoption. Unselected historical objects stay protected without vetoing selected
+eligible siblings.
+
+Admission and the original exclusive enrollment lease protect this transition.
+Its separate immutable receipt preserves the raw declaration and original
+attachment, records the ownership delta, and keeps historical producer outcome
+`unknown`. Original enrollment, uses and disposal results are unchanged. A
+published receipt without a ledger update can be retried with the same binding;
+repeat adoption of managed paths adds no history and performs no disposal. The
+existing pending cache generation and ordinary drain reclaim the newly managed
+outputs after exclusion, without setting finish or adding a cleaner. Subsequent
+bootstrap/check/use share the same leases and interrupted-use recovery. Deploy
+the compatible owner before adopting; old readers reject the new nonempty
+`main_cache_adoptions` ledger field.
+
 Main re-entry drains released pending cache generations before starting a
 new consumer. A linked checkout being entered stays excluded until its new
 consumer has acquired protection; another ordinary entry can recover that
