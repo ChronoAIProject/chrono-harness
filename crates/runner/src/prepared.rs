@@ -284,6 +284,47 @@ pub fn declaration(config: &Value) -> Result<Canonical, String> {
     }
     Ok(c)
 }
+/// Resolve a large managed process from the lifecycle owner's immutable receipt.
+/// The locator is deliberately small enough for the declared parent stdout
+/// bound; the receipt still contains the exact original process streams and
+/// identity fields.
+fn managed_process(root: &Path, report: &Value) -> Result<Value, String> {
+    let reference = &report["managed_process"];
+    if reference["schema"] != "chrono-worktree-managed-process-reference/v1" {
+        return Ok(reference.clone());
+    }
+    let receipt = &reference["receipt"];
+    let path = receipt["path"]
+        .as_str()
+        .ok_or("managed process receipt path")?;
+    relative_path(path)?;
+    if !path.starts_with(".chrono-harness/state/") {
+        return Err("managed process receipt is outside registered state".into());
+    }
+    let source_root = reference["source_root"]
+        .as_str()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.to_path_buf());
+    let source_root = fs::canonicalize(source_root).map_err(|e| e.to_string())?;
+    let target = no_symlink_parents(&source_root, path)?;
+    let bytes = fs::read(&target).map_err(|e| e.to_string())?;
+    if receipt["sha256"] != sha256(&bytes) {
+        return Err("managed process receipt digest mismatch".into());
+    }
+    let value: Value = crate::json(&bytes)?;
+    if !matches!(
+        value["schema"].as_str(),
+        Some("chrono-worktree-managed-process/v1" | "chrono-worktree-managed-use-result/v1")
+    ) || value["operation"] != reference["operation"]
+    {
+        return Err("managed process receipt binding mismatch".into());
+    }
+    value
+        .get("process")
+        .cloned()
+        .ok_or_else(|| "managed process receipt has no process".into())
+}
+
 /// The declared lifecycle owner acquires protection before any check acquisition.
 /// A participating child keeps the same public spelling and original console result.
 pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::CliOutput>, String> {
@@ -356,8 +397,9 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
     }
     let report: Value = crate::json(&process.stdout_bytes)
         .map_err(|e| original_failure(format!("check participation result: {e}")))?;
-    let inner = match report.get("managed_process") {
-        Some(inner) => inner,
+    let inner_value = match report.get("managed_process") {
+        Some(_) => managed_process(root, &report)
+            .map_err(|e| original_failure(format!("check participation result: {e}")))?,
         None => {
             return Err(original_failure(format!(
                 "check participation refused: {}",
@@ -365,6 +407,7 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
             )));
         }
     };
+    let inner = &inner_value;
     if inner["failure"].as_str().is_some() {
         return Err(original_failure(format!(
             "check process failed: {}; original lifecycle report {}",

@@ -232,6 +232,50 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert!(refused.stdout.is_empty());
     }
 }
+
+#[test]
+fn public_participating_check_externalizes_large_managed_process_losslessly() {
+    let h = Host::new("payload");
+    participating_check(&h);
+    h.kernel_cleanup();
+    let target = h.parent.join("large-console");
+    assert_eq!(h.invoke("feature", "large-console", &target).0, 0);
+    let stdout = format!("{}\n", "large-console".repeat(350_000));
+    install_inner(&target, &stdout, "large diagnostic\n", 0);
+    let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(&target)
+        .arg("check")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(out.stdout, stdout.as_bytes());
+    assert_eq!(out.stderr, b"large diagnostic\n");
+
+    let (_, owner, error) = h.received(
+        Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
+            .current_dir(&target)
+            .arg("check")
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(owner["status"], "used", "{owner} {error}");
+    assert_eq!(
+        owner["managed_process"]["schema"],
+        "chrono-worktree-managed-process-reference/v1"
+    );
+    let receipt = &owner["managed_process"]["receipt"];
+    let bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&bytes), receipt["sha256"]);
+    let stored = json(&bytes).unwrap();
+    assert_eq!(stored["schema"], "chrono-worktree-managed-use-result/v1");
+    assert_eq!(stored["process"]["stdout"], stdout);
+    assert_eq!(
+        stored["process"]["stdout_bytes"],
+        value!(stdout.as_bytes().to_vec())
+    );
+    assert_eq!(stored["process"]["stderr"], "large diagnostic\n");
+}
+
 #[test]
 fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     let h = Host::new("payload");

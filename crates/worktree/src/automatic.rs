@@ -430,6 +430,63 @@ fn write_bytes(path: &Path, bytes: &[u8], immutable: bool) -> Result<(), String>
     }
     Ok(())
 }
+
+// Keep the established inline managed-process shape for ordinary commands, but
+// move large console streams to the lifecycle evidence owner before the parent
+// report is serialized. The child bytes remain lossless and are addressed by
+// the immutable receipt; only the transport projection changes.
+const INLINE_MANAGED_PROCESS_BYTES: usize = 4 * 1024 * 1024;
+
+fn managed_process_report(
+    coordinator: &Path,
+    state_directory: &str,
+    token: &str,
+    operation: &str,
+    process: &chrono_harness::ProcessResult,
+    existing: Option<&Receipt>,
+) -> Result<Value, String> {
+    let full = serde_json::to_value(process).map_err(|e| e.to_string())?;
+    if process
+        .stdout_bytes
+        .len()
+        .saturating_add(process.stderr_bytes.len())
+        <= INLINE_MANAGED_PROCESS_BYTES
+    {
+        return Ok(full);
+    }
+    let receipt = if let Some(receipt) = existing {
+        receipt.clone()
+    } else {
+        relative_path(token)?;
+        let name = format!("managed-process-{token}.json");
+        relative_path(&name)?;
+        let path = format!("{state_directory}{name}");
+        let target = no_symlink_parents(coordinator, &path)?;
+        let bytes = write_json(
+            &target,
+            &value!({
+                "schema": "chrono-worktree-managed-process/v1",
+                "operation": operation,
+                "process": full,
+            }),
+            true,
+        )?;
+        Receipt {
+            path,
+            sha256: sha256(&bytes),
+        }
+    };
+    Ok(value!({
+        "schema": "chrono-worktree-managed-process-reference/v1",
+        "operation": operation,
+        "source_root": coordinator,
+        "receipt": receipt,
+        "stdout_bytes": process.stdout_bytes.len(),
+        "stderr_bytes": process.stderr_bytes.len(),
+        "exit_code": process.exit_code,
+        "failure": process.failure,
+    }))
+}
 fn load_policy(
     r: &mut Runner,
     root: &Path,
@@ -2256,6 +2313,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             } else {
                                 canonical_command(target, &manager.registrations, &selection)?
                             };
+                            let coordinator = manager.policy.coordinator_root.clone();
+                            let state_directory = manager.policy.state_directory.clone();
                             drop(manager);
                             let digest =
                                 chrono_harness::file_identity(Path::new(&command.program))?.0;
@@ -2265,7 +2324,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                                 &[],
                                 &digest,
                             )?;
-                            report["managed_process"] = value!(process);
+                            let managed_process = managed_process_report(
+                                &coordinator,
+                                &state_directory,
+                                token,
+                                if operation == "check" {
+                                    "validate.delta"
+                                } else {
+                                    "bootstrap.build"
+                                },
+                                &process,
+                                None,
+                            )?;
+                            report["managed_process"] = managed_process;
                             if process.failure.is_some() || process.exit_code != 0 {
                                 report["managed_command_failed"] = value!(true);
                                 return Err(format!(
@@ -2343,14 +2414,25 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
                     let coordinator = manager.policy.coordinator_root.clone();
+                    let state_directory = manager.policy.state_directory.clone();
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
                     let process =
                         chrono_harness::run_process_observed(target, &command, &[], &digest)?;
-                    report["managed_process"] = value!(process);
                     let mut manager = Manager::open(r, &coordinator, config_path, &bytes, token)?
                         .ok_or("cleanup policy disappeared during managed use")?;
-                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":process}))?;
+                    let receipt = manager.immutable(
+                        &format!("use-{token}.json"),
+                        &value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"process":process}),
+                    )?;
+                    report["managed_process"] = managed_process_report(
+                        &coordinator,
+                        &state_directory,
+                        token,
+                        use_operation,
+                        &process,
+                        Some(&receipt),
+                    )?;
                     report["managed_use_receipt"] = value!(receipt);
                     let i = manager
                         .current_entry(target)
