@@ -1,0 +1,10 @@
+{
+  "tools": [
+    {
+      "id": "python3",
+      "program": "/usr/bin/python3",
+      "version_argv": ["--version"],
+      "expected_version": "Python 3.12.3"
+    }
+  ]
+}

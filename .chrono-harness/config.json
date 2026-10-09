@@ -1,0 +1,434 @@
+{
+  "artifacts": [
+    {
+      "kind": "generated-executables",
+      "owner": "repository",
+      "path": ".chrono-harness/bin/",
+      "tracked": false
+    },
+    {
+      "kind": "execution-evidence",
+      "owner": "repository",
+      "path": ".chrono-harness/state/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "runner",
+      "path": "crates/runner/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "runner-tests",
+      "path": "crates/runner-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "instructions",
+      "path": "crates/instructions/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "instructions-tests",
+      "path": "crates/instructions-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-ci",
+      "path": "crates/judge-ci/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-ci-tests",
+      "path": "crates/judge-ci-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "ci",
+      "path": "crates/ci/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "ci-tests",
+      "path": "crates/ci-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-registration",
+      "path": "crates/judge-registration/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-registration-tests",
+      "path": "crates/judge-registration-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-filemap",
+      "path": "crates/judge-filemap/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-filemap-tests",
+      "path": "crates/judge-filemap-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-routes",
+      "path": "crates/judge-routes/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-routes-tests",
+      "path": "crates/judge-routes-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-projects",
+      "path": "crates/judge-projects/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-projects-tests",
+      "path": "crates/judge-projects-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-cost",
+      "path": "crates/judge-cost/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-cost-tests",
+      "path": "crates/judge-cost-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-mixed",
+      "path": "crates/judge-mixed/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-mixed-tests",
+      "path": "crates/judge-mixed-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-workflow",
+      "path": "crates/judge-workflow/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-workflow-tests",
+      "path": "crates/judge-workflow-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "inputs",
+      "path": "crates/inputs/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "inputs-tests",
+      "path": "crates/inputs-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "distribution",
+      "path": "crates/distribution/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "distribution-tests",
+      "path": "crates/distribution-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "build-cache",
+      "owner": "repository",
+      "path": ".chrono-harness/cache/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-cargo",
+      "path": "crates/judge-cargo/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "judge-cargo-tests",
+      "path": "crates/judge-cargo-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "worktree",
+      "path": "crates/worktree/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "worktree-tests",
+      "path": "crates/worktree-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "diagnostics",
+      "path": "crates/diagnostics/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "diagnostics-tests",
+      "path": "crates/diagnostics-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "cache",
+      "path": "crates/cache/target/",
+      "tracked": false
+    },
+    {
+      "kind": "cargo-output",
+      "owner": "cache-tests",
+      "path": "crates/cache-tests/target/",
+      "tracked": false
+    },
+    {
+      "kind": "startup-transfer",
+      "owner": "host-bootstrap",
+      "path": ".chrono-harness/startup/",
+      "tracked": false
+    }
+  ],
+  "canonical_check": {
+    "argv": [
+      ".chrono-harness/bin/chrono-harness",
+      "check"
+    ],
+    "inputs": {
+      "ci": {
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/ci/units.json",
+          "--event-env",
+          "GITHUB_EVENT_NAME",
+          "--payload-env",
+          "GITHUB_EVENT_PATH",
+          "--revision-env",
+          "CHRONO_WORKFLOW_REVISION",
+          "--repository-env",
+          "GITHUB_REPOSITORY"
+        ],
+        "operation": "prepare.check.ci",
+        "tool": "chrono-ci"
+      },
+      "local": {
+        "argv": [
+          "check-inputs",
+          "--config",
+          ".chrono-harness/worktree.json"
+        ],
+        "operation": "prepare.check.local",
+        "tool": "chrono-worktree"
+      }
+    },
+    "operation": "validate.delta",
+    "participation": {
+      "argv": [
+        "check"
+      ],
+      "operation": "worktree.check",
+      "tool": "chrono-worktree"
+    },
+    "profile": ".chrono-harness/ci/check.json"
+  },
+  "enforcement": "not-implemented",
+  "environment": {
+    "credential_environment": [
+      "GH_TOKEN"
+    ],
+    "inherit": [
+      "PATH",
+      "HOME",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "TMPDIR",
+      "SDKROOT",
+      "CHRONO_CHECK_SOURCE",
+      "GITHUB_EVENT_NAME",
+      "GITHUB_EVENT_PATH",
+      "CHRONO_WORKFLOW_REVISION",
+      "GITHUB_REPOSITORY",
+      "GH_TOKEN",
+      "SSH_AUTH_SOCK",
+      "CHRONO_CI_DETECTION",
+      "CHRONO_CI_NEEDS",
+      "GITHUB_RUN_ID",
+      "GITHUB_RUN_ATTEMPT",
+      "GITHUB_JOB",
+      "CHRONO_CI_TEST_RECEIPTS",
+      "CHRONO_FULL_TEST_RECEIPTS",
+      "CHRONO_WORKTREE_TEST_RECEIPTS",
+      "CHRONO_CHECK_HANDOFF_TRACE",
+      "CHRONO_IMMUTABLE_INPUT_FIXTURE",
+      "GITHUB_STEP_SUMMARY"
+    ],
+    "inputs": [
+      {
+        "id": "git-executable",
+        "location": "/usr/bin/git",
+        "presence": "present",
+        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+      }
+    ],
+    "values": {
+      "CARGO_INCREMENTAL": "1",
+      "CARGO_TERM_COLOR": "never"
+    }
+  },
+  "facts_git": {
+    "input": "git-executable",
+    "tool": "git"
+  },
+  "input_closure": {
+    "status": "incomplete",
+    "unresolved": [
+      "Actual cargo/rustc, compiler backend, linker, target libraries and SDK identities are not registered.",
+      "Effective HOME/CARGO_HOME, rust-toolchain and other consumed configuration files are not enumerated.",
+      "Complete direct/indirect, fixture, environment and external inputs and their explicit dependency edges need evidence.",
+      "Verdict-relevant randomness, time, external responses, timeout/resource conditions and deterministic evaluation are not established."
+    ]
+  },
+  "protocol": {
+    "encoding": "UTF-8",
+    "id": "chrono-judge/v1",
+    "stdout_limit_bytes": 67108864,
+    "timeout_seconds": 2400
+  },
+  "registries": {
+    "filemap": ".chrono-harness/FILEMAP.json",
+    "judges": ".chrono-harness/judges.json",
+    "projects": ".chrono-harness/projects.json",
+    "workflow": ".chrono-harness/workflow.json"
+  },
+  "runner": {
+    "path": ".chrono-harness/bin/chrono-harness",
+    "sha256": null,
+    "version": "0.1.0"
+  },
+  "schema_version": 4,
+  "semantic_fields": [
+    {
+      "on": "add-modify-delete",
+      "path": ".chrono-harness/projects.json",
+      "pointers": [
+        "/projects/*/actions",
+        "/scripts/*/actions"
+      ]
+    },
+    {
+      "on": "modify-delete-existing",
+      "path": ".chrono-harness/FILEMAP.json",
+      "pointers": [
+        "/files/*/surface",
+        "/execution_plans"
+      ]
+    },
+    {
+      "on": "add-modify-delete",
+      "path": ".chrono-harness/workflow.json",
+      "pointers": [
+        "/historical_profiles",
+        "/migrations",
+        "/retirements"
+      ]
+    },
+    {
+      "on": "add-modify-delete",
+      "path": ".chrono-harness/config.json",
+      "pointers": [
+        "/tools",
+        "/environment",
+        "/canonical_check"
+      ]
+    }
+  ],
+  "status": "proposed",
+  "tools": [
+    {
+      "expected_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "id": "cargo",
+      "program": "cargo",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ]
+    },
+    {
+      "expected_version": "Python 3.9.6",
+      "id": "python3",
+      "program": "/usr/bin/python3",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ]
+    },
+    {
+      "expected_version": "chrono-ci 0.1.0",
+      "id": "chrono-ci",
+      "program": ".chrono-harness/bin/chrono-ci",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ]
+    },
+    {
+      "expected_version": "git version 2.50.1 (Apple Git-155)",
+      "id": "git",
+      "program": "/usr/bin/git",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ]
+    },
+    {
+      "expected_version": "chrono-worktree 0.1.0",
+      "id": "chrono-worktree",
+      "program": ".chrono-harness/bin/chrono-worktree",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ]
+    }
+  ]
+}

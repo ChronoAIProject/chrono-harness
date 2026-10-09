@@ -1,0 +1,32 @@
+{
+  "schema": "chrono-worktree-config/v2",
+  "host_config": ".chrono-harness/config.json",
+  "remote": "origin",
+  "git": {
+    "program": "/usr/bin/git",
+    "expected_version": "git version 2.50.1 (Apple Git-155)",
+    "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+  },
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "SSH_AUTH_SOCK"
+    ],
+    "values": {
+      "GIT_TERMINAL_PROMPT": "0"
+    }
+  },
+  "timeout_seconds": 120,
+  "output_limit_bytes": 1048576,
+  "report_directory": ".chrono-harness/state/worktrees/",
+  "check_inputs": {
+    "origin_path": ".chrono-harness/state/origin.json",
+    "context_path": ".chrono-harness/state/local/context.json",
+    "collection_manifest": ".chrono-harness/state/collection/manifest.json",
+    "roles": {
+      "feature": "integration",
+      "integration": "integration"
+    }
+  }
+}

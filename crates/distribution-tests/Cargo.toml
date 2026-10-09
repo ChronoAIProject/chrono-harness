@@ -1,0 +1,19 @@
+[package]
+name = "chrono-distribution-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-distribution = { path = "../distribution" }
+chrono-harness = { path = "../runner" }
+serde_json = "1"
+tempfile = "3"
+
+[[test]]
+name = "installation"
+path = "tests/installation.rs"
+
+[profile.dev.package.sha2]
+opt-level = 3

@@ -1,0 +1,25 @@
+[package]
+name = "chrono-ci"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-ci"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-harness = { path = "../runner" }
+chrono-judge-ci = { path = "../judge-ci" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = { version = "0.3", features = ["parsing"] }
+
+[profile.dev.package.sha2]
+opt-level = 3

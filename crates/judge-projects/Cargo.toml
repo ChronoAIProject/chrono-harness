@@ -1,0 +1,31 @@
+[package]
+name = "chrono-judge-projects"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-judge-projects"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+chrono-judge-filemap = { path = "../judge-filemap" }
+chrono-judge-routes = { path = "../judge-routes" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Collection replays the complete retained judge DAG. Optimize its repeated
+# JSON canonicalization in the registered development build as well.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package.sha2]
+opt-level = 3

@@ -1,0 +1,3467 @@
+{
+  "schema": "chrono-github-release/v2",
+  "workflow_path": ".github/workflows/chrono-release.yml",
+  "name": "chrono-release-build",
+  "push_branches": [
+    "integration/distribution",
+    "integration/release-ci",
+    "integration/release-units"
+  ],
+  "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+  "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+  "jobs": [
+    {
+      "id": "linux_build_runner",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_runner",
+        "--unit",
+        "build_runner"
+      ],
+      "artifact_name": "chrono-release-linux-build_runner",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_runner/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_instructions",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_instructions",
+        "--unit",
+        "build_instructions"
+      ],
+      "artifact_name": "chrono-release-linux-build_instructions",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_instructions/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_ci",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_ci",
+        "--unit",
+        "build_judge_ci"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_ci",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_ci/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_ci",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_ci",
+        "--unit",
+        "build_ci"
+      ],
+      "artifact_name": "chrono-release-linux-build_ci",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_ci/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_registration",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_registration",
+        "--unit",
+        "build_judge_registration"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_registration",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_registration/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_filemap",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_filemap",
+        "--unit",
+        "build_judge_filemap"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_filemap",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_filemap/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_routes",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_routes",
+        "--unit",
+        "build_judge_routes"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_routes",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_routes/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_projects",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_projects",
+        "--unit",
+        "build_judge_projects"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_projects",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_projects/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_cost",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_cost",
+        "--unit",
+        "build_judge_cost"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_cost",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_cost/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_mixed",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_mixed",
+        "--unit",
+        "build_judge_mixed"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_mixed",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_mixed/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_workflow",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_workflow",
+        "--unit",
+        "build_judge_workflow"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_workflow",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_workflow/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_inputs",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_inputs",
+        "--unit",
+        "build_inputs"
+      ],
+      "artifact_name": "chrono-release-linux-build_inputs",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_inputs/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_distribution",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_distribution",
+        "--unit",
+        "build_distribution"
+      ],
+      "artifact_name": "chrono-release-linux-build_distribution",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_distribution/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_judge_cargo",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_cargo",
+        "--unit",
+        "build_judge_cargo"
+      ],
+      "artifact_name": "chrono-release-linux-build_judge_cargo",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_cargo/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_worktree",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_worktree",
+        "--unit",
+        "build_worktree"
+      ],
+      "artifact_name": "chrono-release-linux-build_worktree",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_worktree/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_distribution_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_distribution_tests",
+        "--unit",
+        "verify_distribution_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_distribution_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/",
+      "needs": [
+        "linux_build_distribution"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_worktree_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_worktree_tests",
+        "--unit",
+        "verify_worktree_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_worktree_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_ci",
+        "linux_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "linux_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_runner_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_runner_tests",
+        "--unit",
+        "verify_runner_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_runner_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_runner_tests/",
+      "needs": [
+        "linux_build_runner"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_inputs_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_inputs_tests",
+        "--unit",
+        "verify_inputs_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_inputs_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_routes",
+        "linux_build_judge_projects",
+        "linux_build_judge_cost",
+        "linux_build_judge_mixed",
+        "linux_build_judge_workflow",
+        "linux_build_inputs"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "linux_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "linux_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "linux_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "linux_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "linux_build_inputs",
+          "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_ci_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_ci_tests",
+        "--unit",
+        "verify_ci_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_ci_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_ci_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_ci",
+        "linux_build_ci",
+        "linux_build_judge_registration",
+        "linux_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "linux_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_ci_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_ci_tests",
+        "--unit",
+        "verify_judge_ci_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_ci_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_ci"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_registration_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_registration_tests",
+        "--unit",
+        "verify_judge_registration_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_registration_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_registration"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_projects_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_projects_tests",
+        "--unit",
+        "verify_judge_projects_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_projects_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_ci",
+        "linux_build_ci",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_routes",
+        "linux_build_judge_projects"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "linux_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "linux_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_workflow_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_workflow_tests",
+        "--unit",
+        "verify_judge_workflow_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_workflow_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_ci",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_routes",
+        "linux_build_judge_projects",
+        "linux_build_judge_cost",
+        "linux_build_judge_mixed",
+        "linux_build_judge_workflow",
+        "linux_build_inputs",
+        "linux_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "linux_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "linux_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "linux_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "linux_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "linux_build_inputs",
+          "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
+        },
+        {
+          "job": "linux_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_cargo_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_cargo_tests",
+        "--unit",
+        "verify_judge_cargo_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_cargo_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_ci",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_routes",
+        "linux_build_judge_projects",
+        "linux_build_judge_cost",
+        "linux_build_judge_mixed",
+        "linux_build_judge_workflow",
+        "linux_build_judge_cargo"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "linux_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "linux_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "linux_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "linux_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "linux_build_judge_cargo",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_instructions_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_instructions_tests",
+        "--unit",
+        "verify_instructions_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_instructions_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_judge_filemap_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_filemap_tests",
+        "--unit",
+        "verify_judge_filemap_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_filemap_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_routes",
+        "linux_build_judge_projects"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "linux_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_routes_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_routes_tests",
+        "--unit",
+        "verify_judge_routes_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_routes_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_judge_cost_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_cost_tests",
+        "--unit",
+        "verify_judge_cost_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_cost_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_cost"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_judge_mixed_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_mixed_tests",
+        "--unit",
+        "verify_judge_mixed_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_judge_mixed_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_cost",
+        "linux_build_judge_mixed"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "linux_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        }
+      ]
+    },
+    {
+      "id": "linux_package",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/package",
+        "--collect"
+      ],
+      "artifact_name": "chrono-release-linux-package",
+      "artifact_directory": ".chrono-harness/cache/release-results/package/",
+      "needs": [
+        "linux_build_runner",
+        "linux_build_instructions",
+        "linux_build_judge_ci",
+        "linux_build_ci",
+        "linux_build_judge_registration",
+        "linux_build_judge_filemap",
+        "linux_build_judge_routes",
+        "linux_build_judge_projects",
+        "linux_build_judge_cost",
+        "linux_build_judge_mixed",
+        "linux_build_judge_workflow",
+        "linux_build_inputs",
+        "linux_build_distribution",
+        "linux_build_judge_cargo",
+        "linux_build_worktree",
+        "linux_verify_distribution_tests",
+        "linux_verify_worktree_tests",
+        "linux_verify_runner_tests",
+        "linux_verify_inputs_tests",
+        "linux_verify_ci_tests",
+        "linux_verify_judge_ci_tests",
+        "linux_verify_judge_registration_tests",
+        "linux_verify_judge_projects_tests",
+        "linux_verify_judge_workflow_tests",
+        "linux_verify_judge_cargo_tests",
+        "linux_verify_instructions_tests",
+        "linux_verify_judge_filemap_tests",
+        "linux_verify_judge_routes_tests",
+        "linux_verify_judge_cost_tests",
+        "linux_verify_judge_mixed_tests",
+        "linux_verify_scoped_v1_tests",
+        "linux_verify_workflow_inventory_tests",
+        "linux_verify_release_build_tests",
+        "linux_verify_release_build_integration",
+        "linux_verify_diagnostics_tests",
+        "linux_verify_host_bootstrap_tests",
+        "linux_build_cache",
+        "linux_verify_cache_tests"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "linux_build_instructions",
+          "directory": ".chrono-harness/cache/release-handoffs/build_instructions/"
+        },
+        {
+          "job": "linux_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "linux_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "linux_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "linux_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "linux_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "linux_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "linux_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "linux_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "linux_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "linux_build_inputs",
+          "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
+        },
+        {
+          "job": "linux_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        },
+        {
+          "job": "linux_build_judge_cargo",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
+        },
+        {
+          "job": "linux_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        },
+        {
+          "job": "linux_verify_distribution_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_distribution_tests/"
+        },
+        {
+          "job": "linux_verify_worktree_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
+        },
+        {
+          "job": "linux_verify_runner_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_runner_tests/"
+        },
+        {
+          "job": "linux_verify_inputs_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_inputs_tests/"
+        },
+        {
+          "job": "linux_verify_ci_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_ci_tests/"
+        },
+        {
+          "job": "linux_verify_judge_ci_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests/"
+        },
+        {
+          "job": "linux_verify_judge_registration_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests/"
+        },
+        {
+          "job": "linux_verify_judge_projects_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_projects_tests/"
+        },
+        {
+          "job": "linux_verify_judge_workflow_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests/"
+        },
+        {
+          "job": "linux_verify_judge_cargo_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests/"
+        },
+        {
+          "job": "linux_verify_instructions_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_instructions_tests/"
+        },
+        {
+          "job": "linux_verify_judge_filemap_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_filemap_tests/"
+        },
+        {
+          "job": "linux_verify_judge_routes_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_routes_tests/"
+        },
+        {
+          "job": "linux_verify_judge_cost_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_cost_tests/"
+        },
+        {
+          "job": "linux_verify_judge_mixed_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests/"
+        },
+        {
+          "job": "linux_verify_scoped_v1_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests/"
+        },
+        {
+          "job": "linux_verify_workflow_inventory_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests/"
+        },
+        {
+          "job": "linux_verify_release_build_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_tests/"
+        },
+        {
+          "job": "linux_verify_release_build_integration",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
+        },
+        {
+          "job": "linux_verify_diagnostics_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
+        },
+        {
+          "job": "linux_verify_host_bootstrap_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
+        },
+        {
+          "job": "linux_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        },
+        {
+          "job": "linux_verify_cache_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_cache_tests/"
+        }
+      ],
+      "always": true,
+      "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
+    },
+    {
+      "id": "macos_build_runner",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_runner",
+        "--unit",
+        "build_runner"
+      ],
+      "artifact_name": "chrono-release-macos-build_runner",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_runner/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_instructions",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_instructions",
+        "--unit",
+        "build_instructions"
+      ],
+      "artifact_name": "chrono-release-macos-build_instructions",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_instructions/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_ci",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_ci",
+        "--unit",
+        "build_judge_ci"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_ci",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_ci/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_ci",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_ci",
+        "--unit",
+        "build_ci"
+      ],
+      "artifact_name": "chrono-release-macos-build_ci",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_ci/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_registration",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_registration",
+        "--unit",
+        "build_judge_registration"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_registration",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_registration/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_filemap",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_filemap",
+        "--unit",
+        "build_judge_filemap"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_filemap",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_filemap/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_routes",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_routes",
+        "--unit",
+        "build_judge_routes"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_routes",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_routes/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_projects",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_projects",
+        "--unit",
+        "build_judge_projects"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_projects",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_projects/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_cost",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_cost",
+        "--unit",
+        "build_judge_cost"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_cost",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_cost/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_mixed",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_mixed",
+        "--unit",
+        "build_judge_mixed"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_mixed",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_mixed/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_workflow",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_workflow",
+        "--unit",
+        "build_judge_workflow"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_workflow",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_workflow/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_inputs",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_inputs",
+        "--unit",
+        "build_inputs"
+      ],
+      "artifact_name": "chrono-release-macos-build_inputs",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_inputs/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_distribution",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_distribution",
+        "--unit",
+        "build_distribution"
+      ],
+      "artifact_name": "chrono-release-macos-build_distribution",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_distribution/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_judge_cargo",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_judge_cargo",
+        "--unit",
+        "build_judge_cargo"
+      ],
+      "artifact_name": "chrono-release-macos-build_judge_cargo",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_judge_cargo/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_build_worktree",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_worktree",
+        "--unit",
+        "build_worktree"
+      ],
+      "artifact_name": "chrono-release-macos-build_worktree",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_worktree/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_distribution_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_distribution_tests",
+        "--unit",
+        "verify_distribution_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_distribution_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/",
+      "needs": [
+        "macos_build_distribution"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_worktree_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_worktree_tests",
+        "--unit",
+        "verify_worktree_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_worktree_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_ci",
+        "macos_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "macos_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_runner_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_runner_tests",
+        "--unit",
+        "verify_runner_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_runner_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_runner_tests/",
+      "needs": [
+        "macos_build_runner"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_inputs_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_inputs_tests",
+        "--unit",
+        "verify_inputs_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_inputs_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_routes",
+        "macos_build_judge_projects",
+        "macos_build_judge_cost",
+        "macos_build_judge_mixed",
+        "macos_build_judge_workflow",
+        "macos_build_inputs"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "macos_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "macos_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "macos_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "macos_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "macos_build_inputs",
+          "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_ci_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_ci_tests",
+        "--unit",
+        "verify_ci_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_ci_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_ci_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_ci",
+        "macos_build_ci",
+        "macos_build_judge_registration",
+        "macos_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "macos_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_ci_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_ci_tests",
+        "--unit",
+        "verify_judge_ci_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_ci_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_ci"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_registration_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_registration_tests",
+        "--unit",
+        "verify_judge_registration_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_registration_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_registration"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_projects_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_projects_tests",
+        "--unit",
+        "verify_judge_projects_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_projects_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_ci",
+        "macos_build_ci",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_routes",
+        "macos_build_judge_projects"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "macos_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "macos_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_workflow_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_workflow_tests",
+        "--unit",
+        "verify_judge_workflow_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_workflow_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_ci",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_routes",
+        "macos_build_judge_projects",
+        "macos_build_judge_cost",
+        "macos_build_judge_mixed",
+        "macos_build_judge_workflow",
+        "macos_build_inputs",
+        "macos_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "macos_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "macos_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "macos_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "macos_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "macos_build_inputs",
+          "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
+        },
+        {
+          "job": "macos_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_cargo_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_cargo_tests",
+        "--unit",
+        "verify_judge_cargo_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_cargo_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_ci",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_routes",
+        "macos_build_judge_projects",
+        "macos_build_judge_cost",
+        "macos_build_judge_mixed",
+        "macos_build_judge_workflow",
+        "macos_build_judge_cargo"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "macos_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "macos_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "macos_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "macos_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "macos_build_judge_cargo",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_instructions_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_instructions_tests",
+        "--unit",
+        "verify_instructions_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_instructions_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_judge_filemap_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_filemap_tests",
+        "--unit",
+        "verify_judge_filemap_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_filemap_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_routes",
+        "macos_build_judge_projects"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "macos_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_routes_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_routes_tests",
+        "--unit",
+        "verify_judge_routes_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_routes_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_judge_cost_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_cost_tests",
+        "--unit",
+        "verify_judge_cost_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_cost_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_cost"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_judge_mixed_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_judge_mixed_tests",
+        "--unit",
+        "verify_judge_mixed_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_judge_mixed_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_cost",
+        "macos_build_judge_mixed"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "macos_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        }
+      ]
+    },
+    {
+      "id": "macos_package",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/package",
+        "--collect"
+      ],
+      "artifact_name": "chrono-release-macos-package",
+      "artifact_directory": ".chrono-harness/cache/release-results/package/",
+      "needs": [
+        "macos_build_runner",
+        "macos_build_instructions",
+        "macos_build_judge_ci",
+        "macos_build_ci",
+        "macos_build_judge_registration",
+        "macos_build_judge_filemap",
+        "macos_build_judge_routes",
+        "macos_build_judge_projects",
+        "macos_build_judge_cost",
+        "macos_build_judge_mixed",
+        "macos_build_judge_workflow",
+        "macos_build_inputs",
+        "macos_build_distribution",
+        "macos_build_judge_cargo",
+        "macos_build_worktree",
+        "macos_verify_distribution_tests",
+        "macos_verify_worktree_tests",
+        "macos_verify_runner_tests",
+        "macos_verify_inputs_tests",
+        "macos_verify_ci_tests",
+        "macos_verify_judge_ci_tests",
+        "macos_verify_judge_registration_tests",
+        "macos_verify_judge_projects_tests",
+        "macos_verify_judge_workflow_tests",
+        "macos_verify_judge_cargo_tests",
+        "macos_verify_instructions_tests",
+        "macos_verify_judge_filemap_tests",
+        "macos_verify_judge_routes_tests",
+        "macos_verify_judge_cost_tests",
+        "macos_verify_judge_mixed_tests",
+        "macos_verify_scoped_v1_tests",
+        "macos_verify_workflow_inventory_tests",
+        "macos_verify_release_build_tests",
+        "macos_verify_release_build_integration",
+        "macos_verify_diagnostics_tests",
+        "macos_verify_host_bootstrap_tests",
+        "macos_build_cache",
+        "macos_verify_cache_tests"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_runner",
+          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
+        },
+        {
+          "job": "macos_build_instructions",
+          "directory": ".chrono-harness/cache/release-handoffs/build_instructions/"
+        },
+        {
+          "job": "macos_build_judge_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
+        },
+        {
+          "job": "macos_build_ci",
+          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
+        },
+        {
+          "job": "macos_build_judge_registration",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
+        },
+        {
+          "job": "macos_build_judge_filemap",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
+        },
+        {
+          "job": "macos_build_judge_routes",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_routes/"
+        },
+        {
+          "job": "macos_build_judge_projects",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_projects/"
+        },
+        {
+          "job": "macos_build_judge_cost",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cost/"
+        },
+        {
+          "job": "macos_build_judge_mixed",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
+        },
+        {
+          "job": "macos_build_judge_workflow",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
+        },
+        {
+          "job": "macos_build_inputs",
+          "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
+        },
+        {
+          "job": "macos_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        },
+        {
+          "job": "macos_build_judge_cargo",
+          "directory": ".chrono-harness/cache/release-handoffs/build_judge_cargo/"
+        },
+        {
+          "job": "macos_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        },
+        {
+          "job": "macos_verify_distribution_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_distribution_tests/"
+        },
+        {
+          "job": "macos_verify_worktree_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_worktree_tests/"
+        },
+        {
+          "job": "macos_verify_runner_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_runner_tests/"
+        },
+        {
+          "job": "macos_verify_inputs_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_inputs_tests/"
+        },
+        {
+          "job": "macos_verify_ci_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_ci_tests/"
+        },
+        {
+          "job": "macos_verify_judge_ci_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests/"
+        },
+        {
+          "job": "macos_verify_judge_registration_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests/"
+        },
+        {
+          "job": "macos_verify_judge_projects_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_projects_tests/"
+        },
+        {
+          "job": "macos_verify_judge_workflow_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests/"
+        },
+        {
+          "job": "macos_verify_judge_cargo_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests/"
+        },
+        {
+          "job": "macos_verify_instructions_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_instructions_tests/"
+        },
+        {
+          "job": "macos_verify_judge_filemap_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_filemap_tests/"
+        },
+        {
+          "job": "macos_verify_judge_routes_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_routes_tests/"
+        },
+        {
+          "job": "macos_verify_judge_cost_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_cost_tests/"
+        },
+        {
+          "job": "macos_verify_judge_mixed_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests/"
+        },
+        {
+          "job": "macos_verify_scoped_v1_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests/"
+        },
+        {
+          "job": "macos_verify_workflow_inventory_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests/"
+        },
+        {
+          "job": "macos_verify_release_build_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_tests/"
+        },
+        {
+          "job": "macos_verify_release_build_integration",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
+        },
+        {
+          "job": "macos_verify_diagnostics_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
+        },
+        {
+          "job": "macos_verify_host_bootstrap_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests/"
+        },
+        {
+          "job": "macos_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        },
+        {
+          "job": "macos_verify_cache_tests",
+          "directory": ".chrono-harness/cache/release-handoffs/verify_cache_tests/"
+        }
+      ],
+      "always": true,
+      "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
+    },
+    {
+      "id": "linux_verify_scoped_v1_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_scoped_v1_tests",
+        "--unit",
+        "verify_scoped_v1_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_scoped_v1_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_scoped_v1_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_workflow_inventory_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_workflow_inventory_tests",
+        "--unit",
+        "verify_workflow_inventory_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_workflow_inventory_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_workflow_inventory_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_release_build_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_tests",
+        "--unit",
+        "verify_release_build_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_release_build_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_scoped_v1_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_scoped_v1_tests",
+        "--unit",
+        "verify_scoped_v1_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_scoped_v1_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_scoped_v1_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_workflow_inventory_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_workflow_inventory_tests",
+        "--unit",
+        "verify_workflow_inventory_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_workflow_inventory_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_workflow_inventory_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_release_build_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_tests",
+        "--unit",
+        "verify_release_build_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_release_build_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_release_build_integration",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_integration",
+        "--unit",
+        "verify_release_build_integration"
+      ],
+      "artifact_name": "chrono-release-linux-verify_release_build_integration",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_integration/",
+      "needs": [
+        "linux_build_distribution",
+        "linux_build_cache"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        },
+        {
+          "job": "linux_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
+    },
+    {
+      "id": "macos_verify_release_build_integration",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_release_build_integration",
+        "--unit",
+        "verify_release_build_integration"
+      ],
+      "artifact_name": "chrono-release-macos-verify_release_build_integration",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_integration/",
+      "needs": [
+        "macos_build_distribution",
+        "macos_build_cache"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_distribution",
+          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        },
+        {
+          "job": "macos_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
+    },
+    {
+      "id": "linux_verify_diagnostics_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_diagnostics_tests",
+        "--unit",
+        "verify_diagnostics_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_diagnostics_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_diagnostics_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_diagnostics_tests",
+        "--unit",
+        "verify_diagnostics_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_diagnostics_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_host_bootstrap_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_host_bootstrap_tests",
+        "--unit",
+        "verify_host_bootstrap_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_host_bootstrap_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_host_bootstrap_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_host_bootstrap_tests",
+        "--unit",
+        "verify_host_bootstrap_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_host_bootstrap_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_build_cache",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_cache",
+        "--unit",
+        "build_cache"
+      ],
+      "artifact_name": "chrono-release-linux-build_cache",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_cache/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "linux_verify_cache_tests",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_cache_tests",
+        "--unit",
+        "verify_cache_tests"
+      ],
+      "artifact_name": "chrono-release-linux-verify_cache_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
+      "needs": [
+        "linux_build_cache"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
+    },
+    {
+      "id": "macos_build_cache",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/build_cache",
+        "--unit",
+        "build_cache"
+      ],
+      "artifact_name": "chrono-release-macos-build_cache",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_cache/",
+      "needs": [],
+      "downloads": []
+    },
+    {
+      "id": "macos_verify_cache_tests",
+      "runs_on": "macos-14",
+      "timeout_minutes": 45,
+      "command": [
+        "python3",
+        ".chrono-harness/release/build.py",
+        ".",
+        ".chrono-harness/cache/release-results/verify_cache_tests",
+        "--unit",
+        "verify_cache_tests"
+      ],
+      "artifact_name": "chrono-release-macos-verify_cache_tests",
+      "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
+      "needs": [
+        "macos_build_cache"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
+    }
+  ],
+  "download_artifact_action": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+  "include_hidden_files": true,
+  "persistent_cache": {
+    "schema": "chrono-github-cache/v1",
+    "program": ".chrono-harness/bin/chrono-cache",
+    "config": ".chrono-harness/cache.json",
+    "restore_action": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "jobs": {
+      "linux_build_runner": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_runner",
+        "caches": [
+          "release.linux.release.runner"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_runner/cache-observations/"
+      },
+      "linux_build_instructions": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_instructions",
+        "caches": [
+          "release.linux.release.instructions"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_instructions/cache-observations/"
+      },
+      "linux_build_judge_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_ci",
+        "caches": [
+          "release.linux.release.judge-ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_ci/cache-observations/"
+      },
+      "linux_build_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_ci",
+        "caches": [
+          "release.linux.release.ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_ci/cache-observations/"
+      },
+      "linux_build_judge_registration": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_registration",
+        "caches": [
+          "release.linux.release.judge-registration"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_registration/cache-observations/"
+      },
+      "linux_build_judge_filemap": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_filemap",
+        "caches": [
+          "release.linux.release.judge-filemap"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_filemap/cache-observations/"
+      },
+      "linux_build_judge_routes": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_routes",
+        "caches": [
+          "release.linux.release.judge-routes"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_routes/cache-observations/"
+      },
+      "linux_build_judge_projects": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_projects",
+        "caches": [
+          "release.linux.release.judge-projects"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_projects/cache-observations/"
+      },
+      "linux_build_judge_cost": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_cost",
+        "caches": [
+          "release.linux.release.judge-cost"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cost/cache-observations/"
+      },
+      "linux_build_judge_mixed": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_mixed",
+        "caches": [
+          "release.linux.release.judge-mixed"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_mixed/cache-observations/"
+      },
+      "linux_build_judge_workflow": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_workflow",
+        "caches": [
+          "release.linux.release.judge-workflow"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_workflow/cache-observations/"
+      },
+      "linux_build_inputs": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_inputs",
+        "caches": [
+          "release.linux.release.inputs"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_inputs/cache-observations/"
+      },
+      "linux_build_distribution": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_distribution",
+        "caches": [
+          "release.linux.release.distribution"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_distribution/cache-observations/"
+      },
+      "linux_build_judge_cargo": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_judge_cargo",
+        "caches": [
+          "release.linux.release.judge-cargo"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cargo/cache-observations/"
+      },
+      "linux_build_worktree": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_worktree",
+        "caches": [
+          "release.linux.release.worktree"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_worktree/cache-observations/"
+      },
+      "linux_verify_distribution_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_distribution_tests",
+        "caches": [
+          "release.linux.verify.distribution-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/"
+      },
+      "linux_verify_worktree_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_worktree_tests",
+        "caches": [
+          "release.linux.verify.worktree-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/"
+      },
+      "linux_verify_runner_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_runner_tests",
+        "caches": [
+          "release.linux.verify.runner-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_runner_tests/cache-observations/"
+      },
+      "linux_verify_inputs_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_inputs_tests",
+        "caches": [
+          "release.linux.verify.inputs-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/"
+      },
+      "linux_verify_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_ci_tests",
+        "caches": [
+          "release.linux.verify.ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_ci_tests/cache-observations/"
+      },
+      "linux_verify_judge_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_ci_tests",
+        "caches": [
+          "release.linux.verify.judge-ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/"
+      },
+      "linux_verify_judge_registration_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_registration_tests",
+        "caches": [
+          "release.linux.verify.judge-registration-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/"
+      },
+      "linux_verify_judge_projects_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_projects_tests",
+        "caches": [
+          "release.linux.verify.judge-projects-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/"
+      },
+      "linux_verify_judge_workflow_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_workflow_tests",
+        "caches": [
+          "release.linux.verify.judge-workflow-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/"
+      },
+      "linux_verify_judge_cargo_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_cargo_tests",
+        "caches": [
+          "release.linux.verify.judge-cargo-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/"
+      },
+      "linux_verify_instructions_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_instructions_tests",
+        "caches": [
+          "release.linux.verify.instructions-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/"
+      },
+      "linux_verify_judge_filemap_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_filemap_tests",
+        "caches": [
+          "release.linux.verify.judge-filemap-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/"
+      },
+      "linux_verify_judge_routes_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_routes_tests",
+        "caches": [
+          "release.linux.verify.judge-routes-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/"
+      },
+      "linux_verify_judge_cost_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_cost_tests",
+        "caches": [
+          "release.linux.verify.judge-cost-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/"
+      },
+      "linux_verify_judge_mixed_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_judge_mixed_tests",
+        "caches": [
+          "release.linux.verify.judge-mixed-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/"
+      },
+      "linux_verify_diagnostics_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_diagnostics_tests",
+        "caches": [
+          "release.linux.verify.diagnostics-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/"
+      },
+      "linux_build_cache": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_cache",
+        "caches": [
+          "release.linux.release.cache"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_cache/cache-observations/"
+      },
+      "linux_verify_cache_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_verify_cache_tests",
+        "caches": [
+          "release.linux.verify.cache-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_cache_tests/cache-observations/"
+      },
+      "macos_build_runner": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_runner",
+        "caches": [
+          "release.macos.release.runner"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_runner/cache-observations/"
+      },
+      "macos_build_instructions": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_instructions",
+        "caches": [
+          "release.macos.release.instructions"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_instructions/cache-observations/"
+      },
+      "macos_build_judge_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_ci",
+        "caches": [
+          "release.macos.release.judge-ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_ci/cache-observations/"
+      },
+      "macos_build_ci": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_ci",
+        "caches": [
+          "release.macos.release.ci"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_ci/cache-observations/"
+      },
+      "macos_build_judge_registration": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_registration",
+        "caches": [
+          "release.macos.release.judge-registration"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_registration/cache-observations/"
+      },
+      "macos_build_judge_filemap": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_filemap",
+        "caches": [
+          "release.macos.release.judge-filemap"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_filemap/cache-observations/"
+      },
+      "macos_build_judge_routes": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_routes",
+        "caches": [
+          "release.macos.release.judge-routes"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_routes/cache-observations/"
+      },
+      "macos_build_judge_projects": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_projects",
+        "caches": [
+          "release.macos.release.judge-projects"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_projects/cache-observations/"
+      },
+      "macos_build_judge_cost": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_cost",
+        "caches": [
+          "release.macos.release.judge-cost"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cost/cache-observations/"
+      },
+      "macos_build_judge_mixed": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_mixed",
+        "caches": [
+          "release.macos.release.judge-mixed"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_mixed/cache-observations/"
+      },
+      "macos_build_judge_workflow": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_workflow",
+        "caches": [
+          "release.macos.release.judge-workflow"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_workflow/cache-observations/"
+      },
+      "macos_build_inputs": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_inputs",
+        "caches": [
+          "release.macos.release.inputs"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_inputs/cache-observations/"
+      },
+      "macos_build_distribution": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_distribution",
+        "caches": [
+          "release.macos.release.distribution"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_distribution/cache-observations/"
+      },
+      "macos_build_judge_cargo": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_judge_cargo",
+        "caches": [
+          "release.macos.release.judge-cargo"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_judge_cargo/cache-observations/"
+      },
+      "macos_build_worktree": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_worktree",
+        "caches": [
+          "release.macos.release.worktree"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_worktree/cache-observations/"
+      },
+      "macos_verify_distribution_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_distribution_tests",
+        "caches": [
+          "release.macos.verify.distribution-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/"
+      },
+      "macos_verify_worktree_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_worktree_tests",
+        "caches": [
+          "release.macos.verify.worktree-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/"
+      },
+      "macos_verify_runner_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_runner_tests",
+        "caches": [
+          "release.macos.verify.runner-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_runner_tests/cache-observations/"
+      },
+      "macos_verify_inputs_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_inputs_tests",
+        "caches": [
+          "release.macos.verify.inputs-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/"
+      },
+      "macos_verify_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_ci_tests",
+        "caches": [
+          "release.macos.verify.ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_ci_tests/cache-observations/"
+      },
+      "macos_verify_judge_ci_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_ci_tests",
+        "caches": [
+          "release.macos.verify.judge-ci-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/"
+      },
+      "macos_verify_judge_registration_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_registration_tests",
+        "caches": [
+          "release.macos.verify.judge-registration-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/"
+      },
+      "macos_verify_judge_projects_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_projects_tests",
+        "caches": [
+          "release.macos.verify.judge-projects-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/"
+      },
+      "macos_verify_judge_workflow_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_workflow_tests",
+        "caches": [
+          "release.macos.verify.judge-workflow-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/"
+      },
+      "macos_verify_judge_cargo_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_cargo_tests",
+        "caches": [
+          "release.macos.verify.judge-cargo-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/"
+      },
+      "macos_verify_instructions_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_instructions_tests",
+        "caches": [
+          "release.macos.verify.instructions-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/"
+      },
+      "macos_verify_judge_filemap_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_filemap_tests",
+        "caches": [
+          "release.macos.verify.judge-filemap-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/"
+      },
+      "macos_verify_judge_routes_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_routes_tests",
+        "caches": [
+          "release.macos.verify.judge-routes-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/"
+      },
+      "macos_verify_judge_cost_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_cost_tests",
+        "caches": [
+          "release.macos.verify.judge-cost-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/"
+      },
+      "macos_verify_judge_mixed_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_judge_mixed_tests",
+        "caches": [
+          "release.macos.verify.judge-mixed-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/"
+      },
+      "macos_verify_diagnostics_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_diagnostics_tests",
+        "caches": [
+          "release.macos.verify.diagnostics-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/"
+      },
+      "macos_build_cache": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_cache",
+        "caches": [
+          "release.macos.release.cache"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/build_cache/cache-observations/"
+      },
+      "macos_verify_cache_tests": {
+        "need": "This existing native release unit recompiles its registered project on a fresh macos-14 runner.",
+        "output_use": "Restore this project target before the unchanged registered release command; retain its current build, staging, verification and artifact results.",
+        "prepare": [
+          "python3",
+          ".chrono-harness/ci/bootstrap.py",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_verify_cache_tests",
+        "caches": [
+          "release.macos.verify.cache-tests"
+        ],
+        "evidence_directory": ".chrono-harness/cache/release-results/verify_cache_tests/cache-observations/"
+      }
+    }
+  }
+}

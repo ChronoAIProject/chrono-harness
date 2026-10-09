@@ -1,0 +1,51 @@
+[package]
+name = "chrono-ci-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dependencies]
+serde_json = { version = "1", features = ["unbounded_depth"] }
+
+[dev-dependencies]
+chrono-ci = { path = "../ci" }
+chrono-harness = { path = "../runner" }
+chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
+tempfile = "3"
+serde_yaml_ng = "0.10"
+
+[[test]]
+name = "behavior"
+path = "tests/behavior.rs"
+
+[[test]]
+name = "initial_projection"
+path = "tests/initial_projection.rs"
+
+[[test]]
+name = "git_facts"
+path = "tests/git_facts.rs"
+
+[[test]]
+name = "release"
+path = "tests/release.rs"
+
+[[test]]
+name = "cache"
+path = "tests/cache.rs"
+
+[[bin]]
+name = "chrono-ci-test-transport"
+path = "tests/support/transport.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-ci-test-git"
+path = "tests/support/git.rs"
+test = false
+bench = false
+
+[profile.dev.package.sha2]
+opt-level = 3

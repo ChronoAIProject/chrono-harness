@@ -1,0 +1,34 @@
+{
+  "schema": "chrono-github-ci/v1",
+  "workflow_path": ".github/workflows/chrono-ci.yml",
+  "name": "Example registered checks",
+  "runs_on": "self-hosted",
+  "push_branches": [
+    "dev",
+    "integration/**"
+  ],
+  "pull_request_branches": [
+    "dev"
+  ],
+  "branch_creation_base_ref": "refs/heads/dev",
+  "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+  "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+  "timeout_minutes": 45,
+  "bootstrap": [
+    "python3",
+    ".chrono-harness/ci/install.py",
+    ".",
+    "/opt/chrono-tools"
+  ],
+  "runner": ".chrono-harness/bin/chrono-harness",
+  "generator": ".chrono-harness/bin/chrono-ci",
+  "check_config": ".chrono-harness/ci/check.json",
+  "context_path": ".chrono-harness/state/context.json",
+  "artifact_directory": ".chrono-harness/state/",
+  "push_baselines": [
+    {
+      "ref_prefix": "refs/heads/integration/",
+      "base_ref": "refs/heads/dev"
+    }
+  ]
+}

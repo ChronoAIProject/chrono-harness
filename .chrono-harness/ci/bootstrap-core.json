@@ -1,0 +1,43 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {
+    "cargo": "cargo"
+  },
+  "operations": [
+    "build.runner",
+    "build.judge-ci",
+    "build.ci",
+    "build.worktree"
+  ],
+  "install": [
+    {
+      "source": "crates/runner/target/debug/chrono-harness",
+      "destination": ".chrono-harness/bin/chrono-harness"
+    },
+    {
+      "source": "crates/judge-ci/target/debug/chrono-judge-ci",
+      "destination": ".chrono-harness/bin/chrono-judge-ci"
+    },
+    {
+      "source": "crates/ci/target/debug/chrono-ci",
+      "destination": ".chrono-harness/bin/chrono-ci"
+    },
+    {
+      "source": "crates/worktree/target/debug/chrono-worktree",
+      "destination": ".chrono-harness/bin/chrono-worktree"
+    }
+  ],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "python3",
+    "script": ".chrono-harness/ci/bootstrap.py"
+  },
+  "rust_incremental": true
+}

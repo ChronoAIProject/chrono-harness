@@ -1,0 +1,52 @@
+[package]
+name = "chrono-worktree-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+chrono-worktree = { path = "../worktree" }
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+tempfile = "3"
+
+[[test]]
+name = "creation"
+path = "tests/creation.rs"
+
+[[bin]]
+name = "chrono-worktree-test-judge"
+path = "tests/support/context_judge.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-worktree-test-consumer"
+path = "tests/support/consumer.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-worktree-test-git"
+path = "tests/support/git_fault.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-worktree-test-hook"
+path = "tests/support/hook.rs"
+test = false
+bench = false
+
+[profile.dev.package.sha2]
+opt-level = 3
+
+[[bin]]
+name = "chrono-worktree-test-version-probe"
+path = "tests/support/version_probe.rs"
+test = false
+bench = false

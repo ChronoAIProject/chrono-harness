@@ -1,0 +1,31 @@
+[package]
+name = "chrono-judge-filemap"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-judge-filemap"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-harness = { path = "../runner" }
+chrono-judge-registration = { path = "../judge-registration" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono-judge-mixed = { path = "../judge-mixed" }
+
+# Independent judge roots also compile the shared evidence consumers.
+[profile.dev]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
+[profile.dev.package.sha2]
+opt-level = 3

@@ -1,0 +1,174 @@
+{
+  "schema": "chrono-worktree-automatic-cleanup/v2",
+  "coordinator_root": "git-main-worktree",
+  "state_directory": ".chrono-harness/state/automatic-cleanup-v2/",
+  "retained_ref": "refs/heads/dev",
+  "retention": "same-tree",
+  "remove_branch": false,
+  "allow_evidence_disposal": false,
+  "artifacts": [
+    {
+      "path": ".chrono-harness/bin/",
+      "disposition": "retain"
+    },
+    {
+      "path": ".chrono-harness/state/",
+      "disposition": "evidence-retain"
+    },
+    {
+      "path": "crates/runner/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/runner-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/instructions/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/instructions-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-ci/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-ci-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/ci/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/ci-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-registration/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-registration-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-filemap/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-filemap-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-routes/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-routes-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-projects/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-projects-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-cost/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-cost-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-mixed/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-mixed-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-workflow/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-workflow-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/inputs/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/inputs-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/distribution/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/distribution-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-cargo/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/judge-cargo-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/worktree/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/worktree-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/diagnostics/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/diagnostics-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/cache/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": "crates/cache-tests/target/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/startup/",
+      "disposition": "dispose"
+    }
+  ],
+  "main_cache_only": true,
+  "retained_producers": [
+    {
+      "id": "ci-command-result",
+      "directory": ".chrono-harness/state/ci-test-failures/",
+      "generated_outputs": [
+        "original-state/cargo/producer/target/",
+        "original-state/cargo/tests/target/"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1092 @@
+//! Registration owns full-format schema, snapshot and affected-reference admissibility.
+pub mod execution;
+mod input_coverage;
+pub mod inputs;
+mod registrations;
+mod transition;
+pub use transition::{
+    ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
+    interpret_with_reader, replacements, retirement_requests, reused_tools, validate_retained_view,
+    views, views_for_collection_inputs, views_for_collection_inputs_with, views_with_reader,
+};
+pub mod initial;
+mod schema;
+use chrono_harness::{
+    facts, json, no_symlink_parents, sha256,
+    wire::{self, Finding, Request, Response, Status},
+};
+pub use registrations::{NodeDefinition, NodeKind, NodeView, Registrations};
+use serde_json::{Value, json as value};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::Path,
+};
+/// Validate the explicit projects document without requiring a full-governance host.
+pub fn validate_projects(projects: &Value) -> std::result::Result<(), String> {
+    schema::projects(projects)
+}
+
+type Result<T> = std::result::Result<T, String>;
+fn read(path: &Path) -> Result<Value> {
+    json(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
+}
+fn issue(
+    r: &mut Response,
+    code: &str,
+    message: impl Into<String>,
+    reference: impl Into<String>,
+    error: bool,
+) {
+    r.status = r
+        .status
+        .clone()
+        .max(if error { Status::Error } else { Status::Fail });
+    r.findings.push(Finding {
+        code: code.into(),
+        level: "error".into(),
+        message: message.into(),
+        delta_refs: vec![reference.into()],
+        causes: vec![],
+    });
+}
+fn rows(v: &Value, key: &str, id: &str) -> BTreeMap<String, Value> {
+    v[key]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|r| r[id].as_str().map(|s| (s.into(), r.clone())))
+        .collect()
+}
+fn strings(v: &Value) -> BTreeSet<String> {
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+/// Classify observed untracked paths using an already schema-validated host configuration.
+pub fn nonartifact_paths(config: &Value, paths: &[String]) -> Vec<String> {
+    let artifacts = facts::artifact_directories(config).expect("validated artifact declarations");
+    paths
+        .iter()
+        .filter(|p| !artifacts.iter().any(|a| p.starts_with(a)))
+        .cloned()
+        .collect()
+}
+pub fn judge(req: &Request) -> Response {
+    let mut r = req.response(Status::Pass);
+    let reader = facts::Reader::for_request(req);
+    let result = reader
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(|reader| evaluate(req, &mut r, reader));
+    if let Ok(reader) = &reader {
+        reader.record(&mut r);
+    }
+    if let Err(e) = result {
+        issue(&mut r, "E_INPUT", e, "/request", true);
+    }
+    r
+}
+fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<()> {
+    req.validate()?;
+    let root = &req.candidate.root;
+    let actual_root =
+        fs::canonicalize(facts::utf8(reader.git(root, &["rev-parse", "--show-toplevel"])?)?.trim())
+            .map_err(|e| e.to_string())?;
+    if actual_root != *root {
+        issue(
+            r,
+            "E_SNAPSHOT_DIRTY",
+            "candidate.root must be actual checkout root",
+            "/candidate/root",
+            false,
+        );
+        return Ok(());
+    }
+    if reader.verify_oid(root, &req.base.commit)? != req.base.tree
+        || reader.verify_oid(root, &req.candidate.commit)? != req.candidate.tree
+    {
+        issue(
+            r,
+            "E_IDENTITY",
+            "tree/commit disagreement",
+            "/candidate",
+            true,
+        );
+        return Ok(());
+    }
+    let bt = reader.tree(root, &req.base.commit)?;
+    let ct = reader.tree(root, &req.candidate.commit)?;
+    if req.delta != facts::delta(&bt, &ct) {
+        issue(
+            r,
+            "E_IDENTITY",
+            "DELTA does not match fixed endpoints",
+            "/delta",
+            true,
+        );
+        return Ok(());
+    }
+    // Newly written state artifacts may differ since acquisition; compare all governed dirt below.
+    let base_snapshot = reader.registry_snapshot(root, &req.base.commit, &req.config_path)?;
+    let bv = base_snapshot.values;
+    let candidate_snapshot =
+        reader.registry_snapshot(root, &req.candidate.commit, &req.config_path)?;
+    let cv = candidate_snapshot.values;
+    let candidate_identity = facts::registry_identity(&cv, &req.config_path)?;
+    let selector_required =
+        base_snapshot.selection.is_some() || candidate_snapshot.selection.is_some();
+    let binding = req.observations["registry_bindings"].clone();
+    if selector_required
+        && (binding["base"]["entry_path"] != base_snapshot.entry_path
+            || binding["base"]["effective_path"] != base_snapshot.effective_path
+            || binding["base"]["selection"]
+                != base_snapshot.selection.clone().unwrap_or(Value::Null)
+            || binding["candidate"]["entry_path"] != candidate_snapshot.entry_path
+            || binding["candidate"]["effective_path"] != candidate_snapshot.effective_path
+            || binding["candidate"]["selection"]
+                != candidate_snapshot.selection.clone().unwrap_or(Value::Null))
+    {
+        issue(
+            r,
+            "E_IDENTITY",
+            "registry endpoint selection binding mismatch",
+            "/observations/registry_bindings",
+            true,
+        );
+        return Ok(());
+    }
+    let observed = reader.checkout_excluding(
+        root,
+        &req.candidate.commit,
+        &facts::artifact_directories(
+            cv.get(&candidate_identity.effective_path)
+                .ok_or("missing effective candidate config")?,
+        )?,
+    )?;
+    if facts::registry_digest(&bv, &cv)? != req.registries.digest
+        || req.registries.base != req.base.root.join(".chrono-harness")
+        || req.registries.candidate != root.join(".chrono-harness")
+    {
+        issue(
+            r,
+            "E_IDENTITY",
+            "registry digest/root mismatch",
+            "/registries",
+            true,
+        );
+        return Ok(());
+    }
+    for (p, original) in &base_snapshot.bytes {
+        let p = no_symlink_parents(&req.base.root, p)?;
+        if fs::read(&p).map_err(|e| e.to_string())? != *original {
+            issue(
+                r,
+                "E_IDENTITY",
+                "base snapshot differs from fixed Git data",
+                "/base",
+                true,
+            );
+            return Ok(());
+        }
+    }
+    for (p, original) in &candidate_snapshot.bytes {
+        let disk = fs::read(no_symlink_parents(root, p)?).map_err(|e| e.to_string())?;
+        if &disk != original {
+            issue(
+                r,
+                "E_CONFIG_MISMATCH",
+                format!("checkout registry differs from candidate: {p}"),
+                "/registries",
+                true,
+            );
+            return Ok(());
+        }
+    }
+    let context = read(&req.context.path)?;
+    if wire::digest(&context)? != req.context.sha256 {
+        issue(
+            r,
+            "E_CONTEXT_MISMATCH",
+            "context digest mismatch",
+            "/context",
+            true,
+        );
+        return Ok(());
+    }
+    let context_v2 = context["schema_version"] == 2;
+    schema::object(
+        &context,
+        &[
+            "schema_version",
+            "base",
+            "candidate",
+            "dev_tip",
+            "branch_ref",
+            "fork_point",
+            "branch_started_at",
+            "observed_at",
+            "operation",
+            "integration_evidence",
+        ],
+        if context_v2 {
+            &["retained_inputs", "run_kind"]
+        } else {
+            &["retained_inputs"]
+        },
+    )?;
+    if (context["schema_version"] != 1 && !context_v2)
+        || context["base"] != req.base.commit
+        || context["candidate"] != req.candidate.commit
+        || context["dev_tip"] != req.base.commit
+        || context["operation"] != "validate.delta"
+    {
+        issue(
+            r,
+            "E_CONTEXT_MISMATCH",
+            "context/CLI identities disagree",
+            "/context",
+            true,
+        );
+        return Ok(());
+    }
+    if context_v2
+        && !matches!(
+            context["run_kind"].as_str(),
+            Some("integration" | "delivery")
+        )
+    {
+        return Err("context v2 requires integration/delivery run_kind".into());
+    }
+    schema::string(&context["branch_ref"])?;
+    reader.verify_oid(root, schema::string(&context["fork_point"])?)?;
+    for k in ["branch_started_at", "observed_at"] {
+        let dt = time::OffsetDateTime::parse(
+            schema::string(&context[k])?,
+            &time::format_description::well_known::Rfc3339,
+        )
+        .map_err(|e| e.to_string())?;
+        if dt.offset() != time::UtcOffset::UTC {
+            return Err("context time must be UTC RFC3339".into());
+        }
+    }
+    if !context["integration_evidence"].is_null()
+        && !context["integration_evidence"]
+            .as_str()
+            .is_some_and(wire::is_digest)
+    {
+        return Err("invalid integration evidence digest".into());
+    }
+    let (old, new, view) = match views_with_reader(req, reader) {
+        Ok(v) => v,
+        Err(e) => {
+            issue(r, "E_SCHEMA", e, "/registries", true);
+            return Ok(());
+        }
+    };
+    let nonartifact = |paths: &[String]| nonartifact_paths(new.config(), paths);
+    if observed.head != req.checkout.head
+        || observed.tracked != req.checkout.tracked
+        || nonartifact(&observed.untracked) != nonartifact(&req.checkout.untracked)
+        || observed.index_flags != req.checkout.index_flags
+    {
+        issue(
+            r,
+            "E_IDENTITY",
+            "checkout observations changed since request",
+            "/checkout",
+            true,
+        );
+    }
+    if observed.head != req.candidate.commit
+        || !observed.tracked.is_empty()
+        || !nonartifact(&observed.untracked).is_empty()
+    {
+        issue(
+            r,
+            "E_SNAPSHOT_DIRTY",
+            format!(
+                "head={}, tracked={:?}, nonartifact={:?}",
+                observed.head,
+                observed.tracked,
+                nonartifact(&observed.untracked)
+            ),
+            "/checkout",
+            false,
+        );
+    }
+    for flag in &observed.index_flags {
+        if flag.tag.as_bytes()[0].is_ascii_lowercase() || flag.tag.eq_ignore_ascii_case("S") {
+            issue(
+                r,
+                "E_INPUT_UNSUPPORTED",
+                format!("unsupported index flag {}: {}", flag.tag, flag.path),
+                "/checkout/index_flags",
+                true,
+            );
+        }
+    }
+    let unsupported: Vec<_> = ct
+        .iter()
+        .filter(|(_, e)| {
+            e.kind != "blob" || !matches!(e.mode.as_str(), "100644" | "100755" | "120000")
+        })
+        .map(|(path, _)| path)
+        .collect();
+    if !unsupported.is_empty() {
+        issue(
+            r,
+            "E_INPUT_UNSUPPORTED",
+            format!("unsupported entries: {:?}", unsupported),
+            "/candidate/tree",
+            true,
+        );
+    }
+    readiness(req, &old, &new, r)?;
+    references(
+        reader,
+        root,
+        &req.candidate.commit,
+        Some(&old),
+        &new,
+        &req.delta,
+        &ct,
+        r,
+    )?;
+    if r.status == Status::Pass {
+        if let Some(coverage) = new.config["input_closure"].get("coverage") {
+            r.outputs.insert(
+                "input_coverage".into(),
+                value!({
+                    "schema": "chrono-input-coverage-result/v1",
+                    "scope": "declared-domains", "declaration": coverage,
+                    "completeness_proven": false
+                }),
+            );
+        }
+        r.outputs.insert("registration_view".into(), view);
+        r.outputs.insert("registration".into(),value!({"scope":"registration-only","base":req.base.commit,"candidate":req.candidate.commit,"registry_digest":req.registries.digest,"input_closure":"declared-complete","completeness_proven":false,"previous_enforcement":if old.config["status"]=="proposed"{"none"}else{"enabled"}}));
+    }
+    Ok(())
+}
+fn readiness(
+    req: &Request,
+    old: &Registrations,
+    n: &Registrations,
+    r: &mut Response,
+) -> Result<()> {
+    chrono_harness::units::report_paths(
+        n.config(),
+        n.workflow()["integration"]["evidence"].as_str(),
+    )?;
+    if let Some(block) = chrono_harness::units::full_execution_units(n.config())? {
+        let units: BTreeMap<String, chrono_harness::units::Unit> =
+            serde_json::from_value(block["units"].clone()).map_err(|e| e.to_string())?;
+        let plans = execution::plans(n.filemap())?;
+        let shared = serde_json::from_value(block["shared_operations"].clone())
+            .map_err(|e| e.to_string())?;
+        let mut operation_sets: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (unit, definition) in &units {
+            for test in &definition.tests {
+                let plan = plans
+                    .get(test)
+                    .ok_or_else(|| format!("E_UNIT_ASSIGNMENT: unknown plan {test}"))?;
+                for operation in &plan.operations {
+                    operation_sets
+                        .entry(operation.clone())
+                        .or_default()
+                        .insert(unit.clone());
+                }
+            }
+        }
+        chrono_harness::units::assignments(
+            &units,
+            &plans.keys().cloned().collect(),
+            &shared,
+            &operation_sets,
+        )
+        .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
+    }
+    for (name, v) in [
+        ("config", &n.config),
+        ("judges", &n.judges),
+        ("projects", &n.projects),
+        ("filemap", &n.filemap),
+        ("workflow", &n.workflow),
+    ] {
+        if v["status"] != "active" {
+            issue(
+                r,
+                "E_ACTIVATION",
+                format!("{name} is proposed"),
+                format!("/registries/{name}/status"),
+                true,
+            );
+        }
+    }
+    if n.config["enforcement"] != "enabled"
+        || n.config["input_closure"]["status"] != "declared-complete"
+        || !n.config["input_closure"]["unresolved"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    {
+        issue(
+            r,
+            "E_EVIDENCE_UNRESOLVED",
+            "activation requires enabled enforcement and declared-complete input closure without unresolved inputs",
+            "/config/input_closure",
+            true,
+        );
+    }
+    let root = &req.candidate.root;
+    let runner = &n.config["runner"];
+    if fs::read(&req.runner.path)
+        .ok()
+        .map(|bytes| sha256(&bytes))
+        .as_deref()
+        != Some(&req.runner.sha256)
+        || runner["sha256"] != req.runner.sha256
+        || runner["version"] != req.runner.version
+        || fs::canonicalize(root.join(runner["path"].as_str().unwrap())).ok()
+            != fs::canonicalize(&req.runner.path).ok()
+    {
+        issue(
+            r,
+            "E_EXECUTABLE_BINDING",
+            "runner binding differs from actual process",
+            "/config/runner",
+            true,
+        );
+    }
+    for j in n.judges["judges"].as_array().unwrap() {
+        let path = no_symlink_parents(root, j["executable"].as_str().unwrap())?;
+        if j["sha256"].is_null()
+            || fs::read(&path).ok().map(|v| sha256(&v)).as_deref() != j["sha256"].as_str()
+        {
+            issue(
+                r,
+                "E_EXECUTABLE_BINDING",
+                format!("missing/mismatched candidate executable {}", j["id"]),
+                "/judges",
+                true,
+            );
+        }
+    }
+    for t in n.config["tools"].as_array().unwrap() {
+        if t["expected_version"].is_null() {
+            issue(
+                r,
+                "E_INPUT_UNDECLARED",
+                format!("tool {} has no expected version", t["id"]),
+                "/config/tools",
+                true,
+            );
+        }
+    }
+    match inputs::validate(req, old, n) {
+        Ok(evidence) => {
+            if r.status == Status::Pass && !evidence.is_null() {
+                r.outputs.insert("effective_inputs".into(), evidence);
+            }
+        }
+        Err(e) => issue(
+            r,
+            "E_EVIDENCE_UNRESOLVED",
+            e,
+            "/config/environment/inputs",
+            true,
+        ),
+    }
+    for finding in input_closure_findings(n) {
+        r.status = r.status.clone().max(Status::Fail);
+        r.findings.push(finding);
+    }
+    input_coverage::validate(n, r);
+    Ok(())
+}
+
+/// Validate only the explicit closure whitelist. The registration owns the
+/// node inventory, but it never discovers additional dependencies from the
+/// filesystem, commands, language or directory layout.
+pub(crate) fn input_closure_findings(n: &Registrations) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let mut issue = |code: &str, message: String, reference: String| {
+        findings.push(Finding {
+            code: code.into(),
+            level: "error".into(),
+            message,
+            delta_refs: vec![reference],
+            causes: vec![],
+        });
+    };
+    let Some(bindings) = n.config["input_closure"]
+        .get("bindings")
+        .and_then(Value::as_array)
+    else {
+        return findings;
+    };
+    let nodes = n.node_data();
+    // Input closure is a whitelist over the same explicit graph consumed by
+    // FILEMAP.  A binding by itself is only a free-form claim; every declared
+    // input must also have a registered incoming edge to its consumer.  Keep
+    // the edge kind independent from the binding's caller-defined `kind`:
+    // the latter names the closure interpretation, while FILEMAP records the
+    // graph operation that carries the dependency.
+    let project_edges: BTreeSet<(String, String)> = n.filemap["project_edges"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|edge| {
+            Some((
+                edge["from"].as_str()?.to_owned(),
+                edge["to"].as_str()?.to_owned(),
+            ))
+        })
+        .collect();
+    let mut bound_inputs = BTreeSet::new();
+    for (binding_index, binding) in bindings.iter().enumerate() {
+        let consumer = binding["consumer"].as_str().unwrap_or_default();
+        let consumer_reference = format!("/config/input_closure/bindings/{binding_index}/consumer");
+        match nodes.get(consumer).map(|view| view.kind) {
+            Some(NodeKind::Project | NodeKind::Script | NodeKind::Test | NodeKind::Judge) => {}
+            Some(_) => issue(
+                "E_REFERENCE",
+                format!("input closure consumer is not an executable node: {consumer}"),
+                consumer_reference,
+            ),
+            None => issue(
+                "E_REFERENCE",
+                format!("unknown input closure consumer {consumer}"),
+                consumer_reference,
+            ),
+        }
+        for (input_index, input) in binding["inputs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .enumerate()
+        {
+            let reference =
+                format!("/config/input_closure/bindings/{binding_index}/inputs/{input_index}");
+            bound_inputs.insert(input.to_owned());
+            match nodes.get(input).map(|view| view.kind) {
+                Some(NodeKind::Tool | NodeKind::Input | NodeKind::Environment) => {}
+                Some(_) => issue(
+                    "E_REFERENCE",
+                    format!("input closure reference is not an external input node: {input}"),
+                    reference.clone(),
+                ),
+                None => issue(
+                    "E_REFERENCE",
+                    format!("unknown input closure reference {input}"),
+                    reference.clone(),
+                ),
+            }
+            if !project_edges.contains(&(input.to_owned(), consumer.to_owned())) {
+                issue(
+                    "E_REFERENCE",
+                    format!(
+                        "input closure binding lacks explicit project edge {input} -> {consumer}"
+                    ),
+                    reference,
+                );
+            }
+        }
+    }
+    if matches!(n.config["schema_version"].as_u64(), Some(3 | 4))
+        && n.config["input_closure"]["status"] == "declared-complete"
+    {
+        for (identity, view) in &nodes {
+            if !matches!(
+                view.kind,
+                NodeKind::Tool | NodeKind::Input | NodeKind::Environment
+            ) {
+                continue;
+            }
+            if !bound_inputs.contains(identity) {
+                issue(
+                    "E_INPUT_UNDECLARED",
+                    format!("declared-complete input closure omits external input node {identity}"),
+                    "/config/input_closure/bindings".into(),
+                );
+            }
+        }
+    }
+    findings
+}
+
+fn references(
+    reader: &facts::Reader,
+    root: &Path,
+    candidate: &str,
+    old: Option<&Registrations>,
+    new: &Registrations,
+    changes: &[wire::Delta],
+    ct: &facts::Tree,
+    r: &mut Response,
+) -> Result<()> {
+    let initial = old.is_none();
+    // Inventory has no historical endpoint. The old column is never used to
+    // suppress a check in this mode; every current reference is selected.
+    let old = old.unwrap_or(new);
+    let a = rows(&old.filemap, "files", "path");
+    let b = rows(&new.filemap, "files", "path");
+    let nodes = new.nodes();
+    let old_nodes = old.nodes();
+    let changed_paths: BTreeSet<_> = changes.iter().map(|d| d.path.clone()).collect();
+    for d in changes {
+        if (d.kind == "D" && !a.contains_key(&d.path))
+            || (d.kind != "D" && !b.contains_key(&d.path))
+        {
+            issue(
+                r,
+                "E_UNREGISTERED",
+                format!("{} lacks endpoint registration", d.path),
+                d.path.clone(),
+                false,
+            );
+        }
+        if d.kind != "A" && !a.contains_key(&d.path) && a.get(&d.path) == b.get(&d.path) {
+            issue(
+                r,
+                "E_UNREGISTERED",
+                "modified input lacks base registration or explicit registration addition",
+                d.path.clone(),
+                false,
+            );
+        }
+    }
+    if initial {
+        for path in ct.keys() {
+            if !b.contains_key(path) {
+                issue(
+                    r,
+                    "E_UNREGISTERED",
+                    format!("initial file lacks registration: {path}"),
+                    "/candidate/tree",
+                    false,
+                );
+            }
+        }
+    }
+    let owners = strings(&new.projects["owners"]);
+    let edge_check = |edge: &Value, reference: &str, r: &mut Response| {
+        for k in ["from", "to"] {
+            if let Some(id) = edge[k].as_str() {
+                if !nodes.contains(id) {
+                    issue(
+                        r,
+                        "E_DANGLING_EDGE",
+                        format!("missing node {id}"),
+                        reference,
+                        false,
+                    );
+                }
+            }
+        }
+    };
+    for (p, f) in &b {
+        let removed_target = f["edges"].as_array().unwrap().iter().any(|e| {
+            e["to"]
+                .as_str()
+                .is_some_and(|s| old_nodes.contains(s) && !nodes.contains(s))
+        });
+        let owner_removed = !owners.contains(f["owner"].as_str().unwrap())
+            && strings(&old.projects["owners"]).contains(f["owner"].as_str().unwrap());
+        let cost_removed = new.filemap["cost_models"]
+            .get(f["cost"].as_str().unwrap())
+            .is_none()
+            && old.filemap["cost_models"]
+                .get(f["cost"].as_str().unwrap())
+                .is_some();
+        let projection_removed = f.get("projection").is_some_and(|pr| {
+            pr["sources"].as_array().unwrap().iter().any(|v| {
+                a.contains_key(v.as_str().unwrap()) && !b.contains_key(v.as_str().unwrap())
+            }) || (old_nodes.contains(pr["producer"].as_str().unwrap())
+                && !nodes.contains(pr["producer"].as_str().unwrap()))
+        });
+        let affected = initial
+            || changed_paths.contains(p)
+            || a.get(p) != Some(f)
+            || removed_target
+            || owner_removed
+            || cost_removed
+            || projection_removed;
+        if !affected {
+            continue;
+        }
+        let reference = format!(
+            "/filemap/files/{}",
+            new.filemap["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .position(|row| row["path"] == *p)
+                .unwrap()
+        );
+        if !owners.contains(f["owner"].as_str().unwrap()) {
+            issue(
+                r,
+                "E_REFERENCE",
+                format!("unknown owner {}", f["owner"]),
+                &reference,
+                false,
+            );
+        }
+        if new.filemap["cost_models"]
+            .get(f["cost"].as_str().unwrap())
+            .is_none()
+        {
+            issue(r, "E_REFERENCE", "unknown cost", &reference, false);
+        }
+        if !ct.contains_key(p) {
+            issue(
+                r,
+                "E_REFERENCE",
+                format!("registered file missing from candidate: {p}"),
+                &reference,
+                false,
+            );
+        }
+        for e in f["edges"].as_array().unwrap() {
+            edge_check(e, &reference, r);
+        }
+        if let Some(projection) = f.get("projection") {
+            for src in projection["sources"].as_array().unwrap() {
+                if !b.contains_key(src.as_str().unwrap()) {
+                    issue(
+                        r,
+                        "E_REFERENCE",
+                        "unregistered projection source",
+                        &reference,
+                        false,
+                    );
+                }
+            }
+            if !nodes.contains(projection["producer"].as_str().unwrap()) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    "unknown projection producer",
+                    &reference,
+                    false,
+                );
+            }
+        }
+        if let Some(e) = ct.get(p) {
+            if e.mode == "120000" {
+                let actual = facts::utf8(reader.blob(root, candidate, p)?)?;
+                if f["symlink"].as_str() != Some(actual.as_str()) {
+                    issue(
+                        r,
+                        "E_REFERENCE",
+                        "symlink literal differs from registration",
+                        &reference,
+                        false,
+                    );
+                }
+            } else if f.get("symlink").is_some() {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    "registered symlink is ordinary file",
+                    &reference,
+                    false,
+                );
+            }
+        }
+    }
+    for e in new.filemap["project_edges"].as_array().unwrap() {
+        let added = !old.filemap["project_edges"].as_array().unwrap().contains(e);
+        let removed_target = ["from", "to"].iter().any(|k| {
+            e[k].as_str()
+                .is_some_and(|s| old_nodes.contains(s) && !nodes.contains(s))
+        });
+        if initial || added || removed_target {
+            edge_check(e, "/filemap/project_edges", r);
+        }
+    }
+    for key in ["projects", "scripts"] {
+        let before = rows(&old.projects, key, "id");
+        let after = rows(&new.projects, key, "id");
+        for (id, p) in &after {
+            let tools = strings_ids(&new.config["tools"]);
+            let old_tools = strings_ids(&old.config["tools"]);
+            let removed_tool = p["actions"].as_object().unwrap().values().any(|a| {
+                a["tool"]
+                    .as_str()
+                    .is_some_and(|s| old_tools.contains(s) && !tools.contains(s))
+            });
+            let removed_pair = ["test_project", "tests_for", "test_script"]
+                .iter()
+                .any(|k| {
+                    p[k].as_str()
+                        .is_some_and(|s| before.contains_key(s) && !after.contains_key(s))
+                });
+            let affected_input = ["manifest", "lockfile", "path"].iter().any(|k| {
+                p[k].as_str().is_some_and(|s| {
+                    changed_paths.contains(s) || (a.contains_key(s) && !b.contains_key(s))
+                })
+            });
+            if !initial
+                && before.get(id) == Some(p)
+                && !removed_tool
+                && !removed_pair
+                && !affected_input
+                && !(strings(&old.projects["owners"]).contains(id) && !owners.contains(id))
+            {
+                continue;
+            }
+            if !owners.contains(id) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("project/script owner {id} is not declared"),
+                    "/projects/owners",
+                    false,
+                );
+            }
+            let reference = format!(
+                "/projects/{key}/{}",
+                new.projects[key]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .position(|row| row["id"] == *id)
+                    .unwrap()
+            );
+            for field in if key == "projects" {
+                vec!["manifest", "lockfile"]
+            } else {
+                vec!["path"]
+            } {
+                let Some(path) = p[field].as_str() else {
+                    continue;
+                };
+                if !ct.contains_key(path) || !b.contains_key(path) {
+                    issue(
+                        r,
+                        "E_REFERENCE",
+                        format!("missing/unregistered {field}: {path}"),
+                        &reference,
+                        false,
+                    );
+                }
+            }
+            for field in ["test_project", "tests_for", "test_script"] {
+                if let Some(target) = p[field].as_str() {
+                    if !after.contains_key(target) {
+                        issue(
+                            r,
+                            "E_REFERENCE",
+                            format!("missing {field}: {target}"),
+                            &reference,
+                            false,
+                        );
+                    }
+                }
+            }
+            for action in p["actions"].as_object().unwrap().values() {
+                if !tools.contains(action["tool"].as_str().unwrap()) {
+                    issue(
+                        r,
+                        "E_REFERENCE",
+                        format!(
+                            "undeclared tool {} for {}",
+                            action["tool"], action["operation"]
+                        ),
+                        &reference,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+    if let Some(plans) = new
+        .filemap
+        .get("execution_plans")
+        .and_then(Value::as_object)
+    {
+        let methods = execution::methods(new.projects())?;
+        let old_methods = execution::methods(old.projects())?;
+        for (test, plan) in plans {
+            let removed_method = plan["operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(Value::as_str)
+                .any(|op| old_methods.contains_key(op) && !methods.contains_key(op));
+            if !initial
+                && old.filemap.get("execution_plans").and_then(|p| p.get(test)) == Some(plan)
+                && !removed_method
+            {
+                continue;
+            }
+            if !nodes.contains(test) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("execution plan test missing: {test}"),
+                    "/filemap/execution_plans",
+                    false,
+                );
+            }
+            for op in plan["operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(Value::as_str)
+            {
+                if !methods.contains_key(op) {
+                    issue(
+                        r,
+                        "E_REFERENCE",
+                        format!("execution plan operation missing: {op}"),
+                        "/filemap/execution_plans",
+                        false,
+                    );
+                }
+            }
+        }
+    }
+    let judges = rows(&new.judges, "judges", "id");
+    if !judges.contains_key(new.judges["migration_validator"].as_str().unwrap()) {
+        issue(
+            r,
+            "E_REFERENCE",
+            "missing migration validator",
+            "/judges/migration_validator",
+            false,
+        );
+    }
+    for cost in new.filemap["test_costs"].as_array().unwrap() {
+        let test = format!("test:{}", cost["test"].as_str().unwrap());
+        let name = cost["cost"].as_str().unwrap();
+        let affected = initial
+            || !old.filemap["test_costs"].as_array().unwrap().contains(cost)
+            || (old_nodes.contains(&test) && !nodes.contains(&test))
+            || (old.filemap["cost_models"].get(name).is_some()
+                && new.filemap["cost_models"].get(name).is_none());
+        if affected && (!nodes.contains(&test) || new.filemap["cost_models"].get(name).is_none()) {
+            issue(
+                r,
+                "E_REFERENCE",
+                "test_costs target/cost missing",
+                "/filemap/test_costs",
+                false,
+            );
+        }
+    }
+    for artifact in new.config["artifacts"].as_array().unwrap() {
+        let owner = artifact["owner"].as_str().unwrap();
+        let affected = initial
+            || !old.config["artifacts"]
+                .as_array()
+                .unwrap()
+                .contains(artifact)
+            || (strings(&old.projects["owners"]).contains(owner) && !owners.contains(owner));
+        if affected && !owners.contains(owner) {
+            issue(
+                r,
+                "E_REFERENCE",
+                "unknown artifact owner",
+                "/config/artifacts",
+                false,
+            );
+        }
+    }
+    for field in new.config["semantic_fields"].as_array().unwrap() {
+        let path = field["path"].as_str().unwrap();
+        let affected = initial
+            || !old.config["semantic_fields"]
+                .as_array()
+                .unwrap()
+                .contains(field)
+            || (a.contains_key(path) && !b.contains_key(path));
+        if affected && !b.contains_key(path) {
+            issue(
+                r,
+                "E_REFERENCE",
+                "semantic_fields path is not registered",
+                "/config/semantic_fields",
+                false,
+            );
+        }
+    }
+    let old_stability = rows(&old.workflow, "stability", "id");
+    for rule in new.workflow["stability"].as_array().unwrap() {
+        let changed = initial || old_stability.get(rule["id"].as_str().unwrap()) != Some(rule);
+        for path in rule["paths"].as_array().unwrap() {
+            let p = path.as_str().unwrap();
+            if !b.contains_key(p) && (changed || a.contains_key(p)) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("missing stability path {p}"),
+                    "/workflow/stability",
+                    false,
+                );
+            }
+        }
+        for test in strings(&rule["tests"]) {
+            let id = format!("test:{test}");
+            if !nodes.contains(&id) && (changed || old_nodes.contains(&id)) {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("missing stability test {test}"),
+                    "/workflow/stability",
+                    false,
+                );
+            }
+        }
+    }
+    let old_tests = strings(&old.workflow["integration"]["tests"]);
+    for test in strings(&new.workflow["integration"]["tests"]) {
+        let id = format!("test:{test}");
+        if !nodes.contains(&id)
+            && (initial || !old_tests.contains(&test) || old_nodes.contains(&id))
+        {
+            issue(
+                r,
+                "E_REFERENCE",
+                format!("missing workflow test {test}"),
+                "/workflow/integration/tests",
+                false,
+            );
+        }
+    }
+    for m in new.workflow["migrations"].as_array().unwrap() {
+        for k in ["script", "test"] {
+            let id = format!("script:{}", m[k].as_str().unwrap());
+            if !nodes.contains(&id)
+                && (initial
+                    || !old.workflow["migrations"].as_array().unwrap().contains(m)
+                    || old_nodes.contains(&id))
+            {
+                issue(
+                    r,
+                    "E_REFERENCE",
+                    format!("missing migration {k}"),
+                    "/workflow/migrations",
+                    false,
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+fn strings_ids(v: &Value) -> BTreeSet<String> {
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|v| v["id"].as_str())
+        .map(str::to_owned)
+        .collect()
+}

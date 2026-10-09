@@ -1,0 +1,930 @@
+{
+  "schema": "chrono-release-build/v5",
+  "rust_toolchain": "1.95.0",
+  "manifests": [
+    "crates/runner/Cargo.toml",
+    "crates/instructions/Cargo.toml",
+    "crates/judge-ci/Cargo.toml",
+    "crates/ci/Cargo.toml",
+    "crates/judge-registration/Cargo.toml",
+    "crates/judge-filemap/Cargo.toml",
+    "crates/judge-routes/Cargo.toml",
+    "crates/judge-projects/Cargo.toml",
+    "crates/judge-cost/Cargo.toml",
+    "crates/judge-mixed/Cargo.toml",
+    "crates/judge-workflow/Cargo.toml",
+    "crates/inputs/Cargo.toml",
+    "crates/distribution/Cargo.toml",
+    "crates/judge-cargo/Cargo.toml",
+    "crates/worktree/Cargo.toml",
+    "crates/cache/Cargo.toml"
+  ],
+  "projects": ".chrono-harness/projects.json",
+  "tools": {
+    "rustup": "rustup",
+    "cargo": "cargo",
+    "rustc": "rustc",
+    "git": "git",
+    "python3": "python3"
+  },
+  "verification_operations": [
+    "test.distribution-tests",
+    "test.worktree-tests",
+    "test.runner-tests",
+    "test.inputs-tests",
+    "test.ci-tests",
+    "test.judge-ci-tests",
+    "test.judge-registration-tests",
+    "test.judge-projects-tests",
+    "test.judge-workflow-tests",
+    "test.judge-cargo-tests",
+    "test.instructions-tests",
+    "test.judge-filemap-tests",
+    "test.judge-routes-tests",
+    "test.judge-cost-tests",
+    "test.judge-mixed-tests",
+    "migration.scoped-v1-tests",
+    "workflow.inventory-tests",
+    "release.tests.units",
+    "release.tests.integration",
+    "test.diagnostics-tests",
+    "host.bootstrap-tests",
+    "test.cache-tests"
+  ],
+  "consumer_staging": {
+    "release_plan": ".chrono-harness/release/plan.json",
+    "host_config": ".chrono-harness/config.json",
+    "bindings": [
+      {
+        "asset": "chrono-harness",
+        "destinations": [
+          "crates/runner/target/debug/chrono-harness",
+          ".chrono-harness/bin/chrono-harness"
+        ]
+      },
+      {
+        "asset": "chrono-instructions",
+        "destinations": [
+          "crates/instructions/target/debug/chrono-instructions",
+          ".chrono-harness/bin/chrono-instructions"
+        ]
+      },
+      {
+        "asset": "chrono-judge-ci",
+        "destinations": [
+          "crates/judge-ci/target/debug/chrono-judge-ci",
+          ".chrono-harness/bin/chrono-judge-ci"
+        ]
+      },
+      {
+        "asset": "chrono-ci",
+        "destinations": [
+          "crates/ci/target/debug/chrono-ci",
+          ".chrono-harness/bin/chrono-ci"
+        ]
+      },
+      {
+        "asset": "chrono-judge-registration",
+        "destinations": [
+          "crates/judge-registration/target/debug/chrono-judge-registration",
+          ".chrono-harness/bin/chrono-judge-registration"
+        ]
+      },
+      {
+        "asset": "chrono-judge-filemap",
+        "destinations": [
+          "crates/judge-filemap/target/debug/chrono-judge-filemap",
+          ".chrono-harness/bin/chrono-judge-filemap"
+        ]
+      },
+      {
+        "asset": "chrono-judge-routes",
+        "destinations": [
+          "crates/judge-routes/target/debug/chrono-judge-routes",
+          ".chrono-harness/bin/chrono-judge-routes"
+        ]
+      },
+      {
+        "asset": "chrono-judge-projects",
+        "destinations": [
+          "crates/judge-projects/target/debug/chrono-judge-projects",
+          ".chrono-harness/bin/chrono-judge-projects"
+        ]
+      },
+      {
+        "asset": "chrono-judge-cost",
+        "destinations": [
+          "crates/judge-cost/target/debug/chrono-judge-cost",
+          ".chrono-harness/bin/chrono-judge-cost"
+        ]
+      },
+      {
+        "asset": "chrono-judge-mixed",
+        "destinations": [
+          "crates/judge-mixed/target/debug/chrono-judge-mixed",
+          ".chrono-harness/bin/chrono-judge-mixed"
+        ]
+      },
+      {
+        "asset": "chrono-judge-workflow",
+        "destinations": [
+          "crates/judge-workflow/target/debug/chrono-judge-workflow",
+          ".chrono-harness/bin/chrono-judge-workflow"
+        ]
+      },
+      {
+        "asset": "chrono-inputs",
+        "destinations": [
+          "crates/inputs/target/debug/chrono-inputs",
+          ".chrono-harness/bin/chrono-inputs"
+        ]
+      },
+      {
+        "asset": "chrono-distribution",
+        "destinations": [
+          "crates/distribution/target/debug/chrono-distribution",
+          ".chrono-harness/bin/chrono-distribution"
+        ]
+      },
+      {
+        "asset": "chrono-judge-cargo",
+        "destinations": [
+          "crates/judge-cargo/target/debug/chrono-judge-cargo",
+          ".chrono-harness/bin/chrono-judge-cargo"
+        ]
+      },
+      {
+        "asset": "chrono-worktree",
+        "destinations": [
+          "crates/worktree/target/debug/chrono-worktree",
+          ".chrono-harness/bin/chrono-worktree"
+        ]
+      },
+      {
+        "asset": "chrono-cache",
+        "destinations": [
+          "crates/cache/target/debug/chrono-cache"
+        ]
+      }
+    ]
+  },
+  "rust_components": [
+    "rustfmt"
+  ],
+  "units": [
+    {
+      "id": "build_runner",
+      "kind": "build",
+      "manifest": "crates/runner/Cargo.toml",
+      "asset": "chrono-harness",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_runner"
+    },
+    {
+      "id": "build_instructions",
+      "kind": "build",
+      "manifest": "crates/instructions/Cargo.toml",
+      "asset": "chrono-instructions",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_instructions"
+    },
+    {
+      "id": "build_judge_ci",
+      "kind": "build",
+      "manifest": "crates/judge-ci/Cargo.toml",
+      "asset": "chrono-judge-ci",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_ci"
+    },
+    {
+      "id": "build_ci",
+      "kind": "build",
+      "manifest": "crates/ci/Cargo.toml",
+      "asset": "chrono-ci",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_ci"
+    },
+    {
+      "id": "build_judge_registration",
+      "kind": "build",
+      "manifest": "crates/judge-registration/Cargo.toml",
+      "asset": "chrono-judge-registration",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_registration"
+    },
+    {
+      "id": "build_judge_filemap",
+      "kind": "build",
+      "manifest": "crates/judge-filemap/Cargo.toml",
+      "asset": "chrono-judge-filemap",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_filemap"
+    },
+    {
+      "id": "build_judge_routes",
+      "kind": "build",
+      "manifest": "crates/judge-routes/Cargo.toml",
+      "asset": "chrono-judge-routes",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_routes"
+    },
+    {
+      "id": "build_judge_projects",
+      "kind": "build",
+      "manifest": "crates/judge-projects/Cargo.toml",
+      "asset": "chrono-judge-projects",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_projects"
+    },
+    {
+      "id": "build_judge_cost",
+      "kind": "build",
+      "manifest": "crates/judge-cost/Cargo.toml",
+      "asset": "chrono-judge-cost",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_cost"
+    },
+    {
+      "id": "build_judge_mixed",
+      "kind": "build",
+      "manifest": "crates/judge-mixed/Cargo.toml",
+      "asset": "chrono-judge-mixed",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_mixed"
+    },
+    {
+      "id": "build_judge_workflow",
+      "kind": "build",
+      "manifest": "crates/judge-workflow/Cargo.toml",
+      "asset": "chrono-judge-workflow",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_workflow"
+    },
+    {
+      "id": "build_inputs",
+      "kind": "build",
+      "manifest": "crates/inputs/Cargo.toml",
+      "asset": "chrono-inputs",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_inputs"
+    },
+    {
+      "id": "build_distribution",
+      "kind": "build",
+      "manifest": "crates/distribution/Cargo.toml",
+      "asset": "chrono-distribution",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_distribution"
+    },
+    {
+      "id": "build_judge_cargo",
+      "kind": "build",
+      "manifest": "crates/judge-cargo/Cargo.toml",
+      "asset": "chrono-judge-cargo",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_judge_cargo"
+    },
+    {
+      "id": "build_worktree",
+      "kind": "build",
+      "manifest": "crates/worktree/Cargo.toml",
+      "asset": "chrono-worktree",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_worktree"
+    },
+    {
+      "id": "verify_distribution_tests",
+      "kind": "verify",
+      "operation": "test.distribution-tests",
+      "needs": [
+        "build_distribution"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_distribution_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_worktree_tests",
+      "kind": "verify",
+      "operation": "test.worktree-tests",
+      "needs": [
+        "build_runner",
+        "build_ci",
+        "build_worktree"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_worktree_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_runner_tests",
+      "kind": "verify",
+      "operation": "test.runner-tests",
+      "needs": [
+        "build_runner"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_runner_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_inputs_tests",
+      "kind": "verify",
+      "operation": "test.inputs-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_routes",
+        "build_judge_projects",
+        "build_judge_cost",
+        "build_judge_mixed",
+        "build_judge_workflow",
+        "build_inputs"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_inputs_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_ci_tests",
+      "kind": "verify",
+      "operation": "test.ci-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_ci",
+        "build_ci",
+        "build_judge_registration",
+        "build_worktree"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_ci_tests",
+      "kind": "verify",
+      "operation": "test.judge-ci-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_ci"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_registration_tests",
+      "kind": "verify",
+      "operation": "test.judge-registration-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_registration"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_projects_tests",
+      "kind": "verify",
+      "operation": "test.judge-projects-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_ci",
+        "build_ci",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_routes",
+        "build_judge_projects"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_projects_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_workflow_tests",
+      "kind": "verify",
+      "operation": "test.judge-workflow-tests",
+      "needs": [
+        "build_runner",
+        "build_ci",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_routes",
+        "build_judge_projects",
+        "build_judge_cost",
+        "build_judge_mixed",
+        "build_judge_workflow",
+        "build_inputs",
+        "build_worktree"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_cargo_tests",
+      "kind": "verify",
+      "operation": "test.judge-cargo-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_ci",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_routes",
+        "build_judge_projects",
+        "build_judge_cost",
+        "build_judge_mixed",
+        "build_judge_workflow",
+        "build_judge_cargo"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cargo_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_instructions_tests",
+      "kind": "verify",
+      "operation": "test.instructions-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_instructions_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_filemap_tests",
+      "kind": "verify",
+      "operation": "test.judge-filemap-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_routes",
+        "build_judge_projects"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_filemap_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_routes_tests",
+      "kind": "verify",
+      "operation": "test.judge-routes-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_routes_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_cost_tests",
+      "kind": "verify",
+      "operation": "test.judge-cost-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_cost"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_cost_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_judge_mixed_tests",
+      "kind": "verify",
+      "operation": "test.judge-mixed-tests",
+      "needs": [
+        "build_runner",
+        "build_judge_registration",
+        "build_judge_filemap",
+        "build_judge_cost",
+        "build_judge_mixed"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_scoped_v1_tests",
+      "kind": "verify",
+      "operation": "migration.scoped-v1-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_scoped_v1_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_workflow_inventory_tests",
+      "kind": "verify",
+      "operation": "workflow.inventory-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_workflow_inventory_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_release_build_tests",
+      "kind": "verify",
+      "operation": "release.tests.units",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_release_build_integration",
+      "kind": "verify",
+      "operation": "release.tests.integration",
+      "needs": [
+        "build_distribution",
+        "build_cache"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_integration",
+      "rust_toolchain": false
+    },
+    {
+      "id": "verify_diagnostics_tests",
+      "kind": "verify",
+      "operation": "test.diagnostics-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests",
+      "rust_toolchain": true
+    },
+    {
+      "id": "verify_host_bootstrap_tests",
+      "kind": "verify",
+      "operation": "host.bootstrap-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
+      "rust_toolchain": false
+    },
+    {
+      "id": "build_cache",
+      "kind": "build",
+      "manifest": "crates/cache/Cargo.toml",
+      "asset": "chrono-cache",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_cache"
+    },
+    {
+      "id": "verify_cache_tests",
+      "kind": "verify",
+      "operation": "test.cache-tests",
+      "needs": [
+        "build_cache"
+      ],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_cache_tests",
+      "rust_toolchain": true
+    }
+  ],
+  "collector": {
+    "id": "package",
+    "needs": [
+      "build_runner",
+      "build_instructions",
+      "build_judge_ci",
+      "build_ci",
+      "build_judge_registration",
+      "build_judge_filemap",
+      "build_judge_routes",
+      "build_judge_projects",
+      "build_judge_cost",
+      "build_judge_mixed",
+      "build_judge_workflow",
+      "build_inputs",
+      "build_distribution",
+      "build_judge_cargo",
+      "build_worktree",
+      "verify_distribution_tests",
+      "verify_worktree_tests",
+      "verify_runner_tests",
+      "verify_inputs_tests",
+      "verify_ci_tests",
+      "verify_judge_ci_tests",
+      "verify_judge_registration_tests",
+      "verify_judge_projects_tests",
+      "verify_judge_workflow_tests",
+      "verify_judge_cargo_tests",
+      "verify_instructions_tests",
+      "verify_judge_filemap_tests",
+      "verify_judge_routes_tests",
+      "verify_judge_cost_tests",
+      "verify_judge_mixed_tests",
+      "verify_scoped_v1_tests",
+      "verify_workflow_inventory_tests",
+      "verify_release_build_tests",
+      "verify_release_build_integration",
+      "verify_diagnostics_tests",
+      "verify_host_bootstrap_tests",
+      "build_cache",
+      "verify_cache_tests"
+    ],
+    "package_asset": "chrono-distribution",
+    "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
+  },
+  "local_workers": 3,
+  "native_jobs": {
+    "linux": {
+      "build_runner": "linux_build_runner",
+      "build_instructions": "linux_build_instructions",
+      "build_judge_ci": "linux_build_judge_ci",
+      "build_ci": "linux_build_ci",
+      "build_judge_registration": "linux_build_judge_registration",
+      "build_judge_filemap": "linux_build_judge_filemap",
+      "build_judge_routes": "linux_build_judge_routes",
+      "build_judge_projects": "linux_build_judge_projects",
+      "build_judge_cost": "linux_build_judge_cost",
+      "build_judge_mixed": "linux_build_judge_mixed",
+      "build_judge_workflow": "linux_build_judge_workflow",
+      "build_inputs": "linux_build_inputs",
+      "build_distribution": "linux_build_distribution",
+      "build_judge_cargo": "linux_build_judge_cargo",
+      "build_worktree": "linux_build_worktree",
+      "verify_distribution_tests": "linux_verify_distribution_tests",
+      "verify_worktree_tests": "linux_verify_worktree_tests",
+      "verify_runner_tests": "linux_verify_runner_tests",
+      "verify_inputs_tests": "linux_verify_inputs_tests",
+      "verify_ci_tests": "linux_verify_ci_tests",
+      "verify_judge_ci_tests": "linux_verify_judge_ci_tests",
+      "verify_judge_registration_tests": "linux_verify_judge_registration_tests",
+      "verify_judge_projects_tests": "linux_verify_judge_projects_tests",
+      "verify_judge_workflow_tests": "linux_verify_judge_workflow_tests",
+      "verify_judge_cargo_tests": "linux_verify_judge_cargo_tests",
+      "verify_instructions_tests": "linux_verify_instructions_tests",
+      "verify_judge_filemap_tests": "linux_verify_judge_filemap_tests",
+      "verify_judge_routes_tests": "linux_verify_judge_routes_tests",
+      "verify_judge_cost_tests": "linux_verify_judge_cost_tests",
+      "verify_judge_mixed_tests": "linux_verify_judge_mixed_tests",
+      "package": "linux_package",
+      "verify_scoped_v1_tests": "linux_verify_scoped_v1_tests",
+      "verify_workflow_inventory_tests": "linux_verify_workflow_inventory_tests",
+      "verify_release_build_tests": "linux_verify_release_build_tests",
+      "verify_release_build_integration": "linux_verify_release_build_integration",
+      "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
+      "verify_host_bootstrap_tests": "linux_verify_host_bootstrap_tests",
+      "build_cache": "linux_build_cache",
+      "verify_cache_tests": "linux_verify_cache_tests"
+    },
+    "macos": {
+      "build_runner": "macos_build_runner",
+      "build_instructions": "macos_build_instructions",
+      "build_judge_ci": "macos_build_judge_ci",
+      "build_ci": "macos_build_ci",
+      "build_judge_registration": "macos_build_judge_registration",
+      "build_judge_filemap": "macos_build_judge_filemap",
+      "build_judge_routes": "macos_build_judge_routes",
+      "build_judge_projects": "macos_build_judge_projects",
+      "build_judge_cost": "macos_build_judge_cost",
+      "build_judge_mixed": "macos_build_judge_mixed",
+      "build_judge_workflow": "macos_build_judge_workflow",
+      "build_inputs": "macos_build_inputs",
+      "build_distribution": "macos_build_distribution",
+      "build_judge_cargo": "macos_build_judge_cargo",
+      "build_worktree": "macos_build_worktree",
+      "verify_distribution_tests": "macos_verify_distribution_tests",
+      "verify_worktree_tests": "macos_verify_worktree_tests",
+      "verify_runner_tests": "macos_verify_runner_tests",
+      "verify_inputs_tests": "macos_verify_inputs_tests",
+      "verify_ci_tests": "macos_verify_ci_tests",
+      "verify_judge_ci_tests": "macos_verify_judge_ci_tests",
+      "verify_judge_registration_tests": "macos_verify_judge_registration_tests",
+      "verify_judge_projects_tests": "macos_verify_judge_projects_tests",
+      "verify_judge_workflow_tests": "macos_verify_judge_workflow_tests",
+      "verify_judge_cargo_tests": "macos_verify_judge_cargo_tests",
+      "verify_instructions_tests": "macos_verify_instructions_tests",
+      "verify_judge_filemap_tests": "macos_verify_judge_filemap_tests",
+      "verify_judge_routes_tests": "macos_verify_judge_routes_tests",
+      "verify_judge_cost_tests": "macos_verify_judge_cost_tests",
+      "verify_judge_mixed_tests": "macos_verify_judge_mixed_tests",
+      "package": "macos_package",
+      "verify_scoped_v1_tests": "macos_verify_scoped_v1_tests",
+      "verify_workflow_inventory_tests": "macos_verify_workflow_inventory_tests",
+      "verify_release_build_tests": "macos_verify_release_build_tests",
+      "verify_release_build_integration": "macos_verify_release_build_integration",
+      "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
+      "verify_host_bootstrap_tests": "macos_verify_host_bootstrap_tests",
+      "build_cache": "macos_build_cache",
+      "verify_cache_tests": "macos_verify_cache_tests"
+    }
+  },
+  "unit_costs": {
+    "build_runner": "unmeasured",
+    "build_instructions": "unmeasured",
+    "build_judge_ci": "unmeasured",
+    "build_ci": "unmeasured",
+    "build_judge_registration": "unmeasured",
+    "build_judge_filemap": "unmeasured",
+    "build_judge_routes": "unmeasured",
+    "build_judge_projects": "unmeasured",
+    "build_judge_cost": "unmeasured",
+    "build_judge_mixed": "unmeasured",
+    "build_judge_workflow": "unmeasured",
+    "build_inputs": "unmeasured",
+    "build_distribution": "unmeasured",
+    "build_judge_cargo": "unmeasured",
+    "build_worktree": "unmeasured",
+    "verify_distribution_tests": "unmeasured",
+    "verify_worktree_tests": "unmeasured",
+    "verify_runner_tests": "unmeasured",
+    "verify_inputs_tests": "unmeasured",
+    "verify_ci_tests": "unmeasured",
+    "verify_judge_ci_tests": "unmeasured",
+    "verify_judge_registration_tests": "unmeasured",
+    "verify_judge_projects_tests": "unmeasured",
+    "verify_judge_workflow_tests": "unmeasured",
+    "verify_judge_cargo_tests": "unmeasured",
+    "verify_instructions_tests": "unmeasured",
+    "verify_judge_filemap_tests": "unmeasured",
+    "verify_judge_routes_tests": "unmeasured",
+    "verify_judge_cost_tests": "unmeasured",
+    "verify_judge_mixed_tests": "unmeasured",
+    "package": "unmeasured",
+    "verify_scoped_v1_tests": "unmeasured",
+    "verify_workflow_inventory_tests": "unmeasured",
+    "verify_release_build_tests": "unmeasured",
+    "verify_release_build_integration": "unmeasured",
+    "verify_diagnostics_tests": "unmeasured",
+    "verify_host_bootstrap_tests": "unmeasured",
+    "build_cache": "unmeasured",
+    "verify_cache_tests": "unmeasured"
+  },
+  "limits": {
+    "unit_seconds": 2700,
+    "platform_seconds": 2700
+  },
+  "failure_evidence": {
+    "test.judge-projects-tests": [
+      ".chrono-harness/state/migration-tests/",
+      ".chrono-harness/state/test-failures/"
+    ],
+    "test.ci-tests": [
+      ".chrono-harness/state/ci-test-failures/"
+    ],
+    "test.worktree-tests": [
+      ".chrono-harness/state/worktree-test-failures/"
+    ],
+    "test.judge-workflow-tests": [
+      ".chrono-harness/state/workflow-test-failures/"
+    ],
+    "release.tests.integration": [
+      ".chrono-harness/state/release-test-failures/"
+    ]
+  },
+  "verification_consumers": {
+    "verify_instructions_tests": {
+      "need": "Exercise instruction generation and CLI dispatch through the Rust library; Cargo compiles its source dependencies. No released executable is invoked.",
+      "release_assets": []
+    },
+    "verify_judge_routes_tests": {
+      "need": "Exercise route planning and observed processes through Rust library calls and temporary tool fixtures. No released executable is invoked.",
+      "release_assets": []
+    },
+    "verify_distribution_tests": {
+      "need": "crates/distribution-tests/tests/installation.rs runs the released distribution CLI through the host installer and checks installed bytes, modes and installation evidence; other package assets are synthetic fixture files.",
+      "release_assets": [
+        "chrono-distribution"
+      ]
+    },
+    "verify_worktree_tests": {
+      "need": "crates/worktree-tests/tests/creation.rs and cleanup/check-input consumers run the worktree CLI and runner; check_inputs.rs also runs the CI event producer. Assertions consume actual Git state, retained contexts, ownership and cleanup results.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-ci",
+        "chrono-worktree"
+      ]
+    },
+    "verify_runner_tests": {
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
+      "release_assets": [
+        "chrono-harness"
+      ]
+    },
+    "verify_inputs_tests": {
+      "need": "crates/inputs-tests/tests/consumer.rs runs chrono-inputs to capture/compose declared snapshots, then runner with registration, filemap, routes, projects, cost, mixed and workflow judges from the shared project host. Assertions inspect retained inputs and the resulting full check evidence; snapshots.rs also runs the inputs CLI.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects",
+        "chrono-judge-cost",
+        "chrono-judge-mixed",
+        "chrono-judge-workflow",
+        "chrono-inputs"
+      ]
+    },
+    "verify_ci_tests": {
+      "need": "crates/ci-tests/tests/units.rs and behavior.rs run runner, judge-ci and chrono-ci for generated host checks, preparation and collection; short.rs and gating.rs run worktree for local preparation/ownership; initial_projection.rs runs registration for actual inventory admission. Assertions inspect original results, contexts and generated projections.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci",
+        "chrono-ci",
+        "chrono-judge-registration",
+        "chrono-worktree"
+      ]
+    },
+    "verify_judge_ci_tests": {
+      "need": "crates/judge-ci-tests/tests/units.rs and git_facts.rs run runner with judge-ci and assert scoped unit execution, collected evidence and fixed Git facts.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci"
+      ]
+    },
+    "verify_judge_registration_tests": {
+      "need": "crates/judge-registration-tests/tests/registration_contract.rs runs runner with registration and checks admission failures and passed registration evidence for the declared host inputs.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration"
+      ]
+    },
+    "verify_judge_projects_tests": {
+      "need": "crates/judge-projects-tests/tests/support/host.rs runs runner with registration, filemap, routes and projects to execute declared project/script tests; consumer.rs also runs judge-ci through the scoped runner entry and inspects actual operation receipts. migration.rs also runs chrono-ci to repair the generated workflow in a copied historical host, then checks preserved obligations and detected drift.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci",
+        "chrono-ci",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects"
+      ]
+    },
+    "verify_judge_workflow_tests": {
+      "need": "crates/judge-workflow-tests/tests/consumer.rs and shared project host run runner with all seven full judges for integration/retirement decisions. git_facts.rs and full_short.rs run chrono-ci, full_short.rs runs worktree, and full_units.rs/full_short.rs run inputs; assertions consume fixed contexts, snapshots, unit receipts and collection evidence.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-ci",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects",
+        "chrono-judge-cost",
+        "chrono-judge-mixed",
+        "chrono-judge-workflow",
+        "chrono-inputs",
+        "chrono-worktree"
+      ]
+    },
+    "verify_judge_cargo_tests": {
+      "need": "crates/judge-cargo-tests/tests/support/cargo.rs runs judge-cargo for guarded operations and runner with registration, filemap, routes, projects, cost, mixed and workflow in the full consumer, plus judge-ci in scoped consumers. Assertions inspect actual Cargo actions, their reports and rejection of changed declared inputs.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-ci",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects",
+        "chrono-judge-cost",
+        "chrono-judge-mixed",
+        "chrono-judge-workflow",
+        "chrono-judge-cargo"
+      ]
+    },
+    "verify_judge_filemap_tests": {
+      "need": "crates/judge-filemap-tests/tests/consumer.rs runs runner with registration and filemap for impact decisions. workflow_consumer.rs reuses the project host and also runs routes and projects to check stability selection, shared operation deduplication and actual declared script execution.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-routes",
+        "chrono-judge-projects"
+      ]
+    },
+    "verify_judge_cost_tests": {
+      "need": "crates/judge-cost-tests/tests/support/host.rs runs runner with registration, filemap and cost; consumer assertions read declared impact costs, source identities and unknown coordinates from real reports.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-cost"
+      ]
+    },
+    "verify_judge_mixed_tests": {
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
+      "release_assets": [
+        "chrono-harness",
+        "chrono-judge-registration",
+        "chrono-judge-filemap",
+        "chrono-judge-cost",
+        "chrono-judge-mixed"
+      ]
+    },
+    "verify_release_build_integration": {
+      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity. Its Python cache regression consumes the selected chrono-cache asset at the declared Cargo test destination and runs real plan/recover/report around the release staging owner.",
+      "release_assets": [
+        "chrono-distribution",
+        "chrono-cache"
+      ]
+    },
+    "verify_scoped_v1_tests": {
+      "need": "The original migration.scoped-v1-tests Python action checks decoder inputs and historical/current registry projections without release executables.",
+      "release_assets": []
+    },
+    "verify_workflow_inventory_tests": {
+      "need": "The original workflow.inventory-tests Python action checks explicit inventory parsing, disjoint group membership and subprocess failures with isolated fixtures, without release executables.",
+      "release_assets": []
+    },
+    "verify_release_build_tests": {
+      "need": "The original release.tests.units Python action checks the release recipe, handoff contracts, failures and host projection with synthetic tools and receipts; real packaging belongs to the separate integration group.",
+      "release_assets": []
+    },
+    "verify_diagnostics_tests": {
+      "need": "The original test.diagnostics-tests Cargo action directly consumes the diagnostics Rust library to verify structured errors and logging; it calls no released production executable.",
+      "release_assets": []
+    },
+    "verify_host_bootstrap_tests": {
+      "need": "The original host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; it calls no released production executable.",
+      "release_assets": []
+    },
+    "verify_cache_tests": {
+      "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",
+      "release_assets": [
+        "chrono-cache"
+      ]
+    }
+  },
+  "rust_incremental": true
+}

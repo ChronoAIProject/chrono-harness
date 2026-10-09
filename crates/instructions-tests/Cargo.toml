@@ -1,0 +1,15 @@
+[package]
+name = "chrono-instructions-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[dev-dependencies]
+chrono-instructions = { path = "../instructions", features = ["test-support"] }
+tempfile = "3"
+serde_json = "1"
+
+[[test]]
+name = "generation"
+path = "tests/generation.rs"

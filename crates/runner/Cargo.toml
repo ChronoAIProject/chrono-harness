@@ -1,0 +1,39 @@
+[package]
+name = "chrono-harness"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "External judge transport and canonical harness check entry"
+
+[lib]
+path = "src/lib.rs"
+test = false
+doctest = false
+
+[[bin]]
+name = "chrono-harness"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-diagnostics = { path = "../diagnostics" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sha1 = "0.10"
+libc = "0.2"
+serde_jcs = "=0.2.0"
+tempfile = "3"
+miniz_oxide = "=0.8.9"
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
+# Full unit/collection checks repeatedly serialize the original judge evidence.
+# Keep that work optimized in the registered development build too.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package.sha2]
+opt-level = 3

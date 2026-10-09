@@ -1,0 +1,2446 @@
+{
+  "schema_version": 2,
+  "status": "proposed",
+  "owners": [
+    "repository",
+    "runner",
+    "runner-tests",
+    "instructions",
+    "instructions-tests",
+    "judge-ci",
+    "judge-ci-tests",
+    "ci",
+    "ci-tests",
+    "judge-registration",
+    "judge-registration-tests",
+    "judge-filemap",
+    "judge-filemap-tests",
+    "judge-routes",
+    "judge-routes-tests",
+    "judge-projects",
+    "judge-projects-tests",
+    "scoped-v1",
+    "scoped-v1-tests",
+    "judge-cost",
+    "judge-cost-tests",
+    "judge-mixed",
+    "judge-mixed-tests",
+    "judge-workflow",
+    "judge-workflow-tests",
+    "inputs",
+    "inputs-tests",
+    "distribution",
+    "distribution-tests",
+    "judge-cargo",
+    "judge-cargo-tests",
+    "worktree",
+    "worktree-tests",
+    "workflow-inventory",
+    "workflow-inventory-tests",
+    "release-build",
+    "release-build-tests",
+    "diagnostics",
+    "diagnostics-tests",
+    "host-bootstrap",
+    "host-bootstrap-tests",
+    "cache",
+    "cache-tests"
+  ],
+  "projects": [
+    {
+      "id": "runner",
+      "kind": "production",
+      "manifest": "crates/runner/Cargo.toml",
+      "lockfile": "crates/runner/Cargo.lock",
+      "root": "crates/runner",
+      "test_project": "runner-tests",
+      "actions": {
+        "build": {
+          "operation": "build.runner",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.runner",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.runner",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "runner-tests",
+      "kind": "test",
+      "manifest": "crates/runner-tests/Cargo.toml",
+      "lockfile": "crates/runner-tests/Cargo.lock",
+      "root": "crates/runner-tests",
+      "tests_for": "runner",
+      "actions": {
+        "build": {
+          "operation": "build.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.runner-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "instructions",
+      "kind": "production",
+      "manifest": "crates/instructions/Cargo.toml",
+      "lockfile": "crates/instructions/Cargo.lock",
+      "root": "crates/instructions",
+      "test_project": "instructions-tests",
+      "actions": {
+        "build": {
+          "operation": "build.instructions",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.instructions",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.instructions",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml"
+          ]
+        },
+        "init": {
+          "operation": "instructions.init",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml",
+            "--bin",
+            "chrono-instructions",
+            "--",
+            "init",
+            "--host-root",
+            "."
+          ]
+        },
+        "generate": {
+          "operation": "instructions.generate",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml",
+            "--bin",
+            "chrono-instructions",
+            "--",
+            "generate",
+            "--host-root",
+            "."
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "instructions-tests",
+      "kind": "test",
+      "manifest": "crates/instructions-tests/Cargo.toml",
+      "lockfile": "crates/instructions-tests/Cargo.lock",
+      "root": "crates/instructions-tests",
+      "tests_for": "instructions",
+      "actions": {
+        "build": {
+          "operation": "build.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-ci",
+      "kind": "production",
+      "manifest": "crates/judge-ci/Cargo.toml",
+      "lockfile": "crates/judge-ci/Cargo.lock",
+      "root": "crates/judge-ci",
+      "test_project": "judge-ci-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-ci-tests",
+      "kind": "test",
+      "manifest": "crates/judge-ci-tests/Cargo.toml",
+      "lockfile": "crates/judge-ci-tests/Cargo.lock",
+      "root": "crates/judge-ci-tests",
+      "tests_for": "judge-ci",
+      "actions": {
+        "build": {
+          "operation": "build.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "ci",
+      "kind": "production",
+      "manifest": "crates/ci/Cargo.toml",
+      "lockfile": "crates/ci/Cargo.lock",
+      "root": "crates/ci",
+      "test_project": "ci-tests",
+      "actions": {
+        "build": {
+          "operation": "build.ci",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.ci",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.ci",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "ci.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
+        },
+        "verify_release": {
+          "operation": "ci.release.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/release.json"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "ci-tests",
+      "kind": "test",
+      "manifest": "crates/ci-tests/Cargo.toml",
+      "lockfile": "crates/ci-tests/Cargo.lock",
+      "root": "crates/ci-tests",
+      "tests_for": "ci",
+      "actions": {
+        "build": {
+          "operation": "build.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-registration",
+      "kind": "production",
+      "manifest": "crates/judge-registration/Cargo.toml",
+      "lockfile": "crates/judge-registration/Cargo.lock",
+      "root": "crates/judge-registration",
+      "test_project": "judge-registration-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-registration-tests",
+      "kind": "test",
+      "manifest": "crates/judge-registration-tests/Cargo.toml",
+      "lockfile": "crates/judge-registration-tests/Cargo.lock",
+      "root": "crates/judge-registration-tests",
+      "tests_for": "judge-registration",
+      "actions": {
+        "build": {
+          "operation": "build.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-filemap",
+      "kind": "production",
+      "manifest": "crates/judge-filemap/Cargo.toml",
+      "lockfile": "crates/judge-filemap/Cargo.lock",
+      "root": "crates/judge-filemap",
+      "test_project": "judge-filemap-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-filemap-tests",
+      "kind": "test",
+      "manifest": "crates/judge-filemap-tests/Cargo.toml",
+      "lockfile": "crates/judge-filemap-tests/Cargo.lock",
+      "root": "crates/judge-filemap-tests",
+      "tests_for": "judge-filemap",
+      "actions": {
+        "build": {
+          "operation": "build.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-routes",
+      "kind": "production",
+      "manifest": "crates/judge-routes/Cargo.toml",
+      "lockfile": "crates/judge-routes/Cargo.lock",
+      "root": "crates/judge-routes",
+      "test_project": "judge-routes-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-routes-tests",
+      "kind": "test",
+      "manifest": "crates/judge-routes-tests/Cargo.toml",
+      "lockfile": "crates/judge-routes-tests/Cargo.lock",
+      "root": "crates/judge-routes-tests",
+      "tests_for": "judge-routes",
+      "actions": {
+        "build": {
+          "operation": "build.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-projects",
+      "kind": "production",
+      "manifest": "crates/judge-projects/Cargo.toml",
+      "lockfile": "crates/judge-projects/Cargo.lock",
+      "root": "crates/judge-projects",
+      "test_project": "judge-projects-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-projects-tests",
+      "kind": "test",
+      "manifest": "crates/judge-projects-tests/Cargo.toml",
+      "lockfile": "crates/judge-projects-tests/Cargo.lock",
+      "root": "crates/judge-projects-tests",
+      "tests_for": "judge-projects",
+      "actions": {
+        "build": {
+          "operation": "build.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "execute_core": {
+          "operation": "test.projects.core",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "--test",
+            "execution",
+            "--test",
+            "languages"
+          ]
+        },
+        "execute_migration": {
+          "operation": "test.projects.migration",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml",
+            "--test",
+            "migration"
+          ]
+        }
+      },
+      "language": "rust",
+      "test_groups": {
+        "judge-projects-tests": "execute_core",
+        "judge-projects-migration": "execute_migration"
+      }
+    },
+    {
+      "id": "judge-cost",
+      "kind": "production",
+      "manifest": "crates/judge-cost/Cargo.toml",
+      "lockfile": "crates/judge-cost/Cargo.lock",
+      "root": "crates/judge-cost",
+      "actions": {
+        "build": {
+          "operation": "build.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-cost-tests",
+      "language": "rust"
+    },
+    {
+      "id": "judge-cost-tests",
+      "kind": "test",
+      "manifest": "crates/judge-cost-tests/Cargo.toml",
+      "lockfile": "crates/judge-cost-tests/Cargo.lock",
+      "root": "crates/judge-cost-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "judge-cost",
+      "language": "rust"
+    },
+    {
+      "id": "judge-mixed",
+      "kind": "production",
+      "manifest": "crates/judge-mixed/Cargo.toml",
+      "lockfile": "crates/judge-mixed/Cargo.lock",
+      "root": "crates/judge-mixed",
+      "actions": {
+        "build": {
+          "operation": "build.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-mixed-tests",
+      "language": "rust"
+    },
+    {
+      "id": "judge-mixed-tests",
+      "kind": "test",
+      "manifest": "crates/judge-mixed-tests/Cargo.toml",
+      "lockfile": "crates/judge-mixed-tests/Cargo.lock",
+      "root": "crates/judge-mixed-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "judge-mixed",
+      "language": "rust"
+    },
+    {
+      "id": "judge-workflow",
+      "kind": "production",
+      "manifest": "crates/judge-workflow/Cargo.toml",
+      "lockfile": "crates/judge-workflow/Cargo.lock",
+      "root": "crates/judge-workflow",
+      "actions": {
+        "build": {
+          "operation": "build.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-workflow-tests",
+      "language": "rust"
+    },
+    {
+      "id": "judge-workflow-tests",
+      "kind": "test",
+      "manifest": "crates/judge-workflow-tests/Cargo.toml",
+      "lockfile": "crates/judge-workflow-tests/Cargo.lock",
+      "root": "crates/judge-workflow-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
+        },
+        "streamed-originals": {
+          "operation": "test.workflow-streamed-originals",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::streamed_large_originals_survive_relocated_collection_finalization_and_delivery",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "native-provision": {
+          "operation": "test.workflow-native-provision",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::full_short::genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "ordinary-certificate": {
+          "operation": "test.workflow-ordinary-certificate",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::full_short::ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_it",
+            "--",
+            "--exact",
+            "--nocapture"
+          ]
+        },
+        "execute_core": {
+          "operation": "test.workflow.core",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "branch",
+            "--test",
+            "consumer",
+            "--",
+            "--skip",
+            "full_units::"
+          ]
+        },
+        "execute_units": {
+          "operation": "test.workflow.units",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::",
+            "--",
+            "--skip",
+            "full_units::full_short::"
+          ]
+        },
+        "execute_short": {
+          "operation": "test.workflow.short",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--test",
+            "consumer",
+            "full_units::full_short::"
+          ]
+        }
+      },
+      "tests_for": "judge-workflow",
+      "test_groups": {
+        "judge-workflow-tests": "execute_core",
+        "workflow-units": "execute_units",
+        "workflow-short": "execute_short"
+      },
+      "language": "rust"
+    },
+    {
+      "id": "inputs",
+      "kind": "production",
+      "manifest": "crates/inputs/Cargo.toml",
+      "lockfile": "crates/inputs/Cargo.lock",
+      "root": "crates/inputs",
+      "actions": {
+        "build": {
+          "operation": "build.inputs",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.inputs",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.inputs",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "inputs-tests",
+      "language": "rust"
+    },
+    {
+      "id": "inputs-tests",
+      "kind": "test",
+      "manifest": "crates/inputs-tests/Cargo.toml",
+      "lockfile": "crates/inputs-tests/Cargo.lock",
+      "root": "crates/inputs-tests",
+      "actions": {
+        "build": {
+          "operation": "build.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "inputs",
+      "language": "rust"
+    },
+    {
+      "id": "distribution",
+      "kind": "production",
+      "manifest": "crates/distribution/Cargo.toml",
+      "lockfile": "crates/distribution/Cargo.lock",
+      "root": "crates/distribution",
+      "actions": {
+        "build": {
+          "operation": "build.distribution",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.distribution",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.distribution",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "distribution-tests",
+      "language": "rust"
+    },
+    {
+      "id": "distribution-tests",
+      "kind": "test",
+      "manifest": "crates/distribution-tests/Cargo.toml",
+      "lockfile": "crates/distribution-tests/Cargo.lock",
+      "root": "crates/distribution-tests",
+      "actions": {
+        "build": {
+          "operation": "build.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "distribution",
+      "language": "rust"
+    },
+    {
+      "id": "judge-cargo",
+      "kind": "production",
+      "manifest": "crates/judge-cargo/Cargo.toml",
+      "lockfile": "crates/judge-cargo/Cargo.lock",
+      "root": "crates/judge-cargo",
+      "actions": {
+        "build": {
+          "operation": "build.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-cargo",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-cargo/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "judge-cargo-tests",
+      "language": "rust"
+    },
+    {
+      "id": "judge-cargo-tests",
+      "kind": "test",
+      "manifest": "crates/judge-cargo-tests/Cargo.toml",
+      "lockfile": "crates/judge-cargo-tests/Cargo.lock",
+      "root": "crates/judge-cargo-tests",
+      "actions": {
+        "build": {
+          "operation": "build.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "judge-cargo",
+      "language": "rust"
+    },
+    {
+      "id": "worktree",
+      "kind": "production",
+      "manifest": "crates/worktree/Cargo.toml",
+      "lockfile": "crates/worktree/Cargo.lock",
+      "root": "crates/worktree",
+      "actions": {
+        "build": {
+          "operation": "build.worktree",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.worktree",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.worktree",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "worktree-tests",
+      "language": "rust"
+    },
+    {
+      "id": "worktree-tests",
+      "kind": "test",
+      "manifest": "crates/worktree-tests/Cargo.toml",
+      "lockfile": "crates/worktree-tests/Cargo.lock",
+      "root": "crates/worktree-tests",
+      "actions": {
+        "build": {
+          "operation": "build.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.worktree-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml"
+          ]
+        },
+        "execute_core": {
+          "operation": "test.worktree.core",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--skip",
+            "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
+            "--skip",
+            "interrupted_cleanup::returned_use_without_token_still_protects_detached_python_child",
+            "--skip",
+            "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
+            "--skip",
+            "interrupted_cleanup::registered_python_consumers_forward_leases_after_both_wrappers_die",
+            "--skip",
+            "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
+            "--skip",
+            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+          ]
+        },
+        "execute_adoption": {
+          "operation": "test.worktree.adoption",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--",
+            "--exact",
+            "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
+            "interrupted_cleanup::returned_use_without_token_still_protects_detached_python_child",
+            "interrupted_cleanup::adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease",
+            "interrupted_cleanup::registered_python_consumers_forward_leases_after_both_wrappers_die",
+            "interrupted_cleanup::native_cargo_child_survives_its_cargo_and_managed_wrappers",
+            "interrupted_cleanup::standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect"
+          ]
+        }
+      },
+      "tests_for": "worktree",
+      "language": "rust",
+      "test_groups": {
+        "worktree-tests": "execute_core",
+        "worktree-adoption": "execute_adoption"
+      }
+    },
+    {
+      "id": "release-build",
+      "language": "python",
+      "actions": {
+        "execute": {
+          "operation": "release.build",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build.py",
+            ".",
+            ".chrono-harness/cache/release"
+          ]
+        }
+      },
+      "kind": "production",
+      "test_project": "release-build-tests"
+    },
+    {
+      "id": "release-build-tests",
+      "language": "python",
+      "tests_for": "release-build",
+      "actions": {
+        "execute": {
+          "operation": "test.release-build-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py"
+          ]
+        },
+        "unit_tests": {
+          "operation": "release.tests.units",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py",
+            "--group",
+            "unit"
+          ]
+        },
+        "integration_test": {
+          "operation": "release.tests.integration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/release/build-tests.py",
+            "--group",
+            "integration"
+          ]
+        }
+      },
+      "kind": "test",
+      "test_groups": {
+        "release-build-tests": "unit_tests",
+        "release-build-integration": "integration_test"
+      }
+    },
+    {
+      "id": "diagnostics",
+      "kind": "production",
+      "manifest": "crates/diagnostics/Cargo.toml",
+      "lockfile": "crates/diagnostics/Cargo.lock",
+      "root": "crates/diagnostics",
+      "actions": {
+        "build": {
+          "operation": "build.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "diagnostics-tests",
+      "language": "rust"
+    },
+    {
+      "id": "diagnostics-tests",
+      "kind": "test",
+      "manifest": "crates/diagnostics-tests/Cargo.toml",
+      "lockfile": "crates/diagnostics-tests/Cargo.lock",
+      "root": "crates/diagnostics-tests",
+      "actions": {
+        "build": {
+          "operation": "build.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "diagnostics",
+      "language": "rust"
+    },
+    {
+      "id": "cache",
+      "kind": "production",
+      "manifest": "crates/cache/Cargo.toml",
+      "lockfile": "crates/cache/Cargo.lock",
+      "root": "crates/cache",
+      "actions": {
+        "build": {
+          "operation": "build.cache",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.cache",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--locked",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.cache",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        }
+      },
+      "test_project": "cache-tests",
+      "language": "rust"
+    },
+    {
+      "id": "cache-tests",
+      "kind": "test",
+      "manifest": "crates/cache-tests/Cargo.toml",
+      "lockfile": "crates/cache-tests/Cargo.lock",
+      "root": "crates/cache-tests",
+      "actions": {
+        "build": {
+          "operation": "build.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "check": {
+          "operation": "check.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "check",
+            "--tests",
+            "--locked",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "format_check": {
+          "operation": "fmt.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--check",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
+        "execute": {
+          "operation": "test.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        }
+      },
+      "tests_for": "cache",
+      "language": "rust"
+    }
+  ],
+  "scripts": [
+    {
+      "id": "scoped-v1",
+      "path": ".chrono-harness/migrations/scoped-v1.py",
+      "test_script": "scoped-v1-tests",
+      "actions": {
+        "execute": {
+          "operation": "migration.scoped-v1",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/migrations/scoped-v1.py"
+          ]
+        }
+      },
+      "language": "python"
+    },
+    {
+      "id": "scoped-v1-tests",
+      "path": ".chrono-harness/migrations/scoped-v1-tests.py",
+      "tests_for": "scoped-v1",
+      "actions": {
+        "execute": {
+          "operation": "migration.scoped-v1-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/migrations/scoped-v1-tests.py"
+          ]
+        }
+      },
+      "language": "python"
+    },
+    {
+      "id": "workflow-inventory",
+      "language": "python",
+      "path": ".chrono-harness/ci/workflow-inventory.py",
+      "test_script": "workflow-inventory-tests",
+      "actions": {
+        "execute": {
+          "operation": "workflow.inventory",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory.py",
+            ".",
+            ".chrono-harness/ci/workflow-inventory.json"
+          ]
+        },
+        "worktree": {
+          "operation": "worktree.inventory",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory.py",
+            ".",
+            ".chrono-harness/ci/worktree-inventory.json"
+          ]
+        },
+        "projects": {
+          "operation": "projects.inventory",
+          "tool": "python3",
+          "argv": [
+            ".chrono-harness/ci/workflow-inventory.py",
+            ".",
+            ".chrono-harness/ci/projects-inventory.json"
+          ]
+        }
+      }
+    },
+    {
+      "id": "workflow-inventory-tests",
+      "language": "python",
+      "path": ".chrono-harness/ci/workflow-inventory-tests.py",
+      "tests_for": "workflow-inventory",
+      "actions": {
+        "execute": {
+          "operation": "workflow.inventory-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/workflow-inventory-tests.py"
+          ]
+        }
+      }
+    },
+    {
+      "id": "host-bootstrap",
+      "language": "python",
+      "path": ".chrono-harness/ci/bootstrap.py",
+      "test_script": "host-bootstrap-tests",
+      "actions": {
+        "execute": {
+          "operation": "host.bootstrap",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            "."
+          ]
+        },
+        "core": {
+          "operation": "host.bootstrap-core",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-core.json"
+          ]
+        },
+        "cache": {
+          "operation": "host.bootstrap-cache",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-cache.json"
+          ]
+        },
+        "detector": {
+          "operation": "host.bootstrap-detector",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-detector.json"
+          ]
+        },
+        "shared-produce": {
+          "operation": "host.bootstrap-shared-produce",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "produce"
+          ]
+        },
+        "shared-verify-core": {
+          "operation": "host.bootstrap-shared-verify-core",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "verify",
+            "core"
+          ]
+        },
+        "shared-verify-cache": {
+          "operation": "host.bootstrap-shared-verify-cache",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "verify",
+            "cache"
+          ]
+        },
+        "shared-install-unit_runner": {
+          "operation": "host.bootstrap-shared-install-unit_runner",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_runner"
+          ]
+        },
+        "shared-install-unit_instructions": {
+          "operation": "host.bootstrap-shared-install-unit_instructions",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_instructions"
+          ]
+        },
+        "shared-install-unit_judge-ci": {
+          "operation": "host.bootstrap-shared-install-unit_judge-ci",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-ci"
+          ]
+        },
+        "shared-install-unit_ci": {
+          "operation": "host.bootstrap-shared-install-unit_ci",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_ci"
+          ]
+        },
+        "shared-install-unit_judge-registration": {
+          "operation": "host.bootstrap-shared-install-unit_judge-registration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-registration"
+          ]
+        },
+        "shared-install-unit_judge-filemap": {
+          "operation": "host.bootstrap-shared-install-unit_judge-filemap",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-filemap"
+          ]
+        },
+        "shared-install-unit_judge-routes": {
+          "operation": "host.bootstrap-shared-install-unit_judge-routes",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-routes"
+          ]
+        },
+        "shared-install-unit_judge-projects": {
+          "operation": "host.bootstrap-shared-install-unit_judge-projects",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-projects"
+          ]
+        },
+        "shared-install-unit_scoped-v1": {
+          "operation": "host.bootstrap-shared-install-unit_scoped-v1",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_scoped-v1"
+          ]
+        },
+        "shared-install-unit_judge-cost": {
+          "operation": "host.bootstrap-shared-install-unit_judge-cost",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-cost"
+          ]
+        },
+        "shared-install-unit_judge-mixed": {
+          "operation": "host.bootstrap-shared-install-unit_judge-mixed",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-mixed"
+          ]
+        },
+        "shared-install-unit_judge-workflow": {
+          "operation": "host.bootstrap-shared-install-unit_judge-workflow",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow"
+          ]
+        },
+        "shared-install-unit_inputs": {
+          "operation": "host.bootstrap-shared-install-unit_inputs",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_inputs"
+          ]
+        },
+        "shared-install-unit_distribution": {
+          "operation": "host.bootstrap-shared-install-unit_distribution",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_distribution"
+          ]
+        },
+        "shared-install-unit_judge-cargo": {
+          "operation": "host.bootstrap-shared-install-unit_judge-cargo",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-cargo"
+          ]
+        },
+        "shared-install-unit_worktree": {
+          "operation": "host.bootstrap-shared-install-unit_worktree",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_worktree"
+          ]
+        },
+        "shared-install-unit_judge-workflow-units": {
+          "operation": "host.bootstrap-shared-install-unit_judge-workflow-units",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow-units"
+          ]
+        },
+        "shared-install-unit_judge-workflow-short": {
+          "operation": "host.bootstrap-shared-install-unit_judge-workflow-short",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-workflow-short"
+          ]
+        },
+        "shared-install-unit_workflow-inventory": {
+          "operation": "host.bootstrap-shared-install-unit_workflow-inventory",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_workflow-inventory"
+          ]
+        },
+        "shared-install-unit_release-build": {
+          "operation": "host.bootstrap-shared-install-unit_release-build",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_release-build"
+          ]
+        },
+        "shared-install-unit_release-build-integration": {
+          "operation": "host.bootstrap-shared-install-unit_release-build-integration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_release-build-integration"
+          ]
+        },
+        "shared-install-unit_worktree-adoption": {
+          "operation": "host.bootstrap-shared-install-unit_worktree-adoption",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_worktree-adoption"
+          ]
+        },
+        "shared-install-unit_diagnostics": {
+          "operation": "host.bootstrap-shared-install-unit_diagnostics",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_diagnostics"
+          ]
+        },
+        "shared-install-unit_host-bootstrap": {
+          "operation": "host.bootstrap-shared-install-unit_host-bootstrap",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_host-bootstrap"
+          ]
+        },
+        "shared-install-unit_cache": {
+          "operation": "host.bootstrap-shared-install-unit_cache",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_cache"
+          ]
+        },
+        "shared-install-unit_judge-projects-migration": {
+          "operation": "host.bootstrap-shared-install-unit_judge-projects-migration",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "unit_judge-projects-migration"
+          ]
+        },
+        "shared-install-aggregate": {
+          "operation": "host.bootstrap-shared-install-aggregate",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap_shared.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-shared.json",
+            "install",
+            "aggregate"
+          ]
+        }
+      }
+    },
+    {
+      "id": "host-bootstrap-tests",
+      "language": "python",
+      "path": ".chrono-harness/ci/bootstrap-tests.py",
+      "tests_for": "host-bootstrap",
+      "actions": {
+        "execute": {
+          "operation": "host.bootstrap-tests",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap-tests.py"
+          ]
+        }
+      }
+    }
+  ]
+}

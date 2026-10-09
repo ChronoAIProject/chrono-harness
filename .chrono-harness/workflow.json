@@ -1,0 +1,425 @@
+{
+  "schema_version": 2,
+  "status": "proposed",
+  "target_branch": "dev",
+  "feature_prefix": "feature/",
+  "integration_prefix": "integration/",
+  "staleness": {
+    "max_behind_commits": 3,
+    "max_age_hours": 24,
+    "combine": "any-exceeded"
+  },
+  "stability": [
+    {
+      "id": "runner-engine",
+      "paths": [
+        "crates/runner/src/lib.rs",
+        "crates/runner/src/main.rs",
+        "crates/runner/Cargo.toml",
+        "crates/runner/Cargo.lock",
+        "crates/runner/src/wire.rs",
+        "crates/runner/src/facts.rs",
+        "crates/runner/src/full.rs",
+        "crates/runner/src/observation.rs",
+        "crates/runner/src/checkout.rs"
+      ],
+      "tests": [
+        "runner-tests"
+      ],
+      "reason": "CLI/protocol and future judge engine evolution"
+    },
+    {
+      "id": "instructions-generator",
+      "paths": [
+        "crates/instructions/src/lib.rs",
+        "crates/instructions/src/catalog.rs",
+        "crates/instructions/src/main.rs",
+        "crates/instructions/src/transaction.rs",
+        "crates/instructions/Cargo.toml",
+        "crates/instructions/Cargo.lock",
+        "assets/instructions/catalog.json",
+        "assets/instructions/default-manifest.json"
+      ],
+      "tests": [
+        "instructions-tests"
+      ],
+      "reason": "Explicit rule composition, translations, output ownership, preservation, migration and publication; embedded portable defaults"
+    },
+    {
+      "id": "registration-judge",
+      "paths": [
+        "crates/judge-registration/src/lib.rs",
+        "crates/judge-registration/src/schema.rs",
+        "crates/judge-registration/src/main.rs",
+        "crates/judge-registration/Cargo.toml",
+        "crates/judge-registration/Cargo.lock",
+        "crates/judge-registration/src/registrations.rs",
+        "crates/judge-registration/src/execution.rs",
+        "crates/judge-registration/src/inputs.rs",
+        "crates/judge-registration/src/transition.rs"
+      ],
+      "tests": [
+        "judge-registration-tests"
+      ],
+      "reason": "Registration schema, snapshot and reference policy"
+    },
+    {
+      "id": "filemap-impact",
+      "paths": [
+        "crates/judge-filemap/Cargo.toml",
+        "crates/judge-filemap/Cargo.lock",
+        "crates/judge-filemap/src/lib.rs",
+        "crates/judge-filemap/src/main.rs",
+        "crates/judge-filemap/src/graph.rs",
+        "crates/judge-filemap/src/records.rs",
+        "crates/judge-filemap/src/workflow.rs"
+      ],
+      "tests": [
+        "judge-filemap-tests",
+        "judge-ci-tests"
+      ],
+      "reason": "Full declaration impact and shared operational CI closure selection"
+    },
+    {
+      "id": "judge-routes",
+      "paths": [
+        "crates/judge-routes/Cargo.toml",
+        "crates/judge-routes/Cargo.lock",
+        "crates/judge-routes/src/lib.rs",
+        "crates/judge-routes/src/main.rs"
+      ],
+      "tests": [
+        "judge-routes-tests"
+      ],
+      "reason": "Registered method/receipt and paired operation execution policy"
+    },
+    {
+      "id": "judge-projects",
+      "paths": [
+        "crates/judge-projects/Cargo.toml",
+        "crates/judge-projects/Cargo.lock",
+        "crates/judge-projects/src/lib.rs",
+        "crates/judge-projects/src/main.rs"
+      ],
+      "tests": [
+        "judge-projects-tests"
+      ],
+      "reason": "Registered method/receipt and paired operation execution policy"
+    },
+    {
+      "id": "declared-costs",
+      "paths": [
+        "crates/judge-cost/Cargo.toml",
+        "crates/judge-cost/Cargo.lock",
+        "crates/judge-cost/src/lib.rs",
+        "crates/judge-cost/src/main.rs"
+      ],
+      "tests": [
+        "judge-cost-tests"
+      ],
+      "reason": "Four-coordinate cost reporting, endpoint provenance and warning/error semantics"
+    },
+    {
+      "id": "mixed-classification",
+      "paths": [
+        "crates/judge-mixed/Cargo.toml",
+        "crates/judge-mixed/Cargo.lock",
+        "crates/judge-mixed/src/lib.rs",
+        "crates/judge-mixed/src/main.rs",
+        "crates/judge-mixed/src/semantic.rs"
+      ],
+      "tests": [
+        "judge-mixed-tests"
+      ],
+      "reason": "Explicit surface and semantic-field changes, mixed warnings and bound cost provenance"
+    },
+    {
+      "id": "workflow-certification",
+      "paths": [
+        "crates/judge-workflow/Cargo.toml",
+        "crates/judge-workflow/Cargo.lock",
+        "crates/judge-workflow/src/lib.rs",
+        "crates/judge-workflow/src/main.rs",
+        "crates/judge-workflow/src/branch.rs",
+        "crates/judge-workflow/src/evidence.rs",
+        "crates/judge-workflow/src/transition.rs",
+        "crates/judge-workflow/src/certificate.rs"
+      ],
+      "tests": [
+        "judge-workflow-tests",
+        "workflow-units",
+        "workflow-short"
+      ],
+      "reason": "Branch freshness, declared evolution and actual integration evidence"
+    },
+    {
+      "id": "retained-inputs",
+      "paths": [
+        "crates/inputs/Cargo.toml",
+        "crates/inputs/Cargo.lock",
+        "crates/inputs/src/lib.rs",
+        "crates/inputs/src/main.rs"
+      ],
+      "tests": [
+        "inputs-tests"
+      ],
+      "reason": "Explicit input snapshots and retained content transport"
+    },
+    {
+      "id": "distribution",
+      "paths": [
+        "crates/distribution/Cargo.toml",
+        "crates/distribution/Cargo.lock",
+        "crates/distribution/src/lib.rs",
+        "crates/distribution/src/main.rs",
+        "assets/distribution/bootstrap.py",
+        ".chrono-harness/release/plan.json",
+        ".chrono-harness/release/build.json",
+        ".chrono-harness/release/build.py",
+        ".github/workflows/chrono-release.yml"
+      ],
+      "tests": [
+        "distribution-tests"
+      ],
+      "reason": "Release identity, pinned installation, bootstrap and update rollback"
+    },
+    {
+      "id": "cargo-projects",
+      "paths": [
+        "crates/judge-cargo/Cargo.toml",
+        "crates/judge-cargo/Cargo.lock",
+        "crates/judge-cargo/src/lib.rs",
+        "crates/judge-cargo/src/main.rs",
+        "crates/judge-cargo/src/inputs.rs",
+        "crates/judge-cargo/src/guard.rs"
+      ],
+      "tests": [
+        "judge-cargo-tests"
+      ],
+      "reason": "Optional Cargo consistency; generic core has no language or directory semantics"
+    },
+    {
+      "id": "worktree-creation",
+      "paths": [
+        "crates/worktree/Cargo.toml",
+        "crates/worktree/Cargo.lock",
+        "crates/worktree/src/lib.rs",
+        "crates/worktree/src/main.rs",
+        "crates/worktree/src/start.rs",
+        "crates/worktree/src/reconstruct.rs",
+        ".chrono-harness/worktree.json",
+        "crates/worktree/src/remote.rs",
+        "crates/worktree/src/maintenance.rs",
+        "crates/worktree/src/recovery.rs",
+        "crates/worktree/src/fetch_recovery.rs",
+        "crates/worktree/src/rebind.rs",
+        "crates/worktree/src/rebind_inputs.rs",
+        "crates/worktree/src/automatic.rs",
+        "crates/worktree/src/automatic/migration.rs"
+      ],
+      "tests": [
+        "worktree-tests"
+      ],
+      "reason": "Explicit worktree creation, reconstruction, recovery, metadata rebind and retirement with original process observations and work preservation"
+    },
+    {
+      "id": "ci-projections",
+      "paths": [
+        "crates/ci/src/lib.rs",
+        "crates/ci/src/release.rs",
+        ".chrono-harness/ci/release.json",
+        "crates/ci/src/full.rs"
+      ],
+      "tests": [
+        "ci-tests",
+        "judge-workflow-tests",
+        "workflow-units",
+        "workflow-short"
+      ],
+      "reason": "Explicit check/release source dispatch, shared output ownership and native workflow generation"
+    },
+    {
+      "id": "standard-diagnostics",
+      "paths": [
+        "crates/diagnostics/Cargo.toml",
+        "crates/diagnostics/Cargo.lock",
+        "crates/diagnostics/src/lib.rs",
+        "crates/diagnostics/src/error.rs",
+        "crates/diagnostics/src/logging.rs"
+      ],
+      "tests": [
+        "diagnostics-tests",
+        "runner-tests"
+      ],
+      "reason": "Structured log records, explicit typed error chains and CLI channel preservation"
+    },
+    {
+      "id": "cache-planning",
+      "paths": [
+        "crates/cache/Cargo.toml",
+        "crates/cache/Cargo.lock",
+        "crates/cache/src/lib.rs",
+        "crates/cache/src/main.rs"
+      ],
+      "tests": [
+        "cache-tests"
+      ],
+      "reason": "Explicit cache consumers, artifact ownership and input compatibility"
+    }
+  ],
+  "semantic_changes_require_integration": true,
+  "mixed_change": {
+    "level": "warning",
+    "code": "W_MIXED_JUDGE_PRODUCT",
+    "requires_acknowledgement": false
+  },
+  "integration": {
+    "tests": [
+      "runner-tests",
+      "instructions-tests",
+      "judge-registration-tests",
+      "judge-filemap-tests",
+      "judge-routes-tests",
+      "judge-projects-tests",
+      "judge-cost-tests",
+      "judge-mixed-tests",
+      "judge-workflow-tests",
+      "inputs-tests",
+      "distribution-tests",
+      "judge-cargo-tests",
+      "worktree-tests",
+      "workflow-units",
+      "workflow-short",
+      "diagnostics-tests"
+    ],
+    "bind": [
+      "base",
+      "candidate_tree",
+      "registry_digest",
+      "executables",
+      "tools",
+      "environment",
+      "effective_inputs",
+      "required_tests",
+      "results_digest"
+    ],
+    "evidence": ".chrono-harness/state/integration.json"
+  },
+  "retirements": [
+    {
+      "kind": "test",
+      "id": "ci-verify",
+      "replacement": "ci-tests",
+      "reason": "ci.verify belongs to ci and the complete ci-tests plan; historical method replacement explicitly binds its current provider."
+    },
+    {
+      "kind": "script",
+      "id": "ci-verify",
+      "replacement": "ci",
+      "reason": "Retire malformed pseudo-script; actual ci method owns execution."
+    }
+  ],
+  "migrations": [
+    {
+      "from_version": 1,
+      "to_version": 2,
+      "script": "scoped-v1",
+      "test": "scoped-v1-tests",
+      "mappings": [
+        {
+          "from": "script:ci-verify",
+          "to": "project:ci"
+        },
+        {
+          "from": "test:ci-verify",
+          "to": "test:ci-tests"
+        },
+        {
+          "from": "owner:ci-verify",
+          "to": "owner:ci"
+        }
+      ],
+      "reason": "Finite historical chrono-ci-check/v1 binding decoder; workflow certification remains unresolved."
+    }
+  ],
+  "historical_profiles": [
+    {
+      "id": "chrono-ci-check/v1",
+      "filemap_version": 1,
+      "profile_path": ".chrono-harness/ci/check.json",
+      "script": "scoped-v1",
+      "test": "scoped-v1-tests",
+      "mappings": [
+        {
+          "from": "script:ci-verify",
+          "to": "project:ci"
+        },
+        {
+          "from": "test:ci-verify",
+          "to": "test:ci-tests"
+        },
+        {
+          "from": "owner:ci-verify",
+          "to": "owner:ci"
+        }
+      ],
+      "legacy_records": [
+        {
+          "collection": "scripts",
+          "id": "ci-verify",
+          "definition": {
+            "id": "ci-verify",
+            "kind": "test",
+            "actions": {
+              "execute": {
+                "operation": "ci.verify",
+                "tool": "chrono-ci",
+                "argv": [
+                  "verify",
+                  "--host-root",
+                  ".",
+                  "--config",
+                  ".chrono-harness/ci/github.json"
+                ]
+              }
+            }
+          },
+          "nodes": [
+            "script:ci-verify",
+            "test:ci-verify"
+          ]
+        }
+      ],
+      "ambiguities": [],
+      "method_replacements": [
+        {
+          "from": {
+            "owner": "script:ci-verify",
+            "operation": "ci.verify",
+            "tool": "chrono-ci",
+            "argv": [
+              "verify",
+              "--host-root",
+              ".",
+              "--config",
+              ".chrono-harness/ci/github.json"
+            ]
+          },
+          "to": {
+            "owner": "project:ci",
+            "operation": "ci.verify",
+            "tool": "chrono-ci",
+            "argv": [
+              "verify",
+              "--host-root",
+              ".",
+              "--config",
+              ".chrono-harness/ci/units.json"
+            ]
+          },
+          "reason": "Preserve the ci.verify operation and complete ci-tests plan while explicitly adopting the independent-unit provider."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "producer": "chrono-instructions",
+  "render": "atomic-rules/relative-alias/v3",
+  "catalog": ".chrono-harness/instructions/catalog.json",
+  "host_context": ".chrono-harness/instructions/host-context.md",
+  "outputs": [
+    {
+      "id": "root",
+      "path": "CLAUDE.md",
+      "format": "root-guide",
+      "locale": "zh-CN",
+      "roots": [
+        "goal.deliverable",
+        "action.autonomy",
+        "candidate.isolation",
+        "reuse.search",
+        "registry.explicit",
+        "evidence.failure",
+        "cost.measure",
+        "owner.canonical",
+        "core.small-projects",
+        "method.host-tools",
+        "method.entry",
+        "judge.register",
+        "policy.evolution",
+        "policy.mixed-warning",
+        "delta.selection",
+        "delta.candidate-judge",
+        "delta.local-ci",
+        "test.behavior",
+        "test.same-language",
+        "evidence.program-state",
+        "candidate.landing",
+        "artifact.results",
+        "artifact.cleanup"
+      ],
+      "title": "通用工作方法",
+      "layout": "workflow"
+    }
+  ]
+}
