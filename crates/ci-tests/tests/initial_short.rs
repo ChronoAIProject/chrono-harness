@@ -112,7 +112,7 @@ impl Host {
         );
         write(
             &root.join(".chrono-harness/worktree.json"),
-            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_program,"expected_version":null,"sha256":sha256(&fs::read(&git_program).unwrap())},"environment":{"inherit":["PATH"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"}),
+            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_program,"expected_version":null,"sha256":sha256(&fs::read(&git_program).unwrap())},"environment":{"inherit":["PATH"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}}}),
         );
         let files: Vec<_> = [".gitignore","README.md",".chrono-harness/config.json",".chrono-harness/FILEMAP.json",".chrono-harness/projects.json",".chrono-harness/judges.json",".chrono-harness/workflow.json",".chrono-harness/worktree.json",".chrono-harness/ci/check.json",".chrono-harness/ci/github.json",".chrono-harness/ci/root inventory.json",".github/workflows/chrono-ci.yml"]
             .into_iter().map(|path|json!({"path":path,"owner":"repository","surface":"documentation","cost":"unknown","edges":[]})).collect();
