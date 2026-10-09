@@ -707,10 +707,21 @@ this does not remove nested business-receipt or acquisition duplication.
 
 
 The worktree owner now has an explicit historical-main current-custody transition
-on the existing migrate entry. It preserves original enrollment/outcomes, binds an
+on the existing migrate entry. It preserves original producer/disposal outcomes, binds an
 exact operator declaration and uses the adopted exclusion and cache drain.
+Interrupted-use reconciliation may append use history and remove stale tokens;
+mutable enrollment/use bytes are not an unconditional preservation invariant.
 Dedicated Rust behavior cases cover selected reclamation, live/source/unknown
 protection, published-transition recovery, partial disposal and ordinary reentry.
 This source increment does not establish true-dev canonical/native acceptance,
 report-custody adoption, PR delivery or complete SPEC acceptance. Actual host
 reclamation and deployment observations belong to the caller's retained evidence.
+
+Exact evidence-alias retirement preserves failure originals and requires continued
+availability of its referenced custody declaration and authority. Its `removed`
+count records fully verified completions; later verification failure can follow
+an unlink effect. Native gather shares eligible legacy inline report aliases only
+up to 64 MiB. These transitions do not repair the historical 861 missing stdout
+siblings or change the original 115-pass/5-fail result. Those historical evidence
+limits remain separate from current candidate checks, native/public adoption and
+ordered delivery.
