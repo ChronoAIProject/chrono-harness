@@ -699,3 +699,5 @@ pub fn validate_statuses(c: &units::Config, d: &Detection, needs: &Value) -> Res
     }
     Ok(())
 }
+
+// Explicit fixture source DELTA.

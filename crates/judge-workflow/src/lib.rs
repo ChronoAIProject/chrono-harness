@@ -179,3 +179,5 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
         value!({"schema":"chrono-workflow-verdict/v1","mode":mode,"branch":state,"integration_required":required,"integration":integration,"transitions":transitions,"input_completeness_proven":false}),
     )
 }
+
+// Explicit fixture source DELTA.
