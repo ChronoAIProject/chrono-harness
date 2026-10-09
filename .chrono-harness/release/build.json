@@ -163,8 +163,7 @@
       {
         "asset": "chrono-cache",
         "destinations": [
-          "crates/cache/target/debug/chrono-cache",
-          ".chrono-harness/bin/chrono-cache"
+          "crates/cache/target/debug/chrono-cache"
         ]
       }
     ]

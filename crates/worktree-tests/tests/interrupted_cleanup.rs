@@ -534,8 +534,17 @@ impl CapturedChild {
         }
     }
     pub(super) fn await_file(&mut self, path: &Path) {
+        self.await_file_bounded(path, Some(Duration::from_secs(10)));
+    }
+    pub(super) fn await_managed_file(&mut self, path: &Path) {
+        // This handshake follows real cold Cargo builds. Their producer already
+        // has the fixture's registered process bound; consume its actual exit
+        // instead of killing it at an unrelated ten-second readiness deadline.
+        self.await_file_bounded(path, None);
+    }
+    fn await_file_bounded(&mut self, path: &Path, readiness: Option<Duration>) {
         let began = Instant::now();
-        while !path.exists() && began.elapsed() < Duration::from_secs(10) {
+        while !path.exists() && readiness.is_none_or(|limit| began.elapsed() < limit) {
             if self.try_wait().unwrap().is_some() {
                 break;
             }

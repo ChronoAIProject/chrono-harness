@@ -601,6 +601,9 @@ fn example_push(root: &Path, candidate: &str, branch: &str) -> Result<Value, Str
     )
 }
 fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
+    // A copied-host fixture owns its receipt policy too. The source checkout's
+    // deployed Git binding is host policy, not a native test-platform input.
+    let owner = retained_receipts::Owner::new();
     let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
     assert_eq!(argv[1], "check");
     let output = Command::new(root.join(&argv[0]))
@@ -609,7 +612,7 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
         .output()
         .unwrap();
     let receipt = retain_expected_command_result(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        &owner.root,
         root,
         &argv,
         context,

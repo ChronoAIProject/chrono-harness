@@ -361,3 +361,5 @@ producer and does not grant `save_after_bootstrap`. Original producer reports an
 explicit imported provenance remain available in each consumer's evidence; startup
 binaries stay outside evidence uploads. Transfer costs are measured separately,
 and a source-bound artifact is not proof of complete build input provenance.
+
+发行验证的 `chrono-cache` 资产在 Cargo test destination 被消费；bootstrap 安装的运输 executable 保持归 bootstrap。发行配方不再将资产 staging 到同一个 bin 路径。Python release integration 回归覆盖真实 CLI 的 plan／recover／staging／report 与 inode、摘要保留；这个本地证据不证明原生缓存后端或外围 workflow 成功。详见[发布所有者](release-ci.md)。
