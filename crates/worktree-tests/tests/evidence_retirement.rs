@@ -56,6 +56,12 @@ fn retire(target: &Path, plan: &Value) -> (i32, Value) {
 #[test]
 fn released_aliases_retire_without_rewriting_outcomes_source_or_enrollment() {
     let (h, target, plan) = fixture();
+    // Native gather may already share immutable aliases while preserving both
+    // paths. Their later explicit retirement must preserve the original inode.
+    let first_copy = target.join(".chrono-harness/state/custody/first-copy");
+    let first_original = target.join(".chrono-harness/state/custody/first-original");
+    fs::remove_file(&first_copy).unwrap();
+    fs::hard_link(&first_original, &first_copy).unwrap();
     let enrollment = h.ledger();
     let refs = git(&h.root, &["show-ref"]);
     let source = fs::read(target.join("payload")).unwrap();

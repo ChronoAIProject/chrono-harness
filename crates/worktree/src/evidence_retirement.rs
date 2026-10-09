@@ -5,7 +5,7 @@ use crate::{
     recovery::state_bytes,
     start::{self, Runner},
 };
-use chrono_harness::{file_identity, no_symlink_parents, relative_path, sha256};
+use chrono_harness::{file_identity, no_symlink_parents, relative_path};
 use chrono_judge_registration::Registrations;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -226,8 +226,14 @@ impl Custody {
                     Err(e) => return Err(e.to_string()),
                     Ok(_) => return Err("retired alias remains present".into()),
                 }
-                if signature(&fs::symlink_metadata(survivor).map_err(|e| e.to_string())?)?
-                    != survivor_id
+                // Unlinking an already shared alias changes the survivor's
+                // ctime/link count. Verify preserved content and inode instead
+                // of mistaking that expected effect for a lost original.
+                let (_, after_id) = verified(root, &object.survivor, &object.original)?;
+                if after_id
+                    .split(':')
+                    .take(2)
+                    .ne(survivor_id.split(':').take(2))
                 {
                     return Err(
                         "survivor changed after alias removal; inspect partial effects".into(),
@@ -236,7 +242,7 @@ impl Custody {
                 Ok("removed-verified-absent")
             })();
             match &result {
-                Ok(&"removed-verified-absent") => {
+                Ok("removed-verified-absent") => {
                     removed += 1;
                     logical += object.original.length;
                 }
