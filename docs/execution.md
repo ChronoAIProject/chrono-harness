@@ -581,8 +581,7 @@ promisor regressions, remain in `.chrono-harness/state/migration-tests/`; fixtur
 directories are temporary, and compiled outputs remain in the already registered
 test target. FILEMAP binds the manifest and Rust helper to the migration consumer;
 this is host test-input policy, not a new product history or dependency-discovery
-contract. The original PR169 native migration/collection failure is retained;
-local fixture acceptance does not establish a successful native rerun or delivery.
+contract. Local fixture acceptance does not establish native acceptance or delivery.
 Remote transfer bytes, billing and full input closure remain unmeasured.
 
 Current host operation sequences live only in FILEMAP. Scoped CI consumes v2 plans
