@@ -9,9 +9,9 @@ autotests = false
 serde_json = "1"
 libc = "0.2"
 sha2 = "0.10"
+chrono-harness = { path = "../runner" }
 
 [dev-dependencies]
-chrono-harness = { path = "../runner" }
 tempfile = "3"
 
 [[test]]
@@ -56,6 +56,12 @@ bench = false
 [[bin]]
 name = "chrono-test-cli-child"
 path = "tests/support/cli_child.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-prepared-producer"
+path = "tests/support/prepared_producer.rs"
 test = false
 bench = false
 

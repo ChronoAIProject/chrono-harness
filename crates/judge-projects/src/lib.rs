@@ -558,6 +558,13 @@ fn collect_reports(
             ));
         }
         let report = chrono_harness::json(&report_bytes)?;
+        if chrono_harness::full::report_transport_bytes(&report, report_bytes.len() as u64)?
+            > report_limit
+        {
+            return Err(
+                "full unit metadata and original streams exceed registered report bound".into(),
+            );
+        }
         if input
             .runner_sha256
             .as_deref()
@@ -1469,6 +1476,9 @@ pub fn verify_completion(
             return Err("E_COLLECTION_INPUT: original source bytes/address".into());
         }
         let report = chrono_harness::json(&bytes)?;
+        if chrono_harness::full::report_transport_bytes(&report, bytes.len() as u64)? > limit {
+            return Err("original report metadata and streams exceed registered bound".into());
+        }
         if source["runner_sha256"] != req.runner.sha256
             || source["judge_sha256"] != report["judge_sha256"]
             || source["status"] != report["status"]

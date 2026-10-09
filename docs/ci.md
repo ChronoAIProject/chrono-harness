@@ -95,8 +95,29 @@ to the fixed configuration entry; short acquisition never uses legacy unbound Gi
 Push, PR, branch creation and explicit manual endpoint semantics remain
 with the existing event producer. Preparation is unjudged input acquisition.
 
+An empty business host can use the existing standalone v4 provider with its
+explicit `initial_inventory`, keeping projects, scripts, plans and units empty.
+Config schema4's optional `canonical_check.initial_profile` names the separate
+initial profile; `profile` remains the DELTA profile. The request binds both
+paths and byte digests. The standalone provider's inventory path and generated
+profile must agree with that initial binding, and both are candidate inputs.
+The producer selects the inventory only after authoritative physical Git root or
+native event evidence. Initial preparation and judge reports retain the selected
+profile, exact request, original producer/report correspondence and real bare
+entry. The initial judge emits `initial-inventory`, null base/DELTA and
+`governance: not-evaluated`; it cannot certify DELTA governance. Missing or
+incorrect initial bindings fail. Unit and collection modes still require actual
+registered unit consumers; the nonempty unit-provider guard is unchanged. Existing
+scoped v3 inventory for explicitly declared nonempty units retains its own profile
+and initial event meaning; it is distinct from the standalone initial judge.
+
 Local endpoints use the declared worktree Git/remote and workflow target, fetching
-and freezing that target against clean committed HEAD on every invocation.
+and freezing that target against clean committed nonroot HEAD on every invocation.
+Before fetching, it reads physical commit headers (`cat-file commit`, with
+replacement objects disabled). A genuine parentless HEAD uses the explicitly
+bound standalone inventory without a remote base. A shallow boundary or absent
+parent object cannot erase a physical parent header; a nonroot still needs its
+registered remote target, and missing fetch/base evidence fails.
 Scoped checks do not require origin or branch-age context. Full unscoped checks
 require worktree v2's declared origin/context paths and creation-kind/run-role
 mapping. Start/reconstruct publish the finalized original birth report and exact
@@ -556,3 +577,17 @@ fixed short `check`, `check --unit ID`, `check --collect` entries. Providers wit
 explicit `job_gating` retain their previous independent workflows. See
 [CI units](ci-units.md) for registration, original-evidence gathering, reruns,
 migration and full scheduling boundaries.
+
+## Standalone initial host transition
+
+The CI owner's existing `migrate` also supports an explicitly preserved standalone
+v2/v3/v4 inventory provider to standalone v4 at the same or a new source address.
+Retain the prior source, declare its original address using `--previous-config`,
+then invoke the registered migration entry with the new provider. It verifies the
+old workflow and generated inventory before writes and preserves the exact
+inventory declaration and output. Changing/removing the inventory or transitioning
+it into unit collection is refused. Edit host config, facts/platform policy,
+FILEMAP and profile bindings explicitly; migration does not infer those choices.
+Subsequent `generate` is idempotent and `verify` detects projection drift without
+repair. This support is candidate source behavior; public installation, native
+first-commit events and compatible release pins require their own delivery evidence.

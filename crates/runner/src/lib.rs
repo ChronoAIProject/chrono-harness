@@ -33,7 +33,7 @@ use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{
-    Arc,
+    Arc, Barrier,
     atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -125,6 +125,18 @@ pub struct ProcessResult {
     pub stderr: String,
     pub executable: PathBuf,
     pub sha256: String,
+    /// Retained process records bind the launch identity to this receipt.
+    /// These fields are optional only for historical inline records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launcher_pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_limit_bytes: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_original: Option<Value>,
 }
 
 pub fn sha256(bytes: &[u8]) -> String {
@@ -511,6 +523,7 @@ pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<Process
         input,
         None,
         Duration::from_secs(s.timeout_seconds),
+        None,
     )?)
 }
 /// v1 uses the same bounded engine with a cleared environment and prelaunch binding.
@@ -526,6 +539,7 @@ pub fn run_process_bound(
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
+        None,
     )?)
 }
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
@@ -547,6 +561,7 @@ pub fn run_process_observed(
         input,
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
+        None,
     )
 }
 /// Preserve a caller's finer acquisition deadline through the same engine.
@@ -557,7 +572,228 @@ pub fn run_process_observed_for(
     digest: &str,
     timeout: Duration,
 ) -> Result<ProcessResult, String> {
-    run_process_inner(root, s, input, Some(digest), timeout)
+    run_process_inner(root, s, input, Some(digest), timeout, None)
+}
+/// Explicit originals for a consumer that can be terminated by an enclosing owner.
+/// Stream files contain only bytes actually read, within the unchanged output bound.
+/// A launch record is not a terminal receipt; absent terminal evidence stays unknown.
+pub struct ProcessEvidence<'a> {
+    pub stdout: &'a Path,
+    pub stderr: &'a Path,
+    pub launch: &'a Path,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LaunchEvidence {
+    schema: String,
+    launcher_pid: u32,
+    child_pid: u32,
+    argv: Vec<String>,
+    cwd: PathBuf,
+    executable: PathBuf,
+    sha256: String,
+    environment: std::collections::BTreeMap<String, String>,
+    environment_digest: String,
+    #[serde(default)]
+    ownership_fds: Option<String>,
+    stdin_sha256: String,
+    timeout_seconds: u64,
+    output_limit_bytes: usize,
+}
+
+pub(crate) fn validate_launch_evidence(path: &Path, process: &ProcessResult) -> Result<(), String> {
+    let bytes = fs::read(path).map_err(|e| format!("launch evidence read: {e}"))?;
+    validate_launch_evidence_bytes(&bytes, process)
+}
+
+pub(crate) fn validate_launch_evidence_bytes(
+    bytes: &[u8],
+    process: &ProcessResult,
+) -> Result<(), String> {
+    let record: LaunchEvidence =
+        decode(&bytes).map_err(|e| format!("launch evidence decode: {e}"))?;
+    let child_pid = process
+        .child_pid
+        .ok_or("process receipt missing child identity")?;
+    let launcher_pid = process
+        .launcher_pid
+        .ok_or("process receipt missing launcher identity")?;
+    let timeout_seconds = process
+        .timeout_seconds
+        .ok_or("process receipt missing timeout bound")?;
+    let output_limit_bytes = process
+        .output_limit_bytes
+        .ok_or("process receipt missing output bound")?;
+    let expected = LaunchEvidence {
+        schema: "chrono-process-launch/v1".into(),
+        launcher_pid,
+        child_pid,
+        argv: process.argv.clone(),
+        cwd: process.cwd.clone(),
+        executable: process.executable.clone(),
+        sha256: process.sha256.clone(),
+        environment: process.environment.clone(),
+        environment_digest: process.environment_digest.clone(),
+        ownership_fds: process.ownership_fds.clone(),
+        stdin_sha256: process.stdin_sha256.clone(),
+        timeout_seconds,
+        output_limit_bytes,
+    };
+    let mut mismatches = Vec::new();
+    if record.schema != expected.schema {
+        mismatches.push("schema");
+    }
+    if record.launcher_pid != expected.launcher_pid || launcher_pid == 0 {
+        mismatches.push("launcher_pid");
+    }
+    if record.child_pid != child_pid || child_pid == 0 {
+        mismatches.push("child_pid");
+    }
+    if record.argv != expected.argv {
+        mismatches.push("argv");
+    }
+    if record.cwd != expected.cwd {
+        mismatches.push("cwd");
+    }
+    if record.executable != expected.executable {
+        mismatches.push("executable");
+    }
+    if record.sha256 != expected.sha256 {
+        mismatches.push("executable_sha256");
+    }
+    if record.environment != expected.environment {
+        mismatches.push("environment");
+    }
+    if record.environment_digest != expected.environment_digest {
+        mismatches.push("environment_digest");
+    }
+    if record.ownership_fds != expected.ownership_fds {
+        mismatches.push("ownership_fds");
+    }
+    if record.stdin_sha256 != expected.stdin_sha256 {
+        mismatches.push("stdin_sha256");
+    }
+    if record.timeout_seconds != timeout_seconds {
+        mismatches.push("timeout_seconds");
+    }
+    if record.output_limit_bytes != output_limit_bytes {
+        mismatches.push("output_limit_bytes");
+    }
+    if !mismatches.is_empty() {
+        return Err(format!(
+            "launch evidence does not match process receipt: {}",
+            mismatches.join(",")
+        ));
+    }
+    Ok(())
+}
+pub fn run_process_observed_retained(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<ProcessResult, String> {
+    run_process_inner(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        Some(evidence),
+    )
+}
+
+fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, String> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    };
+    let parent = absolute
+        .parent()
+        .ok_or_else(|| format!("{label} evidence parent missing"))?;
+    let parent =
+        fs::canonicalize(parent).map_err(|error| format!("{label} evidence parent: {error}"))?;
+    let absolute = parent.join(
+        absolute
+            .file_name()
+            .ok_or_else(|| format!("{label} evidence path missing"))?,
+    );
+    let relative = absolute
+        .strip_prefix(root)
+        .map_err(|_| format!("{label} evidence escapes host root"))?
+        .to_str()
+        .ok_or_else(|| format!("{label} evidence path is not UTF-8"))?;
+    let checked = no_symlink_parents(root, relative)?;
+    let mut parent = checked
+        .parent()
+        .ok_or_else(|| format!("{label} evidence parent missing"))?;
+    loop {
+        match fs::symlink_metadata(parent) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!("{label} evidence parent is a symlink"));
+            }
+            Ok(metadata) if !metadata.is_dir() => {
+                return Err(format!("{label} evidence parent is not a directory"));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(format!("{label} evidence parent missing"));
+            }
+            Err(error) => return Err(format!("{label} evidence parent: {error}")),
+        }
+        if parent == root {
+            break;
+        }
+        parent = parent
+            .parent()
+            .ok_or_else(|| format!("{label} evidence escaped host root"))?;
+    }
+    if let Ok(metadata) = fs::symlink_metadata(&checked) {
+        if metadata.file_type().is_symlink() {
+            return Err(format!("{label} evidence path is a symlink"));
+        }
+        if !metadata.is_file() {
+            return Err(format!("{label} evidence path is not a regular file"));
+        }
+    }
+    Ok(checked)
+}
+
+fn validate_process_evidence_paths(
+    root: &Path,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    Ok((
+        evidence_path(root, evidence.stdout, "stdout")?,
+        evidence_path(root, evidence.stderr, "stderr")?,
+        evidence_path(root, evidence.launch, "launch")?,
+    ))
+}
+
+fn launch_descriptor(root: &Path, path: &Path) -> Option<Value> {
+    let relative = path.strip_prefix(root).ok()?.to_str()?.to_owned();
+    let digest = file_identity(path).ok()?.0;
+    Some(serde_json::json!({"path": relative, "sha256": digest}))
+}
+
+fn cleanup_evidence_path(path: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
+            "evidence cleanup refused symlink {}",
+            path.display()
+        )),
+        Ok(metadata) if metadata.is_file() => {
+            fs::remove_file(path).map_err(|error| format!("{}: {error}", path.display()))
+        }
+        Ok(_) => Err(format!(
+            "evidence cleanup refused non-file {}",
+            path.display()
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("{}: {error}", path.display())),
+    }
 }
 // The existing process engine owns termination on errors and unwinding too.
 struct OwnedProcess {
@@ -610,6 +846,7 @@ pub fn run_process_observed_data(
         Some(digest),
         Duration::from_secs(s.timeout_seconds),
         stdout_limit,
+        None,
     )
 }
 fn run_process_inner(
@@ -618,8 +855,17 @@ fn run_process_inner(
     input: &[u8],
     expected: Option<&str>,
     timeout: Duration,
+    evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, String> {
-    run_process_inner_with_stdout(root, s, input, expected, timeout, s.output_limit_bytes)
+    run_process_inner_with_stdout(
+        root,
+        s,
+        input,
+        expected,
+        timeout,
+        s.output_limit_bytes,
+        evidence,
+    )
 }
 fn run_process_inner_with_stdout(
     root: &Path,
@@ -628,6 +874,7 @@ fn run_process_inner_with_stdout(
     expected: Option<&str>,
     timeout: Duration,
     stdout_limit: usize,
+    evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, String> {
     validate_command(s)?;
     if stdout_limit == 0 || stdout_limit > 64 * 1024 * 1024 {
@@ -638,6 +885,17 @@ fn run_process_inner_with_stdout(
     }
     let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let evidence_paths = evidence
+        .map(|paths| validate_process_evidence_paths(&root, paths))
+        .transpose()?;
+    let evidence = evidence_paths
+        .as_ref()
+        .map(|(stdout, stderr, launch)| ProcessEvidence {
+            stdout,
+            stderr,
+            launch,
+        });
+    let launcher_pid = std::process::id();
     let mut environment = if expected.is_some() {
         s.env.clone()
     } else {
@@ -675,16 +933,56 @@ fn run_process_inner_with_stdout(
     };
     #[cfg(not(unix))]
     let ownership_fds = None;
+    let environment_digest = wire::digest(&environment)?;
     #[cfg(unix)]
     let ownership = process_ownership::Launch::prepare()?;
     #[cfg(unix)]
     ownership.configure(&mut command);
+    // Delay file creation until every setup operation above has succeeded.
+    // If spawn itself fails, these are the only files this invocation created
+    // and can be removed without touching a pre-existing address.
+    let (stdout_original, stderr_original) = match evidence.as_ref() {
+        Some(paths) => {
+            let stdout =
+                fs::File::create_new(paths.stdout).map_err(|e| format!("stdout original: {e}"))?;
+            let stderr = match fs::File::create_new(paths.stderr) {
+                Ok(file) => file,
+                Err(error) => {
+                    drop(stdout);
+                    let cleanup = cleanup_evidence_path(paths.stdout).err();
+                    return Err(match cleanup {
+                        Some(cleanup) => {
+                            format!("stderr original: {error}; evidence cleanup: {cleanup}")
+                        }
+                        None => format!("stderr original: {error}"),
+                    });
+                }
+            };
+            (Some(stdout), Some(stderr))
+        }
+        None => (None, None),
+    };
     std::thread::scope(|scope| {
-        let child = command.spawn().map_err(|e| {
-            #[cfg(unix)]
-            let e = ownership.spawn_error(e);
-            format!("{}: {e}", executable.display())
-        })?;
+        let child = match command.spawn() {
+            Ok(child) => child,
+            Err(e) => {
+                drop(stdout_original);
+                drop(stderr_original);
+                let cleanup = evidence.as_ref().map(|paths| {
+                    [paths.stdout, paths.stderr]
+                        .into_iter()
+                        .filter_map(|path| cleanup_evidence_path(path).err())
+                        .collect::<Vec<_>>()
+                });
+                let cleanup = cleanup.filter(|errors| !errors.is_empty());
+                #[cfg(unix)]
+                let e = ownership.spawn_error(e);
+                let cleanup_note = cleanup
+                    .map(|errors| format!("; evidence cleanup: {}", errors.join("; ")))
+                    .unwrap_or_default();
+                return Err(format!("{}: {e}{cleanup_note}", executable.display()));
+            }
+        };
         let mut child = OwnedProcess {
             child,
             #[cfg(unix)]
@@ -692,6 +990,36 @@ fn run_process_inner_with_stdout(
             joined: false,
         };
         let pid = child.id();
+        let publication_failure = evidence.as_ref().and_then(|paths| {
+            let record = serde_json::json!({
+                "schema": "chrono-process-launch/v1",
+                "launcher_pid": launcher_pid, "child_pid": pid,
+                "argv": std::iter::once(executable.to_string_lossy().into_owned()).chain(s.args.clone()).collect::<Vec<_>>(),
+                "cwd": root, "executable": executable, "sha256": hash,
+                "environment": environment, "environment_digest": environment_digest,
+                "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
+                "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
+            });
+            let published = (|| -> Result<(), String> {
+                let mut original = tempfile::NamedTempFile::new_in(
+                    paths
+                        .launch
+                        .parent()
+                        .ok_or("launch original parent missing")?,
+                )
+                .map_err(|e| format!("launch original: {e}"))?;
+                serde_json::to_writer(&mut original, &record)
+                    .map_err(|e| format!("launch original: {e}"))?;
+                original.flush().map_err(|e| format!("launch original: {e}"))?;
+                original
+                    .persist_noclobber(paths.launch)
+                    .map_err(|e| format!("launch original: {e}"))?;
+                Ok(())
+            })();
+            published
+                .err()
+                .map(|error| format!("{error}; launch evidence: {record}"))
+        });
         let stdin = child.stdin.take().ok_or("missing process stdin")?;
         let writer = if input.is_empty() {
             // Preserve the child's input pipe and publish EOF directly; there
@@ -717,42 +1045,70 @@ fn run_process_inner_with_stdout(
             #[cfg(not(unix))]
             wake.unpark();
         };
+        struct StreamResult {
+            bytes: Vec<u8>,
+            failures: Vec<String>,
+        }
         fn reader<'scope, R: Read + Send + 'scope, W: Fn() + Send + 'scope>(
             scope: &'scope std::thread::Scope<'scope, '_>,
             mut r: R,
             limit: usize,
             flag: Arc<AtomicBool>,
             monitor: W,
-        ) -> std::thread::ScopedJoinHandle<'scope, std::io::Result<Vec<u8>>> {
+            mut original: Option<fs::File>,
+            stream: &'static str,
+            ready: Arc<Barrier>,
+        ) -> std::thread::ScopedJoinHandle<'scope, StreamResult> {
             scope.spawn(move || {
-                let result = (|| {
-                    let mut out = Vec::new();
-                    let mut buf = [0u8; 8192];
-                    loop {
-                        let n = r.read(&mut buf)?;
-                        if n == 0 {
+                let mut result = StreamResult {
+                    bytes: Vec::new(),
+                    failures: Vec::new(),
+                };
+                ready.wait();
+                let mut buf = [0u8; 8192];
+                loop {
+                    let n = match r.read(&mut buf) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            result.failures.push(format!("{stream} read: {e}"));
                             break;
                         }
-                        if out.len() + n > limit && !flag.swap(true, Ordering::Relaxed) {
-                            monitor();
-                        }
-                        let keep = n.min(limit.saturating_sub(out.len()));
-                        out.extend_from_slice(&buf[..keep]);
+                    };
+                    if n == 0 {
+                        break;
                     }
-                    Ok(out)
-                })();
+                    if result.bytes.len() + n > limit && !flag.swap(true, Ordering::Relaxed) {
+                        monitor();
+                    }
+                    let keep = n.min(limit.saturating_sub(result.bytes.len()));
+                    // Publication errors cannot discard bytes already read or
+                    // prevent collection of the child's remaining bounded output.
+                    result.bytes.extend_from_slice(&buf[..keep]);
+                    if let Some(file) = &mut original {
+                        // File is unbuffered: enclosing termination cannot discard
+                        // bytes already retained by a completed write.
+                        if let Err(e) = file.write_all(&buf[..keep]) {
+                            result.failures.push(format!("{stream} original: {e}"));
+                            original = None;
+                        }
+                    }
+                }
                 // EOF or an IO error prompts another real child-status probe;
                 // neither is treated as evidence that the process has exited.
                 monitor();
                 result
             })
         }
+        let readers_ready = Arc::new(Barrier::new(3));
         let stdout = reader(
             scope,
             child.stdout.take().ok_or("missing stdout")?,
             stdout_limit,
             exceeded.clone(),
             monitor.clone(),
+            stdout_original,
+            "stdout",
+            readers_ready.clone(),
         );
         let stderr = reader(
             scope,
@@ -760,7 +1116,11 @@ fn run_process_inner_with_stdout(
             limit,
             exceeded.clone(),
             monitor,
+            stderr_original,
+            "stderr",
+            readers_ready.clone(),
         );
+        readers_ready.wait();
         // Read the shared clock first: this evidence cutoff cannot extend the
         // existing monitor deadline, including a delay between the two reads.
         #[cfg(unix)]
@@ -844,12 +1204,8 @@ fn run_process_inner_with_stdout(
         if let Some(writer) = writer {
             let _ = writer.join();
         }
-        let a = stdout_result
-            .map_err(|_| "stdout reader panicked")?
-            .map_err(|e| e.to_string())?;
-        let b = stderr_result
-            .map_err(|_| "stderr reader panicked")?
-            .map_err(|e| e.to_string())?;
+        let a = stdout_result.map_err(|_| "stdout reader panicked")?;
+        let b = stderr_result.map_err(|_| "stderr reader panicked")?;
         if exceeded.load(Ordering::Relaxed)
             && failure.as_deref() != Some("process output limit exceeded")
         {
@@ -858,12 +1214,25 @@ fn run_process_inner_with_stdout(
                 None => "process output limit exceeded".into(),
             });
         }
-        Ok(ProcessResult {
+        let launch_publication_failed = publication_failure.is_some();
+        for error in publication_failure
+            .into_iter()
+            .chain(a.failures)
+            .chain(b.failures)
+        {
+            failure = Some(match failure {
+                Some(original) => format!("{original}; {error}"),
+                None => error,
+            });
+        }
+        let a = a.bytes;
+        let b = b.bytes;
+        let mut process = ProcessResult {
             argv: std::iter::once(executable.to_string_lossy().into_owned())
                 .chain(s.args.clone())
                 .collect(),
             cwd: root,
-            environment_digest: wire::digest(&environment)?,
+            environment_digest,
             environment,
             ownership_fds,
             stdin_sha256,
@@ -877,7 +1246,25 @@ fn run_process_inner_with_stdout(
             exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
             executable,
             sha256: hash,
-        })
+            launcher_pid: Some(launcher_pid),
+            child_pid: Some(pid),
+            timeout_seconds: Some(s.timeout_seconds),
+            output_limit_bytes: Some(s.output_limit_bytes),
+            launch_original: None,
+        };
+        if let Some(paths) = evidence.as_ref() {
+            let validate_launch = !launch_publication_failed;
+            if let Err(error) = validate_launch_evidence(paths.launch, &process)
+                && validate_launch
+            {
+                process.failure = Some(match process.failure.take() {
+                    Some(original) => format!("{original}; {error}"),
+                    None => error,
+                });
+            }
+            process.launch_original = launch_descriptor(&process.cwd, paths.launch);
+        }
+        Ok(process)
     })
 }
 pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
@@ -1056,7 +1443,7 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
         let retention = prepared::retention_directory(&req);
         let result = execute_check(
             root.clone(),
-            req.profile,
+            p.profile,
             p.base,
             p.candidate,
             p.initial,
@@ -1222,6 +1609,7 @@ fn execute_check(
         if !initial || context.is_some() {
             return Err("initial inventory requires --initial without --base or --context".into());
         }
+        entry["preparation"] = serde_json::to_value(preparation).map_err(|e| e.to_string())?;
         return initial::check(&root, &config_path, &candidate, entry);
     }
     if !matches!(
@@ -1293,6 +1681,24 @@ fn execute_check(
         .map_err(|e| e.to_string())?;
     let retained_streams = units::stream_publication(&c);
     let report_path = prepare_publication(&root, &output_path)?;
+    // Register all retained process originals before launching the judge.  A
+    // lifecycle owner may terminate this runner as soon as the child starts;
+    // the stream readers and launch record must therefore have stable
+    // destinations before spawn rather than being copied after wait.
+    let process_evidence = if retained_streams {
+        let directory = retention
+            .as_deref()
+            .ok_or("missing report retention directory")?;
+        let stdout = format!("{directory}judge-stdout-{request_id}.bytes");
+        let stderr = format!("{directory}judge-stderr-{request_id}.bytes");
+        let launch = format!("{directory}judge-launch-{request_id}.json");
+        for path in [&stdout, &stderr, &launch] {
+            prepare_publication(&root, path)?;
+        }
+        Some((stdout, stderr, launch))
+    } else {
+        None
+    };
     let input = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
     let proc = if req.observations["preparation"].is_object() {
         let (_, _, policy, _) = facts_configs::load(&root, ".chrono-harness/config.json")?;
@@ -1330,16 +1736,52 @@ fn execute_check(
             Some(judge.env.get("PATH").map(String::as_str).unwrap_or("")),
         )?;
         judge.program = path.to_str().ok_or("judge path UTF-8")?.into();
-        run_process_observed(&root, &judge, &input, &file_identity(&path)?.0)
+        if let Some((stdout, stderr, launch)) = process_evidence.as_ref() {
+            let stdout_path = no_symlink_parents(&root, stdout)?;
+            let stderr_path = no_symlink_parents(&root, stderr)?;
+            let launch_path = no_symlink_parents(&root, launch)?;
+            let evidence = ProcessEvidence {
+                stdout: &stdout_path,
+                stderr: &stderr_path,
+                launch: &launch_path,
+            };
+            run_process_observed_retained(
+                &root,
+                &judge,
+                &input,
+                &file_identity(&path)?.0,
+                &evidence,
+            )
+        } else {
+            run_process_observed(&root, &judge, &input, &file_identity(&path)?.0)
+        }
     } else {
         // Preserve the legacy environment contract and retain original process
         // evidence when an unprepared invocation fails after launch.
+        let evidence_paths = process_evidence
+            .as_ref()
+            .map(|(stdout, stderr, launch)| {
+                Ok::<_, String>((
+                    no_symlink_parents(&root, stdout)?,
+                    no_symlink_parents(&root, stderr)?,
+                    no_symlink_parents(&root, launch)?,
+                ))
+            })
+            .transpose()?;
+        let evidence = evidence_paths
+            .as_ref()
+            .map(|(stdout, stderr, launch)| ProcessEvidence {
+                stdout,
+                stderr,
+                launch,
+            });
         run_process_inner(
             &root,
             &c.judge,
             &input,
             None,
             Duration::from_secs(c.judge.timeout_seconds),
+            evidence.as_ref(),
         )
     };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -1351,13 +1793,10 @@ fn execute_check(
                 None => decode(&p.stdout_bytes),
             };
             let stored_process = if retained_streams {
-                scoped_report::retain_process(
-                    &root,
-                    retention
-                        .as_deref()
-                        .ok_or("missing report retention directory")?,
-                    &p,
-                )?
+                let (stdout, stderr, launch) = process_evidence
+                    .as_ref()
+                    .ok_or("missing process evidence paths")?;
+                scoped_report::retain_process_evidence(&root, &p, stdout, stderr, launch)?
             } else {
                 serde_json::to_value(&p).map_err(|e| e.to_string())?
             };

@@ -4,7 +4,7 @@ mod native_executable;
 use chrono_harness::{CommandSpec, Status, dispatch, run_process};
 use serde_json::{Value, json};
 
-use std::fs;
+use std::{fs, path::Path, process::Command};
 use tempfile::TempDir;
 
 const CHILD: &str = env!("CARGO_BIN_EXE_chrono-test-cli-child");
@@ -108,6 +108,16 @@ fn scoped_stream_storage_preserves_raw_process_identity_and_detects_bad_original
             error.contains(&format!("cannot retain judge {stream}")) && error.contains("exit 0"),
             "{error}"
         );
+        let evidence: Value =
+            serde_json::from_str(error.strip_prefix("E_PROCESS_EVIDENCE: ").unwrap()).unwrap();
+        assert_eq!(
+            chrono_harness::full::expand_process(&evidence["process"]).unwrap(),
+            serde_json::to_value(&process).unwrap(),
+            "publication failure must preserve both byte streams and every process identity"
+        );
+        if stream == "stderr" {
+            assert_eq!(evidence["stdout_original"], record["stdout_original"]);
+        }
         fs::write(&path, &original).unwrap();
         let mut changed = record.clone();
         changed[format!("{stream}_sha256")] = json!("0".repeat(64));
@@ -243,6 +253,201 @@ fn real_child_and_report_publish() {
             .join(".chrono-harness/state/check.json")
             .is_file()
     );
+}
+
+#[test]
+#[ignore]
+fn retained_reference_cli_subprocess_helper() {
+    let output = dispatch(&["check"]);
+    println!(
+        "CHRONO_CLI_HELPER_RESULT:{}",
+        serde_json::to_string(&json!({
+            "exit_code": output.exit_code,
+            "stdout": output.stdout,
+            "stderr": output.stderr,
+        }))
+        .unwrap()
+    );
+}
+
+fn run_retained_cli_child(root: &Path, source: &str) -> Value {
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "retained_reference_cli_subprocess_helper",
+            "--ignored",
+            "--nocapture",
+        ])
+        .current_dir(root)
+        .env(chrono_harness::prepared::SOURCE, source)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let line = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("CHRONO_CLI_HELPER_RESULT:"))
+        .expect("CLI helper result");
+    serde_json::from_str(line).unwrap()
+}
+
+#[test]
+fn retained_reference_local_fixture_preserves_assertions_under_each_enclosing_source() {
+    for source in ["local", "ci"] {
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "retained_reference_cli_registers_process_evidence_before_judge_spawn",
+                "--nocapture",
+            ])
+            .env(chrono_harness::prepared::SOURCE, source)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "enclosing source {source}: {output:?}"
+        );
+    }
+}
+
+#[test]
+fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".chrono-harness/ci")).unwrap();
+    fs::create_dir_all(dir.path().join(".chrono-harness/state")).unwrap();
+    fs::write(dir.path().join("cli-case.json"), b"{}").unwrap();
+    let shell = "/bin/sh";
+    let shell_hash = chrono_harness::sha256(&fs::read(shell).unwrap());
+    let producer = env!("CARGO_BIN_EXE_chrono-test-prepared-producer");
+    let judge = env!("CARGO_BIN_EXE_chrono-test-cli-child");
+    let config = json!({
+        "schema_version": 4,
+        "runner": {"path": "chrono-harness"},
+        "canonical_check": {
+            "operation": "validate.delta",
+            "argv": ["chrono-harness", "check"],
+            "profile": ".chrono-harness/ci/check.json",
+            "inputs": {
+                "local": {
+                    "operation": "prepare.local",
+                    "tool": "producer",
+                    "argv": ["run"]
+                }
+            }
+        },
+        "facts_git": {"tool": "git", "input": "git-bytes"},
+        "tools": [
+            {"id": "git", "program": shell, "resolution": "PATH-once", "version_argv": ["-c", "printf git"], "expected_version": "git"},
+            {"id": "producer", "program": producer, "resolution": "PATH-once", "version_argv": ["version"], "expected_version": "prepared-producer 0.1.0"}
+        ],
+        "environment": {
+            "inherit": ["PATH", "CHRONO_CHECK_SOURCE"],
+            "values": {},
+            "inputs": [{"id": "git-bytes", "location": shell, "presence": "present", "sha256": shell_hash}]
+        },
+        "artifacts": [{"path": ".chrono-harness/state/", "owner": "host", "kind": "evidence", "tracked": false}],
+        "protocol": {"timeout_seconds": 15, "stdout_limit_bytes": 65536}
+    });
+    fs::write(
+        dir.path().join(".chrono-harness/config.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    let profile = json!({
+        "schema": "chrono-ci-check/v3",
+        "judge": {"program": judge, "args": ["judge"], "timeout_seconds": 15, "output_limit_bytes": 4096},
+        "policy": {
+            "registration_config": ".chrono-harness/config.json",
+            "facts_config": ".chrono-harness/config.json",
+            "report_publication": "retained-reference/v2"
+        },
+        "report_path": ".chrono-harness/state/check.json"
+    });
+    fs::write(
+        dir.path().join(".chrono-harness/ci/check.json"),
+        serde_json::to_vec(&profile).unwrap(),
+    )
+    .unwrap();
+    // This fixture registers only a local producer. Native selection must still
+    // reject that declaration before a judge or report can be published.
+    let missing_native = run_retained_cli_child(dir.path(), "ci");
+    assert_eq!(missing_native["exit_code"], 2);
+    assert!(
+        missing_native["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("native input binding missing"),
+        "{}",
+        missing_native["stderr"]
+    );
+    assert!(!dir.path().join(".chrono-harness/state/check.json").exists());
+
+    let output = run_retained_cli_child(dir.path(), "local");
+    assert_eq!(output["exit_code"], 0, "{}", output["stderr"]);
+    let reference: Value = serde_json::from_slice(
+        &fs::read(dir.path().join(".chrono-harness/state/check.json")).unwrap(),
+    )
+    .unwrap();
+    let report: Value = serde_json::from_slice(
+        &fs::read(
+            dir.path()
+                .join(reference["original"]["path"].as_str().unwrap()),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(reference["schema"], "chrono-check-reference/v1");
+    let judge = &report["judge"];
+    for (field, digest) in [
+        ("stdout_original", judge["stdout_sha256"].as_str().unwrap()),
+        ("stderr_original", judge["stderr_sha256"].as_str().unwrap()),
+    ] {
+        let original = &judge[field];
+        let path = dir.path().join(original["path"].as_str().unwrap());
+        assert_eq!(chrono_harness::sha256(&fs::read(path).unwrap()), digest);
+    }
+    let launch = &judge["launch_original"];
+    assert!(dir.path().join(launch["path"].as_str().unwrap()).is_file());
+    assert!(judge.get("stdout_bytes").is_none());
+    assert!(judge.get("stderr_bytes").is_none());
+
+    // The public check entry also exercises the lifecycle participation
+    // parser.  A malformed lifecycle response must retain the outer process
+    // receipt before returning its parse/status error.
+    let mut participating = config;
+    participating["canonical_check"]["participation"] = json!({
+        "operation": "worktree.check",
+        "tool": "producer",
+        "argv": ["malformed"],
+    });
+    fs::write(
+        dir.path().join(".chrono-harness/config.json"),
+        serde_json::to_vec(&participating).unwrap(),
+    )
+    .unwrap();
+    let refused = run_retained_cli_child(dir.path(), "local");
+    assert_eq!(refused["exit_code"], 2);
+    assert!(
+        refused["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("original process"),
+        "{}",
+        refused["stderr"]
+    );
+    let receipt = fs::read_dir(dir.path().join(".chrono-harness/state/preparation"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("participation-"))
+        })
+        .expect("participation failure receipt");
+    let receipt: Value = serde_json::from_slice(&fs::read(receipt).unwrap()).unwrap();
+    let receipt = chrono_harness::full::expand_process(&receipt).unwrap();
+    assert_eq!(receipt["stdout"], "{}");
 }
 
 #[test]
@@ -399,13 +604,13 @@ fn exit_status_mismatch_fails() {
 }
 #[test]
 fn bounds_cover_timeout_and_output() {
-    for (case, cause) in [
-        (json!({"kind":"sleep"}), "process timed out"),
-        (json!({"kind":"flood"}), "process output limit exceeded"),
+    for (case, cause, timeout) in [
+        (json!({"kind":"sleep"}), "process timed out", 1),
+        (json!({"kind":"flood"}), "process output limit exceeded", 5),
     ] {
         let (_dir, p) = fixture(case);
         let mut cfg: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
-        cfg["judge"]["timeout_seconds"] = 1.into();
+        cfg["judge"]["timeout_seconds"] = timeout.into();
         fs::write(&p, serde_json::to_vec(&cfg).unwrap()).unwrap();
         let start = std::time::Instant::now();
         let r = run(&p);
@@ -905,4 +1110,85 @@ fn scoped_signal_termination_reports_the_process_failure_before_empty_json() {
     assert_eq!(report["judge"]["failure"], expected);
     assert_eq!(report["judge"]["exit_code"], -1);
     assert_eq!(report["judge"]["stdout_bytes"], json!([]));
+}
+
+#[test]
+fn prepared_initial_identity_requires_the_explicit_profile_and_standalone_scope() {
+    use chrono_harness::prepared::{self, InputRequest, PreparedCheck, ProfileBinding, Selection};
+    let mut request = InputRequest {
+        schema: prepared::REQUEST.into(),
+        host_root: Path::new("/host").into(),
+        source: "local".into(),
+        host_config: ".chrono-harness/config.json".into(),
+        host_config_sha256: "1".repeat(64),
+        effective_config: ".chrono-harness/config.json".into(),
+        effective_config_sha256: "1".repeat(64),
+        profile: ".chrono-harness/ci/delta.json".into(),
+        profile_sha256: "2".repeat(64),
+        initial_profile: Some(ProfileBinding {
+            path: ".chrono-harness/ci/initial.json".into(),
+            sha256: "3".repeat(64),
+        }),
+        selection: Selection::All,
+        native_artifacts: None,
+        prepared: None,
+    };
+    let mut result = PreparedCheck {
+        schema: prepared::RESPONSE.into(),
+        request_sha256: chrono_harness::sha256(&serde_json::to_vec(&request).unwrap()),
+        source: "local".into(),
+        profile: ".chrono-harness/ci/initial.json".into(),
+        base: None,
+        candidate: "a".repeat(40),
+        initial: true,
+        context: None,
+        scope: None,
+        evidence: json!({"report_path":"original"}),
+        originals: vec![],
+    };
+    prepared::validate_result_identity(&request, &result).unwrap();
+    result.profile = request.profile.clone();
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "initial may not certify the DELTA profile"
+    );
+    result.profile = ".chrono-harness/ci/initial.json".into();
+    request.initial_profile = None;
+    result.request_sha256 = chrono_harness::sha256(&serde_json::to_vec(&request).unwrap());
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "no implicit initial profile"
+    );
+    request.initial_profile = Some(ProfileBinding {
+        path: result.profile.clone(),
+        sha256: "3".repeat(64),
+    });
+    for selection in [
+        Selection::Unit {
+            unit: "business".into(),
+        },
+        Selection::Collect,
+    ] {
+        request.selection = selection;
+        result.request_sha256 = chrono_harness::sha256(&serde_json::to_vec(&request).unwrap());
+        assert!(
+            prepared::validate_result_identity(&request, &result).is_err(),
+            "initial is a standalone inventory"
+        );
+    }
+    request.selection = Selection::All;
+    result.request_sha256 = chrono_harness::sha256(&serde_json::to_vec(&request).unwrap());
+    result.initial = false;
+    result.base = Some("b".repeat(40));
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "DELTA cannot use the inventory profile"
+    );
+    result.profile = request.profile.clone();
+    prepared::validate_result_identity(&request, &result).unwrap();
+    request.initial_profile.as_mut().unwrap().sha256 = "4".repeat(64);
+    assert!(
+        prepared::validate_result_identity(&request, &result).is_err(),
+        "both profile identities are request-bound"
+    );
 }

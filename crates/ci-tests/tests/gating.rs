@@ -422,6 +422,33 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     .len(),
                 d["required_units"].as_array().unwrap().len()
             );
+            let gather = chrono_harness::json(
+                &fs::read(
+                    h.host
+                        .root
+                        .join(".chrono-harness/state/collection/gather.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let shared = gather["shared_report_aliases"].as_array().unwrap();
+            assert_eq!(shared.len(), d["required_units"].as_array().unwrap().len());
+            for alias in shared {
+                let copy = h.host.root.join(alias["path"].as_str().unwrap());
+                let original = h.host.root.join(alias["original"].as_str().unwrap());
+                assert_eq!(
+                    chrono_harness::file_identity(&copy).unwrap(),
+                    chrono_harness::file_identity(&original).unwrap()
+                );
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    assert_eq!(
+                        fs::symlink_metadata(copy).unwrap().ino(),
+                        fs::symlink_metadata(original).unwrap().ino()
+                    );
+                }
+            }
         }
         for (id, before) in ["a", "b"].iter().zip(counts) {
             assert_eq!(
@@ -561,8 +588,21 @@ fn parent_collection_requires_transported_streams_without_local_fallback_or_busi
         let report: Value =
             serde_json::from_slice(&fs::read(h.host.root.join(original)).unwrap()).unwrap();
         assert_eq!(report["schema"], "chrono-check-report/v2");
+        let launcher_pid = report["judge"]["launcher_pid"]
+            .as_u64()
+            .expect("retained process launcher pid");
+        assert!(launcher_pid > 0);
+        let launch_path = report["judge"]["launch_original"]["path"]
+            .as_str()
+            .expect("retained launch original path");
+        let launch: Value = serde_json::from_slice(
+            &fs::read(h.host.root.join(launch_path)).expect("retained launch original"),
+        )
+        .unwrap();
+        assert_eq!(launch["launcher_pid"].as_u64(), Some(launcher_pid));
         // Remove all local originals after upload, so only transported evidence can satisfy collection.
         fs::remove_file(h.host.root.join(original)).unwrap();
+        fs::remove_file(h.host.root.join(launch_path)).unwrap();
         for stream in ["stdout", "stderr"] {
             let path = report["judge"][format!("{stream}_original")]["path"]
                 .as_str()

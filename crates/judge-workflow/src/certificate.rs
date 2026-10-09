@@ -220,6 +220,16 @@ pub fn consume(
         let report_bytes = fs::read(&report_file)
             .map_err(|e| format!("producer report absent/not finalized: {e}"))?;
         let report = json(&report_bytes)?;
+        if results.completion.is_some()
+            && chrono_harness::full::report_transport_bytes(&report, report_bytes.len() as u64)?
+                > r.config()["execution_units"]["collection_limits"]["report_bytes"]
+                    .as_u64()
+                    .ok_or("collected producer report bound")?
+        {
+            return Err(
+                "collected producer metadata and original streams exceed registered bound".into(),
+            );
+        }
         if !matches!(report["status"].as_str(), Some("pass" | "warn"))
             || report["report_path"] != report_path
             || report["base"] != req.base.commit

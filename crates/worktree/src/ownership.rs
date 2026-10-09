@@ -9,6 +9,7 @@ pub(crate) struct Lease {
     file: File,
     path: PathBuf,
     id: String,
+    created: bool,
     #[cfg(unix)]
     _scope: chrono_harness::process_fds::Scope,
 }
@@ -36,9 +37,20 @@ impl Lease {
         exclusive: bool,
         wait: Option<Duration>,
     ) -> Result<Option<Self>, String> {
+        Self::acquire_observed(path, expected, create, exclusive, wait, || {})
+    }
+
+    pub(crate) fn acquire_observed(
+        path: &Path,
+        expected: Option<&str>,
+        create: bool,
+        exclusive: bool,
+        wait: Option<Duration>,
+        after_create: impl FnOnce(),
+    ) -> Result<Option<Self>, String> {
         #[cfg(not(unix))]
         {
-            let _ = (path, expected, create, exclusive, wait);
+            let _ = (path, expected, create, exclusive, wait, after_create);
             return Err("kernel ownership is unsupported on this platform".into());
         }
         #[cfg(unix)]
@@ -52,24 +64,33 @@ impl Lease {
                 .read(true)
                 .write(true)
                 .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
-            let file = if create {
+            let (file, created) = if create {
                 match options.create_new(true).open(path) {
-                    Ok(file) => file,
+                    Ok(file) => (file, true),
                     Err(e)
                         if e.kind() == std::io::ErrorKind::AlreadyExists && expected.is_none() =>
                     {
-                        options
-                            .create_new(false)
-                            .open(path)
-                            .map_err(|e| e.to_string())?
+                        (
+                            options
+                                .create_new(false)
+                                .open(path)
+                                .map_err(|e| e.to_string())?,
+                            false,
+                        )
                     }
                     Err(e) => return Err(e.to_string()),
                 }
             } else {
-                options
-                    .open(path)
-                    .map_err(|e| format!("ownership lease unavailable; preserve work: {e}"))?
+                (
+                    options
+                        .open(path)
+                        .map_err(|e| format!("ownership lease unavailable; preserve work: {e}"))?,
+                    false,
+                )
             };
+            if created {
+                after_create();
+            }
             let metadata = file.metadata().map_err(|e| e.to_string())?;
             if !metadata.is_file() {
                 return Err("ownership lease must be a regular file".into());
@@ -114,12 +135,16 @@ impl Lease {
                 file,
                 path: path.into(),
                 id,
+                created,
                 _scope: scope,
             }))
         }
     }
     pub(crate) fn id(&self) -> &str {
         &self.id
+    }
+    pub(crate) fn newly_created(&self) -> bool {
+        self.created
     }
     pub(crate) fn stable(&self) -> Result<(), String> {
         let _ = self.file.metadata().map_err(|e| e.to_string())?;

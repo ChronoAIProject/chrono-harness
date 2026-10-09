@@ -33,7 +33,7 @@ Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crate
 | 13 acceptance | partial | row map below | all pending row obligations remain |
 | 14 boundaries | implemented documentation | README/SPEC/this map | update as later increments land |
 | 15 generic reference experience | partial | existing fixed-source references; no reference repo modifications | apply remaining generic workflow lessons |
-| 16 instructions | implemented existing scope: portable requirement → audit → refactor → develop defaults and host adoption | Existing bilingual atoms and workflow layout feed product defaults, this host’s root, full English Markdown and focused skill; current docs/instructions.md defines customization-preserving adoption. Unchanged P3 instructions suite passed 61/61 and real zh/en/customization consumers remain source evidence; this small target verifies its actual generation and idempotence, with its own context measurements in docs/methodology-extraction.md | independent semantic/translation audit, documented platform/crash/concurrency limits, caller clean-candidate/native/PR/landing; no full activation or new input/release claim |
+| 16 instructions | implemented existing scope: portable requirement → audit → refactor → develop defaults and host adoption | Existing bilingual atoms and workflow layout feed product defaults, this host’s root, full English Markdown and focused skill; current docs/instructions.md defines customization-preserving adoption. Unchanged P3 instructions suite passed 61/61 and real zh/en/customization consumers remain source evidence; this small target verifies its actual generation and idempotence, with its own context measurements in docs/methodology-extraction.md; one bounded independent fixed-text bilingual/source-disposition review completed without material findings | runtime/public/native consumption, documented platform/crash/concurrency limits, caller clean-candidate/native/PR/landing; no full activation or new input/release claim |
 
 Rows below follow §13 in order; scoped evidence is explicitly limited to that profile.
 
@@ -98,6 +98,15 @@ Rows below follow §13 in order; scoped evidence is explicitly limited to that p
 | 57 test-only or imagined future consumers | pending: SPEC §1 contract only | require a real existing need and actual consuming path; deliver required intermediate implementation together with integration |
 | 58 explicitly registered external consumers | pending: SPEC §1 contract only | real identity/repository, fixed version, entry, input/output purpose and adoption evidence; unavailable evidence remains unverified |
 | 59 affected consumer missing/retired/mismatched | pending: SPEC §1 contract only | precise reference and evidence failures for the DELTA, no inferred consumers or unrelated whole-repository rejection |
+| 60 released/expired successful report and fixture | partial: current finite custodian file retirement through the existing worktree maintenance owner; exact aliases, retained originals, kernel exclusion, separate synced effect journals and truthful partial retry | complete producer-ended ordinary-entry automatic evidence retirement; native and delivery acceptance |
+| 61 historical reference cycles without current roots | pending: SPEC §10.1 target | explicit references/roots and root-free cycle reclamation |
+| 62 duplicate original bytes across reports/streams/downloads | partial: addressed blob transport deduplicates declared originals; v2 process transport is lossless compression; native gather shares exact explicitly bound report aliases within an artifact while preserving paths and failure closure | unique content entities across enrolled producers, independent operation results and exception relations; compression or shared allocation is not path retirement |
+| 63 nested fixture SDK/build/incremental outputs under state | pending: SPEC §10.1 target | explicit producer enrollment and compatible automatic retirement; directory placement grants no exemption |
+| 64 interruption during artifact publication/reclamation | partial: worktree cache retry intents and kernel leases | declared report/fixture intent recovery through ordinary entries, truthful partial/unknown original outcomes |
+| 65 count/byte overflow with live consumers/recovery state | pending: SPEC §10.1 target | protected roots, measured/unknown occupancy, controllable-write admission and registered overflow handling |
+| 66 new references/identity drift/unjoined descendants before disposal | partial: lifecycle admission/exclusion and identity rechecks | synchronize all declared artifact publication/reference/release/disposal under existing owners |
+| 67 retired originals or repeated cleanup retries | partial: cache retry evidence avoids recursive growth | truthful retired-original summaries and evidence-insufficient consumption; finite metadata for general artifact retirement |
+| 68 large old/unregistered/duplicate historical host artifacts | pending: SPEC §10.1 target | owner migration with real references and exact disposal conditions; unknown ownership remains protected |
 
 The registered execution increment adds routes/projects, FILEMAP v2, retained endpoint inputs and the finite chrono-ci-check/v1 / FILEMAP v1 decoder. See [the execution contract and exact boundary](execution.md). Dedicated routes tests check ordered plans, actual argv/environment/tool bindings, receipt tampering, PATH shadow and byte replacement. Dedicated projects tests run the actual runner/registration/filemap/routes/projects chain on committed project/script hosts, cover exclusive pairs, manifest-free/custom-action hosts, explicit output isolation, retained input failures, real exits/effects, blocked dependents, docs nonexecution and mapped replacements. Its migration consumer uses real old repository registrations and actual ci.verify, including workflow drift and restoration. Existing test identities remain; the historical pseudo-script rejection reads the fixed old tree. Maintained regressions also cover retained inherited-environment changes through the full chain (including absent/empty, overridden and disconnected controls), registered intermediate workspace rejection before operations, both protocols' embedded invalid UTF-8, arbitrary operation bytes, and migration version failure diagnostics. The host interpreter binding is explicit macOS data; the failed original native run and the verified repaired native results are recorded in [CI documentation](ci.md).
 
@@ -533,6 +542,46 @@ platform checks/publication and full main/examples activation remain caller work
 This changes product source and host policy together; the added validation cost is
 three inventory checks plus directly affected owner tests and exhaustive group runs.
 
+## Report and evidence retention target (§10.1)
+
+The existing PR121 target is carried in SPEC §10.1. Runtime coverage remains
+partial: current cache-only cleanup protects lifecycle users and recovery
+originals, but does not implement general producer intents/output enrollment,
+finite time/count/logical and actual byte budgets, explicit reference acquisition
+and release, root-aware historical reclamation, deduplication across independent
+operations, bounded cleanup metadata, or automatic recovery for every declared
+report/fixture producer. Historical reference cycles alone must not become roots.
+Compression saves representation bytes; it does not release or retire artifacts.
+
+The target requires admission for controllable writes and truthful measured or
+unknown occupancy, with protected overflow handling. It does not promise a
+filesystem-wide physical ceiling over arbitrary live builders. Existing required
+sources, current inputs/recovery snapshots, live descendants, unretained commits,
+original failures and old deployed semantics remain protected. Explicit migration,
+actual ordinary-entry/no-finish reclamation, measured eligible savings and real
+host adoption remain unfinished; this specification carry-forward changes no
+cleanup policy or installed behavior.
+
+Portable original-evidence coverage adds the published v2 codec/marker, Git
+observations, full predecessor/report representation, shared original-stream
+accounting at projects and workflow consumers, retained process launch/streams and
+failed-participation originals. Rust tests cover binary/empty/corrupt records,
+legacy inline/v1 and current v2 stdin reconstruction, original budget enforcement,
+partial streams after enclosing termination and unchanged PR165 input capacity.
+Independent runner-dependent locks carry miniz_oxide 0.8.9 / adler2 2.0.1. Projects
+migration and CI release tests consume current source build outputs from their
+existing declared prerequisites and native staging destinations. Cargo policy
+failures retain their original code/message and policy path while referencing the
+candidate registry, so unchanged policy files do not produce invalid findings.
+Original test operations, assertions, selectors, threads and bounds remain. This source foundation is not a
+beta21-compatible release by itself: Cargo/full-input/scoped/collection deltas,
+remaining prerequisites, clean committed canonical/native checks, review, landing,
+installation/publication and full SPEC acceptance remain caller/ordered follow-up
+obligations. Product and host registrations change together; the applicable
+`W_MIXED_JUDGE_PRODUCT` warning does not waive validation. Build/test/storage costs
+for the composition remain measured only by its source validation receipts;
+unmeasured physical reclamation remains unknown.
+
 ## Registered automatic lifecycle cleanup
 
 The candidate worktree owner implements opt-in exact artifact policy, surviving
@@ -655,3 +704,24 @@ non-UTF8 roundtrips, business/transport failures, corruption, missing uploads wi
 all local originals removed, and zero business reruns during collection. Host
 adoption and validation remain subject to the same candidate and native checks;
 this does not remove nested business-receipt or acquisition duplication.
+
+
+The worktree owner now has an explicit historical-main current-custody transition
+on the existing migrate entry. It preserves original producer/disposal outcomes, binds an
+exact operator declaration and uses the adopted exclusion and cache drain.
+Interrupted-use reconciliation may append use history and remove stale tokens;
+mutable enrollment/use bytes are not an unconditional preservation invariant.
+Dedicated Rust behavior cases cover selected reclamation, live/source/unknown
+protection, published-transition recovery, partial disposal and ordinary reentry.
+This source increment does not establish true-dev canonical/native acceptance,
+report-custody adoption, PR delivery or complete SPEC acceptance. Actual host
+reclamation and deployment observations belong to the caller's retained evidence.
+
+Exact evidence-alias retirement preserves failure originals and requires continued
+availability of its referenced custody declaration and authority. Its `removed`
+count records fully verified completions; later verification failure can follow
+an unlink effect. Native gather shares eligible legacy inline report aliases only
+up to 64 MiB. These transitions do not repair the historical 861 missing stdout
+siblings or change the original 115-pass/5-fail result. Those historical evidence
+limits remain separate from current candidate checks, native/public adoption and
+ordered delivery.

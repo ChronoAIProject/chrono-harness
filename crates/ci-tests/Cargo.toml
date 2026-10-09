@@ -11,6 +11,7 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 [dev-dependencies]
 chrono-ci = { path = "../ci" }
 chrono-harness = { path = "../runner" }
+chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 tempfile = "3"
 serde_yaml_ng = "0.10"
 

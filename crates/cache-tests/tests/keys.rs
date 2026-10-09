@@ -1003,10 +1003,37 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         "args":["file",compiler],"env":{},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"file-path"});
     let first = plan(root.path(), &config, "check.one").unwrap();
+    let repeated = plan(root.path(), &config, "check.one").unwrap();
+    let mut stable = first.clone();
+    let mut stable_repeated = repeated.clone();
+    let mut originals = Vec::new();
+    for report in [&mut stable, &mut stable_repeated] {
+        let original = report["inputs"]["compiler"]
+            .as_object_mut()
+            .unwrap()
+            .remove("original")
+            .unwrap();
+        let path = original.as_str().unwrap();
+        let bytes = fs::read(root.path().join(path)).unwrap();
+        assert_eq!(
+            path,
+            format!(
+                ".chrono-harness/state/cache-probes/{:x}.json",
+                Sha256::digest(&bytes)
+            )
+        );
+        let process: Value = serde_json::from_slice(&bytes).unwrap();
+        let observed = &report["inputs"]["compiler"]["observation"];
+        assert_eq!(process["exit_code"], observed["exit_code"]);
+        assert_eq!(process["sha256"], observed["executable_sha256"]);
+        assert_eq!(process["stdout_sha256"], observed["stdout_sha256"]);
+        assert_eq!(process["stderr_sha256"], observed["stderr_sha256"]);
+        originals.push(process);
+    }
+    assert_ne!(originals[0]["child_pid"], originals[1]["child_pid"]);
     assert_eq!(
-        first,
-        plan(root.path(), &config, "check.one").unwrap(),
-        "evidence times must not change keys"
+        stable, stable_repeated,
+        "distinct invocation originals must not change observed inputs or cache keys"
     );
     fs::write(&compiler, b"compiler-two").unwrap();
     let next = plan(root.path(), &config, "check.one").unwrap();

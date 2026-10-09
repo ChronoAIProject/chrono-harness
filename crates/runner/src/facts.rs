@@ -117,6 +117,21 @@ pub fn blob(root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
 pub fn parents(root: &Path, oid: &str) -> Result<Vec<String>, String> {
     Reader::legacy().parents(root, oid)
 }
+/// Parse physical commit headers, without revision-walk shallow semantics.
+pub fn commit_parents(bytes: &[u8]) -> Result<Vec<String>, String> {
+    let mut parents = vec![];
+    for line in bytes
+        .split(|b| *b == b'\n')
+        .take_while(|line| !line.is_empty())
+    {
+        if let Some(oid) = line.strip_prefix(b"parent ") {
+            let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
+            full_oid(oid)?;
+            parents.push(oid.into());
+        }
+    }
+    Ok(parents)
+}
 pub fn tree(root: &Path, oid: &str) -> Result<Tree, String> {
     Reader::legacy().tree(root, oid)
 }
@@ -319,18 +334,7 @@ impl Reader {
     pub fn parents(&self, root: &Path, oid: &str) -> Result<Vec<String>, String> {
         full_oid(oid)?;
         let bytes = self.git(root, &["cat-file", "commit", oid])?;
-        let headers = bytes
-            .split(|b| *b == b'\n')
-            .take_while(|line| !line.is_empty());
-        let mut parents = vec![];
-        for line in headers {
-            if let Some(oid) = line.strip_prefix(b"parent ") {
-                let oid = std::str::from_utf8(oid).map_err(|_| "invalid parent OID")?;
-                full_oid(oid)?;
-                parents.push(oid.into());
-            }
-        }
-        Ok(parents)
+        commit_parents(&bytes)
     }
     pub fn tree(&self, root: &Path, oid: &str) -> Result<Tree, String> {
         self.tree_with_reuse(root, oid)

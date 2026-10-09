@@ -19,6 +19,73 @@ fn encode(value: &str) -> String {
         .collect()
 }
 
+/// Older uploaded reports contain a full selected-path copy of their declared
+/// preparation original. Preserve both reader paths and exact transport bytes,
+/// but let this producer store the immutable aliases on one inode. Reference
+/// publication already avoids this duplicate and requires no change.
+fn share_report_alias(
+    root: &Path,
+    path: &str,
+    source_directory: &str,
+    destination: &str,
+) -> Result<Option<Value>, String> {
+    let alias = no_symlink_parents(root, path)?;
+    let metadata = fs::symlink_metadata(&alias).map_err(|e| e.to_string())?;
+    if !metadata.is_file() || metadata.len() > 64 * 1024 * 1024 {
+        return Ok(None);
+    }
+    let report = chrono_harness::json(&fs::read(&alias).map_err(|e| e.to_string())?)?;
+    let Some(original) = report["retained_report"].as_str() else {
+        return Ok(None);
+    };
+    if report["schema"] != "chrono-check-report/v1" {
+        return Ok(None);
+    }
+    let transport = chrono_harness::prepared::ArtifactTransport {
+        source_directory: source_directory.into(),
+        directory: format!("{destination}/"),
+    };
+    let mapped = chrono_harness::prepared::original_path(
+        &chrono_harness::prepared::Original {
+            path: original.into(),
+            sha256: String::new(),
+        },
+        Some(&transport),
+    )?;
+    let original = no_symlink_parents(root, &mapped)?;
+    if original == alias
+        || !fs::symlink_metadata(&original)
+            .map_err(|e| e.to_string())?
+            .is_file()
+    {
+        return Err("downloaded report alias original is not a distinct regular file".into());
+    }
+    let identity = file_identity(&alias)?;
+    if file_identity(&original)? != identity {
+        return Err("downloaded report alias differs from its declared original".into());
+    }
+    // The temporary name is inside this attempt's existing isolated download.
+    // On interruption it is another link to the preserved original, not a new body.
+    let staged = format!("{path}.shared-{}", std::process::id());
+    let staged = no_symlink_parents(root, &staged)?;
+    fs::hard_link(&original, &staged).map_err(|e| e.to_string())?;
+    let replace: Result<(), String> = (|| {
+        if file_identity(&alias)? != identity || file_identity(&original)? != identity {
+            return Err("downloaded report alias changed before sharing".into());
+        }
+        fs::rename(&staged, &alias).map_err(|e| e.to_string())?;
+        Ok(())
+    })();
+    if replace.is_err() {
+        let _ = fs::remove_file(&staged);
+    }
+    replace?;
+    Ok(Some(
+        json!({"path":path,"original":mapped,"sha256":identity.0,
+        "length":identity.1,"storage":"shared-inode","reader_paths":"preserved"}),
+    ))
+}
+
 struct Transport<'a> {
     root: &'a Path,
     config: &'a units::Gather,
@@ -27,6 +94,7 @@ struct Transport<'a> {
     digest: String,
     observations: Vec<Value>,
     resources: Option<Value>,
+    shared_report_aliases: Vec<Value>,
 }
 
 impl<'a> Transport<'a> {
@@ -50,6 +118,7 @@ impl<'a> Transport<'a> {
             executable: exe.to_str().ok_or("non UTF-8 transport")?.into(),
             digest: file_identity(&exe)?.0,
             observations: vec![],
+            shared_report_aliases: vec![],
             resources: c
                 .resource_observation
                 .as_ref()
@@ -660,6 +729,13 @@ fn inner(
             return Err(format!("unit {unit} executed a different workflow source"));
         }
         let report_path = downloaded(&registered[&unit].report_path)?;
+        if c.collection.schema == "chrono-github-ci/v4" {
+            if let Some(shared) =
+                share_report_alias(root, &report_path, &w.artifact_directory, &destination)?
+            {
+                transport.shared_report_aliases.push(shared);
+            }
+        }
         let mut input = json!({"unit":unit,"path":report_path,"sha256":file_identity(&no_symlink_parents(root,&report_path)?)?.0,
             "runner_sha256":unit_context["executables"]["runner_sha256"],"judge_sha256":unit_context["executables"]["judge_sha256"],
             "artifacts":if c.collection.schema=="chrono-github-ci/v4" {json!({"source_directory":w.artifact_directory,"directory":format!("{destination}/")})} else {Value::Null}});
@@ -755,7 +831,7 @@ pub(super) fn gather(
     }
     let mut transport = Transport::new(root, &c.gather)?;
     let result = inner(root, path, c, repository, &mut transport);
-    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations});
+    let mut report = json!({"schema":"chrono-ci-gather/v1","repository":repository,"result":result.as_ref().ok(),"error":result.as_ref().err(),"processes":transport.observations,"shared_report_aliases":transport.shared_report_aliases});
     if let Some(resources) = transport.resources {
         report["resources"] = resources;
         if let Some(summary) = c.gather.resource_observation.as_ref().and_then(|config| {

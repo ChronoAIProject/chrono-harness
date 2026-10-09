@@ -9,6 +9,10 @@ description = "Explicit host worktree lifecycle operations"
 test = false
 doctest = false
 
+[features]
+# Deterministic scheduling seam used only by the dedicated receipt behavior tests.
+producer-birth-test = []
+
 [[bin]]
 name = "chrono-worktree"
 path = "src/main.rs"

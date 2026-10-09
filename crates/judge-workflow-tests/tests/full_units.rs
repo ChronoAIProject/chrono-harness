@@ -547,6 +547,7 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
         "failed-collector-process",
         "provisional-report",
         "oversized-report",
+        "compressed-stream-budget",
     ] {
         let mut final_report: Value = serde_json::from_slice(&original).unwrap();
         match case {
@@ -570,6 +571,11 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
                 final_report["judges"].as_array_mut().unwrap().pop();
             }
             "oversized-report" => {}
+            "compressed-stream-budget" => {
+                let process = &mut final_report["judges"][0]["process"];
+                assert_eq!(process["encoding"], "chrono-retained-process/v2");
+                process["stdout_length"] = json!(64 * 1024 * 1024);
+            }
             _ => unreachable!(),
         }
         fs::write(&path, serde_json::to_vec(&final_report).unwrap()).unwrap();
@@ -593,6 +599,13 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
                 rejected["findings"]
                     .to_string()
                     .contains("exceeds registered bound")
+            );
+        }
+        if case == "compressed-stream-budget" {
+            assert!(
+                rejected["findings"]
+                    .to_string()
+                    .contains("metadata and original streams exceed registered bound")
             );
         }
         if case == "missing-originals" {
@@ -752,6 +765,22 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
         "wrong-registry",
         "wrong-environment",
     ];
+    let mut oversized = original_report.clone();
+    assert_eq!(
+        oversized["judges"][0]["process"]["encoding"],
+        "chrono-retained-process/v2"
+    );
+    oversized["judges"][0]["process"]["stdout_length"] = json!(64 * 1024 * 1024);
+    fs::write(&path, serde_json::to_vec(&oversized).unwrap()).unwrap();
+    manifest(&root, &["one", "two"]);
+    let (exit, rejected) = collected(&root, &h);
+    assert_ne!(exit, 0);
+    assert!(
+        rejected["findings"]
+            .to_string()
+            .contains("full unit metadata and original streams exceed registered report bound")
+    );
+    assert_eq!(marker(tools.path()), before);
     for case in semantic_cases {
         let mut report = original_report.clone();
         for r in report["judges"].as_array_mut().unwrap() {

@@ -41,6 +41,8 @@ pub struct Canonical {
     pub operation: String,
     pub argv: Vec<String>,
     pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_profile: Option<String>,
     pub inputs: Inputs,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub participation: Option<Action>,
@@ -80,10 +82,18 @@ pub struct InputRequest {
     pub effective_config_sha256: String,
     pub profile: String,
     pub profile_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_profile: Option<ProfileBinding>,
     pub selection: Selection,
     pub native_artifacts: Option<NativeArtifacts>,
     // Local collection uses the CI collection owner after local endpoints were observed.
     pub prepared: Option<PreparedCheck>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileBinding {
+    pub path: String,
+    pub sha256: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -109,6 +119,20 @@ pub struct PreparedCheck {
     pub originals: Vec<Original>,
 }
 impl InputRequest {
+    pub fn profile_for(&self, initial: bool) -> Result<&str, String> {
+        if initial && self.initial_profile.is_some() {
+            if self.selection != Selection::All {
+                return Err("initial inventory requires the standalone bare check".into());
+            }
+            Ok(&self
+                .initial_profile
+                .as_ref()
+                .ok_or("initial profile binding missing")?
+                .path)
+        } else {
+            Ok(&self.profile)
+        }
+    }
     pub fn validate(&self) -> Result<(), String> {
         if self.schema != REQUEST
             || !matches!(self.source.as_str(), "local" | "ci")
@@ -143,6 +167,22 @@ impl InputRequest {
         let c = declaration(&cfg)?;
         if c.profile != self.profile {
             return Err("check input profile disagrees with binding".into());
+        }
+        if c.initial_profile.as_deref() != self.initial_profile.as_ref().map(|p| p.path.as_str()) {
+            return Err("initial profile disagrees with binding".into());
+        }
+        if let Some(p) = &self.initial_profile {
+            if file_identity(&no_symlink_parents(&self.host_root, &p.path)?)?.0 != p.sha256 {
+                return Err("initial profile identity drift".into());
+            }
+            let profile: crate::initial::Profile = decode(
+                &fs::read(no_symlink_parents(&self.host_root, &p.path)?)
+                    .map_err(|e| e.to_string())?,
+            )?;
+            profile.validate()?;
+            if profile.host_config != self.host_config {
+                return Err("initial profile host binding mismatch".into());
+            }
         }
         let dir = retention_directory(self);
         if !cfg["artifacts"]
@@ -188,6 +228,15 @@ pub fn declaration(config: &Value) -> Result<Canonical, String> {
     if !c.profile.starts_with(".chrono-harness/") || c.profile.starts_with(".chrono-harness/state/")
     {
         return Err("short profile must be a host policy".into());
+    }
+    if let Some(p) = &c.initial_profile {
+        relative_path(p)?;
+        if !p.starts_with(".chrono-harness/")
+            || p.starts_with(".chrono-harness/state/")
+            || p == &c.profile
+        {
+            return Err("initial profile must be a separate host policy".into());
+        }
     }
     let inherit: Vec<String> = serde_json::from_value(config["environment"]["inherit"].clone())
         .map_err(|e| e.to_string())?;
@@ -276,40 +325,78 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
             .ok_or("participation output bound")? as usize,
     };
     let process = run_process_observed(root, &spec, &[], &file_identity(&program)?.0)?;
+    let original_failure = |message: String| -> String {
+        let retained = (|| {
+            retain_original(
+                root,
+                ".chrono-harness/state/preparation/",
+                "participation",
+                &serde_json::to_vec(&crate::full::compact_process(
+                    &serde_json::to_value(&process).map_err(|e| e.to_string())?,
+                )?)
+                .map_err(|e| e.to_string())?,
+            )
+        })();
+        match retained {
+            Ok(original) => format!(
+                "{message}; original process {} (sha256 {})",
+                original.path, original.sha256
+            ),
+            Err(error) => format!(
+                "{message}; cannot retain original participation: {error}; stdout sha256 {}, stderr sha256 {}",
+                process.stdout_sha256, process.stderr_sha256
+            ),
+        }
+    };
     if process.failure.is_some() {
-        return Err(format!(
-            "check participation failed: {:?}; stdout {}; stderr {}",
-            process.failure, process.stdout, process.stderr
-        ));
+        return Err(original_failure(format!(
+            "check participation failed: {:?}",
+            process.failure
+        )));
     }
     let report: Value = crate::json(&process.stdout_bytes)
-        .map_err(|e| format!("check participation result: {e}; {}", process.stderr))?;
-    let inner = report
-        .get("managed_process")
-        .ok_or_else(|| format!("check participation refused: {}", report["error"]))?;
+        .map_err(|e| original_failure(format!("check participation result: {e}")))?;
+    let inner = match report.get("managed_process") {
+        Some(inner) => inner,
+        None => {
+            return Err(original_failure(format!(
+                "check participation refused: {}",
+                report["error"]
+            )));
+        }
+    };
     if inner["failure"].as_str().is_some() {
-        return Err(format!(
+        return Err(original_failure(format!(
             "check process failed: {}; original lifecycle report {}",
             inner["failure"], report["report_path"]
-        ));
+        )));
     }
-    let exit = inner["exit_code"].as_i64().ok_or("check process exit")?;
+    let exit = match inner["exit_code"].as_i64() {
+        Some(exit) => exit,
+        None => return Err(original_failure("check process exit".into())),
+    };
     if report["status"] != "used" && report["managed_command_failed"] != true {
-        return Err(format!(
+        return Err(original_failure(format!(
             "check lifecycle failed: {}; original report {}",
             report["error"], report["report_path"]
-        ));
+        )));
     }
+    let stdout = match inner["stdout"].as_str() {
+        Some(stdout) => stdout,
+        None => return Err(original_failure("check process stdout".into())),
+    };
+    let stderr = match inner["stderr"].as_str() {
+        Some(stderr) => stderr,
+        None => return Err(original_failure("check process stderr".into())),
+    };
+    let exit_code = match u8::try_from(exit) {
+        Ok(exit) => exit,
+        Err(_) => return Err(original_failure("check process exit out of range".into())),
+    };
     Ok(Some(crate::CliOutput {
-        exit_code: u8::try_from(exit).map_err(|_| "check process exit out of range")?,
-        stdout: inner["stdout"]
-            .as_str()
-            .ok_or("check process stdout")?
-            .into(),
-        stderr: inner["stderr"]
-            .as_str()
-            .ok_or("check process stderr")?
-            .into(),
+        exit_code,
+        stdout: stdout.into(),
+        stderr: stderr.into(),
     }))
 }
 /// Acquisition credentials are declared in the existing environment policy and never forwarded to judges.
@@ -563,8 +650,11 @@ pub fn validate_result_identity(req: &InputRequest, p: &PreparedCheck) -> Result
     if p.schema != RESPONSE
         || p.request_sha256 != sha256(&serde_json::to_vec(req).map_err(|e| e.to_string())?)
         || p.source != req.source
-        || p.profile != req.profile
+        || p.profile != req.profile_for(p.initial)?
         || p.initial == p.base.is_some()
+        || (p.initial
+            && req.initial_profile.is_some()
+            && (p.context.is_some() || p.scope.is_some()))
         || !req.selection.matches(&p.scope)
         || !p.evidence.is_object()
         || p.evidence.as_object().is_none_or(|o| o.is_empty())
@@ -591,6 +681,37 @@ pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), Stri
     facts::full_oid(&p.candidate)?;
     if let Some(b) = &p.base {
         facts::full_oid(b)?;
+    }
+    if p.initial {
+        let reader = facts::Reader::for_config(&req.host_root, &req.host_config)?;
+        reader.verify_config(&req.host_root, &p.candidate)?;
+        if !reader.parents(&req.host_root, &p.candidate)?.is_empty() {
+            return Err("prepared initial candidate has parents".into());
+        }
+        validate_initial_contract(&req.host_root, req)?;
+        if let Some(profile) = &req.initial_profile {
+            if sha256(&reader.blob(&req.host_root, &p.candidate, &profile.path)?) != profile.sha256
+            {
+                return Err("initial profile differs from candidate".into());
+            }
+        }
+    }
+    Ok(())
+}
+/// Existing scoped unit inventory remains explicit in its nonempty unit policy.
+/// Standalone inventory requires the separate initial judge/profile binding.
+pub fn validate_initial_contract(root: &Path, req: &InputRequest) -> Result<(), String> {
+    if req.initial_profile.is_some() {
+        req.profile_for(true)?;
+        return Ok(());
+    }
+    let profile = crate::load_config(&no_symlink_parents(root, &req.profile)?)?;
+    if profile.schema != units::PROFILE
+        || profile.policy["units"]
+            .as_object()
+            .is_none_or(|units| units.is_empty())
+    {
+        return Err("initial profile binding missing".into());
     }
     Ok(())
 }
@@ -621,6 +742,16 @@ pub fn prepare(
         effective_config_sha256: sha256(&bytes),
         profile: c.profile.clone(),
         profile_sha256: file_identity(&no_symlink_parents(root, &c.profile)?)?.0,
+        initial_profile: c
+            .initial_profile
+            .as_ref()
+            .map(|path| -> Result<ProfileBinding, String> {
+                Ok(ProfileBinding {
+                    path: path.clone(),
+                    sha256: file_identity(&no_symlink_parents(root, path)?)?.0,
+                })
+            })
+            .transpose()?,
         native_artifacts: native_artifacts(root, &cfg, source, &selection)?,
         selection,
         prepared: None,

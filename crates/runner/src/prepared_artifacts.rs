@@ -266,6 +266,12 @@ pub fn validate_retained_binding(
     let p: PreparedCheck =
         serde_json::from_value(binding["result"].clone()).map_err(|e| e.to_string())?;
     let (_, _, cfg, _) = crate::facts_configs::load(root, &req.host_config)?;
+    let c = declaration(&cfg)?;
+    if req.profile != c.profile
+        || req.initial_profile.as_ref().map(|p| p.path.as_str()) != c.initial_profile.as_deref()
+    {
+        return Err("portable preparation profile binding mismatch".into());
+    }
     if native_artifacts(root, &cfg, &req.source, &req.selection)? != req.native_artifacts {
         return Err("producer/upload contract mismatch".into());
     }
@@ -279,6 +285,9 @@ pub fn validate_retained_binding(
         }
     }
     validate_result_identity(&req, &p)?;
+    if p.initial {
+        validate_initial_contract(root, &req)?;
+    }
     for (path, hash) in [
         (&req.host_config, &req.host_config_sha256),
         (&req.effective_config, &req.effective_config_sha256),
@@ -286,6 +295,11 @@ pub fn validate_retained_binding(
     ] {
         if file_identity(&no_symlink_parents(root, path)?)?.0 != *hash {
             return Err("portable preparation policy identity mismatch".into());
+        }
+    }
+    if let Some(p) = &req.initial_profile {
+        if file_identity(&no_symlink_parents(root, &p.path)?)?.0 != p.sha256 {
+            return Err("portable initial profile identity mismatch".into());
         }
     }
     if let Some(a) = &req.native_artifacts {

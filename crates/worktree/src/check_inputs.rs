@@ -122,10 +122,37 @@ fn produce(
             {
                 return Err("local input policy/profile differs from committed HEAD".into());
             }
+            if let Some(p) = &req.initial_profile {
+                if sha256(&r.blob(root, &candidate, &p.path)?) != p.sha256 {
+                    return Err("local initial profile differs from committed HEAD".into());
+                }
+            }
             let (registrations, digest) =
                 start::registrations(r, root, &candidate, &req.host_config)?;
             start::registered_policy(&registrations, path, &r.config.report_directory)?;
             start::cleanliness_at(r, root, &candidate, registrations.config())?;
+            let parents =
+                facts::commit_parents(&r.git(root, &["cat-file", "commit", &candidate])?)?;
+            let initial = parents.is_empty();
+            let selected_profile = req.profile_for(initial)?.to_string();
+            report["parents"] = json!(parents);
+            report["initial"] = json!(initial);
+            report["profile"] = json!(selected_profile);
+            if initial {
+                // A physical root needs no invented or missing remote base.
+                // The final HEAD/config checks still apply to this inventory path.
+                if r.oid(root, "HEAD")? != candidate {
+                    return Err("HEAD advanced during local preparation".into());
+                }
+                start::cleanliness_at(r, root, &candidate, registrations.config())?;
+                req.validate()?;
+                report["registry_digest"] = json!(digest);
+                report["base"] = Value::Null;
+                report["candidate"] = json!(candidate);
+                report["check_context"] = Value::Null;
+                report["scope"] = Value::Null;
+                return Ok(());
+            }
             let target_branch = registrations.workflow()["target_branch"]
                 .as_str()
                 .ok_or("local input target branch missing")?
@@ -321,13 +348,13 @@ fn produce(
         schema: prepared::RESPONSE.into(),
         request_sha256: sha256(&serde_json::to_vec(req).map_err(|e| e.to_string())?),
         source: req.source.clone(),
-        profile: req.profile.clone(),
-        base: Some(report["base"].as_str().ok_or("base missing")?.into()),
+        profile: report["profile"].as_str().ok_or("profile missing")?.into(),
+        base: report["base"].as_str().map(str::to_owned),
         candidate: report["candidate"]
             .as_str()
             .ok_or("candidate missing")?
             .into(),
-        initial: false,
+        initial: report["initial"].as_bool().ok_or("initial missing")?,
         context: serde_json::from_value(report["check_context"].clone())
             .map_err(|e| e.to_string())?,
         scope: serde_json::from_value(report["scope"].clone()).map_err(|e| e.to_string())?,

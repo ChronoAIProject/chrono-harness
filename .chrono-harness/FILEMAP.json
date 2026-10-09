@@ -104,6 +104,10 @@
         {
           "kind": "runtime-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -128,6 +132,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -160,6 +168,10 @@
         {
           "kind": "test-execution",
           "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -184,6 +196,10 @@
         {
           "kind": "runtime-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -220,6 +236,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -4145,6 +4165,10 @@
         {
           "kind": "runtime-input",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
         }
       ]
     },
@@ -4314,6 +4338,18 @@
     },
     {
       "path": "crates/runner-tests/tests/support/cli_child.rs",
+      "owner": "runner-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/runner-tests/tests/support/prepared_producer.rs",
       "owner": "runner-tests",
       "surface": "test",
       "cost": "unmeasured",
@@ -5419,6 +5455,186 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/bounded_cleanup.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/producer.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/cargo_pair/producer/Cargo.toml",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/cargo_pair/producer/Cargo.lock",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/cargo_pair/producer/src/lib.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/cargo_pair/tests/Cargo.toml",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/cargo_pair/tests/Cargo.lock",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/support/cargo_pair/tests/src/lib.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/retained_receipts.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/cache_adoption.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/evidence_retirement.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/evidence_retirement.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/ci-tests/tests/initial_short.rs",
+      "owner": "ci-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:ci-tests"
         }
       ]
     }
@@ -8053,6 +8269,21 @@
       "from": "project:runner",
       "kind": "runtime-input",
       "to": "project:judge-ci-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:ci",
+      "kind": "runtime-input",
+      "to": "project:ci-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:ci-tests"
     }
   ],
   "test_costs": [

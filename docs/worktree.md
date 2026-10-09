@@ -807,7 +807,7 @@ The main host invokes its registered `.chrono-harness/bin/chrono-worktree`; depl
 the candidate binary before using its newly adopted configuration.
 
 The adopted main-host configuration selects `.chrono-harness/cleanup.json`. Its
-`chrono-worktree-automatic-cleanup/v1` policy contains:
+v2 policy retains these v1 fields:
 
 | Field | Contract |
 | --- | --- |
@@ -892,6 +892,96 @@ rejects symlink roots/ancestors and unlinks internal symlinks without following
 external targets. Automatic reports measure literal entry lengths before disposal
 and verified zero afterward; these are logical bytes, not allocated-block savings.
 Legacy explicit maintenance keeps its report shape.
+
+The optional v2 `main_cache_only: true` enrolls the physical Git main checkout
+through the same owner on ordinary `use`, canonical `check`, and adopted
+`bootstrap`. Its enrollment, use intents, shared kernel lease, original process
+result, release, and cache attempts use the existing lifecycle state. Main finish
+releases caches and stays active; it never authorizes checkout, branch, index,
+source, bin, evidence, or commit deletion. Evidence-disposal and landing-pin flags
+are refused for main. Pre-existing registered outputs without adopted consumer
+release remain explicitly protected historical objects. Enrollment owns the
+absent, individually registered outputs before managed production starts; this
+is not a migration of the current host's historical targets or producers.
+
+For historical outputs, the same owner accepts an explicit current-custody
+transition through `migrate --path /exact/main --adopt-cache STATE_PATH`.
+The strict `chrono-main-cache-custody/v1` declaration under registered host state
+contains `path` (the physical main checkout), its full current `head`, exact
+`artifacts` paths, `current_consumers_released: true`, and a nonempty `reason`.
+The current operator must actually join or exclude prior unmanaged consumers and
+state its present custody decision. This is an engineering transition, not an
+assertion that a past producer finished, succeeded, sealed, or released anything.
+Only the active adopted main enrollment and registered `dispose` outputs qualify;
+source/index paths, bin/evidence, unknown paths and live adopted consumers refuse
+adoption. Unselected historical objects stay protected without vetoing selected
+eligible siblings.
+
+Admission and the original exclusive enrollment lease protect this transition.
+Its separate immutable receipt preserves the raw declaration and original
+attachment, records the ownership delta, and keeps historical producer outcome
+`unknown`. Historical producer and disposal outcomes are preserved. The existing
+`reconcile_uses` may append interrupted-use history and remove stale use tokens;
+mutable enrollment/uses are not guaranteed byte-identical. A
+published receipt without a ledger update can be retried with the same binding;
+repeat adoption of managed paths adds no history and performs no disposal. The
+existing pending cache generation and ordinary drain reclaim the newly managed
+outputs after exclusion, without setting finish or adding a cleaner. Subsequent
+bootstrap/check/use share the same leases and interrupted-use recovery. Deploy
+the compatible owner before adopting; old readers reject the new nonempty
+`main_cache_adoptions` ledger field.
+
+Main re-entry drains released pending cache generations before starting a
+new consumer. A linked checkout being entered stays excluded until its new
+consumer has acquired protection; another ordinary entry can recover that
+checkout after release. Installation, tests, cache saving, and other registered operations
+must run under that same use protection. Actual shared descriptors protect live
+descendants and overlapping consumers. No post-check Cargo clean is added.
+The disposal owner rechecks HEAD, physical attachment, policy, and the live index
+before each removal. Logical lengths and allocated blocks (`st_blocks * 512`,
+including directory blocks) are reported separately. Physical release is unknown;
+allocation differences do not establish filesystem savings. Failed removal
+retains the original error and observed remaining objects, and retries preserve
+the original attempt.
+
+The optional v2 `retained_producers` lists exact producer IDs, evidence directories,
+and generated output paths relative to each explicitly registered receipt.
+The adopted `ci-command-result` family belongs to
+`ci-tests::behavior::retain_command_result`. The Rust `RetainedArtifact` interface
+admits the exact preserved object and publishes its intent. The adopted wrapper
+first copies original stdout, stderr, binding, configuration and state, then calls
+`begin` and seals generated directory identities and original stream/binding
+digests. Interruption or admission failure before `begin` leaves an unregistered
+copy protected as unknown evidence; an admitted but unsealed receipt also remains
+protected. The interface records consumers
+with independent explicit acquire/release receipts. Dropping a handle or losing
+a process never releases a receipt. The existing drain reads only that family's
+`objects.json`; it does not discover directories or infer references.
+
+Publication resolves the selected producer through `RetainedArtifact::registered_store`,
+using the same committed worktree configuration, cleanup policy, registration,
+and physical Git main coordinator checks as drain. The default wrapper supplies
+its producer checkout separately from the command's fixture root, so a linked
+producer publishes below the main coordinator's declared evidence directory.
+`CHRONO_CI_TEST_RECEIPTS` may select only that exact physical store; undeclared,
+overlapping, mismatched, or symlink destinations refuse publication and remain
+protected. Store resolution does not release consumers or grant main checkout
+or branch deletion authority. Earlier linked stores have no adopted forwarding
+route and remain protected unknown evidence.
+
+This host admits only the two copied independent Cargo outputs at
+`original-state/cargo/producer/target/` and `original-state/cargo/tests/target/`,
+and the producer additionally requires their exact source artifact declarations.
+The selected expected-exit assertion publishes release after consuming the
+original result. An unexpected exit, incomplete publication, or active diagnostic
+reference retains the copies. After all references explicitly release, the owner
+may reclaim those generated copies; stdout, stderr, binding, configuration,
+source, recovery originals, and other state remain evidence. Existing callers
+without an expected-exit contract retain an unreleased reference. Unknown legacy
+receipts and every unregistered object stay protected; `.chrono-harness/state/`
+does not become disposable. Compatible committed policy and binary deployment,
+real-host migration, native CI cache-save participation, and full SPEC adoption
+remain outside this implementation's verification.
 
 The coordinator ledger records original identity, terminal receipts and attempted
 report paths before effects. Failed results retain their original bytes/digests and
@@ -1078,3 +1168,62 @@ cannot enroll as a disposable linked attachment. A linked checkout without the
 registered coordinator owner fails before build effects. This keeps clean native
 CI bootstrap possible without changing workflow topology or authorizing unsafe
 linked-checkout fallback.
+
+### Current custody of exact evidence aliases
+
+`chrono-worktree retire-evidence --host-root ROOT --config POLICY --plan STATE_PATH`
+is the maintenance owner's finite file transition. It consumes a
+`chrono-worktree-maintenance/v1` plan with `operation: "retire-evidence"`, exact
+`head`, and `custody` using `chrono-evidence-custody/v1`. Custody declares the
+physical `root`, full `branch` ref, `current_consumers_released: true`, engineering
+`reason`, an `authority` original (`path`, SHA256, `length`), and exact `objects`.
+Each object has an `original` identity, a distinct retained `survivor` path,
+producer `owner`, and release `reason`. Equal bytes verify preservation; the
+current custodian's explicit release supplies disposition authority. The caller
+joins or excludes prior unregistered consumers and ends copied-path assertion or
+manifest replay before declaring release. Historical manifests remain original
+evidence; this transition does not claim that retired paths remain replayable.
+
+The `exclusion` declares the existing `coordinator_root`, tracked `config_path`
+and adopted `state_directory`. The command reads their current committed kernel
+policy as data and holds the existing admission and enrollment leases. It checks
+one current active enrollment, its physical attachment, outstanding use tokens,
+foreign Git locks and clean fixed checkout. It does not drain other entries,
+migrate old source policy, update Git, release the checkout or fabricate a past
+producer seal. A historical host can invoke the candidate binary with its own
+unchanged committed worktree policy and artifact registrations.
+
+Only explicitly listed untracked regular members under registered evidence
+state are eligible. Source/index paths, selected survivors, the authority and
+attempt inputs/outputs refuse retirement. Each alias and survivor is streamed
+against its declared identity, including stable physical file identity, just
+before unlinking. Independent identity/preservation failures leave that alias
+and continue other eligible objects. The attempt's separate `effects.jsonl`
+journal syncs its declaration reference and each pre-effect intent/result;
+reports contain counts and references, never preceding report bodies. Repeating
+the same finite plan rechecks survivors and records absent aliases as observed
+absence, without inventing which interrupted attempt removed them. Original
+failures, enrollment, source and refs remain unchanged. Exit 0 means this exact
+finite disposition completed; unresolved members or binding failures exit 2.
+The `removed` count includes only fully verified completions. A post-unlink
+verification failure can increment `failed` after an effect recorded by its
+pre-effect intent; zero `removed` does not prove no unlink occurred. The exact
+referenced custody declaration and authority remain required retained inputs;
+reports do not guarantee a self-contained or independently immutable declaration
+copy. Logical removal counts do not establish physical shared-volume disk release.
+
+Worktree test fixture retention remains explicitly requested by
+`CHRONO_WORKTREE_TEST_RECEIPTS` or panic. Successful default fixtures do not copy
+all state. Retained fixture assertions and failure diagnosis remain consumers
+until their current custodian explicitly ends those copied-path obligations.
+
+### Local initial input preparation
+
+The registered `check-inputs` action supports config schema4's optional separate
+`canonical_check.initial_profile`. It binds both profile digests to committed
+HEAD and records physical commit parents through the existing observed Git owner.
+A genuine parentless candidate prepares standalone inventory with no base, fetch,
+origin or full context. Nonroots retain the registered target fetch and ordinary
+DELTA/context contract. Missing targets and shallow histories do not become roots.
+The bare runner entry validates the original preparation before the existing
+initial judge runs; the producer itself never publishes inventory success.

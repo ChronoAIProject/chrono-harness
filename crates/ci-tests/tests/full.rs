@@ -151,11 +151,17 @@ fn repeated_preparation_retains_distinct_ownership_observations_without_rebindin
         actual["git_facts"]["processes"][0]["ownership_fds"],
         first["git_facts"]["processes"][0]["ownership_fds"]
     );
+    assert_ne!(
+        actual["git_facts"]["processes"][0]["child_pid"],
+        first["git_facts"]["processes"][0]["child_pid"]
+    );
     let mut stable = actual.clone();
     let mut previous = first.clone();
     for report in [&mut stable, &mut previous] {
         for process in report["git_facts"]["processes"].as_array_mut().unwrap() {
             process.as_object_mut().unwrap().remove("ownership_fds");
+            process.as_object_mut().unwrap().remove("launcher_pid");
+            process.as_object_mut().unwrap().remove("child_pid");
         }
     }
     assert_eq!(stable, previous);
@@ -502,6 +508,7 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
             .iter()
             .find(|p| p["exit_code"] == 29 || p["exit_code"] == 31)
             .unwrap();
+        let failed = chrono_harness::full::expand_process(failed).unwrap();
         let b: Vec<u8> = serde_json::from_value(failed["stderr_bytes"].clone()).unwrap();
         assert!(b[0] >= 254);
         assert_eq!(failed["stderr_sha256"], sha256(&b));

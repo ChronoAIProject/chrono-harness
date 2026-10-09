@@ -416,7 +416,12 @@ fn preparation_identity(report: &Value) -> Value {
     {
         for process in processes {
             if let Some(fields) = process.as_object_mut() {
+                // Invocation identities and the lease carrier describe the
+                // actual attempt, not the prepared input. Keep them in the
+                // original reports while comparing all semantic observations.
                 fields.remove("ownership_fds");
+                fields.remove("launcher_pid");
+                fields.remove("child_pid");
             }
         }
     }

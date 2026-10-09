@@ -178,6 +178,66 @@ fn main() -> ExitCode {
             }
             exec(cargo);
         }
+        "bounded-cargo" => {
+            let plan: serde_json::Value = serde_json::from_slice(
+                &fs::read(Path::new(STATE).join("cargo-plan.json")).unwrap(),
+            )
+            .unwrap();
+            let mut observations = Vec::new();
+            for pass in 0..plan["passes"].as_u64().unwrap_or(1) {
+                for (manifest, operation) in plan["manifests"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .zip(plan["operations"].as_array().unwrap())
+                {
+                    let began = std::time::Instant::now();
+                    let mut cargo = Command::new("cargo");
+                    cargo.env_remove("CARGO_TARGET_DIR").args([
+                        operation.as_str().unwrap(),
+                        "--locked",
+                        "--offline",
+                        "--manifest-path",
+                        manifest.as_str().unwrap(),
+                    ]);
+                    let output = cargo.output().unwrap();
+                    observations.push(serde_json::json!({"pass":pass,"manifest":manifest,"elapsed_seconds":began.elapsed().as_secs_f64(),"exit":output.status.code()}));
+                    io::stdout().write_all(&output.stdout).unwrap();
+                    io::stderr().write_all(&output.stderr).unwrap();
+                    assert!(
+                        output.status.success(),
+                        "actual independent Cargo project failed"
+                    );
+                }
+            }
+            mark(
+                "cargo-cost.json",
+                serde_json::to_vec(&observations).unwrap(),
+            );
+            if let Some(stage) = plan["hold_stage"].as_str() {
+                // All these consumers read the real generated output under the same lease.
+                let target = Path::new(plan["manifests"][1].as_str().unwrap())
+                    .parent()
+                    .unwrap()
+                    .join("target/debug/deps");
+                let original: Vec<_> = fs::read_dir(&target)
+                    .unwrap()
+                    .map(|e| e.unwrap().path())
+                    .collect();
+                assert!(!original.is_empty());
+                mark(&format!("{stage}-active"), "ready");
+                wait(&format!("{stage}-release"));
+                assert!(
+                    original.iter().all(|p| p.exists()),
+                    "active consumer lost generated output"
+                );
+                if stage == "installation" {
+                    fs::create_dir_all(".chrono-harness/bin").unwrap();
+                    let input = original.iter().find(|p| p.is_file()).unwrap();
+                    fs::copy(input, ".chrono-harness/bin/installed-cargo-output").unwrap();
+                }
+            }
+        }
         "parent" => {
             // This ordinary native child inherits the actual open descriptors
             // and process group. Its parent intentionally returns first, as the
