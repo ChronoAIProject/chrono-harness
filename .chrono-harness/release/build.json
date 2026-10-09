@@ -163,8 +163,7 @@
       {
         "asset": "chrono-cache",
         "destinations": [
-          "crates/cache/target/debug/chrono-cache",
-          ".chrono-harness/bin/chrono-cache"
+          "crates/cache/target/debug/chrono-cache"
         ]
       }
     ]
@@ -520,7 +519,8 @@
       "kind": "verify",
       "operation": "release.tests.integration",
       "needs": [
-        "build_distribution"
+        "build_distribution",
+        "build_cache"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_integration",
       "rust_toolchain": false
@@ -748,6 +748,9 @@
     ],
     "test.judge-workflow-tests": [
       ".chrono-harness/state/workflow-test-failures/"
+    ],
+    "release.tests.integration": [
+      ".chrono-harness/state/release-test-failures/"
     ]
   },
   "verification_consumers": {
@@ -774,7 +777,7 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project\u2019s Rust fixture executables.",
+      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
       "release_assets": [
         "chrono-harness"
       ]
@@ -880,7 +883,7 @@
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host\u2019s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture\u2019s actual cost invocation.",
+      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -890,9 +893,10 @@
       ]
     },
     "verify_release_build_integration": {
-      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity.",
+      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity. Its Python cache regression consumes the selected chrono-cache asset at the declared Cargo test destination and runs real plan/recover/report around the release staging owner.",
       "release_assets": [
-        "chrono-distribution"
+        "chrono-distribution",
+        "chrono-cache"
       ]
     },
     "verify_scoped_v1_tests": {

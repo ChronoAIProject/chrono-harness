@@ -5935,7 +5935,7 @@ jobs:
           include-hidden-files: true
   linux_verify_release_build_integration:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_distribution"]
+    needs: ["linux_build_distribution","linux_build_cache"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -5958,6 +5958,7 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_2
+      - *chrono_release_download_0
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -5979,7 +5980,7 @@ jobs:
           include-hidden-files: true
   macos_verify_release_build_integration:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_distribution"]
+    needs: ["macos_build_distribution","macos_build_cache"]
     runs-on: "macos-14"
     timeout-minutes: 45
     outputs:
@@ -6002,6 +6003,7 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_17
+      - *chrono_release_download_15
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash

@@ -55,3 +55,7 @@ v5 可在 `failure_evidence` 中按验证 operation 显式登记失败目录列�
 专属 owner 验证包括任意非 Rust 字面命令、原生元数据、独立 sibling、隔离本地调度、真实 distribution pack、非 UTF-8 原始失败、缺失／损坏／重封装错误 receipt、路径／mode、变更字节、当前失败与 carried attempt。测试不认证实际原生平台时限、普遍环境同判或公开采用。提交后的 canonical check、原生两平台执行及必要的重试、发布和 main/examples 采用仍须分别验证。
 
 v5 可在 `verification_consumers` 为验证单元登记 `need`（实际调用位置、需求和输出用途）及 `release_assets`。配方核该资产集合与 `needs` 对应的构建资产完全一致；不一致报 `E_RELEASE_CONSUMPTION`，非空依赖未说明则在原始回执和 stderr 报 `W_RELEASE_CONSUMPTION_UNVERIFIED`。本宿主[构建配方](../.chrono-harness/release/build.json)中全部验证单元均采用合同；宿主回归检查覆盖登记全集，并对额外／缺失依赖作变异核验。通用 v5 仍兼容未采用合同的宿主。`declared` 只表示登记一致，不证明说明真实或依赖最少。消费审计须检查实际调用及共享 fixture，并在未提供其它发布二进制的条件下执行原始未过滤操作；源码搜索不能代替执行证据。
+
+缓存运输的 bootstrap 安装路径与发行验证的消费者路径各有用途。`chrono-cache` 发行资产只保留 `crates/cache/target/debug/chrono-cache` 的 staging；原始 cache-tests 在该处调用它。`.chrono-harness/bin/chrono-cache` 归 bootstrap，供外围 plan／recover／report 使用，不再由发行 staging 替换。源资产、摘要、生产者与前后观察仍按同一 v5 合同核验。
+
+发布 Python integration 组保留真实 distribution pack，并新增真实 cache CLI 的 plan→recover→stage→consumer→report 回归。该组显式增加 `build_cache` 依赖；本地 FILEMAP、shared_operations 与两个原生 job 的 needs／下载同步登记，没有新增独立单元。回归以同字节的真实 CLI 检测 inode 替换，验证 transport 摘要与 recovery/report；它不模拟原生后端、不同编译配置或完整外围工作流。失败保留逐进程原 stdout／stderr／argv／退出与配置到登记的 release-test-failures；原生 collector 仍要求真实全部单元成功。新增构建／下载／回归成本应分别实测；登记的其它成本仍是 unmeasured。

@@ -401,6 +401,10 @@
       "projects.inventory": [
         "judge-projects",
         "judge-projects-migration"
+      ],
+      "build.cache": [
+        "cache",
+        "release-build-integration"
       ]
     },
     "facts_config": ".chrono-harness/config.json",

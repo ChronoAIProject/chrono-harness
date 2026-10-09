@@ -7,9 +7,9 @@ const GENERATED: &[&str] = &[
     "original-state/cargo/tests/target/",
 ];
 
-struct Owner {
+pub(super) struct Owner {
     _dir: tempfile::TempDir,
-    root: PathBuf,
+    pub(super) root: PathBuf,
 }
 
 impl Drop for Owner {
@@ -36,7 +36,7 @@ impl Drop for Owner {
 }
 
 impl Owner {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(dir.path()).unwrap().join("main");
         fs::create_dir(&root).unwrap();

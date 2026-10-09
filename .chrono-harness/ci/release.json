@@ -2269,12 +2269,17 @@
       "artifact_name": "chrono-release-linux-verify_release_build_integration",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_integration/",
       "needs": [
-        "linux_build_distribution"
+        "linux_build_distribution",
+        "linux_build_cache"
       ],
       "downloads": [
         {
           "job": "linux_build_distribution",
           "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        },
+        {
+          "job": "linux_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
         }
       ]
     },
@@ -2293,12 +2298,17 @@
       "artifact_name": "chrono-release-macos-verify_release_build_integration",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_release_build_integration/",
       "needs": [
-        "macos_build_distribution"
+        "macos_build_distribution",
+        "macos_build_cache"
       ],
       "downloads": [
         {
           "job": "macos_build_distribution",
           "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
+        },
+        {
+          "job": "macos_build_cache",
+          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
         }
       ]
     },

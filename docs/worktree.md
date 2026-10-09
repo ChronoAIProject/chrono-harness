@@ -1227,3 +1227,7 @@ origin or full context. Nonroots retain the registered target fetch and ordinary
 DELTA/context contract. Missing targets and shallow histories do not become roots.
 The bare runner entry validates the original preparation before the existing
 initial judge runs; the producer itself never publishes inventory success.
+
+CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式平台 Git 输入；不把源宿主已部署的 Git 摘要／版本当作原生 fixture 的政策，也不改源宿主绑定。原错误与 passing control 均由实际命令产生。worktree 的未保留 commit-tree fixture 显式提供作者姓名／邮箱。
+
+真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。

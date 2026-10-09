@@ -119,11 +119,11 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
             "--operation",
             "use.consumer",
         ];
-        let child = super::interrupted_cleanup::CapturedChild::spawn(
+        let mut child = super::interrupted_cleanup::CapturedChild::spawn(
             &mut h.auto_command("use", &args),
             &h.root,
         );
-        await_file(&target.join(".chrono-harness/state/retained-rebuild-active"));
+        child.await_managed_file(&target.join(".chrono-harness/state/retained-rebuild-active"));
         let observations = cost(&target);
         let cold = value!(&observations.as_array().unwrap()[..2]);
         let retained = value!(&observations.as_array().unwrap()[2..]);
@@ -208,6 +208,44 @@ fn await_file(path: &Path) {
         path.exists(),
         "missing actual consumer handshake: {}",
         path.display()
+    );
+}
+
+#[test]
+fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
+    let h = cargo_host();
+    cargo_plan(&h.root, Some("retained-rebuild"));
+    let path = h.root.join(".chrono-harness/state/cargo-plan.json");
+    let mut plan = json(&fs::read(&path).unwrap()).unwrap();
+    plan["manifests"][0] = value!("missing/Cargo.toml");
+    fs::write(path, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let mut child = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command("use", &["--operation", "use.consumer"]),
+        &h.root,
+    );
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        child.await_managed_file(&h.root.join(".chrono-harness/state/retained-rebuild-active"));
+    }));
+    assert!(failure.is_err());
+    let output = child.wait_with_output().unwrap();
+    assert!(!output.status.success());
+    let report = json(&output.stdout).unwrap();
+    assert_ne!(report["managed_process"]["exit_code"], 0);
+    assert!(
+        report["managed_process"]["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("missing/Cargo.toml")
+    );
+    assert!(
+        !h.root
+            .join(".chrono-harness/state/retained-rebuild-active")
+            .exists()
+    );
+    assert!(
+        h.root
+            .join(report["managed_use_receipt"]["path"].as_str().unwrap())
+            .is_file()
     );
 }
 
@@ -349,6 +387,10 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     let unretained = git(
         &h.root,
         &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
             "commit-tree",
             tree.trim(),
             "-p",
