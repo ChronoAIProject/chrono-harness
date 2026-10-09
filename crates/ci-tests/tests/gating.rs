@@ -422,7 +422,7 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     .len(),
                 d["required_units"].as_array().unwrap().len()
             );
-            let gather = json(
+            let gather = chrono_harness::json(
                 &fs::read(
                     h.host
                         .root
