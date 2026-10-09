@@ -11,6 +11,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub const OBSERVATION_SCHEMA: &str = "chrono-git-facts/v2";
+
 pub struct Reader {
     bound: Option<Bound>,
     processes: RefCell<Vec<ProcessResult>>,
@@ -529,9 +531,13 @@ impl Reader {
                 verified_oids: RefCell::new(BTreeSet::new()),
             };
             if let Some(prior) = prior {
+                if prior["schema"] != OBSERVATION_SCHEMA {
+                    return Err(reader.error(
+                        "unsupported request Git facts schema (requires chrono-git-facts/v2)",
+                    ));
+                }
                 let current = reader.observation();
                 for key in [
-                    "schema",
                     "config_path",
                     "config_sha256",
                     "binding",
@@ -570,13 +576,24 @@ impl Reader {
             }
         })
     }
+    /// V2 uses explicitly encoded lossless process streams. Request-bound readers
+    /// require v2 before invoking Git; v1 inline observations are historical data.
     pub fn observation(&self) -> Value {
         match &self.bound {
             None => Value::Null,
             Some(b) => {
-                let mut observed = value!({"schema":"chrono-git-facts/v1","config_path":b.config_path,
+                let processes: Vec<_> = self
+                    .processes
+                    .borrow()
+                    .iter()
+                    .map(|process| {
+                        crate::full::compact_process(&value!(process))
+                            .expect("process engine preserves original stream identities")
+                    })
+                    .collect();
+                let mut observed = value!({"schema":OBSERVATION_SCHEMA,"config_path":b.config_path,
                 "config_sha256":sha256(&b.config_bytes),"binding":b.binding,"environment":b.environment,
-                "processes":*self.processes.borrow(),"input_closure_complete":false});
+                "processes":processes,"input_closure_complete":false});
                 if let Some(guard) = &b.guard {
                     observed["inputs"] = guard.observation.clone();
                 }

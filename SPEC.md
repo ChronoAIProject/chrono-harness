@@ -81,7 +81,7 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
   workflow.json                 proposed 的分支、迁移与混合修改策略
   ci/                           现役 CI 配置及自举绑定
   bin/                          已安装指定二进制（不跟踪）
-  state/                        输入、报告与证据（不跟踪）
+  state/                        当前状态、输入与有界留存的报告／证据（不跟踪，见 §10.1）
 .github/workflows/              CI 配置的生成投影
 ```
 
@@ -810,6 +810,35 @@ integration.json 为 `{schema_version, base, candidate_tree, registry_digest, ex
 证据额外保留 producer 身份和 proof 中的实际 context、plan、results、inputs 与判官进程。交付必须同时取得发布该证据摘要的成功完成 runner 报告；未完成进程留下的证据不能使用。输入比较只规范化宿主路径与允许变化的候选 commit 身份，保留原始证据；交付仍执行选中测试。
 报告来自可信但可能出错的 AI/runner；摘要用于识别误用，不设计对抗 AI 的授权系统。
 
+### 10.1 报告、证据与临时产物的自动清理（目标合同）
+
+自动清理必须覆盖历史报告、日志、测试现场、下载／解压工件和可重建缓存，而不只清理工作树的顶层编译目录。新宿主首次采用须登记并启用有界留存政策；既有宿主通过显式迁移采用，不静默改变旧版政策或证据解释。不得仅因文件位于 `state`、曾用于验证、属于失败现场或被历史报告引用，就将整个目录永久保留。留存依据是当前实际用途、登记的消费者与有限留存要求。
+
+政策由宿主在 `.chrono-harness/` 显式配置；每类产生物须登记自然所有者、生产／消费操作、准确输出范围、留存理由与释放条件、保留期限、数量上限及逻辑／实际字节预算。清理触发点、单轮对象数／时间上限及超限处置也须登记，不使用产品内写死的宿主目录或逐个历史 case 的删除配方。生产者在发布前登记产生物身份与 intent，实际完成后发布路径、摘要、长度、结果和消费者绑定；此程序维护的清单是产生物及其状态的唯一来源，不靠目录扫描、文件名、年龄、反射或 IO 分析推断所有者、用途与依赖。嵌套测试宿主的输出也由原生产者按该登记纳入生命周期，不能借放在证据目录内逃避缓存回收。
+
+| 产生物类别 | 自动清理与留存要求 |
+| --- | --- |
+| 当前运行／恢复所需状态 | 存活消费者的租约、当前 ledger／指针、未终结操作的 intent、尚需恢复或交付的实际输入按明确角色保护；租约身份保持稳定。历史副本不因与它们同目录而获得相同保护 |
+| 成功检查的完整报告与原始输出 | 操作终结、登记消费者释放且保留期届满后自动回收；可保留有界的提交／输入身份、结果及处置摘要，不默认永久保存完整测试现场 |
+| 失败、取消或未知结果的现场 | 保留原异常链、真实结果和当前恢复／复查所需原件；有用的回归程序与最小复现数据归其自然所有者。失败本身不授予整套现场无限留存，释放后按同一有界政策回收 |
+| 缓存与临时产物 | 下载包、解压副本、测试仓库的已登记编译／增量输出、临时验证程序和工件副本在实际消费／保存结束后按兼容复用及容量政策自动回收；未保存源码、必要实验程序／数据和未保留提交继续保护 |
+| 重复内容与会话过程记录 | 同一原始字节只保留一份内容实体，报告、stdout 捕获与下载副本通过核验过的身份引用复用；历史 brief／回答／PR 草稿等过程文件无当前用途时按有界政策回收，不另立长期手工权威 |
+
+保留根只能由当前运行／恢复／交付角色、明确保存的有用成果及尚未到期的留存条目产生。消费者必须显式取得和释放所需引用及使用保护；沿合同声明的引用计算需保留的闭包，不扫描文件正文猜引用。旧报告互相引用或形成环不构成永久根；长期结果摘要和清理回执只记录身份及实际处置事实，不将全部历史原件再次强引用保留。不得截断仍需使用的原始输出、错误链或历史事实来满足预算，也不得把清理摘要冒充原检查报告。
+
+同内容复用须核原始字节的摘要、长度与实际内容，保留各次操作的独立身份、结果和完整异常关系；相同内容不表示不同运行获得同一成功判词。新的日志／报告不得逐层嵌入历史正文、同时复制完整字符串和原字节数字数组，或在多个目录反复存整份相同工件。引用到期处置后，结果摘要必须能区分原结果与原件已回收的事实；实际仍需原件的检查明确报证据不足，不伪造可用路径。压缩只能减少存储占用，不能代替释放、去重和自动回收，也不能改写仍被引用的字节／身份合同。
+
+普通 start／reconstruct／check／bootstrap／use 及报告发布入口在登记的时机调用同一现役维护实现；正常操作在加入消费者、完成必要缓存保存并释放使用保护后自动尝试回收。会话意外终止或未调用 finish 时，由后续普通入口消费原 intent 和实际租约状态恢复清理，不要求用户先运行手工删除或由 AI 记得 finish。固定 maintain 只作独立重试／诊断入口；复用 worktree、原进程、状态发布和工件处置的自然所有者，不新增空闲定时扫描器、守护进程或第二套清理平台。
+
+留存期限和容量只能用于已确认释放、符合处置条件的产生物；不得以过期、低 CPU、PID 缺失或超出预算推断活消费者结束。删除前立即重验目标身份、政策／引用代际、实际排除、跟踪／索引与提交保留条件；与新的发布、引用取得及使用保护同步，不能在检查后被重新引用的窗口内删除。存活子孙、当前必要状态、源码和未保留提交不得为了腾空间而回收。受保护对象使预算无法满足时，生产者报告各类实际占用、保留原因、可回收量及登记的超限处置结果，不静默丢证据或假称达标。
+
+清理自身须可中断、可重试，并且留存有界。发布紧凑 intent 后逐项处置，记录真实缺失／部分效果、原异常链、逻辑字节及可取得的实际占用变化；未测量值写未知，不把文件长度当成物理释放量。中断后沿原身份恢复，保留必要失败事实，不制造原清理成功或工作完成。报告登记范围内剩余量和拒绝原因；无关对象的失败不阻断合法当前任务，目标／协调状态失败仍按现役合同阻断，显式 maintain 据实返回失败。清理回执不得递归嵌入历史清理报告或成为无限增长的另一份日志。
+
+旧宿主与未登记历史目录先由各自然所有者显式迁移：列明当前消费者、必要恢复状态、保留根、原件身份、重复关系及逐项处置条件，核原引用后采用同一维护入口。未知归属、仍有引用或身份不兼容的对象先保留并报告，不能仅凭本节批量删 `state`。允许原始内容迁到唯一保留实体并更新已登记消费者；迁移后仍核字节、原结果和实际引用，不运行旧判官、不把旧失败重写成成功。
+
+本节是新增目标合同。现役 v2 可显式采用主检出 cache-only 登记和一个 CI 命令回执生产者的精确产生物／引用释放登记；只由同一生命周期 drain 回收已释放且白名单内的生成输出，保留必要原件和未知历史状态。主检出不获得整树删除权，已存在但未迁移的输出继续保护。逻辑长度、分配块和未知物理释放分别报告；独立 Cargo 项目保留独立 manifest、lock 和 target。该有界实现仍不满足通用产生物留存、容量控制、证据去重、完整自动回收或本节全部验收；实际宿主迁移、原生 CI 与交付尚未完成。
+
+
 ## 11. 独立脚本和插件扩展示例
 
 以下是未来新增脚本的登记形状，不是当前 files/scripts 里已经存在的文件：
@@ -903,6 +932,15 @@ base.status 为 proposed 时记录 previous_enforcement:none，不能回填之�
 | 根因经多层包装并跨进程／报告传输 | 可从顶层记录恢复每层 source、原生信息及实际进程证据；只剩摘要字符串不满足 §7.2 |
 | 异常已捕获，重试／降级／恢复最终成功 | 原异常与每次处理动作／结果仍可读取，最终状态由实际完成结果产生 |
 | 处理／清理／日志发布期间再次失败 | 原业务异常与新相关异常同时保留；引用发布失败不伪造可用报告 |
+| 成功报告及完整现场已释放且保留期届满 | 后续普通入口自动回收，保留有界结果／处置摘要；无需手工 finish 或删除 |
+| 历史报告引用成环，已无有效保留根 | 不因历史互相引用永久保留；按声明引用与处置条件自动回收 |
+| 多份报告／stdout／下载副本含相同原始内容 | 核字节后复用唯一内容实体；各操作身份、原结果与异常关系仍独立完整 |
+| 临时测试宿主的 SDK／编译／增量输出位于 state 内 | 原生产者显式登记并加入清理生命周期；目录位置不授予永久留存 |
+| 会话在产生物发布或回收期间中断 | 后续普通入口按原 intent／租约恢复，报告真实部分效果和未知原结果，不制造成功 |
+| 已超过容量／数量预算，但仍有存活消费者或必要恢复状态 | 保护有效保留根，报告占用和保留原因并执行登记的超限处置，不靠预算强删 |
+| 清理判定后出现新引用、身份漂移或未加入子进程 | 发布／引用取得／处置同步，立即重验；不能确认排除时保留目标并报告 |
+| 原件已按政策回收，摘要仍在；或清理自身反复重试 | 明确原件已回收，实际需要原件的消费者报证据不足；清理摘要／回执本身有界且不递归膨胀 |
+| 既有宿主有超大旧报告、未登记状态或重复 CI 工件 | 所有者显式迁移、核引用和处置条件；未知项保留并报告，不批量删除整个 state |
 | 开放集合出现未见过的合法输入或失败变体 | 按类型／结构／不变量及明确边界处理，未知异常保留并传播；不依赖 case 名或错误文本补丁 |
 | CI 冷缓存与后续精确命中 | 观察真实恢复／保存与当前执行物核验；所选判官及测试在两轮均实际执行 |
 | 源码变化，兼容旧编译缓存可用 | 同一登记构建入口增量重建；复用指纹／依赖／增量数据，候选判官源码及绑定更新 |
@@ -935,7 +973,7 @@ Release recipe v3 explicitly declares required Rust components and selects relea
 
 `chrono-github-release/v1` explicitly declares a GitHub release-build projection under host `.chrono-harness/`, selected by the existing chrono-ci init/generate/verify commands. Each job declares its runner, complete command argv, timeout and literal artifact directory/name; no host language, project layout or release recipe is inferred. The generator shares output preflight and writing with check projections but uses a distinct ownership marker. Verification does not repair drift; unknown declarations and ownership collisions fail. Failed build commands retain their exit and artifact upload is attempted with `always()`. Local and CI consumers use the same declared command. Source checkout is a requested revision, not a generator-certified immutable OID; the registered build consumer owns source identity and release acceptance. Generation neither publishes a release nor certifies input closure or parity. Existing check schemas retain their semantics; the host adoption and limits are specified in [release CI](docs/release-ci.md).
 
-Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency and guarded retained-package/metadata validation; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
+Runner owns factual Git/input transport, actual entry argv/cwd, bounded process observations, candidate executable binding, protocol and named-output aggregation. After launch, retained evidence publication failure preserves the actual bounded stream bytes, exit code and process identity as failed evidence. Bound Git facts observations use `chrono-git-facts/v2`; request consumers reject v1, missing and unknown schema identities before Git execution. Historical process decoding does not establish v1 facts request compatibility; see [Git facts](docs/git-facts.md). Registration owns strict current schemas, affected references, fixed snapshots, readiness, supplied retained input validation and finite candidate historical decoding. Filemap owns explicit typed DELTA union, records, causal closure and required test facts. Routes owns canonical method validation, ordered plans, single tool binding and receipt comparison. Projects owns affected reciprocal pairs, explicit ownership/output isolation, actual execution, blocked dependents and required replacement execution. Optional chrono-judge-cargo owns explicitly adopted Cargo workspace/path-dependency consistency and guarded retained-package/metadata validation; the generic core has no host-language or directory semantics. These are separate production/test projects with independent manifests, lockfiles and targets.
 
 The current FILEMAP v2 execution and workflow v2/v3 historical-profile contracts are specified in [docs/execution.md](docs/execution.md). Config supports v1 and explicit-presence v2/v3/v4; projects support v1/v2 and judges use v1. Workflow v3 selects an explicitly registered host decoder by exact endpoint schema versions, including config v1→v2 compatibility with unchanged historical input semantics. It does not supply an automatic host config writer. Strict old v1 readers reject the new fields. The shipped host historical decoder remains chrono-ci-check/v1 plus FILEMAP v1, using original fixed bytes and explicitly supplied bindings. The candidate script/tool, mappings, output digests and every old definition are retained. ci.verify moves unchanged into ci.actions.execute and ci-tests executes it. Its old pseudo-script/owner/test is retired with an explicit replacement; all six old incoming verification triggers survive, while ci-tests-only triggers now also execute verification. No exact selection or cost equivalence is claimed.
 

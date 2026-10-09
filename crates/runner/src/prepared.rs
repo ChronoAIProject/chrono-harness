@@ -276,40 +276,78 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
             .ok_or("participation output bound")? as usize,
     };
     let process = run_process_observed(root, &spec, &[], &file_identity(&program)?.0)?;
+    let original_failure = |message: String| -> String {
+        let retained = (|| {
+            retain_original(
+                root,
+                ".chrono-harness/state/preparation/",
+                "participation",
+                &serde_json::to_vec(&crate::full::compact_process(
+                    &serde_json::to_value(&process).map_err(|e| e.to_string())?,
+                )?)
+                .map_err(|e| e.to_string())?,
+            )
+        })();
+        match retained {
+            Ok(original) => format!(
+                "{message}; original process {} (sha256 {})",
+                original.path, original.sha256
+            ),
+            Err(error) => format!(
+                "{message}; cannot retain original participation: {error}; stdout sha256 {}, stderr sha256 {}",
+                process.stdout_sha256, process.stderr_sha256
+            ),
+        }
+    };
     if process.failure.is_some() {
-        return Err(format!(
-            "check participation failed: {:?}; stdout {}; stderr {}",
-            process.failure, process.stdout, process.stderr
-        ));
+        return Err(original_failure(format!(
+            "check participation failed: {:?}",
+            process.failure
+        )));
     }
     let report: Value = crate::json(&process.stdout_bytes)
-        .map_err(|e| format!("check participation result: {e}; {}", process.stderr))?;
-    let inner = report
-        .get("managed_process")
-        .ok_or_else(|| format!("check participation refused: {}", report["error"]))?;
+        .map_err(|e| original_failure(format!("check participation result: {e}")))?;
+    let inner = match report.get("managed_process") {
+        Some(inner) => inner,
+        None => {
+            return Err(original_failure(format!(
+                "check participation refused: {}",
+                report["error"]
+            )));
+        }
+    };
     if inner["failure"].as_str().is_some() {
-        return Err(format!(
+        return Err(original_failure(format!(
             "check process failed: {}; original lifecycle report {}",
             inner["failure"], report["report_path"]
-        ));
+        )));
     }
-    let exit = inner["exit_code"].as_i64().ok_or("check process exit")?;
+    let exit = match inner["exit_code"].as_i64() {
+        Some(exit) => exit,
+        None => return Err(original_failure("check process exit".into())),
+    };
     if report["status"] != "used" && report["managed_command_failed"] != true {
-        return Err(format!(
+        return Err(original_failure(format!(
             "check lifecycle failed: {}; original report {}",
             report["error"], report["report_path"]
-        ));
+        )));
     }
+    let stdout = match inner["stdout"].as_str() {
+        Some(stdout) => stdout,
+        None => return Err(original_failure("check process stdout".into())),
+    };
+    let stderr = match inner["stderr"].as_str() {
+        Some(stderr) => stderr,
+        None => return Err(original_failure("check process stderr".into())),
+    };
+    let exit_code = match u8::try_from(exit) {
+        Ok(exit) => exit,
+        Err(_) => return Err(original_failure("check process exit out of range".into())),
+    };
     Ok(Some(crate::CliOutput {
-        exit_code: u8::try_from(exit).map_err(|_| "check process exit out of range")?,
-        stdout: inner["stdout"]
-            .as_str()
-            .ok_or("check process stdout")?
-            .into(),
-        stderr: inner["stderr"]
-            .as_str()
-            .ok_or("check process stderr")?
-            .into(),
+        exit_code,
+        stdout: stdout.into(),
+        stderr: stderr.into(),
     }))
 }
 /// Acquisition credentials are declared in the existing environment policy and never forwarded to judges.

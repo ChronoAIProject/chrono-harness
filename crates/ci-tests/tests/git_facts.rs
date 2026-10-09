@@ -162,7 +162,10 @@ fn is_probe(process: &Value) -> bool {
         .any(|arg| arg.as_str().unwrap().starts_with("--batch-check"))
 }
 fn bytes(p: &Value, stream: &str) -> Vec<u8> {
-    serde_json::from_value(p[format!("{stream}_bytes")].clone()).unwrap()
+    serde_json::from_value(
+        chrono_harness::full::expand_process(p).unwrap()[format!("{stream}_bytes")].clone(),
+    )
+    .unwrap()
 }
 
 #[test]

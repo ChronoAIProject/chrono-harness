@@ -39,6 +39,18 @@ Consumers reject missing/mismatched binding observations before invoking Git.
 Process bounds apply per invocation; accumulated report storage is not a total
 run memory/disk quota.
 
+`Reader::observation()` now emits `chrono-git-facts/v2` for bound readers.
+Its process rows use `chrono-retained-process/v2` (or the bounded lossless v1
+fallback); decode rows with `full::expand_process` before deserializing
+`ProcessResult`. Historical `chrono-git-facts/v1` contained inline process rows.
+Request-bound readers explicitly require facts v2 and reject v1, missing and
+unknown schema identities before any Git invocation. The binding, environment,
+guard and selector checks still apply. Legacy unbound observations remain null.
+Historical inline and encoded process data remain decodable, but v1 request
+compatibility is version-gated, not demonstrated or silently converted. Coupled
+producers and consumers must use the same facts schema; host rollout and release
+acceptance remain caller-owned.
+
 A bound Reader reuses successful blob bytes for the same full immutable OID and
 exact requested path only after that Reader's existing `verify_oid` has observed
 the exact requested commit identity and a valid full tree OID. Reads before this

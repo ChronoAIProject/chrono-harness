@@ -50,6 +50,13 @@ struct Judge {
 }
 
 pub(crate) fn error_cause(error: &str) -> String {
+    // A retained-process publication failure is already the lossless error
+    // envelope.  Keep its embedded process receipt intact so callers can
+    // recover the original stdout/stderr bytes, exit code, and identity even
+    // when the human-facing check path fails before a report is published.
+    if error.starts_with("E_PROCESS_EVIDENCE: ") {
+        return error.to_owned();
+    }
     if let Some(text) = error.strip_prefix("E_GIT_FACTS: ") {
         if let Ok(observation) = crate::json(text.as_bytes()) {
             if let Some(message) = observation["message"].as_str() {

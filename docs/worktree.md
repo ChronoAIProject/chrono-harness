@@ -807,7 +807,7 @@ The main host invokes its registered `.chrono-harness/bin/chrono-worktree`; depl
 the candidate binary before using its newly adopted configuration.
 
 The adopted main-host configuration selects `.chrono-harness/cleanup.json`. Its
-`chrono-worktree-automatic-cleanup/v1` policy contains:
+v2 policy retains these v1 fields:
 
 | Field | Contract |
 | --- | --- |
@@ -892,6 +892,69 @@ rejects symlink roots/ancestors and unlinks internal symlinks without following
 external targets. Automatic reports measure literal entry lengths before disposal
 and verified zero afterward; these are logical bytes, not allocated-block savings.
 Legacy explicit maintenance keeps its report shape.
+
+The optional v2 `main_cache_only: true` enrolls the physical Git main checkout
+through the same owner on ordinary `use`, canonical `check`, and adopted
+`bootstrap`. Its enrollment, use intents, shared kernel lease, original process
+result, release, and cache attempts use the existing lifecycle state. Main finish
+releases caches and stays active; it never authorizes checkout, branch, index,
+source, bin, evidence, or commit deletion. Evidence-disposal and landing-pin flags
+are refused for main. Pre-existing registered outputs without adopted consumer
+release remain explicitly protected historical objects. Enrollment owns the
+absent, individually registered outputs before managed production starts; this
+is not a migration of the current host's historical targets or producers.
+
+Main re-entry drains released pending cache generations before starting a
+new consumer. A linked checkout being entered stays excluded until its new
+consumer has acquired protection; another ordinary entry can recover that
+checkout after release. Installation, tests, cache saving, and other registered operations
+must run under that same use protection. Actual shared descriptors protect live
+descendants and overlapping consumers. No post-check Cargo clean is added.
+The disposal owner rechecks HEAD, physical attachment, policy, and the live index
+before each removal. Logical lengths and allocated blocks (`st_blocks * 512`,
+including directory blocks) are reported separately. Physical release is unknown;
+allocation differences do not establish filesystem savings. Failed removal
+retains the original error and observed remaining objects, and retries preserve
+the original attempt.
+
+The optional v2 `retained_producers` lists exact producer IDs, evidence directories,
+and generated output paths relative to each explicitly registered receipt.
+The adopted `ci-command-result` family belongs to
+`ci-tests::behavior::retain_command_result`. The Rust `RetainedArtifact` interface
+admits the exact preserved object and publishes its intent. The adopted wrapper
+first copies original stdout, stderr, binding, configuration and state, then calls
+`begin` and seals generated directory identities and original stream/binding
+digests. Interruption or admission failure before `begin` leaves an unregistered
+copy protected as unknown evidence; an admitted but unsealed receipt also remains
+protected. The interface records consumers
+with independent explicit acquire/release receipts. Dropping a handle or losing
+a process never releases a receipt. The existing drain reads only that family's
+`objects.json`; it does not discover directories or infer references.
+
+Publication resolves the selected producer through `RetainedArtifact::registered_store`,
+using the same committed worktree configuration, cleanup policy, registration,
+and physical Git main coordinator checks as drain. The default wrapper supplies
+its producer checkout separately from the command's fixture root, so a linked
+producer publishes below the main coordinator's declared evidence directory.
+`CHRONO_CI_TEST_RECEIPTS` may select only that exact physical store; undeclared,
+overlapping, mismatched, or symlink destinations refuse publication and remain
+protected. Store resolution does not release consumers or grant main checkout
+or branch deletion authority. Earlier linked stores have no adopted forwarding
+route and remain protected unknown evidence.
+
+This host admits only the two copied independent Cargo outputs at
+`original-state/cargo/producer/target/` and `original-state/cargo/tests/target/`,
+and the producer additionally requires their exact source artifact declarations.
+The selected expected-exit assertion publishes release after consuming the
+original result. An unexpected exit, incomplete publication, or active diagnostic
+reference retains the copies. After all references explicitly release, the owner
+may reclaim those generated copies; stdout, stderr, binding, configuration,
+source, recovery originals, and other state remain evidence. Existing callers
+without an expected-exit contract retain an unreleased reference. Unknown legacy
+receipts and every unregistered object stay protected; `.chrono-harness/state/`
+does not become disposable. Compatible committed policy and binary deployment,
+real-host migration, native CI cache-save participation, and full SPEC adoption
+remain outside this implementation's verification.
 
 The coordinator ledger records original identity, terminal receipts and attempted
 report paths before effects. Failed results retain their original bytes/digests and

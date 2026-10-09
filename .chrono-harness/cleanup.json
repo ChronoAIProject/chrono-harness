@@ -159,5 +159,16 @@
       "path": ".chrono-harness/startup/",
       "disposition": "dispose"
     }
+  ],
+  "main_cache_only": true,
+  "retained_producers": [
+    {
+      "id": "ci-command-result",
+      "directory": ".chrono-harness/state/ci-test-failures/",
+      "generated_outputs": [
+        "original-state/cargo/producer/target/",
+        "original-state/cargo/tests/target/"
+      ]
+    }
   ]
 }

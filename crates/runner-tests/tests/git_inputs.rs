@@ -76,6 +76,185 @@ impl Host {
     }
 }
 
+// Byte assertions consume the codec through the actual public decoder.
+fn expanded_observation(reader: &Reader) -> Value {
+    let mut observed = reader.observation();
+    for process in observed["processes"].as_array_mut().unwrap() {
+        *process = chrono_harness::full::expand_process(process).unwrap();
+    }
+    observed
+}
+
+#[test]
+fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
+    let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let path = ".chrono-harness/config.json";
+    let config: Value = serde_json::from_slice(&fs::read(product.join(path)).unwrap()).unwrap();
+    let filemap: Value =
+        serde_json::from_slice(&fs::read(product.join(".chrono-harness/FILEMAP.json")).unwrap())
+            .unwrap();
+    for input in chrono_harness::facts::registry_paths(&config, path).unwrap() {
+        let declarations: Vec<_> = filemap["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|file| file["path"] == input)
+            .collect();
+        assert_eq!(declarations.len(), 1, "real test input {input}");
+        let file = declarations[0];
+        assert!(
+            file["edges"].as_array().unwrap().iter().any(|edge| {
+                edge["kind"] == "runtime-input" && edge["to"] == "project:runner-tests"
+            }),
+            "missing actual registry test consumer for {input}"
+        );
+    }
+    assert!(
+        filemap["project_edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| {
+                edge["from"] == "project:runner-tests"
+                    && edge["kind"] == "test-execution"
+                    && edge["to"] == "test:runner-tests"
+            })
+    );
+}
+
+#[test]
+fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
+    let h = Host::new(json!({"mode":"passthrough"}));
+    h.save();
+    let oid = commit(&h);
+    let reader = h.open().unwrap();
+    let current = reader.observation();
+    assert_eq!(current["schema"], "chrono-git-facts/v2");
+    let expanded = expanded_observation(&reader);
+    for process in expanded["processes"].as_array().unwrap() {
+        let raw: chrono_harness::ProcessResult = serde_json::from_value(process.clone()).unwrap();
+        chrono_harness::observation::process_success(&raw).unwrap();
+    }
+    let environment = current["environment"].clone();
+    let consumer = Reader::from_observations(
+        &h.root,
+        CONFIG,
+        &oid,
+        &json!({"environment":environment,"git_facts":current}),
+    )
+    .unwrap();
+    assert_eq!(consumer.observation()["schema"], "chrono-git-facts/v2");
+    let before = fs::read(h.root.join("trace")).unwrap();
+    for schema in [
+        Some(json!("chrono-git-facts/v1")),
+        Some(json!("unknown")),
+        Some(Value::Null),
+        None,
+    ] {
+        let mut prior = expanded.clone();
+        match &schema {
+            Some(schema) => prior["schema"] = schema.clone(),
+            None => {
+                prior.as_object_mut().unwrap().remove("schema");
+            }
+        }
+        let error = match Reader::from_observations(
+            &h.root,
+            CONFIG,
+            &oid,
+            &json!({"environment":environment,"git_facts":prior}),
+        ) {
+            Ok(_) => panic!("unsupported request schema accepted: {schema:?}"),
+            Err(error) => error,
+        };
+        assert!(
+            error.contains("unsupported request Git facts schema"),
+            "{error}"
+        );
+        assert_eq!(fs::read(h.root.join("trace")).unwrap(), before);
+    }
+    assert!(Reader::legacy().observation().is_null());
+}
+
+#[test]
+fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
+    let mut h = Host::new(json!({"mode":"passthrough"}));
+    let original = fs::read(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/config.json"),
+    )
+    .unwrap();
+    let path = ".chrono-harness/registry-source.json";
+    let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config: Value = serde_json::from_slice(&original).unwrap();
+    let mut originals = std::collections::BTreeMap::new();
+    for registry in chrono_harness::facts::registry_paths(&config, path).unwrap() {
+        let bytes = if registry == path {
+            original.clone()
+        } else {
+            fs::read(product.join(&registry)).unwrap()
+        };
+        fs::create_dir_all(h.root.join(&registry).parent().unwrap()).unwrap();
+        fs::write(h.root.join(&registry), &bytes).unwrap();
+        originals.insert(registry, bytes);
+    }
+    h.config["protocol"]["stdout_limit_bytes"] = json!(8 * 1024 * 1024);
+    h.save();
+    let oid = commit(&h);
+    let reader = h.open().unwrap();
+    reader.verify_oid(&h.root, &oid).unwrap();
+    let base = reader.registry_snapshot(&h.root, &oid, path).unwrap();
+    assert_eq!(base.bytes, originals);
+    fs::write(h.root.join("candidate-source"), "a real second endpoint").unwrap();
+    let candidate = commit(&h);
+    reader.verify_oid(&h.root, &candidate).unwrap();
+    let current = reader.registry_snapshot(&h.root, &candidate, path).unwrap();
+    assert_eq!(current.bytes, originals);
+    let observed = reader.observation();
+    let wire_bytes = serde_json::to_vec(&observed).unwrap();
+    let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let retained = chrono_harness::prepared::retain_original(
+        &product,
+        ".chrono-harness/state/preparation/",
+        "registry-transport",
+        &wire_bytes,
+    )
+    .unwrap();
+    println!(
+        "ACTUAL_REGISTRY_TRANSPORT config_bytes={} registry_bytes_per_endpoint={} registries={} processes={} observation_bytes={} original={} sha256={}",
+        original.len(),
+        originals.values().map(Vec::len).sum::<usize>(),
+        originals.len(),
+        observed["processes"].as_array().unwrap().len(),
+        wire_bytes.len(),
+        retained.path,
+        retained.sha256
+    );
+    assert!(
+        wire_bytes.len() < 8 * 1024 * 1024,
+        "actual host evidence must fit the existing check bound"
+    );
+    for row in observed["processes"].as_array().unwrap() {
+        let expanded = chrono_harness::full::expand_process(row).unwrap();
+        let process: chrono_harness::ProcessResult = serde_json::from_value(expanded).unwrap();
+        chrono_harness::observation::process_success(&process).unwrap();
+    }
+    let last = observed["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["stdout_sha256"] == sha256(&original))
+        .unwrap();
+    assert_eq!(last["encoding"], "chrono-retained-process/v2");
+    assert!(last.get("stdout").is_none() && last.get("stdout_bytes").is_none());
+    let expanded = chrono_harness::full::expand_process(last).unwrap();
+    let process: chrono_harness::ProcessResult = serde_json::from_value(expanded).unwrap();
+    chrono_harness::observation::process_success(&process).unwrap();
+    assert_eq!(process.stdout_bytes, original);
+    let mut corrupt = last.clone();
+    corrupt["stdout_sha256"] = json!("0".repeat(64));
+    assert!(chrono_harness::full::expand_process(&corrupt).is_err());
+}
+
 #[test]
 fn explicit_git_configuration_is_checked_before_each_real_read() {
     let h = Host::new(json!({"mode":"passthrough"}));
@@ -87,7 +266,7 @@ fn explicit_git_configuration_is_checked_before_each_real_read() {
         )
         .unwrap();
     assert_eq!(bytes, b"0\n");
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     assert_eq!(observed["inputs"]["schema"], "chrono-git-inputs-result/v1");
     assert_eq!(
         observed["inputs"]["files"]["no-extra-config"]["presence"],
@@ -105,7 +284,10 @@ fn explicit_git_configuration_is_checked_before_each_real_read() {
         .unwrap_err();
     assert!(error.contains("git-config"), "{error}");
     assert_eq!(
-        reader.observation()["processes"].as_array().unwrap().len(),
+        expanded_observation(&reader)["processes"]
+            .as_array()
+            .unwrap()
+            .len(),
         count
     );
 }
@@ -141,14 +323,20 @@ fn artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs() {
             "normalized {declaration:?}"
         );
     }
-    let count = reader.observation()["processes"].as_array().unwrap().len();
+    let count = expanded_observation(&reader)["processes"]
+        .as_array()
+        .unwrap()
+        .len();
     fs::write(h.root.join(".git/config.worktree"), "changed").unwrap();
     let error = reader
         .untracked_excluding(&h.root, &["cache[1]/allowed/"])
         .unwrap_err();
     assert!(error.contains("no-extra-config"), "{error}");
     assert_eq!(
-        reader.observation()["processes"].as_array().unwrap().len(),
+        expanded_observation(&reader)["processes"]
+            .as_array()
+            .unwrap()
+            .len(),
         count
     );
 }
@@ -204,7 +392,7 @@ fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
         .git(&h.root, &["rev-parse", "--show-toplevel"])
         .unwrap_err();
     assert!(error.contains("no-extra-config"), "{error}");
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     let process = observed["processes"].as_array().unwrap().last().unwrap();
     assert_eq!(process["exit_code"], 17);
     assert_eq!(process["stdout"], "original output");
@@ -220,7 +408,7 @@ fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
         .unwrap()
         .remove("guard");
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
-    assert!(reader.observation().get("inputs").is_none());
+    assert!(expanded_observation(&reader).get("inputs").is_none());
     fs::write(h.root.join(".git/config.worktree"), "legacy semantics").unwrap();
     assert!(
         reader
@@ -230,7 +418,7 @@ fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
 
     let h = Host::new(json!({"mode":"passthrough"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
-    let mut observation = reader.observation();
+    let mut observation = expanded_observation(&reader);
     let environment = observation["environment"].clone();
     observation.as_object_mut().unwrap().remove("inputs");
     let result = Reader::from_observations(
@@ -303,7 +491,7 @@ fn selected_platform_binds_both_candidate_files_and_request_observation() {
     let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
     assert!(reader.is_bound());
     reader.verify_config(&h.root, &candidate).unwrap();
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     assert_eq!(observed["config_path"], CONFIG);
     assert_eq!(observed["selection"]["path"], SELECTOR);
     assert_eq!(observed["selection"]["platform"], platform());
@@ -410,7 +598,10 @@ fn platform_selector_and_selected_policy_drift_block_the_next_process() {
         assert!(reader.is_bound());
         let before = h.root.join(path);
         let bytes = fs::read(&before).unwrap();
-        let count = reader.observation()["processes"].as_array().unwrap().len();
+        let count = expanded_observation(&reader)["processes"]
+            .as_array()
+            .unwrap()
+            .len();
         fs::write(&before, b"{}").unwrap();
         assert!(
             reader
@@ -418,7 +609,10 @@ fn platform_selector_and_selected_policy_drift_block_the_next_process() {
                 .is_err()
         );
         assert_eq!(
-            reader.observation()["processes"].as_array().unwrap().len(),
+            expanded_observation(&reader)["processes"]
+                .as_array()
+                .unwrap()
+                .len(),
             count
         );
         fs::write(&before, bytes).unwrap();
@@ -438,7 +632,7 @@ fn selector_mutation_during_git_retains_the_original_failed_process() {
         .git(&h.root, &["rev-parse", "--show-toplevel"])
         .unwrap_err();
     assert!(error.contains("selector changed"), "{error}");
-    let observation = reader.observation();
+    let observation = expanded_observation(&reader);
     let process = observation["processes"].as_array().unwrap().last().unwrap();
     assert_eq!(process["exit_code"], 17);
     assert_eq!(process["stdout_sha256"], sha256(b"original"));
@@ -467,7 +661,10 @@ fn platform_selection_must_match_both_fixed_candidate_blobs() {
 }
 
 fn processes(reader: &Reader) -> usize {
-    reader.observation()["processes"].as_array().unwrap().len()
+    expanded_observation(&reader)["processes"]
+        .as_array()
+        .unwrap()
+        .len()
 }
 
 #[test]
@@ -517,7 +714,7 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
         acquired <= 3,
         "small immutable blobs must not launch one Git process per file: {acquired}"
     );
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     for process in observed["processes"].as_array().unwrap() {
         let process: chrono_harness::ProcessResult =
             serde_json::from_value(process.clone()).unwrap();
@@ -526,7 +723,7 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
     let next = tempfile::tempdir().unwrap();
     reader.export(&h.root, &oid, &tree, next.path()).unwrap();
     assert_eq!(
-        reader.observation(),
+        expanded_observation(&reader),
         observed,
         "reuse retains original processes"
     );
@@ -538,7 +735,7 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
             .is_err()
     );
     assert_eq!(
-        reader.observation(),
+        expanded_observation(&reader),
         observed,
         "cached bytes retain input guards"
     );
@@ -555,7 +752,7 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
         .export(&h.root, &oid, &tree, dest.path())
         .unwrap_err();
     assert!(error.contains("Git facts process exit 17"), "{error}");
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     let failure = observed["processes"].as_array().unwrap().last().unwrap();
     assert_eq!(failure["exit_code"], 17);
     assert_eq!(failure["stdout_sha256"], sha256(b"original partial"));
@@ -566,7 +763,7 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
     for (path, bytes) in originals {
         assert_eq!(fs::read(dest.path().join(path)).unwrap(), bytes);
     }
-    let after = reader.observation();
+    let after = expanded_observation(&reader);
     assert_eq!(
         &after["processes"].as_array().unwrap()[..observed["processes"].as_array().unwrap().len()],
         observed["processes"].as_array().unwrap()
@@ -592,7 +789,7 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
     let first = reader
         .registry_snapshot(&h.root, &candidate, SELECTOR)
         .unwrap();
-    let original = reader.observation();
+    let original = expanded_observation(&reader);
     let trace = fs::read(h.root.join("trace")).unwrap();
     for _ in 0..32 {
         reader.verify_config(&h.root, &candidate).unwrap();
@@ -607,7 +804,7 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
     println!(
         "FACTS_REUSE wall_seconds={} observation={}",
         start.elapsed().as_secs_f64(),
-        reader.observation()
+        expanded_observation(&reader)
     );
     assert_eq!(
         processes(&reader),
@@ -615,7 +812,7 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
         "version, existing commit/tree observations, selector/config and two registry batch acquisitions"
     );
     assert_eq!(
-        reader.observation(),
+        expanded_observation(&reader),
         original,
         "reuse is not a fresh process receipt"
     );
@@ -650,9 +847,9 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &old).unwrap();
     assert_eq!(reader.blob(&h.root, &old, path).unwrap(), bytes);
-    let original = reader.observation();
+    let original = expanded_observation(&reader);
     assert_eq!(reader.blob(&h.root, &old, path).unwrap(), bytes);
-    assert_eq!(reader.observation(), original);
+    assert_eq!(expanded_observation(&reader), original);
     assert_eq!(reader.blob(&h.root, &old, "other.bin").unwrap(), b"other");
     fs::write(h.root.join(path), b"new").unwrap();
     let new = commit(&h);
@@ -685,10 +882,10 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &old).unwrap();
     let tree = reader.tree(&h.root, &old).unwrap();
-    let original = reader.observation();
+    let original = expanded_observation(&reader);
     assert_eq!(reader.tree(&h.root, &old).unwrap(), tree);
     assert_eq!(
-        reader.observation(),
+        expanded_observation(&reader),
         original,
         "reuse must retain one original tree acquisition"
     );
@@ -717,7 +914,7 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
             .contains(&"payload".into()),
         "a staged change is not cancelled by opposite worktree bytes"
     );
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     let reads = observed["processes"]
         .as_array()
         .unwrap()
@@ -771,14 +968,14 @@ fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
         fs::write(h.root.join("fail-tree"), b"").unwrap();
         let count = processes(&reader);
         assert!(reader.tree(&h.root, &oid).is_err());
-        let original = reader.observation()["processes"][count].clone();
+        let original = expanded_observation(&reader)["processes"][count].clone();
         fs::remove_file(h.root.join("fail-tree")).unwrap();
         if drift {
             fs::remove_file(h.root.join(".git/config.worktree")).unwrap();
         }
         assert!(reader.tree(&h.root, &oid).unwrap().contains_key("payload"));
         assert_eq!(processes(&reader), count + 2);
-        assert_eq!(reader.observation()["processes"][count], original);
+        assert_eq!(expanded_observation(&reader)["processes"][count], original);
     }
 }
 
@@ -850,7 +1047,7 @@ fn failed_or_postprocess_drifted_blob_reads_are_never_reused() {
         let reader = h.open().unwrap();
         reader.verify_oid(&h.root, &oid).unwrap();
         assert!(reader.blob(&h.root, &oid, "payload").is_err());
-        let observed = reader.observation();
+        let observed = expanded_observation(&reader);
         let failed_index = processes(&reader) - 1;
         let failed = &observed["processes"][failed_index];
         assert_eq!(failed["exit_code"], if drift { 0 } else { 17 });
@@ -874,12 +1071,12 @@ fn failed_or_postprocess_drifted_blob_reads_are_never_reused() {
             reader.blob(&h.root, &oid, "payload").unwrap(),
             b"original\0\xff"
         );
-        let success = reader.observation();
+        let success = expanded_observation(&reader);
         assert_eq!(
             reader.blob(&h.root, &oid, "payload").unwrap(),
             b"original\0\xff"
         );
-        assert_eq!(reader.observation(), success);
+        assert_eq!(expanded_observation(&reader), success);
         assert_eq!(success["processes"][failed_index], *failed);
         println!("FACTS_RETRY drift={drift} observation={success}");
     }
@@ -946,9 +1143,9 @@ fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
     let first = h.open().unwrap();
     first.verify_oid(&h.root, &oid).unwrap();
     assert_eq!(first.blob(&h.root, &oid, "payload").unwrap(), b"first");
-    let original = first.observation();
+    let original = expanded_observation(&first);
     assert_eq!(first.blob(&h.root, &oid, "payload").unwrap(), b"first");
-    assert_eq!(first.observation(), original);
+    assert_eq!(expanded_observation(&first), original);
     h.config["environment"]["values"]["BOUND_VALUE"] = json!("second");
     let second = h.open().unwrap();
     assert!(
@@ -957,10 +1154,10 @@ fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
             .unwrap_err()
             .contains("configuration changed")
     );
-    assert_eq!(first.observation(), original);
+    assert_eq!(expanded_observation(&first), original);
     second.verify_oid(&h.root, &oid).unwrap();
     assert_eq!(second.blob(&h.root, &oid, "payload").unwrap(), b"second");
-    let observed = second.observation();
+    let observed = expanded_observation(&second);
     assert_eq!(processes(&first), 4);
     assert_eq!(processes(&second), 4);
     assert_eq!(
@@ -1003,7 +1200,10 @@ fn oid_shaped_ref_for_another_object_format_is_still_mutable() {
     let new = commit(&h);
     update(&new);
     assert_eq!(reader.blob(&h.root, &refname, "payload").unwrap(), b"new");
-    println!("FACTS_HEX_REF observation={}", reader.observation());
+    println!(
+        "FACTS_HEX_REF observation={}",
+        expanded_observation(&reader)
+    );
 }
 
 #[test]
@@ -1024,9 +1224,9 @@ fn reads_before_a_successful_identity_observation_stay_fresh_without_extra_probe
     );
     reader.verify_oid(&h.root, &oid).unwrap();
     assert_eq!(reader.blob(&h.root, &oid, "payload").unwrap(), b"original");
-    let original = reader.observation();
+    let original = expanded_observation(&reader);
     assert_eq!(reader.blob(&h.root, &oid, "payload").unwrap(), b"original");
-    assert_eq!(reader.observation(), original);
+    assert_eq!(expanded_observation(&reader), original);
     assert_eq!(processes(&reader), 6);
 }
 
@@ -1083,7 +1283,7 @@ fn malformed_or_failed_identity_observations_never_enable_reuse() {
         } else {
             assert!(result.is_err(), "{case}");
         }
-        let observed = reader.observation();
+        let observed = expanded_observation(&reader);
         if let Some(bytes) = &response {
             let process = observed["processes"].as_array().unwrap().last().unwrap();
             assert_eq!(process["stdout_bytes"], json!(bytes));
@@ -1106,7 +1306,7 @@ fn malformed_or_failed_identity_observations_never_enable_reuse() {
         }
         println!(
             "FACTS_MALFORMED case={case} observation={}",
-            reader.observation()
+            expanded_observation(&reader)
         );
     }
 }
@@ -1146,7 +1346,7 @@ fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges(
     for (path, bytes) in &originals {
         assert_eq!(&snapshot.bytes[path], bytes);
     }
-    let observed = reader.observation();
+    let observed = expanded_observation(&reader);
     println!("REGISTRY_ACQUISITION wall_seconds={elapsed} observation={observed}");
     assert_eq!(
         processes(&reader),
@@ -1198,7 +1398,7 @@ fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges(
         snapshot.bytes
     );
     assert_eq!(
-        reader.observation(),
+        expanded_observation(&reader),
         observed,
         "reuse retains the original receipt"
     );
@@ -1225,7 +1425,10 @@ fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blo
             assert_eq!(snapshot.bytes[&path], bytes);
             assert_eq!(reader.blob(&h.root, &oid, &path).unwrap(), bytes);
         }
-        for process in reader.observation()["processes"].as_array().unwrap() {
+        for process in expanded_observation(&reader)["processes"]
+            .as_array()
+            .unwrap()
+        {
             let p: chrono_harness::ProcessResult = serde_json::from_value(process.clone()).unwrap();
             assert!(p.stdout_bytes.len() <= 2048);
             chrono_harness::observation::process_success(&p).unwrap();
@@ -1252,14 +1455,13 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
             fs::write(h.root.join("response"), response).unwrap();
             for _ in 0..2 {
                 let before = processes(&reader);
-                assert!(
-                    reader.registry_snapshot(&h.root, &oid, CONFIG).is_err(),
-                    "{phase}: {response:?}"
-                );
-                assert!(processes(&reader) > before);
-                let observed = reader.observation();
+                let result = reader.registry_snapshot(&h.root, &oid, CONFIG);
+                assert!(result.is_err(), "{phase}: {response:?}");
+                let error = result.err().unwrap();
+                assert!(processes(&reader) > before, "{phase}: {error}");
+                let observed = expanded_observation(&reader);
                 let last = observed["processes"].as_array().unwrap().last().unwrap();
-                assert_eq!(last["stdout_bytes"], json!(response));
+                assert_eq!(last["stdout_bytes"], json!(response), "{phase}: {error}");
                 assert_eq!(last["stdout_sha256"], sha256(response));
                 assert_eq!(last["exit_code"], 0);
             }
@@ -1277,7 +1479,7 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
         let reader = h.open().unwrap();
         reader.verify_oid(&h.root, &oid).unwrap();
         assert!(reader.registry_snapshot(&h.root, &oid, CONFIG).is_err());
-        let observed = reader.observation();
+        let observed = expanded_observation(&reader);
         let failed_index = processes(&reader) - 1;
         let failed = observed["processes"][failed_index].clone();
         assert_eq!(failed["exit_code"], if drift { 0 } else { 17 });
@@ -1289,7 +1491,10 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
         }
         fs::write(h.root.join("retry-ready"), b"").unwrap();
         assert!(reader.registry_snapshot(&h.root, &oid, CONFIG).is_ok());
-        assert_eq!(reader.observation()["processes"][failed_index], failed);
+        assert_eq!(
+            expanded_observation(&reader)["processes"][failed_index],
+            failed
+        );
     }
 }
 
@@ -1300,7 +1505,7 @@ fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
     let first = h.open().unwrap();
     first.verify_oid(&h.root, &oid).unwrap();
     first.registry_snapshot(&h.root, &oid, CONFIG).unwrap();
-    let observed = first.observation();
+    let observed = expanded_observation(&first);
     let valid: chrono_harness::ProcessResult = serde_json::from_value(
         observed["processes"]
             .as_array()
@@ -1343,7 +1548,7 @@ fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
                 "{case}"
             );
             assert!(processes(&reader) > before);
-            let observed = reader.observation();
+            let observed = expanded_observation(&reader);
             let last = observed["processes"].as_array().unwrap().last().unwrap();
             assert_eq!(last["stdout_bytes"], json!(raw));
             assert_eq!(last["stdout_sha256"], sha256(&raw));
@@ -1370,7 +1575,7 @@ fn registry_batch_keeps_configured_process_output_and_time_failures() {
             reader.registry_snapshot(&h.root, &oid, CONFIG).is_err(),
             "{case}"
         );
-        let observed = reader.observation();
+        let observed = expanded_observation(&reader);
         let last = observed["processes"].as_array().unwrap().last().unwrap();
         assert_eq!(
             last["failure"],
@@ -1403,7 +1608,7 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
         reader.verify_oid(&h.root, &oid).unwrap();
         reader.registry_snapshot(&h.root, &oid, SELECTOR).unwrap();
-        let original = reader.observation();
+        let original = expanded_observation(&reader);
         let path = originals.keys().next().unwrap();
         let other = tempfile::tempdir().unwrap();
         let root = if case == "root" {
@@ -1425,7 +1630,7 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
         }
         assert!(reader.blob(root, &oid, path).is_err(), "{case}");
         assert_eq!(
-            reader.observation(),
+            expanded_observation(&reader),
             original,
             "{case}: reject before process effects"
         );

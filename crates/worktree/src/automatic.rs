@@ -1,5 +1,6 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
 mod migration;
+mod producer;
 use crate::{
     Start, artifact_disposal,
     maintenance::{self, Cleanup, Retention},
@@ -8,6 +9,7 @@ use crate::{
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
+pub use producer::RetainedArtifact;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
@@ -27,6 +29,10 @@ struct Policy {
     retention: Retention,
     remove_branch: bool,
     allow_evidence_disposal: bool,
+    #[serde(default)]
+    main_cache_only: bool,
+    #[serde(default)]
+    retained_producers: Vec<producer::ProducerPolicy>,
     artifacts: Vec<Artifact>,
 }
 #[derive(Clone, Deserialize)]
@@ -116,6 +122,8 @@ struct Entry {
     cache_attempts: Vec<CacheAttempt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     policy_migrations: Vec<Receipt>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    cache_only: bool,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -214,6 +222,22 @@ fn attachment_at(target: &Path, metadata: &Path) -> Result<Attachment, String> {
         metadata,
     })
 }
+fn main_attachment(target: &Path, metadata: &Path) -> Result<Attachment, String> {
+    let git = target.join(".git");
+    if !fs::symlink_metadata(&git)
+        .map_err(|e| e.to_string())?
+        .is_dir()
+        || absolute(&git, false)? != absolute(metadata, false)?
+    {
+        return Err("main cache ownership requires the physical Git main directory".into());
+    }
+    Ok(Attachment {
+        gitfile_sha256: "physical-main-directory".into(),
+        gitfile_id: directory_id(&git)?,
+        metadata_id: directory_id(metadata)?,
+        metadata: metadata.into(),
+    })
+}
 fn write_json(path: &Path, v: &impl Serialize, immutable: bool) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
@@ -266,6 +290,12 @@ fn load_policy(
         return Err("invalid automatic cleanup policy".into());
     }
     relative_path(p.state_directory.trim_end_matches('/'))?;
+    if p.main_cache_only && p.schema != "chrono-worktree-automatic-cleanup/v2" {
+        return Err("main cache ownership requires kernel cleanup v2".into());
+    }
+    if !p.retained_producers.is_empty() && p.schema != "chrono-worktree-automatic-cleanup/v2" {
+        return Err("retained producer references require kernel cleanup v2".into());
+    }
     if p.coordinator_root == Path::new("git-main-worktree") {
         // Explicit host selector delegates physical identity to Git's existing owner inventory.
         p.coordinator_root = PathBuf::from(
@@ -351,6 +381,19 @@ impl Manager {
                 .collect::<Vec<_>>(),
             &[registrations.config()],
         )?;
+        let mut producers = BTreeSet::new();
+        for producer in &policy.retained_producers {
+            producer.validate(&policy)?;
+            if !producers.insert(&producer.id)
+                || policy.retained_producers.iter().any(|other| {
+                    other.id != producer.id
+                        && (other.directory.starts_with(&producer.directory)
+                            || producer.directory.starts_with(&other.directory))
+                })
+            {
+                return Err("repeated or overlapping retained producer registrations".into());
+            }
+        }
         start::registered_policy(&registrations, config_path, &r.config.report_directory)?;
         let directory = no_symlink_parents(anchor, policy.state_directory.trim_end_matches('/'))?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
@@ -472,6 +515,11 @@ impl Manager {
         // retained in order. A pathname may have only one unresolved generation.
         let mut paths = BTreeMap::new();
         for e in &ledger.entries {
+            if e.cache_only && (e.path != *anchor || e.status != "active" || e.terminal.is_some()) {
+                return Err(
+                    "main cache enrollment cannot authorize terminal worktree disposal".into(),
+                );
+            }
             if paths
                 .insert(&e.path, e.status.as_str())
                 .is_some_and(|previous| previous != "disposed")
@@ -591,6 +639,39 @@ impl Manager {
         if self.target_policy_inputs(r, &e.path, head)? != binding.inputs {
             return Err("enrolled target policy/configuration changed; preserve work for explicit migration".into());
         }
+        if e.cache_only {
+            let owned: Vec<String> = serde_json::from_value(
+                e.enrollment["main_cache_artifacts"].clone(),
+            )
+            .map_err(|_| "main cache artifact declarations missing or invalid; preserve outputs")?;
+            let protected = e.enrollment["protected_historical_artifacts"]
+                .as_array()
+                .ok_or("main historical ownership declarations missing; preserve outputs")?;
+            let mut declared: BTreeSet<_> = owned.iter().map(String::as_str).collect();
+            for artifact in protected {
+                if !declared.insert(
+                    artifact["path"]
+                        .as_str()
+                        .ok_or("main historical artifact path missing")?,
+                ) {
+                    return Err("ambiguous main cache ownership; preserve outputs".into());
+                }
+            }
+            let registered: BTreeSet<_> = self
+                .policy
+                .artifacts
+                .iter()
+                .filter(|a| a.disposition == Disposition::Dispose)
+                .map(|a| a.path.as_str())
+                .collect();
+            if owned.iter().collect::<BTreeSet<_>>().len() != owned.len()
+                || (e.policy_migrations.is_empty() && declared != registered)
+            {
+                return Err(
+                    "main cache ownership does not match its exact artifact registration".into(),
+                );
+            }
+        }
         Ok(())
     }
     fn check_attachment(
@@ -615,6 +696,21 @@ impl Manager {
             }
         }
         absolute(&e.path, false)?;
+        if e.cache_only {
+            if !self.policy.main_cache_only || e.path != self.policy.coordinator_root {
+                return Err("main cache ownership is not adopted at this coordinator".into());
+            }
+            let observed = r.checkout_identity(&e.path)?;
+            if observed.top != e.path
+                || observed.common != self.ledger.common
+                || observed.head != head
+                || main_attachment(&e.path, &observed.metadata)? != e.attachment
+            {
+                return Err("main cache attachment changed; preserve outputs".into());
+            }
+            self.git_locks(e, Some(&observed.branch))?;
+            return self.stable(r);
+        }
         let observed = maintenance::identity(
             r,
             &self.policy.coordinator_root,
@@ -626,20 +722,23 @@ impl Manager {
         if attachment_at(&e.path, &observed.metadata)? != e.attachment {
             return Err("enrolled checkout attachment changed".into());
         }
-        self.git_locks(e)?;
+        self.git_locks(e, None)?;
         self.stable(r)
     }
-    fn git_locks(&self, e: &Entry) -> Result<(), String> {
+    fn git_locks(&self, e: &Entry, main_branch: Option<&str>) -> Result<(), String> {
         let mut locks = vec![
             e.attachment.metadata.join("index.lock"),
             e.attachment.metadata.join("HEAD.lock"),
             self.ledger.common.join("packed-refs.lock"),
             self.ledger.common.join("config.lock"),
         ];
-        for reference in [
-            format!("refs/heads/{}", e.branch),
-            self.policy.retained_ref.clone(),
-        ] {
+        let mut references = vec![self.policy.retained_ref.clone()];
+        match main_branch {
+            Some("HEAD") => (), // Detached main has no branch-removal authority.
+            Some(reference) => references.push(reference.into()),
+            None => references.push(format!("refs/heads/{}", e.branch)),
+        }
+        for reference in references {
             relative_path(&reference)?;
             locks.push(self.ledger.common.join(format!("{reference}.lock")));
         }
@@ -693,19 +792,37 @@ impl Manager {
     ) -> Result<(), String> {
         let target = absolute(target, false)?;
         self.enrollment_available(&target)?;
-        let branch = r
-            .text(&target, &["symbolic-ref", "--short", "HEAD"])?
-            .trim()
-            .to_owned();
-        if !["feature_prefix", "integration_prefix"].iter().any(|k| {
-            self.registrations.workflow()[k]
-                .as_str()
-                .is_some_and(|p| branch.starts_with(p))
-        }) {
+        let cache_only = kind == "main-cache";
+        let branch = if cache_only {
+            r.checkout_identity(&target)?.branch
+        } else {
+            r.text(&target, &["symbolic-ref", "--short", "HEAD"])?
+                .trim()
+                .to_owned()
+        };
+        if cache_only
+            && (!self.policy.main_cache_only
+                || self._gate.lease.is_none()
+                || target != self.policy.coordinator_root)
+        {
+            return Err("main cache ownership is not explicitly adopted".into());
+        }
+        if !cache_only
+            && !["feature_prefix", "integration_prefix"].iter().any(|k| {
+                self.registrations.workflow()[k]
+                    .as_str()
+                    .is_some_and(|p| branch.starts_with(p))
+            })
+        {
             return Err("enrollment branch is not a registered work branch".into());
         }
         let head = r.oid(&target, "HEAD")?;
-        let attached = attachment(r, &target)?;
+        let attached = if cache_only {
+            let observed = r.checkout_identity(&target)?;
+            main_attachment(&target, &observed.metadata)?
+        } else {
+            attachment(r, &target)?
+        };
         let policy_inputs = self.target_policy_inputs(r, &target, &head)?;
         if kind == "birth"
             && (policy_inputs.get(&self.config_path) != Some(&Some(sha256(&self.config_bytes)))
@@ -732,7 +849,7 @@ impl Manager {
             let owner = Ownership {
                 path,
                 id: lease.id().into(),
-                cache_pending: true,
+                cache_pending: !cache_only,
                 generation: 1,
             };
             if kind == "birth" {
@@ -742,19 +859,46 @@ impl Manager {
         } else {
             None
         };
+        // Existing main outputs have no adopted release history. Enrollment can
+        // own absent registered outputs before its managed producer starts; it
+        // cannot silently migrate historical output or unknown consumers.
+        let mut main_cache_artifacts = vec![];
+        let mut historical_artifacts = vec![];
+        if cache_only {
+            for artifact in self
+                .policy
+                .artifacts
+                .iter()
+                .filter(|a| a.disposition == Disposition::Dispose)
+            {
+                let path = no_symlink_parents(&target, artifact.path.trim_end_matches('/'))?;
+                match fs::symlink_metadata(path) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => main_cache_artifacts.push(artifact.path.clone()),
+                    Err(e) => return Err(e.to_string()),
+                    Ok(_) => historical_artifacts.push(value!({"path":artifact.path,
+                        "reason":"pre-existing output has no adopted consumer release; explicit migration required"})),
+                }
+            }
+        }
+        let mut enrollment = value!({"kind":kind,"observed_head":head,"receipt":receipt,"policy_inputs":policy_inputs});
+        if cache_only {
+            enrollment["main_cache_artifacts"] = value!(main_cache_artifacts);
+            enrollment["protected_historical_artifacts"] = value!(historical_artifacts);
+        }
         let entry = Entry {
             path: target,
             branch,
             attachment: attached,
             policy_sha256: sha256(&self.policy_bytes),
             status: "active".into(),
-            enrollment: value!({"kind":kind,"observed_head":head,"receipt":receipt,"policy_inputs":policy_inputs}),
+            enrollment,
             uses: vec![],
             terminal: None,
             attempts: vec![],
             ownership,
             cache_attempts: vec![],
             policy_migrations: vec![],
+            cache_only,
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = r.config.host_config.clone();
@@ -1139,7 +1283,13 @@ impl Manager {
             .policy
             .artifacts
             .iter()
-            .filter(|a| a.disposition == Disposition::Dispose)
+            .filter(|a| {
+                a.disposition == Disposition::Dispose
+                    && (!e.cache_only
+                        || e.enrollment["main_cache_artifacts"]
+                            .as_array()
+                            .is_some_and(|paths| paths.contains(&value!(a.path))))
+            })
             .map(|a| a.path.clone())
             .collect();
         let host_config = r.config.host_config.clone();
@@ -1195,11 +1345,15 @@ impl Manager {
         report["head"] = value!(head);
         report["worktree_removal"] = value!("preserved");
         report["branch_removal"] = value!("not-requested");
+        report["protected_historical_artifacts"] =
+            e.enrollment["protected_historical_artifacts"].clone();
         report["preserved_reason"] =
             value!("unfinished resumable enrollment; only registered disposable outputs selected");
         report["artifact_disposals"] = value!([]);
         artifact_disposal::dispose(&e.path, &names, &paths, report, || {
-            self.check_entry(r, &e, &head, None)
+            self.check_entry(r, &e, &head, None)?;
+            artifact_disposal::paths(r, &e.path, &head, &names)?;
+            Ok(())
         })?;
         self.check_entry(r, &e, &head, None)
     }
@@ -1228,6 +1382,27 @@ impl Manager {
             None
         };
         let e = self.ledger.entries[i].clone();
+        if e.cache_only {
+            if dispose_evidence || pin.is_some() {
+                return Err(
+                    "main finish only releases caches; evidence/landing disposal is not authorized"
+                        .into(),
+                );
+            }
+            let head = r.oid(&target, "HEAD")?;
+            self.check_entry(r, &e, &head, None)?;
+            let receipt = self.immutable(
+                &format!("main-release-{token}.json"),
+                &value!({
+                    "schema":"chrono-main-cache-release/v1","path":target,"head":head,
+                    "attachment":e.attachment,"ownership":e.ownership,
+                    "worktree_removal":"not-authorized","task_completion":"not-claimed"
+                }),
+            )?;
+            report["main_cache_release"] = value!(receipt);
+            report["worktree_removal"] = value!("preserved");
+            return Ok(());
+        }
         if !matches!(e.status.as_str(), "active" | "retained") || !e.uses.is_empty() {
             return Err(
                 "worktree is terminal or has active/unknown managed use; preserve it".into(),
@@ -1280,6 +1455,8 @@ impl Manager {
     fn drain(&mut self, exclude: &[PathBuf], report: &mut Value) -> Result<(), String> {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
+        report["producer_objects"] = value!([]);
+        report["producer_drains"] = value!([]);
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
@@ -1292,7 +1469,7 @@ impl Manager {
                 report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"status":"preserved","preserved_reason":"legacy/unknown enrollment has no kernel ownership"}));
                 continue;
             }
-            if exclude.contains(&e.path) {
+            if exclude.contains(&e.path) && (!cache || !e.cache_only) {
                 report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"status":"preserved","preserved_reason":"invoking source or destination"}));
                 continue;
             }
@@ -1422,6 +1599,38 @@ impl Manager {
                 }
             }
         }
+        for producer in self.policy.retained_producers.clone() {
+            let (config, bytes) =
+                crate::configuration(&self.policy.coordinator_root, &self.config_path)?;
+            let root = &self.policy.coordinator_root;
+            let result = start::with_report(
+                root,
+                &self.config_path,
+                config,
+                &bytes,
+                "producer-cleanup",
+                "cleaned",
+                |r, _, attempt| {
+                    attempt["producer_objects"] = value!([]);
+                    producer.drain(self, r, attempt)
+                },
+            )?;
+            if result["status"] != "cleaned" {
+                failures.push(format!("producer {}: {}", producer.id, result["error"]));
+            }
+            report["producer_objects"].as_array_mut().unwrap().extend(
+                result["producer_objects"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            let path = result["report_path"]
+                .as_str()
+                .ok_or("producer drain report path")?;
+            let bytes = crate::recovery::state_bytes(root, path)?;
+            report["producer_drains"].as_array_mut().unwrap().push(value!({"producer":producer.id,
+                "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)}}));
+        }
         report["cleanup_failures"] = value!(failures);
         if failures.is_empty() {
             Ok(())
@@ -1457,6 +1666,11 @@ impl Manager {
         token: &str,
         report: &mut Value,
     ) -> Result<(), String> {
+        if self.ledger.entries[i].cache_only
+            || self.ledger.entries[i].path == self.policy.coordinator_root
+        {
+            return Err("main checkout has no worktree deletion authority".into());
+        }
         let e = self.ledger.entries[i].clone();
         let t = e
             .terminal
@@ -1501,7 +1715,7 @@ impl Manager {
             }
         }
         self.stable(r)?;
-        self.git_locks(&e)?;
+        self.git_locks(&e, None)?;
         self.pinned_retention(r, &t)?;
         let names: Vec<_> = self
             .policy
@@ -1625,7 +1839,7 @@ impl Manager {
                 report,
                 |r| {
                     self.stable(r)?;
-                    self.git_locks(&e)?;
+                    self.git_locks(&e, None)?;
                     self.pinned_retention(r, &t)?;
                     if fs::symlink_metadata(&e.path).is_ok() {
                         let row = r
@@ -1820,6 +2034,18 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
+                    manager.drain_for_admission(&[invoking.clone(), target.clone()], report)?;
+                    if manager.current_entry(target).is_none()
+                        && target == &manager.policy.coordinator_root
+                        && manager.policy.main_cache_only
+                    {
+                        manager.enroll(
+                            r,
+                            target,
+                            "main-cache",
+                            value!({"report_path":report["report_path"]}),
+                        )?;
+                    }
                     let selection = if flags.contains("--collect") {
                         vec!["--collect".to_owned()]
                     } else if let Some(unit) = values.get("--unit") {
@@ -1832,7 +2058,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         None if matches!(operation.as_str(), "check" | "bootstrap")
                             && target == &manager.policy.coordinator_root =>
                         {
-                            manager.drain_for_admission(&[invoking.clone()], report)?;
                             let command = if operation == "bootstrap" {
                                 bootstrap_command(
                                     r,
@@ -1929,7 +2154,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     }
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
-                    manager.drain_for_admission(&[invoking.clone(), target.clone()], report)?;
                     let coordinator = manager.policy.coordinator_root.clone();
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;

@@ -1,6 +1,8 @@
 //! Produce real Git worktrees and observations; governance remains with the judges.
 mod artifact_disposal;
+pub use artifact_disposal::{ArtifactFootprint, artifact_footprint};
 mod automatic;
+pub use automatic::RetainedArtifact;
 mod check_inputs;
 mod maintenance;
 mod ownership;

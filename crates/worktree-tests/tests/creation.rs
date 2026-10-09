@@ -23,6 +23,7 @@ fn fixture_git() -> PathBuf {
     chrono_harness::resolve_program(&source(), program, None).unwrap()
 }
 mod automatic;
+mod bounded_cleanup;
 mod check_inputs;
 mod interrupted_cleanup;
 mod maintenance;

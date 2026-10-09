@@ -175,11 +175,39 @@ consumers reject contribution-only results.
 Selected reports retain one sealed first-judge request template. The runner's
 shared `judge_request` rule reconstructs every original stdin from that template,
 the configured DAG and the exact preceding records; each actual stdin digest is
-checked. Predecessor observations never embed requests. The lossless
-`chrono-retained-process/v1` encoding stores original stdout/stderr bytes as hex
-and reconstructs their text fields without changing argv, cwd, roots, run IDs,
-receipt identities or exits. Direct legacy reports retain their ordinary process
-encoding. Addressed context, retained snapshots/blobs and referenced evidence
+checked. Predecessor observations never embed requests. Current preparations
+explicitly select `chrono-retained-process/v2`: zlib hex plus original length and
+SHA-256 for each stream, decoded with a bounded inflater that rejects trailing,
+truncated, corrupt or conflicting stream views. Original argv, cwd, run IDs,
+receipt identities, exits and errors remain intact. Git observations use the same
+codec. Historical inline and `chrono-retained-process/v1` hex records remain
+readable; an absent request marker preserves historical full inline / scoped v1
+stdin construction without rewriting the originals.
+
+Full scoped report publication, projects collection/completion and collected
+workflow certificates charge serialized metadata plus v2 original stdout/stderr
+lengths against the existing `report_bytes` limit. Compression does not grant a
+larger original-stream budget. Historical inline/v1 reports retain their previous
+serialized-byte accounting; original-byte and digest validation still follows.
+Explicit `ProcessEvidence` consumers use the same process engine to retain bytes
+actually read and an atomic launch identity. Absent terminal evidence remains
+unknown after enclosing termination; launch publication alone is no success
+receipt. After launch, publication failures remain failures in the actual
+`ProcessResult`, preserving bounded bytes already read, remaining stream reads,
+exit code and process identity. A failed launch publication carries its original
+launch record, including both process IDs, in the failure diagnostic. Prelaunch
+publication errors launch no child.
+Scoped stream publication errors carry an `E_PROCESS_EVIDENCE` JSON diagnostic
+with the lossless process and any successfully retained stdout reference; a
+secondary codec failure falls back to the original inline receipt. Partial files
+and failed publication are never successful reports. Git facts observations are
+explicitly version-gated as [facts v2](git-facts.md); process codec compatibility
+does not imply compatibility with v1 facts request consumers.
+Failed check participation retains its original process in preparation
+state and reports the address/digest instead of embedding both stream views.
+These are evidence transport/protection contracts, not §10.1 automatic retirement.
+
+Addressed context, retained snapshots/blobs and referenced evidence
 use external `chrono-retained-blob/v1` descriptors under their original logical
 keys: `{schema, storage, sha256, length}`. `storage` is an explicit state path
 beneath the selected upload root. Staging hashes and copies with bounded buffers,

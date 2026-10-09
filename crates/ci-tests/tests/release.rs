@@ -28,7 +28,7 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
         .parent()
         .unwrap();
-    Command::new(host.join(".chrono-harness/bin/chrono-ci"))
+    Command::new(host.join("crates/ci/target/debug/chrono-ci"))
         .args(args)
         .current_dir(root)
         .output()
