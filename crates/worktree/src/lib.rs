@@ -4,6 +4,7 @@ pub use artifact_disposal::{ArtifactFootprint, artifact_footprint};
 mod automatic;
 pub use automatic::RetainedArtifact;
 mod check_inputs;
+mod evidence_retirement;
 mod maintenance;
 mod ownership;
 mod rebind;
@@ -100,7 +101,7 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
     }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return match check_inputs::dispatch(args) {
@@ -133,6 +134,7 @@ pub fn run(args: &[String]) -> CliOutput {
                 | "cleanup-fetch"
                 | "cleanup-fetch-interrupted"
                 | "cleanup-remote"
+                | "retire-evidence"
         )
     ) {
         maintenance::run(args)

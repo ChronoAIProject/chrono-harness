@@ -422,6 +422,33 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     .len(),
                 d["required_units"].as_array().unwrap().len()
             );
+            let gather = json(
+                &fs::read(
+                    h.host
+                        .root
+                        .join(".chrono-harness/state/collection/gather.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let shared = gather["shared_report_aliases"].as_array().unwrap();
+            assert_eq!(shared.len(), d["required_units"].as_array().unwrap().len());
+            for alias in shared {
+                let copy = h.host.root.join(alias["path"].as_str().unwrap());
+                let original = h.host.root.join(alias["original"].as_str().unwrap());
+                assert_eq!(
+                    chrono_harness::file_identity(&copy).unwrap(),
+                    chrono_harness::file_identity(&original).unwrap()
+                );
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    assert_eq!(
+                        fs::symlink_metadata(copy).unwrap().ino(),
+                        fs::symlink_metadata(original).unwrap().ino()
+                    );
+                }
+            }
         }
         for (id, before) in ["a", "b"].iter().zip(counts) {
             assert_eq!(

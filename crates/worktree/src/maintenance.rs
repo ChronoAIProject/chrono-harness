@@ -22,6 +22,12 @@ struct Receipt {
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "lowercase", deny_unknown_fields)]
 enum Plan {
+    #[serde(rename = "retire-evidence")]
+    RetireEvidence {
+        schema: String,
+        head: String,
+        custody: crate::evidence_retirement::Custody,
+    },
     #[serde(rename = "inspect-rebind")]
     InspectRebind {
         schema: String,
@@ -124,6 +130,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     let bytes = state_bytes(&root, plan_path)?;
     let plan: Plan = decode(&bytes)?;
     let (schema, operation, head) = match &plan {
+        Plan::RetireEvidence { schema, head, .. } => (schema, "retire-evidence", head),
         Plan::InspectRebind { schema, head, .. } => (schema, "inspect-rebind", head),
         Plan::Rebind { schema, head, .. } => (schema, "rebind", head),
         Plan::ResumeRebind {
@@ -240,8 +247,11 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             if matches!(operation, "cleanup-fetch" | "cleanup-fetch-interrupted") {
                 report["fetch_ref_removal"] = value!("not-attempted");
             }
-            report["maintenance_plan"] =
-                value!({"path":plan_path,"sha256":sha256(&bytes),"input_bytes":bytes});
+            report["maintenance_plan"] = if operation == "retire-evidence" {
+                value!({"path":plan_path,"sha256":sha256(&bytes),"byte_length":bytes.len()})
+            } else {
+                value!({"path":plan_path,"sha256":sha256(&bytes),"input_bytes":bytes})
+            };
             report["recovery"] = value!(
                 "Inspect original and new process evidence after partial failure; no original failure or governance verdict is rewritten."
             );
@@ -270,6 +280,17 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
             report["source_commit"] = value!(source_head);
             report["registry_digest"] = value!(digest);
             match plan {
+                Plan::RetireEvidence { head, custody, .. } => custody.execute(
+                    r,
+                    &root,
+                    &registrations,
+                    report,
+                    &head,
+                    plan_path,
+                    &bytes,
+                    config_path,
+                    &config_bytes,
+                ),
                 Plan::InspectRebind { head, binding, .. } => binding.execute(
                     r,
                     &root,

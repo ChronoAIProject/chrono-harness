@@ -885,3 +885,16 @@ the host's registration policy, and its success does not certify governance or C
 Filesystem failure reports completed changes; there is no cross-file transaction
 or concurrent-writer isolation. Preserve the original result and reconcile the
 reported paths before retrying; once migrated, ordinary generation is idempotent.
+
+For older prepared native uploads whose selected `chrono-check-report/v1` file
+is a byte-identical copy of its explicitly bound `retained_report`, gather keeps
+both paths readable on one inode within the same isolated downloaded artifact.
+It verifies the mapped original, full SHA256/length and selected alias before
+atomic replacement by a hard link. Gather records the shared paths separately
+from transport observations, including when a later native failure prevents
+collection. Failed downloads, native failures, original context/preparation and
+transport evidence remain retained. Reference publication already stores a small
+selected reference and receives no alias replacement. This avoids duplicate
+report bodies in the actual gathered closure; separate acquisition attempts
+still retain their diagnostic input closures. It is neither global artifact
+reclamation nor retirement of current manifest readers.

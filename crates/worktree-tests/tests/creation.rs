@@ -25,6 +25,7 @@ fn fixture_git() -> PathBuf {
 mod automatic;
 mod bounded_cleanup;
 mod check_inputs;
+mod evidence_retirement;
 mod interrupted_cleanup;
 mod maintenance;
 mod policy_migration;

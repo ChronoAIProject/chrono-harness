@@ -2,6 +2,175 @@
 mod cache_adoption;
 mod migration;
 mod producer;
+// Explicit file custody uses these same admission/enrollment capabilities, without
+// draining unrelated entries or migrating a historical checkout's policy.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct EvidenceExclusion {
+    coordinator_root: PathBuf,
+    config_path: String,
+    state_directory: String,
+}
+pub(crate) struct EvidenceGuard {
+    admission: Lease,
+    enrollment: Lease,
+    ledger_path: PathBuf,
+    ledger_bytes: Vec<u8>,
+}
+impl EvidenceGuard {
+    pub(crate) fn capabilities_stable(&self) -> Result<(), String> {
+        self.admission.stable()?;
+        self.enrollment.stable()
+    }
+    pub(crate) fn stable(&self) -> Result<(), String> {
+        self.capabilities_stable()?;
+        if fs::read(&self.ledger_path).map_err(|e| e.to_string())? != self.ledger_bytes {
+            return Err("evidence custody enrollment changed; preserve remaining objects".into());
+        }
+        Ok(())
+    }
+}
+impl EvidenceExclusion {
+    pub(crate) fn acquire(&self, r: &mut Runner, target: &Path) -> Result<EvidenceGuard, String> {
+        let coordinator = absolute(&self.coordinator_root, false)?;
+        let inventory = r.inventory(target)?;
+        if inventory
+            .first()
+            .and_then(|row| row.get("worktree"))
+            .map(PathBuf::from)
+            .as_ref()
+            != Some(&coordinator)
+        {
+            return Err("evidence coordinator must be this repository's actual Git main".into());
+        }
+        let (config, config_bytes) = crate::configuration(&coordinator, &self.config_path)?;
+        let head = r.oid(&coordinator, "HEAD")?;
+        if r.blob(&coordinator, &head, &self.config_path)? != config_bytes {
+            return Err("evidence coordinator configuration differs from committed bytes".into());
+        }
+        let policy_path = config
+            .automatic_cleanup
+            .ok_or("evidence exclusion requires adopted cleanup")?;
+        let policy_bytes =
+            fs::read(no_symlink_parents(&coordinator, &policy_path)?).map_err(|e| e.to_string())?;
+        let policy: Policy = decode(&policy_bytes)?;
+        if r.blob(&coordinator, &head, &policy_path)? != policy_bytes
+            || policy.schema != "chrono-worktree-automatic-cleanup/v2"
+            || policy.state_directory != self.state_directory
+            || !(policy.coordinator_root == coordinator
+                || policy.coordinator_root == Path::new("git-main-worktree"))
+        {
+            return Err("evidence exclusion must bind the current committed kernel owner".into());
+        }
+        relative_path(self.state_directory.trim_end_matches('/'))?;
+        if !self.state_directory.starts_with(".chrono-harness/state/")
+            || !self.state_directory.ends_with('/')
+        {
+            return Err("invalid evidence owner state directory".into());
+        }
+        let directory =
+            no_symlink_parents(&coordinator, self.state_directory.trim_end_matches('/'))?;
+        let owner = json(&fs::read(directory.join("owner.json")).map_err(|e| e.to_string())?)?;
+        let common = absolute(&r.checkout_identity(&coordinator)?.common, false)?;
+        if owner["schema"] != "chrono-worktree-cleanup-owner/v2"
+            || owner["coordinator_root"] != value!(coordinator)
+            || owner["common"] != value!(common)
+        {
+            return Err("evidence coordinator ownership mismatch".into());
+        }
+        let admission = Lease::acquire(
+            &directory.join("admission.lease"),
+            Some(
+                owner["admission_id"]
+                    .as_str()
+                    .ok_or("missing admission identity")?,
+            ),
+            false,
+            true,
+            None,
+        )?
+        .ok_or("evidence admission has live consumers")?;
+        let ledger_path = no_symlink_parents(
+            &coordinator,
+            &format!("{}ledger.json", self.state_directory),
+        )?;
+        let ledger_bytes = fs::read(&ledger_path).map_err(|e| e.to_string())?;
+        let ledger: Ledger = decode(&ledger_bytes)?;
+        if ledger.schema != "chrono-worktree-cleanup-state/v2"
+            || ledger.coordinator_root != coordinator
+            || ledger.common != common
+            || ledger.admission_id.as_deref() != Some(admission.id())
+        {
+            return Err("evidence ledger ownership mismatch".into());
+        }
+        let entries: Vec<_> = ledger
+            .entries
+            .iter()
+            .filter(|e| e.path == target && e.status != "disposed")
+            .collect();
+        if entries.len() != 1 {
+            return Err("evidence custody requires one current enrollment".into());
+        }
+        let e = entries[0];
+        let rows: Vec<_> = inventory
+            .iter()
+            .filter(|row| row.get("worktree").is_some_and(|p| Path::new(p) == target))
+            .collect();
+        if rows.len() != 1 || rows[0].contains_key("locked") || rows[0].contains_key("prunable") {
+            return Err("evidence checkout has foreign or unknown Git ownership".into());
+        }
+        if e.status != "active" || e.terminal.is_some() || !e.uses.is_empty() {
+            return Err(
+                "evidence custody requires active enrollment without outstanding use tokens".into(),
+            );
+        }
+        let observed = r.checkout_identity(target)?;
+        for lock in [
+            observed.metadata.join("index.lock"),
+            observed.metadata.join("HEAD.lock"),
+            common.join("packed-refs.lock"),
+            common.join("config.lock"),
+            common.join(format!("refs/heads/{}.lock", e.branch)),
+        ] {
+            match fs::symlink_metadata(lock) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+                Err(error) => return Err(error.to_string()),
+                Ok(_) => return Err("evidence checkout has an active or unknown Git lock".into()),
+            }
+        }
+        let actual = if e.cache_only {
+            main_attachment(target, &observed.metadata)?
+        } else {
+            attachment(r, target)?
+        };
+        if actual != e.attachment
+            || observed.branch != format!("refs/heads/{}", e.branch)
+            || absolute(&observed.common, false)? != common
+        {
+            return Err("evidence enrollment attachment changed".into());
+        }
+        let ownership = e
+            .ownership
+            .as_ref()
+            .ok_or("evidence enrollment lacks kernel protection")?;
+        let enrollment = Lease::acquire(
+            &no_symlink_parents(&coordinator, &ownership.path)?,
+            Some(&ownership.id),
+            false,
+            true,
+            None,
+        )?
+        .ok_or("evidence enrollment has live consumers")?;
+        let guard = EvidenceGuard {
+            admission,
+            enrollment,
+            ledger_path,
+            ledger_bytes,
+        };
+        guard.stable()?;
+        Ok(guard)
+    }
+}
 use crate::{
     Start, artifact_disposal,
     maintenance::{self, Cleanup, Retention},

@@ -1166,3 +1166,46 @@ cannot enroll as a disposable linked attachment. A linked checkout without the
 registered coordinator owner fails before build effects. This keeps clean native
 CI bootstrap possible without changing workflow topology or authorizing unsafe
 linked-checkout fallback.
+
+### Current custody of exact evidence aliases
+
+`chrono-worktree retire-evidence --host-root ROOT --config POLICY --plan STATE_PATH`
+is the maintenance owner's finite file transition. It consumes a
+`chrono-worktree-maintenance/v1` plan with `operation: "retire-evidence"`, exact
+`head`, and `custody` using `chrono-evidence-custody/v1`. Custody declares the
+physical `root`, full `branch` ref, `current_consumers_released: true`, engineering
+`reason`, an `authority` original (`path`, SHA256, `length`), and exact `objects`.
+Each object has an `original` identity, a distinct retained `survivor` path,
+producer `owner`, and release `reason`. Equal bytes verify preservation; the
+current custodian's explicit release supplies disposition authority. The caller
+joins or excludes prior unregistered consumers and ends copied-path assertion or
+manifest replay before declaring release. Historical manifests remain original
+evidence; this transition does not claim that retired paths remain replayable.
+
+The `exclusion` declares the existing `coordinator_root`, tracked `config_path`
+and adopted `state_directory`. The command reads their current committed kernel
+policy as data and holds the existing admission and enrollment leases. It checks
+one current active enrollment, its physical attachment, outstanding use tokens,
+foreign Git locks and clean fixed checkout. It does not drain other entries,
+migrate old source policy, update Git, release the checkout or fabricate a past
+producer seal. A historical host can invoke the candidate binary with its own
+unchanged committed worktree policy and artifact registrations.
+
+Only explicitly listed untracked regular members under registered evidence
+state are eligible. Source/index paths, selected survivors, the authority and
+attempt inputs/outputs refuse retirement. Each alias and survivor is streamed
+against its declared identity, including stable physical file identity, just
+before unlinking. Independent identity/preservation failures leave that alias
+and continue other eligible objects. The attempt's separate `effects.jsonl`
+journal syncs its declaration reference and each pre-effect intent/result;
+reports contain counts and references, never preceding report bodies. Repeating
+the same finite plan rechecks survivors and records absent aliases as observed
+absence, without inventing which interrupted attempt removed them. Original
+failures, enrollment, source and refs remain unchanged. Exit 0 means this exact
+finite disposition completed; unresolved members or binding failures exit 2.
+Logical removal counts do not establish physical shared-volume disk release.
+
+Worktree test fixture retention remains explicitly requested by
+`CHRONO_WORKTREE_TEST_RECEIPTS` or panic. Successful default fixtures do not copy
+all state. Retained fixture assertions and failure diagnosis remain consumers
+until their current custodian explicitly ends those copied-path obligations.
