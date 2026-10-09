@@ -9099,7 +9099,9 @@
       },
       "release.tests.integration": {
         "resources": [],
-        "outputs": []
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
       },
       "test.worktree.core": {
         "resources": [
