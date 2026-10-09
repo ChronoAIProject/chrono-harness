@@ -285,6 +285,9 @@ pub fn validate_retained_binding(
         }
     }
     validate_result_identity(&req, &p)?;
+    if p.initial {
+        validate_initial_contract(root, &req)?;
+    }
     for (path, hash) in [
         (&req.host_config, &req.host_config_sha256),
         (&req.effective_config, &req.effective_config_sha256),

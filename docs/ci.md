@@ -107,7 +107,9 @@ profile, exact request, original producer/report correspondence and real bare
 entry. The initial judge emits `initial-inventory`, null base/DELTA and
 `governance: not-evaluated`; it cannot certify DELTA governance. Missing or
 incorrect initial bindings fail. Unit and collection modes still require actual
-registered unit consumers; the nonempty unit-provider guard is unchanged.
+registered unit consumers; the nonempty unit-provider guard is unchanged. Existing
+scoped v3 inventory for explicitly declared nonempty units retains its own profile
+and initial event meaning; it is distinct from the standalone initial judge.
 
 Local endpoints use the declared worktree Git/remote and workflow target, fetching
 and freezing that target against clean committed nonroot HEAD on every invocation.

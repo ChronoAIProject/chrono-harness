@@ -122,7 +122,7 @@ impl Host {
         );
         write(
             &root.join(".chrono-harness/ci/check.json"),
-            &json!({"schema":"chrono-ci-check/v1","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":30,"output_limit_bytes":8388608},"report_path":".chrono-harness/state/native/check.json","policy":{"filemap":".chrono-harness/FILEMAP.json","projects":".chrono-harness/projects.json","registration_config":".chrono-harness/config.json","facts_config":".chrono-harness/config.json","tools":{},"artifacts":[".chrono-harness/bin/",".chrono-harness/state/"],"required_inputs":[".chrono-harness/ci/check.json",".chrono-harness/ci/github.json",".chrono-harness/ci/root inventory.json",".chrono-harness/worktree.json",".github/workflows/chrono-ci.yml"],"adoption_base":null,"operation_timeout_seconds":30,"operation_output_limit_bytes":1048576,"environment":{}}}),
+            &json!({"schema":"chrono-ci-check/v2","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":30,"output_limit_bytes":8388608},"report_path":".chrono-harness/state/native/check.json","policy":{"filemap":".chrono-harness/FILEMAP.json","projects":".chrono-harness/projects.json","registration_config":".chrono-harness/config.json","facts_config":".chrono-harness/config.json","tools":{},"artifacts":[".chrono-harness/bin/",".chrono-harness/state/"],"required_inputs":[".chrono-harness/ci/check.json",".chrono-harness/ci/github.json",".chrono-harness/ci/root inventory.json",".chrono-harness/worktree.json",".github/workflows/chrono-ci.yml"],"adoption_base":null,"operation_timeout_seconds":30,"operation_output_limit_bytes":1048576,"environment":{}}}),
         );
         fs::write(
             root.join(".gitignore"),
@@ -234,9 +234,11 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
                 .unwrap(),
             )
             .unwrap();
+            let original_request: prepared::InputRequest =
+                serde_json::from_value(receipt["request"].clone()).unwrap();
             assert_eq!(
                 receipt["process"]["stdin_sha256"],
-                sha256(&serde_json::to_vec(&receipt["request"]).unwrap())
+                sha256(&serde_json::to_vec(&original_request).unwrap())
             );
             assert_eq!(
                 serde_json::from_slice::<Value>(

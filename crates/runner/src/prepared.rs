@@ -120,7 +120,7 @@ pub struct PreparedCheck {
 }
 impl InputRequest {
     pub fn profile_for(&self, initial: bool) -> Result<&str, String> {
-        if initial {
+        if initial && self.initial_profile.is_some() {
             if self.selection != Selection::All {
                 return Err("initial inventory requires the standalone bare check".into());
             }
@@ -652,7 +652,9 @@ pub fn validate_result_identity(req: &InputRequest, p: &PreparedCheck) -> Result
         || p.source != req.source
         || p.profile != req.profile_for(p.initial)?
         || p.initial == p.base.is_some()
-        || (p.initial && (p.context.is_some() || p.scope.is_some()))
+        || (p.initial
+            && req.initial_profile.is_some()
+            && (p.context.is_some() || p.scope.is_some()))
         || !req.selection.matches(&p.scope)
         || !p.evidence.is_object()
         || p.evidence.as_object().is_none_or(|o| o.is_empty())
@@ -686,13 +688,30 @@ pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), Stri
         if !reader.parents(&req.host_root, &p.candidate)?.is_empty() {
             return Err("prepared initial candidate has parents".into());
         }
-        let profile = req
-            .initial_profile
-            .as_ref()
-            .ok_or("initial profile binding missing")?;
-        if sha256(&reader.blob(&req.host_root, &p.candidate, &profile.path)?) != profile.sha256 {
-            return Err("initial profile differs from candidate".into());
+        validate_initial_contract(&req.host_root, req)?;
+        if let Some(profile) = &req.initial_profile {
+            if sha256(&reader.blob(&req.host_root, &p.candidate, &profile.path)?) != profile.sha256
+            {
+                return Err("initial profile differs from candidate".into());
+            }
         }
+    }
+    Ok(())
+}
+/// Existing scoped unit inventory remains explicit in its nonempty unit policy.
+/// Standalone inventory requires the separate initial judge/profile binding.
+pub fn validate_initial_contract(root: &Path, req: &InputRequest) -> Result<(), String> {
+    if req.initial_profile.is_some() {
+        req.profile_for(true)?;
+        return Ok(());
+    }
+    let profile = crate::load_config(&no_symlink_parents(root, &req.profile)?)?;
+    if profile.schema != units::PROFILE
+        || profile.policy["units"]
+            .as_object()
+            .is_none_or(|units| units.is_empty())
+    {
+        return Err("initial profile binding missing".into());
     }
     Ok(())
 }
