@@ -231,6 +231,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
                         operations: ops.clone(),
                         timeout_seconds: p.operation_timeout_seconds,
                         output_limit_bytes: p.operation_output_limit_bytes,
+                        operation_bounds: BTreeMap::new(),
                     },
                 )
             })
@@ -587,6 +588,9 @@ fn ci_impact(
                 }
                 if before.output_limit_bytes != after.output_limit_bytes {
                     reasons.insert("changed operation output limit".into());
+                }
+                if before.operation_bounds != after.operation_bounds {
+                    reasons.insert("changed operation bounds".into());
                 }
             }
         }

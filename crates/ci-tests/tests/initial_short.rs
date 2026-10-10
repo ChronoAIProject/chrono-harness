@@ -4,7 +4,7 @@ use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
 struct Host {
-    temporary: Option<tempfile::TempDir>,
+    temporary: Option<chrono_worktree::TemporaryHost>,
     root: PathBuf,
     remote: PathBuf,
     candidate: String,
@@ -13,17 +13,14 @@ impl Drop for Host {
     fn drop(&mut self) {
         if std::thread::panicking() {
             if let Some(temporary) = self.temporary.take() {
-                eprintln!("Original failed host: {}", temporary.keep().display());
+                eprintln!("Original failed host: {}", temporary.path().display());
             }
         }
     }
 }
 impl Host {
     fn new(unregistered: bool, binding: bool) -> Self {
-        let temporary = tempfile::Builder::new()
-            .prefix("empty initial λ ")
-            .tempdir()
-            .unwrap();
+        let temporary = crate::tools::temporary_host("empty initial λ ");
         let parent = fs::canonicalize(temporary.path()).unwrap();
         let root = parent.join("independent host");
         let remote = parent.join("registered target.git");
@@ -44,6 +41,11 @@ impl Host {
             ("judge-registration", "chrono-judge-registration"),
             ("judge-ci", "chrono-judge-ci"),
         ] {
+            crate::tools::copied_fixture_input(
+                &root,
+                &product.join(format!("crates/{project}/target/debug/{name}")),
+                &root.join(format!(".chrono-harness/bin/{name}")),
+            );
             fs::copy(
                 product.join(format!("crates/{project}/target/debug/{name}")),
                 root.join(format!(".chrono-harness/bin/{name}")),
@@ -51,7 +53,7 @@ impl Host {
             .expect("registered production prerequisite");
         }
         let git_program = fixture_git();
-        let version = Command::new(&git_program)
+        let version = crate::tools::command(&git_program)
             .arg("--version")
             .output()
             .unwrap();
@@ -74,6 +76,7 @@ impl Host {
         }
         cfg["semantic_fields"] = json!([]);
         cfg["environment"] = json!({"inherit":["PATH","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","ACQUISITION_SECRET"],"credential_environment":["ACQUISITION_SECRET"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_program,"presence":"present","sha256":sha256(&fs::read(&git_program).unwrap())}]});
+        cfg["environment"]["values"]["TMPDIR"] = json!(root);
         cfg["protocol"]["timeout_seconds"] = json!(30);
         cfg["artifacts"] = json!([
             {"path":".chrono-harness/bin/","owner":"repository","kind":"executable","tracked":false},
@@ -121,7 +124,7 @@ impl Host {
         );
         write(
             &root.join(".chrono-harness/worktree.json"),
-            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_program,"expected_version":null,"sha256":sha256(&fs::read(&git_program).unwrap())},"environment":{"inherit":["PATH"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}}}),
+            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_program,"expected_version":null,"sha256":sha256(&fs::read(&git_program).unwrap())},"environment":{"inherit":["PATH"],"values":{"TMPDIR":root,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}}}),
         );
         let files: Vec<_> = [".gitignore","README.md",".chrono-harness/config.json",".chrono-harness/FILEMAP.json",".chrono-harness/projects.json",".chrono-harness/judges.json",".chrono-harness/workflow.json",".chrono-harness/worktree.json",".chrono-harness/ci/check.json",".chrono-harness/ci/github.json",".chrono-harness/ci/root inventory.json",".github/workflows/chrono-ci.yml"]
             .into_iter().map(|path|json!({"path":path,"owner":"repository","surface":"documentation","cost":"unknown","edges":[]})).collect();
@@ -166,12 +169,19 @@ impl Host {
     fn native(&self, payload: Value) -> std::process::Output {
         let payload_path = self.root.join(".chrono-harness/state/event.json");
         write(&payload_path, &payload);
-        self.command()
+        let mut command = self.command();
+        command
             .env(prepared::SOURCE, "ci")
             .env("GITHUB_EVENT_NAME", "push")
             .env("GITHUB_EVENT_PATH", payload_path)
-            .env("CHRONO_WORKFLOW_REVISION", &self.candidate)
-            .output()
+            .env("CHRONO_WORKFLOW_REVISION", &self.candidate);
+        self.output(&mut command)
+    }
+    fn output(&self, command: &mut Command) -> std::process::Output {
+        self.temporary
+            .as_ref()
+            .unwrap()
+            .capture_output(command)
             .unwrap()
     }
 }
@@ -216,7 +226,7 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
         let local = report(
             &h.root,
             ".chrono-harness/state/initial-report.json",
-            &h.command().output().unwrap(),
+            &h.output(&mut h.command()),
             if unregistered { 1 } else { 0 },
         );
         let native=report(&h.root,".chrono-harness/state/native/initial-report.json",&h.native(json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":h.candidate,"created":true})),if unregistered {1}else{0});
@@ -307,7 +317,7 @@ fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registere
     h.candidate = commit(&h.root);
     for source in ["local", "ci"] {
         let out = if source == "local" {
-            h.command().output().unwrap()
+            h.output(&mut h.command())
         } else {
             h.native(
                 json!({"ref":"refs/heads/dev","before":base,"after":h.candidate,"created":false}),
@@ -335,7 +345,7 @@ fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registere
 #[test]
 fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
     let h = Host::new(false, false);
-    let out = h.command().output().unwrap();
+    let out = h.output(&mut h.command());
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("initial profile binding missing"));
     assert!(
@@ -363,7 +373,7 @@ fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
         chrono_harness::facts::parents(&h.root, &h.candidate).unwrap(),
         vec![parent]
     );
-    let local = h.command().output().unwrap();
+    let local = h.output(&mut h.command());
     assert_eq!(local.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&local.stderr).contains("Original acquisition:"));
     assert!(

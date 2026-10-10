@@ -606,6 +606,24 @@ Committed composition, supported native platforms and complete host adoption
 remain acceptance obligations.
 Legacy v1 records remain protected; no retrospective ownership is fabricated.
 
+The bounded Git worktree inventory closes the shared-drain visibility gap for
+Git-registered rows without current enrollment. `Manager::drain` observes the
+bound runner's owner inventory before effects and reports path/current HEAD/branch,
+locked/prunable state, available physical identity and explicit preservation or
+attachment-blocking reasons. Only exact non-disposed enrollment attachments match;
+birth HEAD/branch do not define mutable checkout identity. Observation grants no
+ownership, lease or terminal state. Existing cleanup/retention/effect checks remain
+the deletion authority. Rust real-Git regressions cover failed and interrupted
+ledgerless births, dirty/locked/prunable rows, changed gitfile/metadata and unreadable
+attachments, advanced HEAD/main branch changes, explicit import, known cache and
+terminal cleanup, fatal inventory failure and protected live consumers. The
+existing adopted-short-check fixture also checks an unowned locked validation row
+through the public canonical CLI and its owner report; generated CI keeps that
+same registered test group and command. No new consumer or workflow is introduced.
+This is a visibility improvement, not automatic import or arbitrary filesystem
+reclamation. Full host activation, complete input closure, generated-CI/native
+parity and custody of active external validation checkouts remain unfinished.
+
 Automatic retry evidence uses versioned retained-input references, preserving
 immutable receipts in place and storing opaque partial bytes once at the surviving
 coordinator. The dedicated worktree regressions
@@ -614,6 +632,14 @@ coordinator. The dedicated worktree regressions
 repeated real terminal/cache failures, bounded report growth, original-byte
 preservation, transitive drift/missing/symlink refusals and partial-result
 retention without claiming success. Explicit maintenance keeps its prior shape.
+Current nonempty drains also refer to the immutable child instead of embedding
+it. `nonempty_large_cleanup_participation_preserves_reports_and_console_under_bound`
+exercises actual cleanup and public check participation with a child whose former
+inline parent exceeds the existing stdout bound; the parent retains the child
+status/error, original receipt and unchanged managed console. The dedicated
+`addressed_drain_originals_remain_required_for_birth_consumption` regression checks
+that missing or changed child evidence refuses later admission. Historical inline
+drains remain readable through the same retained-input verifier.
 This does not dispose historical evidence, deploy the coordinator or establish
 complete native acceptance.
 
@@ -725,3 +751,14 @@ up to 64 MiB. These transitions do not repair the historical 861 missing stdout
 siblings or change the original 115-pass/5-fail result. Those historical evidence
 limits remain separate from current candidate checks, native/public adoption and
 ordered delivery.
+
+The temporary-host increment adopts prospective registration in the existing
+worktree producer registry and kernel lease owner. Rust behavior oracles cover
+hard-killed production, a distinct surviving native descendant, overlapping
+consumers and an unreleased real diagnostic reference. Source/partial bytes stay
+in the retained allocation, independent of Drop. Explicit worktree/projects/CI
+fixture construction and command routes consume configurable committed policy;
+only declared generated output subdirectories are eligible for ordinary drain.
+Current candidate local receipts, real coordinator deployment, native evidence,
+independent review and external delivery remain separately required; the original
+failed canonical receipts are not rewritten by subsequent passing observations.

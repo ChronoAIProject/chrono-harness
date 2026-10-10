@@ -1,8 +1,18 @@
 #![allow(dead_code)]
+#[path = "temporary.rs"]
+mod temporary;
 use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+pub use temporary::copied_fixture_input;
+pub use temporary::{FixtureDirectory, fixture_directory};
+
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    command
+}
 
 pub enum FixtureProbe {
     Version,
@@ -17,6 +27,7 @@ pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureP
         if error.kind() == std::io::ErrorKind::NotFound));
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
+    temporary::copied_fixture_input(root, &source, &destination);
     let copied = Command::new("/bin/cp")
         .arg(source)
         .arg(&destination)
@@ -86,7 +97,7 @@ impl CommandEvidence {
     }
 }
 pub struct Host {
-    dir: tempfile::TempDir,
+    dir: FixtureDirectory,
     last_result: RefCell<Option<CommandEvidence>>,
     pub base: String,
     pub candidate: String,
@@ -96,10 +107,7 @@ pub struct Host {
 }
 impl Host {
     pub fn new(script: bool) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("execution host space ")
-            .tempdir()
-            .unwrap();
+        let dir = fixture_directory("execution host space λ ");
         let root = fs::canonicalize(dir.path()).unwrap();
         git(&root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
@@ -143,7 +151,15 @@ impl Host {
         }
         let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
         let version = Command::new(&tool).arg("--version").output().unwrap();
-        let external = tempfile::NamedTempFile::new().unwrap();
+        // The external input outlives an intentionally unavailable Git checkout.
+        // Keep its declared absolute location in the retained allocation, beside
+        // the movable source root, so delivery reads the original bytes.
+        let retained_inputs = dir.temporary_path().join("fixture-inputs");
+        fs::create_dir_all(&retained_inputs).unwrap();
+        let external = tempfile::Builder::new()
+            .disable_cleanup(true)
+            .tempfile_in(&retained_inputs)
+            .unwrap();
         fs::write(external.path(), b"bounded input\n").unwrap();
         v.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
             ".chrono-harness/bin/chrono-harness",
@@ -159,7 +175,7 @@ impl Host {
         ]);
         v.get_mut(CONFIG).unwrap()["tools"] = json!([{"id":"python","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
         v.get_mut(CONFIG).unwrap()["protocol"]["stdout_limit_bytes"] = json!(67108864);
-        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":""},"inputs":[{"id":"interpreter","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
+        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":"","TMPDIR":dir.temporary_path()},"inputs":[{"id":"interpreter","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
         v.get_mut(FM).unwrap()["schema_version"] = json!(2);
         v.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["prepare.p","execute.t"],"timeout_seconds":15,"output_limit_bytes":4096}});
         let pre = json!({"operation":"prepare.p","tool":"python","argv":["-c","open('.chrono-harness/state/order','a').write('p')"]});
@@ -290,7 +306,8 @@ impl Host {
     ) -> (i32, Value) {
         self.prepare_with_context(edit, context_edit);
         let root = self.root();
-        let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+        let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+        command
             .current_dir("/")
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -306,9 +323,8 @@ impl Host {
                 root.join(".chrono-harness/state/context.json")
                     .to_str()
                     .unwrap(),
-            ])
-            .output()
-            .unwrap();
+            ]);
+        let out = self.dir.capture_output(&mut command).unwrap();
         self.retain_command_result("check", &out);
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
@@ -333,6 +349,12 @@ impl Host {
         let destination = std::path::Path::new(&directory)
             .join(format!("{}-{number}-{label}", std::process::id()));
         evidence.write(&destination).unwrap();
+    }
+    pub fn capture_native(&self, command: &mut Command) -> std::process::Output {
+        self.dir.capture_output(command).unwrap()
+    }
+    pub fn make_checkout_unavailable(&self) -> std::path::PathBuf {
+        self.dir.make_checkout_unavailable().unwrap()
     }
 }
 impl Drop for Host {

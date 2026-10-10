@@ -1,3 +1,18 @@
+pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
+    static STORE: std::sync::OnceLock<(std::path::PathBuf, Vec<String>)> =
+        std::sync::OnceLock::new();
+    let (directory, outputs) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "projects-migration-host",
+        )
+        .expect("committed temporary producer adoption")
+    });
+    chrono_worktree::TemporaryHost::allocate(directory, "projects-migration-host", outputs, prefix)
+        .expect("prospective temporary host custody")
+}
+
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::{facts, observation, wire};
@@ -10,6 +25,11 @@ use std::{
     process::Command,
 };
 use support::*;
+fn native_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    command
+}
 fn adopt_fixture_tool(root: &std::path::Path, config: &mut Value, id: &str) -> observation::Tool {
     let tool = config["tools"]
         .as_array_mut()
@@ -47,7 +67,12 @@ fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
     input["location"] = json!(git.path);
     input["sha256"] = json!(git.sha256);
 }
-fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+fn migration_host() -> (
+    chrono_worktree::TemporaryHost,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     migration_host_with_alias_collision(false)
 }
 fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -129,13 +154,15 @@ fn execution_failure(
 }
 fn migration_host_with_alias_collision(
     collision: bool,
-) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+) -> (
+    chrono_worktree::TemporaryHost,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     let source = fs::canonicalize(source()).unwrap();
     let original = "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98";
-    let dir = tempfile::Builder::new()
-        .prefix("migration actual host ")
-        .tempdir()
-        .unwrap();
+    let dir = temporary_host("migration actual host ");
     let root = fs::canonicalize(dir.path()).unwrap();
     let tree = facts::tree(&source, original).unwrap();
     facts::export(&source, original, &tree, &root).unwrap();
@@ -205,6 +232,21 @@ fn migration_host_with_alias_collision(
         ("runner", "chrono-harness"),
         ("judge-ci", "chrono-judge-ci"),
     ] {
+        let (directory, _) = chrono_worktree::TemporaryHost::registered_store(
+            &source,
+            ".chrono-harness/worktree.json",
+            "projects-migration-host",
+        )
+        .unwrap();
+        chrono_worktree::TemporaryHost::register_copy(
+            &directory,
+            "projects-migration-host",
+            &source.join(format!("crates/{project}/target/debug/{name}")),
+            &root.join(format!(".chrono-harness/bin/{name}")),
+            Some(&root),
+            "crates/judge-projects-tests/tests/migration.rs::migration_host",
+        )
+        .unwrap();
         fs::copy(
             source.join(format!("crates/{project}/target/debug/{name}")),
             root.join(format!(".chrono-harness/bin/{name}")),
@@ -458,7 +500,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         "{}",
         execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
-    let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+    let output = native_command(root.join(".chrono-harness/bin/chrono-ci"))
         .args([
             "generate",
             "--host-root",
@@ -507,7 +549,7 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
         .iter_mut()
         .find(|t| t["id"] == "python3")
         .unwrap();
-    let observed = Command::new(tool["program"].as_str().unwrap())
+    let observed = native_command(tool["program"].as_str().unwrap())
         .arg("--version")
         .output()
         .unwrap();

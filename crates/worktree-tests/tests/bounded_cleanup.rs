@@ -4,7 +4,7 @@ fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
-fn main_host_mode(mode: &str) -> Host {
+pub(super) fn main_host_mode(mode: &str) -> Host {
     let h = Host::new("payload");
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, mode);
@@ -44,7 +44,7 @@ const CARGO_FILES: &[(&str, &[u8])] = &[
     ),
 ];
 
-fn cargo_host() -> Host {
+pub(super) fn cargo_host() -> Host {
     let h = main_host_mode("bounded-cargo");
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     let mut policy = json(&fs::read(h.root.join(".chrono-harness/cleanup.json")).unwrap()).unwrap();
@@ -253,9 +253,20 @@ fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
 fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outputs() {
     for stage in ["installation", "test", "cache-save"] {
         let h = cargo_host();
+        let _release = ReleaseBoundedConsumer {
+            root: h.root.clone(),
+            stage: stage.into(),
+        };
         cargo_plan(&h.root, Some(stage));
+        let path = h.root.join(".chrono-harness/state/cargo-plan.json");
+        let mut plan = json(&fs::read(&path).unwrap()).unwrap();
+        plan["detached_consumer"] = value!(true);
+        fs::write(path, serde_json::to_vec(&plan).unwrap()).unwrap();
         let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
-        let child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
+        let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
+        // Join the actual bounded build. Liveness now belongs to the independent
+        // native consumer, rather than a stale marker left by a timed-out build.
+        assert!(child.wait_with_output().unwrap().status.success());
         await_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
@@ -268,8 +279,18 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
             "joined",
         )
         .unwrap();
-        assert!(child.wait_with_output().unwrap().status.success());
-        assert_eq!(h.auto("finish", &[]).0, 0);
+        await_file(&h.root.join(format!(".chrono-harness/state/{stage}-done")));
+        let began = std::time::Instant::now();
+        loop {
+            if h.auto("finish", &[]).0 == 0 {
+                break;
+            }
+            assert!(
+                began.elapsed().as_secs() < 10,
+                "native consumer did not actually release its lease"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert!(!h.root.join("independent/tests/target").exists());
         if stage == "installation" {
             assert!(
@@ -277,6 +298,27 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
                     .join(".chrono-harness/bin/installed-cargo-output")
                     .exists()
             );
+        }
+    }
+}
+
+struct ReleaseBoundedConsumer {
+    root: PathBuf,
+    stage: String,
+}
+impl Drop for ReleaseBoundedConsumer {
+    fn drop(&mut self) {
+        let state = self.root.join(".chrono-harness/state");
+        let _ = fs::write(
+            state.join(format!("{}-release", self.stage)),
+            "actual fixture teardown",
+        );
+        let began = std::time::Instant::now();
+        while state.join(format!("{}-active", self.stage)).exists()
+            && !state.join(format!("{}-done", self.stage)).exists()
+            && began.elapsed().as_secs() < 10
+        {
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 }
@@ -358,13 +400,17 @@ fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_o
     assert!(!h.root.join("output λ").exists());
     assert!(protected.join("remaining").exists());
     assert!(
-        partial
+        drain_report(&partial["drain"][0])
             .to_string()
             .contains("failed-partial-effects-possible")
     );
     let (code, retried, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{retried} {error}");
-    assert!(retried.to_string().contains("already-absent"));
+    assert!(
+        drain_report(&retried["drain"][0])
+            .to_string()
+            .contains("already-absent")
+    );
     assert!(!protected.exists());
     assert_eq!(
         fs::read(h.root.join(failed["report_path"].as_str().unwrap())).unwrap(),
@@ -444,7 +490,7 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     assert!(!h.root.join("output λ").exists());
     assert!(h.root.join("nested/cache/unknown-history").exists());
     assert!(
-        finished
+        drain_report(&finished["drain"][0])
             .to_string()
             .contains("pre-existing output has no adopted consumer release")
     );
@@ -487,9 +533,17 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{used} {error}");
     git(&h.root, &["checkout", "-q", "--detach"]);
+    assert_eq!(
+        super::automatic::inventory_row(&used, &h.root)["enrollment_match"],
+        true
+    );
     let refs = git(&h.root, &["show-ref"]);
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    assert_eq!(
+        super::automatic::inventory_row(&finished, &h.root)["enrollment_match"],
+        true
+    );
     assert_eq!(git(&h.root, &["show-ref"]), refs);
     assert!(!h.root.join("output λ").exists());
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
@@ -631,7 +685,11 @@ fn main_historical_custody_publication_retry_and_partial_disposal_preserve_origi
     let original_result_bytes = fs::read(&original_result).unwrap();
     let (code, cleaned, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{cleaned} {error}");
-    assert!(cleaned.to_string().contains("already-absent"));
+    assert!(
+        drain_report(&cleaned["drain"][0])
+            .to_string()
+            .contains("already-absent")
+    );
     assert!(!h.root.join("nested/cache").exists());
     assert_eq!(fs::read(original_result).unwrap(), original_result_bytes);
     assert_eq!(fs::read(&path).unwrap(), bytes);

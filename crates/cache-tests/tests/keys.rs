@@ -60,6 +60,44 @@ fn fixture() -> (Host, Value) {
     (root, config)
 }
 
+fn ready_probe(root: &Path, program: &Path) {
+    // Join the actual native fixture startup before measuring the registered
+    // two-second cache probe. This does not change that command's bound.
+    let started = std::time::Instant::now();
+    let output = Command::new(program)
+        .current_dir(root)
+        .env_clear()
+        .args(["echo", "cache-probe-ready"])
+        .output()
+        .unwrap();
+    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        root.join(".chrono-harness/state/probe-ready.stdout"),
+        &output.stdout,
+    )
+    .unwrap();
+    fs::write(
+        root.join(".chrono-harness/state/probe-ready.stderr"),
+        &output.stderr,
+    )
+    .unwrap();
+    fs::write(
+        root.join(".chrono-harness/state/probe-ready.json"),
+        serde_json::to_vec(&json!({
+            "program":program,"exit":output.status.code(),"joined":true,
+            "wall_seconds":started.elapsed().as_secs_f64(),"scope":"native fixture setup"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        output.status.success(),
+        "native fixture readiness: {output:?}"
+    );
+    assert_eq!(output.stdout, b"cache-probe-ready\n");
+    assert!(output.stderr.is_empty());
+}
+
 fn register_artifacts(root: &Path, config: &Value) {
     let rows: Vec<_> = config["artifacts"].as_object().unwrap().values()
         .filter(|a| a["external"] == false)
@@ -997,6 +1035,10 @@ fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
 #[test]
 fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
     let (root, mut config) = fixture();
+    ready_probe(
+        root.path(),
+        Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-probe")),
+    );
     let compiler = root.path().join("compiler");
     config["inputs"]["compiler"] = json!({"kind":"command", "command":{
         "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),
@@ -1054,6 +1096,7 @@ fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
     fs::create_dir(&tools).unwrap();
     let executable = tools.join("registered-probe");
     fs::copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), &executable).unwrap();
+    ready_probe(root.path(), &executable);
     config["inputs"]["compiler"] = json!({"kind":"command", "command":{
         "program":"registered-probe", "args":["echo","actual compiler"],
         "env":{"PATH":tools},"timeout_seconds":2,"output_limit_bytes":4096},

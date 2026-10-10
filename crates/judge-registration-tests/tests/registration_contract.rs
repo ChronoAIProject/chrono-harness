@@ -8,6 +8,44 @@ use std::{
 use tempfile::TempDir;
 
 #[test]
+fn operation_bounds_are_explicit_complete_and_local_to_listed_operations() {
+    use chrono_judge_registration::execution::plans;
+    let legacy = json!({"execution_plans":{"test:t":{"operations":["build","run"],
+        "timeout_seconds":900,"output_limit_bytes":1048576}}});
+    let parsed = plans(&legacy).unwrap();
+    assert_eq!(
+        serde_json::to_value(&parsed).unwrap(),
+        legacy["execution_plans"]
+    );
+    let mut empty = legacy.clone();
+    empty["execution_plans"]["test:t"]["operation_bounds"] = json!({});
+    assert_eq!(
+        serde_json::to_value(plans(&empty).unwrap()).unwrap(),
+        legacy["execution_plans"]
+    );
+    let mut valid = legacy.clone();
+    valid["execution_plans"]["test:t"]["operation_bounds"] =
+        json!({"build":{"timeout_seconds":600,"output_limit_bytes":1048576}});
+    assert!(plans(&valid).is_ok());
+    for bounds in [
+        json!({"unknown":{"timeout_seconds":600,"output_limit_bytes":1048576}}),
+        json!({"build":{"timeout_seconds":0,"output_limit_bytes":1048576}}),
+        json!({"build":{"timeout_seconds":600,"output_limit_bytes":0}}),
+        json!({"build":{"timeout_seconds":600,"output_limit_bytes":67108865}}),
+        json!({"build":{"timeout_seconds":600}}),
+        json!({"build":{"timeout_seconds":600,"output_limit_bytes":1048576,"other":1}}),
+        Value::Null,
+    ] {
+        let mut invalid = valid.clone();
+        invalid["execution_plans"]["test:t"]["operation_bounds"] = bounds.clone();
+        assert!(
+            plans(&invalid).unwrap_err().contains("E_EXECUTION_PLAN"),
+            "{bounds}"
+        );
+    }
+}
+
+#[test]
 fn retained_input_duplicates_check_each_descriptor_and_refresh_on_each_validation() {
     use chrono_judge_registration::{Registrations, inputs};
     let h = Host::new();

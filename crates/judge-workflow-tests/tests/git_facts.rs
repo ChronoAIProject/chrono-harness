@@ -64,6 +64,7 @@ pub(super) fn bind_host(mut h: Host) -> Host {
                     "environment:DECLARED_EMPTY",
                     "environment:DECLARED_ABSENT",
                     "environment:EMPTY",
+                    "environment:TMPDIR",
                     "environment:PATH",
                     "environment:FACTS_SENTINEL"
                 ]
@@ -100,6 +101,7 @@ pub(super) fn bind_host(mut h: Host) -> Host {
                 "judge:projects",
             ),
             edge("environment:EMPTY", "runtime-input", "judge:projects"),
+            edge("environment:TMPDIR", "runtime-input", "judge:projects"),
             edge("environment:PATH", "runtime-input", "judge:projects"),
             edge(
                 "environment:FACTS_SENTINEL",

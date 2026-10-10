@@ -12,6 +12,35 @@ const POLICY: &str = ".chrono-harness/worktree.json";
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
+
+fn native_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    command
+}
+
+// Tests consume current addressed children and supported historical inline
+// children without rewriting either original representation.
+fn drain_report(entry: &Value) -> Value {
+    if let Some(report) = entry.get("report") {
+        return report.clone();
+    }
+    let input = &entry["input"];
+    assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+    assert_eq!(input["format"], "receipt");
+    assert_eq!(entry["receipt"]["path"], input["path"]);
+    assert_eq!(entry["receipt"]["sha256"], input["sha256"]);
+    let bytes = fs::read(
+        Path::new(input["source_root"].as_str().unwrap()).join(input["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(bytes.len(), input["byte_length"].as_u64().unwrap() as usize);
+    assert_eq!(sha256(&bytes), input["sha256"]);
+    let report = json(&bytes).unwrap();
+    assert_eq!(entry["status"], report["status"]);
+    assert_eq!(entry["error"], report["error"]);
+    report
+}
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
     let tools = json(&fs::read(&registry).expect("registered worktree test tools")).unwrap();
@@ -26,13 +55,51 @@ mod automatic;
 mod bounded_cleanup;
 mod check_inputs;
 mod evidence_retirement;
+mod fixture_body;
 mod interrupted_cleanup;
 mod maintenance;
 mod policy_migration;
 mod rebind;
+mod temporary;
+
+pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
+    static STORE: std::sync::OnceLock<(std::path::PathBuf, Vec<String>)> =
+        std::sync::OnceLock::new();
+    let (directory, outputs) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "worktree-test-host",
+        )
+        .expect("committed temporary producer adoption")
+    });
+    chrono_worktree::TemporaryHost::allocate(directory, "worktree-test-host", outputs, prefix)
+        .expect("prospective temporary host custody")
+}
+
+pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
+    static STORE: std::sync::OnceLock<(PathBuf, Vec<String>)> = std::sync::OnceLock::new();
+    let (directory, _) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &crate::source(),
+            POLICY,
+            "worktree-test-host",
+        )
+        .unwrap()
+    });
+    chrono_worktree::TemporaryHost::register_copy(
+        directory,
+        "worktree-test-host",
+        source,
+        destination,
+        Some(root),
+        "crates/worktree-tests/tests/creation.rs::copied_fixture_input",
+    )
+    .unwrap();
+}
 
 struct Host {
-    _dir: tempfile::TempDir,
+    _dir: chrono_worktree::TemporaryHost,
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
@@ -119,10 +186,7 @@ impl Drop for Host {
 }
 impl Host {
     fn new(layout: &str) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("worktree host λ ")
-            .tempdir()
-            .unwrap();
+        let dir = temporary_host("worktree host λ ");
         let parent = fs::canonicalize(dir.path()).unwrap();
         let root = parent.join("source with spaces");
         let remote = parent.join("declared upstream.git");
@@ -136,6 +200,7 @@ impl Host {
         }
         v.get_mut(CONFIG).unwrap()["enforcement"] = value!("not-implemented");
         v.get_mut(CONFIG).unwrap()["input_closure"] = value!({"status":"incomplete","unresolved":["fixture does not certify complete inputs"]});
+        v.get_mut(CONFIG).unwrap()["environment"]["values"]["TMPDIR"] = value!(parent);
         v.get_mut(PROJECTS).unwrap()["owners"] = value!(["host"]);
         v.get_mut(PROJECTS).unwrap()["projects"] = value!([]);
         let paths = [
@@ -168,7 +233,7 @@ impl Host {
             "literal host input; no dependency inference\n",
         )
         .unwrap();
-        let policy = value!({"schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"warehouse","git":{"program":fixture_git(),"expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{"HOME":parent,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null","GIT_TERMINAL_PROMPT":"0"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"});
+        let policy = value!({"schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"warehouse","git":{"program":fixture_git(),"expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{"HOME":parent,"TMPDIR":parent,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null","GIT_TERMINAL_PROMPT":"0"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"});
         fs::write(
             root.join(POLICY),
             serde_json::to_vec_pretty(&policy).unwrap(),
@@ -199,7 +264,9 @@ impl Host {
         git(&self.root, &["push", "-q", "warehouse", "dev"]);
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let mut command =
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        command
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -216,10 +283,8 @@ impl Host {
                 name,
                 "--path",
                 target.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
-        self.received(out)
+            ]);
+        self.received(self._dir.capture_output(&mut command).unwrap())
     }
     fn received(&self, out: std::process::Output) -> (i32, Value, String) {
         if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {
@@ -276,7 +341,12 @@ impl Host {
     fn hook(&self, settings: Value) {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
-        let copied = Command::new("/bin/cp")
+        copied_fixture_input(
+            &self.root,
+            Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-hook")),
+            &p,
+        );
+        let copied = native_command("/bin/cp")
             .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
             .arg(&p)
             .output()
@@ -303,7 +373,7 @@ fn select_config(root: &Path, target: &str) {
     let mut config = json(&fs::read(root.join(old)).unwrap()).unwrap();
     if config["schema_version"] != 3 {
         let git = fixture_git();
-        let version = Command::new(&git).arg("--version").output().unwrap();
+        let version = native_command(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
         config["schema_version"] = value!(3);
         config["facts_git"] = value!({"tool":"git","input":"git-bytes"});
@@ -382,7 +452,7 @@ fn assert_fixed_registry_reads(
                         && row["process"]["stdin_sha256"] == sha256(metadata_input.as_bytes())
                 })
                 .expect("missing exact endpoint/path batch binding");
-            let output = Command::new("git")
+            let output = native_command("git")
                 .current_dir(repository)
                 .args(["show", &format!("{oid}:{path}")])
                 .output()
@@ -1050,7 +1120,7 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
         let git =
             chrono_harness::resolve_program(&h.root, p["git"]["program"].as_str().unwrap(), None)
                 .unwrap();
-        let version = Command::new(&git).arg("--version").output().unwrap();
+        let version = native_command(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
         let environment = p["environment"].clone();
         *p = adopted;
@@ -1100,7 +1170,7 @@ impl Host {
         let path = ".chrono-harness/state/reconstruction.json";
         fs::create_dir_all(self.root.join(".chrono-harness/state")).unwrap();
         fs::write(self.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -1497,7 +1567,7 @@ fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
         )
         .unwrap();
     }
-    let old = Command::new("git")
+    let old = native_command("git")
         .current_dir(&h.root)
         .args([
             "status",

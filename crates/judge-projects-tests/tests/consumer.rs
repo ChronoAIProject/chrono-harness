@@ -1,5 +1,7 @@
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{fs, process::Command};
@@ -81,6 +83,30 @@ fn committed_project_and_script_hosts_execute_actual_four_judge_chain() {
         assert_eq!(data[2], "");
         assert!(data[3].is_null());
     }
+}
+#[test]
+fn full_chain_executes_registered_prerequisite_override_and_original_test_bound() {
+    let mut h = Host::new(false);
+    h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["timeout_seconds"] = json!(900);
+    h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"] =
+        json!({"prepare.p":{"timeout_seconds":600,"output_limit_bytes":4096}});
+    h.save();
+    let (code, report) = h.run(|_| {});
+    check_pass(code, &report);
+    assert_eq!(
+        fs::read_to_string(h.root().join(".chrono-harness/state/order")).unwrap(),
+        "pt"
+    );
+    let route = report["judges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "routes")
+        .unwrap();
+    let operations = &route["response"]["outputs"]["execution_plan"]["operations"];
+    assert_eq!(operations[0]["timeout_seconds"], 600);
+    assert_eq!(operations[1]["timeout_seconds"], 900);
+    assert_eq!(report["tests"]["executed"].as_array().unwrap().len(), 2);
 }
 #[test]
 fn retained_missing_changed_and_wrong_endpoint_cannot_pass() {
@@ -242,6 +268,11 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let mut h = Host::new(true);
     let root = h.root();
     let profile = ".chrono-harness/scoped.json";
+    host::copied_fixture_input(
+        &root,
+        &source().join("crates/judge-ci/target/debug/chrono-judge-ci"),
+        &root.join(".chrono-harness/bin/chrono-judge-ci"),
+    );
     fs::copy(
         source().join("crates/judge-ci/target/debug/chrono-judge-ci"),
         root.join(".chrono-harness/bin/chrono-judge-ci"),
@@ -270,7 +301,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         use std::os::unix::fs::PermissionsExt;
         let facts = ".chrono-harness/scoped-facts.json";
         let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
-        let version = Command::new(&git).arg("--version").output().unwrap();
+        let version = host::command(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
         let chosen = root.join(".chrono-harness/bin/chosen git");
         let quoted = format!("'{}'", git.to_str().unwrap().replace('\'', "'\\''"));
@@ -366,7 +397,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
                 &h.candidate,
             ]
         };
-        let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+        let mut command = host::command(root.join(".chrono-harness/bin/chrono-harness"));
         if bound {
             command.env_clear().env("PATH", &shadow);
         }
@@ -970,7 +1001,7 @@ fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
 fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
     let mut h = Host::new(false);
     let cargo = chrono_harness::resolve_program(&h.root(), "cargo", None).unwrap();
-    let version = Command::new(&cargo).arg("--version").output().unwrap();
+    let version = host::command(&cargo).arg("--version").output().unwrap();
     assert!(version.status.success());
     let cargo_bytes = fs::read(&cargo).unwrap();
     let cargo_digest = sha256(&cargo_bytes);
@@ -1046,7 +1077,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         fs::create_dir_all(h.root().join(path).parent().unwrap()).unwrap();
         fs::write(h.root().join(path), body).unwrap();
     }
-    let lock = Command::new(&cargo)
+    let lock = host::command(&cargo)
         .current_dir(h.root())
         .args(["generate-lockfile", "--manifest-path", "t/Cargo.toml"])
         .output()
@@ -1110,7 +1141,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         for name in ["alpha", "beta"] {
             fs::remove_file(h.root().join(".chrono-harness/state").join(name)).unwrap_or(());
         }
-        let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+        let out = host::command(h.root().join(".chrono-harness/bin/chrono-harness"))
             .current_dir(h.root())
             .args([
                 "check",
@@ -1137,7 +1168,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         r#"{"schema":"chrono-ci-collection/v1","reports":[]}"#,
     )
     .unwrap();
-    let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+    let out = host::command(h.root().join(".chrono-harness/bin/chrono-harness"))
         .current_dir(h.root())
         .args([
             "check",

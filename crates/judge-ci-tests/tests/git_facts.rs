@@ -572,7 +572,12 @@ fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
                 assert_eq!(processes.len(), 1);
             } else {
                 assert_eq!(last["stdout_bytes"].as_array().unwrap().len(), 4096);
-                assert!(h.trace().contains("ls-tree"));
+                assert!(
+                    h.trace().contains("ls-tree"),
+                    "bounded command {:?}; trace {}",
+                    last["argv"],
+                    h.trace()
+                );
             }
         }
     }

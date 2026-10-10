@@ -63,13 +63,13 @@ fn unscoped_source_identity_and_projection_are_stable() {
 #[test]
 fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
     for scope in scopes().into_iter().chain([json!({"kind":"collect","manifest":".chrono-harness/state/'$CHRONO_BASE`literal`/manifest.json"})]) {
-        let d = tempfile::tempdir().unwrap();
+        let d = crate::tools::temporary_host("host λ ");
         let root = d.path();
         let mut c = scoped_config(&scope);
         c.runner = "$CHRONO_BASE".into();
         executable_alias(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), root.join(&c.runner));
         let yaml = full::render(&c, SOURCE).unwrap();
-        let out = Command::new("/bin/bash").current_dir(root).env("PATH", root)
+        let out = crate::tools::command("/bin/bash").current_dir(root).env("PATH", root)
             .env("CHRONO_TEST_RECORDING", "scope")
             .env("CHRONO_BASE", "base fixed").env("CHRONO_CANDIDATE", "candidate fixed")
             .args(["-e", "-c", &script(&yaml, "Canonical full harness check")]).output().unwrap();
@@ -130,7 +130,7 @@ fn malformed_scopes_and_ownership_collisions_fail_before_generation() {
     ] {
         invalid.push(json!({"kind":"collect","manifest":path}));
     }
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     for scope in invalid {
         let mut value = serde_json::to_value(&c).unwrap();
@@ -172,7 +172,7 @@ fn malformed_scopes_and_ownership_collisions_fail_before_generation() {
 
 #[test]
 fn independent_sources_regenerate_only_their_owned_projection_and_keep_customization() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let unit_source = ".chrono-harness/providers/build-one.json";
     let collect_source = ".chrono-harness/providers/review.json";
@@ -316,28 +316,30 @@ fn scoped_prepare_cli(h: &Host, path: &str, bytes: &[u8], extra: &[&str]) -> std
     );
     let output = h.root.join(".chrono-harness/state/github-output");
     fs::write(&output, "").unwrap();
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"))
-        .current_dir(h.root.parent().unwrap())
-        .env("PATH", &h.shadow)
-        .env("CHRONO_EVENT_AMBIENT", "ambient")
-        .args([
-            "prepare",
-            "--host-root",
-            h.root.file_name().unwrap().to_str().unwrap(),
-            "--config",
-            path,
-            "--event",
-            "workflow_dispatch",
-            "--payload",
-            payload.to_str().unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-            "--github-output",
-            output.to_str().unwrap(),
-        ])
-        .args(extra)
-        .output()
-        .unwrap()
+    crate::tools::command(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"),
+    )
+    .current_dir(h.root.parent().unwrap())
+    .env("PATH", &h.shadow)
+    .env("CHRONO_EVENT_AMBIENT", "ambient")
+    .args([
+        "prepare",
+        "--host-root",
+        h.root.file_name().unwrap().to_str().unwrap(),
+        "--config",
+        path,
+        "--event",
+        "workflow_dispatch",
+        "--payload",
+        payload.to_str().unwrap(),
+        "--workflow-revision",
+        &h.candidate,
+        "--github-output",
+        output.to_str().unwrap(),
+    ])
+    .args(extra)
+    .output()
+    .unwrap()
 }
 
 #[test]
@@ -510,7 +512,7 @@ fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
 
 #[test]
 fn scoped_init_preserves_host_customization_and_can_adopt_scope_on_legacy_projection() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let input = root.join("incoming.json");
     write(
@@ -536,7 +538,7 @@ fn scoped_init_preserves_host_customization_and_can_adopt_scope_on_legacy_projec
 
 #[test]
 fn scoped_generation_cannot_take_a_legacy_projection_from_another_source() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let legacy_source = ".chrono-harness/providers/legacy.json";
     let scoped_source = ".chrono-harness/providers/scoped.json";
@@ -573,7 +575,7 @@ fn scoped_generation_cannot_take_a_legacy_projection_from_another_source() {
 
 #[test]
 fn collection_symlink_is_rejected_without_provisioning_or_output() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let c = scoped_config(&scopes()[1]);
     write(root, SOURCE, &serde_json::to_value(&c).unwrap());

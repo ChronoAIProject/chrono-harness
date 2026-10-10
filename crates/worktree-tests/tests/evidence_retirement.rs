@@ -36,7 +36,7 @@ fn fixture() -> (Host, PathBuf, Value) {
 fn retire(target: &Path, plan: &Value) -> (i32, Value) {
     let path = ".chrono-harness/state/custody/plan.json";
     fs::write(target.join(path), serde_json::to_vec(plan).unwrap()).unwrap();
-    let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let out = native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .args([

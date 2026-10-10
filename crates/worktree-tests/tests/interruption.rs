@@ -31,7 +31,7 @@ impl Host {
     }
     fn crash(&self, args: &[&str], stage: &str) {
         fs::write(self.parent.join("interrupt-stage"), stage).unwrap();
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -109,6 +109,34 @@ impl Host {
             "worktree add",
         );
     }
+}
+
+#[test]
+fn interrupted_ledgerless_worktree_is_reported_without_adopting_ownership() {
+    let h = Host::new("payload");
+    h.interrupting_git("none");
+    let target = h.parent.join("interrupted-unowned");
+    h.crash_start(&target);
+    let (intent_path, intent) = h.intent("start");
+    let original = fs::read(h.root.join(&intent_path)).unwrap();
+    let result_path = h.root.join(intent["report_path"].as_str().unwrap());
+    let original_result = fs::read(&result_path).ok();
+    let head = git(&target, &["rev-parse", "HEAD"]);
+    h.kernel_cleanup();
+    fs::write(target.join("payload"), "interrupted dirty source").unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let row = super::automatic::inventory_row(&report, &target);
+    assert_eq!(row["status"], "preserved");
+    assert_eq!(row["enrollment_match"], false);
+    assert_eq!(row["head"], head);
+    assert_eq!(h.ledger()["entries"], value!([]));
+    assert_eq!(fs::read(h.root.join(intent_path)).unwrap(), original);
+    assert_eq!(fs::read(result_path).ok(), original_result);
+    assert_eq!(
+        fs::read_to_string(target.join("payload")).unwrap(),
+        "interrupted dirty source"
+    );
 }
 
 #[test]

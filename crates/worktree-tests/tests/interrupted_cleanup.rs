@@ -40,9 +40,8 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
         }),
         "the same invoking/coordinator checkout shares one live common-directory observation"
     );
-    let processes = report["drain"][0]["report"]["processes"]
-        .as_array()
-        .unwrap();
+    let child = drain_report(&report["drain"][0]);
+    let processes = child["processes"].as_array().unwrap();
     let trees: Vec<_> = processes
         .iter()
         .filter(|p| {
@@ -142,9 +141,8 @@ fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error
         assert_eq!(fs::read(target.join("payload")).unwrap(), source);
         assert_eq!(h.ledger()["entries"][0]["ownership"]["cache_pending"], true);
         if fault == "failure" {
-            let processes = report["drain"][0]["report"]["processes"]
-                .as_array()
-                .unwrap();
+            let child = drain_report(&report["drain"][0]);
+            let processes = child["processes"].as_array().unwrap();
             let original = &processes.last().unwrap()["process"];
             assert_eq!(original["exit_code"], 71);
             assert_eq!(original["stderr"], "original identity failure\n");
@@ -195,7 +193,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         let target = h.parent.join("console");
         assert_eq!(h.invoke("feature", "console", &target).0, 0);
         install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
-        let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        let out = native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
             .output()
@@ -205,7 +203,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert_eq!(out.stderr, b"original diagnostic\n");
         assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
         let (_, owner, _) = h.received(
-            Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
+            native_command(target.join(".chrono-harness/bin/chrono-worktree"))
                 .current_dir(&target)
                 .args(["check", "--config", POLICY])
                 .output()
@@ -222,7 +220,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         );
         // Target policy failure is a lifecycle refusal, distinct from diagnostics.
         fs::write(target.join(AUTO_POLICY), "ordinary policy edit").unwrap();
-        let refused = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        let refused = native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
             .output()
@@ -231,6 +229,83 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert!(String::from_utf8_lossy(&refused.stderr).contains("participation refused"));
         assert!(refused.stdout.is_empty());
     }
+}
+
+#[test]
+fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_bound() {
+    let h = Host::new("payload");
+    participating_check(&h);
+    h.kernel_cleanup();
+    h.policy(|p| p["immutable_input_limits"] = value!({CONFIG:2_097_152, FM:2_097_152}));
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("large-cleanup");
+    assert_eq!(h.invoke("feature", "large-cleanup", &target).0, 0);
+    // The real observed gap has a small coordinator and a larger, separately
+    // adopted host configuration. Keep that same ownership relationship.
+    let mut bytes = fs::read(target.join(CONFIG)).unwrap();
+    bytes.resize(2_022_211, b' ');
+    fs::write(target.join(CONFIG), &bytes).unwrap();
+    let mut filemap = fs::read(target.join(FM)).unwrap();
+    filemap.resize(1_791_500, b' ');
+    fs::write(target.join(FM), &filemap).unwrap();
+    commit(&target);
+    output(&target);
+    let target_head = git(&target, &["rev-parse", "HEAD"]);
+    install_inner(
+        &h.root,
+        "original collection stdout\n",
+        "original warning\n",
+        0,
+    );
+    let out = native_command(h.root.join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(&h.root)
+        .args(["check", "--collect"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(out.stdout, b"original collection stdout\n");
+    assert_eq!(out.stderr, b"original warning\n");
+    assert!(!target.join("output λ").exists());
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), target_head);
+    assert_eq!(fs::read(target.join(CONFIG)).unwrap(), bytes);
+    let report_path = fs::read_dir(h.root.join(".chrono-harness/state/worktrees"))
+        .unwrap()
+        .map(|r| r.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("check-")
+        })
+        .unwrap();
+    let parent = fs::read(&report_path).unwrap();
+    assert!(parent.len() < 67_108_864);
+    let report = json(&parent).unwrap();
+    let row = &report["drain"][0];
+    assert!(row.get("report").is_none());
+    assert_eq!(row["status"], "cleaned");
+    let child = drain_report(row);
+    assert_eq!(child["worktree_removal"], "preserved");
+    assert_eq!(child["artifact_disposals"][0]["bytes_before"], 12);
+    assert_eq!(child["artifact_disposals"][0]["bytes_after"], 0);
+    let mut historical_inline = report.clone();
+    historical_inline["drain"][0]["report"] = child;
+    historical_inline["drain"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("input");
+    let inline_bytes = serde_json::to_vec_pretty(&historical_inline).unwrap().len();
+    assert!(
+        inline_bytes > 67_108_864,
+        "fixture must reproduce the original parent transport overflow: {inline_bytes}"
+    );
+    println!(
+        "LIFECYCLE_TRANSPORT parent_bytes={} child_bytes={} historical_inline_bytes={inline_bytes} stdout_bound=67108864",
+        parent.len(),
+        row["input"]["byte_length"]
+    );
 }
 #[test]
 fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
@@ -257,7 +332,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     );
     assert_eq!(code, 0, "{used} {error}");
     assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
-    let checked = Command::new(b.join(".chrono-harness/bin/chrono-harness"))
+    let checked = native_command(b.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&b)
         .arg("check")
         .output()
@@ -339,7 +414,7 @@ fn successful_use_without_finish_reclaims_caches_and_preserves_active_work() {
 struct OwnedGroup(String);
 impl Drop for OwnedGroup {
     fn drop(&mut self) {
-        let _ = Command::new("/bin/kill")
+        let _ = native_command("/bin/kill")
             .args(["-KILL", "--", &format!("-{}", self.0)])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -447,7 +522,7 @@ impl CapturedChild {
             }
             #[cfg(target_os = "macos")]
             {
-                let observe = |program: &str, args: &[&str]| match Command::new(program)
+                let observe = |program: &str, args: &[&str]| match native_command(program)
                     .args(args)
                     .output()
                 {
@@ -515,7 +590,7 @@ impl CapturedChild {
                     if path.exists() {
                         continue;
                     }
-                    let sampled = Command::new("/usr/bin/sample")
+                    let sampled = native_command("/usr/bin/sample")
                         .args([&pid, "1", "10", "-file"])
                         .arg(&path)
                         .output();
@@ -832,7 +907,7 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
         "original missing/partial result must be unchanged"
     );
     assert_eq!(
-        report["drain"][0]["report"]["artifact_disposals"][0]["status"],
+        drain_report(&report["drain"][0])["artifact_disposals"][0]["status"],
         "already-absent"
     );
     assert_eq!(h.ledger()["entries"][0]["status"], "active");
@@ -859,7 +934,7 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
         output(&target);
         let (code, report, error) = h.auto("maintain", &[]);
         assert_ne!(code, 0, "{report} {error}");
-        let report = &report["drain"][0]["report"];
+        let report = &drain_report(&report["drain"][0]);
         assert_eq!(report["status"], "failed");
         assert!(report["processes"].as_array().unwrap().iter().any(|p| {
             p["process"]["exit_code"] == 71 && p["process"]["stderr"] == "original cache failure\n"
@@ -901,7 +976,7 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
     output(&target);
     let (code, failed, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{failed} {error}");
-    let original = &failed["drain"][0]["report"]["prior_cache_attempt"]["result"];
+    let original = &drain_report(&failed["drain"][0])["prior_cache_attempt"]["result"];
     assert_eq!(original["original_outcome"], "unknown");
     let input = &original["input"];
     assert_eq!(input["format"], "bytes");
@@ -997,7 +1072,7 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
     let target = h.parent.join("unsealed");
     let interrupted = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree")).args([
+        native_command(source().join("crates/worktree/target/debug/chrono-worktree")).args([
             "start",
             "--host-root",
             h.root.to_str().unwrap(),
@@ -1219,7 +1294,7 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
     let mut start = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .args([
@@ -1342,6 +1417,29 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("normal-check");
     let other = h.parent.join("interrupted-other");
+    let unowned = h.parent.join("external-validation");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "external-validation",
+            unowned.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    output(&unowned);
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            "external validation",
+            unowned.to_str().unwrap(),
+        ],
+    );
     assert_eq!(h.invoke("integration", "normal-check", &target).0, 0);
     assert_eq!(h.invoke("feature", "interrupted-other", &other).0, 0);
     super::check_inputs::install(&target);
@@ -1363,7 +1461,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         ).unwrap();
     }
     let mut check = CapturedChild::spawn(
-        Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .env("CHRONO_CHECK_SOURCE", "local")
             .arg("check"),
@@ -1396,7 +1494,21 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     );
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/check-holder")).unwrap());
-    assert_eq!(h.auto("maintain", &[]).0, 0);
+    let (code, inventory, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{inventory} {error}");
+    let observed = super::automatic::inventory_row(&inventory, &unowned);
+    assert_eq!(observed["status"], "preserved");
+    assert_eq!(observed["locked"], true);
+    assert_eq!(observed["enrollment_match"], false);
+    assert!(unowned.join("output λ/cache").exists());
+    assert!(
+        inventory["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"] == value!(target)
+                && row["preserved_reason"] == "live registered consumers hold enrollment lease")
+    );
     assert!(target.join("output λ/cache").exists());
     fs::write(
         target.join(".chrono-harness/state/check-release"),
@@ -1428,6 +1540,13 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
             .starts_with("check-")
         {
             let report = json(&fs::read(&path).unwrap()).unwrap();
+            let observed = super::automatic::inventory_row(&report, &unowned);
+            assert_eq!(observed["enrollment_match"], false);
+            assert_eq!(observed["locked"], true);
+            assert_eq!(
+                super::automatic::inventory_row(&report, &target)["preserved_reason"],
+                "invoking source or destination"
+            );
             let mut calls = std::collections::BTreeMap::<String, usize>::new();
             for process in report["processes"].as_array().unwrap() {
                 *calls.entry(process["argv"].to_string()).or_default() += 1;
@@ -1444,7 +1563,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         vec!["check", "--unit", "missing"],
         vec!["check", "--collect"],
     ] {
-        let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        let out = native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .env("CHRONO_CHECK_SOURCE", "local")
             .args(args)
@@ -1472,13 +1591,13 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
         ".chrono-harness/migrations/scoped-v1-tests.py",
     ];
     for script in [sources[1], sources[2], sources[3], sources[5]] {
-        let root = tempfile::tempdir().unwrap();
+        let root = temporary_host("host λ ");
         for path in sources {
             let destination = root.path().join(path);
             fs::create_dir_all(destination.parent().unwrap()).unwrap();
             fs::copy(source().join(path), destination).unwrap();
         }
-        let loaded = Command::new("/usr/bin/python3")
+        let loaded = native_command("/usr/bin/python3")
             .args([
                 "-c",
                 "import runpy,sys; sys.dont_write_bytecode=False; sys.pycache_prefix=None; runpy.run_path(sys.argv[1],run_name='consumer')",
@@ -1608,7 +1727,7 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
         owner.kill().unwrap();
         owner.wait().unwrap();
         assert!(
-            Command::new("/bin/kill")
+            native_command("/bin/kill")
                 .args(["-KILL", &python])
                 .status()
                 .unwrap()
@@ -1675,7 +1794,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     owner.kill().unwrap();
     owner.wait().unwrap();
     assert!(
-        Command::new("/bin/kill")
+        native_command("/bin/kill")
             .args(["-KILL", &cargo])
             .status()
             .unwrap()
@@ -1771,7 +1890,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     )
     .unwrap();
     let mut child = CapturedChild::spawn(
-        Command::new("/usr/bin/python3")
+        native_command("/usr/bin/python3")
             .current_dir(&target)
             .env("PATH", &path)
             .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path]),
@@ -1817,7 +1936,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
     install_inner(&target, "canonical-linked-check", "", 0);
-    let checked = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+    let checked = native_command(target.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&target)
         .arg("check")
         .output()
@@ -1840,7 +1959,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     )
     .unwrap();
     commit(&target);
-    let refused = Command::new("/usr/bin/python3")
+    let refused = native_command("/usr/bin/python3")
         .current_dir(&target)
         .env("PATH", &path)
         .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
@@ -1887,7 +2006,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     .unwrap();
     commit(&h.root);
     output(&target);
-    let refused_check = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+    let refused_check = native_command(target.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&target)
         .arg("check")
         .output()
@@ -1898,7 +2017,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
             .contains("coordinator policy/configuration identity mismatch")
     );
     fs::remove_file(target.join(".chrono-harness/state/bootstrap-holder")).unwrap();
-    let refused_bootstrap = Command::new("/usr/bin/python3")
+    let refused_bootstrap = native_command("/usr/bin/python3")
         .current_dir(&target)
         .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
         .output()

@@ -172,6 +172,10 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-routes-tests"
         }
       ]
     },
@@ -200,6 +204,10 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-routes-tests"
         }
       ]
     },
@@ -3062,6 +3070,34 @@
         {
           "kind": "runtime-input",
           "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-ci-tests"
         }
       ]
     },
@@ -4173,6 +4209,30 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-ci-tests"
         }
       ]
     },
@@ -4940,6 +5000,10 @@
         {
           "kind": "compile",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-ci-tests"
         }
       ]
     },
@@ -5639,6 +5703,70 @@
         {
           "kind": "compile",
           "to": "project:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/temporary.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/temporary.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/producer/body.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/fixture_body.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
         }
       ]
     }
@@ -8288,6 +8416,36 @@
       "from": "project:worktree",
       "kind": "compile",
       "to": "project:ci-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-workflow-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-ci-tests"
     }
   ],
   "test_costs": [

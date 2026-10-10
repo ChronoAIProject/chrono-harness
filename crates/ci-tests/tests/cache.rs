@@ -1,5 +1,7 @@
 use serde_json::{Value, json};
-use std::{fs, path::Path, process::Command};
+#[path = "support/tools.rs"]
+mod tools;
+use std::{fs, path::Path};
 #[path = "startup.rs"]
 mod startup;
 
@@ -152,7 +154,7 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         .lines()
         .next()
         .unwrap();
-    let seed_result = Command::new("/bin/bash")
+    let seed_result = crate::tools::command("/bin/bash")
         .args(["-e", "-c", seed])
         .output()
         .unwrap();
@@ -391,8 +393,11 @@ fn cache_adoption_rejects_unknown_jobs_unpinned_actions_and_empty_consumers() {
 
 #[test]
 fn release_init_and_generation_resolve_cache_consumers_before_writing() {
-    let root = tempfile::tempdir().unwrap();
-    let input = tempfile::NamedTempFile::new().unwrap();
+    let root = crate::tools::temporary_host("host λ ");
+    let input = tempfile::Builder::new()
+        .disable_cleanup(true)
+        .tempfile_in(root.path())
+        .unwrap();
     let mut value = source(".chrono-harness/ci/release.json");
     value["persistent_cache"] = adoption("linux_build_runner");
     fs::write(input.path(), serde_json::to_vec(&value).unwrap()).unwrap();

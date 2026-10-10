@@ -8,7 +8,7 @@ const GENERATED: &[&str] = &[
 ];
 
 pub(super) struct Owner {
-    _dir: tempfile::TempDir,
+    _dir: chrono_worktree::TemporaryHost,
     pub(super) root: PathBuf,
 }
 
@@ -37,7 +37,7 @@ impl Drop for Owner {
 
 impl Owner {
     pub(super) fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = crate::tools::temporary_host("host λ ");
         let root = fs::canonicalize(dir.path()).unwrap().join("main");
         fs::create_dir(&root).unwrap();
         git(&root, &["init", "-q", "-b", "dev"]);
@@ -395,8 +395,14 @@ fn producer_wrapper_refuses_unknown_destination_before_publication() {
     );
 }
 
-fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<String>) {
-    let dir = tempfile::tempdir().unwrap();
+fn cargo_result(
+    fail: bool,
+) -> (
+    chrono_worktree::TemporaryHost,
+    std::process::Output,
+    Vec<String>,
+) {
+    let dir = crate::tools::temporary_host("host λ ");
     let fixtures =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree-tests/tests/support/cargo_pair");
     for project in ["producer", "tests"] {
@@ -411,7 +417,8 @@ fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<Str
     fs::write(dir.path().join(".chrono-harness/config.json"), serde_json::to_vec(&json!({
         "artifacts":(["producer","tests"].iter().map(|p| json!({"path":format!(".chrono-harness/state/cargo/{p}/target/"),"tracked":false})).collect::<Vec<_>>())
     })).unwrap()).unwrap();
-    let build = Command::new("cargo")
+    let mut build = std::process::Command::new("cargo");
+    build
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
         .args([
@@ -420,9 +427,8 @@ fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<Str
             "--offline",
             "--manifest-path",
             ".chrono-harness/state/cargo/producer/Cargo.toml",
-        ])
-        .output()
-        .unwrap();
+        ]);
+    let build = dir.capture_output(&mut build).unwrap();
     assert!(build.status.success(), "{build:?}");
     if fail {
         let input = dir
@@ -446,12 +452,12 @@ fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<Str
         "--manifest-path".into(),
         ".chrono-harness/state/cargo/tests/Cargo.toml".into(),
     ];
-    let output = Command::new(&argv[0])
+    let mut command = std::process::Command::new(&argv[0]);
+    command
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
-        .args(&argv[1..])
-        .output()
-        .unwrap();
+        .args(&argv[1..]);
+    let output = dir.capture_output(&mut command).unwrap();
     assert_eq!(
         output.status.code(),
         Some(if fail { 101 } else { 0 }),
@@ -663,7 +669,7 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
     let (finished_tx, finished_rx) = mpsc::channel();
     let (first, second) = std::thread::scope(|scope| {
         let root = &owner.root;
-        let command = &commands[0];
+        let command = (commands[0].0.path(), &commands[0].1, &commands[0].2);
         let store = &directory;
         let first = scope.spawn(move || {
             let mut observer = |phase: &str| {
@@ -674,7 +680,7 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
             };
             retain_command_result_observed(
                 root,
-                command.0.path(),
+                command.0,
                 &command.2,
                 &json!({"publisher":0}),
                 &command.1,
@@ -706,7 +712,10 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
             commands[0].1.stdout
         );
         assert!(first_copy.join("original-state/recovery/original").exists());
-        let second = scope.spawn(|| {
+        let command = (commands[1].0.path(), &commands[1].1, &commands[1].2);
+        let root = &owner.root;
+        let store = &directory;
+        let second = scope.spawn(move || {
             let mut reported_busy = false;
             let mut observer = |phase: &str| {
                 if phase == "birth-gate-busy" && !reported_busy {
@@ -715,13 +724,13 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
                 }
             };
             let receipt = retain_command_result_observed(
-                &owner.root,
-                commands[1].0.path(),
-                &commands[1].2,
+                root,
+                command.0,
+                command.2,
                 &json!({"publisher":1}),
-                &commands[1].1,
+                command.1,
                 Some(0),
-                Some(&directory),
+                Some(store),
                 Some(&mut observer),
             );
             finished_tx.send(()).unwrap();

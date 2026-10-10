@@ -19,10 +19,23 @@ fn pinned_git_package_executes_and_changed_revision_blocks_the_consumer() {
     write(upstream.path(), "src/lib.rs", "pub fn value()->u32 { 0 }\n");
     git(upstream.path(), &["init", "-q"]);
     let revision = commit(upstream.path());
-    let url = format!(
-        "file://{}",
-        fs::canonicalize(upstream.path()).unwrap().display()
-    );
+    // Cargo canonicalizes a file URL in the lockfile. Encode the actual UTF-8
+    // allocation path so the declared source has that same identity, including
+    // the adopted parent's spaces and Unicode.
+    let path = fs::canonicalize(upstream.path()).unwrap();
+    let encoded: String = path
+        .to_str()
+        .unwrap()
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"/-_.~".contains(&byte) {
+                (byte as char).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    let url = format!("file://{encoded}");
     let manifest = f.root().join("p/Cargo.toml");
     let mut text = fs::read_to_string(&manifest).unwrap();
     text.push_str(&format!(

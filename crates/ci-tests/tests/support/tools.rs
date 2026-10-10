@@ -1,6 +1,13 @@
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// Actual native fixture routes forward the scopes already held by their host.
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    command
+}
+
 pub fn fixture_git() -> PathBuf {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let registry = source.join(".chrono-harness/tests/ci-tools.json");
@@ -14,4 +21,40 @@ pub fn fixture_git() -> PathBuf {
         .expect("Git must be explicitly registered for this CI test platform");
     assert!(Path::new(program).is_absolute());
     chrono_harness::resolve_program(&source, program, None).unwrap()
+}
+
+pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
+    static STORE: std::sync::OnceLock<(std::path::PathBuf, Vec<String>)> =
+        std::sync::OnceLock::new();
+    let (directory, outputs) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "ci-test-host",
+        )
+        .expect("committed temporary producer adoption")
+    });
+    chrono_worktree::TemporaryHost::allocate(directory, "ci-test-host", outputs, prefix)
+        .expect("prospective temporary host custody")
+}
+
+pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
+    static STORE: std::sync::OnceLock<(PathBuf, Vec<String>)> = std::sync::OnceLock::new();
+    let (directory, _) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "ci-test-host",
+        )
+        .unwrap()
+    });
+    chrono_worktree::TemporaryHost::register_copy(
+        directory,
+        "ci-test-host",
+        source,
+        destination,
+        Some(root),
+        "crates/ci-tests/tests/units.rs::install_tools",
+    )
+    .unwrap();
 }

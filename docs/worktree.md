@@ -93,9 +93,10 @@ For an explicitly named immutable input larger than the ordinary diagnostic
 bound, v1/v2 policies may additionally declare `immutable_input_limits`, a map
 from exact repository-relative paths to positive byte limits of at most
 67,108,864 bytes. An omitted map preserves the original transport contract.
-This host declares `.chrono-harness/config.json` at 2,097,152 bytes while keeping
-`output_limit_bytes` at 1,048,576. These declarations grant acquisition capacity;
-they do not register files, outputs, consumers or cleanup eligibility.
+This host declares `.chrono-harness/config.json` and
+`.chrono-harness/FILEMAP.json` at 2,097,152 bytes while keeping
+`output_limit_bytes` at 1,048,576. These declarations grant acquisition
+capacity; they do not register files, outputs, consumers or cleanup eligibility.
 
 The existing blob owner first acquires fixed-commit object metadata under the
 ordinary output/time limits. Oversized inputs are refused before acquiring their
@@ -838,6 +839,36 @@ drain after validating policy/identity, excluding the invoking source and intend
 destination. Unrelated drain failures retain their original reports and do not block valid
 admission; target identity and coordinator publication failures still block.
 
+At the beginning of that shared drain, the bound Git runner reads one
+`worktree list --porcelain -z` inventory. The parent report's
+`worktree_inventory` rows contain the exact registered `path`, `head`, `branch`,
+`locked` and `prunable` flags, the original `git` fields (including lock/prune
+reasons), and available `checkout_identity` and physical `attachment` fields.
+`enrollment_match` requires the exact path and attachment of a non-disposed ledger
+entry in this common repository. Current HEAD/branch observations are recorded;
+birth HEAD/branch are not universal physical identities. Main and active consumers
+can legitimately advance or switch them.
+
+Rows without a current enrollment are `preserved` with an explicit-import reason;
+unreadable or changed attachments are `blocked` with `attachment_error` and a
+preservation reason. The coordinator and explicit source/destination exclusions
+are reported as protected. This observation never imports, acquires a consumer
+lease, marks terminal or reclaims an unknown row. Explicit `import` remains the
+ownership transition for an existing linked checkout; old disposed generations
+grant no ownership over a reused path. A blocked inventory row is a diagnostic,
+not a new deletion or admission policy. Inventory command and report-publication
+failures are fatal. Existing enrolled cleanup still takes leases and rechecks
+identity, retention and effects; unrelated cleanup failures retain their existing
+admission behavior, while explicit maintain/finish remains fail-closed.
+
+The inventory describes the beginning of drain, not the post-cleanup tree. It
+covers only Git-registered rows, not orphan directories or arbitrary external
+writers. Dirty work, branches, unretained commits and evidence in an unowned row
+remain untouched. It cannot take custody of an active external validation checkout
+or reconstruct its missing history. Local and generated CI retain the existing
+canonical check entry; local fixture evidence does not establish native parity,
+complete input closure or full host activation.
+
 The fixed lifecycle commands default to `--host-root .` and
 `--config .chrono-harness/worktree.json`:
 
@@ -1108,14 +1139,22 @@ does not embed the previous report's bytes or parsed history.
 The reference-bearing fields are `terminal_input`, `prior_report.input`,
 `prior_cache_attempt.intent_input`, `prior_cache_attempt.result.input`,
 `original_report.result.input`, `unreferenced_original_receipt.input`, and
-`original_result.input`. Inline current results in `drain[].report` use the same
-contract. Receipt consumption checks these explicit references transitively,
+`original_result.input`, and `drain[].input`. Current drain rows retain the exact
+child report through that descriptor and the existing `receipt`, with the child's
+`status` and `error` available in the parent. They do not embed the child's parsed
+report. Consumers needing cleanup effects or original process observations read
+the addressed child and verify its length and digest; canonical check and bootstrap
+continue to consume the unchanged parent `managed_process` streams and status.
+Receipt consumption checks these explicit references transitively,
 deduplicating reads within the check. Missing, changed, incorrectly bound or
 symlinked inputs refuse cleanup; an opaque partial result is preserved without
 requiring valid JSON. Historical inline evidence remains readable. Explicit
 maintenance outside automatic lifecycle retains its existing report shape.
 This bounds historical embedding, not the number or total size of necessary
 original observations; retention and disposal remain governed by host policy.
+Historical `drain[].report` remains supported by the current reference verifier.
+The stdout protocol bound is unchanged. Parent publication still fails on its own
+IO or transport errors, and a retained child failure remains a cleanup failure.
 
 Later start/reconstruct/maintain and managed admission can dispose unfinished
 quiescent caches, including a successful use with no orphan token. EX permits
@@ -1231,3 +1270,167 @@ initial judge runs; the producer itself never publishes inventory success.
 CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式平台 Git 输入；不把源宿主已部署的 Git 摘要／版本当作原生 fixture 的政策，也不改源宿主绑定。原错误与 passing control 均由实际命令产生。worktree 的未保留 commit-tree fixture 显式提供作者姓名／邮箱。
 
 真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。
+
+### Prospective temporary-host custody
+
+**Policy and product change warning (R1B):** `fixture_bodies:true` changes the
+adopted lifetime of individually enrolled copied fixture inputs. Previous policy
+kept every copied executable indefinitely. The copy producer now retains original
+bytes once per SHA256 in its existing store, then publishes an immutable member
+intent before copying. The original allocation intent and producer outcome remain
+unchanged. Drain removes only the enrolled matching file after kernel exclusion
+and current diagnostic-reference release. It retains source, Git objects/commits,
+raw captures, partial or changed members, missing-original failures and unknown
+neighbors. This requires matching candidate binaries and committed policy; an
+older binary rejects the added registration. Retained-original storage cost is
+one file per distinct input; classification hashes real bytes, and recovery checks
+original/member bytes and explicit Git roots. Physical APFS savings are unknown.
+Targeted Rust tests cover no-finish recovery, overlapping holders and diagnostic
+references, interruption/live native descendants, partial copies, missing
+originals, source guards, finite migration and repeated recovery. R2 still owns
+the broad canonical/coordinator receipts and external/native delivery boundaries.
+
+Native Git test hooks are actual copied inputs too. Their constructor enrolls
+each copy before production. Only an explicitly enrolled regular leaf under
+`.git/hooks/` can have this lifetime; Git identity, objects and commits keep
+their source protection. Path spelling alone grants no disposal eligibility.
+This corrects the previous broad Git-path exclusion for copied hook inputs and
+adds the same retained-input hashing and storage cost as other copies.
+
+`TemporaryHost::register_copy` receives the exact declared store, producer, real
+source file, destination, possible Git root and producer recipe. It preserves the
+real input before publishing membership; the existing joined copy route continues
+to own writable executable descriptors. Native and engine consumers retain their
+existing allocation scopes. Enrolled bodies do not acquire an outcome from a
+command exit. A partial copy is not identical and stays protected; an interrupted
+copy whose complete bytes match its retained input may be recovered after the
+last supported holder without Drop, finish or a fabricated seal.
+
+Current custodians enroll exact legacy members through the same lifecycle entry:
+`chrono-worktree migrate --path <coordinator> --adopt-fixtures <state-plan>`.
+The `chrono-fixture-body-custody/v1` plan binds current HEAD, actual current
+consumer disposition and its reason; each selection binds producer, allocation,
+physical identity and original intent, and each member binds path, SHA256, length,
+explicit possible Git root and committed producer recipe file. Migration retains
+the actual member bytes and immutable custody/provenance receipts. It deletes
+nothing, releases no old diagnostic reference and imports no unknown object.
+Nested members bind the exact existing producer registry, allocation identity,
+original intent and kernel lease. Recovery reads that registry's current
+diagnostic references under exclusion; a late persistent claim protects the
+body after its process releases the lease. Missing or changed bindings preserve
+the member. This adds explicit registry/reference verification cost, not discovery.
+Ordinary adopted recovery performs the effects. Source/index guards run again
+before removal. Cargo `disposed` state does not settle subsequently enrolled
+bodies. Concrete unavailable members fail independently of checked siblings.
+
+The behavior oracles for temporary allocations are declared before their tests:
+production must follow an immutable allocation intent; ordinary maintenance must
+preserve a distinct live native descendant and an overlapping holder, then reclaim
+only the selected rebuildable directories after final actual release. Normal exit,
+SIGTERM and SIGKILL before Drop/finish must preserve source, partial streams and
+missing-result truth. Unknown objects and unreleased diagnostic references must
+remain protected. Literal absolute allocation bindings must survive nested native
+commands, cleared command environments and Cargo working-directory changes,
+including spaces and Unicode; no ambient caller export is the custody authority.
+An intentionally blocked source check for one excluded allocation must still
+allow an unrelated allocation to publish. A diagnostic claim on the excluded
+allocation must fail without publishing a reference. After the check resumes,
+only that eligible output is removed. Native captures must open retained raw
+streams and intent before spawn: killing the producer while it waits must leave
+the child's exact partial bytes and no joined result, seal or completion. A
+normally joined command must return those same bytes and its actual exit code.
+Each actual native route must bind its command exactly once. Binding an allocation
+must forward the already held scope, without adding another copy of that same
+lease. Captured and asynchronous routes must carry the same descriptor count as
+one native forwarding operation in the same thread; their children must still
+hold the allocation through interruption. This count is a local descriptor-cost
+oracle, not an attribution of a historical system file-table failure.
+An excluded allocation whose entire declared output set is absent requires no
+disposal publication or registry rewrite. Its producer intent, missing outcome,
+source and registration must remain unchanged, and the observation must list
+only the declared absent paths. A present output still follows ordinary checked
+disposal. This avoids durable writes for outputs that were never produced.
+The interruption fixture places its independent native consumer in a distinct
+process group and checks its actual PID after joining the killed wrapper and
+after maintenance. A readiness marker cannot establish survival after managed
+group cancellation; an actually terminated child supplies no live-holder claim.
+An unavailable registered allocation must retain its original registration and
+report a concrete failure. Exclusion and validation of an eligible sibling must
+still proceed, including within the same producer. Explicit maintenance remains
+nonzero for the missing allocation; sibling disposal does not repair that failure.
+The regression moves the unavailable fixture to a retained unknown neighbor,
+checks those source bytes and the unchanged failed row, and independently checks
+the eligible sibling's actual removal. Real-coordinator tests retain maintenance
+streams and validate their own rows while preserving unrelated failure outcomes.
+
+Offline fixture consumers may make their Git path unavailable after joining and
+transporting its originals, but their allocation and declared TMPDIR must remain available. The
+shared projects fixture separates the Git root (`fixture/`) from its retained
+allocation. Its external input is retained beside the movable checkout, keeping
+the declared absolute input location available for delivery. Workflow tools and cloned hosts adopt that same adapter before
+production. The checkout moves to `retained-offline-checkout/`, preserving source,
+commits and raw captures. Both literal roots and the four actual `p`, `t`, `p2`, `t2`
+target directories at each root are declared before production. Collection must still work with the old
+Git root and business executable absent; it must launch no business processes.
+The existing native capture implementation also serves already bound short/native
+fixture routes at their explicit retained host. It does not add a capability or
+establish custody; their declared command adapter forwards held capabilities once.
+
+`retained_producers[].temporary: true` opts a declared store into prospective
+cache recovery using the existing producer registry and kernel Lease. A
+`TemporaryHost` resolves the committed host policy, publishes an exact child and
+its output whitelist before returning to the producer, and holds a shared kernel
+lease. The existing drain obtains exclusive exclusion; it does not require a
+success seal or publish diagnostic release, task completion or producer success.
+Drop closes ownership only. Source, originals and every unselected path remain
+in place, so evidence custody survives a hard kill. Native Command adapters call
+`bind_command`, which forwards owned descriptor copies through the existing
+process engine adapter and binds the absolute TMPDIR; engine calls consume the
+same capabilities. Host `temporary_environment` optionally selects one declared
+producer for bootstrap/check/use command temporaries. Host paths and disposable
+outputs remain in `.chrono-harness/cleanup.json`, independent of host language.
+
+This repository explicitly adopts worktree test allocations, projects execution
+and migration fixtures, and CI test hosts. Smaller nested temporary allocations
+use their bound retained container; no system temporary directory is scanned or
+imported. Declared Cargo outputs and individually enrolled copied inputs are
+eligible for automatic disposal; other fixture contents retain their existing
+source/evidence custody. Explicit fixture moves forward the registered copy
+members before rename, including their possible Git roots; missing or changed
+members acquire no new eligibility. Test allocation retention is intentional
+and is not a completion claim. Unclaimed neighbors and earlier system-temporary
+objects have no retrospective custody. Platform/native acceptance and external
+coordinator delivery remain separate from local behavior tests.
+
+The current producer correspondence is explicit: `creation::temporary_host`
+owns worktree fixtures, `support/temporary::temporary_host` owns projects
+execution and shared Host fixtures, `migration::temporary_host` owns migration
+checkouts, and CI `support/tools::temporary_host` owns CI fixtures. Their native
+command adapters forward the held scopes; managed engine calls use those scopes
+and the declared absolute TMPDIR values. The CI receipt Cargo fixture additionally
+binds both actual Cargo Commands, with outputs below `.chrono-harness/state/cargo/`.
+Anonymous tempfile handles used solely as kernel test leases have no named output
+to recover. Explicit retained failure-file publishers keep their existing evidence
+directories and are not disposable temporary allocations.
+The CI judge fixture also consumes the existing CI temporary-host adapter. Its
+source and pre-evaluation request survive interruption; a returned response is
+retained before assertions. Compact fixture JSON keeps the actual selected
+Git output fault inside its original 4096-byte bound. This is fixture adoption,
+not a claim that arbitrary native process streams have been captured.
+
+`source_roots` declares allocation-relative Git roots (`.` means the allocation).
+Before each removal the same owner checks the actual declared root's HEAD and
+index; absent roots cannot silently resolve to the coordinator or a parent Git
+repository. Worktree fixtures declare their main and linked roots, migration
+fixtures declare their checkout root. The CI Cargo receipt fixture has no Git
+repository and retains its source outside the selected target paths. No nested
+repository discovery supplies custody. An entirely absent selected output set
+requires no Git tree acquisition or disposal publication: the read-only
+`already-absent` observation leaves intent, outcome and registration unchanged.
+
+The live Cargo-output regression joins its bounded build before observing a
+separate native installation/test/cache consumer. Its original failure had a
+timed-out build and a stale readiness marker; the marker alone is not liveness.
+This repairs that observation without increasing the command bounds. Other
+historical ownership and nested CI timeout causes require their own controlled
+evidence; a later passing run cannot change those original outcomes.

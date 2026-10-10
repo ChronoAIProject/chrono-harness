@@ -53,13 +53,18 @@ fn install_parent_provider(root: &Path) {
         fs::symlink_metadata(&program).unwrap_err().kind(),
         std::io::ErrorKind::NotFound
     );
-    let copied = Command::new("/bin/cp")
+    crate::tools::copied_fixture_input(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-ci-test-transport")),
+        &program,
+    );
+    let copied = crate::tools::command("/bin/cp")
         .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
         .arg(&program)
         .output()
         .unwrap();
     assert!(copied.status.success(), "parent provider copy: {copied:?}");
-    let ready = Command::new(&program)
+    let ready = crate::tools::command(&program)
         .current_dir(root)
         .env_clear()
         .arg("--version")
@@ -165,7 +170,7 @@ impl GatedHost {
     }
     fn detect(&self) -> std::process::Output {
         let output = self.host.root.join(".chrono-harness/state/detector-output");
-        let mut c = Command::new(self.host.root.join(".chrono-harness/bin/chrono-ci"));
+        let mut c = crate::tools::command(self.host.root.join(".chrono-harness/bin/chrono-ci"));
         c.args([
             "detect",
             "--host-root",
@@ -229,7 +234,8 @@ impl GatedHost {
             .as_u64()
             .unwrap()
             .to_string();
-        let mut command = Command::new(self.host.root.join(".chrono-harness/bin/chrono-ci"));
+        let mut command =
+            crate::tools::command(self.host.root.join(".chrono-harness/bin/chrono-ci"));
         command.args([
             "production",
             "--host-root",
@@ -382,11 +388,9 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
             if !out.status.success() {
                 // Keep the actual nested producer receipts, including child exit,
                 // stdout and stderr, before the fixture's temporary host is dropped.
-                let evidence = tempfile::Builder::new()
-                    .prefix("chrono-gating-failure-")
-                    .tempdir()
-                    .unwrap()
-                    .keep();
+                let evidence = crate::tools::temporary_host("chrono-gating-failure-")
+                    .path()
+                    .to_owned();
                 fs::write(evidence.join("stdout"), &out.stdout).unwrap();
                 fs::write(evidence.join("stderr"), &out.stderr).unwrap();
                 json_file(
@@ -922,7 +926,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         &root,
         &["clone", "-q", "--no-checkout", "--depth=2", &remote, "."],
     );
-    let before = Command::new(fixture_git())
+    let before = crate::tools::command(fixture_git())
         .current_dir(&root)
         .args(["cat-file", "-e", &format!("{}^{{commit}}", h.host.base)])
         .status()
@@ -940,7 +944,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
         PROVIDER,
         ".github/workflows/collection.yml",
     ] {
-        let bytes = Command::new(fixture_git())
+        let bytes = crate::tools::command(fixture_git())
             .current_dir(&root)
             .args(["show", &format!("HEAD:{path}")])
             .output()
@@ -952,7 +956,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
     install(&root);
     let output = root.join(".chrono-harness/state/out");
     fs::create_dir_all(output.parent().unwrap()).unwrap();
-    let mut c = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
+    let mut c = crate::tools::command(root.join(".chrono-harness/bin/chrono-ci"));
     c.args([
         "detect",
         "--host-root",
@@ -1280,7 +1284,7 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
 #[test]
 fn copied_conditional_example_executes_fixed_unit_and_collection_commands_without_rust_source() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-host-job-gating");
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::tools::temporary_host("host λ ");
     let root = dir.path().join("installed tools host");
     fs::create_dir(&root).unwrap();
     let map: Value =
@@ -1293,13 +1297,21 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     }
     install(&root);
     install_parent_provider(&root);
+    crate::tools::copied_fixture_input(
+        &root,
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
+        &root.join(".chrono-harness/bin/chrono-worktree"),
+    );
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
         root.join(".chrono-harness/bin/chrono-worktree"),
     )
     .unwrap();
     let git_bin = fixture_git();
-    let version = Command::new(&git_bin).arg("--version").output().unwrap();
+    let version = crate::tools::command(&git_bin)
+        .arg("--version")
+        .output()
+        .unwrap();
     let mut cfg: Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/config.json")).unwrap())
             .unwrap();
@@ -1310,7 +1322,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
                 json!(String::from_utf8(version.stdout.clone()).unwrap().trim());
         }
         if tool["id"] == "python3" {
-            let python = Command::new("/usr/bin/python3")
+            let python = crate::tools::command("/usr/bin/python3")
                 .arg("--version")
                 .output()
                 .unwrap();
@@ -1692,14 +1704,14 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     let source = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
     let original = git(&source, &["rev-parse", "HEAD"]);
     // Fixed baseline data is exported; no other branch or active worktree is read.
-    let dir = tempfile::tempdir().unwrap();
-    let archive = Command::new(fixture_git())
+    let dir = crate::tools::temporary_host("host λ ");
+    let archive = crate::tools::command(fixture_git())
         .current_dir(&source)
         .args(["archive", &original])
         .output()
         .unwrap();
     assert!(archive.status.success());
-    let mut unpack = Command::new("tar")
+    let mut unpack = crate::tools::command("tar")
         .current_dir(dir.path())
         .arg("-x")
         .stdin(std::process::Stdio::piped())
@@ -1756,7 +1768,10 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     // The copied registration belongs to the source host. This fixture owns
     // its actual Git invocation and binds it before fixing the candidate.
     let program = fixture_git();
-    let version = Command::new(&program).arg("--version").output().unwrap();
+    let version = crate::tools::command(&program)
+        .arg("--version")
+        .output()
+        .unwrap();
     assert!(version.status.success());
     let config_path = ".chrono-harness/config.json";
     let mut config: Value =
@@ -1810,7 +1825,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     install(dir.path());
     let payload = json!({"ref":"refs/heads/dev","before":base,"after":candidate,"created":false,"deleted":false});
     json_file(dir.path(), ".chrono-harness/state/event.json", &payload);
-    let mut command = Command::new(dir.path().join(".chrono-harness/bin/chrono-ci"));
+    let mut command = crate::tools::command(dir.path().join(".chrono-harness/bin/chrono-ci"));
     command
         .current_dir(dir.path())
         .args([

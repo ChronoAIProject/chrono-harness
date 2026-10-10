@@ -84,7 +84,8 @@ fn native_v3(h: &mut Host) {
         "environment:FACTS_GIT",
         "environment:DECLARED_EMPTY",
         "environment:DECLARED_ABSENT",
-        "environment:EMPTY"
+        "environment:EMPTY",
+        "environment:TMPDIR"
     ]);
     cfg["input_closure"]["bindings"] =
         json!([{"id":"script-inputs","consumer":"script:t","kind":"execution","inputs":inputs}]);

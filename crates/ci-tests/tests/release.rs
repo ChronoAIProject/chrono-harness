@@ -1,6 +1,8 @@
 use chrono_ci::{generate, init, release};
+#[path = "support/tools.rs"]
+mod tools;
 use serde_json::{Value, json};
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path};
 
 fn config() -> Value {
     json!({
@@ -28,7 +30,7 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
         .parent()
         .unwrap();
-    Command::new(host.join("crates/ci/target/debug/chrono-ci"))
+    crate::tools::command(host.join("crates/ci/target/debug/chrono-ci"))
         .args(args)
         .current_dir(root)
         .output()
@@ -48,10 +50,7 @@ fn script(rendered: &str) -> String {
 
 #[test]
 fn generated_command_preserves_literal_argv_and_original_failure() {
-    let d = tempfile::Builder::new()
-        .prefix("release host ")
-        .tempdir()
-        .unwrap();
+    let d = crate::tools::temporary_host("release host ");
     let root = d.path();
     let program = root.join("literal command.py");
     fs::write(&program, "import json,sys\nfrom pathlib import Path\nPath('args.json').write_text(json.dumps(sys.argv[1:]))\nprint('original failure',file=sys.stderr)\nsys.exit(17)\n").unwrap();
@@ -86,7 +85,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
         String::from_utf8_lossy(&out.stderr)
     );
     let workflow = fs::read_to_string(root.join(".github/workflows/package.yml")).unwrap();
-    let run = Command::new("/bin/bash")
+    let run = crate::tools::command("/bin/bash")
         .args(["-e", "-c", &script(&workflow)])
         .current_dir(root)
         .output()
@@ -103,7 +102,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
 
 #[test]
 fn release_adoption_preserves_customization_and_verify_does_not_repair() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let source = root.join("source.json");
     write(root, "source.json", &config());
@@ -202,7 +201,7 @@ fn invalid_release_declarations_fail_before_adoption() {
         bad.push(c);
     }
     for c in bad {
-        let d = tempfile::tempdir().unwrap();
+        let d = crate::tools::temporary_host("host λ ");
         write(d.path(), "source.json", &c);
         assert!(
             init(d.path(), &d.path().join("source.json")).is_err(),
@@ -211,7 +210,7 @@ fn invalid_release_declarations_fail_before_adoption() {
         assert!(!d.path().join(".github").exists());
         assert!(!d.path().join(".chrono-harness").exists());
     }
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let duplicate = serde_json::to_string(&config()).unwrap().replacen(
         "\"schema\":",
         "\"schema\":\"chrono-github-release/v1\",\"schema\":",
@@ -226,7 +225,7 @@ fn invalid_release_declarations_fail_before_adoption() {
 #[test]
 fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
     for text in ["host-owned\n", "# chrono-ci: owned github-actions/v1\n"] {
-        let d = tempfile::tempdir().unwrap();
+        let d = crate::tools::temporary_host("host λ ");
         let root = d.path();
         write(root, "source.json", &config());
         let path = root.join(".github/workflows/package.yml");
@@ -240,7 +239,7 @@ fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
         assert_eq!(fs::read_to_string(path).unwrap(), text);
         assert!(!root.join(".chrono-harness").exists());
     }
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     write(root, "source.json", &config());
     init(root, &root.join("source.json")).unwrap();
@@ -332,7 +331,7 @@ fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() 
 
 #[test]
 fn oversized_workflows_reject_adoption_and_generation_without_writes() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let source = root.join("source.json");
     let mut c = config();
@@ -383,10 +382,7 @@ fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
 
 #[test]
 fn release_units_cli_runs_non_rust_literal_command_and_writes_original_dependency_data() {
-    let d = tempfile::Builder::new()
-        .prefix("units host λ ")
-        .tempdir()
-        .unwrap();
+    let d = crate::tools::temporary_host("units host λ ");
     let root = d.path();
     let program = root.join("consumer command.py");
     fs::write(&program,"import json,sys\nfrom pathlib import Path\nPath('args.json').write_text(json.dumps(sys.argv[1:]))\nsys.stderr.buffer.write(b'original failure\\xff')\nsys.exit(17)\n").unwrap();
@@ -409,7 +405,7 @@ fn release_units_cli_runs_non_rust_literal_command_and_writes_original_dependenc
         .unwrap();
     let command = script(command);
     let original = r#"{"native":{"result":"failure","outputs":{"artifact_id":"123","attempt":"1","run_id":"45"}}}"#;
-    let result = Command::new("/bin/bash")
+    let result = crate::tools::command("/bin/bash")
         .args(["-e", "-c", &command])
         .env("CHRONO_RELEASE_DEPENDENCIES", original)
         .current_dir(root)
@@ -434,7 +430,7 @@ fn release_v1_rejects_even_empty_opt_in_fields() {
         ("always", json!(false)),
         ("dependency_metadata", Value::Null),
     ] {
-        let d = tempfile::tempdir().unwrap();
+        let d = crate::tools::temporary_host("host λ ");
         let mut c = config();
         c["jobs"][0][key] = value;
         write(d.path(), "source.json", &c);
@@ -451,7 +447,7 @@ fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
         ("dependency_metadata", Value::Null),
         ("download_artifact_action", Value::Null),
     ] {
-        let d = tempfile::tempdir().unwrap();
+        let d = crate::tools::temporary_host("host λ ");
         let root = d.path();
         let source = root.join("source.json");
         write(root, "source.json", &config());
@@ -483,13 +479,13 @@ fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
 fn release_single_id_download_extracts_receipt_at_the_registered_root() {
     let c: release::Config = serde_json::from_value(units_config()).unwrap();
     let yaml = release::render(&c).unwrap();
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let workflow = d.path().join("workflow.yml");
     fs::write(&workflow, yaml).unwrap();
     // This models the exact pinned action's extraction contract, including its
     // default-false negative control. A single artifact ID is NOT a name download.
     // https://github.com/actions/download-artifact/blob/d3f86a106a0bac45b974a628896c90dbdf5c8093/src/download-artifact.ts
-    let out = Command::new("/usr/bin/python3")
+    let out = crate::tools::command("/usr/bin/python3")
         .args(["-c", r#"
 import io, pathlib, sys, zipfile
 root = pathlib.Path(sys.argv[1]); workflow = (root/'workflow.yml').read_text()
