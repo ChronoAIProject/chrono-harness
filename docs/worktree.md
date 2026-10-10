@@ -1295,6 +1295,11 @@ lease. Captured and asynchronous routes must carry the same descriptor count as
 one native forwarding operation in the same thread; their children must still
 hold the allocation through interruption. This count is a local descriptor-cost
 oracle, not an attribution of a historical system file-table failure.
+An excluded allocation whose entire declared output set is absent requires no
+disposal publication or registry rewrite. Its producer intent, missing outcome,
+source and registration must remain unchanged, and the observation must list
+only the declared absent paths. A present output still follows ordinary checked
+disposal. This avoids durable writes for outputs that were never produced.
 The interruption fixture places its independent native consumer in a distinct
 process group and checks its actual PID after joining the killed wrapper and
 after maintenance. A readiness marker cannot establish survival after managed

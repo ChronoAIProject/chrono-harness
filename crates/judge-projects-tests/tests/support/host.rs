@@ -148,9 +148,11 @@ impl Host {
         }
         let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
         let version = Command::new(&tool).arg("--version").output().unwrap();
+        let retained_inputs = root.join(".chrono-harness/state/fixture-inputs");
+        fs::create_dir_all(&retained_inputs).unwrap();
         let external = tempfile::Builder::new()
             .disable_cleanup(true)
-            .tempfile_in(dir.path())
+            .tempfile_in(&retained_inputs)
             .unwrap();
         fs::write(external.path(), b"bounded input\n").unwrap();
         v.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([

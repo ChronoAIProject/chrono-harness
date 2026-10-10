@@ -149,6 +149,42 @@ fn command_carrier_count(command: &Command) -> usize {
 }
 
 #[test]
+fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "absent λ ")
+            .unwrap();
+    let name = allocation
+        .path()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
+    drop(allocation);
+    let before = fs::read(store.join("objects.json")).unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let row = report["producer_objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"].as_str().unwrap().ends_with(&name))
+        .unwrap();
+    assert_eq!(row["status"], "already-absent");
+    assert_eq!(row["absent_outputs"], value!(outputs));
+    assert_eq!(
+        fs::read(store.join("objects.json")).unwrap(),
+        before,
+        "no disposal result or producer success may be manufactured for absent output"
+    );
+    assert!(store.join(&name).is_dir());
+}
+
+#[test]
 fn allocation_native_binding_forwards_existing_scope_once() {
     let h = host();
     let (store, outputs) =
