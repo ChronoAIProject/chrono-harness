@@ -202,10 +202,15 @@
         "fixture/p/target/",
         "fixture/t/target/",
         "fixture/p2/target/",
-        "fixture/t2/target/"
+        "fixture/t2/target/",
+        "retained-offline-checkout/p/target/",
+        "retained-offline-checkout/t/target/",
+        "retained-offline-checkout/p2/target/",
+        "retained-offline-checkout/t2/target/"
       ],
       "source_roots": [
-        "fixture/"
+        "fixture/",
+        "retained-offline-checkout/"
       ]
     },
     {

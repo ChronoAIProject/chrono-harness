@@ -770,7 +770,17 @@ impl TemporaryHost {
         command: &mut std::process::Command,
     ) -> Result<std::process::Output, String> {
         self.bind_command(command)?;
-        let directory = self.path.join(".chrono-harness/state/command-captures");
+        Self::capture_bound_output(&self.path, command)
+    }
+
+    /// Capture an already bound native route in its explicit retained host.
+    /// The caller supplies that host's held capabilities and environment; this
+    /// adapter records IO and actual join, and establishes no lifecycle custody.
+    pub fn capture_bound_output(
+        root: &Path,
+        command: &mut std::process::Command,
+    ) -> Result<std::process::Output, String> {
+        let directory = root.join(".chrono-harness/state/command-captures");
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let capture = tempfile::Builder::new()
             .prefix("native-")

@@ -348,6 +348,9 @@ impl Host {
     pub fn capture_native(&self, command: &mut Command) -> std::process::Output {
         self.dir.capture_output(command).unwrap()
     }
+    pub fn make_checkout_unavailable(&self) -> std::path::PathBuf {
+        self.dir.make_checkout_unavailable().unwrap()
+    }
 }
 impl Drop for Host {
     fn drop(&mut self) {

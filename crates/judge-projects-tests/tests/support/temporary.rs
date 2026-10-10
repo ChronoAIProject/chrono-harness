@@ -26,6 +26,13 @@ impl FixtureDirectory {
     pub fn temporary_path(&self) -> &std::path::Path {
         self.allocation.path()
     }
+    /// The caller has joined the checkout's producers and transported their
+    /// reports. Preserve original bytes while making the old Git path unavailable.
+    pub fn make_checkout_unavailable(&self) -> std::io::Result<std::path::PathBuf> {
+        let retained = self.allocation.path().join("retained-offline-checkout");
+        std::fs::rename(&self.root, &retained)?;
+        Ok(retained)
+    }
     pub fn capture_output(
         &self,
         command: &mut std::process::Command,

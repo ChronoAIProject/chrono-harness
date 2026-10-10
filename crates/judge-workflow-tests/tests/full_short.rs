@@ -2,28 +2,28 @@
 use super::*;
 const PROVIDER: &str = ".chrono-harness/ci/units.json";
 const WORKTREE: &str = ".chrono-harness/worktree.json";
-fn short_host(native: bool) -> (Host, tempfile::TempDir) {
+fn short_host(native: bool) -> (Host, host::FixtureDirectory) {
     configured_short_host(native, None)
 }
-fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, tempfile::TempDir) {
+fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, host::FixtureDirectory) {
     configured_short_host_with_governance(native, age_seconds, false)
 }
 fn configured_short_host_with_governance(
     native: bool,
     age_seconds: Option<f64>,
     governance: bool,
-) -> (Host, tempfile::TempDir) {
+) -> (Host, host::FixtureDirectory) {
     let (h, tools) = rust_host();
     adopt_short_host(h, tools, native, age_seconds, governance, false)
 }
 fn adopt_short_host(
     mut h: Host,
-    tools: tempfile::TempDir,
+    tools: host::FixtureDirectory,
     native: bool,
     age_seconds: Option<f64>,
     governance: bool,
     migration: bool,
-) -> (Host, tempfile::TempDir) {
+) -> (Host, host::FixtureDirectory) {
     let root = h.root();
     for (project, binary) in [("ci", "chrono-ci"), ("worktree", "chrono-worktree")] {
         fs::copy(
@@ -120,7 +120,7 @@ fn adopt_short_host(
             .push(f);
     }
     h.save();
-    let out = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+    let out = host::command(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(&root)
         .args(["generate", "--host-root", ".", "--config", PROVIDER])
         .output()
@@ -268,7 +268,7 @@ fn short_report(
 }
 fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     let root = fs::canonicalize(root).unwrap();
-    let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+    let mut command = host::command(root.join(".chrono-harness/bin/chrono-harness"));
     command
         .current_dir(&root)
         .env("DECLARED_EMPTY", "")
@@ -278,7 +278,7 @@ fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     if let Some(source) = source {
         command.env("CHRONO_CHECK_SOURCE", source);
     }
-    let output = command.output().unwrap();
+    let output = chrono_worktree::TemporaryHost::capture_bound_output(&root, &mut command).unwrap();
     if !output.status.success() {
         println!("SHORT_FAILURE {}", String::from_utf8_lossy(&output.stderr));
         if source == Some("ci") && args == ["check", "--collect"] && output.stdout.is_empty() {
@@ -393,7 +393,7 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
         fs::create_dir_all(input.parent().unwrap()).unwrap();
         fs::write(&input, b"original input bytes").unwrap();
         let before = marker(tools.path());
-        let out = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+        let out = host::command(root.join(".chrono-harness/bin/chrono-ci"))
             .current_dir(&root)
             .args(["generate", "--host-root", ".", "--config", PROVIDER])
             .output()
@@ -406,26 +406,28 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
         }
     }
 }
-fn local_short_lane(age_seconds: Option<f64>) -> (Host, tempfile::TempDir, std::path::PathBuf) {
+fn local_short_lane(
+    age_seconds: Option<f64>,
+) -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     local_short_lane_with_governance(age_seconds, false)
 }
 fn local_short_lane_with_governance(
     age_seconds: Option<f64>,
     governance: bool,
-) -> (Host, tempfile::TempDir, std::path::PathBuf) {
+) -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     let (h, tools) = configured_short_host_with_governance(false, age_seconds, governance);
     make_local_lane(h, tools, "integration")
 }
 fn make_local_lane(
     h: Host,
-    tools: tempfile::TempDir,
+    tools: host::FixtureDirectory,
     kind: &str,
-) -> (Host, tempfile::TempDir, std::path::PathBuf) {
+) -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     let root = h.root();
     // Finish first execution of the declared fixture images before birth starts
     // the freshness clock. These probes do not execute any business operation.
     for name in ["chrono-harness", "chrono-ci", "chrono-worktree"] {
-        let ready = Command::new(root.join(format!(".chrono-harness/bin/{name}")))
+        let ready = host::command(root.join(format!(".chrono-harness/bin/{name}")))
             .current_dir(&root)
             .env_clear()
             .arg("--version")
@@ -443,7 +445,7 @@ fn make_local_lane(
     }
     for judge in h.values[JUDGES]["judges"].as_array().unwrap() {
         let name = judge["executable"].as_str().unwrap();
-        let ready = Command::new(root.join(name))
+        let ready = host::command(root.join(name))
             .current_dir(&root)
             .env_clear()
             .args(
@@ -494,7 +496,7 @@ fn make_local_lane(
             .to_string()
     };
     let mut timing = json!({"start_requested_ns": timestamp()});
-    let out = Command::new(root.join(".chrono-harness/bin/chrono-worktree"))
+    let out = host::command(root.join(".chrono-harness/bin/chrono-worktree"))
         .current_dir(&root)
         .args([
             "start",
@@ -881,7 +883,7 @@ fn native_command(root: &Path, id: &str, candidate: &str, payload: &Path) -> (i3
         })
         .expect("generated short command")
         .trim();
-    let out = Command::new("/bin/sh")
+    let out = host::command("/bin/sh")
         .current_dir(root)
         .args(["-c", command])
         .env("CHRONO_CHECK_SOURCE", "ci")
@@ -996,8 +998,10 @@ else:
  unit='one' if args[2]=='1' else 'two';dest=pathlib.Path(args[args.index('--dir')+1]);shutil.copytree(pathlib.Path(data['uploads'])/unit,dest,dirs_exist_ok=True)
 "#,python=python.display(),data=data.to_str().unwrap())).unwrap();
     fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
-    one.close().unwrap();
-    two.close().unwrap();
+    one.make_checkout_unavailable().unwrap();
+    two.make_checkout_unavailable().unwrap();
+    drop(one);
+    drop(two);
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     let before = marker(tools.path());
     let (exit, collected) = native_command(collector.path(), "collection", &h.candidate, &payload);
@@ -1182,7 +1186,7 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
     // Obtain genuine current captures while retaining the original historical base snapshot.
     let inputs_path = lane.join(".chrono-harness/state/inputs.json");
     let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
-    let captured = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let captured = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(&lane)
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT")
@@ -1227,7 +1231,7 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     // changes that same location. No historical judge is executed.
     let base_original_path = ".chrono-harness/state/inputs/governance-base.json";
     git(&lane, &["checkout", "--detach", &h.base]);
-    let old_capture = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let old_capture = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(&lane)
         .env("CHRONO_CHECK_SOURCE", "ci")
         .env("DECLARED_EMPTY", "")
@@ -1284,11 +1288,11 @@ fn genuine_lineage_early_seed_and_forwarding_bind_real_native_receipts() {
     let python =
         chrono_harness::resolve_program(&lane, "python3", Some(python_directory.to_str().unwrap()))
             .unwrap();
-    let link_version = Command::new(&python).arg("--version").output().unwrap();
+    let link_version = host::command(&python).arg("--version").output().unwrap();
     let link_digest = sha256(&fs::read(&python).unwrap());
     // Ordinary file inputs require the actual regular executable, not its alias.
     let python = fs::canonicalize(python).unwrap();
-    let version = Command::new(&python).arg("--version").output().unwrap();
+    let version = host::command(&python).arg("--version").output().unwrap();
     assert_eq!(version.status, link_version.status);
     assert_eq!(version.stdout, link_version.stdout);
     assert_eq!(version.stderr, link_version.stderr);
@@ -1378,7 +1382,7 @@ else:print(json.dumps(run))
     fs::set_permissions(&mock, fs::Permissions::from_mode(0o755)).unwrap();
     provider["gather"]["program"] = json!(mock);
     fs::write(lane.join(PROVIDER), serde_json::to_vec(&provider).unwrap()).unwrap();
-    let generated = Command::new(lane.join(".chrono-harness/bin/chrono-ci"))
+    let generated = host::command(lane.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(&lane)
         .args(["generate", "--host-root", ".", "--config", PROVIDER])
         .output()
@@ -1402,7 +1406,7 @@ else:print(json.dumps(run))
         } else {
             "push"
         };
-        let out = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+        let out = host::command(root.join(".chrono-harness/bin/chrono-ci"))
             .current_dir(root)
             .env("GITHUB_EVENT_NAME", event)
             .env("GITHUB_EVENT_PATH", &payload)
@@ -1433,7 +1437,7 @@ else:print(json.dumps(run))
     };
     let detected = detect(&lane, "900");
     let native = |root: &Path, operation: &str, unit: Option<&str>, run: &str| {
-        let mut c = Command::new(&python);
+        let mut c = host::command(&python);
         c.current_dir(root)
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -1493,7 +1497,7 @@ else:print(json.dumps(run))
         if let Some(unit) = unit {
             c.args(["--unit", unit]);
         }
-        let out = c.output().unwrap();
+        let out = chrono_worktree::TemporaryHost::capture_bound_output(&root, &mut c).unwrap();
         if operation == "publish" && !out.status.success() {
             let retained = tempfile::Builder::new()
                 .prefix("chrono-native-publication-failure-")
@@ -1563,9 +1567,9 @@ else:print(json.dumps(run))
     assert!(generated_workflow.contains("actions: read"));
     copy_tree(&lane.join(seed_directory), &uploads);
     fs::write(&metadata,serde_json::to_vec(&json!({"candidate":h.candidate,"upload":uploads,"workflow":lane.join(".github/workflows/collection.yml")})).unwrap()).unwrap();
-    let unit_root = tempfile::tempdir().unwrap();
+    let unit_root = host::fixture_directory("workflow unit_root λ ");
     assert!(
-        Command::new("git")
+        host::command("git")
             .args(["clone", "--quiet", "--no-hardlinks"])
             .arg(&lane)
             .arg(unit_root.path())
@@ -1628,7 +1632,7 @@ else:print(json.dumps(run))
         seed
     );
     // Capture the current endpoint in the real business environment with acquisition fields absent.
-    let capture = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let capture = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(unit_root.path())
         .env("CHRONO_CHECK_SOURCE", "ci")
         .env("DECLARED_EMPTY", "")
@@ -1655,7 +1659,7 @@ else:print(json.dumps(run))
     );
     // The historical original was captured at its explicit checked-out endpoint.
     git(&lane, &["checkout", "--detach", &h.base]);
-    let base = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let base = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(&lane)
         .env("CHRONO_CHECK_SOURCE", "ci")
         .env("DECLARED_EMPTY", "")
@@ -1681,7 +1685,7 @@ else:print(json.dumps(run))
         String::from_utf8_lossy(&base.stderr)
     );
     git(&lane, &["checkout", "--detach", &h.candidate]);
-    let paired = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let paired = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(unit_root.path())
         .args([
             "pair",
@@ -1755,9 +1759,9 @@ else:print(json.dumps(run))
     )
     .unwrap();
     // A second independent checkout contributes its own genuine endpoint pair and unit run.
-    let second = tempfile::tempdir().unwrap();
+    let second = host::fixture_directory("workflow second λ ");
     assert!(
-        Command::new("git")
+        host::command("git")
             .args(["clone", "--quiet", "--no-hardlinks"])
             .arg(&lane)
             .arg(second.path())
@@ -1781,7 +1785,7 @@ else:print(json.dumps(run))
         seed
     );
     let capture_two = |root: &Path, endpoint: &str, output: &str| {
-        let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        let p = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
             .current_dir(root)
             .env("CHRONO_CHECK_SOURCE", "ci")
             .env("DECLARED_EMPTY", "")
@@ -1811,7 +1815,7 @@ else:print(json.dumps(run))
     git(&lane, &["checkout", "--detach", &h.base]);
     capture_two(&lane, &h.base, ".chrono-harness/state/base-two.json");
     git(&lane, &["checkout", "--detach", &h.candidate]);
-    let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let p = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(second.path())
         .args([
             "pair",
@@ -1832,7 +1836,7 @@ else:print(json.dumps(run))
     let (exit, two) = short(second.path(), &["check", "--unit", "two"], Some("ci"));
     passed(exit, &two);
     let production = |root: &Path, unit: &str| {
-        let out = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+        let out = host::command(root.join(".chrono-harness/bin/chrono-ci"))
             .current_dir(root)
             .env("GITHUB_REPOSITORY", "fixture/native")
             .env("GITHUB_RUN_ID", "900")
@@ -1905,9 +1909,9 @@ else:print(json.dumps(run))
     );
     // A fresh aggregate-only rerun retains original detector/unit production and
     // applies a genuinely later current observation to the same context bytes.
-    let repeated_root = tempfile::tempdir().unwrap();
+    let repeated_root = host::fixture_directory("workflow repeated_root λ ");
     assert!(
-        Command::new("git")
+        host::command("git")
             .args(["clone", "--quiet", "--no-hardlinks"])
             .arg(&lane)
             .arg(repeated_root.path())
@@ -1954,9 +1958,9 @@ else:print(json.dumps(run))
     // Publication's bootstrap supplies the same captured original bytes again;
     // collection above succeeded after the detector's source path was removed.
     fs::write(lane.join(base_original_path), &base_original_raw).unwrap();
-    let delivery_root = tempfile::tempdir().unwrap();
+    let delivery_root = host::fixture_directory("workflow delivery_root λ ");
     assert!(
-        Command::new("git")
+        host::command("git")
             .args(["clone", "--quiet", "--no-hardlinks"])
             .arg(&lane)
             .arg(delivery_root.path())
@@ -2070,7 +2074,7 @@ fn fixture_job_id(unit: &str) -> String {
 // original processes and report bytes; ordinary dedicated-suite runs need no flag.
 fn repair_short(root: &Path, name: &str, args: &[&str]) -> (i32, Value) {
     let root = fs::canonicalize(root).unwrap();
-    let output = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+    let output = host::command(root.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&root)
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT")
@@ -2110,9 +2114,9 @@ fn repair_short(root: &Path, name: &str, args: &[&str]) -> (i32, Value) {
         short_report(&root, args, &output, None),
     )
 }
-fn migration_local_short_lane() -> (Host, tempfile::TempDir, std::path::PathBuf) {
+fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     let mut h = git_facts::bind_host(super::super::migration_host());
-    let tools = tempfile::tempdir().unwrap();
+    let tools = host::fixture_directory("workflow tools λ ");
     let wrapper = fs::canonicalize(tools.path())
         .unwrap()
         .join("python-migration");

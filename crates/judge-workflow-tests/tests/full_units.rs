@@ -470,8 +470,13 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
     manifest(collector.path(), &["one", "two"]);
     let old_one = h.root();
     let old_two = two.path().to_path_buf();
-    fs::remove_dir_all(&old_one).unwrap();
-    fs::remove_dir_all(&old_two).unwrap();
+    let original_source = fs::read(old_one.join("p/src/lib.rs")).unwrap();
+    let retained_one = h.make_checkout_unavailable();
+    two.make_checkout_unavailable().unwrap();
+    assert_eq!(
+        fs::read(retained_one.join("p/src/lib.rs")).unwrap(),
+        original_source
+    );
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     assert!(!old_one.exists() && !old_two.exists());
     let before = marker(tools.path());
@@ -1594,7 +1599,7 @@ fn collection_binds_canonical_runner_resolution_to_original_declaration() {
         passed(e, &r);
     }
     let collector = clone_host(&h);
-    fs::remove_dir_all(h.root()).unwrap();
+    h.make_checkout_unavailable();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     let before = marker(tools.path());
     manifest(collector.path(), &["one", "two"]);
@@ -2065,7 +2070,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
             .unwrap(),
     )
     .unwrap();
-    fs::remove_dir_all(&root).unwrap();
+    h.make_checkout_unavailable();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     for (_, path, _) in &identities {
         fs::remove_file(path).unwrap();
