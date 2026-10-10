@@ -3094,6 +3094,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-ci-tests"
         }
       ]
     },
@@ -4225,6 +4229,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-ci-tests"
         }
       ]
     },
@@ -4992,6 +5000,10 @@
         {
           "kind": "compile",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-ci-tests"
         }
       ]
     },
@@ -8405,6 +8417,11 @@
       "from": "project:worktree",
       "kind": "compile",
       "to": "project:judge-cargo-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-ci-tests"
     }
   ],
   "test_costs": [

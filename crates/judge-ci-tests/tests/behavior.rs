@@ -4,7 +4,8 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use tempfile::TempDir;
+#[path = "../../ci-tests/tests/support/tools.rs"]
+mod tools;
 const CONFIG: &str = ".chrono-harness/ci/check.json";
 #[path = "checkout.rs"]
 mod checkout;
@@ -13,15 +14,12 @@ mod git_facts;
 #[path = "units.rs"]
 mod units;
 struct Host {
-    dir: TempDir,
+    dir: chrono_worktree::TemporaryHost,
 }
 impl Host {
     fn new() -> Self {
         let h = Self {
-            dir: tempfile::Builder::new()
-                .prefix("judge host ")
-                .tempdir()
-                .unwrap(),
+            dir: tools::temporary_host("judge host λ "),
         };
         h.git(&["init", "-q"]);
         h.git(&["config", "user.email", "test@example.invalid"]);
@@ -73,7 +71,7 @@ impl Host {
         fs::write(p, text).unwrap();
     }
     fn json(&self, p: &str, v: &Value) {
-        self.write(p, &serde_json::to_string_pretty(v).unwrap())
+        self.write(p, &serde_json::to_string(v).unwrap())
     }
     fn read(&self, p: &str) -> Value {
         serde_json::from_slice(&fs::read(self.root().join(p)).unwrap()).unwrap()
@@ -101,7 +99,26 @@ impl Host {
         }
     }
     fn check(&self, b: &str, c: &str) -> Response {
-        judge(&self.request(Some(b), c))
+        let request = self.request(Some(b), c);
+        let state = self.root().join(".chrono-harness/state/judge-observations");
+        fs::create_dir_all(&state).unwrap();
+        let observation = tempfile::Builder::new()
+            .prefix("evaluation-")
+            .tempdir_in(state)
+            .unwrap()
+            .keep();
+        fs::write(
+            observation.join("request.json"),
+            serde_json::to_vec(&request).unwrap(),
+        )
+        .unwrap();
+        let result = judge(&request);
+        fs::write(
+            observation.join("response.json"),
+            serde_json::to_vec(&result).unwrap(),
+        )
+        .unwrap();
+        result
     }
     fn change_registry(&self, p: &str, f: impl FnOnce(&mut Value)) {
         let mut v = self.read(p);

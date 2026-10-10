@@ -1339,6 +1339,11 @@ binds both actual Cargo Commands, with outputs below `.chrono-harness/state/carg
 Anonymous tempfile handles used solely as kernel test leases have no named output
 to recover. Explicit retained failure-file publishers keep their existing evidence
 directories and are not disposable temporary allocations.
+The CI judge fixture also consumes the existing CI temporary-host adapter. Its
+source and pre-evaluation request survive interruption; a returned response is
+retained before assertions. Compact fixture JSON keeps the actual selected
+Git output fault inside its original 4096-byte bound. This is fixture adoption,
+not a claim that arbitrary native process streams have been captured.
 
 `source_roots` declares allocation-relative Git roots (`.` means the allocation).
 Before each removal the same owner checks the actual declared root's HEAD and
@@ -1346,8 +1351,9 @@ index; absent roots cannot silently resolve to the coordinator or a parent Git
 repository. Worktree fixtures declare their main and linked roots, migration
 fixtures declare their checkout root. The CI Cargo receipt fixture has no Git
 repository and retains its source outside the selected target paths. No nested
-repository discovery supplies custody. Absent selected outputs require no Git
-tree acquisition and produce ordinary already-absent disposal observations.
+repository discovery supplies custody. An entirely absent selected output set
+requires no Git tree acquisition or disposal publication: the read-only
+`already-absent` observation leaves intent, outcome and registration unchanged.
 
 The live Cargo-output regression joins its bounded build before observing a
 separate native installation/test/cache consumer. Its original failure had a

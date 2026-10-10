@@ -980,12 +980,7 @@ impl ProducerPolicy {
             } else if object.disposed {
                 row["status"] = value!("already-disposed");
             } else {
-                if object.cache_lease.is_some() {
-                    // The exact allocation EX lease excludes reference acquisition;
-                    // unrelated allocations may publish while this cache is checked.
-                    drop(store.take());
-                }
-                let mut run = || -> Result<Value, String> {
+                let mut run = || -> Result<Option<Value>, String> {
                     Store::stable_in(&directory, &self.id, &registry_id, object)?;
                     let prospective: Vec<String> = if object.cache_lease.is_some() {
                         if !self.temporary {
@@ -1008,6 +1003,31 @@ impl ProducerPolicy {
                         .any(|p| !self.generated_outputs.contains(p))
                     {
                         return Err("producer output is not in the current exact whitelist".into());
+                    }
+                    if object.cache_lease.is_some() {
+                        let mut absent = true;
+                        for output in &prospective {
+                            let path = no_symlink_parents(
+                                &directory.join(&object.path),
+                                output.trim_end_matches('/'),
+                            )?;
+                            match fs::symlink_metadata(path) {
+                                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+                                Err(error) => return Err(error.to_string()),
+                                Ok(_) => absent = false,
+                            }
+                        }
+                        if absent {
+                            // No producer state or success publication is needed for
+                            // a complete, excluded output set that is actually absent.
+                            // Keep the short registry read transaction for the next
+                            // observation instead of reloading it for each empty row.
+                            row["absent_outputs"] = value!(prospective);
+                            return Ok(None);
+                        }
+                        // The exact allocation EX lease excludes reference acquisition;
+                        // unrelated allocations may publish during source checks/removal.
+                        drop(store.take());
                     }
                     let names: Vec<_> = prospective
                         .iter()
@@ -1076,10 +1096,11 @@ impl ProducerPolicy {
                     let receipt =
                         Store::receipt_in(&directory, "producer-cleanup-result", &attempt)?;
                     attempt["receipt"] = value!(receipt);
-                    Ok(attempt)
+                    Ok(Some(attempt))
                 };
                 match run() {
-                    Ok(attempt) => {
+                    Ok(None) => row["status"] = value!("already-absent"),
+                    Ok(Some(attempt)) => {
                         if store.is_none() {
                             store = Some(Store::open(&directory, &self.id, false)?);
                         }
@@ -1118,7 +1139,10 @@ impl ProducerPolicy {
                     }
                 }
             }
-            if object.cache_lease.is_some() {
+            if object.cache_lease.is_some()
+                && row["status"] != "already-absent"
+                && row["status"] != "already-disposed"
+            {
                 drop(store.take());
             }
             report["producer_objects"].as_array_mut().unwrap().push(row);
