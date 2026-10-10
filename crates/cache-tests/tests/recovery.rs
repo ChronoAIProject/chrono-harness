@@ -541,7 +541,18 @@ fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
     .unwrap();
     let socket_root = tempfile::tempdir().unwrap();
     let socket_path = socket_root.path().join("socket");
-    let _socket = std::os::unix::net::UnixListener::bind(&socket_path).unwrap();
+    // The actual special-file fixture must work under the adopted absolute
+    // TMPDIR, even when that root exceeds the kernel socket-address limit.
+    // Bind a short relative address in an explicitly rooted Rust child; the
+    // test process never changes its cwd or its allocation environment.
+    let bound = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-cache-test-probe"))
+        .current_dir(socket_root.path())
+        .arg("socket")
+        .output()
+        .unwrap();
+    assert!(bound.status.success(), "native socket fixture: {bound:?}");
+    use std::os::unix::fs::FileTypeExt;
+    assert!(fs::metadata(&socket_path).unwrap().file_type().is_socket());
     fs::rename(socket_path, root.path().join("out/socket")).unwrap();
     let steps = json!({"cache_0_restore":{"outcome":"failure"}});
     let failed = recover(root.path(), &steps);
