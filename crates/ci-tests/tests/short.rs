@@ -77,7 +77,7 @@ for prefix,code,timeout,expected in [
    assert (root/failed['stderr']['path']).read_bytes()==b'real failure'
  else:raise AssertionError('accepted original child failure: '+prefix)
 "#;
-    let output = Command::new(&python)
+    let output = crate::tools::command(&python)
         .current_dir(&root)
         .args(["-c", driver])
         .output()
@@ -119,9 +119,13 @@ impl ShortHost {
             &["remote", "set-url", "origin", remote.to_str().unwrap()],
         );
         let git_bin = fixture_git();
-        let version = Command::new(&git_bin).arg("--version").output().unwrap();
+        let version = crate::tools::command(&git_bin)
+            .arg("--version")
+            .output()
+            .unwrap();
         let native = json!({"operation":"prepare.check.ci","tool":"chrono-ci","argv":["check-inputs","--config",".chrono-harness/ci/units.json","--event-env","GITHUB_EVENT_NAME","--payload-env","GITHUB_EVENT_PATH","--revision-env","CHRONO_WORKFLOW_REVISION","--repository-env","GITHUB_REPOSITORY"]});
-        let cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"sh","program":"/bin/sh","resolution":"PATH-once","version_argv":["-c","printf shell"],"expected_version":"shell"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
+        let mut cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"sh","program":"/bin/sh","resolution":"PATH-once","version_argv":["-c","printf shell"],"expected_version":"shell"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
+        cfg["environment"]["values"]["TMPDIR"] = json!(dir.path());
         json_file(&root, ".chrono-harness/config.json", &cfg);
         json_file(
             &root,
@@ -138,7 +142,7 @@ impl ShortHost {
         json_file(
             &root,
             ".chrono-harness/worktree.json",
-            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["PATH","HOME"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":15,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}}}),
+            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["PATH","HOME"],"values":{"TMPDIR":dir.path(),"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":15,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}}}),
         );
         let mut projects: Value =
             serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
@@ -207,7 +211,7 @@ impl ShortHost {
         }
     }
     fn command(&self, args: &[&str]) -> Command {
-        let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
+        let mut c = crate::tools::command(self.root.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&self.root)
             .env_remove(prepared::SOURCE)
             .args(args);
@@ -937,7 +941,7 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         .find(|l| l.contains("'check' '--unit' 'alpha'"))
         .unwrap()
         .trim();
-    let out = Command::new("/bin/bash")
+    let out = crate::tools::command("/bin/bash")
         .current_dir(&h.root)
         .args(["-c", line])
         .env(prepared::SOURCE, "ci")
@@ -1098,7 +1102,7 @@ fn configured_selector_resolves_v4_without_legacy_git_and_has_no_platform_fallba
 }
 fn adjudicate(h: &ShortHost, req: &Value) -> Value {
     use std::io::Write;
-    let mut child = Command::new(h.root.join(".chrono-harness/bin/chrono-judge-ci"))
+    let mut child = crate::tools::command(h.root.join(".chrono-harness/bin/chrono-judge-ci"))
         .current_dir(&h.root)
         .env_remove(prepared::SOURCE)
         .stdin(std::process::Stdio::piped())
@@ -1344,7 +1348,7 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         .unwrap()
         .trim();
     for _ in 0..2 {
-        let out = Command::new("/bin/bash")
+        let out = crate::tools::command("/bin/bash")
             .current_dir(&h.root)
             .args(["-c", line])
             .env(prepared::SOURCE, "ci")
@@ -1524,7 +1528,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     let mut h = ShortHost::new();
     let real_git = fixture_git();
     let wrapper = h.root.join(".chrono-harness/bin/declared-git");
-    let copied = Command::new("/bin/cp")
+    let copied = crate::tools::command("/bin/cp")
         .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
         .arg(&wrapper)
         .output()
@@ -1540,13 +1544,13 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     );
     // Finish the copied fixture's actual Git protocol before measuring the
     // registered check with absent and declared SSH agent inputs.
-    let ready = Command::new(&wrapper)
+    let ready = crate::tools::command(&wrapper)
         .arg("--version")
         .current_dir(&h.root)
         .env_clear()
         .output()
         .unwrap();
-    let expected = Command::new(&real_git)
+    let expected = crate::tools::command(&real_git)
         .arg("--version")
         .env_clear()
         .output()
@@ -1724,7 +1728,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     install_mock_transport(&consumer, "success", &h.candidate);
     json_file(&consumer, ".chrono-harness/state/event.json", &payload);
     let command = || {
-        let mut c = Command::new(consumer.join(".chrono-harness/bin/chrono-harness"));
+        let mut c = crate::tools::command(consumer.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&consumer)
             .args(["check", "--collect"])
             .env(prepared::SOURCE, "ci")
@@ -1772,7 +1776,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     .unwrap();
     {
         use std::io::Write;
-        let mut judge = Command::new(consumer.join(".chrono-harness/bin/chrono-judge-ci"))
+        let mut judge = crate::tools::command(consumer.join(".chrono-harness/bin/chrono-judge-ci"))
             .current_dir(&consumer)
             .env(prepared::SOURCE, "ci")
             .stdin(std::process::Stdio::piped())
@@ -1939,7 +1943,7 @@ fn script(root: &Path, path: &str, body: &str) {
 
 fn native_transport_ready(root: &Path) -> &'static str {
     let program = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
-    let output = Command::new(program)
+    let output = crate::tools::command(program)
         .arg("--version")
         .current_dir(root)
         .output()

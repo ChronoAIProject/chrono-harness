@@ -31,7 +31,7 @@ impl Host {
     }
     fn crash(&self, args: &[&str], stage: &str) {
         fs::write(self.parent.join("interrupt-stage"), stage).unwrap();
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())

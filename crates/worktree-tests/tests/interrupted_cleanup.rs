@@ -193,7 +193,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         let target = h.parent.join("console");
         assert_eq!(h.invoke("feature", "console", &target).0, 0);
         install_inner(&target, "original stdout\n", "original diagnostic\n", exit);
-        let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        let out = native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
             .output()
@@ -203,7 +203,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert_eq!(out.stderr, b"original diagnostic\n");
         assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
         let (_, owner, _) = h.received(
-            Command::new(target.join(".chrono-harness/bin/chrono-worktree"))
+            native_command(target.join(".chrono-harness/bin/chrono-worktree"))
                 .current_dir(&target)
                 .args(["check", "--config", POLICY])
                 .output()
@@ -220,7 +220,7 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         );
         // Target policy failure is a lifecycle refusal, distinct from diagnostics.
         fs::write(target.join(AUTO_POLICY), "ordinary policy edit").unwrap();
-        let refused = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        let refused = native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .arg("check")
             .output()
@@ -258,7 +258,7 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
         "original warning\n",
         0,
     );
-    let out = Command::new(h.root.join(".chrono-harness/bin/chrono-harness"))
+    let out = native_command(h.root.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&h.root)
         .args(["check", "--collect"])
         .output()
@@ -332,7 +332,7 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     );
     assert_eq!(code, 0, "{used} {error}");
     assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
-    let checked = Command::new(b.join(".chrono-harness/bin/chrono-harness"))
+    let checked = native_command(b.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&b)
         .arg("check")
         .output()
@@ -414,7 +414,7 @@ fn successful_use_without_finish_reclaims_caches_and_preserves_active_work() {
 struct OwnedGroup(String);
 impl Drop for OwnedGroup {
     fn drop(&mut self) {
-        let _ = Command::new("/bin/kill")
+        let _ = native_command("/bin/kill")
             .args(["-KILL", "--", &format!("-{}", self.0)])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -522,7 +522,7 @@ impl CapturedChild {
             }
             #[cfg(target_os = "macos")]
             {
-                let observe = |program: &str, args: &[&str]| match Command::new(program)
+                let observe = |program: &str, args: &[&str]| match native_command(program)
                     .args(args)
                     .output()
                 {
@@ -590,7 +590,7 @@ impl CapturedChild {
                     if path.exists() {
                         continue;
                     }
-                    let sampled = Command::new("/usr/bin/sample")
+                    let sampled = native_command("/usr/bin/sample")
                         .args([&pid, "1", "10", "-file"])
                         .arg(&path)
                         .output();
@@ -1072,7 +1072,7 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
     let target = h.parent.join("unsealed");
     let interrupted = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree")).args([
+        native_command(source().join("crates/worktree/target/debug/chrono-worktree")).args([
             "start",
             "--host-root",
             h.root.to_str().unwrap(),
@@ -1294,7 +1294,7 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
     let mut start = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .args([
@@ -1461,7 +1461,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         ).unwrap();
     }
     let mut check = CapturedChild::spawn(
-        Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .env("CHRONO_CHECK_SOURCE", "local")
             .arg("check"),
@@ -1563,7 +1563,7 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         vec!["check", "--unit", "missing"],
         vec!["check", "--collect"],
     ] {
-        let out = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+        let out = native_command(target.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&target)
             .env("CHRONO_CHECK_SOURCE", "local")
             .args(args)
@@ -1597,7 +1597,7 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
             fs::create_dir_all(destination.parent().unwrap()).unwrap();
             fs::copy(source().join(path), destination).unwrap();
         }
-        let loaded = Command::new("/usr/bin/python3")
+        let loaded = native_command("/usr/bin/python3")
             .args([
                 "-c",
                 "import runpy,sys; sys.dont_write_bytecode=False; sys.pycache_prefix=None; runpy.run_path(sys.argv[1],run_name='consumer')",
@@ -1727,7 +1727,7 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
         owner.kill().unwrap();
         owner.wait().unwrap();
         assert!(
-            Command::new("/bin/kill")
+            native_command("/bin/kill")
                 .args(["-KILL", &python])
                 .status()
                 .unwrap()
@@ -1794,7 +1794,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     owner.kill().unwrap();
     owner.wait().unwrap();
     assert!(
-        Command::new("/bin/kill")
+        native_command("/bin/kill")
             .args(["-KILL", &cargo])
             .status()
             .unwrap()
@@ -1890,7 +1890,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     )
     .unwrap();
     let mut child = CapturedChild::spawn(
-        Command::new("/usr/bin/python3")
+        native_command("/usr/bin/python3")
             .current_dir(&target)
             .env("PATH", &path)
             .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path]),
@@ -1936,7 +1936,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert_eq!(h.ledger()["entries"][0]["uses"], value!([]));
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
     install_inner(&target, "canonical-linked-check", "", 0);
-    let checked = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+    let checked = native_command(target.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&target)
         .arg("check")
         .output()
@@ -1959,7 +1959,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     )
     .unwrap();
     commit(&target);
-    let refused = Command::new("/usr/bin/python3")
+    let refused = native_command("/usr/bin/python3")
         .current_dir(&target)
         .env("PATH", &path)
         .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
@@ -2006,7 +2006,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     .unwrap();
     commit(&h.root);
     output(&target);
-    let refused_check = Command::new(target.join(".chrono-harness/bin/chrono-harness"))
+    let refused_check = native_command(target.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&target)
         .arg("check")
         .output()
@@ -2017,7 +2017,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
             .contains("coordinator policy/configuration identity mismatch")
     );
     fs::remove_file(target.join(".chrono-harness/state/bootstrap-holder")).unwrap();
-    let refused_bootstrap = Command::new("/usr/bin/python3")
+    let refused_bootstrap = native_command("/usr/bin/python3")
         .current_dir(&target)
         .args([".chrono-harness/ci/bootstrap.py", ".", cfg_path])
         .output()

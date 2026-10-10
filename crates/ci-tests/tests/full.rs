@@ -32,11 +32,13 @@ fn context(h: &Host, base: &str) -> Vec<u8> {
     format!(" {{\n\t\"schema_version\": 2, \"run_kind\": \"integration\", \"base\": \"{base}\", \"candidate\": \"{}\",\n\"branch_started_at\": \"2001-02-03T04:05:06Z\", \"note\": \"λ $HOME `literal`\" }}\n",h.candidate).into_bytes()
 }
 fn cli(root: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"))
-        .current_dir(root)
-        .args(args)
-        .output()
-        .unwrap()
+    crate::tools::command(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"),
+    )
+    .current_dir(root)
+    .args(args)
+    .output()
+    .unwrap()
 }
 fn prepare_cli(h: &Host, bytes: &[u8], event: &str) -> std::process::Output {
     prepare_cli_from(h, SOURCE, bytes, event)
@@ -273,7 +275,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
     );
     c.check_config = ".chrono-harness/'$HOME`literal`.json".into();
     let yaml = full::render(&c, SOURCE).unwrap();
-    let out = Command::new("/bin/bash")
+    let out = crate::tools::command("/bin/bash")
         .current_dir(root)
         .env("PATH", root)
         .env("CHRONO_TEST_RECORDING", "full")
@@ -312,7 +314,7 @@ fn generated_preparation_step_keeps_original_failure_in_artifacts() {
         &json!({"inputs":{"context":"{}"}}),
     );
     let run = || {
-        Command::new("/bin/bash")
+        crate::tools::command("/bin/bash")
             .current_dir(&h.root)
             .env("GITHUB_EVENT_NAME", "workflow_dispatch")
             .env("GITHUB_EVENT_PATH", &payload)

@@ -69,7 +69,7 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
         c.runner = "$CHRONO_BASE".into();
         executable_alias(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), root.join(&c.runner));
         let yaml = full::render(&c, SOURCE).unwrap();
-        let out = Command::new("/bin/bash").current_dir(root).env("PATH", root)
+        let out = crate::tools::command("/bin/bash").current_dir(root).env("PATH", root)
             .env("CHRONO_TEST_RECORDING", "scope")
             .env("CHRONO_BASE", "base fixed").env("CHRONO_CANDIDATE", "candidate fixed")
             .args(["-e", "-c", &script(&yaml, "Canonical full harness check")]).output().unwrap();
@@ -316,28 +316,30 @@ fn scoped_prepare_cli(h: &Host, path: &str, bytes: &[u8], extra: &[&str]) -> std
     );
     let output = h.root.join(".chrono-harness/state/github-output");
     fs::write(&output, "").unwrap();
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"))
-        .current_dir(h.root.parent().unwrap())
-        .env("PATH", &h.shadow)
-        .env("CHRONO_EVENT_AMBIENT", "ambient")
-        .args([
-            "prepare",
-            "--host-root",
-            h.root.file_name().unwrap().to_str().unwrap(),
-            "--config",
-            path,
-            "--event",
-            "workflow_dispatch",
-            "--payload",
-            payload.to_str().unwrap(),
-            "--workflow-revision",
-            &h.candidate,
-            "--github-output",
-            output.to_str().unwrap(),
-        ])
-        .args(extra)
-        .output()
-        .unwrap()
+    crate::tools::command(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"),
+    )
+    .current_dir(h.root.parent().unwrap())
+    .env("PATH", &h.shadow)
+    .env("CHRONO_EVENT_AMBIENT", "ambient")
+    .args([
+        "prepare",
+        "--host-root",
+        h.root.file_name().unwrap().to_str().unwrap(),
+        "--config",
+        path,
+        "--event",
+        "workflow_dispatch",
+        "--payload",
+        payload.to_str().unwrap(),
+        "--workflow-revision",
+        &h.candidate,
+        "--github-output",
+        output.to_str().unwrap(),
+    ])
+    .args(extra)
+    .output()
+    .unwrap()
 }
 
 #[test]

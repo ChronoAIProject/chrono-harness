@@ -9,6 +9,9 @@ pub(super) struct ProducerPolicy {
     pub(super) generated_outputs: Vec<String>,
     #[serde(default)]
     pub(super) temporary: bool,
+    /// Exact Git roots within each allocation; no nested repository discovery.
+    #[serde(default)]
+    pub(super) source_roots: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -749,6 +752,72 @@ impl ProducerPolicy {
             return Err("producer requires a distinct explicit retained evidence directory".into());
         }
         generated_paths(&self.generated_outputs)?;
+        let mut roots = BTreeSet::new();
+        for root in &self.source_roots {
+            if root != "." {
+                relative_path(root.trim_end_matches('/'))?;
+                if !root.ends_with('/') {
+                    return Err("producer source root requires a literal directory".into());
+                }
+            }
+            if !roots.insert(root) {
+                return Err("duplicate producer source root".into());
+            }
+        }
+        Ok(())
+    }
+
+    fn protect_sources(
+        &self,
+        r: &mut Runner,
+        allocation: &Path,
+        outputs: &[String],
+    ) -> Result<(), String> {
+        for declared in &self.source_roots {
+            let names: Vec<_> = outputs
+                .iter()
+                .filter_map(|p| {
+                    if declared == "." {
+                        Some(p.clone())
+                    } else {
+                        p.strip_prefix(declared).map(str::to_owned)
+                    }
+                })
+                .filter(|p| {
+                    allocation
+                        .join(if declared == "." { "" } else { declared })
+                        .join(p)
+                        .exists()
+                })
+                .collect();
+            if names.is_empty() {
+                continue;
+            }
+            let root = if declared == "." {
+                allocation.to_owned()
+            } else {
+                no_symlink_parents(allocation, declared.trim_end_matches('/'))?
+            };
+            // A missing nested repository must not fall through to a parent Git
+            // root. Only the explicit native consumer's root supplies source facts.
+            if !root.join(".git").exists() {
+                return Err(format!(
+                    "declared producer source root is unavailable: {declared}"
+                ));
+            }
+            let observed = PathBuf::from(
+                String::from_utf8(r.git(&root, &["rev-parse", "--show-toplevel"])?)
+                    .map_err(|e| e.to_string())?
+                    .trim(),
+            );
+            if fs::canonicalize(&observed).map_err(|e| e.to_string())?
+                != fs::canonicalize(&root).map_err(|e| e.to_string())?
+            {
+                return Err("producer source root identity differs".into());
+            }
+            let head = r.oid(&root, "HEAD")?;
+            artifact_disposal::paths(r, &root, &head, &names)?;
+        }
         Ok(())
     }
 
@@ -817,7 +886,9 @@ impl ProducerPolicy {
                         .iter()
                         .map(|p| format!("{}{}/{p}", self.directory, object.path))
                         .collect();
-                    let head = if names.is_empty() {
+                    let allocation = directory.join(&object.path);
+                    self.protect_sources(r, &allocation, &prospective)?;
+                    let head = if names.iter().all(|p| !root.join(p).exists()) {
                         None
                     } else {
                         Some(r.oid(root, "HEAD")?)
@@ -825,7 +896,10 @@ impl ProducerPolicy {
                     let paths = if let Some(head) = &head {
                         artifact_disposal::paths(r, root, head, &names)?
                     } else {
-                        vec![]
+                        names
+                            .iter()
+                            .map(|p| no_symlink_parents(root, p.trim_end_matches('/')))
+                            .collect::<Result<Vec<_>, _>>()?
                     };
                     let intent = store.receipt("producer-cleanup-intent", &value!({
                         "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
@@ -845,6 +919,7 @@ impl ProducerPolicy {
                             if let Some(head) = &head {
                                 artifact_disposal::paths(r, root, head, &names)?;
                             }
+                            self.protect_sources(r, &allocation, &prospective)?;
                             for (path, expected) in &object.generated {
                                 let physical = no_symlink_parents(
                                     &directory.join(&object.path),

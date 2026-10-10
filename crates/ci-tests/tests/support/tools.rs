@@ -1,6 +1,13 @@
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// Actual native fixture routes forward the scopes already held by their host.
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    command
+}
+
 pub fn fixture_git() -> PathBuf {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let registry = source.join(".chrono-harness/tests/ci-tools.json");

@@ -17,7 +17,7 @@ fn write(p: &Path, c: &Config) {
     fs::write(p, serde_json::to_vec_pretty(c).unwrap()).unwrap();
 }
 fn git(p: &Path, args: &[&str]) -> String {
-    let o = Command::new(fixture_git())
+    let o = crate::tools::command(fixture_git())
         .args(args)
         .current_dir(p)
         .output()
@@ -324,7 +324,7 @@ fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_
     let advanced = git(writer.path(), &["rev-parse", "HEAD"]);
     git(writer.path(), &["push", "-q", "origin", "stable"]);
     assert!(
-        !Command::new(fixture_git())
+        !crate::tools::command(fixture_git())
             .current_dir(d.path())
             .args(["cat-file", "-e", &advanced])
             .output()
@@ -606,7 +606,7 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
     let owner = retained_receipts::Owner::new();
     let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
     assert_eq!(argv[1], "check");
-    let output = Command::new(root.join(&argv[0]))
+    let output = crate::tools::command(root.join(&argv[0]))
         .args(&argv[1..])
         .current_dir(root)
         .output()
@@ -932,7 +932,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         .clone();
     // This synthetic host adopts its actual interpreter. The product host's fixed
     // interpreter pin is checked by the separately registered host migration tests.
-    let observed = Command::new(tool["program"].as_str().unwrap())
+    let observed = crate::tools::command(tool["program"].as_str().unwrap())
         .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
         .env_clear()
         .output()
@@ -944,7 +944,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     fs::write(&shadow, "#!/bin/sh\nprintf 'Python shadowed\\n'\nexit 0\n").unwrap();
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(&shadow, fs::Permissions::from_mode(0o755)).unwrap();
-    let control = Command::new("python3")
+    let control = crate::tools::command("python3")
         .env_clear()
         .env("PATH", dir.path())
         .arg("--version")
@@ -952,7 +952,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         .unwrap();
     assert!(control.status.success());
     assert_eq!(control.stdout, b"Python shadowed\n");
-    let actual = Command::new(tool["program"].as_str().unwrap())
+    let actual = crate::tools::command(tool["program"].as_str().unwrap())
         .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
         .env_clear()
         .env("PATH", dir.path())

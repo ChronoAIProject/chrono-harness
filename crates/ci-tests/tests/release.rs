@@ -2,7 +2,7 @@ use chrono_ci::{generate, init, release};
 #[path = "support/tools.rs"]
 mod tools;
 use serde_json::{Value, json};
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path};
 
 fn config() -> Value {
     json!({
@@ -30,7 +30,7 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
         .parent()
         .unwrap();
-    Command::new(host.join("crates/ci/target/debug/chrono-ci"))
+    crate::tools::command(host.join("crates/ci/target/debug/chrono-ci"))
         .args(args)
         .current_dir(root)
         .output()
@@ -85,7 +85,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
         String::from_utf8_lossy(&out.stderr)
     );
     let workflow = fs::read_to_string(root.join(".github/workflows/package.yml")).unwrap();
-    let run = Command::new("/bin/bash")
+    let run = crate::tools::command("/bin/bash")
         .args(["-e", "-c", &script(&workflow)])
         .current_dir(root)
         .output()
@@ -405,7 +405,7 @@ fn release_units_cli_runs_non_rust_literal_command_and_writes_original_dependenc
         .unwrap();
     let command = script(command);
     let original = r#"{"native":{"result":"failure","outputs":{"artifact_id":"123","attempt":"1","run_id":"45"}}}"#;
-    let result = Command::new("/bin/bash")
+    let result = crate::tools::command("/bin/bash")
         .args(["-e", "-c", &command])
         .env("CHRONO_RELEASE_DEPENDENCIES", original)
         .current_dir(root)
@@ -485,7 +485,7 @@ fn release_single_id_download_extracts_receipt_at_the_registered_root() {
     // This models the exact pinned action's extraction contract, including its
     // default-false negative control. A single artifact ID is NOT a name download.
     // https://github.com/actions/download-artifact/blob/d3f86a106a0bac45b974a628896c90dbdf5c8093/src/download-artifact.ts
-    let out = Command::new("/usr/bin/python3")
+    let out = crate::tools::command("/usr/bin/python3")
         .args(["-c", r#"
 import io, pathlib, sys, zipfile
 root = pathlib.Path(sys.argv[1]); workflow = (root/'workflow.yml').read_text()

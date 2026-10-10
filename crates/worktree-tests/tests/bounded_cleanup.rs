@@ -254,9 +254,16 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
     for stage in ["installation", "test", "cache-save"] {
         let h = cargo_host();
         cargo_plan(&h.root, Some(stage));
+        let path = h.root.join(".chrono-harness/state/cargo-plan.json");
+        let mut plan = json(&fs::read(&path).unwrap()).unwrap();
+        plan["detached_consumer"] = value!(true);
+        fs::write(path, serde_json::to_vec(&plan).unwrap()).unwrap();
         let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
         let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
         child.await_managed_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
+        // Join the actual bounded build. Liveness now belongs to the independent
+        // native consumer, rather than a stale marker left by a timed-out build.
+        assert!(child.wait_with_output().unwrap().status.success());
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
         assert!(maintained.to_string().contains("live registered consumers"));
@@ -268,8 +275,18 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
             "joined",
         )
         .unwrap();
-        assert!(child.wait_with_output().unwrap().status.success());
-        assert_eq!(h.auto("finish", &[]).0, 0);
+        await_file(&h.root.join(format!(".chrono-harness/state/{stage}-done")));
+        let began = std::time::Instant::now();
+        loop {
+            if h.auto("finish", &[]).0 == 0 {
+                break;
+            }
+            assert!(
+                began.elapsed().as_secs() < 10,
+                "native consumer did not actually release its lease"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert!(!h.root.join("independent/tests/target").exists());
         if stage == "installation" {
             assert!(

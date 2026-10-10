@@ -417,7 +417,8 @@ fn cargo_result(
     fs::write(dir.path().join(".chrono-harness/config.json"), serde_json::to_vec(&json!({
         "artifacts":(["producer","tests"].iter().map(|p| json!({"path":format!(".chrono-harness/state/cargo/{p}/target/"),"tracked":false})).collect::<Vec<_>>())
     })).unwrap()).unwrap();
-    let build = Command::new("cargo")
+    let mut build = crate::tools::command("cargo");
+    build
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
         .args([
@@ -426,9 +427,9 @@ fn cargo_result(
             "--offline",
             "--manifest-path",
             ".chrono-harness/state/cargo/producer/Cargo.toml",
-        ])
-        .output()
-        .unwrap();
+        ]);
+    dir.bind_command(&mut build).unwrap();
+    let build = build.output().unwrap();
     assert!(build.status.success(), "{build:?}");
     if fail {
         let input = dir
@@ -452,12 +453,13 @@ fn cargo_result(
         "--manifest-path".into(),
         ".chrono-harness/state/cargo/tests/Cargo.toml".into(),
     ];
-    let output = Command::new(&argv[0])
+    let mut command = crate::tools::command(&argv[0]);
+    command
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
-        .args(&argv[1..])
-        .output()
-        .unwrap();
+        .args(&argv[1..]);
+    dir.bind_command(&mut command).unwrap();
+    let output = command.output().unwrap();
     assert_eq!(
         output.status.code(),
         Some(if fail { 101 } else { 0 }),

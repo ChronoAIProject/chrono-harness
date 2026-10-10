@@ -3,7 +3,7 @@ use chrono_harness::prepared::{self, InputRequest, PreparedCheck, Selection};
 
 pub(super) fn bind(h: &Host) {
     let git_bin = fixture_git();
-    let version = Command::new(&git_bin).arg("--version").output().unwrap();
+    let version = native_command(&git_bin).arg("--version").output().unwrap();
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     cfg["schema_version"] = value!(4);
     cfg["facts_git"] = value!({"tool":"git","input":"git-bytes"});
@@ -53,7 +53,7 @@ pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str
     install_readonly_file(root, &built, name, format!("{name} 0.1.0\n").as_bytes());
 }
 pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
-    let ready = Command::new(program)
+    let ready = native_command(program)
         .current_dir(root)
         .env_clear()
         .arg("--version")
@@ -78,7 +78,7 @@ pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, versi
     );
     // Each host owns its executable identity. A joined child owns writable
     // descriptors, so concurrent test forks cannot inherit writable executables.
-    let copied = Command::new("/bin/cp")
+    let copied = native_command("/bin/cp")
         .arg(built)
         .arg(&installed)
         .output()
@@ -112,7 +112,7 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     assert_eq!(fs::read(&first_path).unwrap(), fs::read(built).unwrap());
     assert_eq!(fs::read(&second_path).unwrap(), fs::read(built).unwrap());
     drop(first);
-    let output = Command::new(&second_path)
+    let output = native_command(&second_path)
         .arg("--version")
         .output()
         .unwrap();
@@ -143,7 +143,7 @@ fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
         native_artifacts: None,
         prepared: None,
     };
-    let mut c = Command::new(root.join(".chrono-harness/bin/chrono-worktree"));
+    let mut c = native_command(root.join(".chrono-harness/bin/chrono-worktree"));
     c.current_dir(root)
         .env(prepared::SOURCE, "local")
         .args(["check-inputs", "--config", POLICY])
@@ -172,7 +172,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     // child with an explicit local selector so no test-global environment is
     // mutated while other tests execute.
     if std::env::var(prepared::SOURCE).as_deref() == Ok("ci") {
-        let status = Command::new(std::env::current_exe().unwrap())
+        let status = native_command(std::env::current_exe().unwrap())
             .args([
                 "--exact",
                 "check_inputs::creation_publishes_exact_birth_and_full_short_check_uses_original_fork",
@@ -196,7 +196,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     assert_eq!(json(&birth_bytes).unwrap(), birth);
     fs::write(dest.join("anything/data.txt"), "changed").unwrap();
     commit(&dest);
-    let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+    let out = native_command(dest.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&dest)
         .env(prepared::SOURCE, "local")
         .arg("check")
@@ -273,7 +273,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     );
     // Identical bytes at another path do not replace the original producer binding.
     for scope in [vec!["check", "--unit", "any"], vec!["check", "--collect"]] {
-        let rejected = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+        let rejected = native_command(dest.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&dest)
             .env(prepared::SOURCE, "local")
             .args(scope)
@@ -291,7 +291,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
             .unwrap_err()
             .contains("actual check context")
     );
-    let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+    let out = native_command(dest.join(".chrono-harness/bin/chrono-harness"))
         .current_dir(&dest)
         .env(prepared::SOURCE, "local")
         .arg("check")
@@ -429,7 +429,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         h.root.join(".chrono-harness/bin/chrono-ci"),
     )
     .unwrap();
-    let output = Command::new(h.root.join(".chrono-harness/bin/chrono-ci"))
+    let output = native_command(h.root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(&h.root)
         .args([
             "generate",
@@ -491,7 +491,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .find(|l| l.contains("'check'"))
         .unwrap()
         .trim();
-    let o = Command::new("/bin/bash")
+    let o = native_command("/bin/bash")
         .current_dir(&dest)
         .args(["-c", line])
         .env(prepared::SOURCE, "ci")
@@ -547,7 +547,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .unwrap(),
     )
     .unwrap();
-    let repeated = Command::new("/bin/bash")
+    let repeated = native_command("/bin/bash")
         .current_dir(&dest)
         .args(["-c", line])
         .env(prepared::SOURCE, "ci")
@@ -707,7 +707,7 @@ fn full_short_console_projects_warnings_failures_transport_and_blocked_from_orig
         let (code, _, error) = h.invoke("integration", case, &dest);
         assert_eq!(code, 0, "{error}");
         install(&dest);
-        let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+        let out = native_command(dest.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&dest)
             .env(prepared::SOURCE, "local")
             .arg("check")
@@ -798,7 +798,7 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
         let (code, _, error) = h.invoke("integration", "outer", &dest);
         assert_eq!(code, 0, "{error}");
         install(&dest);
-        let out = Command::new(dest.join(".chrono-harness/bin/chrono-harness"))
+        let out = native_command(dest.join(".chrono-harness/bin/chrono-harness"))
             .current_dir(&dest)
             .env(prepared::SOURCE, "local")
             .arg("check")

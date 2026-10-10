@@ -9,7 +9,6 @@ use serde_json::{Value, json};
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 const SOURCE: &str = ".chrono-harness/ci/github.json";
@@ -24,7 +23,7 @@ fn read(root: &Path, path: &str) -> Value {
     serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap()
 }
 fn git(root: &Path, args: &[&str]) -> String {
-    let out = Command::new(fixture_git())
+    let out = crate::tools::command(fixture_git())
         .arg("-C")
         .arg(root)
         .args(args)
@@ -73,7 +72,10 @@ impl Host {
         let program = external.join("chosen git");
         let trace = external.join("process.trace");
         let real = fixture_git();
-        let version = Command::new(&real).arg("--version").output().unwrap();
+        let version = crate::tools::command(&real)
+            .arg("--version")
+            .output()
+            .unwrap();
         assert!(version.status.success());
         let helper = env!("CARGO_BIN_EXE_chrono-ci-test-git");
         fs::copy(helper, &program).unwrap();
@@ -237,7 +239,7 @@ fn bound_event_cli_ignores_ambient_git_and_retains_original_processes() {
 fn prepare_cli(h: &Host, event: &str, payload: &Value) -> Value {
     write(&h.root, ".chrono-harness/state/payload.json", &payload);
     let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
-    let out = Command::new(binary)
+    let out = crate::tools::command(binary)
         .current_dir("/")
         .env_clear()
         .env("PATH", &h.shadow)
@@ -543,7 +545,7 @@ fn relative_host_root_uses_the_same_bound_checkout() {
         &json!({"before":h.candidate,"after":h.candidate,"created":false}),
     );
     let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci");
-    let out = Command::new(binary)
+    let out = crate::tools::command(binary)
         .current_dir(h.root.parent().unwrap())
         .env_clear()
         .env("PATH", &h.shadow)

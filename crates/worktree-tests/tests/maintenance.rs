@@ -9,7 +9,7 @@ impl Host {
         let path = ".chrono-harness/state/maintenance.json";
         fs::create_dir_all(self.root.join(".chrono-harness/state")).unwrap();
         fs::write(self.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())

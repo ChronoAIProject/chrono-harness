@@ -186,6 +186,10 @@
         "cargo-linked/independent/producer/target/",
         "cargo-linked/independent/tests/target/",
         "source with spaces/.chrono-harness/state/cargo-case/target/"
+      ],
+      "source_roots": [
+        "source with spaces/",
+        "cargo-linked/"
       ]
     },
     {
@@ -233,6 +237,9 @@
         "crates/diagnostics-tests/target/",
         "crates/cache/target/",
         "crates/cache-tests/target/"
+      ],
+      "source_roots": [
+        "."
       ]
     },
     {
@@ -240,8 +247,8 @@
       "directory": ".chrono-harness/state/temporary-hosts/ci/",
       "temporary": true,
       "generated_outputs": [
-        "cargo/producer/target/",
-        "cargo/tests/target/"
+        ".chrono-harness/state/cargo/producer/target/",
+        ".chrono-harness/state/cargo/tests/target/"
       ]
     }
   ],

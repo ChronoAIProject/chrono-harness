@@ -25,6 +25,11 @@ use std::{
     process::Command,
 };
 use support::*;
+fn native_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    command
+}
 fn adopt_fixture_tool(root: &std::path::Path, config: &mut Value, id: &str) -> observation::Tool {
     let tool = config["tools"]
         .as_array_mut()
@@ -480,7 +485,7 @@ fn real_historical_profile_repair_preserves_obligations_and_verify_detects_drift
         "{}",
         execution_failure(&root, "ci.verify did not diagnose drift", &result)
     );
-    let output = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+    let output = native_command(root.join(".chrono-harness/bin/chrono-ci"))
         .args([
             "generate",
             "--host-root",
@@ -529,7 +534,7 @@ fn migration_binding_failure_retains_expected_and_observed_version() {
         .iter_mut()
         .find(|t| t["id"] == "python3")
         .unwrap();
-    let observed = Command::new(tool["program"].as_str().unwrap())
+    let observed = native_command(tool["program"].as_str().unwrap())
         .arg("--version")
         .output()
         .unwrap();

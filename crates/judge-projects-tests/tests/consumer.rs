@@ -296,7 +296,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         use std::os::unix::fs::PermissionsExt;
         let facts = ".chrono-harness/scoped-facts.json";
         let git = chrono_harness::resolve_program(&root, "git", None).unwrap();
-        let version = Command::new(&git).arg("--version").output().unwrap();
+        let version = host::command(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
         let chosen = root.join(".chrono-harness/bin/chosen git");
         let quoted = format!("'{}'", git.to_str().unwrap().replace('\'', "'\\''"));
@@ -392,7 +392,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
                 &h.candidate,
             ]
         };
-        let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+        let mut command = host::command(root.join(".chrono-harness/bin/chrono-harness"));
         if bound {
             command.env_clear().env("PATH", &shadow);
         }
@@ -996,7 +996,7 @@ fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
 fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
     let mut h = Host::new(false);
     let cargo = chrono_harness::resolve_program(&h.root(), "cargo", None).unwrap();
-    let version = Command::new(&cargo).arg("--version").output().unwrap();
+    let version = host::command(&cargo).arg("--version").output().unwrap();
     assert!(version.status.success());
     let cargo_bytes = fs::read(&cargo).unwrap();
     let cargo_digest = sha256(&cargo_bytes);
@@ -1072,7 +1072,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         fs::create_dir_all(h.root().join(path).parent().unwrap()).unwrap();
         fs::write(h.root().join(path), body).unwrap();
     }
-    let lock = Command::new(&cargo)
+    let lock = host::command(&cargo)
         .current_dir(h.root())
         .args(["generate-lockfile", "--manifest-path", "t/Cargo.toml"])
         .output()
@@ -1136,7 +1136,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         for name in ["alpha", "beta"] {
             fs::remove_file(h.root().join(".chrono-harness/state").join(name)).unwrap_or(());
         }
-        let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+        let out = host::command(h.root().join(".chrono-harness/bin/chrono-harness"))
             .current_dir(h.root())
             .args([
                 "check",
@@ -1163,7 +1163,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         r#"{"schema":"chrono-ci-collection/v1","reports":[]}"#,
     )
     .unwrap();
-    let out = Command::new(h.root().join(".chrono-harness/bin/chrono-harness"))
+    let out = host::command(h.root().join(".chrono-harness/bin/chrono-harness"))
         .current_dir(h.root())
         .args([
             "check",

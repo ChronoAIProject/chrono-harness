@@ -55,7 +55,7 @@ impl Host {
         self.policy(|p| p["automatic_cleanup"] = value!(AUTO_POLICY));
     }
     pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
-        let mut c = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        let mut c = native_command(source().join("crates/worktree/target/debug/chrono-worktree"));
         c.current_dir(&self.root)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -1178,7 +1178,7 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
     fs::write(target.join("nested/cache/keep-until-retry"), "cache").unwrap();
     let special = target.join("nested/cache/special");
     assert!(
-        Command::new("mkfifo")
+        native_command("mkfifo")
             .arg(&special)
             .status()
             .unwrap()
@@ -1258,7 +1258,7 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
     let target = h.parent.join("self-finish");
     assert_eq!(h.invoke("feature", "self-finish", &target).0, 0);
     output(&target);
-    let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let out = native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
         .current_dir(&target)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
@@ -1277,7 +1277,7 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
     assert_eq!(code, 0, "{r} {e}");
     assert!(!target.exists());
     let (code, r, e) = h.received(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
             .current_dir(&h.root)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -1350,7 +1350,7 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
     assert_ne!(h.received(out).0, 0);
     // Join exactly the test-owned process group; no process scanning or age heuristic.
     assert!(
-        Command::new("/bin/kill")
+        native_command("/bin/kill")
             .args(["-KILL", "--", &format!("-{child_pid}")])
             .status()
             .unwrap()
@@ -1437,7 +1437,7 @@ fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
     native_consumer(&h, "finished");
     let target = h.parent.join("local-use");
     assert_eq!(h.invoke("feature", "local-use", &target).0, 0);
-    let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let out = native_command(source().join("crates/worktree/target/debug/chrono-worktree"))
         .current_dir(&target)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())

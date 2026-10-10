@@ -1306,3 +1306,30 @@ contents are retained source/evidence. Test allocation retention is intentional
 and is not a completion claim. Unclaimed neighbors and earlier system-temporary
 objects have no retrospective custody. Platform/native acceptance and external
 coordinator delivery remain separate from local behavior tests.
+
+The current producer correspondence is explicit: `creation::temporary_host`
+owns worktree fixtures, `support/temporary::temporary_host` owns projects
+execution and shared Host fixtures, `migration::temporary_host` owns migration
+checkouts, and CI `support/tools::temporary_host` owns CI fixtures. Their native
+command adapters forward the held scopes; managed engine calls use those scopes
+and the declared absolute TMPDIR values. The CI receipt Cargo fixture additionally
+binds both actual Cargo Commands, with outputs below `.chrono-harness/state/cargo/`.
+Anonymous tempfile handles used solely as kernel test leases have no named output
+to recover. Explicit retained failure-file publishers keep their existing evidence
+directories and are not disposable temporary allocations.
+
+`source_roots` declares allocation-relative Git roots (`.` means the allocation).
+Before each removal the same owner checks the actual declared root's HEAD and
+index; absent roots cannot silently resolve to the coordinator or a parent Git
+repository. Worktree fixtures declare their main and linked roots, migration
+fixtures declare their checkout root. The CI Cargo receipt fixture has no Git
+repository and retains its source outside the selected target paths. No nested
+repository discovery supplies custody. Absent selected outputs require no Git
+tree acquisition and produce ordinary already-absent disposal observations.
+
+The live Cargo-output regression joins its bounded build before observing a
+separate native installation/test/cache consumer. Its original failure had a
+timed-out build and a stale readiness marker; the marker alone is not liveness.
+This repairs that observation without increasing the command bounds. Other
+historical ownership and nested CI timeout causes require their own controlled
+evidence; a later passing run cannot change those original outcomes.

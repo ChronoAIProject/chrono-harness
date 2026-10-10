@@ -178,7 +178,7 @@ fn main() -> ExitCode {
             }
             exec(cargo);
         }
-        "temporary-producer" => {
+        "temporary-producer" | "temporary-cargo" => {
             let root = std::env::current_dir().unwrap();
             let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
                 &root,
@@ -200,6 +200,38 @@ fn main() -> ExitCode {
             fs::write(allocated.join("cache 空白/output"), "rebuildable").unwrap();
             mark("temporary-parent", std::process::id().to_string());
             mark("temporary-path", allocated.as_os_str().as_encoded_bytes());
+            if mode == "temporary-cargo" {
+                let project = allocated.join("cargo 空白");
+                fs::create_dir_all(project.join("src")).unwrap();
+                fs::write(
+                    project.join("Cargo.toml"),
+                    include_bytes!("native_cargo/Cargo.toml"),
+                )
+                .unwrap();
+                fs::write(
+                    project.join("src/lib.rs"),
+                    include_bytes!("native_cargo/src/lib.rs"),
+                )
+                .unwrap();
+                let cwd = if Path::new(STATE).join("vary-cargo-cwd").exists() {
+                    let cwd = allocated.join("different cwd λ");
+                    fs::create_dir(&cwd).unwrap();
+                    cwd
+                } else {
+                    allocated.to_owned()
+                };
+                let mut cargo = Command::new("cargo");
+                cargo
+                    .current_dir(cwd)
+                    .env_remove("CARGO_TARGET_DIR")
+                    .env("CHRONO_TEMPORARY_CARGO_ROOT", allocated)
+                    .env("CHRONO_TEMPORARY_HELPER", std::env::current_exe().unwrap())
+                    .args(["test", "--lib", "--offline", "--manifest-path"])
+                    .arg(project.join("Cargo.toml"));
+                allocation.bind_command(&mut cargo).unwrap();
+                assert!(cargo.status().unwrap().success());
+                return ExitCode::SUCCESS;
+            }
             let mut child = Command::new(std::env::current_exe().unwrap());
             child
                 .arg("temporary-descendant")
@@ -270,6 +302,19 @@ fn main() -> ExitCode {
                 serde_json::to_vec(&observations).unwrap(),
             );
             if let Some(stage) = plan["hold_stage"].as_str() {
+                if plan["detached_consumer"] == true {
+                    let mut command = Command::new(std::env::current_exe().unwrap());
+                    command
+                        .args(["bounded-consumer", stage])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null());
+                    command.spawn().unwrap();
+                    // The actual consumer holds inherited descriptors and publishes
+                    // its own read handshake. This bounded build need not pretend
+                    // to stay live while an independent installation consumes it.
+                    return ExitCode::SUCCESS;
+                }
                 // All these consumers read the real generated output under the same lease.
                 let target = Path::new(plan["manifests"][1].as_str().unwrap())
                     .parent()
@@ -292,6 +337,30 @@ fn main() -> ExitCode {
                     fs::copy(input, ".chrono-harness/bin/installed-cargo-output").unwrap();
                 }
             }
+        }
+        "bounded-consumer" => {
+            let stage = std::env::args().nth(2).unwrap();
+            let target = Path::new("independent/tests/target/debug/deps");
+            let original: Vec<_> = fs::read_dir(target)
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect();
+            assert!(!original.is_empty());
+            mark(&format!("{stage}-active"), std::process::id().to_string());
+            wait(&format!("{stage}-release"));
+            assert!(
+                original.iter().all(|p| p.exists()),
+                "active native consumer lost generated output"
+            );
+            if stage == "installation" {
+                fs::create_dir_all(".chrono-harness/bin").unwrap();
+                fs::copy(
+                    original.iter().find(|p| p.is_file()).unwrap(),
+                    ".chrono-harness/bin/installed-cargo-output",
+                )
+                .unwrap();
+            }
+            mark(&format!("{stage}-done"), "actual final read complete");
         }
         "parent" => {
             // This ordinary native child inherits the actual open descriptors

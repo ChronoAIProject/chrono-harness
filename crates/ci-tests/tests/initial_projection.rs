@@ -30,7 +30,7 @@ fn write(path: &Path, value: &Value) {
     fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
 fn git(root: &Path, args: &[&str]) -> String {
-    let out = Command::new(fixture_git())
+    let out = crate::tools::command(fixture_git())
         .arg("-C")
         .arg(root)
         .args(args)
@@ -372,7 +372,7 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             serde_json::from_value(context["canonical_argv"].clone()).unwrap();
         assert_eq!(argv[3], c["initial_inventory"]["path"]);
         argv[3] = root.join(&argv[3]).to_str().unwrap().into();
-        let output = Command::new(root.join(&argv[0]))
+        let output = crate::tools::command(root.join(&argv[0]))
             .args(&argv[1..])
             .current_dir(inputs.path())
             .env_remove("HOME")

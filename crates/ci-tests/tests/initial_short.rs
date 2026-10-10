@@ -48,7 +48,7 @@ impl Host {
             .expect("registered production prerequisite");
         }
         let git_program = fixture_git();
-        let version = Command::new(&git_program)
+        let version = crate::tools::command(&git_program)
             .arg("--version")
             .output()
             .unwrap();
@@ -71,6 +71,7 @@ impl Host {
         }
         cfg["semantic_fields"] = json!([]);
         cfg["environment"] = json!({"inherit":["PATH","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","ACQUISITION_SECRET"],"credential_environment":["ACQUISITION_SECRET"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_program,"presence":"present","sha256":sha256(&fs::read(&git_program).unwrap())}]});
+        cfg["environment"]["values"]["TMPDIR"] = json!(root);
         cfg["protocol"]["timeout_seconds"] = json!(30);
         cfg["artifacts"] = json!([
             {"path":".chrono-harness/bin/","owner":"repository","kind":"executable","tracked":false},
@@ -118,7 +119,7 @@ impl Host {
         );
         write(
             &root.join(".chrono-harness/worktree.json"),
-            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_program,"expected_version":null,"sha256":sha256(&fs::read(&git_program).unwrap())},"environment":{"inherit":["PATH"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}}}),
+            &json!({"schema":"chrono-worktree-config/v2","host_config":".chrono-harness/config.json","remote":"origin","git":{"program":git_program,"expected_version":null,"sha256":sha256(&fs::read(&git_program).unwrap())},"environment":{"inherit":["PATH"],"values":{"TMPDIR":root,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}}}),
         );
         let files: Vec<_> = [".gitignore","README.md",".chrono-harness/config.json",".chrono-harness/FILEMAP.json",".chrono-harness/projects.json",".chrono-harness/judges.json",".chrono-harness/workflow.json",".chrono-harness/worktree.json",".chrono-harness/ci/check.json",".chrono-harness/ci/github.json",".chrono-harness/ci/root inventory.json",".github/workflows/chrono-ci.yml"]
             .into_iter().map(|path|json!({"path":path,"owner":"repository","surface":"documentation","cost":"unknown","edges":[]})).collect();
@@ -153,7 +154,7 @@ impl Host {
         }
     }
     fn command(&self) -> Command {
-        let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
+        let mut c = crate::tools::command(self.root.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&self.root)
             .arg("check")
             .env("ACQUISITION_SECRET", "fixture acquisition credential")

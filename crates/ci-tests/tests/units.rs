@@ -160,7 +160,7 @@ fn generated_unit_workflow_cli_adoption_uses_the_local_canonical_command() {
         .trim();
     assert!(root.join(".chrono-harness/bin/chrono-ci").is_file());
     assert!(root.join(".chrono-harness/bin/chrono-harness").is_file());
-    let prepared = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+    let prepared = crate::tools::command(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(root)
         .env("GITHUB_EVENT_NAME", "push")
         .env("GITHUB_EVENT_PATH", root.join(event_path))
@@ -280,7 +280,7 @@ fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
     // caller-owned rollout and may intentionally retain an older schema.
     // Each temporary host owns its executable inode and pathname. A joined copy
     // child keeps writable descriptors out of concurrently forked test children.
-    let mut copy = Command::new("/bin/cp");
+    let mut copy = crate::tools::command("/bin/cp");
     for (project, name, _) in tools {
         let built = source.join(format!("crates/{project}/target/debug/{name}"));
         assert!(matches!(
@@ -300,7 +300,7 @@ fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
     // Finish fixture setup before fault injection and bounded check execution.
     // Each caller declares the program's real readiness protocol.
     for (_, name, probe) in tools {
-        let mut command = Command::new(bin.join(name));
+        let mut command = crate::tools::command(bin.join(name));
         command
             .current_dir(root)
             .env_clear()
@@ -355,7 +355,7 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
         fs::read(second.path().join(relative)).unwrap(),
         fs::read(&source).unwrap()
     );
-    let result = Command::new(second.path().join(relative))
+    let result = crate::tools::command(second.path().join(relative))
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
@@ -611,7 +611,7 @@ fn install_mock_transport(root: &Path, mode: &str, c: &str) {
         env!("CARGO_BIN_EXE_chrono-ci-test-transport").to_string(),
         "--version".to_string(),
     ];
-    let ready = Command::new(&args[0])
+    let ready = crate::tools::command(&args[0])
         .arg(&args[1])
         .current_dir(root)
         .env_clear()
@@ -670,7 +670,7 @@ fn gather_host_config(
 }
 
 fn gather_cli(root: &Path) -> std::process::Output {
-    Command::new(root.join(".chrono-harness/bin/chrono-ci"))
+    crate::tools::command(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(root)
         .args([
             "gather",
