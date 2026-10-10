@@ -960,7 +960,22 @@ impl ProducerPolicy {
                 {
                     return Err("producer allocation binding changed; preserve originals".into());
                 }
-                current.stable(object)?;
+                if let Err(error) = current.stable(object) {
+                    // This unavailable allocation cannot establish exclusion or
+                    // disposal. Preserve its registration and original outcome,
+                    // but do not veto checked siblings in the same producer.
+                    let path = format!("{}{}", self.directory, object.path);
+                    failures.push(format!("{path}: {error}"));
+                    report["producer_objects"].as_array_mut().unwrap().push(value!({
+                        "producer":self.id,"path":path,"status":"failed","error":error,
+                        "retention_reason":object.retention_reason,"consumers":object.consumers,
+                        "registered_generated_objects":object.generated.len(),"evidence":"retained"
+                    }));
+                    if snapshot.cache_lease.is_some() {
+                        drop(store.take());
+                    }
+                    continue;
+                }
                 object.clone()
             } else {
                 snapshot.clone()
