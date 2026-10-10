@@ -5,6 +5,7 @@ use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+pub use temporary::copied_fixture_input;
 pub use temporary::{FixtureDirectory, fixture_directory};
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {

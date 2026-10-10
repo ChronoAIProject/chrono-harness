@@ -53,6 +53,11 @@ fn install_parent_provider(root: &Path) {
         fs::symlink_metadata(&program).unwrap_err().kind(),
         std::io::ErrorKind::NotFound
     );
+    crate::tools::copied_fixture_input(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-ci-test-transport")),
+        &program,
+    );
     let copied = crate::tools::command("/bin/cp")
         .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
         .arg(&program)
@@ -1292,6 +1297,11 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     }
     install(&root);
     install_parent_provider(&root);
+    crate::tools::copied_fixture_input(
+        &root,
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
+        &root.join(".chrono-harness/bin/chrono-worktree"),
+    );
     fs::copy(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
         root.join(".chrono-harness/bin/chrono-worktree"),
