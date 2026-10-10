@@ -1304,6 +1304,22 @@ The interruption fixture places its independent native consumer in a distinct
 process group and checks its actual PID after joining the killed wrapper and
 after maintenance. A readiness marker cannot establish survival after managed
 group cancellation; an actually terminated child supplies no live-holder claim.
+An unavailable registered allocation must retain its original registration and
+report a concrete failure. Exclusion and validation of an eligible sibling must
+still proceed, including within the same producer. Explicit maintenance remains
+nonzero for the missing allocation; sibling disposal does not repair that failure.
+The regression moves the unavailable fixture to a retained unknown neighbor,
+checks those source bytes and the unchanged failed row, and independently checks
+the eligible sibling's actual removal. Real-coordinator tests retain maintenance
+streams and validate their own rows while preserving unrelated failure outcomes.
+
+Offline fixture consumers may remove their Git checkout after transporting its
+originals, but their allocation and declared TMPDIR must remain available. The
+shared projects fixture separates the Git root (`fixture/`) from its retained
+allocation. Workflow tools and cloned hosts adopt that same adapter before
+production. Their declared Cargo targets are the four actual `p`, `t`, `p2`, `t2`
+target directories below the Git root. Collection must still work with the old
+Git root and business executable absent; it must launch no business processes.
 
 `retained_producers[].temporary: true` opts a declared store into prospective
 cache recovery using the existing producer registry and kernel Lease. A

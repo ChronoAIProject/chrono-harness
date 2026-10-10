@@ -185,6 +185,68 @@ fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() 
 }
 
 #[test]
+fn unavailable_allocation_preserves_originals_and_does_not_block_eligible_sibling() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let missing = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "unavailable λ ",
+    )
+    .unwrap();
+    let original = missing.path().to_owned();
+    let name = original.file_name().unwrap().to_str().unwrap().to_owned();
+    fs::write(original.join("source.rs"), "original source").unwrap();
+    drop(missing);
+    let retained = store.join("unknown-retained-original");
+    fs::rename(&original, &retained).unwrap();
+    let sibling = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "eligible λ ",
+    )
+    .unwrap();
+    let target = sibling.path().join("cache 空白");
+    fs::create_dir(&target).unwrap();
+    fs::write(target.join("generated"), "rebuildable").unwrap();
+    drop(sibling);
+    let read = || json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let find = |registry: &Value| {
+        registry["objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == name)
+            .unwrap()
+            .clone()
+    };
+    let before = find(&read());
+    let (code, report, _) = h.auto("maintain", &[]);
+    assert_eq!(code, 2);
+    assert!(
+        !target.exists(),
+        "eligible sibling must be reclaimed despite the missing row"
+    );
+    assert_eq!(find(&read()), before);
+    assert_eq!(
+        fs::read(retained.join("source.rs")).unwrap(),
+        b"original source"
+    );
+    let row = report["producer_objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"].as_str().unwrap().ends_with(&name))
+        .unwrap();
+    assert_eq!(row["status"], "failed");
+    assert!(row["error"].as_str().unwrap().contains("No such file"));
+}
+
+#[test]
 fn allocation_native_binding_forwards_existing_scope_once() {
     let h = host();
     let (store, outputs) =
@@ -579,14 +641,38 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     // This allocation is the real source coordinator's declared worktree-test-host,
     // not the fixture coordinator's test-allocation producer.
     drop(h);
-    let maintain = || {
+    let mut maintenance_number = 0;
+    let mut maintain = || {
+        maintenance_number += 1;
         let out = native_command(crate::source().join(".chrono-harness/bin/chrono-worktree"))
             .current_dir(crate::source())
             .arg("maintain")
             .output()
             .unwrap();
-        assert!(out.status.success(), "{out:?}");
-        json(&out.stdout).unwrap()
+        let prefix = allocation.join(format!("maintenance-{maintenance_number}"));
+        fs::write(prefix.with_extension("stdout"), &out.stdout).unwrap();
+        fs::write(prefix.with_extension("stderr"), &out.stderr).unwrap();
+        let report = json(&out.stdout).unwrap();
+        fs::write(
+            prefix.with_extension("json"),
+            serde_json::to_vec(&value!({
+                "exit":out.status.code(),"joined":true,"report_path":report["report_path"],
+                "stdout_sha256":sha256(&out.stdout),"stderr_sha256":sha256(&out.stderr)
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        // Explicit maintenance truthfully reports unrelated retained failures.
+        // The assertions below independently require this allocation's actual
+        // protection and removal; unrelated rows do not establish either.
+        let failures = report["cleanup_failures"].as_array().unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(if failures.is_empty() { 0 } else { 2 }),
+            "maintenance outcome retained at {}",
+            prefix.display()
+        );
+        report
     };
     let protected = maintain();
     assert!(target.exists());

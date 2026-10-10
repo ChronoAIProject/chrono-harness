@@ -198,7 +198,15 @@
       "id": "projects-test-host",
       "directory": ".chrono-harness/state/temporary-hosts/projects/",
       "temporary": true,
-      "generated_outputs": []
+      "generated_outputs": [
+        "fixture/p/target/",
+        "fixture/t/target/",
+        "fixture/p2/target/",
+        "fixture/t2/target/"
+      ],
+      "source_roots": [
+        "fixture/"
+      ]
     },
     {
       "id": "projects-migration-host",

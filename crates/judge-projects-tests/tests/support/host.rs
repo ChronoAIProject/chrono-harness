@@ -5,6 +5,7 @@ use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
+pub use temporary::{FixtureDirectory, fixture_directory};
 
 pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     let mut command = Command::new(program);
@@ -94,7 +95,7 @@ impl CommandEvidence {
     }
 }
 pub struct Host {
-    dir: chrono_worktree::TemporaryHost,
+    dir: FixtureDirectory,
     last_result: RefCell<Option<CommandEvidence>>,
     pub base: String,
     pub candidate: String,
@@ -104,7 +105,7 @@ pub struct Host {
 }
 impl Host {
     pub fn new(script: bool) -> Self {
-        let dir = temporary::temporary_host("execution host space ");
+        let dir = fixture_directory("execution host space λ ");
         let root = fs::canonicalize(dir.path()).unwrap();
         git(&root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
@@ -169,7 +170,7 @@ impl Host {
         ]);
         v.get_mut(CONFIG).unwrap()["tools"] = json!([{"id":"python","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
         v.get_mut(CONFIG).unwrap()["protocol"]["stdout_limit_bytes"] = json!(67108864);
-        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":"","TMPDIR":root},"inputs":[{"id":"interpreter","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
+        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":"","TMPDIR":dir.temporary_path()},"inputs":[{"id":"interpreter","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
         v.get_mut(FM).unwrap()["schema_version"] = json!(2);
         v.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["prepare.p","execute.t"],"timeout_seconds":15,"output_limit_bytes":4096}});
         let pre = json!({"operation":"prepare.p","tool":"python","argv":["-c","open('.chrono-harness/state/order','a').write('p')"]});
@@ -343,6 +344,9 @@ impl Host {
         let destination = std::path::Path::new(&directory)
             .join(format!("{}-{number}-{label}", std::process::id()));
         evidence.write(&destination).unwrap();
+    }
+    pub fn capture_native(&self, command: &mut Command) -> std::process::Output {
+        self.dir.capture_output(command).unwrap()
     }
 }
 impl Drop for Host {

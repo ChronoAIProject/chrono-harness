@@ -1,10 +1,10 @@
 use super::*;
 use chrono_harness::wire::{self, Binding, Request};
-use std::{os::unix::fs::PermissionsExt, path::Path, process::Command, time::Instant};
+use std::{os::unix::fs::PermissionsExt, path::Path, time::Instant};
 
-fn rust_host() -> (Host, tempfile::TempDir) {
+fn rust_host() -> (Host, host::FixtureDirectory) {
     let mut h = git_facts::bound_host();
-    let tools = tempfile::tempdir().unwrap();
+    let tools = host::fixture_directory("workflow tools λ ");
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let root = h.root();
     let wrapper = tool_root.join("cargo-fixture");
@@ -24,7 +24,7 @@ fn rust_host() -> (Host, tempfile::TempDir) {
             t["program"] = json!(git_tool);
         }
     }
-    let version = Command::new(&cargo).arg("--version").output().unwrap();
+    let version = host::command(&cargo).arg("--version").output().unwrap();
     cfg["tools"][0]["expected_version"] =
         json!(String::from_utf8(version.stdout).unwrap().trim_end());
     // The fixture needs Cargo and system tools, not the caller's editor/agent
@@ -160,7 +160,7 @@ fn rust_host() -> (Host, tempfile::TempDir) {
         .unwrap();
         for id in [prod, test] {
             assert!(
-                Command::new(&cargo)
+                host::command(&cargo)
                     .args(["generate-lockfile", "--offline", "--manifest-path"])
                     .arg(root.join(format!("{id}/Cargo.toml")))
                     .output()
@@ -206,18 +206,14 @@ fn copy_tree(from: &Path, to: &Path) {
         }
     }
 }
-fn clone_host(h: &Host) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["clone", "--quiet", "--no-hardlinks"])
-            .arg(h.root())
-            .arg(dir.path())
-            .output()
-            .unwrap()
-            .status
-            .success()
-    );
+fn clone_host(h: &Host) -> host::FixtureDirectory {
+    let dir = host::fixture_directory("workflow clone λ ");
+    let mut command = std::process::Command::new("git");
+    command
+        .args(["clone", "--quiet", "--no-hardlinks"])
+        .arg(h.root())
+        .arg(dir.path());
+    assert!(dir.capture_output(&mut command).unwrap().status.success());
     copy_tree(
         &h.root().join(".chrono-harness/bin"),
         &dir.path().join(".chrono-harness/bin"),
@@ -229,7 +225,7 @@ fn clone_host(h: &Host) -> tempfile::TempDir {
     dir
 }
 fn launch(root: &Path, h: &Host, suffix: &[&str]) -> (i32, Value) {
-    launch_endpoints(root, &h.base, &h.candidate, suffix)
+    launch_endpoints(root, h, suffix)
 }
 fn launch_entry(root: &Path, h: &Host, cwd: &Path, config: &str, suffix: &[&str]) -> (i32, Value) {
     let root = fs::canonicalize(root).unwrap();
@@ -247,19 +243,19 @@ fn launch_entry(root: &Path, h: &Host, cwd: &Path, config: &str, suffix: &[&str]
             .unwrap()
             .into(),
     ];
-    let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+    let mut command = std::process::Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+    command
         .current_dir(cwd)
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT")
         .args(&argv)
-        .args(suffix)
-        .output()
-        .unwrap();
+        .args(suffix);
+    let out = h.capture_native(&mut command);
     let report: Value = serde_json::from_slice(&out.stdout)
         .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
     (out.status.code().unwrap(), report)
 }
-fn launch_endpoints(root: &Path, base: &str, candidate: &str, suffix: &[&str]) -> (i32, Value) {
+fn launch_endpoints(root: &Path, h: &Host, suffix: &[&str]) -> (i32, Value) {
     let root_buf = fs::canonicalize(root).unwrap();
     let root = root_buf.as_path();
     let argv = vec![
@@ -267,9 +263,9 @@ fn launch_endpoints(root: &Path, base: &str, candidate: &str, suffix: &[&str]) -
         "--config".into(),
         root.join(CONFIG).to_str().unwrap().into(),
         "--base".into(),
-        base.into(),
+        h.base.clone(),
         "--candidate".into(),
-        candidate.into(),
+        h.candidate.clone(),
         "--context".into(),
         root.join(".chrono-harness/state/context.json")
             .to_str()
@@ -277,14 +273,14 @@ fn launch_endpoints(root: &Path, base: &str, candidate: &str, suffix: &[&str]) -
             .into(),
     ];
     let started = Instant::now();
-    let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+    let mut command = std::process::Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+    command
         .current_dir("/")
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT")
         .args(&argv)
-        .args(suffix)
-        .output()
-        .unwrap();
+        .args(suffix);
+    let out = h.capture_native(&mut command);
     let report: Value = serde_json::from_slice(&out.stdout)
         .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));
     println!(
@@ -1261,7 +1257,7 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
     let baseline = original.base.clone();
     let mut h = git_facts::bind_host(original);
     h.base = baseline;
-    let tools = tempfile::tempdir().unwrap();
+    let tools = host::fixture_directory("workflow tools λ ");
     let tool_root = fs::canonicalize(tools.path()).unwrap();
     let wrapper = tool_root.join("python-migration");
     let python = fs::canonicalize(&h.tool).unwrap();
@@ -1706,7 +1702,7 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
     fs::remove_file(tools.path().join("two-sdk")).unwrap();
     // A wrong-shaped unrelated live location must never be opened by capture.
     fs::create_dir(tools.path().join("two-sdk")).unwrap();
-    let capture = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let capture = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(&root)
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT")
@@ -1958,7 +1954,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
     h.save();
     git_facts::prepare_bound(&h, "integration", None);
     let capture = |commit: &str, unit: &str, output: &str| {
-        let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        let p = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
             .current_dir(&root)
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -2003,7 +1999,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
             unit,
             &format!(".chrono-harness/state/candidate-{unit}.json"),
         );
-        let p = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        let p = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
             .current_dir(&root)
             .args([
                 "pair",
@@ -2075,7 +2071,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
         fs::remove_file(path).unwrap();
     }
     let before = marker(tools.path());
-    let compose = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let compose = host::command(source().join("crates/inputs/target/debug/chrono-inputs"))
         .current_dir(collector.path())
         .args([
             "compose",

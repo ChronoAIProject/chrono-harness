@@ -12,3 +12,30 @@ pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
     chrono_worktree::TemporaryHost::allocate(directory, "projects-test-host", outputs, prefix)
         .expect("prospective temporary host custody")
 }
+
+/// The Git checkout may be absent during offline collection, while its
+/// prospective allocation, TMPDIR and captured originals retain their lifetime.
+pub struct FixtureDirectory {
+    allocation: chrono_worktree::TemporaryHost,
+    root: std::path::PathBuf,
+}
+impl FixtureDirectory {
+    pub fn path(&self) -> &std::path::Path {
+        &self.root
+    }
+    pub fn temporary_path(&self) -> &std::path::Path {
+        self.allocation.path()
+    }
+    pub fn capture_output(
+        &self,
+        command: &mut std::process::Command,
+    ) -> Result<std::process::Output, String> {
+        self.allocation.capture_output(command)
+    }
+}
+pub fn fixture_directory(prefix: &str) -> FixtureDirectory {
+    let allocation = temporary_host(prefix);
+    let root = allocation.path().join("fixture");
+    std::fs::create_dir(&root).expect("declared fixture Git root");
+    FixtureDirectory { allocation, root }
+}
