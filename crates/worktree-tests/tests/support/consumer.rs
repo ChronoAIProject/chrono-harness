@@ -262,7 +262,11 @@ fn main() -> ExitCode {
             while !allocation.join("native-release").exists() {
                 thread::sleep(Duration::from_millis(10));
             }
-            assert!(allocation.join("cache 空白/output").exists());
+            let output = std::env::args_os()
+                .nth(3)
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| "cache 空白/output".into());
+            assert!(!fs::read(allocation.join(output)).unwrap().is_empty());
             fs::write(allocation.join("native-done"), "read and released").unwrap();
         }
         "bounded-cargo" => {

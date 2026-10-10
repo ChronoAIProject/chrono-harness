@@ -252,6 +252,97 @@ fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs(
 }
 
 #[test]
+fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_output() {
+    let h = super::bounded_cleanup::cargo_host();
+    let allocation = h.parent.clone();
+    let source = h.root.join("independent/producer/src/lib.rs");
+    let original = fs::read(&source).unwrap();
+    let mut cargo = native_command("cargo");
+    cargo
+        .current_dir(&h.root)
+        .env_remove("CARGO_TARGET_DIR")
+        .args([
+            "build",
+            "--offline",
+            "--locked",
+            "--manifest-path",
+            "independent/producer/Cargo.toml",
+        ]);
+    h._dir.bind_command(&mut cargo).unwrap();
+    let output = cargo.output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    drop(cargo);
+    let target = h.root.join("independent/producer/target");
+    let selected =
+        "source with spaces/independent/producer/target/debug/libbounded_cache_producer.rlib";
+    assert!(allocation.join(selected).is_file());
+    let unknown = allocation.parent().unwrap().join(format!(
+        "unclaimed-neighbor-{}",
+        allocation.file_name().unwrap().to_str().unwrap()
+    ));
+    fs::create_dir(&unknown).unwrap();
+    fs::write(unknown.join("original"), [255, 0, 10]).unwrap();
+    let mut command = native_command(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command
+        .args(["temporary-descendant"])
+        .arg(&allocation)
+        .arg(selected)
+        .env_clear();
+    h._dir.bind_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    drop(command);
+    let _release = ReleaseNative {
+        allocation: allocation.clone(),
+        coordinator: h.root.clone(),
+    };
+    wait(&allocation.join("native-active"));
+    // This allocation is the real source coordinator's declared worktree-test-host,
+    // not the fixture coordinator's test-allocation producer.
+    drop(h);
+    let maintain = || {
+        let out = native_command(crate::source().join(".chrono-harness/bin/chrono-worktree"))
+            .current_dir(crate::source())
+            .arg("maintain")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        json(&out.stdout).unwrap()
+    };
+    let protected = maintain();
+    assert!(target.exists());
+    assert!(
+        protected["producer_objects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["producer"] == "worktree-test-host"
+                && r["status"] == "protected"
+                && r["path"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with(allocation.file_name().unwrap().to_str().unwrap()))
+    );
+    fs::write(
+        allocation.join("native-release"),
+        "actual final consumer read",
+    )
+    .unwrap();
+    assert!(child.wait().unwrap().success());
+    let reclaimed = maintain();
+    assert!(!target.exists());
+    assert_eq!(fs::read(source).unwrap(), original);
+    assert_eq!(fs::read(unknown.join("original")).unwrap(), [255, 0, 10]);
+    println!(
+        "REAL_COORDINATOR_CUSTODY {}",
+        value!({"candidate":git(&crate::source(), &["rev-parse","HEAD"]),
+        "binary_sha256":sha256(&fs::read(crate::source().join(".chrono-harness/bin/chrono-worktree")).unwrap()),
+        "policy_sha256":sha256(&fs::read(crate::source().join(".chrono-harness/cleanup.json")).unwrap()),
+        "allocation":allocation,"protected_report":protected["report_path"],"recovery_report":reclaimed["report_path"],
+        "source_preserved":true,"unknown_neighbor_preserved":true,"finish":"not-called"})
+    );
+}
+
+#[test]
 fn overlapping_allocation_commands_and_real_diagnostic_reference_preserve_generated_outputs() {
     let h = host();
     let (store, outputs) =

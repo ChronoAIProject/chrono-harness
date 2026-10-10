@@ -44,7 +44,7 @@ const CARGO_FILES: &[(&str, &[u8])] = &[
     ),
 ];
 
-fn cargo_host() -> Host {
+pub(super) fn cargo_host() -> Host {
     let h = main_host_mode("bounded-cargo");
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     let mut policy = json(&fs::read(h.root.join(".chrono-harness/cleanup.json")).unwrap()).unwrap();
