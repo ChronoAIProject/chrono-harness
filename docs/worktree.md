@@ -1289,6 +1289,10 @@ only that eligible output is removed. Native captures must open retained raw
 streams and intent before spawn: killing the producer while it waits must leave
 the child's exact partial bytes and no joined result, seal or completion. A
 normally joined command must return those same bytes and its actual exit code.
+The interruption fixture places its independent native consumer in a distinct
+process group and checks its actual PID after joining the killed wrapper and
+after maintenance. A readiness marker cannot establish survival after managed
+group cancellation; an actually terminated child supplies no live-holder claim.
 
 `retained_producers[].temporary: true` opts a declared store into prospective
 cache recovery using the existing producer registry and kernel Lease. A

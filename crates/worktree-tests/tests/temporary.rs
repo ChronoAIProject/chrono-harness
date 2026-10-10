@@ -252,9 +252,24 @@ fn interrupted(signal: &str) {
     );
     producer.kill().unwrap();
     assert!(!producer.wait_with_output().unwrap().status.success());
+    assert!(
+        native_command("/bin/kill")
+            .args(["-0", &child])
+            .status()
+            .unwrap()
+            .success(),
+        "the independently surviving consumer must actually be alive"
+    );
     let (code, protected, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{protected} {error}");
     assert!(allocated.join("cache 空白/output").exists());
+    assert!(
+        native_command("/bin/kill")
+            .args(["-0", &child])
+            .status()
+            .unwrap()
+            .success()
+    );
     assert!(
         protected["producer_objects"]
             .as_array()

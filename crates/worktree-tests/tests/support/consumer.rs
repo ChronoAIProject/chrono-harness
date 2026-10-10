@@ -253,6 +253,7 @@ fn main() -> ExitCode {
             child
                 .arg("temporary-descendant")
                 .arg(allocated)
+                .process_group(0)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
