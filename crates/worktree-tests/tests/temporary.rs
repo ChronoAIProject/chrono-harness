@@ -135,6 +135,40 @@ fn capture_directory(root: &Path) -> PathBuf {
     captures[0].clone()
 }
 
+fn command_carrier_count(command: &Command) -> usize {
+    command.get_envs().find_map(|(key, value)| {
+        (key == chrono_harness::process_fds::ENV).then(||
+            value.map(|value| value.to_str().unwrap().split(',').count()).unwrap_or(0))
+    }).unwrap_or(0)
+}
+
+#[test]
+fn allocation_native_binding_forwards_existing_scope_once() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation = chrono_worktree::TemporaryHost::allocate(
+        &store, "test-allocation", &outputs, "binding cost λ "
+    ).unwrap();
+    let baseline = native_command(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    let expected = command_carrier_count(&baseline);
+    assert!(expected > 0);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command.arg("noop").current_dir(allocation.path()).env_clear();
+    allocation.bind_command(&mut command).unwrap();
+    let bound = command_carrier_count(&command);
+    assert_eq!(bound, expected, "allocation lease is already in the held scope");
+    assert!(command.output().unwrap().status.success());
+    let mut captured = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    captured.arg("capture-once").current_dir(allocation.path()).env_clear();
+    let output = allocation.capture_output(&mut captured).unwrap();
+    assert_eq!(output.status.code(), Some(7));
+    assert_eq!(command_carrier_count(&captured), expected);
+    println!("native capability cost: baseline={expected}, bound={bound}, captured={}",
+        command_carrier_count(&captured));
+}
+
 #[test]
 fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
     let h = host();

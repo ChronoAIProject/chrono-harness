@@ -1289,6 +1289,12 @@ only that eligible output is removed. Native captures must open retained raw
 streams and intent before spawn: killing the producer while it waits must leave
 the child's exact partial bytes and no joined result, seal or completion. A
 normally joined command must return those same bytes and its actual exit code.
+Each actual native route must bind its command exactly once. Binding an allocation
+must forward the already held scope, without adding another copy of that same
+lease. Captured and asynchronous routes must carry the same descriptor count as
+one native forwarding operation in the same thread; their children must still
+hold the allocation through interruption. This count is a local descriptor-cost
+oracle, not an attribution of a historical system file-table failure.
 The interruption fixture places its independent native consumer in a distinct
 process group and checks its actual PID after joining the killed wrapper and
 after maintenance. A readiness marker cannot establish survival after managed
