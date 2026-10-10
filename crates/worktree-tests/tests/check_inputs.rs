@@ -425,6 +425,11 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         serde_json::to_vec(&provider).unwrap(),
     )
     .unwrap();
+    copied_fixture_input(
+        &h.root,
+        &source().join("crates/ci/target/debug/chrono-ci"),
+        &h.root.join(".chrono-harness/bin/chrono-ci"),
+    );
     fs::copy(
         source().join("crates/ci/target/debug/chrono-ci"),
         h.root.join(".chrono-harness/bin/chrono-ci"),
@@ -460,6 +465,11 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
     let (exit, birth, err) = h.invoke("integration", "native", &dest);
     assert_eq!(exit, 0, "{} {err}", birth["error"]);
     install(&dest);
+    copied_fixture_input(
+        &dest,
+        &source().join("crates/ci/target/debug/chrono-ci"),
+        &dest.join(".chrono-harness/bin/chrono-ci"),
+    );
     fs::copy(
         source().join("crates/ci/target/debug/chrono-ci"),
         dest.join(".chrono-harness/bin/chrono-ci"),

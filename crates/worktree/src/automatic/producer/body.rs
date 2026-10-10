@@ -398,6 +398,7 @@ impl Manager {
                         member.leases,
                         value!({"route":"current-custodian-transition", "custody":custody,
                         "reason":plan.reason, "recipe":member.recipe,"recipe_sha256":sha256(&source),
+                        "member_identity":crate::ownership::identity(&physical)?,
                         "candidate":self.anchor_head, "past_outcome":"unchanged"}),
                     )?;
                 }
@@ -540,6 +541,13 @@ pub(super) fn drain(
             }
             if input(&path)? != (body.sha256.clone(), body.length) {
                 return Err("copied body differs or is partial; preserve original member".into());
+            }
+            if let Some(expected) = intent["provenance"]["member_identity"].as_str() {
+                if crate::ownership::identity(&path)? != expected {
+                    return Err(
+                        "legacy copied member identity changed; preserve replacement".into(),
+                    );
+                }
             }
             protect_source(r, &allocation, member, body.git_root.as_deref())?;
             let footprint = artifact_disposal::artifact_footprint(&path)?;

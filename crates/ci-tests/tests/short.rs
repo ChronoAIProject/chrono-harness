@@ -2083,6 +2083,13 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
         .join(format!("target-local-{}", "x".repeat(220)));
     fs::create_dir_all(&long_parent).unwrap();
     let long_root = long_parent.join("host");
+    chrono_worktree::TemporaryHost::relocate_copies(
+        h._dir.path().parent().unwrap(),
+        "ci-test-host",
+        &h.root,
+        &long_root,
+    )
+    .unwrap();
     fs::rename(&h.root, &long_root).unwrap();
     h.root = long_root;
     h.modify(".chrono-harness/ci/check.json", |c| {
