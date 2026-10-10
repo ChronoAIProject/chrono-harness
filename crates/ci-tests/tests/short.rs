@@ -210,16 +210,20 @@ impl ShortHost {
             candidate,
         }
     }
-    fn command(&self, args: &[&str]) -> Command {
-        let mut c = crate::tools::command(self.root.join(".chrono-harness/bin/chrono-harness"));
+    fn prepared_command(&self, args: &[&str]) -> Command {
+        let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&self.root)
             .env_remove(prepared::SOURCE)
             .args(args);
+        c
+    }
+    fn command(&self, args: &[&str]) -> Command {
+        let mut c = self.prepared_command(args);
         self._dir.bind_command(&mut c).unwrap();
         c
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
-        let out = self._dir.capture_output(&mut self.command(args)).unwrap();
+        let out = self._dir.capture_output(&mut self.prepared_command(args)).unwrap();
         if out.status.code() != Some(exit) {
             let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
                 .chain(args.iter().map(|arg| (*arg).to_owned()))

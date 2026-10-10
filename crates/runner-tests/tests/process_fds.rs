@@ -81,6 +81,27 @@ fn capability_child_helper() {
     }
     println!("FORWARDED_FDS={}", carrier.as_deref().unwrap_or(""));
 }
+
+#[test]
+fn declared_native_command_owns_capability_after_scope_release() {
+    use std::io::{Read, Seek};
+    let mut file = tempfile::tempfile().unwrap();
+    let scope = Scope::new(&[file.as_fd()]).unwrap();
+    let probe = capability_probe(inherited_count() + 1);
+    let mut command = std::process::Command::new(&probe.program);
+    command.args(&probe.args).env_clear().envs(&probe.env)
+        .env("CHRONO_FD_WRITE", "native-owned-copy");
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    drop(scope);
+    let output = command.output().unwrap();
+    assert!(output.status.success(), "{} {}",
+        String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    assert_ne!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC, 0);
+    file.rewind().unwrap();
+    let mut bytes = String::new();
+    file.read_to_string(&mut bytes).unwrap();
+    assert_eq!(bytes, "native-owned-copy");
+}
 #[test]
 fn scoped_descriptor_survives_bound_env_clear_and_parent_keeps_cloexec() {
     let dir = tempfile::tempdir().unwrap();

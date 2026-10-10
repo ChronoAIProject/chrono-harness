@@ -754,12 +754,13 @@ impl TemporaryHost {
     }
 
     pub fn bind_command(&self, command: &mut std::process::Command) -> Result<(), String> {
-        use std::os::fd::AsFd;
         self.lease.stable()?;
         // The same exact allocation also holds nested default tempfile outputs.
         // It is retained source/evidence, never a disposable mixed TMPDIR root.
         command.env("TMPDIR", &self.path);
-        chrono_harness::process_fds::forward_command(command, &[self.lease.file.as_fd()])
+        // Lease is !Send and already owns a scope in this thread. Forward it
+        // once; adding the explicit lease here duplicates that same capability.
+        chrono_harness::process_fds::forward_command(command, &[])
     }
 
     /// Native fixture output is written before join, independently of Drop.

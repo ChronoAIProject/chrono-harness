@@ -54,8 +54,8 @@ impl Host {
         .unwrap();
         self.policy(|p| p["automatic_cleanup"] = value!(AUTO_POLICY));
     }
-    pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
-        let mut c = native_command(source().join("crates/worktree/target/debug/chrono-worktree"));
+    fn prepared_auto_command(&self, command: &str, extra: &[&str]) -> Command {
+        let mut c = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
         c.current_dir(&self.root)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -67,13 +67,17 @@ impl Host {
                 POLICY,
             ])
             .args(extra);
+        c
+    }
+    pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
+        let mut c = self.prepared_auto_command(command, extra);
         self._dir.bind_command(&mut c).unwrap();
         c
     }
     pub(super) fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
         self.received(
             self._dir
-                .capture_output(&mut self.auto_command(command, extra))
+                .capture_output(&mut self.prepared_auto_command(command, extra))
                 .unwrap(),
         )
     }

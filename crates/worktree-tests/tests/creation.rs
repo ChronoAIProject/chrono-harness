@@ -243,7 +243,7 @@ impl Host {
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
         let mut command =
-            native_command(source().join("crates/worktree/target/debug/chrono-worktree"));
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
         command
             .current_dir("/")
             .env_clear()

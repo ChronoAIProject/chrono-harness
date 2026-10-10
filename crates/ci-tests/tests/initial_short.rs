@@ -154,16 +154,11 @@ impl Host {
         }
     }
     fn command(&self) -> Command {
-        let mut c = crate::tools::command(self.root.join(".chrono-harness/bin/chrono-harness"));
+        let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&self.root)
             .arg("check")
             .env("ACQUISITION_SECRET", "fixture acquisition credential")
             .env_remove(prepared::SOURCE);
-        self.temporary
-            .as_ref()
-            .unwrap()
-            .bind_command(&mut c)
-            .unwrap();
         c
     }
     fn native(&self, payload: Value) -> std::process::Output {

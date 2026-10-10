@@ -18,6 +18,11 @@ Engine calls leave already inherited descriptors and their flags unchanged, so
 other threads and subsequent native children retain the original capability.
 Engine-owned duplicates remain CLOEXEC until their child launch; closing the final
 inherited or owned descriptor still releases the kernel lease.
+The explicit native adapter is applied once to a prepared Command. The Command
+must retain its capability after the preparing Scope is released, while the
+parent's descriptor flags stay CLOEXEC and the child writes through the exact
+held open description. Allocation adapters reuse their already held scope;
+captured routes bind at capture and asynchronous routes bind before spawn.
 
 FILEMAP v2 owns `execution_plans`: a map from `test:ID` to
 `{operations: [operation-ID, ...], timeout_seconds, output_limit_bytes}`.

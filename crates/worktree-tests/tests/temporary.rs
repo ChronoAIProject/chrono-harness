@@ -178,7 +178,7 @@ fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
     let allocation =
         chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "capture λ ")
             .unwrap();
-    let mut command = native_command(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
     command
         .arg("capture-once")
         .current_dir(allocation.path())
@@ -480,7 +480,7 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     let allocation = h.parent.clone();
     let source = h.root.join("independent/producer/src/lib.rs");
     let original = fs::read(&source).unwrap();
-    let mut cargo = native_command("cargo");
+    let mut cargo = Command::new("cargo");
     cargo
         .current_dir(&h.root)
         .env_remove("CARGO_TARGET_DIR")
@@ -505,7 +505,7 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     ));
     fs::create_dir(&unknown).unwrap();
     fs::write(unknown.join("original"), [255, 0, 10]).unwrap();
-    let mut command = native_command(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
     command
         .args(["temporary-descendant"])
         .arg(&allocation)
@@ -595,7 +595,7 @@ fn overlapping_allocation_commands_and_real_diagnostic_reference_preserve_genera
         .unwrap();
     let mut commands = vec![];
     for _ in 0..2 {
-        let mut c = native_command(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+        let mut c = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
         c.arg("temporary-descendant").arg(&root).env_clear();
         allocation.bind_command(&mut c).unwrap();
         commands.push(c.spawn().unwrap());

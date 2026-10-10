@@ -417,7 +417,7 @@ fn cargo_result(
     fs::write(dir.path().join(".chrono-harness/config.json"), serde_json::to_vec(&json!({
         "artifacts":(["producer","tests"].iter().map(|p| json!({"path":format!(".chrono-harness/state/cargo/{p}/target/"),"tracked":false})).collect::<Vec<_>>())
     })).unwrap()).unwrap();
-    let mut build = crate::tools::command("cargo");
+    let mut build = std::process::Command::new("cargo");
     build
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
@@ -452,7 +452,7 @@ fn cargo_result(
         "--manifest-path".into(),
         ".chrono-harness/state/cargo/tests/Cargo.toml".into(),
     ];
-    let mut command = crate::tools::command(&argv[0]);
+    let mut command = std::process::Command::new(&argv[0]);
     command
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
