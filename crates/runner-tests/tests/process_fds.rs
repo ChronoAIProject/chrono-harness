@@ -89,14 +89,24 @@ fn declared_native_command_owns_capability_after_scope_release() {
     let scope = Scope::new(&[file.as_fd()]).unwrap();
     let probe = capability_probe(inherited_count() + 1);
     let mut command = std::process::Command::new(&probe.program);
-    command.args(&probe.args).env_clear().envs(&probe.env)
+    command
+        .args(&probe.args)
+        .env_clear()
+        .envs(&probe.env)
         .env("CHRONO_FD_WRITE", "native-owned-copy");
     chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
     drop(scope);
     let output = command.output().unwrap();
-    assert!(output.status.success(), "{} {}",
-        String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
-    assert_ne!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC, 0);
+    assert!(
+        output.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_ne!(
+        unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
+        0
+    );
     file.rewind().unwrap();
     let mut bytes = String::new();
     file.read_to_string(&mut bytes).unwrap();
