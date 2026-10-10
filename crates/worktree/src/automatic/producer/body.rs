@@ -122,6 +122,78 @@ fn register(
 }
 
 impl TemporaryHost {
+    /// A real fixture move carries only its already enrolled copy members.
+    /// Publish destination membership before rename; originals and old intents survive.
+    pub fn relocate_copies(
+        directory: &Path,
+        producer: &str,
+        old_root: &Path,
+        new_root: &Path,
+    ) -> Result<(), String> {
+        let old = old_root
+            .strip_prefix(directory)
+            .map_err(|e| e.to_string())?;
+        let object = old
+            .components()
+            .next()
+            .and_then(|p| p.as_os_str().to_str())
+            .ok_or("copy relocation allocation UTF-8")?;
+        let allocation = directory.join(object);
+        let old_relative = old_root
+            .strip_prefix(&allocation)
+            .map_err(|e| e.to_string())?;
+        let new_relative = new_root
+            .strip_prefix(&allocation)
+            .map_err(|e| e.to_string())?;
+        let store = Store::open(directory, producer, false)?;
+        let record = store
+            .registry
+            .objects
+            .iter()
+            .find(|o| o.path == object)
+            .ok_or("relocation allocation is not enrolled")?;
+        store.stable(record)?;
+        let bodies = record.bodies.clone();
+        drop(store);
+        for (member, body) in bodies {
+            if !body.leases.is_empty() {
+                return Err(
+                    "copy relocation with nested custody requires an explicit bound migration"
+                        .into(),
+                );
+            }
+            let Ok(tail) = Path::new(&member).strip_prefix(old_relative) else {
+                continue;
+            };
+            let source = allocation.join(&member);
+            // Changed/missing inputs retain their prior diagnostics and never
+            // acquire reconstructible membership at a new path.
+            if !source.exists() || input(&source)? != (body.sha256, body.length) {
+                continue;
+            }
+            let root = body.git_root.map(|root| {
+                let relative = if root == "." {
+                    PathBuf::new()
+                } else {
+                    PathBuf::from(root)
+                };
+                allocation.join(match relative.strip_prefix(old_relative) {
+                    Ok(tail) => new_relative.join(tail),
+                    Err(_) => relative,
+                })
+            });
+            Self::register_copy(
+                directory,
+                producer,
+                &source,
+                &new_root.join(tail),
+                root.as_deref(),
+                "actual enrolled fixture copy relocation",
+            )?;
+        }
+        Ok(())
+    }
+
     /// Declare a real copy before it is produced. The returned original is retained
     /// independently of this allocation and can be used by the existing copy route.
     /// No outcome or diagnostic consumer is released by this operation.

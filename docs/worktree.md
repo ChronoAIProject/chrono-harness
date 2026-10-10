@@ -1381,9 +1381,11 @@ outputs remain in `.chrono-harness/cleanup.json`, independent of host language.
 This repository explicitly adopts worktree test allocations, projects execution
 and migration fixtures, and CI test hosts. Smaller nested temporary allocations
 use their bound retained container; no system temporary directory is scanned or
-imported. Only the declared Cargo outputs of the migration, worktree Cargo/native
-fixtures and CI Cargo receipts are eligible for automatic disposal; other fixture
-contents are retained source/evidence. Test allocation retention is intentional
+imported. Declared Cargo outputs and individually enrolled copied inputs are
+eligible for automatic disposal; other fixture contents retain their existing
+source/evidence custody. Explicit fixture moves forward the registered copy
+members before rename, including their possible Git roots; missing or changed
+members acquire no new eligibility. Test allocation retention is intentional
 and is not a completion claim. Unclaimed neighbors and earlier system-temporary
 objects have no retrospective custody. Platform/native acceptance and external
 coordinator delivery remain separate from local behavior tests.

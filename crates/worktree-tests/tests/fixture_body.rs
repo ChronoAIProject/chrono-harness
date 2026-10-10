@@ -108,6 +108,51 @@ fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release
 }
 
 #[test]
+fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let root = allocation.path().to_owned();
+    let checkout = root.join("checkout");
+    fs::create_dir(&checkout).unwrap();
+    git(&checkout, &["init", "-q", "-b", "dev"]);
+    fs::write(checkout.join("source.rs"), "unique committed source\n").unwrap();
+    fs::write(checkout.join(".gitignore"), "copy.bin\n").unwrap();
+    commit(&checkout);
+    let head = git(&checkout, &["rev-parse", "HEAD"]);
+    let source = root.join("input");
+    fs::write(&source, b"original copied input").unwrap();
+    let original = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        &source,
+        &checkout.join("copy.bin"),
+        Some(&checkout),
+        "actual offline fixture copy",
+    )
+    .unwrap();
+    fs::copy(&source, checkout.join("copy.bin")).unwrap();
+    let retained = root.join("offline checkout");
+    chrono_worktree::TemporaryHost::relocate_copies(
+        &store,
+        "test-allocation",
+        &checkout,
+        &retained,
+    )
+    .unwrap();
+    fs::rename(&checkout, &retained).unwrap();
+    drop(allocation);
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!retained.join("copy.bin").exists());
+    assert_eq!(fs::read(original).unwrap(), b"original copied input");
+    assert_eq!(
+        fs::read(retained.join("source.rs")).unwrap(),
+        b"unique committed source\n"
+    );
+    assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
+}
+
+#[test]
 fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_siblings() {
     let h = host();
     let (store, first) = allocation(&h);

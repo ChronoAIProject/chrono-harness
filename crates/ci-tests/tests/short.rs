@@ -1731,6 +1731,13 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
         );
     }
     // Original absolute paths are unavailable. Only the selected uploaded roots are delivered.
+    chrono_worktree::TemporaryHost::relocate_copies(
+        h._dir.path().parent().unwrap(),
+        "ci-test-host",
+        &h.root,
+        &h._dir.path().join("unavailable original checkout"),
+    )
+    .unwrap();
     fs::rename(&h.root, h._dir.path().join("unavailable original checkout")).unwrap();
     install_mock_transport(&consumer, "success", &h.candidate);
     json_file(&consumer, ".chrono-harness/state/event.json", &payload);

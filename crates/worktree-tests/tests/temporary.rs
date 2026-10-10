@@ -511,7 +511,7 @@ fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_
         let h = super::bounded_cleanup::main_host_mode("temporary-cargo");
         let policy_path = h.root.join(".chrono-harness/cleanup.json");
         let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
-        policy["retained_producers"] = value!([{"id":"test-allocation", "directory":".chrono-harness/state/custom temporary λ/", "temporary":true,
+        policy["retained_producers"] = value!([{"id":"test-allocation", "directory":".chrono-harness/state/custom temporary λ/", "temporary":true,"fixture_bodies":true,
             "generated_outputs":["cache 空白/", "cargo 空白/target/"]}]);
         fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
         commit(&h.root);

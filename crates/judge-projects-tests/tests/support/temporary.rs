@@ -56,6 +56,13 @@ impl FixtureDirectory {
     /// reports. Preserve original bytes while making the old Git path unavailable.
     pub fn make_checkout_unavailable(&self) -> std::io::Result<std::path::PathBuf> {
         let retained = self.allocation.path().join("retained-offline-checkout");
+        chrono_worktree::TemporaryHost::relocate_copies(
+            self.allocation.path().parent().unwrap(),
+            "projects-test-host",
+            &self.root,
+            &retained,
+        )
+        .map_err(std::io::Error::other)?;
         std::fs::rename(&self.root, &retained)?;
         Ok(retained)
     }

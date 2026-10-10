@@ -596,6 +596,13 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         &dest.join(".chrono-harness/state/native evidence λ"),
         &consumer.join(".chrono-harness/state/native evidence λ"),
     );
+    chrono_worktree::TemporaryHost::relocate_copies(
+        h.parent.parent().unwrap(),
+        "worktree-test-host",
+        &dest,
+        &h.parent.join("original full paths unavailable"),
+    )
+    .unwrap();
     fs::rename(&dest, h.parent.join("original full paths unavailable")).unwrap();
     prepared::validate_portable_binding(&consumer, &r["preparation"], None).unwrap();
     prepared::validate_portable_binding(&consumer, &next["preparation"], None).unwrap();
