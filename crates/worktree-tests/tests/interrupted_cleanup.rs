@@ -40,9 +40,8 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
         }),
         "the same invoking/coordinator checkout shares one live common-directory observation"
     );
-    let processes = report["drain"][0]["report"]["processes"]
-        .as_array()
-        .unwrap();
+    let child = drain_report(&report["drain"][0]);
+    let processes = child["processes"].as_array().unwrap();
     let trees: Vec<_> = processes
         .iter()
         .filter(|p| {
@@ -142,9 +141,8 @@ fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error
         assert_eq!(fs::read(target.join("payload")).unwrap(), source);
         assert_eq!(h.ledger()["entries"][0]["ownership"]["cache_pending"], true);
         if fault == "failure" {
-            let processes = report["drain"][0]["report"]["processes"]
-                .as_array()
-                .unwrap();
+            let child = drain_report(&report["drain"][0]);
+            let processes = child["processes"].as_array().unwrap();
             let original = &processes.last().unwrap()["process"];
             assert_eq!(original["exit_code"], 71);
             assert_eq!(original["stderr"], "original identity failure\n");
@@ -231,6 +229,83 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
         assert!(String::from_utf8_lossy(&refused.stderr).contains("participation refused"));
         assert!(refused.stdout.is_empty());
     }
+}
+
+#[test]
+fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_bound() {
+    let h = Host::new("payload");
+    participating_check(&h);
+    h.kernel_cleanup();
+    h.policy(|p| p["immutable_input_limits"] = value!({CONFIG:2_097_152, FM:2_097_152}));
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("large-cleanup");
+    assert_eq!(h.invoke("feature", "large-cleanup", &target).0, 0);
+    // The real observed gap has a small coordinator and a larger, separately
+    // adopted host configuration. Keep that same ownership relationship.
+    let mut bytes = fs::read(target.join(CONFIG)).unwrap();
+    bytes.resize(2_022_211, b' ');
+    fs::write(target.join(CONFIG), &bytes).unwrap();
+    let mut filemap = fs::read(target.join(FM)).unwrap();
+    filemap.resize(1_791_500, b' ');
+    fs::write(target.join(FM), &filemap).unwrap();
+    commit(&target);
+    output(&target);
+    let target_head = git(&target, &["rev-parse", "HEAD"]);
+    install_inner(
+        &h.root,
+        "original collection stdout\n",
+        "original warning\n",
+        0,
+    );
+    let out = Command::new(h.root.join(".chrono-harness/bin/chrono-harness"))
+        .current_dir(&h.root)
+        .args(["check", "--collect"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(out.stdout, b"original collection stdout\n");
+    assert_eq!(out.stderr, b"original warning\n");
+    assert!(!target.join("output λ").exists());
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), target_head);
+    assert_eq!(fs::read(target.join(CONFIG)).unwrap(), bytes);
+    let report_path = fs::read_dir(h.root.join(".chrono-harness/state/worktrees"))
+        .unwrap()
+        .map(|r| r.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("check-")
+        })
+        .unwrap();
+    let parent = fs::read(&report_path).unwrap();
+    assert!(parent.len() < 67_108_864);
+    let report = json(&parent).unwrap();
+    let row = &report["drain"][0];
+    assert!(row.get("report").is_none());
+    assert_eq!(row["status"], "cleaned");
+    let child = drain_report(row);
+    assert_eq!(child["worktree_removal"], "preserved");
+    assert_eq!(child["artifact_disposals"][0]["bytes_before"], 12);
+    assert_eq!(child["artifact_disposals"][0]["bytes_after"], 0);
+    let mut historical_inline = report.clone();
+    historical_inline["drain"][0]["report"] = child;
+    historical_inline["drain"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("input");
+    let inline_bytes = serde_json::to_vec_pretty(&historical_inline).unwrap().len();
+    assert!(
+        inline_bytes > 67_108_864,
+        "fixture must reproduce the original parent transport overflow: {inline_bytes}"
+    );
+    println!(
+        "LIFECYCLE_TRANSPORT parent_bytes={} child_bytes={} historical_inline_bytes={inline_bytes} stdout_bound=67108864",
+        parent.len(),
+        row["input"]["byte_length"]
+    );
 }
 #[test]
 fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
@@ -832,7 +907,7 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
         "original missing/partial result must be unchanged"
     );
     assert_eq!(
-        report["drain"][0]["report"]["artifact_disposals"][0]["status"],
+        drain_report(&report["drain"][0])["artifact_disposals"][0]["status"],
         "already-absent"
     );
     assert_eq!(h.ledger()["entries"][0]["status"], "active");
@@ -859,7 +934,7 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
         output(&target);
         let (code, report, error) = h.auto("maintain", &[]);
         assert_ne!(code, 0, "{report} {error}");
-        let report = &report["drain"][0]["report"];
+        let report = &drain_report(&report["drain"][0]);
         assert_eq!(report["status"], "failed");
         assert!(report["processes"].as_array().unwrap().iter().any(|p| {
             p["process"]["exit_code"] == 71 && p["process"]["stderr"] == "original cache failure\n"
@@ -901,7 +976,7 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
     output(&target);
     let (code, failed, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{failed} {error}");
-    let original = &failed["drain"][0]["report"]["prior_cache_attempt"]["result"];
+    let original = &drain_report(&failed["drain"][0])["prior_cache_attempt"]["result"];
     assert_eq!(original["original_outcome"], "unknown");
     let input = &original["input"];
     assert_eq!(input["format"], "bytes");

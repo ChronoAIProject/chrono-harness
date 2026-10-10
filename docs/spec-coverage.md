@@ -614,6 +614,14 @@ coordinator. The dedicated worktree regressions
 repeated real terminal/cache failures, bounded report growth, original-byte
 preservation, transitive drift/missing/symlink refusals and partial-result
 retention without claiming success. Explicit maintenance keeps its prior shape.
+Current nonempty drains also refer to the immutable child instead of embedding
+it. `nonempty_large_cleanup_participation_preserves_reports_and_console_under_bound`
+exercises actual cleanup and public check participation with a child whose former
+inline parent exceeds the existing stdout bound; the parent retains the child
+status/error, original receipt and unchanged managed console. The dedicated
+`addressed_drain_originals_remain_required_for_birth_consumption` regression checks
+that missing or changed child evidence refuses later admission. Historical inline
+drains remain readable through the same retained-input verifier.
 This does not dispose historical evidence, deploy the coordinator or establish
 complete native acceptance.
 

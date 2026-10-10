@@ -12,6 +12,29 @@ const POLICY: &str = ".chrono-harness/worktree.json";
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
+
+// Tests consume current addressed children and supported historical inline
+// children without rewriting either original representation.
+fn drain_report(entry: &Value) -> Value {
+    if let Some(report) = entry.get("report") {
+        return report.clone();
+    }
+    let input = &entry["input"];
+    assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
+    assert_eq!(input["format"], "receipt");
+    assert_eq!(entry["receipt"]["path"], input["path"]);
+    assert_eq!(entry["receipt"]["sha256"], input["sha256"]);
+    let bytes = fs::read(
+        Path::new(input["source_root"].as_str().unwrap()).join(input["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    assert_eq!(bytes.len(), input["byte_length"].as_u64().unwrap() as usize);
+    assert_eq!(sha256(&bytes), input["sha256"]);
+    let report = json(&bytes).unwrap();
+    assert_eq!(entry["status"], report["status"]);
+    assert_eq!(entry["error"], report["error"]);
+    report
+}
 fn fixture_git() -> PathBuf {
     let registry = source().join(".chrono-harness/tests/worktree-tools.json");
     let tools = json(&fs::read(&registry).expect("registered worktree test tools")).unwrap();

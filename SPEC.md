@@ -268,7 +268,7 @@ argv 显式指定本仓宿主根 `.`，init 不传材料路径以保留已有定
 | surface | `product / test / documentation / membership / instruction-policy / judge-policy / judge-implementation` |
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
-| execution_plans | FILEMAP v2: `test:ID` -> `{operations: string[], timeout_seconds, output_limit_bytes}`; ordered nonempty unique IDs, test execute required; shared precedence and bounds must agree before any launch |
+| execution_plans | FILEMAP v2: `test:ID` -> `{operations: string[], timeout_seconds, output_limit_bytes, operation_bounds?}`; optional map from listed operation IDs to complete positive `{timeout_seconds, output_limit_bytes}` (output ≤64 MiB), missing entries inherit defaults, absent/empty map preserves historical serialization; ordered nonempty unique IDs, test execute required; shared precedence and resolved bounds must agree before any launch |
 | execution_scheduling | FILEMAP v2 optional: `{max_running: positive integer, resources: string[], claims: {operation: {resources: string[], outputs: artifact-path[]}}}`; every participating operation explicitly claimed, including empty lists; exclusive resources and overlapping output namespaces; absent preserves serial plan identity |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
 
