@@ -21,7 +21,11 @@ impl Drop for ReleaseNative {
 }
 
 fn host() -> Host {
-    let h = super::bounded_cleanup::main_host_mode("temporary-producer");
+    host_mode("temporary-producer")
+}
+
+fn host_mode(mode: &str) -> Host {
+    let h = super::bounded_cleanup::main_host_mode(mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"] = value!([{"id":"test-allocation",
@@ -162,8 +166,7 @@ fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
 
 #[test]
 fn killed_capture_producer_keeps_partial_streams_without_joined_result_or_finish() {
-    let h = host();
-    super::automatic::native_consumer(&h, "temporary-capture");
+    let h = host_mode("temporary-capture");
     let mut producer = super::interrupted_cleanup::CapturedChild::spawn(
         &mut h.auto_command("use", &["--operation", "use.consumer"]),
         &h.root,
