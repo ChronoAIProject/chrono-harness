@@ -269,7 +269,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let root = h.root();
     let profile = ".chrono-harness/scoped.json";
     host::copied_fixture_input(
-        root,
+        &root,
         &source().join("crates/judge-ci/target/debug/chrono-judge-ci"),
         &root.join(".chrono-harness/bin/chrono-judge-ci"),
     );
