@@ -219,7 +219,7 @@ impl ShortHost {
         c
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
-        let out = self.command(args).output().unwrap();
+        let out = self._dir.capture_output(&mut self.command(args)).unwrap();
         if out.status.code() != Some(exit) {
             let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
                 .chain(args.iter().map(|arg| (*arg).to_owned()))

@@ -14,14 +14,14 @@ pub(super) struct ProducerPolicy {
     pub(super) source_roots: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CacheLease {
     path: String,
     id: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Reference {
     released: bool,
@@ -29,7 +29,7 @@ struct Reference {
     receipt: Option<Receipt>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Object {
     path: String,
@@ -214,18 +214,32 @@ impl Store {
 
     fn stable(&self, object: &Object) -> Result<(), String> {
         self.lease.stable()?;
-        if directory_id(&self.directory)? != self.registry.directory_id
-            || directory_id(&no_symlink_parents(&self.directory, &object.path)?)? != object.identity
+        Self::stable_in(
+            &self.directory,
+            &self.registry.producer,
+            &self.registry.directory_id,
+            object,
+        )
+    }
+
+    fn stable_in(
+        directory: &Path,
+        producer: &str,
+        directory_id_expected: &str,
+        object: &Object,
+    ) -> Result<(), String> {
+        if directory_id(directory)? != directory_id_expected
+            || directory_id(&no_symlink_parents(directory, &object.path)?)? != object.identity
         {
             return Err("producer artifact identity changed; preserve object".into());
         }
-        let intent = no_symlink_parents(&self.directory, &object.intent.path)?;
+        let intent = no_symlink_parents(directory, &object.intent.path)?;
         let bytes = fs::read(intent).map_err(|e| e.to_string())?;
         let intent = json(&bytes)?;
         if sha256(&bytes) != object.intent.sha256
             || intent["path"] != object.path
             || intent["identity"] != object.identity
-            || intent["producer"] != self.registry.producer
+            || intent["producer"] != producer
             || (object.cache_lease.is_some() && intent["cache_lease"] != value!(object.cache_lease))
         {
             return Err("producer intent changed; preserve object".into());
@@ -235,7 +249,7 @@ impl Store {
                 .publication
                 .as_ref()
                 .ok_or("producer publication is missing")?;
-            let bytes = fs::read(no_symlink_parents(&self.directory, &publication.path)?)
+            let bytes = fs::read(no_symlink_parents(directory, &publication.path)?)
                 .map_err(|e| e.to_string())?;
             if sha256(&bytes) != publication.sha256
                 || json(&bytes)?
@@ -249,7 +263,7 @@ impl Store {
         }
         for (consumer, reference) in &object.consumers {
             if let Some(receipt) = &reference.receipt {
-                let bytes = fs::read(no_symlink_parents(&self.directory, &receipt.path)?)
+                let bytes = fs::read(no_symlink_parents(directory, &receipt.path)?)
                     .map_err(|e| e.to_string())?;
                 if sha256(&bytes) != receipt.sha256
                     || json(&bytes)?
@@ -268,11 +282,8 @@ impl Store {
             }
         }
         for (path, observed) in &object.evidence {
-            let bytes = fs::read(no_symlink_parents(
-                &self.directory.join(&object.path),
-                path,
-            )?)
-            .map_err(|e| e.to_string())?;
+            let bytes = fs::read(no_symlink_parents(&directory.join(&object.path), path)?)
+                .map_err(|e| e.to_string())?;
             if observed != &value!({"sha256":sha256(&bytes),"length":bytes.len()}) {
                 return Err("producer original evidence changed; preserve object".into());
             }
@@ -291,11 +302,15 @@ impl Store {
     }
 
     fn receipt(&self, prefix: &str, value: &Value) -> Result<Receipt, String> {
+        Self::receipt_in(&self.directory, prefix, value)
+    }
+
+    fn receipt_in(directory: &Path, prefix: &str, value: &Value) -> Result<Receipt, String> {
         let name = format!(
             "{prefix}-{}.json",
             sha256(&serde_json::to_vec(value).map_err(|e| e.to_string())?)
         );
-        let physical = no_symlink_parents(&self.directory, &name)?;
+        let physical = no_symlink_parents(directory, &name)?;
         let bytes = match fs::read(&physical) {
             Ok(bytes) if json(&bytes)? == *value => bytes,
             Ok(_) => return Err("producer receipt collision".into()),
@@ -602,6 +617,22 @@ impl RetainedArtifact {
             .ok_or("producer object missing")?;
         let object = &store.registry.objects[i];
         store.stable(object)?;
+        let _cache = object
+            .cache_lease
+            .as_ref()
+            .map(|binding| {
+                Lease::acquire(
+                    &no_symlink_parents(&self.directory, &binding.path)?,
+                    Some(&binding.id),
+                    false,
+                    false,
+                    None,
+                )?
+                .ok_or_else(|| {
+                    "temporary cache recovery is active; reference not acquired".to_string()
+                })
+            })
+            .transpose()?;
         if (!object.sealed && object.cache_lease.is_none()) || (!released && object.disposed) {
             return Err(
                 "unsealed/disposed producer artifact cannot acquire or release consumers".into(),
@@ -730,6 +761,69 @@ impl TemporaryHost {
         command.env("TMPDIR", &self.path);
         chrono_harness::process_fds::forward_command(command, &[self.lease.file.as_fd()])
     }
+
+    /// Native fixture output is written before join, independently of Drop.
+    /// Captures remain evidence; a missing result never establishes completion.
+    pub fn capture_output(
+        &self,
+        command: &mut std::process::Command,
+    ) -> Result<std::process::Output, String> {
+        self.bind_command(command)?;
+        let directory = self.path.join(".chrono-harness/state/command-captures");
+        fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        let capture = tempfile::Builder::new()
+            .prefix("native-")
+            .tempdir_in(&directory)
+            .map_err(|e| e.to_string())?
+            .keep();
+        let stdout = capture.join("stdout.bytes");
+        let stderr = capture.join("stderr.bytes");
+        let out = fs::File::create_new(&stdout).map_err(|e| e.to_string())?;
+        let err = fs::File::create_new(&stderr).map_err(|e| e.to_string())?;
+        let environment: BTreeMap<_, _> = command
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| sha256(v.as_encoded_bytes())),
+                )
+            })
+            .collect();
+        write_json(
+            &capture.join("intent.json"),
+            &value!({
+                "schema":"chrono-temporary-native-capture/v1", "program":command.get_program().to_string_lossy(),
+                "argv":command.get_args().map(|v| v.to_string_lossy()).collect::<Vec<_>>(),
+                "cwd":command.get_current_dir(),"explicit_environment_sha256":environment,
+                "stdout":"stdout.bytes","stderr":"stderr.bytes","producer_outcome":"not-established",
+                "task_completion":"not-claimed"
+            }),
+            true,
+        )?;
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(out)
+            .stderr(err);
+        let mut child = command.spawn().map_err(|e| e.to_string())?;
+        write_json(
+            &capture.join("started.json"),
+            &value!({"child_pid":child.id()}),
+            true,
+        )?;
+        let status = child.wait().map_err(|e| e.to_string())?;
+        write_json(
+            &capture.join("result.json"),
+            &value!({"child_pid":child.id(),
+            "status":status.to_string(),"exit_code":status.code(),"joined":true,
+            "task_completion":"not-claimed"}),
+            true,
+        )?;
+        Ok(std::process::Output {
+            status,
+            stdout: fs::read(stdout).map_err(|e| e.to_string())?,
+            stderr: fs::read(stderr).map_err(|e| e.to_string())?,
+        })
+    }
 }
 
 impl ProducerPolicy {
@@ -834,19 +928,46 @@ impl ProducerPolicy {
                 "status":"protected-unknown","reason":"no explicit producer registry; historical objects remain untouched"}));
             return Ok(());
         }
-        let mut store = Store::open(&directory, &self.id, false)?;
+        let opened = Store::open(&directory, &self.id, false)?;
+        let objects = opened.registry.objects.clone();
+        let registry_id = opened.registry.directory_id.clone();
+        let mut store = Some(opened);
         let mut failures = vec![];
-        for i in 0..store.registry.objects.len() {
-            let object = &store.registry.objects[i];
-            let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
-                "retention_reason":object.retention_reason,"consumers":object.consumers,
-                "registered_generated_objects":object.generated.len(),"evidence":"retained"});
-            let cache_guard = if let Some(binding) = &object.cache_lease {
+        for snapshot in &objects {
+            let cache_guard = if let Some(binding) = &snapshot.cache_lease {
                 let path = no_symlink_parents(&directory, &binding.path)?;
                 Lease::acquire(&path, Some(&binding.id), false, true, None)?
             } else {
                 None
             };
+            let owned = if !snapshot.disposed
+                && (snapshot.cache_lease.is_none() || cache_guard.is_some())
+            {
+                if store.is_none() {
+                    store = Some(Store::open(&directory, &self.id, false)?);
+                }
+                let current = store.as_ref().unwrap();
+                let object = current
+                    .registry
+                    .objects
+                    .iter()
+                    .find(|o| o.path == snapshot.path)
+                    .ok_or("producer object missing during recovery")?;
+                if object.identity != snapshot.identity
+                    || value!(object.intent) != value!(snapshot.intent)
+                    || value!(object.cache_lease) != value!(snapshot.cache_lease)
+                {
+                    return Err("producer allocation binding changed; preserve originals".into());
+                }
+                current.stable(object)?;
+                object.clone()
+            } else {
+                snapshot.clone()
+            };
+            let object = &owned;
+            let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
+                "retention_reason":object.retention_reason,"consumers":object.consumers,
+                "registered_generated_objects":object.generated.len(),"evidence":"retained"});
             if (!object.sealed && object.cache_lease.is_none())
                 || object.consumers.values().any(|c| !c.released)
                 || (object.cache_lease.is_some() && cache_guard.is_none())
@@ -858,8 +979,13 @@ impl ProducerPolicy {
             } else if object.disposed {
                 row["status"] = value!("already-disposed");
             } else {
+                if object.cache_lease.is_some() {
+                    // The exact allocation EX lease excludes reference acquisition;
+                    // unrelated allocations may publish while this cache is checked.
+                    drop(store.take());
+                }
                 let mut run = || -> Result<Value, String> {
-                    store.stable(object)?;
+                    Store::stable_in(&directory, &self.id, &registry_id, object)?;
                     let prospective: Vec<String> = if object.cache_lease.is_some() {
                         if !self.temporary {
                             return Err(
@@ -901,18 +1027,22 @@ impl ProducerPolicy {
                             .map(|p| no_symlink_parents(root, p.trim_end_matches('/')))
                             .collect::<Result<Vec<_>, _>>()?
                     };
-                    let intent = store.receipt("producer-cleanup-intent", &value!({
-                        "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
-                        "identity":object.identity,"producer_intent":object.intent,"generated":object.generated,
-                        "policy_sha256":sha256(&manager.policy_bytes),"released_consumers":object.consumers,
-                        "cache_lease":object.cache_lease,"prospective_outputs":prospective,
-                        "producer_outcome":"not-established-by-cache-recovery"
-                    }))?;
+                    let intent = Store::receipt_in(
+                        &directory,
+                        "producer-cleanup-intent",
+                        &value!({
+                            "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
+                            "identity":object.identity,"producer_intent":object.intent,"generated":object.generated,
+                            "policy_sha256":sha256(&manager.policy_bytes),"released_consumers":object.consumers,
+                            "cache_lease":object.cache_lease,"prospective_outputs":prospective,
+                            "producer_outcome":"not-established-by-cache-recovery"
+                        }),
+                    )?;
                     let mut attempt = value!({"automatic_cleanup":true,"intent":intent,"artifact_disposals":[],"status":"failed"});
                     let outcome =
                         artifact_disposal::dispose(root, &names, &paths, &mut attempt, || {
                             manager.stable(r)?;
-                            store.stable(object)?;
+                            Store::stable_in(&directory, &self.id, &registry_id, object)?;
                             if let Some(lease) = &cache_guard {
                                 lease.stable()?;
                             }
@@ -942,23 +1072,43 @@ impl ProducerPolicy {
                         Ok(()) => attempt["status"] = value!("cleaned"),
                         Err(error) => attempt["error"] = value!(error),
                     }
-                    let receipt = store.receipt("producer-cleanup-result", &attempt)?;
+                    let receipt =
+                        Store::receipt_in(&directory, "producer-cleanup-result", &attempt)?;
                     attempt["receipt"] = value!(receipt);
                     Ok(attempt)
                 };
                 match run() {
                     Ok(attempt) => {
-                        store.registry.objects[i].attempts.push(
+                        if store.is_none() {
+                            store = Some(Store::open(&directory, &self.id, false)?);
+                        }
+                        let current = store.as_mut().unwrap();
+                        let i = current
+                            .registry
+                            .objects
+                            .iter()
+                            .position(|o| o.path == object.path)
+                            .ok_or("producer object missing during recovery")?;
+                        if value!(current.registry.objects[i]) != value!(object) {
+                            return Err(
+                                "producer registration changed during recovery; preserve originals"
+                                    .into(),
+                            );
+                        }
+                        current.registry.objects[i].attempts.push(
                             serde_json::from_value(attempt["receipt"].clone())
                                 .map_err(|e| e.to_string())?,
                         );
-                        store.registry.objects[i].disposed = attempt["status"] == "cleaned";
+                        current.registry.objects[i].disposed = attempt["status"] == "cleaned";
                         if attempt["status"] != "cleaned" {
                             failures.push(attempt["error"].to_string());
                         }
                         row["status"] = attempt["status"].clone();
                         row["cleanup"] = attempt;
-                        store.save()?;
+                        current.save()?;
+                        if object.cache_lease.is_some() {
+                            drop(store.take());
+                        }
                     }
                     Err(error) => {
                         failures.push(error.clone());
@@ -966,6 +1116,9 @@ impl ProducerPolicy {
                         row["error"] = value!(error);
                     }
                 }
+            }
+            if object.cache_lease.is_some() {
+                drop(store.take());
             }
             report["producer_objects"].as_array_mut().unwrap().push(row);
         }

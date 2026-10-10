@@ -262,8 +262,7 @@ impl Host {
                 "--path",
                 target.to_str().unwrap(),
             ]);
-        self._dir.bind_command(&mut command).unwrap();
-        self.received(command.output().unwrap())
+        self.received(self._dir.capture_output(&mut command).unwrap())
     }
     fn received(&self, out: std::process::Output) -> (i32, Value, String) {
         if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {

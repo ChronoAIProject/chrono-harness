@@ -12,7 +12,15 @@ const STATE: &str = ".chrono-harness/state";
 
 fn mark(name: &str, bytes: impl AsRef<[u8]>) {
     fs::create_dir_all(STATE).unwrap();
-    fs::write(Path::new(STATE).join(name), bytes).unwrap();
+    let (mut file, partial) = tempfile::Builder::new()
+        .prefix("unpublished-marker-")
+        .tempfile_in(STATE)
+        .unwrap()
+        .keep()
+        .unwrap();
+    file.write_all(bytes.as_ref()).unwrap();
+    drop(file);
+    fs::rename(partial, Path::new(STATE).join(name)).unwrap();
 }
 
 fn wait(name: &str) {
@@ -178,7 +186,7 @@ fn main() -> ExitCode {
             }
             exec(cargo);
         }
-        "temporary-producer" | "temporary-cargo" => {
+        "temporary-producer" | "temporary-cargo" | "temporary-capture" => {
             let root = std::env::current_dir().unwrap();
             let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
                 &root,
@@ -200,6 +208,15 @@ fn main() -> ExitCode {
             fs::write(allocated.join("cache 空白/output"), "rebuildable").unwrap();
             mark("temporary-parent", std::process::id().to_string());
             mark("temporary-path", allocated.as_os_str().as_encoded_bytes());
+            if mode == "temporary-capture" {
+                let mut child = Command::new(std::env::current_exe().unwrap());
+                child
+                    .arg("capture-child")
+                    .current_dir(allocated)
+                    .process_group(0);
+                allocation.capture_output(&mut child).unwrap();
+                return ExitCode::SUCCESS;
+            }
             if mode == "temporary-cargo" {
                 let project = allocated.join("cargo 空白");
                 fs::create_dir_all(project.join("src")).unwrap();
@@ -244,6 +261,20 @@ fn main() -> ExitCode {
             mark("temporary-child", child.id().to_string());
             wait("temporary-parent-release");
             assert!(child.wait().unwrap().success());
+        }
+        "capture-child" | "capture-once" => {
+            io::stdout().write_all(b"\xffpartial stdout\0\n").unwrap();
+            io::stderr().write_all(b"\xfepartial stderr\0\n").unwrap();
+            io::stdout().flush().unwrap();
+            io::stderr().flush().unwrap();
+            if mode == "capture-child" {
+                fs::write("capture-active", std::process::id().to_string()).unwrap();
+                while !Path::new("native-release").exists() {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                fs::write("capture-done", "actual final write complete").unwrap();
+            }
+            return ExitCode::from(7);
         }
         "temporary-descendant" => {
             let allocation = std::path::PathBuf::from(std::env::args_os().nth(2).unwrap());
@@ -310,6 +341,7 @@ fn main() -> ExitCode {
                     let mut command = Command::new(std::env::current_exe().unwrap());
                     command
                         .args(["bounded-consumer", stage])
+                        .process_group(0)
                         .stdin(Stdio::null())
                         .stdout(Stdio::null())
                         .stderr(Stdio::null());

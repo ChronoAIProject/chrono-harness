@@ -6,6 +6,9 @@ struct ReleaseNative {
 }
 impl Drop for ReleaseNative {
     fn drop(&mut self) {
+        if !self.allocation.is_absolute() {
+            return;
+        }
         // Teardown uses the actual fixture protocol, including assertion failure.
         // The child's final read and the owner's kernel exclusion establish release.
         let _ = fs::write(self.allocation.join("native-release"), "fixture teardown");
@@ -39,6 +42,174 @@ fn wait(path: &Path) {
         "missing actual native observation {}",
         path.display()
     );
+}
+
+struct ReleaseCheck(PathBuf);
+impl Drop for ReleaseCheck {
+    fn drop(&mut self) {
+        let _ = fs::write(
+            self.0.join("temporary-check-release"),
+            "actual fixture release",
+        );
+    }
+}
+
+#[test]
+fn excluded_allocation_source_check_allows_unrelated_publication_and_rejects_diagnostic_race() {
+    let h = host();
+    let policy_path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"][0]["source_roots"] = value!(["."]);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "blocked λ ")
+            .unwrap();
+    let root = allocation.path().to_owned();
+    git(&root, &["init", "-q"]);
+    fs::write(root.join("source.rs"), "retained source").unwrap();
+    commit(&root);
+    fs::create_dir(root.join("cache 空白")).unwrap();
+    fs::write(root.join("cache 空白/output"), "generated").unwrap();
+    super::automatic::native_git(&h, "temporary-source-check", value!({"root":root}));
+    drop(allocation);
+    let mut maintenance = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command("maintain", &[]),
+        &h.root,
+    );
+    let _release = ReleaseCheck(h.parent.clone());
+    maintenance.await_file(&h.parent.join("temporary-check-active"));
+    let began = std::time::Instant::now();
+    let unrelated = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &outputs,
+        "unrelated λ ",
+    )
+    .unwrap();
+    assert!(
+        began.elapsed().as_secs() < 10,
+        "unrelated publication waited for the source check"
+    );
+    let reference =
+        chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root).unwrap();
+    assert!(
+        reference
+            .acquire("racing-diagnostic", "must not enter an excluded cache")
+            .unwrap_err()
+            .contains("reference not acquired")
+    );
+    assert!(root.join("cache 空白/output").exists());
+    fs::write(h.parent.join("temporary-check-release"), "actual release").unwrap();
+    let output = maintenance.wait_with_output().unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(!root.join("cache 空白").exists());
+    assert_eq!(
+        fs::read(root.join("source.rs")).unwrap(),
+        b"retained source"
+    );
+    let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    let row = registry["objects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == root.file_name().unwrap().to_str().unwrap())
+        .unwrap();
+    assert!(row["consumers"].get("racing-diagnostic").is_none());
+    assert!(unrelated.path().is_dir());
+}
+
+fn capture_directory(root: &Path) -> PathBuf {
+    let captures: Vec<_> = fs::read_dir(root.join(".chrono-harness/state/command-captures"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(captures.len(), 1);
+    captures[0].clone()
+}
+
+#[test]
+fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
+    let h = host();
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
+            .unwrap();
+    let allocation =
+        chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "capture λ ")
+            .unwrap();
+    let mut command = native_command(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
+    command
+        .arg("capture-once")
+        .current_dir(allocation.path())
+        .env_clear();
+    let output = allocation.capture_output(&mut command).unwrap();
+    assert_eq!(output.status.code(), Some(7));
+    assert_eq!(output.stdout, b"\xffpartial stdout\0\n");
+    assert_eq!(output.stderr, b"\xfepartial stderr\0\n");
+    let capture = capture_directory(allocation.path());
+    assert_eq!(
+        fs::read(capture.join("stdout.bytes")).unwrap(),
+        output.stdout
+    );
+    assert_eq!(
+        json(&fs::read(capture.join("result.json")).unwrap()).unwrap()["exit_code"],
+        7
+    );
+}
+
+#[test]
+fn killed_capture_producer_keeps_partial_streams_without_joined_result_or_finish() {
+    let h = host();
+    super::automatic::native_consumer(&h, "temporary-capture");
+    let mut producer = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command("use", &["--operation", "use.consumer"]),
+        &h.root,
+    );
+    producer.await_managed_file(&h.root.join(".chrono-harness/state/temporary-path"));
+    let root = PathBuf::from(
+        fs::read_to_string(h.root.join(".chrono-harness/state/temporary-path")).unwrap(),
+    );
+    let _release = ReleaseNative {
+        allocation: root.clone(),
+        coordinator: h.root.clone(),
+    };
+    wait(&root.join("capture-active"));
+    let capture = capture_directory(&root);
+    wait(&capture.join("started.json"));
+    let parent = fs::read_to_string(h.root.join(".chrono-harness/state/temporary-parent")).unwrap();
+    assert!(
+        native_command("/bin/kill")
+            .args(["-KILL", &parent])
+            .status()
+            .unwrap()
+            .success()
+    );
+    producer.kill().unwrap();
+    assert!(!producer.wait_with_output().unwrap().status.success());
+    assert_eq!(
+        fs::read(capture.join("stdout.bytes")).unwrap(),
+        b"\xffpartial stdout\0\n"
+    );
+    assert_eq!(
+        fs::read(capture.join("stderr.bytes")).unwrap(),
+        b"\xfepartial stderr\0\n"
+    );
+    assert!(!capture.join("result.json").exists());
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(root.join("cache 空白/output").exists());
+    fs::write(root.join("native-release"), "actual final native write").unwrap();
+    wait(&root.join("capture-done"));
+    let began = std::time::Instant::now();
+    while root.join("cache 空白").exists() {
+        assert_eq!(h.auto("maintain", &[]).0, 0);
+        assert!(began.elapsed().as_secs() < 10);
+    }
+    assert!(capture.join("intent.json").is_file());
+    assert!(!capture.join("result.json").exists());
+    assert!(h.ledger()["entries"][0]["terminal"].is_null());
 }
 
 #[test]
@@ -245,8 +416,8 @@ fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs(
             b"irreplaceable source"
         );
         assert_eq!(
-            git(&root, &["ls-files", "cache 空白/source.rs"]),
-            "cache 空白/source.rs"
+            git(&root, &["ls-files", "-z", "cache 空白/source.rs"]),
+            "cache 空白/source.rs\0"
         );
     }
 }
@@ -332,14 +503,18 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     assert!(!target.exists());
     assert_eq!(fs::read(source).unwrap(), original);
     assert_eq!(fs::read(unknown.join("original")).unwrap(), [255, 0, 10]);
-    println!(
-        "REAL_COORDINATOR_CUSTODY {}",
-        value!({"candidate":git(&crate::source(), &["rev-parse","HEAD"]),
+    let evidence = value!({"candidate":git(&crate::source(), &["rev-parse","HEAD"]),
         "binary_sha256":sha256(&fs::read(crate::source().join(".chrono-harness/bin/chrono-worktree")).unwrap()),
         "policy_sha256":sha256(&fs::read(crate::source().join(".chrono-harness/cleanup.json")).unwrap()),
         "allocation":allocation,"protected_report":protected["report_path"],"recovery_report":reclaimed["report_path"],
-        "source_preserved":true,"unknown_neighbor_preserved":true,"finish":"not-called"})
-    );
+        "source_preserved":true,"unknown_neighbor_preserved":true,"finish":"not-called"});
+    let evidence_path = allocation.join("real-coordinator-custody.json");
+    fs::write(
+        &evidence_path,
+        serde_json::to_vec_pretty(&evidence).unwrap(),
+    )
+    .unwrap();
+    println!("REAL_COORDINATOR_CUSTODY {}", evidence_path.display());
 }
 
 #[test]

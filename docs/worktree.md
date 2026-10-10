@@ -1282,6 +1282,13 @@ missing-result truth. Unknown objects and unreleased diagnostic references must
 remain protected. Literal absolute allocation bindings must survive nested native
 commands, cleared command environments and Cargo working-directory changes,
 including spaces and Unicode; no ambient caller export is the custody authority.
+An intentionally blocked source check for one excluded allocation must still
+allow an unrelated allocation to publish. A diagnostic claim on the excluded
+allocation must fail without publishing a reference. After the check resumes,
+only that eligible output is removed. Native captures must open retained raw
+streams and intent before spawn: killing the producer while it waits must leave
+the child's exact partial bytes and no joined result, seal or completion. A
+normally joined command must return those same bytes and its actual exit code.
 
 `retained_producers[].temporary: true` opts a declared store into prospective
 cache recovery using the existing producer registry and kernel Lease. A

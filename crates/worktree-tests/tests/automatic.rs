@@ -71,7 +71,11 @@ impl Host {
         c
     }
     pub(super) fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {
-        self.received(self.auto_command(command, extra).output().unwrap())
+        self.received(
+            self._dir
+                .capture_output(&mut self.auto_command(command, extra))
+                .unwrap(),
+        )
     }
     pub(super) fn ledger(&self) -> Value {
         json(&fs::read(self.root.join(STATE)).unwrap()).unwrap()

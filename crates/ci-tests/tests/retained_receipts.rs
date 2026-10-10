@@ -428,8 +428,7 @@ fn cargo_result(
             "--manifest-path",
             ".chrono-harness/state/cargo/producer/Cargo.toml",
         ]);
-    dir.bind_command(&mut build).unwrap();
-    let build = build.output().unwrap();
+    let build = dir.capture_output(&mut build).unwrap();
     assert!(build.status.success(), "{build:?}");
     if fail {
         let input = dir
@@ -458,8 +457,7 @@ fn cargo_result(
         .env_remove("CARGO_TARGET_DIR")
         .current_dir(dir.path())
         .args(&argv[1..]);
-    dir.bind_command(&mut command).unwrap();
-    let output = command.output().unwrap();
+    let output = dir.capture_output(&mut command).unwrap();
     assert_eq!(
         output.status.code(),
         Some(if fail { 101 } else { 0 }),

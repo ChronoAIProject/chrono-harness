@@ -253,6 +253,10 @@ fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
 fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outputs() {
     for stage in ["installation", "test", "cache-save"] {
         let h = cargo_host();
+        let _release = ReleaseBoundedConsumer {
+            root: h.root.clone(),
+            stage: stage.into(),
+        };
         cargo_plan(&h.root, Some(stage));
         let path = h.root.join(".chrono-harness/state/cargo-plan.json");
         let mut plan = json(&fs::read(&path).unwrap()).unwrap();
@@ -260,10 +264,10 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
         fs::write(path, serde_json::to_vec(&plan).unwrap()).unwrap();
         let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
         let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
-        child.await_managed_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
         // Join the actual bounded build. Liveness now belongs to the independent
         // native consumer, rather than a stale marker left by a timed-out build.
         assert!(child.wait_with_output().unwrap().status.success());
+        await_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
         assert!(maintained.to_string().contains("live registered consumers"));
@@ -294,6 +298,27 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
                     .join(".chrono-harness/bin/installed-cargo-output")
                     .exists()
             );
+        }
+    }
+}
+
+struct ReleaseBoundedConsumer {
+    root: PathBuf,
+    stage: String,
+}
+impl Drop for ReleaseBoundedConsumer {
+    fn drop(&mut self) {
+        let state = self.root.join(".chrono-harness/state");
+        let _ = fs::write(
+            state.join(format!("{}-release", self.stage)),
+            "actual fixture teardown",
+        );
+        let began = std::time::Instant::now();
+        while state.join(format!("{}-active", self.stage)).exists()
+            && !state.join(format!("{}-done", self.stage)).exists()
+            && began.elapsed().as_secs() < 10
+        {
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
 }

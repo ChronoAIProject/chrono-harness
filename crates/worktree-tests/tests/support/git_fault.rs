@@ -103,6 +103,20 @@ fn main() {
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
+        "temporary-source-check" => {
+            if std::env::current_dir().unwrap() == Path::new(config["root"].as_str().unwrap())
+                && arg(1, "ls-tree")
+            {
+                fs::write(
+                    home.join("temporary-check-active"),
+                    "source check holds exclusion",
+                )
+                .unwrap();
+                while !home.join("temporary-check-release").is_file() {
+                    thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
         "remote" => match config["fault"].as_str().unwrap() {
             "remote-lease" if arg(1, "push") => {
                 update_remote(git, &home, "refs/heads/integration/owned");

@@ -316,8 +316,7 @@ impl Host {
                     .to_str()
                     .unwrap(),
             ]);
-        self.dir.bind_command(&mut command).unwrap();
-        let out = command.output().unwrap();
+        let out = self.dir.capture_output(&mut command).unwrap();
         self.retain_command_result("check", &out);
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));

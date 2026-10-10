@@ -169,12 +169,19 @@ impl Host {
     fn native(&self, payload: Value) -> std::process::Output {
         let payload_path = self.root.join(".chrono-harness/state/event.json");
         write(&payload_path, &payload);
-        self.command()
+        let mut command = self.command();
+        command
             .env(prepared::SOURCE, "ci")
             .env("GITHUB_EVENT_NAME", "push")
             .env("GITHUB_EVENT_PATH", payload_path)
-            .env("CHRONO_WORKFLOW_REVISION", &self.candidate)
-            .output()
+            .env("CHRONO_WORKFLOW_REVISION", &self.candidate);
+        self.output(&mut command)
+    }
+    fn output(&self, command: &mut Command) -> std::process::Output {
+        self.temporary
+            .as_ref()
+            .unwrap()
+            .capture_output(command)
             .unwrap()
     }
 }
@@ -219,7 +226,7 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
         let local = report(
             &h.root,
             ".chrono-harness/state/initial-report.json",
-            &h.command().output().unwrap(),
+            &h.output(&mut h.command()),
             if unregistered { 1 } else { 0 },
         );
         let native=report(&h.root,".chrono-harness/state/native/initial-report.json",&h.native(json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":h.candidate,"created":true})),if unregistered {1}else{0});
@@ -310,7 +317,7 @@ fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registere
     h.candidate = commit(&h.root);
     for source in ["local", "ci"] {
         let out = if source == "local" {
-            h.command().output().unwrap()
+            h.output(&mut h.command())
         } else {
             h.native(
                 json!({"ref":"refs/heads/dev","before":base,"after":h.candidate,"created":false}),
@@ -338,7 +345,7 @@ fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registere
 #[test]
 fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
     let h = Host::new(false, false);
-    let out = h.command().output().unwrap();
+    let out = h.output(&mut h.command());
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("initial profile binding missing"));
     assert!(
@@ -366,7 +373,7 @@ fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
         chrono_harness::facts::parents(&h.root, &h.candidate).unwrap(),
         vec![parent]
     );
-    let local = h.command().output().unwrap();
+    let local = h.output(&mut h.command());
     assert_eq!(local.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&local.stderr).contains("Original acquisition:"));
     assert!(
