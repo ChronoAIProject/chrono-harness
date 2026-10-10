@@ -1,7 +1,7 @@
 use super::*;
 
 fn host() -> Host {
-    let h = super::bounded_cleanup::main_host_mode("temporary-producer");
+    let h = super::bounded_cleanup::main_host_mode("noop");
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"] = value!([{"id":"test-allocation",
@@ -156,9 +156,15 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
 #[test]
 fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcome() {
     let h = host();
+    let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+    assert_eq!(code, 0, "{report} {error}");
     let (store, allocation) = allocation(&h);
     let root = allocation.path().to_owned();
     fs::write(root.join("legacy-copy"), b"real copied input").unwrap();
+    fs::write(root.join("nested.lease"), b"").unwrap();
+    use std::os::unix::fs::MetadataExt;
+    let metadata = fs::metadata(root.join("nested.lease")).unwrap();
+    let nested_id = format!("{}:{}", metadata.dev(), metadata.ino());
     drop(allocation);
     let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
     let object = &registry["objects"][0];
@@ -166,7 +172,8 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
         "current_consumers_released":true,"reason":"This test has joined its actual legacy copy consumer",
         "objects":[{"producer":"test-allocation","allocation":object["path"],"identity":object["identity"],"intent":object["intent"],
-        "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs"}]}]});
+        "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs",
+        "leases":[{"path":"nested.lease","id":nested_id}]}]}]});
     let plan_path = ".chrono-harness/state/body-custody.json";
     fs::write(h.root.join(plan_path), serde_json::to_vec(&plan).unwrap()).unwrap();
     let (code, report, error) = h.auto(
@@ -183,6 +190,18 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
         root.join("legacy-copy").exists(),
         "migration must perform no disposal"
     );
+    use std::os::fd::AsRawFd;
+    unsafe extern "C" {
+        fn flock(fd: i32, operation: i32) -> i32;
+    }
+    let holder = fs::File::open(root.join("nested.lease")).unwrap();
+    assert_eq!(unsafe { flock(holder.as_raw_fd(), 1) }, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(
+        root.join("legacy-copy").exists(),
+        "nested consumer outlives parent allocation holder"
+    );
+    drop(holder);
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!root.join("legacy-copy").exists());
     assert_eq!(

@@ -952,6 +952,7 @@ impl ProducerPolicy {
         let registry_id = opened.registry.directory_id.clone();
         let mut store = Some(opened);
         let mut failures = vec![];
+        let mut originals = BTreeMap::new();
         for snapshot in &objects {
             let cache_guard = if let Some(binding) = &snapshot.cache_lease {
                 let path = no_symlink_parents(&directory, &binding.path)?;
@@ -1010,8 +1011,16 @@ impl ProducerPolicy {
                     .filter(|_| object.consumers.values().all(|consumer| consumer.released))
                 {
                     drop(store.take());
-                    let bodies =
-                        body::drain(self, manager, r, &directory, object, &registry_id, lease)?;
+                    let bodies = body::drain(
+                        self,
+                        manager,
+                        r,
+                        &directory,
+                        object,
+                        &registry_id,
+                        lease,
+                        &mut originals,
+                    )?;
                     if bodies["status"] == "failed" {
                         failures.push(format!("{}: {}", object.path, bodies["failures"]));
                     }

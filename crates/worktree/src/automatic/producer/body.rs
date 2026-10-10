@@ -10,7 +10,8 @@ pub(super) struct Body {
     sha256: String,
     length: u64,
     git_root: Option<String>,
-    attempts: Vec<Receipt>,
+    #[serde(default)]
+    leases: Vec<CacheLease>,
 }
 
 fn input(path: &Path) -> Result<(String, u64), String> {
@@ -53,6 +54,7 @@ fn register(
     member: &str,
     source: &Path,
     git_root: Option<String>,
+    leases: Vec<CacheLease>,
     provenance: Value,
 ) -> Result<PathBuf, String> {
     relative_path(member)?;
@@ -87,6 +89,7 @@ fn register(
             || existing.sha256 != digest
             || existing.length != length
             || existing.git_root != git_root
+            || value!(existing.leases) != value!(leases)
         {
             return Err("copied body registration changed; preserve member".into());
         }
@@ -98,7 +101,7 @@ fn register(
             "schema":"chrono-fixture-copied-input/v1", "allocation":object.path,
             "identity":object.identity, "producer_intent":object.intent,
             "member":member, "original":name, "sha256":digest, "length":length,
-            "git_root":git_root, "provenance":provenance,
+            "git_root":git_root, "leases":leases, "provenance":provenance,
             "lifetime":"last-supported-holder-and-current-consumer-release",
             "original_custody":"retained", "historical_producer_outcome":"unchanged"
         }),
@@ -111,7 +114,7 @@ fn register(
             sha256: digest,
             length,
             git_root,
-            attempts: vec![],
+            leases,
         },
     );
     store.save()?;
@@ -181,6 +184,7 @@ impl TemporaryHost {
             member,
             source,
             git_root,
+            vec![],
             value!({"route":"actual-copy-producer", "recipe":recipe,"source":source}),
         )?;
         lease.stable()?;
@@ -214,6 +218,8 @@ struct Member {
     length: u64,
     git_root: Option<String>,
     recipe: String,
+    #[serde(default)]
+    leases: Vec<CacheLease>,
 }
 
 impl Manager {
@@ -295,6 +301,19 @@ impl Manager {
                     }
                     protect_source(r, &allocation, &member.path, member.git_root.as_deref())?;
                     relative_path(&member.recipe)?;
+                    let mut dependencies = vec![];
+                    for binding in &member.leases {
+                        dependencies.push(
+                            Lease::acquire(
+                                &no_symlink_parents(&allocation, &binding.path)?,
+                                Some(&binding.id),
+                                false,
+                                true,
+                                None,
+                            )?
+                            .ok_or("nested registered consumer remains live")?,
+                        );
+                    }
                     let source = r.blob(target, &self.anchor_head, &member.recipe)?;
                     self.stable(r)?;
                     lease.stable()?;
@@ -304,6 +323,7 @@ impl Manager {
                         &member.path,
                         &physical,
                         member.git_root,
+                        member.leases,
                         value!({"route":"current-custodian-transition", "custody":custody,
                         "reason":plan.reason, "recipe":member.recipe,"recipe_sha256":sha256(&source),
                         "candidate":self.anchor_head, "past_outcome":"unchanged"}),
@@ -383,6 +403,7 @@ pub(super) fn drain(
     object: &Object,
     registry_id: &str,
     lease: &Lease,
+    originals: &mut BTreeMap<PathBuf, String>,
 ) -> Result<Value, String> {
     let allocation = directory.join(&object.path);
     let mut row = value!({"class":"copied-input/v1", "members":[],"original_custody":"retained"});
@@ -405,12 +426,37 @@ pub(super) fn drain(
                 || intent["sha256"] != body.sha256
                 || intent["length"] != body.length
                 || intent["git_root"] != value!(body.git_root)
+                || intent["leases"] != value!(body.leases)
             {
                 return Err("copied body intent binding changed".into());
             }
             let original = no_symlink_parents(directory, &body.original)?;
-            if input(&original)? != (body.sha256.clone(), body.length) {
-                return Err("copied input original unavailable or changed".into());
+            let original_id = fingerprint(&original)?;
+            if !originals
+                .get(&original)
+                .is_some_and(|prior| prior == &original_id)
+            {
+                if input(&original)? != (body.sha256.clone(), body.length) {
+                    return Err("copied input original unavailable or changed".into());
+                }
+                originals.insert(original.clone(), original_id.clone());
+            }
+            let mut dependencies = vec![];
+            for binding in &body.leases {
+                match Lease::acquire(
+                    &no_symlink_parents(&allocation, &binding.path)?,
+                    Some(&binding.id),
+                    false,
+                    true,
+                    None,
+                )? {
+                    Some(held) => dependencies.push(held),
+                    None => {
+                        return Ok(
+                            value!({"path":member,"status":"protected","reason":"live explicitly bound nested consumer","lease":binding.path}),
+                        );
+                    }
+                }
             }
             let path = no_symlink_parents(&allocation, member)?;
             match fs::symlink_metadata(&path) {
@@ -435,11 +481,14 @@ pub(super) fn drain(
             Store::stable_in(directory, &policy.id, registry_id, object)?;
             if crate::ownership::identity(&path)? != before_id
                 || input(&path)? != (body.sha256.clone(), body.length)
-                || input(&original)? != (body.sha256.clone(), body.length)
+                || fingerprint(&original)? != original_id
             {
                 return Err("copied body or original changed before removal".into());
             }
             protect_source(r, &allocation, member, body.git_root.as_deref())?;
+            for dependency in &dependencies {
+                dependency.stable()?;
+            }
             let mut result = value!({"path":member,"intent":intent,"footprint_before":footprint,"status":"failed","original":body.original,"physical_release_bytes":Value::Null});
             match fs::remove_file(&path) {
                 Ok(()) if matches!(fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
@@ -467,11 +516,45 @@ pub(super) fn drain(
         }
         row["members"].as_array_mut().unwrap().push(result);
     }
-    row["status"] = value!(if failures.is_empty() {
-        "recovered"
-    } else {
+    row["status"] = value!(if !failures.is_empty() {
         "failed"
+    } else if row["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|m| m["status"] == "protected")
+    {
+        "protected"
+    } else {
+        "recovered"
     });
     row["failures"] = value!(failures);
     Ok(row)
+}
+
+fn fingerprint(path: &Path) -> Result<String, String> {
+    let m = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if !m.is_file() {
+            return Err("retained original is not a regular file".into());
+        }
+        Ok(format!(
+            "{}:{}:{}:{}:{}:{}:{}:{}",
+            m.dev(),
+            m.ino(),
+            m.len(),
+            m.mode(),
+            m.mtime(),
+            m.mtime_nsec(),
+            m.ctime(),
+            m.ctime_nsec()
+        ))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = m;
+        Err("copied-input recovery needs kernel ownership".into())
+    }
 }
