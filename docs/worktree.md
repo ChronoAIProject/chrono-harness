@@ -1290,6 +1290,13 @@ references, interruption/live native descendants, partial copies, missing
 originals, source guards, finite migration and repeated recovery. R2 still owns
 the broad canonical/coordinator receipts and external/native delivery boundaries.
 
+Native Git test hooks are actual copied inputs too. Their constructor enrolls
+each copy before production. Only an explicitly enrolled regular leaf under
+`.git/hooks/` can have this lifetime; Git identity, objects and commits keep
+their source protection. Path spelling alone grants no disposal eligibility.
+This corrects the previous broad Git-path exclusion for copied hook inputs and
+adds the same retained-input hashing and storage cost as other copies.
+
 `TemporaryHost::register_copy` receives the exact declared store, producer, real
 source file, destination, possible Git root and producer recipe. It preserves the
 real input before publishing membership; the existing joined copy route continues

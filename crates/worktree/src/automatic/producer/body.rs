@@ -142,7 +142,10 @@ fn register(
                 .strip_prefix(&format!("{root}/"))
                 .ok_or("body lies outside declared Git root")?
         };
-        if relative.starts_with(".git/") || relative == ".git" {
+        let hook_leaf = relative
+            .strip_prefix(".git/hooks/")
+            .is_some_and(|leaf| !leaf.is_empty() && Path::new(leaf).components().count() == 1);
+        if (relative.starts_with(".git/") || relative == ".git") && !hook_leaf {
             return Err("Git identity and unretained commits cannot be fixture bodies".into());
         }
     }

@@ -131,6 +131,42 @@ fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
     )
     .unwrap();
     fs::copy(&source, checkout.join("copy.bin")).unwrap();
+    let hook_source = Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"));
+    let hook = checkout.join(".git/hooks/post-checkout");
+    let hook_original = chrono_worktree::TemporaryHost::register_copy(
+        &store,
+        "test-allocation",
+        hook_source,
+        &hook,
+        Some(&checkout),
+        "actual copied native Git hook",
+    )
+    .unwrap();
+    fs::copy(hook_source, &hook).unwrap();
+    fs::write(
+        hook.with_extension("json"),
+        serde_json::to_vec(&value!({
+            "writes":[{"path":"native-hook-read","contents":"actual Git consumer"}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        chrono_worktree::TemporaryHost::register_copy(
+            &store,
+            "test-allocation",
+            hook_source,
+            &checkout.join(".git/HEAD"),
+            Some(&checkout),
+            "Git identity must stay protected",
+        )
+        .is_err()
+    );
+    git(&checkout, &["checkout", "--detach", "HEAD"]);
+    assert_eq!(
+        fs::read(checkout.join("native-hook-read")).unwrap(),
+        b"actual Git consumer"
+    );
     let retained = root.join("offline checkout");
     chrono_worktree::TemporaryHost::relocate_copies(
         &store,
@@ -144,6 +180,12 @@ fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
     assert!(!retained.join("copy.bin").exists());
+    assert!(!retained.join(".git/hooks/post-checkout").exists());
+    assert!(retained.join(".git/hooks/post-checkout.json").exists());
+    assert_eq!(
+        fs::read(hook_original).unwrap(),
+        fs::read(hook_source).unwrap()
+    );
     assert_eq!(fs::read(original).unwrap(), b"original copied input");
     assert_eq!(
         fs::read(retained.join("source.rs")).unwrap(),

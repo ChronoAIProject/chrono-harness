@@ -93,7 +93,7 @@ pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
         source,
         destination,
         Some(root),
-        "crates/worktree-tests/tests/check_inputs.rs::install_readonly_file",
+        "crates/worktree-tests/tests/creation.rs::copied_fixture_input",
     )
     .unwrap();
 }
@@ -341,6 +341,11 @@ impl Host {
     fn hook(&self, settings: Value) {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
+        copied_fixture_input(
+            &self.root,
+            Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-hook")),
+            &p,
+        );
         let copied = native_command("/bin/cp")
             .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
             .arg(&p)

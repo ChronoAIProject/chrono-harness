@@ -1057,6 +1057,8 @@ last supported holder and actual diagnostic reference release. Missing originals
 partial copies, source/index paths and unknown allocations remain protected.
 Nested custody binds the actual registry and protects its current diagnostic
 references even after their process lease ends.
+Actual copied Git-hook leaves may be enrolled individually; Git identity,
+objects and commits remain protected.
 Current custody may enroll finite legacy copies while preserving old intents and
 unknown outcomes; enrollment performs no disposal. Originals, source and commits
 remain readable. This is not whole mixed-root disposal or historical test success.
