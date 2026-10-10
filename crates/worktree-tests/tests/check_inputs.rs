@@ -78,6 +78,7 @@ pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, versi
     );
     // Each host owns its executable identity. A joined child owns writable
     // descriptors, so concurrent test forks cannot inherit writable executables.
+    copied_fixture_input(root, built, &installed);
     let copied = native_command("/bin/cp")
         .arg(built)
         .arg(&installed)

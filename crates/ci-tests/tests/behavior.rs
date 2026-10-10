@@ -567,6 +567,7 @@ fn committed_example(
     let bin = root.path().join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
     for name in ["chrono-harness", "chrono-judge-ci", "chrono-ci"] {
+        crate::tools::copied_fixture_input(root.path(), &installed.join(name), &bin.join(name));
         fs::copy(installed.join(name), bin.join(name)).expect(
             "bootstrap the registered candidate tools before running the copied-host tests",
         );

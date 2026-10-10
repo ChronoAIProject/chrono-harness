@@ -41,6 +41,11 @@ impl Host {
             ("judge-registration", "chrono-judge-registration"),
             ("judge-ci", "chrono-judge-ci"),
         ] {
+            crate::tools::copied_fixture_input(
+                &root,
+                &product.join(format!("crates/{project}/target/debug/{name}")),
+                &root.join(format!(".chrono-harness/bin/{name}")),
+            );
             fs::copy(
                 product.join(format!("crates/{project}/target/debug/{name}")),
                 root.join(format!(".chrono-harness/bin/{name}")),

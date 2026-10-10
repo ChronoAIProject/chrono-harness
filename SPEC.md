@@ -1049,3 +1049,12 @@ coverage is limited to declared producer/child routes, not arbitrary child APIs 
 an operating-system temporary scan. Host paths and outputs remain configurable in
 `.chrono-harness/cleanup.json`; this repository's producer mapping and oracles are
 in [worktree custody](docs/worktree.md#prospective-temporary-host-custody).
+
+Copied fixture inputs also have an explicitly adopted body lifetime. The actual
+copy producer retains original bytes and an allocation-bound member intent before
+copying; the existing owner removes only identical untracked members after the
+last supported holder and actual diagnostic reference release. Missing originals,
+partial copies, source/index paths and unknown allocations remain protected.
+Current custody may enroll finite legacy copies while preserving old intents and
+unknown outcomes; enrollment performs no disposal. Originals, source and commits
+remain readable. This is not whole mixed-root disposal or historical test success.

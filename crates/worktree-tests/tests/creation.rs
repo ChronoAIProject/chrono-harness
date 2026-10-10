@@ -55,6 +55,7 @@ mod automatic;
 mod bounded_cleanup;
 mod check_inputs;
 mod evidence_retirement;
+mod fixture_body;
 mod interrupted_cleanup;
 mod maintenance;
 mod policy_migration;
@@ -74,6 +75,27 @@ pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
     });
     chrono_worktree::TemporaryHost::allocate(directory, "worktree-test-host", outputs, prefix)
         .expect("prospective temporary host custody")
+}
+
+pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
+    static STORE: std::sync::OnceLock<(PathBuf, Vec<String>)> = std::sync::OnceLock::new();
+    let (directory, _) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &crate::source(),
+            POLICY,
+            "worktree-test-host",
+        )
+        .unwrap()
+    });
+    chrono_worktree::TemporaryHost::register_copy(
+        directory,
+        "worktree-test-host",
+        source,
+        destination,
+        Some(root),
+        "crates/worktree-tests/tests/check_inputs.rs::install_readonly_file",
+    )
+    .unwrap();
 }
 
 struct Host {

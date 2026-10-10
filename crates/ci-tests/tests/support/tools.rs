@@ -37,3 +37,24 @@ pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
     chrono_worktree::TemporaryHost::allocate(directory, "ci-test-host", outputs, prefix)
         .expect("prospective temporary host custody")
 }
+
+pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
+    static STORE: std::sync::OnceLock<(PathBuf, Vec<String>)> = std::sync::OnceLock::new();
+    let (directory, _) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "ci-test-host",
+        )
+        .unwrap()
+    });
+    chrono_worktree::TemporaryHost::register_copy(
+        directory,
+        "ci-test-host",
+        source,
+        destination,
+        Some(root),
+        "crates/ci-tests/tests/units.rs::install_tools",
+    )
+    .unwrap();
+}

@@ -232,6 +232,21 @@ fn migration_host_with_alias_collision(
         ("runner", "chrono-harness"),
         ("judge-ci", "chrono-judge-ci"),
     ] {
+        let (directory, _) = chrono_worktree::TemporaryHost::registered_store(
+            &source,
+            ".chrono-harness/worktree.json",
+            "projects-migration-host",
+        )
+        .unwrap();
+        chrono_worktree::TemporaryHost::register_copy(
+            &directory,
+            "projects-migration-host",
+            &source.join(format!("crates/{project}/target/debug/{name}")),
+            &root.join(format!(".chrono-harness/bin/{name}")),
+            Some(&root),
+            "crates/judge-projects-tests/tests/migration.rs::migration_host",
+        )
+        .unwrap();
         fs::copy(
             source.join(format!("crates/{project}/target/debug/{name}")),
             root.join(format!(".chrono-harness/bin/{name}")),

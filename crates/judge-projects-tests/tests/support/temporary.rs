@@ -13,6 +13,32 @@ pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
         .expect("prospective temporary host custody")
 }
 
+pub fn copied_fixture_input(
+    root: &std::path::Path,
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) {
+    static STORE: std::sync::OnceLock<(std::path::PathBuf, Vec<String>)> =
+        std::sync::OnceLock::new();
+    let (directory, _) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "projects-test-host",
+        )
+        .unwrap()
+    });
+    chrono_worktree::TemporaryHost::register_copy(
+        directory,
+        "projects-test-host",
+        source,
+        destination,
+        Some(root),
+        "crates/judge-projects-tests/tests/support/host.rs::install_program",
+    )
+    .unwrap();
+}
+
 /// The Git checkout may be absent during offline collection, while its
 /// prospective allocation, TMPDIR and captured originals retain their lifetime.
 pub struct FixtureDirectory {

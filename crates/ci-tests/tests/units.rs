@@ -287,6 +287,7 @@ fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
             fs::symlink_metadata(bin.join(name)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound
         ));
+        crate::tools::copied_fixture_input(root, &built, &bin.join(name));
         copy.arg(built);
     }
     if !tools.is_empty() {

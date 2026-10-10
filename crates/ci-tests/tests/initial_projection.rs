@@ -273,6 +273,11 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             ("runner", "chrono-harness"),
             ("judge-registration", "chrono-judge-registration"),
         ] {
+            crate::tools::copied_fixture_input(
+                root,
+                &product.join(format!("crates/{project}/target/debug/{name}")),
+                &bin.join(name),
+            );
             fs::copy(
                 product.join(format!("crates/{project}/target/debug/{name}")),
                 bin.join(name),

@@ -174,7 +174,8 @@
       "id": "command-temporaries",
       "directory": ".chrono-harness/state/temporary-hosts/commands/",
       "temporary": true,
-      "generated_outputs": []
+      "generated_outputs": [],
+      "fixture_bodies": true
     },
     {
       "id": "worktree-test-host",
@@ -192,7 +193,8 @@
         "source with spaces/",
         "cargo-linked/",
         "native-cargo/"
-      ]
+      ],
+      "fixture_bodies": true
     },
     {
       "id": "projects-test-host",
@@ -211,7 +213,8 @@
       "source_roots": [
         "fixture/",
         "retained-offline-checkout/"
-      ]
+      ],
+      "fixture_bodies": true
     },
     {
       "id": "projects-migration-host",
@@ -255,7 +258,8 @@
       ],
       "source_roots": [
         "."
-      ]
+      ],
+      "fixture_bodies": true
     },
     {
       "id": "ci-test-host",
@@ -264,7 +268,8 @@
       "generated_outputs": [
         ".chrono-harness/state/cargo/producer/target/",
         ".chrono-harness/state/cargo/tests/target/"
-      ]
+      ],
+      "fixture_bodies": true
     }
   ],
   "temporary_environment": "command-temporaries"

@@ -5745,6 +5745,30 @@
           "to": "project:worktree-tests"
         }
       ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/producer/body.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/fixture_body.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

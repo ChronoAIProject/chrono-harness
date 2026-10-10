@@ -1,5 +1,6 @@
 //! Explicit producer records consumed by the existing lifecycle drain. No discovery.
 use super::*;
+mod body;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -12,6 +13,9 @@ pub(super) struct ProducerPolicy {
     /// Exact Git roots within each allocation; no nested repository discovery.
     #[serde(default)]
     pub(super) source_roots: Vec<String>,
+    /// Exact copied input members are enrolled by the producer, never discovered.
+    #[serde(default)]
+    pub(super) fixture_bodies: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -45,6 +49,8 @@ struct Object {
     attempts: Vec<Receipt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cache_lease: Option<CacheLease>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    bodies: BTreeMap<String, body::Body>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -512,6 +518,7 @@ impl RetainedArtifact {
             disposed: false,
             attempts: vec![],
             cache_lease: None,
+            bodies: BTreeMap::new(),
         });
         store.save()?;
         Ok(Self {
@@ -737,6 +744,7 @@ impl TemporaryHost {
             disposed: false,
             attempts: vec![],
             cache_lease: Some(binding),
+            bodies: BTreeMap::new(),
         });
         store.save()?;
         Ok(Self { path, lease })
@@ -994,6 +1002,25 @@ impl ProducerPolicy {
             let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
                 "retention_reason":object.retention_reason,"consumers":object.consumers,
                 "registered_generated_objects":object.generated.len(),"evidence":"retained"});
+            // Body recovery has its own membership and receipts. A historical
+            // Cargo disposal bit cannot settle a subsequently adopted body.
+            if !object.bodies.is_empty() {
+                if let Some(lease) = cache_guard
+                    .as_ref()
+                    .filter(|_| object.consumers.values().all(|consumer| consumer.released))
+                {
+                    drop(store.take());
+                    let bodies =
+                        body::drain(self, manager, r, &directory, object, &registry_id, lease)?;
+                    if bodies["status"] == "failed" {
+                        failures.push(format!("{}: {}", object.path, bodies["failures"]));
+                    }
+                    row["fixture_bodies"] = bodies;
+                } else {
+                    row["fixture_bodies"] = value!({"status":"protected",
+                        "reason":"live supported holder or unreleased actual consumer"});
+                }
+            }
             if (!object.sealed && object.cache_lease.is_none())
                 || object.consumers.values().any(|c| !c.released)
                 || (object.cache_lease.is_some() && cache_guard.is_none())

@@ -26,6 +26,7 @@ pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureP
         if error.kind() == std::io::ErrorKind::NotFound));
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
+    temporary::copied_fixture_input(root, &source, &destination);
     let copied = Command::new("/bin/cp")
         .arg(source)
         .arg(&destination)

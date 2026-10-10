@@ -1273,6 +1273,44 @@ CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式�
 
 ### Prospective temporary-host custody
 
+**Policy and product change warning (R1B):** `fixture_bodies:true` changes the
+adopted lifetime of individually enrolled copied fixture inputs. Previous policy
+kept every copied executable indefinitely. The copy producer now retains original
+bytes once per SHA256 in its existing store, then publishes an immutable member
+intent before copying. The original allocation intent and producer outcome remain
+unchanged. Drain removes only the enrolled matching file after kernel exclusion
+and current diagnostic-reference release. It retains source, Git objects/commits,
+raw captures, partial or changed members, missing-original failures and unknown
+neighbors. This requires matching candidate binaries and committed policy; an
+older binary rejects the added registration. Retained-original storage cost is
+one file per distinct input; classification hashes real bytes, and recovery checks
+original/member bytes and explicit Git roots. Physical APFS savings are unknown.
+Targeted Rust tests cover no-finish recovery, overlapping holders and diagnostic
+references, interruption/live native descendants, partial copies, missing
+originals, source guards, finite migration and repeated recovery. R2 still owns
+the broad canonical/coordinator receipts and external/native delivery boundaries.
+
+`TemporaryHost::register_copy` receives the exact declared store, producer, real
+source file, destination, possible Git root and producer recipe. It preserves the
+real input before publishing membership; the existing joined copy route continues
+to own writable executable descriptors. Native and engine consumers retain their
+existing allocation scopes. Enrolled bodies do not acquire an outcome from a
+command exit. A partial copy is not identical and stays protected; an interrupted
+copy whose complete bytes match its retained input may be recovered after the
+last supported holder without Drop, finish or a fabricated seal.
+
+Current custodians enroll exact legacy members through the same lifecycle entry:
+`chrono-worktree migrate --path <coordinator> --adopt-fixtures <state-plan>`.
+The `chrono-fixture-body-custody/v1` plan binds current HEAD, actual current
+consumer disposition and its reason; each selection binds producer, allocation,
+physical identity and original intent, and each member binds path, SHA256, length,
+explicit possible Git root and committed producer recipe file. Migration retains
+the actual member bytes and immutable custody/provenance receipts. It deletes
+nothing, releases no old diagnostic reference and imports no unknown object.
+Ordinary adopted recovery performs the effects. Source/index guards run again
+before removal. Cargo `disposed` state does not settle subsequently enrolled
+bodies. Concrete unavailable members fail independently of checked siblings.
+
 The behavior oracles for temporary allocations are declared before their tests:
 production must follow an immutable allocation intent; ordinary maintenance must
 preserve a distinct live native descendant and an overlapping holder, then reclaim

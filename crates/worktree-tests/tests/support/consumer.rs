@@ -204,6 +204,20 @@ fn main() -> ExitCode {
             let allocated = allocation.path();
             fs::write(allocated.join("source.txt"), b"original source\n").unwrap();
             fs::write(allocated.join("partial.bin"), [255, 0, 10]).unwrap();
+            chrono_worktree::TemporaryHost::register_copy(
+                &store,
+                "test-allocation",
+                &allocated.join("source.txt"),
+                &allocated.join("copied-body.bin"),
+                Some(allocated),
+                "actual temporary native fixture copy",
+            )
+            .unwrap();
+            fs::copy(
+                allocated.join("source.txt"),
+                allocated.join("copied-body.bin"),
+            )
+            .unwrap();
             fs::create_dir_all(allocated.join("cache 空白")).unwrap();
             fs::write(allocated.join("cache 空白/output"), "rebuildable").unwrap();
             mark("temporary-parent", std::process::id().to_string());
@@ -253,6 +267,7 @@ fn main() -> ExitCode {
             child
                 .arg("temporary-descendant")
                 .arg(allocated)
+                .arg("copied-body.bin")
                 .process_group(0)
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())

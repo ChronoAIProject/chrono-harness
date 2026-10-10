@@ -30,6 +30,7 @@ fn host_mode(mode: &str) -> Host {
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
     policy["retained_producers"] = value!([{"id":"test-allocation",
         "directory":".chrono-harness/state/custom temporary λ/", "temporary":true,
+        "fixture_bodies":true,
         "generated_outputs":["cache 空白/"]}]);
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);
@@ -416,6 +417,7 @@ fn interrupted(signal: &str) {
     let (code, protected, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{protected} {error}");
     assert!(allocated.join("cache 空白/output").exists());
+    assert!(allocated.join("copied-body.bin").exists());
     assert!(
         native_command("/bin/kill")
             .args(["-0", &child])
@@ -448,6 +450,7 @@ fn interrupted(signal: &str) {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     assert!(reclaimed);
+    assert!(!allocated.join("copied-body.bin").exists());
     assert_eq!(
         fs::read(allocated.join("source.txt")).unwrap(),
         b"original source\n"
