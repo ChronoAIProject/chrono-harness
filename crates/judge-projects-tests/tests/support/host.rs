@@ -149,7 +149,10 @@ impl Host {
         }
         let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
         let version = Command::new(&tool).arg("--version").output().unwrap();
-        let retained_inputs = root.join(".chrono-harness/state/fixture-inputs");
+        // The external input outlives an intentionally unavailable Git checkout.
+        // Keep its declared absolute location in the retained allocation, beside
+        // the movable source root, so delivery reads the original bytes.
+        let retained_inputs = dir.temporary_path().join("fixture-inputs");
         fs::create_dir_all(&retained_inputs).unwrap();
         let external = tempfile::Builder::new()
             .disable_cleanup(true)

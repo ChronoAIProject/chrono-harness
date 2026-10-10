@@ -1316,7 +1316,8 @@ streams and validate their own rows while preserving unrelated failure outcomes.
 Offline fixture consumers may make their Git path unavailable after joining and
 transporting its originals, but their allocation and declared TMPDIR must remain available. The
 shared projects fixture separates the Git root (`fixture/`) from its retained
-allocation. Workflow tools and cloned hosts adopt that same adapter before
+allocation. Its external input is retained beside the movable checkout, keeping
+the declared absolute input location available for delivery. Workflow tools and cloned hosts adopt that same adapter before
 production. The checkout moves to `retained-offline-checkout/`, preserving source,
 commits and raw captures. Both literal roots and the four actual `p`, `t`, `p2`, `t2`
 target directories at each root are declared before production. Collection must still work with the old
