@@ -1307,6 +1307,11 @@ physical identity and original intent, and each member binds path, SHA256, lengt
 explicit possible Git root and committed producer recipe file. Migration retains
 the actual member bytes and immutable custody/provenance receipts. It deletes
 nothing, releases no old diagnostic reference and imports no unknown object.
+Nested members bind the exact existing producer registry, allocation identity,
+original intent and kernel lease. Recovery reads that registry's current
+diagnostic references under exclusion; a late persistent claim protects the
+body after its process releases the lease. Missing or changed bindings preserve
+the member. This adds explicit registry/reference verification cost, not discovery.
 Ordinary adopted recovery performs the effects. Source/index guards run again
 before removal. Cargo `disposed` state does not settle subsequently enrolled
 bodies. Concrete unavailable members fail independently of checked siblings.

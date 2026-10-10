@@ -206,10 +206,26 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let (store, allocation) = allocation(&h);
     let root = allocation.path().to_owned();
     fs::write(root.join("legacy-copy"), b"real copied input").unwrap();
-    fs::write(root.join("nested.lease"), b"").unwrap();
-    use std::os::unix::fs::MetadataExt;
-    let metadata = fs::metadata(root.join("nested.lease")).unwrap();
-    let nested_id = format!("{}:{}", metadata.dev(), metadata.ino());
+    let nested_store = root.join("nested producer");
+    fs::create_dir(&nested_store).unwrap();
+    let nested =
+        chrono_worktree::TemporaryHost::allocate(&nested_store, "nested-fixture", &[], "child ")
+            .unwrap();
+    let nested_root = nested.path().to_owned();
+    fs::write(nested_root.join("copy"), b"real copied input").unwrap();
+    drop(nested);
+    let nested_registry = json(&fs::read(nested_store.join("objects.json")).unwrap()).unwrap();
+    let nested_object = &nested_registry["objects"][0];
+    let nested_binding = &nested_object["cache_lease"];
+    let nested_path = format!(
+        "nested producer/{}",
+        nested_binding["path"].as_str().unwrap()
+    );
+    let nested_member = format!(
+        "nested producer/{}/copy",
+        nested_object["path"].as_str().unwrap()
+    );
+    let nested_id = nested_binding["id"].as_str().unwrap();
     drop(allocation);
     let registry = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
     let object = &registry["objects"][0];
@@ -217,8 +233,12 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     let plan = value!({"schema":"chrono-fixture-body-custody/v1", "head":git(&h.root,&["rev-parse","HEAD"]),
         "current_consumers_released":true,"reason":"This test has joined its actual legacy copy consumer",
         "objects":[{"producer":"test-allocation","allocation":object["path"],"identity":object["identity"],"intent":object["intent"],
-        "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs",
-        "leases":[{"path":"nested.lease","id":nested_id}]}]}]});
+        "members":[{"path":"legacy-copy","sha256":sha256(b"real copied input"),"length":17,"git_root":".","recipe":"recipe.rs"},
+        {"path":nested_member,"sha256":sha256(b"real copied input"),"length":17,"git_root":null,"recipe":"recipe.rs",
+        "leases":[{"path":nested_path,"id":nested_id}],
+        "nested_consumers":[{"directory":"nested producer","producer":"nested-fixture",
+        "registry_identity":nested_registry["directory_id"],"allocation":nested_object["path"],
+        "identity":nested_object["identity"],"intent":nested_object["intent"]}]}]}]});
     let plan_path = ".chrono-harness/state/body-custody.json";
     fs::write(h.root.join(plan_path), serde_json::to_vec(&plan).unwrap()).unwrap();
     let (code, report, error) = h.auto(
@@ -239,16 +259,34 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     unsafe extern "C" {
         fn flock(fd: i32, operation: i32) -> i32;
     }
-    let holder = fs::File::open(root.join("nested.lease")).unwrap();
+    let holder = fs::File::open(root.join(&nested_path)).unwrap();
     assert_eq!(unsafe { flock(holder.as_raw_fd(), 1) }, 0);
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(
-        root.join("legacy-copy").exists(),
+        nested_root.join("copy").exists(),
         "nested consumer outlives parent allocation holder"
     );
     drop(holder);
+    let nested_diagnostic =
+        chrono_worktree::RetainedArtifact::resume(&nested_store, "nested-fixture", &nested_root)
+            .unwrap();
+    nested_diagnostic
+        .acquire(
+            "actual late diagnostic",
+            "reads nested copied body after migration",
+        )
+        .unwrap();
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(
+        nested_root.join("copy").exists(),
+        "persistent nested diagnostic outlives its lease holder"
+    );
+    nested_diagnostic
+        .release("actual late diagnostic", "actual nested read completed")
+        .unwrap();
     assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!root.join("legacy-copy").exists());
+    assert!(!nested_root.join("copy").exists());
     assert_eq!(
         fs::read(store.join(object["intent"]["path"].as_str().unwrap())).unwrap(),
         old_intent

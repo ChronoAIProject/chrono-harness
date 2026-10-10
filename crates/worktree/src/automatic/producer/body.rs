@@ -12,6 +12,68 @@ pub(super) struct Body {
     git_root: Option<String>,
     #[serde(default)]
     leases: Vec<CacheLease>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    nested_consumers: Vec<NestedConsumer>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NestedConsumer {
+    directory: String,
+    producer: String,
+    registry_identity: String,
+    allocation: String,
+    identity: String,
+    intent: Receipt,
+}
+
+// The exclusive nested lease prevents new reference publication while this
+// reads the exact existing registry. No directory/object discovery is involved.
+fn nested_released(
+    allocation: &Path,
+    member: &str,
+    bindings: &[NestedConsumer],
+    leases: &[CacheLease],
+) -> Result<bool, String> {
+    if bindings.len() != leases.len() {
+        return Err("nested fixture custody requires exact registry reference bindings".into());
+    }
+    for binding in bindings {
+        let directory = no_symlink_parents(allocation, &binding.directory)?;
+        let store = Store::open(&directory, &binding.producer, false)?;
+        let object = store
+            .registry
+            .objects
+            .iter()
+            .find(|o| o.path == binding.allocation)
+            .ok_or("nested diagnostic allocation is not registered")?;
+        if store.registry.directory_id != binding.registry_identity
+            || object.identity != binding.identity
+            || value!(object.intent) != value!(binding.intent)
+        {
+            return Err("nested diagnostic producer binding changed; preserve member".into());
+        }
+        let root = Path::new(&binding.directory).join(&binding.allocation);
+        if !Path::new(member).starts_with(&root) {
+            return Err("copied body lies outside its nested diagnostic allocation".into());
+        }
+        let lease = object
+            .cache_lease
+            .as_ref()
+            .ok_or("nested diagnostic has no kernel lease")?;
+        let lease_path = Path::new(&binding.directory).join(&lease.path);
+        if !leases
+            .iter()
+            .any(|held| Path::new(&held.path) == lease_path && held.id == lease.id)
+        {
+            return Err("nested diagnostic reference is not bound to its held lease".into());
+        }
+        store.stable(object)?;
+        if object.consumers.values().any(|c| !c.released) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn input(path: &Path) -> Result<(String, u64), String> {
@@ -55,6 +117,7 @@ fn register(
     source: &Path,
     git_root: Option<String>,
     leases: Vec<CacheLease>,
+    nested_consumers: Vec<NestedConsumer>,
     provenance: Value,
 ) -> Result<PathBuf, String> {
     relative_path(member)?;
@@ -90,6 +153,7 @@ fn register(
             || existing.length != length
             || existing.git_root != git_root
             || value!(existing.leases) != value!(leases)
+            || value!(existing.nested_consumers) != value!(nested_consumers)
         {
             return Err("copied body registration changed; preserve member".into());
         }
@@ -101,7 +165,7 @@ fn register(
             "schema":"chrono-fixture-copied-input/v1", "allocation":object.path,
             "identity":object.identity, "producer_intent":object.intent,
             "member":member, "original":name, "sha256":digest, "length":length,
-            "git_root":git_root, "leases":leases, "provenance":provenance,
+            "git_root":git_root, "leases":leases, "nested_consumers":nested_consumers, "provenance":provenance,
             "lifetime":"last-supported-holder-and-current-consumer-release",
             "original_custody":"retained", "historical_producer_outcome":"unchanged"
         }),
@@ -115,6 +179,7 @@ fn register(
             length,
             git_root,
             leases,
+            nested_consumers,
         },
     );
     store.save()?;
@@ -257,6 +322,7 @@ impl TemporaryHost {
             source,
             git_root,
             vec![],
+            vec![],
             value!({"route":"actual-copy-producer", "recipe":recipe,"source":source}),
         )?;
         lease.stable()?;
@@ -292,6 +358,8 @@ struct Member {
     recipe: String,
     #[serde(default)]
     leases: Vec<CacheLease>,
+    #[serde(default)]
+    nested_consumers: Vec<NestedConsumer>,
 }
 
 impl Manager {
@@ -386,6 +454,16 @@ impl Manager {
                             .ok_or("nested registered consumer remains live")?,
                         );
                     }
+                    if !nested_released(
+                        &allocation,
+                        &member.path,
+                        &member.nested_consumers,
+                        &member.leases,
+                    )? {
+                        return Err(
+                            "nested registered diagnostic consumer remains unreleased".into()
+                        );
+                    }
                     let source = r.blob(target, &self.anchor_head, &member.recipe)?;
                     self.stable(r)?;
                     lease.stable()?;
@@ -396,6 +474,7 @@ impl Manager {
                         &physical,
                         member.git_root,
                         member.leases,
+                        member.nested_consumers,
                         value!({"route":"current-custodian-transition", "custody":custody,
                         "reason":plan.reason, "recipe":member.recipe,"recipe_sha256":sha256(&source),
                         "member_identity":crate::ownership::identity(&physical)?,
@@ -500,6 +579,11 @@ pub(super) fn drain(
                 || intent["length"] != body.length
                 || intent["git_root"] != value!(body.git_root)
                 || intent["leases"] != value!(body.leases)
+                || intent
+                    .get("nested_consumers")
+                    .cloned()
+                    .unwrap_or_else(|| value!([]))
+                    != value!(body.nested_consumers)
             {
                 return Err("copied body intent binding changed".into());
             }
@@ -530,6 +614,11 @@ pub(super) fn drain(
                         );
                     }
                 }
+            }
+            if !nested_released(&allocation, member, &body.nested_consumers, &body.leases)? {
+                return Ok(
+                    value!({"path":member,"status":"protected","reason":"unreleased explicitly bound nested diagnostic consumer"}),
+                );
             }
             let path = no_symlink_parents(&allocation, member)?;
             match fs::symlink_metadata(&path) {
