@@ -1270,3 +1270,39 @@ initial judge runs; the producer itself never publishes inventory success.
 CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式平台 Git 输入；不把源宿主已部署的 Git 摘要／版本当作原生 fixture 的政策，也不改源宿主绑定。原错误与 passing control 均由实际命令产生。worktree 的未保留 commit-tree fixture 显式提供作者姓名／邮箱。
 
 真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。
+
+### Prospective temporary-host custody
+
+The behavior oracles for temporary allocations are declared before their tests:
+production must follow an immutable allocation intent; ordinary maintenance must
+preserve a distinct live native descendant and an overlapping holder, then reclaim
+only the selected rebuildable directories after final actual release. Normal exit,
+SIGTERM and SIGKILL before Drop/finish must preserve source, partial streams and
+missing-result truth. Unknown objects and unreleased diagnostic references must
+remain protected. Literal absolute allocation bindings must survive nested native
+commands, cleared command environments and Cargo working-directory changes,
+including spaces and Unicode; no ambient caller export is the custody authority.
+
+`retained_producers[].temporary: true` opts a declared store into prospective
+cache recovery using the existing producer registry and kernel Lease. A
+`TemporaryHost` resolves the committed host policy, publishes an exact child and
+its output whitelist before returning to the producer, and holds a shared kernel
+lease. The existing drain obtains exclusive exclusion; it does not require a
+success seal or publish diagnostic release, task completion or producer success.
+Drop closes ownership only. Source, originals and every unselected path remain
+in place, so evidence custody survives a hard kill. Native Command adapters call
+`bind_command`, which forwards owned descriptor copies through the existing
+process engine adapter and binds the absolute TMPDIR; engine calls consume the
+same capabilities. Host `temporary_environment` optionally selects one declared
+producer for bootstrap/check/use command temporaries. Host paths and disposable
+outputs remain in `.chrono-harness/cleanup.json`, independent of host language.
+
+This repository explicitly adopts worktree test allocations, projects execution
+and migration fixtures, and CI test hosts. Smaller nested temporary allocations
+use their bound retained container; no system temporary directory is scanned or
+imported. Only the declared Cargo outputs of the migration, worktree Cargo/native
+fixtures and CI Cargo receipts are eligible for automatic disposal; other fixture
+contents are retained source/evidence. Test allocation retention is intentional
+and is not a completion claim. Unclaimed neighbors and earlier system-temporary
+objects have no retrospective custody. Platform/native acceptance and external
+coordinator delivery remain separate from local behavior tests.

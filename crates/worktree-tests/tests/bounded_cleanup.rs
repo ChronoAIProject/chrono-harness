@@ -4,7 +4,7 @@ fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
-fn main_host_mode(mode: &str) -> Host {
+pub(super) fn main_host_mode(mode: &str) -> Host {
     let h = Host::new("payload");
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, mode);

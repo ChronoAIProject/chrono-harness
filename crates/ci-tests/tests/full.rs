@@ -193,7 +193,7 @@ fn repeated_preparation_retains_distinct_ownership_observations_without_rebindin
 
 #[test]
 fn declaration_init_ownership_customization_and_verify_are_explicit() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let c = config();
     write(root, "incoming.json", &serde_json::to_value(&c).unwrap());
@@ -263,7 +263,7 @@ fn executable_alias(source: impl AsRef<Path>, destination: impl AsRef<Path>) {
 
 #[test]
 fn generated_bash_preserves_literal_arguments_and_original_exit() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let root = d.path();
     let mut c = config();
     c.runner = "$CHRONO_BASE".into();

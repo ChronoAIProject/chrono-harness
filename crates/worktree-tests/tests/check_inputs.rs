@@ -94,8 +94,8 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     use std::os::unix::fs::MetadataExt;
 
     let built = Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
-    let first = tempfile::tempdir().unwrap();
-    let second = tempfile::tempdir().unwrap();
+    let first = temporary_host("host λ ");
+    let second = temporary_host("host λ ");
     for directory in [first.path(), second.path()] {
         fs::create_dir_all(directory.join(".chrono-harness/bin")).unwrap();
         install_readonly_file(directory, built, "consumer", b"fixture\n");

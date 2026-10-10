@@ -53,9 +53,25 @@ mod interrupted_cleanup;
 mod maintenance;
 mod policy_migration;
 mod rebind;
+mod temporary;
+
+pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
+    static STORE: std::sync::OnceLock<(std::path::PathBuf, Vec<String>)> =
+        std::sync::OnceLock::new();
+    let (directory, outputs) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "worktree-test-host",
+        )
+        .expect("committed temporary producer adoption")
+    });
+    chrono_worktree::TemporaryHost::allocate(directory, "worktree-test-host", outputs, prefix)
+        .expect("prospective temporary host custody")
+}
 
 struct Host {
-    _dir: tempfile::TempDir,
+    _dir: chrono_worktree::TemporaryHost,
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
@@ -142,10 +158,7 @@ impl Drop for Host {
 }
 impl Host {
     fn new(layout: &str) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("worktree host λ ")
-            .tempdir()
-            .unwrap();
+        let dir = temporary_host("worktree host λ ");
         let parent = fs::canonicalize(dir.path()).unwrap();
         let root = parent.join("source with spaces");
         let remote = parent.join("declared upstream.git");
@@ -222,7 +235,9 @@ impl Host {
         git(&self.root, &["push", "-q", "warehouse", "dev"]);
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let mut command =
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        command
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -239,10 +254,9 @@ impl Host {
                 name,
                 "--path",
                 target.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
-        self.received(out)
+            ]);
+        self._dir.bind_command(&mut command).unwrap();
+        self.received(command.output().unwrap())
     }
     fn received(&self, out: std::process::Output) -> (i32, Value, String) {
         if let Ok(directory) = std::env::var("CHRONO_WORKTREE_TEST_RECEIPTS") {

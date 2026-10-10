@@ -178,6 +178,61 @@ fn main() -> ExitCode {
             }
             exec(cargo);
         }
+        "temporary-producer" => {
+            let root = std::env::current_dir().unwrap();
+            let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
+                &root,
+                ".chrono-harness/worktree.json",
+                "test-allocation",
+            )
+            .unwrap();
+            let allocation = chrono_worktree::TemporaryHost::allocate(
+                &store,
+                "test-allocation",
+                &outputs,
+                "native 空白 λ ",
+            )
+            .unwrap();
+            let allocated = allocation.path();
+            fs::write(allocated.join("source.txt"), b"original source\n").unwrap();
+            fs::write(allocated.join("partial.bin"), [255, 0, 10]).unwrap();
+            fs::create_dir_all(allocated.join("cache 空白")).unwrap();
+            fs::write(allocated.join("cache 空白/output"), "rebuildable").unwrap();
+            mark("temporary-parent", std::process::id().to_string());
+            mark("temporary-path", allocated.as_os_str().as_encoded_bytes());
+            let mut child = Command::new(std::env::current_exe().unwrap());
+            child
+                .arg("temporary-descendant")
+                .arg(allocated)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            allocation.bind_command(&mut child).unwrap();
+            let mut child = child.spawn().unwrap();
+            mark("temporary-child", child.id().to_string());
+            wait("temporary-parent-release");
+            assert!(child.wait().unwrap().success());
+        }
+        "temporary-descendant" => {
+            let allocation = std::path::PathBuf::from(std::env::args_os().nth(2).unwrap());
+            assert_eq!(std::env::temp_dir(), allocation);
+            let nested = tempfile::Builder::new()
+                .prefix("nested λ ")
+                .tempdir()
+                .unwrap()
+                .keep();
+            assert!(nested.starts_with(&allocation));
+            fs::write(
+                allocation.join("native-active"),
+                std::process::id().to_string(),
+            )
+            .unwrap();
+            while !allocation.join("native-release").exists() {
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert!(allocation.join("cache 空白/output").exists());
+            fs::write(allocation.join("native-done"), "read and released").unwrap();
+        }
         "bounded-cargo" => {
             let plan: serde_json::Value = serde_json::from_slice(
                 &fs::read(Path::new(STATE).join("cargo-plan.json")).unwrap(),

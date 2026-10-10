@@ -73,3 +73,5 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 
 缓存已有一个登记消费者的原生 cold miss/save 与 exact-hit 路径验收；changed-source、损坏／不可用、并发、其它消费者及完整成本／生命周期合同仍未完成。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
+
+本轮临时宿主采用归现役 worktree producer owner：cleanup.json 明确声明工作树、projects 执行／迁移与 CI 测试的持久分配目录和可重建输出，temporary_environment 选择托管命令的绝对 TMPDIR。生成源码与原件在分配位置保留，不靠 Drop 拷贝；只在实际内核排除后回收白名单生成子目录，不制造 seal、诊断 release 或任务成功。原有未知系统临时项和外部 worktree 不接管。实际构造与子进程对应见 worktree 所有者；候选本地、原生、复核与外部落地各需自己的当前回执。

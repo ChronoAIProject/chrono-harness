@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+#[path = "temporary.rs"]
+mod temporary;
 use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
@@ -86,7 +88,7 @@ impl CommandEvidence {
     }
 }
 pub struct Host {
-    dir: tempfile::TempDir,
+    dir: chrono_worktree::TemporaryHost,
     last_result: RefCell<Option<CommandEvidence>>,
     pub base: String,
     pub candidate: String,
@@ -96,10 +98,7 @@ pub struct Host {
 }
 impl Host {
     pub fn new(script: bool) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("execution host space ")
-            .tempdir()
-            .unwrap();
+        let dir = temporary::temporary_host("execution host space ");
         let root = fs::canonicalize(dir.path()).unwrap();
         git(&root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
@@ -143,7 +142,7 @@ impl Host {
         }
         let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
         let version = Command::new(&tool).arg("--version").output().unwrap();
-        let external = tempfile::NamedTempFile::new().unwrap();
+        let external = tempfile::NamedTempFile::new_in(dir.path()).unwrap();
         fs::write(external.path(), b"bounded input\n").unwrap();
         v.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
             ".chrono-harness/bin/chrono-harness",
@@ -290,7 +289,8 @@ impl Host {
     ) -> (i32, Value) {
         self.prepare_with_context(edit, context_edit);
         let root = self.root();
-        let out = Command::new(root.join(".chrono-harness/bin/chrono-harness"))
+        let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
+        command
             .current_dir("/")
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -306,9 +306,9 @@ impl Host {
                 root.join(".chrono-harness/state/context.json")
                     .to_str()
                     .unwrap(),
-            ])
-            .output()
-            .unwrap();
+            ]);
+        self.dir.bind_command(&mut command).unwrap();
+        let out = command.output().unwrap();
         self.retain_command_result("check", &out);
         let v = serde_json::from_slice(&out.stdout)
             .unwrap_or_else(|_| json!({"stderr":String::from_utf8_lossy(&out.stderr)}));

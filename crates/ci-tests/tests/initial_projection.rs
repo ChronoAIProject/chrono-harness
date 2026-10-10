@@ -46,11 +46,8 @@ fn git(root: &Path, args: &[&str]) -> String {
 
 #[test]
 fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
-    let host = tempfile::Builder::new()
-        .prefix("explicit CI host ")
-        .tempdir()
-        .unwrap();
-    let inputs = tempfile::tempdir().unwrap();
+    let host = crate::tools::temporary_host("explicit CI host ");
+    let inputs = crate::tools::temporary_host("host λ ");
     let input = inputs.path().join("source.json");
     let c = source();
     write(&input, &c);
@@ -114,8 +111,8 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
 
 #[test]
 fn initial_projection_verification_detects_drift_without_repairing() {
-    let host = tempfile::tempdir().unwrap();
-    let inputs = tempfile::tempdir().unwrap();
+    let host = crate::tools::temporary_host("host λ ");
+    let inputs = crate::tools::temporary_host("host λ ");
     let input = inputs.path().join("source.json");
     let mut c = source();
     write(&input, &c);
@@ -143,8 +140,8 @@ fn initial_projection_verification_detects_drift_without_repairing() {
 
 #[test]
 fn initial_adoption_collision_is_preflighted_before_any_output_is_written() {
-    let host = tempfile::tempdir().unwrap();
-    let inputs = tempfile::tempdir().unwrap();
+    let host = crate::tools::temporary_host("host λ ");
+    let inputs = crate::tools::temporary_host("host λ ");
     let input = inputs.path().join("source.json");
     let c = source();
     write(&input, &c);
@@ -182,8 +179,8 @@ fn invalid_initial_sources_do_not_publish_partial_configuration() {
         "host-parent",
         "judge-collision",
     ] {
-        let host = tempfile::tempdir().unwrap();
-        let inputs = tempfile::tempdir().unwrap();
+        let host = crate::tools::temporary_host("host λ ");
+        let inputs = crate::tools::temporary_host("host λ ");
         let input = inputs.path().join("source.json");
         let mut c = source();
         match case {
@@ -244,8 +241,8 @@ fn invalid_initial_sources_do_not_publish_partial_configuration() {
 
 #[test]
 fn initial_projection_symlink_is_rejected_without_touching_the_target() {
-    let host = tempfile::tempdir().unwrap();
-    let inputs = tempfile::tempdir().unwrap();
+    let host = crate::tools::temporary_host("host λ ");
+    let inputs = crate::tools::temporary_host("host λ ");
     let input = inputs.path().join("source.json");
     let c = source();
     write(&input, &c);
@@ -267,11 +264,8 @@ fn initial_projection_symlink_is_rejected_without_touching_the_target() {
 fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory() {
     let product = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for unregistered in [false, true] {
-        let host = tempfile::Builder::new()
-            .prefix("generated root host ")
-            .tempdir()
-            .unwrap();
-        let inputs = tempfile::tempdir().unwrap();
+        let host = crate::tools::temporary_host("generated root host ");
+        let inputs = crate::tools::temporary_host("host λ ");
         let root = host.path();
         let bin = root.join(".chrono-harness/bin");
         fs::create_dir_all(&bin).unwrap();
@@ -412,8 +406,8 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
 
 #[test]
 fn standalone_v4_preserves_explicit_initial_inventory_and_fixed_bare_entry() {
-    let host = tempfile::tempdir().unwrap();
-    let inputs = tempfile::tempdir().unwrap();
+    let host = crate::tools::temporary_host("host λ ");
+    let inputs = crate::tools::temporary_host("host λ ");
     let input = inputs.path().join("source.json");
     let mut c = source();
     c["schema"] = json!("chrono-github-ci/v4");
@@ -450,8 +444,8 @@ fn standalone_initial_migration_preserves_inventory_and_refuses_edits_or_weakeni
         "inventory-drift",
         "workflow-edit",
     ] {
-        let host = tempfile::tempdir().unwrap();
-        let inputs = tempfile::tempdir().unwrap();
+        let host = crate::tools::temporary_host("host λ ");
+        let inputs = crate::tools::temporary_host("host λ ");
         let input = inputs.path().join("source.json");
         let old = source();
         write(&input, &old);

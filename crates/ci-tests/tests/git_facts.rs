@@ -56,8 +56,8 @@ fn commit(root: &Path, amend: bool) -> String {
     git(root, &["rev-parse", "HEAD"])
 }
 struct Host {
-    _dir: tempfile::TempDir,
-    _inputs: tempfile::TempDir,
+    _dir: chrono_worktree::TemporaryHost,
+    _inputs: chrono_worktree::TemporaryHost,
     root: PathBuf,
     trace: PathBuf,
     program: PathBuf,
@@ -66,15 +66,9 @@ struct Host {
 }
 impl Host {
     fn new(mode: &str) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("event host λ ")
-            .tempdir()
-            .unwrap();
+        let dir = crate::tools::temporary_host("event host λ ");
         let root = fs::canonicalize(dir.path()).unwrap();
-        let inputs = tempfile::Builder::new()
-            .prefix("event tools λ ")
-            .tempdir()
-            .unwrap();
+        let inputs = crate::tools::temporary_host("event tools λ ");
         let external = fs::canonicalize(inputs.path()).unwrap();
         let program = external.join("chosen git");
         let trace = external.join("process.trace");
@@ -134,8 +128,8 @@ impl Host {
     fn revise(&mut self) {
         self.candidate = commit(&self.root, true);
     }
-    fn remote(&self) -> (tempfile::TempDir, String) {
-        let remote = tempfile::tempdir().unwrap();
+    fn remote(&self) -> (chrono_worktree::TemporaryHost, String) {
+        let remote = crate::tools::temporary_host("host λ ");
         git(remote.path(), &["init", "-q", "-b", "stable"]);
         fs::write(remote.path().join("remote-only"), "distinct object\n").unwrap();
         let base = commit(remote.path(), false);

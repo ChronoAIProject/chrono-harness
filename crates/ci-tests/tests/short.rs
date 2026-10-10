@@ -90,7 +90,7 @@ for prefix,code,timeout,expected in [
 }
 
 struct ShortHost {
-    _dir: tempfile::TempDir,
+    _dir: chrono_worktree::TemporaryHost,
     root: PathBuf,
     remote: PathBuf,
     base: String,
@@ -99,10 +99,7 @@ struct ShortHost {
 impl ShortHost {
     fn new() -> Self {
         let (old, _, _) = consumer_source();
-        let dir = tempfile::Builder::new()
-            .prefix("short host λ ")
-            .tempdir()
-            .unwrap();
+        let dir = crate::tools::temporary_host("short host λ ");
         let parent = fs::canonicalize(dir.path()).unwrap();
         let root = parent.join("arbitrary non Cargo layout");
         fs::create_dir(&root).unwrap();
@@ -214,6 +211,7 @@ impl ShortHost {
         c.current_dir(&self.root)
             .env_remove(prepared::SOURCE)
             .args(args);
+        self._dir.bind_command(&mut c).unwrap();
         c
     }
     fn run(&self, args: &[&str], exit: i32) -> Value {
@@ -394,7 +392,7 @@ impl Drop for ShortHost {
 
 #[test]
 fn failed_short_fixture_retains_original_state_before_removing_host() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::tools::temporary_host("host λ ");
     let root = directory.path().join("failed fixture");
     let original = b"{\"failure\":\"timeout\",\"raw\":[255,0,10]}\n";
     let report = ".chrono-harness/state/preparation/acquisition.json";
@@ -421,8 +419,8 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
     });
     assert!(failed.is_err());
     assert!(
-        !root.exists(),
-        "fixture teardown must still remove the host"
+        root.exists(),
+        "source and original evidence survive fixture teardown"
     );
     assert_eq!(
         fs::read(evidence.join("preparation/acquisition.json")).unwrap(),

@@ -12,8 +12,8 @@ fn config_value() -> Value {
         "gather":{"program":"gh","inherit_environment":["PATH","HOME","GH_TOKEN"],"credential_environment":["GH_TOKEN"],"environment":{"GH_PROMPT_DISABLED":"1"},"timeout_seconds":30,"output_limit_bytes":1048576,"wait_seconds":600,"poll_seconds":15,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}})
 }
 
-fn fixture() -> tempfile::TempDir {
-    let d = tempfile::tempdir().unwrap();
+fn fixture() -> chrono_worktree::TemporaryHost {
+    let d = crate::tools::temporary_host("host λ ");
     let path = d.path().join(".chrono-harness/ci/units.json");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, serde_json::to_vec_pretty(&config_value()).unwrap()).unwrap();
@@ -79,7 +79,7 @@ fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
                     json!(".chrono-harness/state/alpha//nested/")
             }
         }
-        let d = tempfile::tempdir().unwrap();
+        let d = crate::tools::temporary_host("host λ ");
         json_file(d.path(), ".chrono-harness/ci/units.json", &value);
         assert!(
             generate(d.path(), ".chrono-harness/ci/units.json", false).is_err(),
@@ -364,14 +364,14 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     assert!(result.stderr.starts_with(b"E_REQUEST: "));
 }
 
-fn consumer() -> (tempfile::TempDir, String, String) {
+fn consumer() -> (chrono_worktree::TemporaryHost, String, String) {
     let (host, base, candidate) = consumer_source();
     install(host.path());
     (host, base, candidate)
 }
 
 // Clone sources contain repository inputs; only an executing host installs tools.
-fn consumer_source() -> (tempfile::TempDir, String, String) {
+fn consumer_source() -> (chrono_worktree::TemporaryHost, String, String) {
     let d = fixture();
     let root = d.path();
     fs::write(
@@ -527,10 +527,7 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     let (host, b, c) = consumer();
     let mut copies = vec![];
     for _ in 0..2 {
-        let copy = tempfile::Builder::new()
-            .prefix("unit host λ ")
-            .tempdir()
-            .unwrap();
+        let copy = crate::tools::temporary_host("unit host λ ");
         git(
             copy.path(),
             &["clone", "-q", host.path().to_str().unwrap(), "."],
@@ -544,8 +541,13 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
             .zip(["alpha", "beta"])
             .map(|(copy, unit)| {
                 let (b, c) = (&b, &c);
+                let capability = copy.capability().unwrap();
+                let path = copy.path();
                 threads.spawn(move || {
-                    execute_context(copy.path(), &unit_context(copy.path(), b, c, Some(unit)), 0)
+                    use std::os::fd::AsFd;
+                    let _scope =
+                        chrono_harness::process_fds::Scope::new(&[capability.as_fd()]).unwrap();
+                    execute_context(path, &unit_context(path, b, c, Some(unit)), 0)
                 })
             })
             .collect();
@@ -623,14 +625,14 @@ fn install_mock_transport(root: &Path, mode: &str, c: &str) {
     assert_eq!(ready.stdout, b"chrono-ci-test-provider/v1\n");
 }
 
-fn gather_host(mode: &str) -> (tempfile::TempDir, String, String) {
+fn gather_host(mode: &str) -> (chrono_worktree::TemporaryHost, String, String) {
     gather_host_config(mode, |_| {})
 }
 
 fn gather_host_config(
     mode: &str,
     configure: impl FnOnce(&mut Value),
-) -> (tempfile::TempDir, String, String) {
+) -> (chrono_worktree::TemporaryHost, String, String) {
     let (host, b, _) = consumer();
     let root = host.path();
     let mut cfg = config_value();

@@ -179,7 +179,7 @@ use crate::{
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
-pub use producer::RetainedArtifact;
+pub use producer::{RetainedArtifact, TemporaryHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
@@ -203,6 +203,8 @@ struct Policy {
     main_cache_only: bool,
     #[serde(default)]
     retained_producers: Vec<producer::ProducerPolicy>,
+    #[serde(default)]
+    temporary_environment: Option<String>,
     artifacts: Vec<Artifact>,
 }
 #[derive(Clone, Deserialize)]
@@ -565,6 +567,16 @@ impl Manager {
             {
                 return Err("repeated or overlapping retained producer registrations".into());
             }
+        }
+        if policy.temporary_environment.as_ref().is_some_and(|id| {
+            !policy
+                .retained_producers
+                .iter()
+                .any(|p| p.id == *id && p.temporary)
+        }) {
+            return Err(
+                "temporary environment must select one prospectively adopted producer".into(),
+            );
         }
         start::registered_policy(&registrations, config_path, &r.config.report_directory)?;
         let directory = no_symlink_parents(anchor, policy.state_directory.trim_end_matches('/'))?;
@@ -2408,7 +2420,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     let target_regs = target_snapshot
                         .as_ref()
                         .map_or(&manager.registrations, |(registrations, _)| registrations);
-                    let command = if operation == "check" {
+                    let mut command = if operation == "check" {
                         canonical_command(target, target_regs, &selection)?
                     } else if operation == "bootstrap" {
                         bootstrap_command(r, target, target_regs, values["--bootstrap-config"])?
@@ -2445,6 +2457,32 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     }
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
+                    // The adopted command domain selects one retained allocation
+                    // before any child runs; no ambient caller export owns it.
+                    let temporary = manager
+                        .policy
+                        .retained_producers
+                        .iter()
+                        .find(|p| manager.policy.temporary_environment.as_ref() == Some(&p.id))
+                        .map(|p| {
+                            TemporaryHost::allocate(
+                                &p.directory(&manager.policy.coordinator_root)?,
+                                &p.id,
+                                &p.generated_outputs,
+                                "command λ ",
+                            )
+                        })
+                        .transpose()?;
+                    if let Some(host) = &temporary {
+                        command.env.insert(
+                            "TMPDIR".into(),
+                            host.path()
+                                .to_str()
+                                .ok_or("temporary allocation UTF-8")?
+                                .into(),
+                        );
+                        report["temporary_allocation"] = value!(host.path());
+                    }
                     let coordinator = manager.policy.coordinator_root.clone();
                     drop(manager);
                     let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;

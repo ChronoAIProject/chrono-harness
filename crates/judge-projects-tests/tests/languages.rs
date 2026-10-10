@@ -1,12 +1,18 @@
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_judge_projects::pairs;
 use serde_json::json;
 use std::{collections::BTreeSet, fs};
 use support::*;
 
-fn fixture(script: bool, implementation: &str, testing: &str) -> (tempfile::TempDir, Values) {
-    let root = tempfile::tempdir().unwrap();
+fn fixture(
+    script: bool,
+    implementation: &str,
+    testing: &str,
+) -> (chrono_worktree::TemporaryHost, Values) {
+    let root = temporary::temporary_host("host λ ");
     let mut values = values();
     let registry = values.get_mut(PROJECTS).unwrap();
     registry["schema_version"] = json!(2);

@@ -6,7 +6,7 @@ use std::{
 };
 
 pub(crate) struct Lease {
-    file: File,
+    pub(crate) file: File,
     path: PathBuf,
     id: String,
     created: bool,

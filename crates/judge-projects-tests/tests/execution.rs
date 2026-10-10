@@ -1,3 +1,5 @@
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_judge_projects::execute;
 use chrono_judge_registration::execution::{Method, Plan};
 use chrono_judge_routes::prepare;
@@ -118,8 +120,11 @@ fn edit_steps(
 fn plan(
     commands: &[(&str, Vec<Step>)],
     sequences: &[(&str, Vec<&str>)],
-) -> (tempfile::TempDir, chrono_judge_routes::Execution) {
-    let dir = tempfile::tempdir().unwrap();
+) -> (
+    chrono_worktree::TemporaryHost,
+    chrono_judge_routes::Execution,
+) {
+    let dir = temporary::temporary_host("host λ ");
     let child = std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-test-project-execution"));
     let version = std::process::Command::new(&child)
         .arg("--version")
@@ -416,7 +421,7 @@ fn priority_does_not_run_failed_descendants_or_drop_unlisted_work() {
 fn barrier_plan(
     ids: &[&str],
 ) -> (
-    tempfile::TempDir,
+    chrono_worktree::TemporaryHost,
     chrono_judge_routes::Execution,
     std::net::TcpListener,
 ) {

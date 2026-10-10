@@ -382,11 +382,9 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
             if !out.status.success() {
                 // Keep the actual nested producer receipts, including child exit,
                 // stdout and stderr, before the fixture's temporary host is dropped.
-                let evidence = tempfile::Builder::new()
-                    .prefix("chrono-gating-failure-")
-                    .tempdir()
-                    .unwrap()
-                    .keep();
+                let evidence = crate::tools::temporary_host("chrono-gating-failure-")
+                    .path()
+                    .to_owned();
                 fs::write(evidence.join("stdout"), &out.stdout).unwrap();
                 fs::write(evidence.join("stderr"), &out.stderr).unwrap();
                 json_file(
@@ -1280,7 +1278,7 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
 #[test]
 fn copied_conditional_example_executes_fixed_unit_and_collection_commands_without_rust_source() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-host-job-gating");
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::tools::temporary_host("host λ ");
     let root = dir.path().join("installed tools host");
     fs::create_dir(&root).unwrap();
     let map: Value =
@@ -1692,7 +1690,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     let source = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
     let original = git(&source, &["rev-parse", "HEAD"]);
     // Fixed baseline data is exported; no other branch or active worktree is read.
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::tools::temporary_host("host λ ");
     let archive = Command::new(fixture_git())
         .current_dir(&source)
         .args(["archive", &original])

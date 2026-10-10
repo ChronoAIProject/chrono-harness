@@ -1591,7 +1591,7 @@ fn registered_python_sources_load_without_creating_unregistered_outputs() {
         ".chrono-harness/migrations/scoped-v1-tests.py",
     ];
     for script in [sources[1], sources[2], sources[3], sources[5]] {
-        let root = tempfile::tempdir().unwrap();
+        let root = temporary_host("host λ ");
         for path in sources {
             let destination = root.path().join(path);
             fs::create_dir_all(destination.parent().unwrap()).unwrap();

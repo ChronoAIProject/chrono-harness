@@ -1,4 +1,6 @@
 use serde_json::{Value, json};
+#[path = "support/tools.rs"]
+mod tools;
 use std::{fs, path::Path, process::Command};
 #[path = "startup.rs"]
 mod startup;
@@ -391,7 +393,7 @@ fn cache_adoption_rejects_unknown_jobs_unpinned_actions_and_empty_consumers() {
 
 #[test]
 fn release_init_and_generation_resolve_cache_consumers_before_writing() {
-    let root = tempfile::tempdir().unwrap();
+    let root = crate::tools::temporary_host("host λ ");
     let input = tempfile::NamedTempFile::new().unwrap();
     let mut value = source(".chrono-harness/ci/release.json");
     value["persistent_cache"] = adoption("linux_build_runner");

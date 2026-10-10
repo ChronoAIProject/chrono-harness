@@ -7,6 +7,15 @@ pub(super) struct ProducerPolicy {
     pub(super) id: String,
     pub(super) directory: String,
     pub(super) generated_outputs: Vec<String>,
+    #[serde(default)]
+    pub(super) temporary: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CacheLease {
+    path: String,
+    id: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -31,6 +40,8 @@ struct Object {
     retention_reason: String,
     disposed: bool,
     attempts: Vec<Receipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cache_lease: Option<CacheLease>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -186,7 +197,7 @@ impl Store {
             relative_path(&object.path)?;
             if Path::new(&object.path).components().count() != 1
                 || !seen.insert(&object.path)
-                || object.consumers.is_empty()
+                || (object.consumers.is_empty() && object.cache_lease.is_none())
             {
                 return Err("invalid exact producer object registration".into());
             }
@@ -212,6 +223,7 @@ impl Store {
             || intent["path"] != object.path
             || intent["identity"] != object.identity
             || intent["producer"] != self.registry.producer
+            || (object.cache_lease.is_some() && intent["cache_lease"] != value!(object.cache_lease))
         {
             return Err("producer intent changed; preserve object".into());
         }
@@ -334,6 +346,15 @@ impl RetainedArtifact {
         config_path: &str,
         producer: &str,
     ) -> Result<(PathBuf, Vec<String>), String> {
+        Self::resolve_store(host_root, config_path, producer, false)
+    }
+
+    fn resolve_store(
+        host_root: &Path,
+        config_path: &str,
+        producer: &str,
+        temporary: bool,
+    ) -> Result<(PathBuf, Vec<String>), String> {
         let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
         let (config, bytes) = crate::configuration(&root, config_path)?;
         let mut selected = None;
@@ -353,6 +374,9 @@ impl RetainedArtifact {
                     .iter()
                     .find(|p| p.id == producer)
                     .ok_or("retained producer store is not declared by its owner")?;
+                if temporary && !declaration.temporary {
+                    return Err("temporary producer is not prospectively adopted".into());
+                }
                 let directory = declaration.directory(&manager.policy.coordinator_root)?;
                 manager.stable(r)?;
                 report["producer"] = value!(producer);
@@ -469,6 +493,7 @@ impl RetainedArtifact {
             retention_reason: retention_reason.into(),
             disposed: false,
             attempts: vec![],
+            cache_lease: None,
         });
         store.save()?;
         Ok(Self {
@@ -511,7 +536,7 @@ impl RetainedArtifact {
             .ok_or("producer object missing")?;
         let object = &store.registry.objects[i];
         store.stable(object)?;
-        if object.sealed || object.disposed {
+        if object.sealed || object.disposed || object.cache_lease.is_some() {
             return Err("producer artifact is already sealed/disposed".into());
         }
         let intent: Value =
@@ -574,7 +599,7 @@ impl RetainedArtifact {
             .ok_or("producer object missing")?;
         let object = &store.registry.objects[i];
         store.stable(object)?;
-        if !object.sealed || (!released && object.disposed) {
+        if (!object.sealed && object.cache_lease.is_none()) || (!released && object.disposed) {
             return Err(
                 "unsealed/disposed producer artifact cannot acquire or release consumers".into(),
             );
@@ -600,8 +625,112 @@ impl RetainedArtifact {
     }
 }
 
+/// One prospectively enrolled temporary allocation. Source and originals stay
+/// in place after Drop or interruption; only its declared outputs enter drain.
+/// Native consumers use bind_command; engine consumers inherit the same Scope.
+pub struct TemporaryHost {
+    path: PathBuf,
+    lease: Lease,
+}
+
+impl TemporaryHost {
+    pub fn registered_store(
+        host_root: &Path,
+        config_path: &str,
+        producer: &str,
+    ) -> Result<(PathBuf, Vec<String>), String> {
+        RetainedArtifact::resolve_store(host_root, config_path, producer, true)
+    }
+
+    pub fn allocate(
+        directory: &Path,
+        producer: &str,
+        generated_outputs: &[String],
+        prefix: &str,
+    ) -> Result<Self, String> {
+        generated_paths(generated_outputs)?;
+        if prefix.contains(['/', '\\', '\0']) {
+            return Err("temporary allocation prefix must be one literal name".into());
+        }
+        fs::create_dir_all(directory).map_err(|e| e.to_string())?;
+        let mut store = Store::open(directory, producer, true)?;
+        // Keep immediately: even a failed/interrupted enrollment is an unknown
+        // neighbor, never an implicitly reclaimable source or evidence object.
+        let path = tempfile::Builder::new()
+            .prefix(prefix)
+            .tempdir_in(directory)
+            .map_err(|e| e.to_string())?
+            .keep();
+        let object = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or("allocation UTF-8")?
+            .to_owned();
+        let lease_path = format!("allocation-{}.lease", sha256(object.as_bytes()));
+        let lease = Lease::acquire(
+            &no_symlink_parents(directory, &lease_path)?,
+            None,
+            true,
+            false,
+            None,
+        )?
+        .ok_or("allocation lease unavailable")?;
+        let binding = CacheLease {
+            path: lease_path,
+            id: lease.id().into(),
+        };
+        let identity = directory_id(&path)?;
+        let intent = store.receipt(
+            "producer-intent",
+            &value!({
+                "schema":"chrono-temporary-host-intent/v1","producer":producer,
+                "path":object,"identity":identity,"generated_outputs":generated_outputs,
+                "cache_lease":binding,"evidence_disposal":"not-authorized",
+                "producer_outcome":"not-established","task_completion":"not-claimed"
+            }),
+        )?;
+        store.registry.objects.push(Object {
+            path: object,
+            identity,
+            intent,
+            sealed: false,
+            publication: None,
+            generated: BTreeMap::new(),
+            evidence: BTreeMap::new(),
+            consumers: BTreeMap::new(),
+            retention_reason:
+                "prospective temporary source and original evidence; cache-only recovery".into(),
+            disposed: false,
+            attempts: vec![],
+            cache_lease: Some(binding),
+        });
+        store.save()?;
+        Ok(Self { path, lease })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// A declared cross-thread engine consumer enters its own process_fds Scope
+    /// with this owned copy. It shares the existing kernel open description.
+    pub fn capability(&self) -> Result<fs::File, String> {
+        self.lease.stable()?;
+        self.lease.file.try_clone().map_err(|e| e.to_string())
+    }
+
+    pub fn bind_command(&self, command: &mut std::process::Command) -> Result<(), String> {
+        use std::os::fd::AsFd;
+        self.lease.stable()?;
+        // The same exact allocation also holds nested default tempfile outputs.
+        // It is retained source/evidence, never a disposable mixed TMPDIR root.
+        command.env("TMPDIR", &self.path);
+        chrono_harness::process_fds::forward_command(command, &[self.lease.file.as_fd()])
+    }
+}
+
 impl ProducerPolicy {
-    fn directory(&self, coordinator_root: &Path) -> Result<PathBuf, String> {
+    pub(super) fn directory(&self, coordinator_root: &Path) -> Result<PathBuf, String> {
         no_symlink_parents(coordinator_root, self.directory.trim_end_matches('/'))
     }
 
@@ -643,41 +772,79 @@ impl ProducerPolicy {
             let mut row = value!({"producer":self.id,"path":format!("{}{}",self.directory,object.path),
                 "retention_reason":object.retention_reason,"consumers":object.consumers,
                 "registered_generated_objects":object.generated.len(),"evidence":"retained"});
-            if !object.sealed || object.consumers.values().any(|c| !c.released) {
+            let cache_guard = if let Some(binding) = &object.cache_lease {
+                let path = no_symlink_parents(&directory, &binding.path)?;
+                Lease::acquire(&path, Some(&binding.id), false, true, None)?
+            } else {
+                None
+            };
+            if (!object.sealed && object.cache_lease.is_none())
+                || object.consumers.values().any(|c| !c.released)
+                || (object.cache_lease.is_some() && cache_guard.is_none())
+            {
                 row["status"] = value!("protected");
                 row["reason"] = value!(
-                    "producer has not explicitly released all consumers or publication is interrupted"
+                    "live kernel holder, unreleased diagnostic consumer, or interrupted retained publication"
                 );
             } else if object.disposed {
                 row["status"] = value!("already-disposed");
             } else {
                 let mut run = || -> Result<Value, String> {
                     store.stable(object)?;
-                    if object
-                        .generated
-                        .keys()
+                    let prospective: Vec<String> = if object.cache_lease.is_some() {
+                        if !self.temporary {
+                            return Err(
+                                "temporary producer is no longer adopted; preserve outputs".into(),
+                            );
+                        }
+                        let intent = json(
+                            &fs::read(directory.join(&object.intent.path))
+                                .map_err(|e| e.to_string())?,
+                        )?;
+                        serde_json::from_value(intent["generated_outputs"].clone())
+                            .map_err(|e| e.to_string())?
+                    } else {
+                        object.generated.keys().cloned().collect()
+                    };
+                    generated_paths(&prospective)?;
+                    if prospective
+                        .iter()
                         .any(|p| !self.generated_outputs.contains(p))
                     {
                         return Err("producer output is not in the current exact whitelist".into());
                     }
-                    let names: Vec<_> = object
-                        .generated
-                        .keys()
+                    let names: Vec<_> = prospective
+                        .iter()
                         .map(|p| format!("{}{}/{p}", self.directory, object.path))
                         .collect();
-                    let head = r.oid(root, "HEAD")?;
-                    let paths = artifact_disposal::paths(r, root, &head, &names)?;
+                    let head = if names.is_empty() {
+                        None
+                    } else {
+                        Some(r.oid(root, "HEAD")?)
+                    };
+                    let paths = if let Some(head) = &head {
+                        artifact_disposal::paths(r, root, head, &names)?
+                    } else {
+                        vec![]
+                    };
                     let intent = store.receipt("producer-cleanup-intent", &value!({
                         "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
                         "identity":object.identity,"producer_intent":object.intent,"generated":object.generated,
-                        "policy_sha256":sha256(&manager.policy_bytes),"released_consumers":object.consumers
+                        "policy_sha256":sha256(&manager.policy_bytes),"released_consumers":object.consumers,
+                        "cache_lease":object.cache_lease,"prospective_outputs":prospective,
+                        "producer_outcome":"not-established-by-cache-recovery"
                     }))?;
                     let mut attempt = value!({"automatic_cleanup":true,"intent":intent,"artifact_disposals":[],"status":"failed"});
                     let outcome =
                         artifact_disposal::dispose(root, &names, &paths, &mut attempt, || {
                             manager.stable(r)?;
                             store.stable(object)?;
-                            artifact_disposal::paths(r, root, &head, &names)?;
+                            if let Some(lease) = &cache_guard {
+                                lease.stable()?;
+                            }
+                            if let Some(head) = &head {
+                                artifact_disposal::paths(r, root, head, &names)?;
+                            }
                             for (path, expected) in &object.generated {
                                 let physical = no_symlink_parents(
                                     &directory.join(&object.path),

@@ -29,8 +29,8 @@ fn git(p: &Path, args: &[&str]) -> String {
     );
     String::from_utf8(o.stdout).unwrap().trim().to_string()
 }
-fn repo() -> (tempfile::TempDir, String, String) {
-    let d = tempfile::tempdir().unwrap();
+fn repo() -> (chrono_worktree::TemporaryHost, String, String) {
+    let d = crate::tools::temporary_host("host λ ");
     git(d.path(), &["init", "-q", "-b", "dev"]);
     git(
         d.path(),
@@ -48,11 +48,8 @@ fn repo() -> (tempfile::TempDir, String, String) {
 }
 #[test]
 fn init_from_external_config_and_spaced_host_is_idempotent() {
-    let d = tempfile::Builder::new()
-        .prefix("spaced host ")
-        .tempdir()
-        .unwrap();
-    let input = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("spaced host ");
+    let input = crate::tools::temporary_host("host λ ");
     let p = input.path().join("settings.json");
     write(&p, &config());
     assert!(init(d.path(), &p).unwrap());
@@ -66,7 +63,7 @@ fn init_from_external_config_and_spaced_host_is_idempotent() {
 }
 #[test]
 fn init_preserves_adopted_customization() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let input = d.path().join("source.json");
     write(&input, &config());
     init(d.path(), &input).unwrap();
@@ -84,7 +81,7 @@ fn init_preserves_adopted_customization() {
 }
 #[test]
 fn drift_verification_never_repairs() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let p = d.path().join("source.json");
     write(&p, &config());
     init(d.path(), &p).unwrap();
@@ -100,7 +97,7 @@ fn drift_verification_never_repairs() {
 }
 #[test]
 fn unowned_collision_preflight_preserves_all_inputs() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let p = d.path().join("source.json");
     write(&p, &config());
     let out = d.path().join(".github/workflows/check.yml");
@@ -112,7 +109,7 @@ fn unowned_collision_preflight_preserves_all_inputs() {
 }
 #[test]
 fn unrelated_workflows_and_symlink_collisions() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let p = d.path().join("source.json");
     write(&p, &config());
     let wf = d.path().join(".github/workflows");
@@ -133,7 +130,7 @@ fn unrelated_workflows_and_symlink_collisions() {
 }
 #[test]
 fn bootstrap_extension_regenerates_owned_projection() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let p = d.path().join("source.json");
     let c = config();
     write(&p, &c);
@@ -153,7 +150,7 @@ fn bootstrap_extension_regenerates_owned_projection() {
 }
 #[test]
 fn invalid_provider_unknown_member_and_unpinned_action_fail() {
-    let d = tempfile::tempdir().unwrap();
+    let d = crate::tools::temporary_host("host λ ");
     let p = d.path().join("source.json");
     for mutation in ["provider", "member", "action"] {
         let mut v = serde_json::to_value(config()).unwrap();
@@ -194,7 +191,7 @@ fn pr_uses_head_not_merge_ref() {
 #[test]
 fn configured_push_baseline_covers_repeated_pushes_and_tracks_the_named_remote_ref() {
     let (d, base, first) = repo();
-    let remote = tempfile::tempdir().unwrap();
+    let remote = crate::tools::temporary_host("host λ ");
     git(remote.path(), &["init", "--bare", "-q"]);
     git(
         d.path(),
@@ -249,7 +246,7 @@ fn configured_push_baseline_covers_repeated_pushes_and_tracks_the_named_remote_r
 
 #[test]
 fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() {
-    let host = tempfile::tempdir().unwrap();
+    let host = crate::tools::temporary_host("host λ ");
     for rules in [
         json!([{"ref_prefix":"refs/heads/verify/*","base_ref":"refs/heads/stable"}]),
         json!([{"ref_prefix":"refs/heads/verify/","base_ref":"stable"}]),
@@ -265,7 +262,7 @@ fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() 
         assert!(!host.path().join(".github/workflows/check.yml").exists());
     }
     let (d, base, candidate) = repo();
-    let remote = tempfile::tempdir().unwrap();
+    let remote = crate::tools::temporary_host("host λ ");
     git(remote.path(), &["init", "--bare", "-q"]);
     git(
         d.path(),
@@ -295,7 +292,7 @@ fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() 
 #[test]
 fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_customization() {
     let (d, base, candidate) = repo();
-    let remote = tempfile::tempdir().unwrap();
+    let remote = crate::tools::temporary_host("host λ ");
     git(remote.path(), &["init", "--bare", "-q"]);
     git(
         d.path(),
@@ -305,7 +302,7 @@ fn configured_push_baseline_cli_fetches_the_pinned_missing_object_and_preserves_
         d.path(),
         &["push", "-q", "origin", &format!("{base}:refs/heads/stable")],
     );
-    let writer = tempfile::tempdir().unwrap();
+    let writer = crate::tools::temporary_host("host λ ");
     git(
         writer.path(),
         &[
@@ -439,7 +436,7 @@ fn deletion_zero_missing_and_wrong_checkout_fail() {
 #[test]
 fn branch_creation_resolves_configured_baseline_once() {
     let (d, b, c) = repo();
-    let remote = tempfile::tempdir().unwrap();
+    let remote = crate::tools::temporary_host("host λ ");
     git(remote.path(), &["init", "--bare", "-q"]);
     git(
         d.path(),
@@ -528,12 +525,9 @@ fn cli_preserves_context_and_outputs_full_identity() {
     );
     assert!(d.path().join(".chrono-harness/state/context.json").exists());
 }
-fn copied_example() -> tempfile::TempDir {
+fn copied_example() -> chrono_worktree::TemporaryHost {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-host");
-    let root = tempfile::Builder::new()
-        .prefix("copied example host ")
-        .tempdir()
-        .unwrap();
+    let root = crate::tools::temporary_host("copied example host ");
     let map: Value =
         serde_json::from_slice(&fs::read(source.join(".chrono-harness/FILEMAP.json")).unwrap())
             .unwrap();
@@ -561,7 +555,13 @@ fn example_bundle_adopts_without_source_checkout_dependency() {
     assert_eq!(config.runs_on, "self-hosted");
 }
 
-fn committed_example(message: &str) -> (tempfile::TempDir, tempfile::TempDir, String) {
+fn committed_example(
+    message: &str,
+) -> (
+    chrono_worktree::TemporaryHost,
+    chrono_worktree::TemporaryHost,
+    String,
+) {
     let root = copied_example();
     let installed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/bin");
     let bin = root.path().join(".chrono-harness/bin");
@@ -581,7 +581,7 @@ fn committed_example(message: &str) -> (tempfile::TempDir, tempfile::TempDir, St
     git(root.path(), &["add", "."]);
     git(root.path(), &["commit", "-qm", "initial host"]);
     let candidate = git(root.path(), &["rev-parse", "HEAD"]);
-    let remote = tempfile::tempdir().unwrap();
+    let remote = crate::tools::temporary_host("host λ ");
     git(remote.path(), &["init", "--bare", "-q"]);
     git(
         root.path(),
@@ -939,7 +939,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         .unwrap();
     assert!(observed.status.success());
     tool["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::tools::temporary_host("host λ ");
     let shadow = dir.path().join("python3");
     fs::write(&shadow, "#!/bin/sh\nprintf 'Python shadowed\\n'\nexit 0\n").unwrap();
     use std::os::unix::fs::PermissionsExt;

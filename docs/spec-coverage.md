@@ -751,3 +751,14 @@ up to 64 MiB. These transitions do not repair the historical 861 missing stdout
 siblings or change the original 115-pass/5-fail result. Those historical evidence
 limits remain separate from current candidate checks, native/public adoption and
 ordered delivery.
+
+The temporary-host increment adopts prospective registration in the existing
+worktree producer registry and kernel lease owner. Rust behavior oracles cover
+hard-killed production, a distinct surviving native descendant, overlapping
+consumers and an unreleased real diagnostic reference. Source/partial bytes stay
+in the retained allocation, independent of Drop. Explicit worktree/projects/CI
+fixture construction and command routes consume configurable committed policy;
+only declared generated output subdirectories are eligible for ordinary drain.
+Current candidate local receipts, real coordinator deployment, native evidence,
+independent review and external delivery remain separately required; the original
+failed canonical receipts are not rewritten by subsequent passing observations.

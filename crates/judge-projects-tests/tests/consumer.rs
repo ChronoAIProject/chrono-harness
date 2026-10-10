@@ -1,5 +1,7 @@
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "support/temporary.rs"]
+mod temporary;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
 use std::{fs, process::Command};

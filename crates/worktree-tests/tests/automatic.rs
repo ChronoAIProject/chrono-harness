@@ -67,6 +67,7 @@ impl Host {
                 POLICY,
             ])
             .args(extra);
+        self._dir.bind_command(&mut c).unwrap();
         c
     }
     pub(super) fn auto(&self, command: &str, extra: &[&str]) -> (i32, Value, String) {

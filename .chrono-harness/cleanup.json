@@ -169,6 +169,81 @@
         "original-state/cargo/producer/target/",
         "original-state/cargo/tests/target/"
       ]
+    },
+    {
+      "id": "command-temporaries",
+      "directory": ".chrono-harness/state/temporary-hosts/commands/",
+      "temporary": true,
+      "generated_outputs": []
+    },
+    {
+      "id": "worktree-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/worktree/",
+      "temporary": true,
+      "generated_outputs": [
+        "source with spaces/independent/producer/target/",
+        "source with spaces/independent/tests/target/",
+        "cargo-linked/independent/producer/target/",
+        "cargo-linked/independent/tests/target/",
+        "source with spaces/.chrono-harness/state/cargo-case/target/"
+      ]
+    },
+    {
+      "id": "projects-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/projects/",
+      "temporary": true,
+      "generated_outputs": []
+    },
+    {
+      "id": "projects-migration-host",
+      "directory": ".chrono-harness/state/temporary-hosts/migration/",
+      "temporary": true,
+      "generated_outputs": [
+        "crates/runner/target/",
+        "crates/runner-tests/target/",
+        "crates/instructions/target/",
+        "crates/instructions-tests/target/",
+        "crates/judge-ci/target/",
+        "crates/judge-ci-tests/target/",
+        "crates/ci/target/",
+        "crates/ci-tests/target/",
+        "crates/judge-registration/target/",
+        "crates/judge-registration-tests/target/",
+        "crates/judge-filemap/target/",
+        "crates/judge-filemap-tests/target/",
+        "crates/judge-routes/target/",
+        "crates/judge-routes-tests/target/",
+        "crates/judge-projects/target/",
+        "crates/judge-projects-tests/target/",
+        "crates/judge-cost/target/",
+        "crates/judge-cost-tests/target/",
+        "crates/judge-mixed/target/",
+        "crates/judge-mixed-tests/target/",
+        "crates/judge-workflow/target/",
+        "crates/judge-workflow-tests/target/",
+        "crates/inputs/target/",
+        "crates/inputs-tests/target/",
+        "crates/distribution/target/",
+        "crates/distribution-tests/target/",
+        "crates/judge-cargo/target/",
+        "crates/judge-cargo-tests/target/",
+        "crates/worktree/target/",
+        "crates/worktree-tests/target/",
+        "crates/diagnostics/target/",
+        "crates/diagnostics-tests/target/",
+        "crates/cache/target/",
+        "crates/cache-tests/target/"
+      ]
+    },
+    {
+      "id": "ci-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/ci/",
+      "temporary": true,
+      "generated_outputs": [
+        "cargo/producer/target/",
+        "cargo/tests/target/"
+      ]
     }
-  ]
+  ],
+  "temporary_environment": "command-temporaries"
 }

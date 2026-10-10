@@ -1,3 +1,18 @@
+pub fn temporary_host(prefix: &str) -> chrono_worktree::TemporaryHost {
+    static STORE: std::sync::OnceLock<(std::path::PathBuf, Vec<String>)> =
+        std::sync::OnceLock::new();
+    let (directory, outputs) = STORE.get_or_init(|| {
+        chrono_worktree::TemporaryHost::registered_store(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "projects-migration-host",
+        )
+        .expect("committed temporary producer adoption")
+    });
+    chrono_worktree::TemporaryHost::allocate(directory, "projects-migration-host", outputs, prefix)
+        .expect("prospective temporary host custody")
+}
+
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::{facts, observation, wire};
@@ -47,7 +62,12 @@ fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
     input["location"] = json!(git.path);
     input["sha256"] = json!(git.sha256);
 }
-fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+fn migration_host() -> (
+    chrono_worktree::TemporaryHost,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     migration_host_with_alias_collision(false)
 }
 fn copy_nested_receipts(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
@@ -129,13 +149,15 @@ fn execution_failure(
 }
 fn migration_host_with_alias_collision(
     collision: bool,
-) -> (tempfile::TempDir, std::path::PathBuf, String, String) {
+) -> (
+    chrono_worktree::TemporaryHost,
+    std::path::PathBuf,
+    String,
+    String,
+) {
     let source = fs::canonicalize(source()).unwrap();
     let original = "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98";
-    let dir = tempfile::Builder::new()
-        .prefix("migration actual host ")
-        .tempdir()
-        .unwrap();
+    let dir = temporary_host("migration actual host ");
     let root = fs::canonicalize(dir.path()).unwrap();
     let tree = facts::tree(&source, original).unwrap();
     facts::export(&source, original, &tree, &root).unwrap();

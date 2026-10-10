@@ -1037,3 +1037,15 @@ observer 接收端的 recvmsg 失败（EAGAIN／EINTR 除外）与不完整 hand
 Git main 的已登记历史可重建工件可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。原 admission／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，原 producer／disposal outcome 保留，不制造 terminal。现有 `reconcile_uses` 可追加中断消费历史并移除过期 token，mutable enrollment／uses 不保证字节不变。已托管项重入不增接管历史，未登记的独立对象不否决已选择的合法兄弟；发布中断可按同绑定重试。接管本身不删除，新 pending 代际由现有普通入口／maintain drain 回收；后续普通构建及中断恢复继续使用同一租约。该局部源与行为合同不证明 native、全 SPEC、PR 或发布完成。
 
 已结束历史复制路径消费的精确证据别名，可由 worktree 现役 maintenance 所有者执行 `retire-evidence`。当前 custodian 输入绑定物理 checkout、固定 HEAD／branch、明确结束消费、权威声明原件及逐项路径／长度／SHA256／保留原件／所有者／原因；等同字节不独自授权处置。复用现有协调 admission 和附件租约，核现役单一 enrollment、Git 锁、干净源码与真实工件登记，不迁移历史源码或执行旧判官，不清理其它登记项。逐文件稳定身份／原件核验后删除，独立失败不阻断合格兄弟；独立原 intent/result 日志保留部分效果，重入只报告实际缺失，不制造原成功或 release。`removed` 只计完全核验的删除完成；unlink 后的核验失败可记 failed，因此 removed=0 不证明没有删除效果。回执依赖精确引用的 retained declaration／authority，不保证自包含副本。历史 manifest 可由当前 custodian 明确结束 replay，原字节仍保留。当前 CI gather 对不超过 64 MiB 且有明确 retained_report 的同 artifact 原报告副本保留两个接口路径而共用 inode；更大报告不共享，失败 native／transport 原件不删除，reference 发布不改。该有限行为不证明通用全历史回收、完整自动证据终点、native parity、PR／发布或持续目标完成。
+
+Prospective temporary fixture custody is an opt-in of the existing worktree
+producer owner. A temporary allocation's intent and kernel lease precede
+production. Normal maintenance may recover only its explicitly declared
+rebuildable paths after actual exclusion, without requiring Drop, finish, a
+success publication or diagnostic release. Source, partial/failure observations,
+unknown neighbors and unreleased references remain retained. The supported native
+command adapter binds absolute TMPDIR and forwards opaque lease descriptors;
+coverage is limited to declared producer/child routes, not arbitrary child APIs or
+an operating-system temporary scan. Host paths and outputs remain configurable in
+`.chrono-harness/cleanup.json`; this repository's producer mapping and oracles are
+in [worktree custody](docs/worktree.md#prospective-temporary-host-custody).
