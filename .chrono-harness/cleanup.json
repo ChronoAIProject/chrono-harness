@@ -185,11 +185,13 @@
         "source with spaces/independent/tests/target/",
         "cargo-linked/independent/producer/target/",
         "cargo-linked/independent/tests/target/",
-        "source with spaces/.chrono-harness/state/cargo-case/target/"
+        "source with spaces/.chrono-harness/state/cargo-case/target/",
+        "native-cargo/.chrono-harness/state/cargo-case/target/"
       ],
       "source_roots": [
         "source with spaces/",
-        "cargo-linked/"
+        "cargo-linked/",
+        "native-cargo/"
       ]
     },
     {

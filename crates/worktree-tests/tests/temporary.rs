@@ -1,5 +1,22 @@
 use super::*;
 
+struct ReleaseNative {
+    allocation: PathBuf,
+    coordinator: PathBuf,
+}
+impl Drop for ReleaseNative {
+    fn drop(&mut self) {
+        // Teardown uses the actual fixture protocol, including assertion failure.
+        // The child's final read and the owner's kernel exclusion establish release.
+        let _ = fs::write(self.allocation.join("native-release"), "fixture teardown");
+        let _ = fs::write(
+            self.coordinator
+                .join(".chrono-harness/state/temporary-parent-release"),
+            "fixture teardown",
+        );
+    }
+}
+
 fn host() -> Host {
     let h = super::bounded_cleanup::main_host_mode("temporary-producer");
     let path = h.root.join(".chrono-harness/cleanup.json");
@@ -41,6 +58,10 @@ fn interrupted(signal: &str) {
     let allocated = PathBuf::from(
         fs::read_to_string(h.root.join(".chrono-harness/state/temporary-path")).unwrap(),
     );
+    let _release = ReleaseNative {
+        allocation: allocated.clone(),
+        coordinator: h.root.clone(),
+    };
     wait(&allocated.join("native-active"));
     let parent = fs::read_to_string(h.root.join(".chrono-harness/state/temporary-parent")).unwrap();
     let child = fs::read_to_string(h.root.join(".chrono-harness/state/temporary-child")).unwrap();
@@ -115,6 +136,10 @@ fn normal_producer_exit_without_finish_recovers_only_declared_output() {
     let root = PathBuf::from(
         fs::read_to_string(h.root.join(".chrono-harness/state/temporary-path")).unwrap(),
     );
+    let _release = ReleaseNative {
+        allocation: root.clone(),
+        coordinator: h.root.clone(),
+    };
     wait(&root.join("native-active"));
     fs::write(root.join("native-release"), "actual release").unwrap();
     fs::write(
@@ -161,6 +186,10 @@ fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_
         let root = PathBuf::from(
             fs::read_to_string(h.root.join(".chrono-harness/state/temporary-path")).unwrap(),
         );
+        let _release = ReleaseNative {
+            allocation: root.clone(),
+            coordinator: h.root.clone(),
+        };
         producer.await_managed_file(&root.join("native-active"));
         assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(root.join("cargo 空白/target").exists());
@@ -232,6 +261,10 @@ fn overlapping_allocation_commands_and_real_diagnostic_reference_preserve_genera
         chrono_worktree::TemporaryHost::allocate(&store, "test-allocation", &outputs, "overlap λ ")
             .unwrap();
     let root = allocation.path().to_owned();
+    let _release = ReleaseNative {
+        allocation: root.clone(),
+        coordinator: h.root.clone(),
+    };
     fs::create_dir_all(root.join("cache 空白")).unwrap();
     fs::write(root.join("cache 空白/output"), "rebuildable").unwrap();
     let reference =
