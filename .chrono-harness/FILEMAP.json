@@ -1707,6 +1707,18 @@
       ]
     },
     {
+      "path": "crates/judge-routes-tests/tests/support/tool.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-routes-tests"
+        }
+      ]
+    },
+    {
       "path": "crates/judge-projects/Cargo.toml",
       "owner": "judge-projects",
       "surface": "judge-implementation",
