@@ -86,8 +86,12 @@ The dedicated Rust tests cover error wrapping/import, native and custom IO value
 retention, source and related-error preservation, UTF-8 JSON lines, level
 filtering, explicit thread context transfer, recovery and failed sinks. Runner
 owner tests cover independent output attempts, both failures, partial write and
-flush boundaries, healthy bytes/status, diagnostic framing and an unavailable
-diagnostic sink. An actual runner binary regression also covers help/version,
+flush boundaries, recoverable interrupted writes, actual zero writes with native
+`WriteZero` errors and acknowledged-byte counts, healthy bytes/status, diagnostic
+framing and an unavailable diagnostic sink. Existing help/domain outputs supply
+the empty-channel cases: healthy binary publication and direct empty-channel
+flush-failure observations, without adding a new output producer. An actual
+runner binary regression also covers help/version,
 domain failure, unestablished parity, stdout rejection and both unavailable
 descriptors, detecting a main that still uses the former publication path.
 

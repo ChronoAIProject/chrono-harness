@@ -377,6 +377,219 @@ impl std::io::Write for PublicationCapture {
 }
 
 #[test]
+fn publication_boundary_recovers_interrupted_writes_without_replaying_accepted_bytes() {
+    use std::io::{self, Write};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Default)]
+    struct InterruptedWriter {
+        accepted: PublicationCapture,
+        requests: Arc<Mutex<Vec<Vec<u8>>>>,
+        flushes: Arc<Mutex<usize>>,
+    }
+    impl Write for InterruptedWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            let mut requests = self.requests.lock().unwrap();
+            requests.push(bytes.to_vec());
+            match requests.len() {
+                1 | 3 => Err(io::Error::from(io::ErrorKind::Interrupted)),
+                2 => self.accepted.write(&bytes[..2]),
+                _ => self.accepted.write(bytes),
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            *self.flushes.lock().unwrap() += 1;
+            Ok(())
+        }
+    }
+
+    for exit_code in [0, 7] {
+        let output = chrono_harness::CliOutput {
+            exit_code,
+            stdout: "abcdef".into(),
+            stderr: "uvwxyz".into(),
+        };
+        let mut stdout = InterruptedWriter::default();
+        let stderr = InterruptedWriter::default();
+        assert_eq!(
+            chrono_harness::publish_output(&output, &mut stdout, stderr.clone()).unwrap(),
+            exit_code
+        );
+        assert_eq!(*stdout.accepted.0.lock().unwrap(), b"abcdef");
+        assert_eq!(*stderr.accepted.0.lock().unwrap(), b"uvwxyz");
+        assert_eq!(
+            *stdout.requests.lock().unwrap(),
+            [
+                b"abcdef".to_vec(),
+                b"abcdef".to_vec(),
+                b"cdef".to_vec(),
+                b"cdef".to_vec()
+            ]
+        );
+        assert_eq!(
+            *stderr.requests.lock().unwrap(),
+            [
+                b"uvwxyz".to_vec(),
+                b"uvwxyz".to_vec(),
+                b"wxyz".to_vec(),
+                b"wxyz".to_vec()
+            ]
+        );
+        assert_eq!(*stdout.flushes.lock().unwrap(), 1);
+        assert_eq!(*stderr.flushes.lock().unwrap(), 1);
+    }
+}
+
+#[test]
+fn publication_boundary_turns_zero_writes_into_native_failure_and_attempts_stderr() {
+    use std::error::Error;
+    use std::io::{self, Write};
+
+    struct ZeroWriter {
+        prefix: usize,
+        accepted: Vec<u8>,
+        requests: Vec<Vec<u8>>,
+    }
+    impl Write for ZeroWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.requests.push(bytes.to_vec());
+            if self.requests.len() == 1 && self.prefix > 0 {
+                self.accepted.extend_from_slice(&bytes[..self.prefix]);
+                Ok(self.prefix)
+            } else {
+                Ok(0)
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("a zero write must fail before stdout flush")
+        }
+    }
+
+    for prefix in [0, 2] {
+        let output = chrono_harness::CliOutput {
+            exit_code: 7,
+            stdout: "abcdef".into(),
+            stderr: "explanation\n".into(),
+        };
+        let mut stdout = ZeroWriter {
+            prefix,
+            accepted: Vec::new(),
+            requests: Vec::new(),
+        };
+        let stderr = PublicationCapture::default();
+        let failure =
+            chrono_harness::publish_output(&output, &mut stdout, stderr.clone()).unwrap_err();
+        assert_eq!(stdout.accepted, &b"abcdef"[..prefix]);
+        let expected_requests = if prefix == 0 {
+            vec![b"abcdef".to_vec()]
+        } else {
+            vec![b"abcdef".to_vec(), b"cdef".to_vec()]
+        };
+        assert_eq!(stdout.requests, expected_requests);
+        let native = failure.source().unwrap().source().unwrap();
+        let native = native.downcast_ref::<io::Error>().unwrap();
+        assert_eq!(native.kind(), io::ErrorKind::WriteZero);
+        assert_eq!(native.raw_os_error(), None);
+        assert!(
+            native.get_ref().is_none(),
+            "the error must come from write_all"
+        );
+        let record = failure.record();
+        assert_eq!(record.error.code, "E_OUTPUT_PUBLISH");
+        assert_eq!(record.error.context["stream"], "stdout");
+        assert_eq!(record.error.context["phase"], "write");
+        assert_eq!(record.error.context["operation_exit_code"], 7);
+        assert_eq!(record.error.context["operation_succeeded"], false);
+        assert_eq!(record.error.context["output_bytes"], 6);
+        assert_eq!(record.error.context["published_bytes"], prefix);
+        assert!(record.error.related.is_empty());
+        let cause = record
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap();
+        assert_eq!(cause.code, "io::WriteZero");
+        assert_eq!(cause.message, native.to_string());
+        assert_eq!(cause.native_code, None);
+        let bytes = stderr.0.lock().unwrap();
+        assert!(bytes.starts_with(b"explanation\n"));
+        let event_bytes = &bytes[b"explanation\n".len()..];
+        assert_eq!(std::str::from_utf8(event_bytes).unwrap().lines().count(), 1);
+        let event: Value = serde_json::from_slice(event_bytes).unwrap();
+        assert_eq!(event["event"], "runner.output_publication_failed");
+        assert_eq!(event["error"], serde_json::to_value(record).unwrap());
+    }
+}
+
+#[test]
+fn publication_flushes_empty_channels_from_existing_cli_outputs() {
+    use std::io::{self, Write};
+
+    struct EmptyFlushFails(usize);
+    impl Write for EmptyFlushFails {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            panic!("an empty channel has no payload to write")
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.0 += 1;
+            Err(io::Error::from(io::ErrorKind::BrokenPipe))
+        }
+    }
+
+    // The binary regression already covers healthy empty channels. Here the
+    // same real CLI outputs must still observe an empty channel's flush error.
+    for (args, empty_stream) in [
+        (vec!["--help"], "stderr"),
+        (vec!["unknown-command"], "stdout"),
+    ] {
+        let output = dispatch(&args);
+        let mut empty = EmptyFlushFails(0);
+        let mut other = Vec::new();
+        let failure = if empty_stream == "stdout" {
+            assert!(output.stdout.is_empty());
+            assert!(!output.stderr.is_empty());
+            chrono_harness::publish_output_to(&output, &mut empty, &mut other).unwrap_err()
+        } else {
+            assert!(output.stderr.is_empty());
+            assert!(!output.stdout.is_empty());
+            chrono_harness::publish_output_to(&output, &mut other, &mut empty).unwrap_err()
+        };
+        assert_eq!(empty.0, 1);
+        let expected_other = if empty_stream == "stdout" {
+            &output.stderr
+        } else {
+            &output.stdout
+        };
+        assert_eq!(other, expected_other.as_bytes());
+        let record = failure.record();
+        assert_eq!(record.error.context["stream"], empty_stream);
+        assert_eq!(record.error.context["phase"], "flush");
+        assert_eq!(record.error.context["output_bytes"], 0);
+        assert_eq!(record.error.context["published_bytes"], 0);
+        assert_eq!(
+            record.error.context["operation_exit_code"],
+            output.exit_code
+        );
+        assert!(record.error.related.is_empty());
+        assert_eq!(
+            record
+                .error
+                .source
+                .as_ref()
+                .unwrap()
+                .source
+                .as_ref()
+                .unwrap()
+                .code,
+            "io::BrokenPipe"
+        );
+    }
+}
+
+#[test]
 fn publication_boundary_preserves_success_and_frames_one_event_after_unterminated_stderr() {
     use std::io::{self, Write};
     struct Fails;
