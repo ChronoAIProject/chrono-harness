@@ -1,4 +1,4 @@
-use crate::error::{Context, ErrorRecord};
+use crate::error::{Context, ErrorNode, ErrorRecord, RecordedError, io_error_node};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::error::Error;
@@ -6,8 +6,9 @@ use std::fmt;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+pub use tracing::Level;
 use tracing::{
-    Dispatch, Event, Level, Metadata, Subscriber,
+    Dispatch, Event, Metadata, Subscriber,
     field::{Field, Visit},
     span::{Attributes, Id, Record},
 };
@@ -37,9 +38,16 @@ pub struct LogRecord {
 }
 
 #[derive(Debug)]
+pub enum LogIoPhase {
+    Write,
+    Flush,
+}
+
+#[derive(Debug)]
 pub enum LogFailure {
     Io {
         source: io::Error,
+        phase: LogIoPhase,
         attempted_record: Option<Vec<u8>>,
     },
     Json {
@@ -58,6 +66,106 @@ pub enum LogFailure {
     Closed {
         attempted_record: Vec<u8>,
     },
+}
+
+impl RecordedError for LogFailure {
+    fn error_node(&self) -> ErrorNode {
+        let (code, source, context) = match self {
+            Self::Io {
+                source,
+                phase,
+                attempted_record,
+            } => {
+                let mut context = Context::new();
+                context.insert(
+                    "phase".into(),
+                    match phase {
+                        LogIoPhase::Write => "write",
+                        LogIoPhase::Flush => "flush",
+                    }
+                    .into(),
+                );
+                if let Some(bytes) = attempted_record {
+                    context.insert("attempted_record".into(), bytes.clone().into());
+                }
+                ("E_LOG_IO", Some(Box::new(io_error_node(source))), context)
+            }
+            Self::Json {
+                source,
+                observed_fields,
+            } => {
+                let mut context = Context::new();
+                context.insert("observed_fields".into(), observed_fields.clone().into());
+                (
+                    "E_LOG_JSON",
+                    Some(Box::new(ErrorNode {
+                        error_type: std::any::type_name::<serde_json::Error>().into(),
+                        code: "native".into(),
+                        message: source.to_string(),
+                        context: Context::new(),
+                        source: None,
+                        native_code: None,
+                        traceback: None,
+                        related: Vec::new(),
+                    })),
+                    context,
+                )
+            }
+            Self::Time(source) => (
+                "E_LOG_TIME",
+                Some(Box::new(ErrorNode {
+                    error_type: std::any::type_name::<time::error::Format>().into(),
+                    code: "native".into(),
+                    message: source.to_string(),
+                    context: Context::new(),
+                    source: None,
+                    native_code: None,
+                    traceback: None,
+                    related: Vec::new(),
+                })),
+                Context::new(),
+            ),
+            Self::InvalidField { field, observed } => {
+                let mut context = Context::new();
+                context.insert("field".into(), (*field).into());
+                context.insert("observed".into(), observed.clone());
+                ("E_LOG_FIELD", None, context)
+            }
+            Self::Blocked {
+                source,
+                attempted_record,
+            } => (
+                "E_LOG_BLOCKED",
+                Some(Box::new(source.error_node())),
+                [("attempted_record".into(), attempted_record.clone().into())]
+                    .into_iter()
+                    .collect(),
+            ),
+            Self::Closed { attempted_record } => (
+                "E_LOG_CLOSED",
+                None,
+                [("attempted_record".into(), attempted_record.clone().into())]
+                    .into_iter()
+                    .collect(),
+            ),
+        };
+        ErrorNode {
+            error_type: std::any::type_name::<Self>().into(),
+            code: code.into(),
+            message: self.to_string(),
+            context,
+            source,
+            native_code: None,
+            traceback: None,
+            related: Vec::new(),
+        }
+    }
+}
+
+impl RecordedError for Arc<LogFailure> {
+    fn error_node(&self) -> ErrorNode {
+        self.as_ref().error_node()
+    }
 }
 
 impl fmt::Display for LogFailure {
@@ -165,13 +273,18 @@ impl<W: Write> LogLayer<W> {
                     attempted_record: bytes,
                 });
             }
-            sink.writer
-                .write_all(&bytes)
-                .and_then(|()| sink.writer.flush())
-                .map_err(|source| LogFailure::Io {
-                    source,
-                    attempted_record: Some(bytes),
-                })
+            let result = match sink.writer.write_all(&bytes) {
+                Err(source) => Err((LogIoPhase::Write, source)),
+                Ok(()) => sink
+                    .writer
+                    .flush()
+                    .map_err(|source| (LogIoPhase::Flush, source)),
+            };
+            result.map_err(|(phase, source)| LogFailure::Io {
+                source,
+                phase,
+                attempted_record: Some(bytes),
+            })
         });
         if let Err(error) = result {
             let error = Arc::new(error);
@@ -294,6 +407,7 @@ impl<W: Write + Send + 'static> Logger<W> {
                 if let Err(source) = sink.writer.flush() {
                     let failure = Arc::new(LogFailure::Io {
                         source,
+                        phase: LogIoPhase::Flush,
                         attempted_record: None,
                     });
                     sink.stopped = Some(failure.clone());

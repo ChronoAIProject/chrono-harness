@@ -320,6 +320,22 @@
       ]
     },
     {
+      "path": "crates/runner/src/publication.rs",
+      "owner": "runner",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:runner"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
+    },
+    {
       "path": "crates/runner-tests/Cargo.toml",
       "owner": "runner-tests",
       "surface": "test",
@@ -5659,6 +5675,11 @@
     {
       "from": "project:runner",
       "kind": "compile",
+      "to": "project:runner-tests"
+    },
+    {
+      "from": "project:runner",
+      "kind": "runtime-input",
       "to": "project:runner-tests"
     },
     {

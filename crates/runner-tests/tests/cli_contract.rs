@@ -172,6 +172,506 @@ fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
 }
 
 #[test]
+#[cfg(unix)]
+fn runner_binary_publication_preserves_bytes_and_attempts_parity_stderr_after_stdout_failure() {
+    use std::process::Stdio;
+    fn broken_pipe() -> Stdio {
+        let (writer, reader) = std::os::unix::net::UnixStream::pair().unwrap();
+        drop(reader);
+        Stdio::from(std::os::fd::OwnedFd::from(writer))
+    }
+    let binary =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../runner/target/debug/chrono-harness");
+    for args in [vec!["--help"], vec!["--version"], vec!["unknown-command"]] {
+        let expected = dispatch(&args);
+        let actual = Command::new(&binary).args(&args).output().unwrap();
+        assert_eq!(actual.status.code(), Some(i32::from(expected.exit_code)));
+        assert_eq!(actual.stdout, expected.stdout.as_bytes());
+        assert_eq!(actual.stderr, expected.stderr.as_bytes());
+    }
+    let dir = TempDir::new().unwrap();
+    let report =
+        json!({"schema_version":1,"scope":"configured-judges","status":"pass","unresolved":{}});
+    for name in ["current.json", "compared.json"] {
+        fs::write(dir.path().join(name), serde_json::to_vec(&report).unwrap()).unwrap();
+    }
+    let args = [
+        "parity",
+        "--host-root",
+        dir.path().to_str().unwrap(),
+        "--report",
+        "current.json",
+        "--compared-report",
+        "compared.json",
+    ];
+    let expected = dispatch(&args);
+    assert_eq!(expected.exit_code, 2);
+    assert!(!expected.stdout.is_empty() && !expected.stderr.is_empty());
+    let healthy = Command::new(&binary).args(args).output().unwrap();
+    assert_eq!(healthy.status.code(), Some(2));
+    assert_eq!(healthy.stdout, expected.stdout.as_bytes());
+    assert_eq!(healthy.stderr, expected.stderr.as_bytes());
+
+    // The peer is already closed, so publication fails without a timing race.
+    let actual = Command::new(&binary)
+        .args(args)
+        .stdout(broken_pipe())
+        .output()
+        .unwrap();
+    assert_eq!(actual.status.code(), Some(2));
+    assert!(actual.stdout.is_empty());
+    assert!(
+        actual.stderr.starts_with(expected.stderr.as_bytes()),
+        "independent parity explanation was suppressed: {:?}",
+        actual.stderr
+    );
+    let diagnostic = &actual.stderr[expected.stderr.len()..];
+    assert_eq!(std::str::from_utf8(diagnostic).unwrap().lines().count(), 1);
+    let event: Value = serde_json::from_slice(diagnostic).unwrap();
+    assert_eq!(event["schema"], "chrono-log/v1");
+    assert_eq!(event["event"], "runner.output_publication_failed");
+    assert_eq!(event["error"]["error"]["context"]["stream"], "stdout");
+    assert_eq!(event["error"]["error"]["context"]["operation_exit_code"], 2);
+    assert_eq!(
+        event["error"]["error"]["source"]["source"]["native_code"],
+        libc::EPIPE
+    );
+
+    let unavailable = Command::new(&binary)
+        .args(args)
+        .stdout(broken_pipe())
+        .stderr(broken_pipe())
+        .output()
+        .unwrap();
+    assert_eq!(unavailable.status.code(), Some(2));
+    assert!(unavailable.stdout.is_empty() && unavailable.stderr.is_empty());
+}
+
+#[test]
+fn runner_output_publication_attempts_independent_channels_and_keeps_typed_failures() {
+    use std::io::{self, Write};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    struct Failing(io::ErrorKind, Arc<AtomicUsize>);
+    impl Write for Failing {
+        fn write(&mut self, _bytes: &[u8]) -> io::Result<usize> {
+            self.1.fetch_add(1, Ordering::SeqCst);
+            Err(io::Error::new(self.0, "publication failed"))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let output = chrono_harness::CliOutput {
+        exit_code: 7,
+        stdout: "machine output\n".into(),
+        stderr: "operation explanation\n".into(),
+    };
+    let stdout_calls = Arc::new(AtomicUsize::new(0));
+    let mut stdout = Failing(io::ErrorKind::BrokenPipe, stdout_calls.clone());
+    let mut stderr = Vec::new();
+    let failure = chrono_harness::publish_output_to(&output, &mut stdout, &mut stderr)
+        .expect_err("stdout failure must be returned");
+    assert_eq!(stdout_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(stderr, output.stderr.as_bytes());
+    let record = failure.record();
+    assert_eq!(record.error.code, "E_OUTPUT_PUBLISH");
+    assert_eq!(record.error.context["stream"], "stdout");
+    assert_eq!(record.error.context["operation_exit_code"], 7);
+    assert_eq!(record.error.context["operation_succeeded"], false);
+    assert_eq!(record.error.source.as_ref().unwrap().code, "E_NATIVE_IO");
+    assert_eq!(
+        record
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .code,
+        "io::BrokenPipe"
+    );
+}
+
+#[test]
+fn runner_output_publication_keeps_both_failures_and_does_not_replay_partial_payload() {
+    use std::io::{self, Write};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    struct PartialThenFail(Arc<AtomicUsize>);
+    impl Write for PartialThenFail {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                Ok(bytes.len().min(2))
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "partial publication",
+                ))
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("flush must not run after a failed write_all")
+        }
+    }
+    struct FlushFails(Vec<u8>);
+    impl Write for FlushFails {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Err(io::Error::new(io::ErrorKind::Other, "flush publication"))
+        }
+    }
+
+    let output = chrono_harness::CliOutput {
+        exit_code: 2,
+        stdout: "abcdef".into(),
+        stderr: "stderr bytes".into(),
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut stdout = PartialThenFail(calls.clone());
+    let mut stderr = FlushFails(Vec::new());
+    let failure = chrono_harness::publish_output_to(&output, &mut stdout, &mut stderr)
+        .expect_err("both channel failures must be returned");
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(stderr.0, output.stderr.as_bytes());
+    let record = failure.record();
+    assert_eq!(record.error.context["stream"], "stdout");
+    assert_eq!(record.error.context["operation_exit_code"], 2);
+    assert_eq!(record.error.context["phase"], "write");
+    assert_eq!(record.error.context["published_bytes"], 2);
+    assert_eq!(record.error.related.len(), 1);
+    assert_eq!(record.error.related[0].role, "secondary_output_publication");
+    assert_eq!(record.error.related[0].error.context["stream"], "stderr");
+    assert_eq!(record.error.related[0].error.context["phase"], "flush");
+    assert_eq!(
+        record.error.related[0].error.context["published_bytes"],
+        output.stderr.len()
+    );
+    assert_eq!(
+        record.error.related[0].error.source.as_ref().unwrap().code,
+        "E_NATIVE_IO"
+    );
+}
+
+#[derive(Clone, Default)]
+struct PublicationCapture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+impl std::io::Write for PublicationCapture {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn publication_boundary_preserves_success_and_frames_one_event_after_unterminated_stderr() {
+    use std::io::{self, Write};
+    struct Fails;
+    impl Write for Fails {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "original output cause",
+            ))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("failed write is not flushed")
+        }
+    }
+    for exit_code in [0, 1, 2, 7] {
+        let output = chrono_harness::CliOutput {
+            exit_code,
+            stdout: "λ\n\0machine".into(),
+            stderr: "explanation".into(),
+        };
+        let stderr = PublicationCapture::default();
+        let mut stdout = Vec::new();
+        assert_eq!(
+            chrono_harness::publish_output(&output, &mut stdout, stderr.clone()).unwrap(),
+            exit_code
+        );
+        assert_eq!(stdout, output.stdout.as_bytes());
+        assert_eq!(*stderr.0.lock().unwrap(), output.stderr.as_bytes());
+
+        let stderr = PublicationCapture::default();
+        let failure =
+            chrono_harness::publish_output(&output, &mut Fails, stderr.clone()).unwrap_err();
+        assert_eq!(
+            failure.record().error.context["operation_exit_code"],
+            exit_code
+        );
+        assert_eq!(
+            failure.record().error.context["operation_succeeded"],
+            exit_code == 0
+        );
+        assert!(failure.related().next().is_none());
+        let bytes = stderr.0.lock().unwrap();
+        assert!(bytes.starts_with(b"explanation\n"));
+        let event_bytes = &bytes[b"explanation\n".len()..];
+        assert_eq!(std::str::from_utf8(event_bytes).unwrap().lines().count(), 1);
+        let event: Value = serde_json::from_slice(event_bytes).unwrap();
+        assert_eq!(event["event"], "runner.output_publication_failed");
+        assert_eq!(
+            event["error"],
+            serde_json::to_value(failure.record()).unwrap()
+        );
+    }
+}
+
+#[test]
+fn publication_boundary_retains_both_output_causes_and_unavailable_diagnostic_sink() {
+    use std::io::{self, Write};
+    struct Stdout;
+    impl Write for Stdout {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from_raw_os_error(libc::EPIPE))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("failed write")
+        }
+    }
+    struct Stderr(PublicationCapture, usize);
+    impl Write for Stderr {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.write_all(bytes)?;
+            self.1 += 1;
+            Err(io::Error::from_raw_os_error(if self.1 == 1 {
+                libc::EBADF
+            } else {
+                libc::ENOSPC
+            }))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("failed sink is not flushed")
+        }
+    }
+    let attempts = PublicationCapture::default();
+    let output = chrono_harness::CliOutput {
+        exit_code: 1,
+        stdout: "machine".into(),
+        stderr: "business".into(),
+    };
+    let failure = chrono_harness::publish_output(&output, &mut Stdout, Stderr(attempts.clone(), 0))
+        .unwrap_err();
+    let record = failure.record();
+    assert_eq!(
+        record
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .native_code,
+        Some(i64::from(libc::EPIPE))
+    );
+    assert_eq!(record.error.related.len(), 2);
+    assert_eq!(record.error.related[0].role, "secondary_output_publication");
+    assert_eq!(
+        record.error.related[0]
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .native_code,
+        Some(i64::from(libc::EBADF))
+    );
+    assert_eq!(record.error.related[1].role, "diagnostic_publication");
+    assert_eq!(
+        record.error.related[1]
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .native_code,
+        Some(i64::from(libc::ENOSPC))
+    );
+    let diagnostic = failure.related().nth(1).unwrap().1.source().unwrap();
+    assert_eq!(
+        diagnostic
+            .downcast_ref::<io::Error>()
+            .unwrap()
+            .raw_os_error(),
+        Some(libc::ENOSPC)
+    );
+    let attempts = attempts.0.lock().unwrap();
+    assert!(attempts.starts_with(b"business{"));
+    assert_eq!(
+        attempts
+            .windows(b"business".len())
+            .filter(|bytes| *bytes == b"business")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn publication_boundary_keeps_stderr_flush_and_partial_diagnostic_write_failures() {
+    use std::io::{self, Write};
+    struct Sink(PublicationCapture, usize);
+    impl Write for Sink {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.1 += 1;
+            match self.1 {
+                1 => {
+                    self.0.write_all(bytes)?;
+                    Ok(bytes.len())
+                }
+                2 => {
+                    self.0.write_all(&bytes[..3])?;
+                    Ok(3)
+                }
+                3 => Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "diagnostic partial write",
+                )),
+                _ => panic!("diagnostic payload replayed"),
+            }
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            assert_eq!(self.1, 1, "failed diagnostic is not flushed");
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "original stderr flush",
+            ))
+        }
+    }
+    let stderr = PublicationCapture::default();
+    let mut stdout = Vec::new();
+    let output = chrono_harness::CliOutput {
+        exit_code: 0,
+        stdout: "machine".into(),
+        stderr: "original\n".into(),
+    };
+    let failure =
+        chrono_harness::publish_output(&output, &mut stdout, Sink(stderr.clone(), 0)).unwrap_err();
+    assert_eq!(stdout, b"machine");
+    assert_eq!(*stderr.0.lock().unwrap(), b"original\n{\"s");
+    let record = failure.record();
+    assert_eq!(record.error.context["stream"], "stderr");
+    assert_eq!(record.error.context["phase"], "flush");
+    assert_eq!(
+        record
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .message,
+        "original stderr flush"
+    );
+    assert_eq!(record.error.related.len(), 1);
+    assert_eq!(record.error.related[0].error.context["phase"], "write");
+    assert_eq!(
+        record.error.related[0]
+            .error
+            .source
+            .as_ref()
+            .unwrap()
+            .message,
+        "diagnostic partial write"
+    );
+}
+
+#[test]
+fn publication_boundary_keeps_event_and_finish_flush_failures_with_original_output_cause() {
+    use std::error::Error as _;
+    use std::io::{self, Write};
+    struct Stdout;
+    impl Write for Stdout {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from_raw_os_error(libc::EPIPE))
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("failed output is not flushed")
+        }
+    }
+    struct Stderr(PublicationCapture, usize, usize);
+    impl Write for Stderr {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.0.write(bytes)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.1 += 1;
+            if self.1 < self.2 {
+                Ok(())
+            } else if self.1 == self.2 {
+                Err(io::Error::from_raw_os_error(libc::ENOSPC))
+            } else {
+                panic!("diagnostic flush was retried")
+            }
+        }
+    }
+    let output = chrono_harness::CliOutput {
+        exit_code: 0,
+        stdout: "machine".into(),
+        stderr: "explanation\n".into(),
+    };
+    for fail_at in [2, 3] {
+        let captured = PublicationCapture::default();
+        let failure = chrono_harness::publish_output(
+            &output,
+            &mut Stdout,
+            Stderr(captured.clone(), 0, fail_at),
+        )
+        .unwrap_err();
+        let original = failure.source().unwrap().source().unwrap();
+        assert_eq!(
+            original.downcast_ref::<io::Error>().unwrap().raw_os_error(),
+            Some(libc::EPIPE)
+        );
+        let record = failure.record();
+        assert_eq!(record.error.context["stream"], "stdout");
+        assert_eq!(record.error.related.len(), 1);
+        let related = &record.error.related[0];
+        assert_eq!(related.role, "diagnostic_publication");
+        assert_eq!(related.error.context["phase"], "flush");
+        assert_eq!(
+            related.error.context.contains_key("attempted_record"),
+            fail_at == 2
+        );
+        assert_eq!(
+            related.error.source.as_ref().unwrap().native_code,
+            Some(i64::from(libc::ENOSPC))
+        );
+        let diagnostic = failure.related().next().unwrap().1.source().unwrap();
+        assert_eq!(
+            diagnostic
+                .downcast_ref::<io::Error>()
+                .unwrap()
+                .raw_os_error(),
+            Some(libc::ENOSPC)
+        );
+        let bytes = captured.0.lock().unwrap();
+        assert!(bytes.starts_with(output.stderr.as_bytes()));
+        let event_bytes = &bytes[output.stderr.len()..];
+        assert_eq!(std::str::from_utf8(event_bytes).unwrap().lines().count(), 1);
+        let event: Value = serde_json::from_slice(event_bytes).unwrap();
+        assert_eq!(event["event"], "runner.output_publication_failed");
+        assert_eq!(event["error"]["error"]["context"]["operation_exit_code"], 0);
+    }
+}
+
+#[test]
 fn standard_sha256_vectors_match_memory_stream_and_file() {
     use std::io::{Cursor, Read};
     struct Chunks(Cursor<Vec<u8>>);
