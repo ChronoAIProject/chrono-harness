@@ -2,20 +2,18 @@ use chrono_harness::{CommandSpec, run_process_observed, sha256, wire};
 use chrono_judge_registration::execution::{Method, Plan};
 use chrono_judge_routes::{Receipt, compare, order, prepare};
 use serde_json::json;
-use std::{collections::BTreeMap, fs};
+use std::{collections::BTreeMap, fs, os::unix::fs::symlink};
+
+const TOOL: &str = env!("CARGO_BIN_EXE_chrono-judge-routes-test-tool");
+
 fn declarations() -> serde_json::Value {
-    let path = chrono_harness::resolve_program(std::path::Path::new("/"), "python3", None).unwrap();
-    let out = std::process::Command::new(&path)
-        .arg("--version")
-        .output()
-        .unwrap();
-    json!([{"id":"python","program":path,"version_argv":["--version"],"expected_version":String::from_utf8(out.stdout).unwrap().trim_end()}])
+    json!([{"id":"routes-helper","program":TOOL,"version_argv":["--version"],"expected_version":"chrono-judge-routes-test-tool 0.1.0"}])
 }
 fn method(id: &str, args: Vec<String>) -> Method {
     Method {
         owner: "script:p".into(),
         operation: id.into(),
-        tool: "python".into(),
+        tool: "routes-helper".into(),
         argv: args,
     }
 }
@@ -100,7 +98,12 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
         .prefix("routes host space ")
         .tempdir()
         .unwrap();
-    let args=vec!["-c".into(),"import sys,os,json; print(json.dumps([sys.argv[1:],os.getcwd(),os.environ.get('EMPTY'),os.environ.get('ABSENT')]))".into(),"$HOME `literal` <tag>".into(),"".into(),"line\nnext".into()];
+    let args = vec![
+        "observe".into(),
+        "$HOME `literal` <tag>".into(),
+        "".into(),
+        "line\nnext".into(),
+    ];
     let methods = BTreeMap::from([("test".into(), vec![method("test", args.clone())])]);
     let plans = BTreeMap::from([("test:t".into(), p(&["test"]))]);
     let exec = BTreeMap::from([("test:t".into(), "test".into())]);
@@ -117,7 +120,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     )
     .unwrap();
     let op = &plan.operations[0];
-    let tool = &plan.tools["python"];
+    let tool = &plan.tools["routes-helper"];
     let process = run_process_observed(
         &plan.root,
         &CommandSpec {
@@ -132,7 +135,9 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     )
     .unwrap();
     let data: serde_json::Value = serde_json::from_slice(&process.stdout_bytes).unwrap();
+    assert_eq!(process.exit_code, 0);
     assert_eq!(data[0], json!(["$HOME `literal` <tag>", "", "line\nnext"]));
+    assert_eq!(data[1], json!(plan.root));
     assert_eq!(data[2], "");
     assert!(data[3].is_null());
     let receipt = Receipt::new(&plan, op, process).unwrap();
@@ -189,7 +194,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
 fn tool_wrong_version_and_replacement_before_launch_fail() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("tool");
-    fs::copy(declarations()[0]["program"].as_str().unwrap(), &path).unwrap();
+    symlink(TOOL, &path).unwrap();
     let mut tools = declarations();
     tools[0]["program"] = json!(path);
     tools[0]["expected_version"] = json!("wrong");
@@ -215,6 +220,7 @@ fn tool_wrong_version_and_replacement_before_launch_fail() {
     );
     // Preserve a real executable identity; replacing its bytes must fail before spawn.
     let hash = sha256(&fs::read(&path).unwrap());
+    fs::remove_file(&path).unwrap();
     fs::write(&path, b"replaced").unwrap();
     assert!(
         run_process_observed(
@@ -236,24 +242,17 @@ fn tool_wrong_version_and_replacement_before_launch_fail() {
 
 #[test]
 fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
-    use std::os::unix::fs::symlink;
     let dir = tempfile::tempdir().unwrap();
     let a = dir.path().join("a");
     let b = dir.path().join("b");
     fs::create_dir(&a).unwrap();
     fs::create_dir(&b).unwrap();
     let source = declarations();
-    symlink(source[0]["program"].as_str().unwrap(), a.join("python3")).unwrap();
-    symlink("/bin/sh", b.join("python3")).unwrap();
+    symlink(TOOL, a.join("routes-helper")).unwrap();
+    symlink("/bin/sh", b.join("routes-helper")).unwrap();
     let mut tools = source;
-    tools[0]["program"] = json!("python3");
-    let methods = BTreeMap::from([(
-        "test".into(),
-        vec![method(
-            "test",
-            vec!["-c".into(), "print('bound-python')".into()],
-        )],
-    )]);
+    tools[0]["program"] = json!("routes-helper");
+    let methods = BTreeMap::from([("test".into(), vec![method("test", vec!["bound".into()])])]);
     let plans = BTreeMap::from([("test:t".into(), p(&["test"]))]);
     let exec = BTreeMap::from([("test:t".into(), "test".into())]);
     let env = BTreeMap::from([("PATH".into(), a.to_str().unwrap().into())]);
@@ -270,7 +269,7 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     )
     .unwrap();
     let op = &plan.operations[0];
-    let tool = &plan.tools["python"];
+    let tool = &plan.tools["routes-helper"];
     let spec = CommandSpec {
         program: tool.path.to_str().unwrap().into(),
         args: op.method.argv.clone(),
@@ -279,14 +278,15 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
         output_limit_bytes: 4096,
     };
     let actual = run_process_observed(dir.path(), &spec, &[], &tool.sha256).unwrap();
-    assert_eq!(actual.stdout, "bound-python\n");
+    assert_eq!(actual.exit_code, 0);
+    assert_eq!(actual.stdout, "bound-rust\n");
     let receipt = Receipt::new(&plan, op, actual).unwrap();
     assert!(
         compare(&plan, op, Some(&receipt)).is_err(),
         "changed effective PATH cannot use old receipt binding"
     );
-    fs::remove_file(a.join("python3")).unwrap();
-    symlink("/bin/sh", a.join("python3")).unwrap();
+    fs::remove_file(a.join("routes-helper")).unwrap();
+    symlink("/bin/sh", a.join("routes-helper")).unwrap();
     assert!(
         run_process_observed(dir.path(), &spec, &[], &tool.sha256)
             .unwrap_err()
@@ -343,17 +343,13 @@ fn canonical_compares_actual_order_and_paths_instead_of_parsed_reconstruction() 
 fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let root = fs::canonicalize(dir.path()).unwrap();
-    let source = declarations();
-    let program = source[0]["program"].as_str().unwrap();
-    let version_argv = vec![
-        "-c".into(),
-        "import sys; open('version-count','a').write('v'); print(sys.version)".into(),
-    ];
+    let program = TOOL;
+    let version_argv = vec!["count-version".into()];
     let environment = BTreeMap::new();
     let observed =
         chrono_harness::observation::tool(&root, program, &version_argv, &environment, 10, 4096)
             .unwrap();
-    let declarations = json!([{"id":"python","program":program,"version_argv":version_argv,"expected_version":observed.version.stdout.trim_end()}]);
+    let declarations = json!([{"id":"routes-helper","program":program,"version_argv":version_argv,"expected_version":"chrono-judge-routes-test-tool 0.1.0"}]);
     let methods = ["a", "b"]
         .into_iter()
         .map(|id| (id.into(), vec![method(id, vec!["--version".into()])]))
@@ -364,7 +360,7 @@ fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothi
     ]);
     let actions = BTreeMap::from([("test:a".into(), "a".into()), ("test:b".into(), "b".into())]);
     let selected = plans.keys().cloned().collect();
-    let reused = BTreeMap::from([("python".into(), observed.clone())]);
+    let reused = BTreeMap::from([("routes-helper".into(), observed.clone())]);
     let plan = prepare(
         &root,
         json!({"run":"reuse"}),
@@ -378,13 +374,13 @@ fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothi
     )
     .unwrap();
     assert_eq!(
-        plan.tools["python"].version.stdout_bytes,
+        plan.tools["routes-helper"].version.stdout_bytes,
         observed.version.stdout_bytes
     );
     assert_eq!(fs::read_to_string(root.join("version-count")).unwrap(), "v");
     let mut wrong = reused;
     wrong
-        .get_mut("python")
+        .get_mut("routes-helper")
         .unwrap()
         .version
         .environment
