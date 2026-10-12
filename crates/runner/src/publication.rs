@@ -6,6 +6,55 @@ use chrono_diagnostics::{
 };
 use std::io::{self, Write};
 
+/// Write through the supplied output handle without duplicating its descriptor.
+/// Unlike Rust's standard output writers, native write failures (including EBADF)
+/// reach the publication owner unchanged. This adapter has no userspace buffer.
+#[cfg(unix)]
+pub struct NativeOutput<W>(W);
+
+#[cfg(unix)]
+impl<W: std::os::fd::AsFd> NativeOutput<W> {
+    pub fn new(writer: W) -> Self {
+        Self(writer)
+    }
+}
+
+#[cfg(unix)]
+impl<W: std::os::fd::AsFd> Write for NativeOutput<W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        use std::os::fd::AsRawFd;
+        let count = bytes.len().min(isize::MAX as usize);
+        // The handle keeps the borrowed descriptor live; the slice remains valid
+        // for this synchronous call. No close or ownership transfer occurs here.
+        let written =
+            unsafe { libc::write(self.0.as_fd().as_raw_fd(), bytes.as_ptr().cast(), count) };
+        if written < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(written as usize)
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        // Native stdout/stderr have no buffer to flush. This is not fsync.
+        Ok(())
+    }
+}
+
+/// The actual CLI uses the same native adapter for both output channels.
+pub fn publish_native_output(output: &CliOutput) -> Result<u8, Failure> {
+    #[cfg(unix)]
+    {
+        publish_output(
+            output,
+            &mut NativeOutput::new(io::stdout().lock()),
+            NativeOutput::new(io::stderr()),
+        )
+    }
+    #[cfg(not(unix))]
+    publish_output(output, &mut io::stdout().lock(), io::stderr())
+}
+
 struct ObservedWriter<W> {
     writer: W,
     published: usize,

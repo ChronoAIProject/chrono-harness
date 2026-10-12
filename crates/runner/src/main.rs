@@ -1,4 +1,3 @@
-use std::io;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -35,7 +34,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     let output = chrono_harness::dispatch(&arguments);
-    match chrono_harness::publish_output(&output, &mut io::stdout().lock(), io::stderr()) {
+    match chrono_harness::publish_native_output(&output) {
         Ok(exit_code) => ExitCode::from(exit_code),
         Err(_failure) => ExitCode::from(2),
     }

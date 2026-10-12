@@ -173,6 +173,172 @@ fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
 
 #[test]
 #[cfg(unix)]
+fn runner_binary_read_only_stdout_is_a_native_publication_failure() {
+    use sha2::{Digest, Sha256};
+    use std::process::Stdio;
+
+    let binary =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../runner/target/debug/chrono-harness");
+    let expected = dispatch(&["--help"]);
+    assert_eq!(expected.exit_code, 0);
+    assert!(!expected.stdout.is_empty());
+    assert!(expected.stderr.is_empty());
+    let dir = TempDir::new().unwrap();
+    let descriptor = dir.path().join("read-only-output");
+    let original = b"launcher supplied a read-only output descriptor\n";
+    fs::write(&descriptor, original).unwrap();
+    let actual = Command::new(&binary)
+        .arg("--help")
+        .stdout(Stdio::from(fs::File::open(&descriptor).unwrap()))
+        .output()
+        .unwrap();
+    fs::write(dir.path().join("stdout.bin"), &actual.stdout).unwrap();
+    fs::write(dir.path().join("stderr.bin"), &actual.stderr).unwrap();
+    fs::write(
+        dir.path().join("observation.json"),
+        serde_json::to_vec_pretty(&json!({
+            "argv": [binary, "--help"],
+            "descriptor_scenario": {"stdout": "open O_RDONLY regular file", "stderr": "writable capture pipe"},
+            "binary_sha256": format!("{:x}", Sha256::digest(fs::read(&binary).unwrap())),
+            "expected_exit": 2,
+            "actual_exit": actual.status.code(),
+            "expected_stdout_bytes": expected.stdout.len(),
+            "stdout_bytes": actual.stdout.len(),
+            "stderr_bytes": actual.stderr.len(),
+            "native_error": libc::EBADF
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    if actual.status.code() != Some(2) {
+        let retained = dir.keep();
+        panic!(
+            "native output failure was suppressed; original evidence: {}",
+            retained.display()
+        );
+    }
+    assert!(actual.stdout.is_empty());
+    assert_eq!(fs::read(descriptor).unwrap(), original);
+    assert!(actual.stderr.ends_with(b"\n"));
+    assert_eq!(
+        std::str::from_utf8(&actual.stderr).unwrap().lines().count(),
+        1
+    );
+    let event: Value = serde_json::from_slice(&actual.stderr).unwrap();
+    assert_eq!(event["schema"], "chrono-log/v1");
+    assert_eq!(event["event"], "runner.output_publication_failed");
+    let error = &event["error"]["error"];
+    assert_eq!(error["code"], "E_OUTPUT_PUBLISH");
+    assert_eq!(error["context"]["stream"], "stdout");
+    assert_eq!(error["context"]["phase"], "write");
+    assert_eq!(error["context"]["operation_exit_code"], 0);
+    assert_eq!(error["context"]["operation_succeeded"], true);
+    assert_eq!(error["context"]["published_bytes"], 0);
+    assert_eq!(error["source"]["source"]["native_code"], libc::EBADF);
+}
+
+#[test]
+#[cfg(unix)]
+fn native_output_preserves_bad_descriptor_primary_related_and_diagnostic_causes() {
+    use chrono_harness::NativeOutput;
+    use std::{error::Error, io};
+
+    let output = chrono_harness::CliOutput {
+        exit_code: 0,
+        stdout: "machine\n".into(),
+        stderr: "explanation".into(),
+    };
+    // These are the two independent channels and their combination, using the
+    // actual adapter rather than an injected IO error from a mock writer.
+    for (stdout_read_only, stderr_read_only) in [(true, false), (false, true), (true, true)] {
+        let dir = TempDir::new().unwrap();
+        let open = |name, read_only| {
+            let path = dir.path().join(name);
+            fs::write(&path, b"original descriptor bytes").unwrap();
+            if read_only {
+                fs::File::open(path).unwrap()
+            } else {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(path)
+                    .unwrap()
+            }
+        };
+        let mut stdout = NativeOutput::new(open("stdout", stdout_read_only));
+        let stderr = NativeOutput::new(open("stderr", stderr_read_only));
+        let failure = chrono_harness::publish_output(&output, &mut stdout, stderr).unwrap_err();
+        let native = failure.source().unwrap().source().unwrap();
+        let native = native.downcast_ref::<io::Error>().unwrap();
+        assert_eq!(native.raw_os_error(), Some(libc::EBADF));
+        let record = failure.record();
+        assert_eq!(
+            record.error.context["stream"],
+            if stdout_read_only { "stdout" } else { "stderr" }
+        );
+        assert_eq!(record.error.context["phase"], "write");
+        assert_eq!(record.error.context["operation_exit_code"], 0);
+        assert_eq!(record.error.context["published_bytes"], 0);
+        assert_eq!(
+            record
+                .error
+                .source
+                .as_ref()
+                .unwrap()
+                .source
+                .as_ref()
+                .unwrap()
+                .native_code,
+            Some(i64::from(libc::EBADF))
+        );
+        let related = failure.related().collect::<Vec<_>>();
+        assert_eq!(
+            related.len(),
+            usize::from(stdout_read_only && stderr_read_only) + usize::from(stderr_read_only)
+        );
+        if stdout_read_only && stderr_read_only {
+            assert_eq!(related[0].0, "secondary_output_publication");
+            let native = related[0].1.source().unwrap().source().unwrap();
+            assert_eq!(
+                native.downcast_ref::<io::Error>().unwrap().raw_os_error(),
+                Some(libc::EBADF)
+            );
+            assert_eq!(record.error.related[0].error.context["stream"], "stderr");
+        }
+        if stderr_read_only {
+            let diagnostic = related.last().unwrap();
+            assert_eq!(diagnostic.0, "diagnostic_publication");
+            let native = diagnostic.1.source().unwrap();
+            assert_eq!(
+                native.downcast_ref::<io::Error>().unwrap().raw_os_error(),
+                Some(libc::EBADF)
+            );
+            assert_eq!(
+                fs::read(dir.path().join("stderr")).unwrap(),
+                b"original descriptor bytes"
+            );
+        } else {
+            let bytes = fs::read(dir.path().join("stderr")).unwrap();
+            assert!(bytes.starts_with(b"explanation\n"));
+            let diagnostic = &bytes[b"explanation\n".len()..];
+            assert_eq!(std::str::from_utf8(diagnostic).unwrap().lines().count(), 1);
+            let event: Value = serde_json::from_slice(diagnostic).unwrap();
+            assert_eq!(event["event"], "runner.output_publication_failed");
+            assert_eq!(event["error"], serde_json::to_value(record).unwrap());
+        }
+        assert_eq!(
+            fs::read(dir.path().join("stdout")).unwrap(),
+            if stdout_read_only {
+                b"original descriptor bytes".as_slice()
+            } else {
+                output.stdout.as_bytes()
+            }
+        );
+    }
+}
+
+#[test]
+#[cfg(unix)]
 fn runner_binary_publication_preserves_bytes_and_attempts_parity_stderr_after_stdout_failure() {
     use std::process::Stdio;
     fn broken_pipe() -> Stdio {

@@ -73,6 +73,17 @@ status. A write or flush failure exits 2, retains the original typed IO value,
 stream, phase, acknowledged byte count and original operation outcome, and keeps
 the other channel's failure separately. No whole payload is replayed.
 
+On the supported Unix platforms, the actual CLI supplies the same runner-owned
+`NativeOutput` adapter for stdout and stderr. It writes through the supplied live
+handle with the native write interface, preserving native errors rather than
+using Rust stdio's successful acknowledgement of EBADF. An open read-only output
+descriptor therefore fails publication even though it is not a closed socket.
+The adapter neither duplicates nor closes borrowed stdio descriptors. It has no
+userspace buffer, so flush is a no-op, as for the native stdio backend; it makes
+no fsync or durable-storage claim. Existing publication policy handles short
+writes and Interrupted errors. Non-Unix builds retain the previous standard
+output adapters; native error transparency there has not been verified.
+
 The boundary attempts one `runner.output_publication_failed` event through the
 existing stderr logger. It adds a newline only when necessary to frame the event
 after already accepted stderr bytes; diagnostic bytes never enter stdout.
@@ -94,6 +105,12 @@ flush-failure observations, without adding a new output producer. An actual
 runner binary regression also covers help/version,
 domain failure, unestablished parity, stdout rejection and both unavailable
 descriptors, detecting a main that still uses the former publication path.
+The read-only stdout regression runs a successful nonempty help command and
+requires exit 2 with exactly one framed stderr event carrying native EBADF.
+Failure evidence retains the original argv, executable digest, descriptor
+scenario, raw streams and exit. Direct tests exercise the same native adapter
+with each read-only channel and their combination, including primary, secondary
+output and diagnostic IO causes and the independent available channel.
 
 Product and registration changes are coupled in this increment: FILEMAP lists
 `runner/src/publication.rs` as a runner compile input and explicitly records the
