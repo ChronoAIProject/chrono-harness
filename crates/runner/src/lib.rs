@@ -19,11 +19,15 @@ pub mod parity;
 pub mod prepared;
 #[cfg(unix)]
 pub mod process_fds;
+mod publication;
 pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
 pub mod wire;
+#[cfg(unix)]
+pub use publication::NativeOutput;
+pub use publication::{publish_native_output, publish_output, publish_output_to};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -45,6 +49,7 @@ pub struct CliOutput {
     pub stdout: String,
     pub stderr: String,
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CommandSpec {

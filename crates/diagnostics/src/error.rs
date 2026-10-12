@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::fmt;
+use std::io;
 
 pub type Context = BTreeMap<String, Value>;
 
@@ -47,6 +48,73 @@ pub struct ErrorRecord {
 /// This trait deliberately does not guess a concrete type from erased Display text.
 pub trait RecordedError: StdError + Send + Sync + 'static {
     fn error_node(&self) -> ErrorNode;
+}
+
+/// Adopts a native IO error without replacing its typed value with Display text.
+#[derive(Debug)]
+pub struct NativeIoError {
+    source: io::Error,
+}
+
+impl NativeIoError {
+    pub fn new(source: io::Error) -> Self {
+        Self { source }
+    }
+
+    pub fn as_io_error(&self) -> &io::Error {
+        &self.source
+    }
+
+    pub fn into_io_error(self) -> io::Error {
+        self.source
+    }
+}
+
+impl fmt::Display for NativeIoError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.source.fmt(formatter)
+    }
+}
+
+impl StdError for NativeIoError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        Some(&self.source)
+    }
+}
+
+pub(crate) fn io_error_node(error: &io::Error) -> ErrorNode {
+    let mut context = Context::new();
+    context.insert("kind".into(), format!("{:?}", error.kind()).into());
+    if error.get_ref().is_some() {
+        context.insert("custom_source".into(), "not_recorded".into());
+    }
+    ErrorNode {
+        error_type: "std::io::Error".into(),
+        code: format!("io::{:?}", error.kind()),
+        message: error.to_string(),
+        context,
+        source: None,
+        native_code: error.raw_os_error().map(i64::from),
+        traceback: None,
+        related: Vec::new(),
+    }
+}
+
+impl RecordedError for NativeIoError {
+    fn error_node(&self) -> ErrorNode {
+        ErrorNode {
+            error_type: std::any::type_name::<Self>().into(),
+            code: "E_NATIVE_IO".into(),
+            message: self.to_string(),
+            context: [("kind".into(), format!("{:?}", self.source.kind()).into())]
+                .into_iter()
+                .collect(),
+            source: Some(Box::new(io_error_node(&self.source))),
+            native_code: self.source.raw_os_error().map(i64::from),
+            traceback: None,
+            related: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -16,8 +16,13 @@ such as cleanup or publication failures, without replacing the primary cause.
 `ErrorRecord` is a versioned tree. Each node contains its type, stable code,
 original message, context and source. Native codes, obtained traceback text and
 related failures have separate fields. The owner supplies these details; the
-library does not recover types, codes or causes by parsing messages. Native
-upstream errors require an explicit owner adapter before wrapping.
+library does not recover types, codes or causes by parsing messages.
+`NativeIoError` adopts the original `std::io::Error`, retains its kind, message
+and available OS code, and exposes the unchanged native value through its source
+and accessors. A custom IO payload remains typed in memory; without its own
+recording adapter, its wire cause is explicitly `custom_source: not_recorded`.
+This adapter does not serialize arbitrary custom cause chains or obtain a stack.
+Other native upstream errors still require an explicit owner adapter.
 
 `ReceivedError` imports a record while preserving its source chain. Importing
 does not claim that the receiving process executed the original operation.
@@ -50,15 +55,73 @@ record is not retried. Repeated `finish()` calls cannot erase the failure. The
 caller remains responsible for publishing failures through its declared evidence
 or emergency output boundary.
 
+`LogFailure` implements `RecordedError`, including shared retained failures, so
+a boundary can attach the actual logging exception as a related error. Native IO
+recording uses the same diagnostics owner as `NativeIoError`; attempted bytes and
+the producer's explicit write/flush phase remain available for event publication
+and final flushing. Recording adds no successful publication
+claim.
+
 ## Adoption boundary
 
 The runner's invalid UTF-8 argument path uses the shared logger, emits no stdout
-and exits with status 2. Other runner paths and other programs still use their
-existing diagnostics. The dedicated tests cover error wrapping and import,
-source and related-error preservation, UTF-8 JSON lines, level filtering,
-explicit thread context transfer, recovery events and partial sink failures.
+and exits with status 2. All post-dispatch `CliOutput` consumers now use the
+runner-owned publication boundary, including unestablished parity's machine
+stdout plus stderr explanation. Both existing channels are attempted and flushed
+independently. Successful publication preserves the bytes and operation exit
+status. A write or flush failure exits 2, retains the original typed IO value,
+stream, phase, acknowledged byte count and original operation outcome, and keeps
+the other channel's failure separately. No whole payload is replayed.
 
-This increment does not complete SPEC §7.1 or §7.2. General native-error adapters,
+On the supported Unix platforms, the actual CLI supplies the same runner-owned
+`NativeOutput` adapter for stdout and stderr. It writes through the supplied live
+handle with the native write interface, preserving native errors rather than
+using Rust stdio's successful acknowledgement of EBADF. An open read-only output
+descriptor therefore fails publication even though it is not a closed socket.
+The adapter neither duplicates nor closes borrowed stdio descriptors. It has no
+userspace buffer, so flush is a no-op, as for the native stdio backend; it makes
+no fsync or durable-storage claim. Existing publication policy handles short
+writes and Interrupted errors. Non-Unix builds retain the previous standard
+output adapters; native error transparency there has not been verified.
+
+The boundary attempts one `runner.output_publication_failed` event through the
+existing stderr logger. It adds a newline only when necessary to frame the event
+after already accepted stderr bytes; diagnostic bytes never enter stdout.
+Logger serialization and finish failures become related typed failures in the
+returned error. If stderr is unavailable or a diagnostic is only partially
+written, the boundary cannot promise durable retention and does not retry the
+whole record. A logged publication failure records the operation's exit status;
+it does not reconstruct a business cause from existing free-form stderr.
+
+The dedicated Rust tests cover error wrapping/import, native and custom IO value
+retention, source and related-error preservation, UTF-8 JSON lines, level
+filtering, explicit thread context transfer, recovery and failed sinks. Runner
+owner tests cover independent output attempts, both failures, partial write and
+flush boundaries, recoverable interrupted writes, actual zero writes with native
+`WriteZero` errors and acknowledged-byte counts, healthy bytes/status, diagnostic
+framing and an unavailable diagnostic sink. Existing help/domain outputs supply
+the empty-channel cases: healthy binary publication and direct empty-channel
+flush-failure observations, without adding a new output producer. An actual
+runner binary regression also covers help/version,
+domain failure, unestablished parity, stdout rejection and both unavailable
+descriptors, detecting a main that still uses the former publication path.
+The read-only stdout regression runs a successful nonempty help command and
+requires exit 2 with exactly one framed stderr event carrying native EBADF.
+Failure evidence retains the original argv, executable digest, descriptor
+scenario, raw streams and exit. Direct tests exercise the same native adapter
+with each read-only channel and their combination, including primary, secondary
+output and diagnostic IO causes and the independent available channel.
+
+Product and registration changes are coupled in this increment: FILEMAP lists
+`runner/src/publication.rs` as a runner compile input and explicitly records the
+runner binary as a runtime input of runner-tests. The existing runner and
+diagnostics execution plans remain the direct check owners. Canonical validation
+uses the declared two-end DELTA closure, which may be broad; no local selection
+or verification-cost reduction is claimed. Marginal build, CI and storage cost
+remain unmeasured.
+
+This increment does not complete SPEC §7.1 or §7.2. Other runner domain paths and
+other programs retain their existing diagnostics. General native-error adapters,
 typed errors throughout the existing products, a common emergency publication
 entry, registered formatting/sink choices, persisted record references,
 subprocess context transfer and non-Rust adapters remain required. Failed

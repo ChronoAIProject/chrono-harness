@@ -1,5 +1,5 @@
 use chrono_diagnostics::{
-    error::{ErrorNode, ErrorRecord, Failure, ReceivedError, RecordedError},
+    error::{ErrorNode, ErrorRecord, Failure, NativeIoError, ReceivedError, RecordedError},
     logging::{self, LogFailure, LogRecord, Logger},
 };
 use serde_json::{Value, json};
@@ -132,6 +132,53 @@ fn domain_rejection_does_not_invent_a_source_and_wire_version_is_strict() {
     value["schema"] = json!("chrono-error/v1");
     value["error"]["unregistered_field"] = json!(true);
     assert!(serde_json::from_value::<ErrorRecord>(value).is_err());
+}
+
+#[test]
+fn native_io_adapter_preserves_kind_message_and_os_code() {
+    let original = io::Error::from_raw_os_error(32);
+    let message = original.to_string();
+    let kind = original.kind();
+    let adapted = NativeIoError::new(original);
+    assert_eq!(adapted.as_io_error().raw_os_error(), Some(32));
+    assert_eq!(
+        adapted
+            .source()
+            .unwrap()
+            .downcast_ref::<io::Error>()
+            .unwrap()
+            .raw_os_error(),
+        Some(32)
+    );
+    let node = adapted.error_node();
+    assert_eq!(node.code, "E_NATIVE_IO");
+    assert_eq!(node.native_code, Some(32));
+    assert_eq!(node.context["kind"], format!("{kind:?}"));
+    assert_eq!(node.source.as_ref().unwrap().native_code, Some(32));
+    assert_eq!(node.source.as_ref().unwrap().message, message);
+}
+
+#[test]
+fn native_io_adapter_keeps_custom_typed_cause_without_inventing_a_wire_adapter() {
+    #[derive(Debug)]
+    struct Custom;
+    impl std::fmt::Display for Custom {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("custom native cause")
+        }
+    }
+    impl Error for Custom {}
+    let original = io::Error::new(io::ErrorKind::Other, Custom);
+    let adapter = NativeIoError::new(original);
+    assert!(adapter.as_io_error().get_ref().unwrap().is::<Custom>());
+    assert_eq!(adapter.as_io_error().raw_os_error(), None);
+    let node = adapter.error_node();
+    let native = node.source.unwrap();
+    assert_eq!(native.message, "custom native cause");
+    assert_eq!(native.native_code, None);
+    assert_eq!(native.context["custom_source"], "not_recorded");
+    assert!(native.source.is_none());
+    assert!(adapter.into_io_error().into_inner().unwrap().is::<Custom>());
 }
 
 #[test]
@@ -280,11 +327,15 @@ fn sink_failure_keeps_native_error_and_attempted_original_record() {
     let LogFailure::Io {
         source,
         attempted_record: Some(bytes),
+        phase: logging::LogIoPhase::Write,
     } = errors[0].as_ref()
     else {
         panic!("missing original failure")
     };
     assert_eq!(source.raw_os_error(), Some(32));
+    let log_node = errors[0].error_node();
+    assert_eq!(log_node.code, "E_LOG_IO");
+    assert_eq!(log_node.source.as_ref().unwrap().native_code, Some(32));
     assert_eq!(
         errors[0]
             .source()
@@ -297,6 +348,57 @@ fn sink_failure_keeps_native_error_and_attempted_original_record() {
     let row: LogRecord = serde_json::from_slice(bytes).unwrap();
     assert_eq!(row.error.as_ref(), Some(&primary));
     assert!(Arc::ptr_eq(&logger.finish().unwrap_err()[0], &errors[0]));
+}
+
+#[test]
+fn event_and_finish_flush_failures_keep_their_phase_and_original_error() {
+    struct FlushSink {
+        captured: Captured,
+        flushes: usize,
+        fail_at: usize,
+    }
+    impl Write for FlushSink {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.captured.write(bytes)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            if self.flushes < self.fail_at {
+                Ok(())
+            } else if self.flushes == self.fail_at {
+                Err(io::Error::from_raw_os_error(28))
+            } else {
+                panic!("failed flush was retried")
+            }
+        }
+    }
+    for fail_at in [1, 2] {
+        let captured = Captured::default();
+        let logger = Logger::new(
+            "fixture",
+            tracing::Level::INFO,
+            FlushSink {
+                captured: captured.clone(),
+                flushes: 0,
+                fail_at,
+            },
+        );
+        logger.run(|| tracing::info!(event_id = "flush.fixture", message = "original event"));
+        let failures = logger.finish().unwrap_err();
+        assert_eq!(failures.len(), 1);
+        let node = failures[0].error_node();
+        assert_eq!(node.context["phase"], "flush");
+        assert_eq!(node.source.as_ref().unwrap().native_code, Some(28));
+        assert_eq!(node.context.contains_key("attempted_record"), fail_at == 1);
+        let source = failures[0]
+            .source()
+            .unwrap()
+            .downcast_ref::<io::Error>()
+            .unwrap();
+        assert_eq!(source.raw_os_error(), Some(28));
+        assert_eq!(captured.records().len(), 1);
+        assert!(Arc::ptr_eq(&logger.finish().unwrap_err()[0], &failures[0]));
+    }
 }
 
 #[test]
