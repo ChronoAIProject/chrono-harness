@@ -5,10 +5,18 @@ edition = "2024"
 publish = false
 autotests = false
 
-[dev-dependencies]
-chrono-judge-registration = { path = "../judge-registration" }
+[dependencies]
 chrono-harness = { path = "../runner" }
 serde_json = "1"
+
+[[bin]]
+name = "chrono-test-registration-regression"
+path = "tests/support/regression_child.rs"
+test = false
+bench = false
+
+[dev-dependencies]
+chrono-judge-registration = { path = "../judge-registration" }
 tempfile = "3"
 
 [[test]]

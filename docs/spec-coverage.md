@@ -726,3 +726,35 @@ up to 64 MiB. These transitions do not repair the historical 861 missing stdout
 siblings or change the original 115-pass/5-fail result. Those historical evidence
 limits remain separate from current candidate checks, native/public adoption and
 ordered delivery.
+
+Four bounded §2.2 regression consumers now use Rust drivers, assertions and
+request-bound child behavior: registration's initial DAG, named warn outputs,
+missing/conflicting responses, and projects' embedded UTF-8 boundary. One
+registration-test-owned binary consumes the actual sealed initial/full requests;
+the existing projects test binary adds the two encoding modes while retaining
+literal Step effects. The registration helper asserts the empty independent
+predecessors and exact successful registration predecessor, and retains the
+actual external `/usr/bin/python3 --version` subprocess's original streams and
+status. That tool observation is an external interface, not a Python assertion
+or driver. Malformed/wrong requests and unsupported modes fail without a pass
+response; malformed stdout/exit 9, conflicting impact, null tests, equal cost
+sources and exact EF BF BD versus FF bytes retain their distinctions.
+
+Both helpers' manifests and FILEMAP compile edges bind their dedicated test
+owners, existing Rust runner dependency, registered owner operations and unknown
+cost. Evidence for these four consumers is retained beneath the existing test
+target artifacts; source-language compliance is not inferred from a behavioral
+pass or a source-token test. Direct source verification passes the registered
+registration action, including both initial-DAG branches, the projects core and
+exhaustive inventory actions, and a fresh historical-migration action with its
+real nested CI suite and workflow drift/restoration checks. Existing FILEMAP consumers, unfiltered release
+actions, historical-migration assertions, dependencies, cap 2 and each entry's
+registered bounds are preserved. Historical-migration verification requires a
+fresh producer result; an empty historical result is not terminal evidence.
+Managed-use observations retain the adopted 2400-second and 64 MiB stream bounds;
+the historical-migration test phase took 1246.21 seconds, which does not establish
+timing acceptance under the separate 900-second scoped execution plan.
+This source increment does not establish full §2.2 compliance, committed
+canonical/native acceptance, delivery, complete provenance/input closure/parity,
+or comparative cost improvement; other fixture families and complete SPEC
+adoption remain separate obligations.

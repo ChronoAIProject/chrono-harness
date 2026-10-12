@@ -753,16 +753,19 @@ fn unrepresented_retained_environment_is_not_no_work_success() {
 
 #[test]
 fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
-    for (bytes, expected_exit) in [("bytes([239,191,189])", 0), ("bytes([255])", 2)] {
+    for (mode, note_bytes, expected_exit) in [
+        ("encoding-valid", &[0xef, 0xbf, 0xbd][..], 0),
+        ("encoding-invalid", &[0xff][..], 2),
+    ] {
         let mut h = Host::new(true);
         let path = ".chrono-harness/bin/encoding-judge";
-        let script = format!(
-            "#!/usr/bin/python3\nimport json,sys\nr=json.load(sys.stdin)\ns={{'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],'status':'pass','findings':[],'evidence':[],'outputs':{{'note':'MARKER'}}}}\nsys.stdout.buffer.write(json.dumps(s).encode().replace(b'MARKER',{bytes}))\n"
-        );
-        fs::write(h.root().join(path), &script).unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(h.root().join(path), fs::Permissions::from_mode(0o755)).unwrap();
-        h.values.get_mut(JUDGES).unwrap()["judges"] = json!([{"id":"encoding","executable":path,"version":"fixture","sha256":sha256(script.as_bytes()),"argv":[],"selector":"every-delta","after":[],"modes":["evaluate"]}]);
+        fs::copy(
+            env!("CARGO_BIN_EXE_chrono-test-project-execution"),
+            h.root().join(path),
+        )
+        .unwrap();
+        let digest = sha256(&fs::read(h.root().join(path)).unwrap());
+        h.values.get_mut(JUDGES).unwrap()["judges"] = json!([{"id":"encoding","executable":path,"version":"fixture","sha256":digest,"argv":[mode],"selector":"every-delta","after":[],"modes":["evaluate"]}]);
         h.values.get_mut(JUDGES).unwrap()["migration_validator"] = json!("encoding");
         h.save();
         let (code, report) = h.run(|_| {});
@@ -776,6 +779,60 @@ fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes
                 .clone(),
         )
         .unwrap();
+        let slot = b"\"note\":\"";
+        let start = raw
+            .windows(slot.len())
+            .position(|bytes| bytes == slot)
+            .expect("original note string slot")
+            + slot.len();
+        assert_eq!(&raw[start..start + note_bytes.len()], note_bytes);
+        assert_eq!(raw[start + note_bytes.len()], b'"');
+        let input = fs::read(h.root().join(".chrono-harness/state/encoding.request.json")).unwrap();
+        assert_eq!(record["process"]["stdin_sha256"], sha256(&input));
+        let destination = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/encoding-evidence")
+            .join(mode);
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("stdout.bin"), &raw).unwrap();
+        let process = chrono_harness::full::expand_process(&record["process"]).unwrap();
+        let stderr: Vec<u8> = serde_json::from_value(process["stderr_bytes"].clone()).unwrap();
+        fs::write(destination.join("stderr.bin"), stderr).unwrap();
+        fs::write(destination.join("request.json"), &input).unwrap();
+        fs::write(
+            destination.join("report.json"),
+            serde_json::to_vec_pretty(&report).unwrap(),
+        )
+        .unwrap();
+        // Check malformed/wrong requests and unsupported mode against the real Rust child.
+        let request: Value = serde_json::from_slice(&input).unwrap();
+        let mut rejected = vec![
+            (mode, b"{malformed".to_vec()),
+            ("unsupported", input.clone()),
+            (mode, b"{}".to_vec()),
+        ];
+        for field in ["protocol", "mode", "request_id"] {
+            let mut wrong = request.clone();
+            wrong[field] = json!("wrong");
+            rejected.push((mode, serde_json::to_vec(&wrong).unwrap()));
+        }
+        for (mode, bytes) in rejected {
+            use std::{io::Write, process::Stdio};
+            let isolated = tempfile::tempdir().unwrap();
+            let mut child = Command::new(env!("CARGO_BIN_EXE_chrono-test-project-execution"))
+                .arg(mode)
+                .current_dir(isolated.path())
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            // An unsupported mode may exit without reading stdin.
+            let _ = child.stdin.take().unwrap().write_all(&bytes);
+            let output = child.wait_with_output().unwrap();
+            assert!(!output.status.success());
+            assert!(output.stdout.is_empty());
+            assert!(!isolated.path().join(".chrono-harness/state").exists());
+        }
         assert_eq!(std::str::from_utf8(&raw).is_ok(), expected_exit == 0);
         assert_eq!(record["process"]["exit_code"], 0);
         if expected_exit == 0 {

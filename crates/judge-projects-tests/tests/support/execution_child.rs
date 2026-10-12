@@ -83,6 +83,15 @@ fn main() -> ExitCode {
         println!("chrono-test-project-execution/v1");
         return ExitCode::SUCCESS;
     }
+    if args.len() == 1 && ["encoding-valid", "encoding-invalid"].contains(&args[0].as_str()) {
+        return match encoding(args[0] == "encoding-valid") {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("{error}");
+                ExitCode::from(2)
+            }
+        };
+    }
     assert_eq!(args.len(), 2, "expected run and encoded Rust fixture steps");
     assert_eq!(args[0], "run");
     match run(serde_json::from_str(&args[1]).expect("valid fixture steps")) {
@@ -92,4 +101,37 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn encoding(valid: bool) -> Result<(), String> {
+    let mut input = Vec::new();
+    io::stdin()
+        .read_to_end(&mut input)
+        .map_err(|e| e.to_string())?;
+    let request: chrono_harness::wire::Request =
+        serde_json::from_value(chrono_harness::json(&input)?).map_err(|e| e.to_string())?;
+    request.validate()?;
+    fs::create_dir_all(".chrono-harness/state").map_err(|e| e.to_string())?;
+    fs::write(".chrono-harness/state/encoding.request.json", &input).map_err(|e| e.to_string())?;
+    let mut response = request.response(chrono_harness::wire::Status::Pass);
+    response
+        .outputs
+        .insert("note".into(), serde_json::json!("MARKER"));
+    let encoded = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
+    let marker = b"\"note\":\"MARKER\"";
+    let start = encoded
+        .windows(marker.len())
+        .position(|bytes| bytes == marker)
+        .ok_or("missing note slot")?
+        + b"\"note\":\"".len();
+    let replacement: &[u8] = if valid { &[0xef, 0xbf, 0xbd] } else { &[0xff] };
+    let mut stdout = io::stdout().lock();
+    stdout
+        .write_all(&encoded[..start])
+        .map_err(|e| e.to_string())?;
+    stdout.write_all(replacement).map_err(|e| e.to_string())?;
+    stdout
+        .write_all(&encoded[start + b"MARKER".len()..])
+        .map_err(|e| e.to_string())?;
+    stdout.flush().map_err(|e| e.to_string())
 }

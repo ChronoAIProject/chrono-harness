@@ -461,26 +461,9 @@ fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
 
 #[test]
 fn initial_inventory_uses_only_declared_dag_and_blocks_failed_dependents() {
-    use std::os::unix::fs::PermissionsExt;
     let mut h = initial_host();
-    let script = ".chrono-harness/inventory-plugin.py";
-    let text = r#"#!/usr/bin/python3
-import json, pathlib, sys
-r = json.load(sys.stdin)
-assert 'base' not in r and 'delta' not in r
-if r['judge_id'] == 'dependent':
-    assert len(r['prior_results']) == 1
-    assert r['prior_results'][0]['outputs']['inventory']['scope'] == 'schema-references-checkout'
-else:
-    assert r['prior_results'] == []
-p = pathlib.Path('.chrono-harness/state')
-p.mkdir(parents=True, exist_ok=True)
-(p / (r['judge_id'] + '-ran')).write_text('ran')
-print(json.dumps({'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],
- 'status':'pass','findings':[],'evidence':[],'outputs':{'plugin':True}}))
-"#;
-    fs::write(h.root().join(script), text).unwrap();
-    fs::set_permissions(h.root().join(script), fs::Permissions::from_mode(0o755)).unwrap();
+    let script = ".chrono-harness/inventory-plugin";
+    let digest = install_regression_child(&h, script);
     let fm = ".chrono-harness/FILEMAP.json";
     let mut map: Value = serde_json::from_slice(&fs::read(h.root().join(fm)).unwrap()).unwrap();
     map["files"].as_array_mut().unwrap().push(file(script));
@@ -493,7 +476,7 @@ print(json.dumps({'protocol':r['protocol'],'request_id':r['request_id'],'judge_i
         ("independent", vec![]),
     ] {
         profile["judges"].as_array_mut().unwrap().push(json!({"id":id,"executable":script,"version":"fixture",
-            "sha256":sha256(text.as_bytes()),"argv":[],"selector":"every-initial","after":after,"modes":["inventory"]}));
+            "sha256":digest,"argv":["inventory"],"selector":"every-initial","after":after,"modes":["inventory"]}));
     }
     write(h.root(), path, &profile);
     amend_initial(&mut h);
@@ -506,14 +489,45 @@ print(json.dumps({'protocol':r['protocol'],'request_id':r['request_id'],'judge_i
             .iter()
             .all(|r| r["state"] == "executed" && r["process"]["exit_code"] == 0)
     );
+    retain_regression(&h, "inventory-success", &r);
+    for id in ["dependent", "independent"] {
+        let request: Value = serde_json::from_slice(
+            &fs::read(
+                h.root()
+                    .join(format!(".chrono-harness/state/{id}.request.json")),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(request.get("base").is_none() && request.get("delta").is_none());
+        if id == "dependent" {
+            let registration = records
+                .iter()
+                .find(|record| record["id"] == "initial-registration")
+                .unwrap();
+            assert_eq!(
+                request["prior_results"],
+                json!([registration["response"].clone()])
+            );
+        } else {
+            assert_eq!(request["prior_results"], json!([]));
+            assert_rejected_regression_inputs("inventory", &request);
+        }
+    }
     for id in ["dependent", "independent"] {
         let path = h.root().join(format!(".chrono-harness/state/{id}-ran"));
         assert_eq!(fs::read(&path).unwrap(), b"ran");
         fs::remove_file(path).unwrap();
+        fs::remove_file(
+            h.root()
+                .join(format!(".chrono-harness/state/{id}.request.json")),
+        )
+        .unwrap();
     }
     fs::write(h.root().join("unregistered.txt"), "break first judge").unwrap();
     amend_initial(&mut h);
     let (exit, r) = initial_run(&h);
+    retain_regression(&h, "inventory-failure", &r);
     assert_ne!(exit, 0, "{r}");
     assert!(finding(&r, "E_UNREGISTERED"), "{r}");
     let records = r["judges"].as_array().unwrap();
@@ -909,48 +923,159 @@ fn full_report_preserves_failure_findings_and_incomplete_status() {
         assert_unresolved(&report, field);
     }
 }
-fn install_report_fixture(h: &mut Host, script: &str, plan: &[(&str, Vec<&str>)]) {
-    use std::os::unix::fs::PermissionsExt;
-    let path = ".chrono-harness/bin/report-fixture";
-    fs::write(
+fn install_regression_child(h: &Host, path: &str) -> String {
+    fs::copy(
+        env!("CARGO_BIN_EXE_chrono-test-registration-regression"),
         h.root().join(path),
-        format!("#!/usr/bin/python3\n{script}\n"),
     )
     .unwrap();
-    fs::set_permissions(h.root().join(path), fs::Permissions::from_mode(0o755)).unwrap();
-    let digest = sha256(&fs::read(h.root().join(path)).unwrap());
+    sha256(&fs::read(h.root().join(path)).unwrap())
+}
+
+// These four regressions retain exact child streams in the already registered target.
+fn retain_regression(h: &Host, case: &str, report: &Value) {
+    let destination = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target/regression-evidence")
+        .join(case);
+    fs::create_dir_all(&destination).unwrap();
+    fs::write(
+        destination.join("report.json"),
+        serde_json::to_vec_pretty(report).unwrap(),
+    )
+    .unwrap();
+    for record in report["judges"].as_array().unwrap() {
+        let id = record["id"].as_str().unwrap();
+        if !record["process"].is_null() {
+            let process = chrono_harness::full::expand_process(&record["process"]).unwrap();
+            for stream in ["stdout", "stderr"] {
+                let bytes: Vec<u8> =
+                    serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+                fs::write(destination.join(format!("{id}.{stream}.bin")), bytes).unwrap();
+            }
+        }
+        let request = h
+            .root()
+            .join(format!(".chrono-harness/state/{id}.request.json"));
+        if request.exists() {
+            fs::copy(request, destination.join(format!("{id}.request.json"))).unwrap();
+        }
+    }
+    for name in [
+        "tool-version.txt",
+        "tool-version.stderr.bin",
+        "tool-version.status.json",
+    ] {
+        let original = h.root().join(".chrono-harness/state").join(name);
+        if original.exists() {
+            fs::copy(original, destination.join(name)).unwrap();
+        }
+    }
+}
+
+fn assert_rejected_regression_inputs(mode: &str, request: &Value) {
+    use std::{io::Write, process::Stdio};
+    let mut cases = vec![
+        (mode.to_owned(), b"{malformed".to_vec()),
+        ("unsupported".into(), serde_json::to_vec(request).unwrap()),
+    ];
+    for field in ["protocol", "mode", "request_id", "judge_id"] {
+        let mut wrong = request.clone();
+        wrong[field] = json!("wrong");
+        cases.push((mode.into(), serde_json::to_vec(&wrong).unwrap()));
+    }
+    cases.push((mode.into(), b"{}".to_vec()));
+    if mode == "inventory" {
+        for field in ["base", "delta"] {
+            let mut wrong = request.clone();
+            wrong[field] = json!(null);
+            cases.push((mode.into(), serde_json::to_vec(&wrong).unwrap()));
+        }
+        let mut wrong: chrono_harness::initial::Request =
+            serde_json::from_value(request.clone()).unwrap();
+        wrong.judge_id = "dependent".into();
+        wrong.seal().unwrap(); // Valid identity, but the required predecessor is absent.
+        cases.push((mode.into(), serde_json::to_vec(&wrong).unwrap()));
+        wrong.judge_id = "independent".into();
+        wrong
+            .prior_results
+            .push(wrong.response(chrono_harness::wire::Status::Pass));
+        wrong.seal().unwrap();
+        cases.push((mode.into(), serde_json::to_vec(&wrong).unwrap()));
+    }
+    for (mode, bytes) in cases {
+        let isolated = tempfile::tempdir().unwrap();
+        let mut child = Command::new(env!("CARGO_BIN_EXE_chrono-test-registration-regression"))
+            .arg(&mode)
+            .current_dir(isolated.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(&bytes).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(!output.status.success(), "{mode} rejected input must fail");
+        assert!(output.stdout.is_empty(), "{mode} must not forge a response");
+        assert!(!isolated.path().join(".chrono-harness/state").exists());
+    }
+}
+
+fn install_report_fixture(h: &mut Host, mode: &str, plan: &[(&str, Vec<&str>)]) {
+    let path = ".chrono-harness/bin/report-fixture";
+    let digest = install_regression_child(h, path);
     h.edit(".chrono-harness/judges.json", |v| {
         v["judges"] = plan.iter().map(|(id, after)| json!({
             "id":id, "after":after, "executable":path, "sha256":digest,
-            "version":"configured-version-only", "argv":[], "selector":"every-delta", "modes":["evaluate"]
+            "version":"configured-version-only", "argv":[mode], "selector":"every-delta", "modes":["evaluate"]
         })).collect();
     });
 }
 #[test]
 fn full_report_forwards_real_named_outputs_and_warn_without_inventing_observations() {
     let mut h = Host::new();
-    install_report_fixture(
-        &mut h,
-        r#"
-import hashlib,json,subprocess,sys
-r=json.load(sys.stdin)
-child=subprocess.run([sys.executable,'--version'],capture_output=True)
-path='.chrono-harness/state/tool-version.txt'
-with open(path,'wb') as f: f.write(child.stdout)
-e={'path':path,'sha256':hashlib.sha256(child.stdout).hexdigest(),'kind':'fixture-tool-version'}
-outputs={
- 'tools':[{'path':sys.executable,'version':child.stdout.decode().strip(),'evidence':[e]}],
- 'effective_inputs':{'scope':'fixture-context-only','context':r['context']},
- 'impact':{'seeds':['file:'+d['path'] for d in r['delta']],'edges':[],'tests':[],'retired_tests':[]},
- 'tests':[{'id':'fixture-version-command','state':'executed','exit_code':child.returncode,'evidence':[e]}],
- 'costs':{'declared_before':None,'declared_after':None,'affected_tests':['fixture-version-command'],'retired_tests':[],'unknown':['fixture-version-command'],'measured':None},
- 'fixture_extra':{'retained':True}
-}
-print(json.dumps({'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],'status':'warn','findings':[{'code':'W_FIXTURE_COST','level':'warning','message':'fixture costs unmeasured','delta_refs':['/costs'],'causes':[]}],'evidence':[e],'outputs':outputs}))
-"#,
-        &[("observations", vec![])],
-    );
+    install_report_fixture(&mut h, "named", &[("observations", vec![])]);
     let (exit, report) = h.run();
+    retain_regression(&h, "named-outputs", &report);
+    let request: Value = serde_json::from_slice(
+        &fs::read(
+            h.root()
+                .join(".chrono-harness/state/observations.request.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_rejected_regression_inputs("named", &request);
+    assert_eq!(report["effective_inputs"]["context"], request["context"]);
+    assert_eq!(
+        report["judges"][0]["process"]["stdin_sha256"],
+        sha256(
+            &fs::read(
+                h.root()
+                    .join(".chrono-harness/state/observations.request.json")
+            )
+            .unwrap()
+        )
+    );
+    assert_eq!(
+        report["impact"]["seeds"],
+        json!(
+            report["delta"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|d| format!("file:{}", d["path"].as_str().unwrap()))
+                .collect::<Vec<_>>()
+        )
+    );
+    let version_status: Value = serde_json::from_slice(
+        &fs::read(
+            h.root()
+                .join(".chrono-harness/state/tool-version.status.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(report["tests"][0]["exit_code"], version_status["exit_code"]);
     assert_eq!(exit, 0, "{report:#}");
     assert_report_contract(&h, &report);
     assert_eq!(report["status"], "warn");
@@ -996,10 +1121,19 @@ fn full_report_missing_responses_and_conflicting_outputs_remain_unresolved() {
     let mut h = Host::new();
     install_report_fixture(
         &mut h,
-        "import sys\nprint('invalid JSON')\nsys.exit(9)",
+        "broken",
         &[("broken", vec![]), ("dependent", vec!["broken"])],
     );
     let (exit, report) = h.run();
+    retain_regression(&h, "missing-response", &report);
+    let original = chrono_harness::full::expand_process(&report["judges"][0]["process"]).unwrap();
+    let original_bytes: Vec<u8> = serde_json::from_value(original["stdout_bytes"].clone()).unwrap();
+    assert_eq!(original_bytes, b"invalid JSON\n");
+    let request: Value = serde_json::from_slice(
+        &fs::read(h.root().join(".chrono-harness/state/broken.request.json")).unwrap(),
+    )
+    .unwrap();
+    assert_rejected_regression_inputs("broken", &request);
     assert_eq!(exit, 2, "{report:#}");
     assert_report_contract(&h, &report);
     assert_eq!(report["status"], "error");
@@ -1016,6 +1150,8 @@ fn full_report_missing_responses_and_conflicting_outputs_remain_unresolved() {
         v["judges"][0]["sha256"] = "0".repeat(64).into()
     });
     let (exit, report) = h.run();
+    retain_regression(&h, "rejected-digest", &report);
+    assert!(report["judges"][0]["process"].is_null());
     assert_eq!(exit, 2, "{report:#}");
     assert_report_contract(&h, &report);
     assert_eq!(report["executables"].as_array().unwrap().len(), 1);
@@ -1027,16 +1163,30 @@ fn full_report_missing_responses_and_conflicting_outputs_remain_unresolved() {
     );
     assert_unresolved(&report, "findings");
     // Two independent producers cannot be silently resolved by traversal order.
-    install_report_fixture(
-        &mut h,
-        r#"
-import json,sys
-r=json.load(sys.stdin)
-print(json.dumps({'protocol':r['protocol'],'request_id':r['request_id'],'judge_id':r['judge_id'],'status':'pass','findings':[],'evidence':[],'outputs':{'impact':{'seeds':[r['judge_id']]},'tests':None,'costs':{'unknown':['fixture']}}}))
-"#,
-        &[("first", vec![]), ("second", vec![])],
-    );
+    install_report_fixture(&mut h, "conflict", &[("first", vec![]), ("second", vec![])]);
     let (exit, report) = h.run();
+    retain_regression(&h, "conflicting-outputs", &report);
+    let request: Value = serde_json::from_slice(
+        &fs::read(h.root().join(".chrono-harness/state/first.request.json")).unwrap(),
+    )
+    .unwrap();
+    assert_rejected_regression_inputs("conflict", &request);
+    assert!(
+        report["judges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["process"]["exit_code"] == 0 && r["response"]["status"] == "pass")
+    );
+    for field in ["impact", "costs"] {
+        assert_eq!(
+            report["sources"][format!("/{field}")],
+            json!([
+                format!("/judges/0/response/outputs/{field}"),
+                format!("/judges/1/response/outputs/{field}")
+            ])
+        );
+    }
     assert_eq!(exit, 0, "configured statuses preserved: {report:#}");
     assert_report_contract(&h, &report);
     assert_unresolved(&report, "impact");

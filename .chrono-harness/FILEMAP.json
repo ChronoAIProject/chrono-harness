@@ -5669,6 +5669,22 @@
           "to": "project:ci-tests"
         }
       ]
+    },
+    {
+      "path": "crates/judge-registration-tests/tests/support/regression_child.rs",
+      "owner": "judge-registration-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-registration-tests"
+        },
+        {
+          "kind": "judge-trigger",
+          "to": "judge:filemap"
+        }
+      ]
     }
   ],
   "project_edges": [
