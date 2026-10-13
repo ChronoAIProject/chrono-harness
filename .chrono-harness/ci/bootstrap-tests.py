@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the real Python bootstrap entry with registered operations and SDK fixtures."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True
 SOURCE = Path(__file__).resolve().parent
@@ -187,6 +189,80 @@ class Bootstrap(unittest.TestCase):
                             "rustc": str(self.tools / "rustc")}
         config["tool_bindings"] = bindings
         return config
+
+    def test_relocation_ignores_only_retired_declaration_paths(self):
+        config = self.binding_config()
+        for name in ("cargo", "rustc"):
+            config["tool_bindings"][name]["allow_relocation"] = True
+        local = self.root / "relocated"
+        shutil.copytree(self.tools, local)
+        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
+        for state in ("stale", "absent"):
+            with self.subTest(state=state):
+                for name in ("cargo", "rustc"):
+                    old = self.tools / name
+                    if state == "stale": old.write_bytes(b"retired, not executable")
+                    else: old.unlink()
+                self.write_json(self.ci / "bootstrap.json", config)
+                self.succeeded(self.invoke())
+                self.assertEqual(self.evidence()["selection"]["cargo"], str(local / "cargo"))
+        # A separately configured current selection remains authoritative.
+        other = self.root / "other-current"
+        other.mkdir()
+        cargo = other / "cargo"
+        cargo.write_bytes((local / "cargo").read_bytes() + b"\n# different bytes, same version\n")
+        cargo.chmod(0o755)
+        config["tools"]["cargo"] = str(cargo)
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"configured cargo selection differs", rejected.stderr)
+        config["tools"]["cargo"] = str(self.root / "missing-current-cargo")
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"configured cargo executable is missing", rejected.stderr)
+
+    def test_exact_path_rejects_equal_byte_relocation(self):
+        config = self.binding_config()
+        local = self.root / "relocated"
+        shutil.copytree(self.tools, local)
+        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"relocation is not permitted", rejected.stderr)
+        self.assertFalse((self.root / "built-tool").exists())
+
+    def test_native_registry_selects_independent_tuple_and_rejects_missing_before_tools(self):
+        spec = importlib.util.spec_from_file_location("native_bootstrap", SOURCE / "bootstrap.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        registry = {"schema": "chrono-bootstrap-toolchains/v1", "rust_toolchain": "1.95.0",
+                    "platforms": {}}
+        for system, machine, byte in [("Darwin", "arm64", "a"), ("Linux", "x86_64", "b")]:
+            registry["platforms"][system + "/" + machine] = {
+                "target": "fixture", "tools": {name: {"sha256": byte * 64,
+                    "version": name + " 1.95.0 (fixture)"} for name in ("cargo", "rustc")}}
+        path = ".chrono-harness/ci/native.json"
+        self.write_json(self.root / path, registry)
+        config = dict(self.config, require_tool_bindings=True, tool_bindings_registry=path)
+        for system, machine, byte in [("Darwin", "arm64", "a"), ("Linux", "x86_64", "b")]:
+            with mock.patch.object(module.platform, "system", return_value=system), mock.patch.object(module.platform, "machine", return_value=machine):
+                actual = module.binding_declarations(self.root, config)
+                self.assertEqual(actual["cargo"]["sha256"], byte * 64)
+                self.assertEqual(actual["rustc"]["version"], "rustc 1.95.0 (fixture)")
+        for defect in ("unknown", "missing", "conflict"):
+            with self.subTest(defect=defect), mock.patch.object(module.platform, "system", return_value="Linux"), mock.patch.object(module.platform, "machine", return_value="x86_64"), mock.patch.object(module.subprocess, "run") as run:
+                candidate = dict(config)
+                data = json.loads(json.dumps(registry))
+                if defect == "unknown": data["platforms"].pop("Linux/x86_64")
+                elif defect == "missing": candidate["tool_bindings_registry"] += ".missing"
+                else: candidate["tool_bindings"] = self.binding_config()["tool_bindings"]
+                self.write_json(self.root / path, data)
+                with self.assertRaises((ValueError, OSError)):
+                    module.toolchain_environment(candidate, self.root)
+                run.assert_not_called()
 
     def test_bound_executables_are_selected_and_reported(self):
         config = self.binding_config()
@@ -430,5 +506,5 @@ if __name__ == "__main__":
         from bootstrap_shared_tests import RealSharedStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealSharedStartup")
     else:
-        from bootstrap_shared_tests import SharedStartup
+        from bootstrap_shared_tests import SharedStartup, AttemptCustody
         unittest.main()

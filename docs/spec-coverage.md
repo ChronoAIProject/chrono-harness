@@ -769,3 +769,30 @@ This source increment does not establish full §2.2 compliance, committed
 canonical/native acceptance, delivery, complete provenance/input closure/parity,
 or comparative cost improvement; other fixture families and complete SPEC
 adoption remain separate obligations.
+
+### Native bootstrap selection and real-consumer custody boundary
+
+The existing core/cache/default/detector Python bootstrap profiles now share
+explicit Darwin/arm64 and Linux/x86_64 executable and version expectations from
+`.chrono-harness/ci/bootstrap-toolchains.json`. They bind actual rustup selection
+and effective rustc. Official manifest/component/member identities provide
+independent preparation provenance; acceptance never derives expectations from
+the installation it checks. Shared reports bind the registry as a source input.
+Equal-byte relocation permits absent or stale original personal paths while
+retaining exact-path, current-selection, wrapper and executable-drift rejection.
+
+The real Python fixture producer retains terminal success/nonzero/timeout streams
+and source/report/descriptor originals in one exclusive unresolved-attempt slot.
+It preserves historical failures. **Disposal is still unimplemented for this
+consumer:** the existing retained-producer Rust API has no registered CLI route
+for Python admission/seal/release. The result records protected pending custody,
+unknown descendant quiescence, and no deletion, and refuses a second attempt.
+This is a bounded evidence repair, not automatic cleanup or historical adoption.
+
+**Mixed registration/runtime change:** the source expectation input, FILEMAP
+consumer edges, canonical required inputs and cache compatibility declarations
+change alongside Python behavior. Direct Python regressions provide source-leg
+evidence only. Committed-clean real cache/core/shared/independent runner execution,
+canonical DELTA, Darwin and Linux native consumption, lifecycle closure, review
+and actual delivery remain required. Full SPEC scope, CPU acceleration, full-host
+activation and unresolved compiler/backend/SDK/input closure remain unchanged.

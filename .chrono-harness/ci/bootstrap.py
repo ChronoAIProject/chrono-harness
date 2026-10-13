@@ -128,6 +128,71 @@ def executable_identity(path, tool, env):
     return {"path": str(path), "sha256": file_digest(path), "version": version}
 
 
+def binding_registry_path(root, config):
+    declared = config["tool_bindings_registry"]
+    if not isinstance(declared, str):
+        raise ValueError("invalid bootstrap toolchain registry path")
+    path = Path(declared)
+    if (path.is_absolute() or ".." in path.parts or path.as_posix() != declared
+            or path.parts[:2] != (".chrono-harness", "ci")):
+        raise ValueError("invalid bootstrap toolchain registry path")
+    target = root
+    for part in path.parts:
+        target /= part
+        if target.is_symlink():
+            raise ValueError("bootstrap toolchain registry contains a symlink")
+    return target
+
+
+def binding_declarations(root, config):
+    """Read source expectations before probing or provisioning the selected SDK."""
+    native = {"system": platform.system(), "machine": platform.machine()}
+    if "tool_bindings_registry" in config:
+        if "tool_bindings" in config or "native_platform" in config:
+            raise ValueError("conflicting bootstrap binding declarations")
+        registry = json.loads(binding_registry_path(root, config).read_bytes())
+        if (registry.get("schema") != "chrono-bootstrap-toolchains/v1"
+                or registry.get("rust_toolchain") != config["rust_toolchain"]):
+            raise ValueError("bootstrap toolchain registry differs")
+        entry = registry.get("platforms", {}).get(native["system"] + "/" + native["machine"])
+        if not isinstance(entry, dict) or not isinstance(entry.get("tools"), dict):
+            raise ValueError("unsupported or missing native bootstrap registration")
+        if any(not isinstance(item, dict) for item in entry["tools"].values()):
+            raise ValueError("invalid native executable binding")
+        declared = {name: {"sha256": item.get("sha256"), "version": item.get("version"),
+                           "allow_relocation": True}
+                    for name, item in entry["tools"].items()}
+    else:
+        declared = config.get("tool_bindings")
+        if config.get("require_tool_bindings"):
+            if declared is None:
+                raise ValueError("bootstrap requires declared Cargo/rustc bindings")
+            if config.get("native_platform") != native:
+                raise ValueError("unsupported or missing native bootstrap registration")
+    if declared is None:
+        return None
+    if not isinstance(declared, dict) or set(declared) != {"cargo", "rustc"}:
+        raise ValueError("tool_bindings must declare cargo and rustc")
+    for tool, item in declared.items():
+        if (not isinstance(item, dict)
+                or set(item) - {"path", "sha256", "version", "allow_relocation"}
+                or ("path" in item and not isinstance(item["path"], str))
+                or ("path" not in item and "tool_bindings_registry" not in config)
+                or not isinstance(item.get("sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                or not isinstance(item.get("version"), str)
+                or type(item.get("allow_relocation", False)) is not bool):
+            raise ValueError("invalid " + tool + " executable binding")
+    return declared
+
+
+def registration_paths(config_path, config):
+    paths = [config_path, config["projects"], ".chrono-harness/ci/bootstrap.py"]
+    if "tool_bindings_registry" in config:
+        paths.append(config["tool_bindings_registry"])
+    return paths
+
+
 def declared_bindings(root, config, env):
     """Resolve and validate the explicit Cargo/rustc selection contract.
 
@@ -136,23 +201,13 @@ def declared_bindings(root, config, env):
     runs.  `allow_relocation` permits an equivalent rustup installation to move
     while retaining the observed local path in the report.
     """
-    declared = config.get("tool_bindings")
+    declared = binding_declarations(root, config)
     if declared is None:
         return None
-    if set(declared) != {"cargo", "rustc"}:
-        raise ValueError("tool_bindings must declare cargo and rustc")
     toolchain = config["rust_toolchain"]
     selected = {}
     for tool in ("cargo", "rustc"):
         item = declared[tool]
-        if (not isinstance(item, dict)
-                or set(item) - {"path", "sha256", "version", "allow_relocation"}
-                or not isinstance(item.get("path"), str)
-                or not isinstance(item.get("sha256"), str)
-                or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
-                or not isinstance(item.get("version"), str)
-                or type(item.get("allow_relocation", False)) is not bool):
-            raise ValueError("invalid " + tool + " executable binding")
         try:
             selected_path = Path(subprocess.check_output(
                 ["rustup", "which", "--toolchain", toolchain, tool],
@@ -169,25 +224,22 @@ def declared_bindings(root, config, env):
         observed = executable_identity(selected_path, tool, env)
         if observed["sha256"] != item["sha256"] or observed["version"] != item["version"]:
             raise ValueError("bound " + tool + " identity mismatch")
-        expected_path = Path(item["path"])
-        if not expected_path.is_absolute():
-            expected_path = root / expected_path
-        if not item.get("allow_relocation", False) and selected_path != expected_path:
-            raise ValueError("bound " + tool + " relocation is not permitted")
-        if expected_path.exists():
-            expected = executable_identity(expected_path, tool, env)
-            if expected["sha256"] != observed["sha256"] or expected["version"] != observed["version"]:
-                raise ValueError("declared " + tool + " path differs from selected executable")
-        elif not item.get("allow_relocation", False):
-            raise ValueError("declared " + tool + " executable is missing")
+        if not item.get("allow_relocation", False):
+            expected_path = Path(item["path"])
+            if not expected_path.is_absolute():
+                expected_path = root / expected_path
+            if selected_path != expected_path:
+                raise ValueError("bound " + tool + " relocation is not permitted")
         configured = config.get("tools", {}).get(tool)
-        if configured is None:
+        if configured is None and "tool_bindings_registry" not in config:
             raise ValueError("tool_bindings requires configured " + tool)
-        configured_path = shutil.which(configured) if not Path(configured).is_absolute() else configured
-        if configured_path is None:
-            if not item.get("allow_relocation", False):
+        # In a relocatable legacy declaration the repeated original path is a
+        # historical location, not a second current selector. Never execute it.
+        retired = item.get("allow_relocation", False) and configured == item.get("path")
+        if configured is not None and not retired:
+            configured_path = shutil.which(configured, path=env.get("PATH")) if not Path(configured).is_absolute() else configured
+            if configured_path is None or not Path(configured_path).is_file():
                 raise ValueError("configured " + tool + " executable is missing")
-        else:
             configured_identity = executable_identity(configured_path, tool, env)
             if (configured_identity["sha256"] != observed["sha256"]
                     or configured_identity["version"] != observed["version"]):
@@ -207,10 +259,7 @@ def declared_bindings(root, config, env):
 
 
 def toolchain_environment(config, root=None):
-    if config.get("require_tool_bindings"):
-        registered_native = config.get("native_platform")
-        if registered_native != {"system": platform.system(), "machine": platform.machine()}:
-            raise ValueError("unsupported or missing native bootstrap registration")
+    binding_declarations(root or Path.cwd(), config)
     toolchain = config["rust_toolchain"]
     probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], cwd=root,
                            pass_fds=PASS_FDS, capture_output=True)
@@ -322,8 +371,7 @@ def main():
         raise ValueError("rust_incremental must be a boolean")
     if type(config.get("require_tool_bindings", False)) is not bool:
         raise ValueError("require_tool_bindings must be a boolean")
-    if config.get("require_tool_bindings") and "tool_bindings" not in config:
-        raise ValueError("bootstrap requires declared Cargo/rustc bindings")
+    binding_declarations(root, config)
     participate(root, config_path, config)
     source_before = observe_source(root)
     if config["schema"] != "chrono-bootstrap/v1":
@@ -337,7 +385,7 @@ def main():
     result = {"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(),
               "host_root": str(root), "versions": versions, "status": "failed",
               "registrations": {path: file_digest(root / path) for path in
-                                [config_path.as_posix(), config["projects"], ".chrono-harness/ci/bootstrap.py"]},
+                                registration_paths(config_path.as_posix(), config)},
               "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL",
                                                             "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"]},
               "operations": [], "installed": []}
@@ -350,9 +398,8 @@ def main():
     try:
         for index, operation in enumerate(config["operations"]):
             action = operations[operation]
-            executable = config["tools"][action["tool"]]
-            if bindings and action["tool"] in bindings:
-                executable = bindings[action["tool"]]["path"]
+            executable = (bindings[action["tool"]]["path"] if bindings and action["tool"] in bindings
+                          else config["tools"][action["tool"]])
             executable = shutil.which(executable, path=env.get("PATH")) or executable
             record = run_operation(root, directory, index, operation, action, executable, env)
             result["operations"].append(record)

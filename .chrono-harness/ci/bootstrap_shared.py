@@ -78,8 +78,7 @@ def registration(root, path):
             raise ValueError("startup profile must install declared tools")
         if type(profile.get("require_tool_bindings", False)) is not bool:
             raise ValueError("invalid bootstrap binding requirement")
-        if profile.get("require_tool_bindings") and "tool_bindings" not in profile:
-            raise ValueError("startup profile requires declared Cargo/rustc bindings")
+        bootstrap.binding_declarations(root, profile)
         report = bootstrap.report_destination(root, profile)
         if report in reports:
             raise ValueError("startup profiles must have separate reports")
@@ -121,10 +120,10 @@ def validate_execution(root, profile, report):
     if report.get("status") != "passed" or not Path(report.get("host_root", "")).is_absolute():
         raise ValueError("startup requires a successful original execution")
     expected_registrations = {path: digest(read(root, path)) for path in
-                              [report["config"], profile["projects"], ".chrono-harness/ci/bootstrap.py"]}
+                              bootstrap.registration_paths(report["config"], profile)}
     if report.get("registrations") != expected_registrations:
         raise ValueError("startup execution registrations differ")
-    bindings = profile.get("tool_bindings")
+    bindings = bootstrap.binding_declarations(root, profile)
     selected = {}
     if bindings is not None:
         rows = report.get("executables", [])
@@ -136,11 +135,12 @@ def validate_execution(root, profile, report):
                     or not Path(row.get("path", "")).is_absolute()):
                 raise ValueError("startup producer executable binding differs")
             selected[name] = row["path"]
-            declared_path = Path(bindings[name]["path"])
-            if not declared_path.is_absolute():
-                declared_path = Path(report["host_root"]) / declared_path
-            if not bindings[name].get("allow_relocation", False) and row["path"] != str(declared_path):
-                raise ValueError("startup producer relocation is not permitted")
+            if not bindings[name].get("allow_relocation", False):
+                declared_path = Path(bindings[name]["path"])
+                if not declared_path.is_absolute():
+                    declared_path = Path(report["host_root"]) / declared_path
+                if row["path"] != str(declared_path):
+                    raise ValueError("startup producer relocation is not permitted")
         if report.get("selection") != dict(selected, toolchain=profile["rust_toolchain"], compiler=selected["rustc"]):
             raise ValueError("startup producer selection differs")
         if report["versions"] != {name: bindings[name]["version"] for name in bindings}:
@@ -157,7 +157,8 @@ def validate_execution(root, profile, report):
         raise ValueError("startup producer operations differ")
     for row in actual:
         action = operations[row["operation"]]
-        executable = selected.get(action["tool"], profile["tools"][action["tool"]])
+        executable = (selected[action["tool"]] if action["tool"] in selected
+                      else profile["tools"][action["tool"]])
         if (row["tool"] != action["tool"] or row["argv"] != [executable, *action["argv"]]
                 or row["cwd"] != report["host_root"] or type(row["exit_code"]) is not int
                 or row["exit_code"] != 0 or type(row["pid"]) is not int or row["pid"] <= 0):

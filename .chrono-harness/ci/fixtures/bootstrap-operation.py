@@ -4,12 +4,20 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from process_fds import inherited_fds
 
 mode = sys.argv[1]
+if mode == "timeout":
+    sys.stdout.buffer.write(b"timeout stdout\x00\xff\n")
+    sys.stdout.buffer.flush()
+    sys.stderr.buffer.write(b"timeout stderr\xfe\n")
+    sys.stderr.buffer.flush()
+    time.sleep(30)
+    sys.exit(0)
 if mode == "fail":
     sys.stdout.buffer.write(b"failure stdout\x00\xff\n")
     sys.stderr.buffer.write(b"failure stderr\xfe\n")

@@ -154,12 +154,30 @@ remain equal; its install report retains both producer and local executable
 paths. A missing, conflicting or changed binding rejects the bootstrap before
 acceptance. These observations do not constitute reproducible-build or complete
 compiler/backend/SDK/input-closure certification.
-The profiles explicitly register macOS arm64; other platforms or a missing native
-declaration fail before tool provisioning. Native expectations are committed
-declarations, never populated by the invocation that checks them. Config's input
-inventory and FILEMAP bind these entry executables and compiler-selection variables
-to the bootstrap owner and the runner startup consumer. The later independent
-Cargo action still has the documented incomplete input closure.
+Core, cache, detector and default profiles select the same source-owned
+`.chrono-harness/ci/bootstrap-toolchains.json` registry. It explicitly declares
+Darwin/arm64 (the macos-26 CI consumer) and Linux/x86_64 (the ubuntu-24.04 release
+cache-bootstrap consumer). Unknown or missing tuples fail before provisioning.
+Each executable SHA-256 was acquired from its exact Cargo/rustc member in an
+official Rust 1.95.0 component archive, independently of the installed toolchain.
+The registry retains the official manifest URL/digest/date and each component's
+URL, archive digest, member, size and version provenance. Archive digests are
+provenance, never substitutes for executable-byte expectations. Cargo's upstream
+version implementation explains the package 0.96.0 / CLI 1.95.0 distinction.
+Acquisition is preparation of committed input; bootstrap does not download or
+learn expectations, and continues to use existing rustup provisioning.
+
+The profiles use rustup selection directly, with no personal installation path.
+For older inline relocatable bindings, a repeated declared/configured original
+path is a historical location and is not probed, even if stale or absent. A
+separate explicitly configured current executable must still exist and match;
+nonrelocatable bindings still require the exact selected path. The actual Cargo,
+effective rustc, inherited compiler conflicts, wrappers and post-build drift
+remain checked. Source reports include the registry digest, and shared
+produce/install/verify all validate the same declarations before installation.
+Config's input inventory, FILEMAP, canonical required inputs and cache compatibility
+inputs explicitly register the new source. The later independent Cargo action
+still has the documented incomplete input closure.
 
 Each bootstrap attempt retains its operation argv, cwd, executable digest, PID,
 exit and original stdout/stderr files beside an immutable `bootstrap-*/report.json`
@@ -175,13 +193,38 @@ test entry with `--real-consumer`. It owns a primary fixture cloned from the exa
 clean candidate, runs cache/core builds, shared produce/install and the runner
 unit's registered verify command, then consumes the real runner unit check and
 its independent `test.runner-tests` Cargo result. Its originals remain under
-`.chrono-harness/state/bootstrap-real/`; successful fixtures are removed only
-after all children join and their state/startup originals are retained. Failures
-keep the fixture for diagnosis. The bootstrap test owner retains the existing
-900-second/1-MiB limits, and FILEMAP retains cap 2. Added native time/storage cost
-is unmeasured. These evidence directories are for the current increment's local
-acceptance and independent review; their owner may retire them once those
-consumers finish, preserving any failure evidence still needed for diagnosis.
+`.chrono-harness/state/bootstrap-real/pending-attempt/`. Its producer-owned
+`result.json` records the source, argv/cwd, original stdout/stderr paths, digests,
+sizes, inherited ownership descriptors, and terminal command success, nonzero
+failure or timeout. Timeout records preserve originals and do not invent an exit
+code. The result is written before execution and updated on ordinary exits; an
+interrupted attempt stays protected. The slot is created exclusively, so a prior
+unresolved attempt refuses another clone/build. Historical `attempt-*` directories
+are preserved without migration or any assertion that their ownership is known.
+
+**Custody remains incomplete.** The existing lifecycle retained-producer primitive
+is Rust's `RetainedArtifact` API; the registered CLI has no begin/seal/release route
+for this Python producer. No Python ledger is synthesized. Results explicitly
+record `protected-pending`, unknown descendant quiescence and no requested
+disposal. Both passing and failed fixtures retain source, reports and streams at
+their original paths. A passing behavior result does not establish custody or
+acceptance. A compatible registered lifecycle route and actual consumer release
+are required before the caller can retire this slot; deleting it by name or age
+is not a recovery procedure. Failure diagnosis and caller acceptance/review remain
+consumers. The finite capacity is one unresolved attempt per source root.
+
+The bootstrap test owner retains the existing 900-second/1-MiB limits and FILEMAP
+cap 2. The producer passes the remaining deadline to each command and rejects
+further work if completed original streams exceed the registered output bound;
+outer registered process ownership remains responsible for running commands and
+descendants. This producer is not a process reaper or a streaming disk quota.
+Added native time/storage and full lifecycle cost remain unmeasured.
+
+**Mixed registration/runtime change:** native declarations, canonical/cache inputs
+and DELTA edges change with bootstrap/shared selection and real-test evidence
+handling. Direct Python cases cover those behaviors; committed-clean bootstrap,
+real shared/runner consumption, canonical DELTA and both native consumers remain
+separate caller checks. This does not change full SPEC scope or CPU acceleration.
 A parentless commit can instead use `--candidate FULL_OID --initial` without
 `--base`. The report explicitly says `initial-inventory`; it does not fabricate
 a historical DELTA.

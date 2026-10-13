@@ -444,23 +444,17 @@
         "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
       },
       {
-        "id": "bootstrap-cargo-executable",
-        "location": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+        "id": "bootstrap-native-toolchains",
+        "location": ".chrono-harness/ci/bootstrap-toolchains.json",
         "presence": "present",
-        "sha256": "c512bff73c86143b557463f021d0c3d5b0490d97d65040ba59ea2b3427784758"
-      },
-      {
-        "id": "bootstrap-rustc-executable",
-        "location": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
-        "presence": "present",
-        "sha256": "b829b733131d4e1673eeebd1f34d06ae1e9ff4977b051313cf42e2a9e79ecf1c"
+        "sha256": "d2f9ab496397c9e56109a255b8bd31230a480e8c07ee808b81c060344efcad35"
       }
     ]
   },
   "input_closure": {
     "status": "incomplete",
     "unresolved": [
-      "Bootstrap Cargo/rustc entry bytes and selection are registered for macOS arm64 only; compiler backend, linker, target libraries, SDK and later independent Cargo execution remain incomplete.",
+      "Bootstrap Cargo/rustc entry bytes and selection are declared for Darwin/arm64 and Linux/x86_64 from official component members; native acceptance, compiler backend, linker, target libraries, SDK and later independent Cargo execution remain incomplete.",
       "Effective HOME/CARGO_HOME, rust-toolchain and other consumed configuration files are not enumerated.",
       "Complete direct/indirect, fixture, environment and external inputs and their explicit dependency edges need evidence.",
       "Verdict-relevant randomness, time, external responses, timeout/resource conditions and deterministic evaluation are not established."
@@ -474,15 +468,14 @@
           "tool:cargo",
           "tool:rustc",
           "tool:rustup",
-          "input:bootstrap-cargo-executable",
-          "input:bootstrap-rustc-executable",
           "environment:PATH",
           "environment:HOME",
           "environment:CARGO_HOME",
           "environment:RUSTUP_HOME",
           "environment:RUSTC",
           "environment:RUSTC_WRAPPER",
-          "environment:RUSTC_WORKSPACE_WRAPPER"
+          "environment:RUSTC_WORKSPACE_WRAPPER",
+          "input:bootstrap-native-toolchains"
         ]
       }
     ]

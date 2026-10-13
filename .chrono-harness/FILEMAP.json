@@ -108,6 +108,10 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -176,6 +180,10 @@
         {
           "kind": "runtime-input",
           "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -204,6 +212,10 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -989,6 +1001,10 @@
         {
           "kind": "runtime-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -5717,6 +5733,46 @@
           "to": "judge:filemap"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-toolchains.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:release-build-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache"
+        }
+      ]
     }
   ],
   "project_edges": [
@@ -8386,12 +8442,7 @@
       "to": "script:host-bootstrap"
     },
     {
-      "from": "input:bootstrap-cargo-executable",
-      "kind": "runtime-input",
-      "to": "script:host-bootstrap"
-    },
-    {
-      "from": "input:bootstrap-rustc-executable",
+      "from": "input:bootstrap-native-toolchains",
       "kind": "runtime-input",
       "to": "script:host-bootstrap"
     },
