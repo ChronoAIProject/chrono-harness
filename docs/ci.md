@@ -144,9 +144,16 @@ Legacy host contracts keep their explicit spelling. The current adopted host
 admits only its registered short spelling and rejects partial overrides.
 
 Always bootstrap from the candidate checkout before checking it. The runner
-reports the actual runner/judge/operation executable hashes; bootstrap records
-Cargo/rustc versions and installed binary hashes. These observations do not
-constitute reproducible-build or complete binary-provenance certification.
+reports the actual runner/judge/operation executable hashes. The adopted core,
+cache and default bootstrap profiles additionally bind the rustup-selected
+Cargo and rustc files to declared SHA-256 and version expectations, set the
+effective `RUSTC` selection, and retain the observed local paths in the report.
+Shared startup rechecks those same identities before installation and verify,
+while equivalent relocation is accepted when the declared bytes and versions
+remain equal; its install report retains both producer and local executable
+paths. A missing, conflicting or changed binding rejects the bootstrap before
+acceptance. These observations do not constitute reproducible-build or complete
+compiler/backend/SDK/input-closure certification.
 A parentless commit can instead use `--candidate FULL_OID --initial` without
 `--base`. The report explicitly says `initial-inventory`; it does not fabricate
 a historical DELTA.
@@ -214,6 +221,13 @@ validate every proposed field's semantics.
 | policy.required_inputs | Explicit regular tracked inputs required by this profile |
 | policy.adoption_base | Null or exact full base OID whose missing prior CI profile is deliberately accepted |
 | policy.operation_timeout_seconds / operation_output_limit_bytes | Positive legacy fallback operation process bounds |
+
+The adopted profiles set `require_tool_bindings: true` and declare
+`tool_bindings` for `cargo` and `rustc`. Each entry contains the expected executable path, SHA-256 and exact
+`--version` output, with optional `allow_relocation` for an equivalent local
+rustup installation. The producer resolves the selected toolchain files before
+registered operations, rejects conflicting configured/PATH/compiler selection,
+and reports the actual paths and identities used.
 
 Projects schema v2 uses the registration owner's strict document schema. Scoped CI
 reuses the projects owner's reciprocal dedicated-pair and language checks for the

@@ -11,6 +11,9 @@ calls = json.loads(record.read_text()) if record.exists() else []
 calls.append([name, *args])
 record.write_text(json.dumps(calls))
 if name == "rustup":
+    if len(args) == 4 and args[:2] == ["which", "--toolchain"] and args[2] == "1.95.0" and args[3] in ["cargo", "rustc"]:
+        print(str(Path(__file__).resolve().parent / args[3]))
+        sys.exit(0)
     if args == ["run", "1.95.0", "cargo", "--version"]:
         sys.exit(0 if (root / "cargo-ready").exists() else 1)
     if args == ["run", "1.95.0", "rustfmt", "--version"]:

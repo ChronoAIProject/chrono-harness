@@ -15,6 +15,9 @@ if mode == "fail":
 if mode == "environment":
     Path(sys.argv[2]).write_text(json.dumps({name: os.environ.get(name) for name in sys.argv[3:]}))
     sys.exit(0)
+if mode == "mutate":
+    Path(os.environ["BOUND_CARGO"]).write_bytes(b"replaced executable")
+    sys.exit(0)
 if mode == "move-head":
     Path("product-source").write_text("moved")
     for args in [["add", "product-source"], ["commit", "-qm", "moved"]]:

@@ -655,12 +655,19 @@ The host bootstrap has an explicit Python production/test script pair and separa
 The bootstrap's optional explicit `report_path` separates the host's cache-tool
 record from the later core-tool record. Python regressions cover consecutive
 selected/default bootstraps, invalid or symlinked locations and write failures.
+Core, cache and default profiles now require and declare Cargo/rustc executable
+digests and versions; bootstrap resolves the selected rustup files, rejects PATH/configuration
+or compiler-selection disagreement and persistent executable drift, and records
+the observed paths and effective compiler selection. Shared startup carries and
+rechecks this binding before install/verify, preserving installed tools on
+preflight rejection while accepting equivalent relocation with equal identity.
 Cache transport reports record the actual reporting executable's file digest,
 path and version; the Rust CLI regression verifies the retained identity against
 the invoked binary. Test hosts retain failed probe inputs and raw reports during
 panic, while successful fixtures are removed. These observations permit source
-binding checks against retained clean bootstrap records; they do not establish
-complete build inputs, historical timeout causes or full host acceptance.
+binding checks against retained clean bootstrap records; backend, linker, SDK,
+build-script, Cargo configuration/environment and later independent Cargo
+execution remain outside the achieved closure, as do native/full-host acceptance.
 
 The mixed-judge stale-cost consumer uses a registered Rust fixture that invokes the actual cost judge, checks its exit and corrupts only the candidate-tree binding. The original mixed-judge rejection and empty-output assertions remain; this does not complete remaining foreign-language fixture migrations.
 

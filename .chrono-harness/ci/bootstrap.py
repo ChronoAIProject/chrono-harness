@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -101,23 +102,129 @@ def participate(root, config_path, config):
     sys.exit(process["exit_code"] if 0 <= process["exit_code"] <= 255 else 1)
 
 
-def toolchain_environment(config):
-    toolchain = config["rust_toolchain"]
-    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], pass_fds=PASS_FDS, capture_output=True)
+def file_digest(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def executable_identity(path, tool, env):
+    path = Path(path)
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("bound executable is not a regular file: " + str(path))
+    probe = subprocess.run([str(path), "--version"], env=env, pass_fds=PASS_FDS,
+                           capture_output=True, text=True)
     if probe.returncode:
-        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], pass_fds=PASS_FDS, check=True)
-    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], pass_fds=PASS_FDS, capture_output=True)
+        raise ValueError("bound " + tool + " version failed: " + str(probe.returncode))
+    version = probe.stdout.strip()
+    if not version.startswith(tool + " "):
+        raise ValueError("bound " + tool + " version mismatch: " + version)
+    return {"path": str(path), "sha256": file_digest(path), "version": version}
+
+
+def declared_bindings(root, config, env):
+    """Resolve and validate the explicit Cargo/rustc selection contract.
+
+    The declaration is intentionally separate from observations: its digest and
+    version are checked against the selected files before any registered action
+    runs.  `allow_relocation` permits an equivalent rustup installation to move
+    while retaining the observed local path in the report.
+    """
+    declared = config.get("tool_bindings")
+    if declared is None:
+        return None
+    if set(declared) != {"cargo", "rustc"}:
+        raise ValueError("tool_bindings must declare cargo and rustc")
+    toolchain = config["rust_toolchain"]
+    selected = {}
+    for tool in ("cargo", "rustc"):
+        item = declared[tool]
+        if (not isinstance(item, dict)
+                or set(item) - {"path", "sha256", "version", "allow_relocation"}
+                or not isinstance(item.get("path"), str)
+                or not isinstance(item.get("sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                or not isinstance(item.get("version"), str)
+                or type(item.get("allow_relocation", False)) is not bool):
+            raise ValueError("invalid " + tool + " executable binding")
+        try:
+            selected_path = Path(subprocess.check_output(
+                ["rustup", "which", "--toolchain", toolchain, tool],
+                cwd=root, env=env, pass_fds=PASS_FDS, stderr=subprocess.PIPE,
+            ).decode("utf-8").strip())
+        except (OSError, subprocess.CalledProcessError, UnicodeDecodeError) as error:
+            raise ValueError("cannot resolve bound " + tool + ": " + str(error))
+        if not selected_path.is_absolute():
+            raise ValueError("rustup selected non-absolute " + tool + " path")
+        if not selected_path.is_file() or selected_path.is_symlink():
+            raise ValueError("bound executable is not a regular file: " + str(selected_path))
+        if file_digest(selected_path) != item["sha256"]:
+            raise ValueError("bound " + tool + " identity mismatch")
+        observed = executable_identity(selected_path, tool, env)
+        if observed["sha256"] != item["sha256"] or observed["version"] != item["version"]:
+            raise ValueError("bound " + tool + " identity mismatch")
+        expected_path = Path(item["path"])
+        if not expected_path.is_absolute():
+            expected_path = root / expected_path
+        if expected_path.exists():
+            expected = executable_identity(expected_path, tool, env)
+            if expected["sha256"] != observed["sha256"] or expected["version"] != observed["version"]:
+                raise ValueError("declared " + tool + " path differs from selected executable")
+        elif not item.get("allow_relocation", False):
+            raise ValueError("declared " + tool + " executable is missing")
+        configured = config.get("tools", {}).get(tool)
+        if configured is None:
+            raise ValueError("tool_bindings requires configured " + tool)
+        configured_path = shutil.which(configured) if not Path(configured).is_absolute() else configured
+        if configured_path is None:
+            if not item.get("allow_relocation", False):
+                raise ValueError("configured " + tool + " executable is missing")
+        else:
+            configured_identity = executable_identity(configured_path, tool, env)
+            if (configured_identity["sha256"] != observed["sha256"]
+                    or configured_identity["version"] != observed["version"]):
+                raise ValueError("configured " + tool + " selection differs from binding")
+        selected[tool] = observed
+    if selected["cargo"]["version"].split(" ", 2)[1] != toolchain:
+        raise ValueError("Cargo toolchain selection mismatch")
+    if not selected["rustc"]["version"].startswith("rustc " + toolchain + " "):
+        raise ValueError("rustc toolchain selection mismatch")
+    inherited_rustc = env.get("RUSTC")
+    if inherited_rustc and Path(inherited_rustc).resolve() != Path(selected["rustc"]["path"]).resolve():
+        raise ValueError("inherited compiler selection differs from binding")
+    for wrapper in ("RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"):
+        if env.get(wrapper):
+            raise ValueError("inherited compiler wrapper differs from binding: " + wrapper)
+    return selected
+
+
+def toolchain_environment(config, root=None):
+    toolchain = config["rust_toolchain"]
+    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], cwd=root,
+                           pass_fds=PASS_FDS, capture_output=True)
+    if probe.returncode:
+        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], cwd=root, pass_fds=PASS_FDS, check=True)
+    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], cwd=root,
+                               pass_fds=PASS_FDS, capture_output=True)
     if fmt_probe.returncode:
-        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], pass_fds=PASS_FDS, check=True)
+        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], cwd=root, pass_fds=PASS_FDS, check=True)
     env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
     if "rust_incremental" in config:
         env["CARGO_INCREMENTAL"] = "1" if config["rust_incremental"] else "0"
+    bindings = declared_bindings(root or Path.cwd(), config, env)
     versions = {}
     for tool in ["cargo", "rustc"]:
-        versions[tool] = subprocess.check_output([tool, "--version"], env=env, pass_fds=PASS_FDS, text=True).strip()
+        executable = bindings[tool]["path"] if bindings else tool
+        versions[tool] = subprocess.check_output([executable, "--version"], cwd=root, env=env, pass_fds=PASS_FDS, text=True).strip()
     if not versions["rustc"].startswith("rustc " + toolchain + " "):
         raise ValueError("unexpected rustc version")
-    return env, versions
+    if bindings:
+        env["RUSTC"] = bindings["rustc"]["path"]
+        env["RUSTC_WRAPPER"] = ""
+        env["RUSTC_WORKSPACE_WRAPPER"] = ""
+    return env, versions, bindings
 
 
 def main():
@@ -131,6 +238,10 @@ def main():
     report_destination(root, config)
     if "rust_incremental" in config and type(config["rust_incremental"]) is not bool:
         raise ValueError("rust_incremental must be a boolean")
+    if type(config.get("require_tool_bindings", False)) is not bool:
+        raise ValueError("require_tool_bindings must be a boolean")
+    if config.get("require_tool_bindings") and "tool_bindings" not in config:
+        raise ValueError("bootstrap requires declared Cargo/rustc bindings")
     participate(root, config_path, config)
     source_before = observe_source(root)
     if config["schema"] != "chrono-bootstrap/v1":
@@ -143,10 +254,20 @@ def main():
             if key in operations:
                 raise ValueError("duplicate operation: " + key)
             operations[key] = action
-    env, versions = toolchain_environment(config)
+    env, versions, bindings = toolchain_environment(config, root)
     for operation in config["operations"]:
         action = operations[operation]
-        subprocess.run([config["tools"][action["tool"]], *action["argv"]], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
+        executable = config["tools"][action["tool"]]
+        if bindings and action["tool"] in bindings:
+            executable = bindings[action["tool"]]["path"]
+        subprocess.run([executable, *action["argv"]], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
+    if bindings:
+        # A successful child must not have persistently replaced the selected
+        # compiler or Cargo executable before installation/report publication.
+        current = declared_bindings(root, config, env)
+        if {tool: current[tool]["sha256"] for tool in current} != {
+                tool: bindings[tool]["sha256"] for tool in bindings}:
+            raise ValueError("bound executable changed during bootstrap")
     installed = []
     for item in config["install"]:
         source, target = root / item["source"], root / item["destination"]
@@ -174,7 +295,17 @@ def main():
     }
     report = report_destination(root, config)
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps({"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(), "source": source_identity, "versions": versions, "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]}, "installed": installed}, indent=2) + "\n")
+    result = {"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(),
+              "source": source_identity, "versions": versions,
+              "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]},
+              "installed": installed}
+    if bindings:
+        result["executables"] = [bindings[tool] for tool in ("cargo", "rustc")]
+        result["selection"] = {"toolchain": config["rust_toolchain"],
+                                "cargo": bindings["cargo"]["path"],
+                                "rustc": bindings["rustc"]["path"],
+                                "compiler": env["RUSTC"]}
+    report.write_text(json.dumps(result, indent=2) + "\n")
 
 
 if __name__ == "__main__":

@@ -151,6 +151,27 @@ class SharedStartup(unittest.TestCase):
         self.assertNotEqual(self.invoke("produce").returncode, 0)
         self.assertEqual((self.transfer / "manifest.json").read_bytes(), original)
 
+    def test_shared_install_and_verify_recheck_executable_binding(self):
+        bindings = {}
+        for tool in ["cargo", "rustc"]:
+            path = self.host.tools / tool
+            bindings[tool] = {"path": str(path),
+                              "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                              "version": tool + " 1.95.0 (fixture)"}
+        self.host.config["tools"].update({"cargo": str(self.host.tools / "cargo"),
+                                           "rustc": str(self.host.tools / "rustc")})
+        self.host.config["tool_bindings"] = bindings
+        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
+        self.host.git("commit", "-qm", "bind bootstrap executables")
+        self.produce()
+        root = self.clone_consumer()
+        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
+        self.host.succeeded(self.invoke("verify", "core", root=root))
+        report = json.loads((root / ".chrono-harness/state/bootstrap.json").read_bytes())
+        self.assertEqual([row["sha256"] for row in report["executables"]],
+                         [bindings[name]["sha256"] for name in ["cargo", "rustc"]])
+
 
 if __name__ == "__main__":
     unittest.main()

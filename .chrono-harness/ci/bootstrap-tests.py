@@ -173,6 +173,72 @@ class Bootstrap(unittest.TestCase):
                 self.assertFalse((self.tools / "calls.json").exists())
                 self.assertFalse(self.state_path.exists())
 
+    def binding_config(self):
+        bindings = {}
+        for tool in ["cargo", "rustc"]:
+            path = self.tools / tool
+            bindings[tool] = {
+                "path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "version": tool + " 1.95.0 (fixture)",
+            }
+        config = dict(self.config)
+        config["tools"] = {"python": sys.executable, "cargo": str(self.tools / "cargo"),
+                            "rustc": str(self.tools / "rustc")}
+        config["tool_bindings"] = bindings
+        return config
+
+    def test_bound_executables_are_selected_and_reported(self):
+        config = self.binding_config()
+        config["operations"] = ["make.cargo"]
+        self.declare("write", "built-tool", "bound")
+        declarations = self.declarations("write", "built-tool", "bound")
+        declarations["projects"][0]["actions"]["cargo"] = {
+            "operation": "make.cargo", "tool": "cargo", "argv": ["--version"],
+        }
+        self.write_json(self.registry, declarations)
+        (self.root / "built-tool").write_bytes(b"bound")
+        self.write_json(self.ci / "bootstrap.json", config)
+        self.succeeded(self.invoke())
+        state = self.evidence()
+        self.assertEqual([row["version"] for row in state["executables"]],
+                         ["cargo 1.95.0 (fixture)", "rustc 1.95.0 (fixture)"])
+        self.assertEqual(state["selection"]["compiler"], str(self.tools / "rustc"))
+        self.assertIn(["cargo", "--version"], self.calls())
+
+    def test_binding_mismatch_rejects_before_registered_operation(self):
+        config = self.binding_config()
+        config["tool_bindings"]["rustc"]["sha256"] = "0" * 64
+        self.write_json(self.ci / "bootstrap.json", config)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"bound rustc identity mismatch", result.stderr)
+        self.assertFalse((self.root / "built-tool").exists())
+
+    def test_required_binding_declaration_cannot_be_omitted(self):
+        config = dict(self.config, require_tool_bindings=True)
+        self.write_json(self.ci / "bootstrap.json", config)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"requires declared Cargo/rustc bindings", result.stderr)
+        self.assertFalse((self.tools / "calls.json").exists())
+
+    def test_persistent_bound_executable_drift_rejects_after_operation(self):
+        config = self.binding_config()
+        config["operations"] = ["make.mutate"]
+        declarations = self.declarations("mutate")
+        declarations["projects"][0]["actions"]["mutate"] = {
+            "operation": "make.mutate", "tool": "python", "argv": [OPERATION, "mutate"],
+        }
+        self.write_json(self.registry, declarations)
+        (self.root / "built-tool").write_bytes(b"keep")
+        self.environment["BOUND_CARGO"] = str(self.tools / "cargo")
+        self.write_json(self.ci / "bootstrap.json", config)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"bound cargo identity mismatch", result.stderr)
+        self.assertFalse(self.state_path.exists())
+
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
         self.assertEqual(json.dumps(self.evidence()["source"], sort_keys=True),

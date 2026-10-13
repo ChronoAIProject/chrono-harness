@@ -3,7 +3,8 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "cargo": "cargo"
+    "cargo": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+    "rustc": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc"
   },
   "operations": [
     "build.runner",
@@ -89,5 +90,20 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true
+  "rust_incremental": true,
+  "tool_bindings": {
+    "cargo": {
+      "path": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+      "sha256": "c512bff73c86143b557463f021d0c3d5b0490d97d65040ba59ea2b3427784758",
+      "version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "allow_relocation": true
+    },
+    "rustc": {
+      "path": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "sha256": "b829b733131d4e1673eeebd1f34d06ae1e9ff4977b051313cf42e2a9e79ecf1c",
+      "version": "rustc 1.95.0 (59807616e 2026-04-14)",
+      "allow_relocation": true
+    }
+  },
+  "require_tool_bindings": true
 }
