@@ -111,15 +111,72 @@ def original_report(root, item, profile, observed):
                 for i in profile["install"]]
     if report["installed"] != expected:
         raise ValueError("startup producer report differs from installed tools")
-    declared = profile.get("tool_bindings")
-    if declared is not None:
-        expected_tools = [{"sha256": declared[name]["sha256"], "version": declared[name]["version"]}
-                          for name in ("cargo", "rustc")]
-        actual_tools = [{"sha256": row.get("sha256"), "version": row.get("version")}
-                        for row in report.get("executables", [])]
-        if actual_tools != expected_tools:
-            raise ValueError("startup producer report differs from executable bindings")
+    validate_execution(root, profile, report)
+    validate_streams(root, report)
     return data
+
+
+def validate_execution(root, profile, report):
+    """Bind original producer facts to this source's declarations, never to probes."""
+    if report.get("status") != "passed" or not Path(report.get("host_root", "")).is_absolute():
+        raise ValueError("startup requires a successful original execution")
+    expected_registrations = {path: digest(read(root, path)) for path in
+                              [report["config"], profile["projects"], ".chrono-harness/ci/bootstrap.py"]}
+    if report.get("registrations") != expected_registrations:
+        raise ValueError("startup execution registrations differ")
+    bindings = profile.get("tool_bindings")
+    selected = {}
+    if bindings is not None:
+        rows = report.get("executables", [])
+        if len(rows) != 2:
+            raise ValueError("startup producer executable bindings are missing")
+        for name, row in zip(("cargo", "rustc"), rows):
+            if (row.get("sha256") != bindings[name]["sha256"]
+                    or row.get("version") != bindings[name]["version"]
+                    or not Path(row.get("path", "")).is_absolute()):
+                raise ValueError("startup producer executable binding differs")
+            selected[name] = row["path"]
+            declared_path = Path(bindings[name]["path"])
+            if not declared_path.is_absolute():
+                declared_path = Path(report["host_root"]) / declared_path
+            if not bindings[name].get("allow_relocation", False) and row["path"] != str(declared_path):
+                raise ValueError("startup producer relocation is not permitted")
+        if report.get("selection") != dict(selected, toolchain=profile["rust_toolchain"], compiler=selected["rustc"]):
+            raise ValueError("startup producer selection differs")
+        if report["versions"] != {name: bindings[name]["version"] for name in bindings}:
+            raise ValueError("startup producer versions differ")
+        expected_environment = {"RUSTUP_TOOLCHAIN": profile["rust_toolchain"], "RUSTC": selected["rustc"],
+                                "RUSTC_WRAPPER": "", "RUSTC_WORKSPACE_WRAPPER": ""}
+        if "rust_incremental" in profile:
+            expected_environment["CARGO_INCREMENTAL"] = "1" if profile["rust_incremental"] else "0"
+        if any(report.get("environment", {}).get(key) != value for key, value in expected_environment.items()):
+            raise ValueError("startup producer compiler environment differs")
+    operations = bootstrap.registered_operations(json.loads(read(root, profile["projects"])))
+    actual = report.get("operations", [])
+    if [row["operation"] for row in actual] != profile["operations"]:
+        raise ValueError("startup producer operations differ")
+    for row in actual:
+        action = operations[row["operation"]]
+        executable = selected.get(action["tool"], profile["tools"][action["tool"]])
+        if (row["tool"] != action["tool"] or row["argv"] != [executable, *action["argv"]]
+                or row["cwd"] != report["host_root"] or type(row["exit_code"]) is not int
+                or row["exit_code"] != 0 or type(row["pid"]) is not int or row["pid"] <= 0):
+            raise ValueError("startup producer operation execution differs")
+        if action["tool"] in selected and row["executable_sha256"] != bindings[action["tool"]]["sha256"]:
+            raise ValueError("startup operation executable differs")
+
+
+def stream_descriptors(report):
+    return [row[channel] for row in report["operations"] for channel in ("stdout", "stderr")]
+
+
+def validate_streams(storage, report):
+    paths = set()
+    for item in stream_descriptors(report):
+        raw = read(storage, item["path"], ".chrono-harness/state/")
+        if item["path"] in paths or digest(raw) != item["sha256"] or len(raw) != item["size"]:
+            raise ValueError("startup original process stream differs")
+        paths.add(item["path"])
 
 
 def write_new(path, data):
@@ -157,6 +214,8 @@ def produce(root, path, config, profiles, config_sha):
             report = original_report(root, item, profile, observed)
             report_path = "reports/" + name + ".json"
             write_new(staging / report_path, report)
+            for stream in stream_descriptors(json.loads(report)):
+                write_new(safe(staging, stream["path"], ".chrono-harness/state/"), read(root, stream["path"]))
             entry = {"config": item["config"], "config_sha256": profile_sha,
                      "report": {"path": report_path, "sha256": digest(report)}, "files": []}
             for installed in profile["install"]:
@@ -213,6 +272,8 @@ def validate_artifact(root, path, config, profiles, config_sha, binding):
                 or report["installed"] != [{"path": f["destination"], "sha256": f["sha256"]} for f in entry["files"]]):
             raise ValueError("startup original report is not bound to this source and payload")
         originals[name] = original
+        validate_execution(root, profile, report)
+        validate_streams(transfer, report)
         for item in entry["files"]:
             data = read(transfer, item["path"], "tools/")
             if (item["path"] in seen or digest(data) != item["sha256"] or len(data) != item["size"]
@@ -260,19 +321,23 @@ def install(root, path, config, profiles, config_sha, consumer):
             writes.append((safe(root, item["destination"]), payloads[item["destination"]], item["mode"]))
         writes.append((bootstrap.report_destination(root, profile), imported_report(originals[name], binding), 0o644))
         writes.append((safe(root, ".chrono-harness/state/startup-originals/" + name + ".json"), originals[name], 0o644))
+        for stream in stream_descriptors(json.loads(originals[name])):
+            target = safe(root, stream["path"], ".chrono-harness/state/")
+            data = read(safe(root, config["directory"][:-1]), stream["path"])
+            if target.exists() and target.read_bytes() != data:
+                raise ValueError("startup original process stream collision")
+            writes.append((target, data, 0o644))
     if any(target.exists() and not target.is_file() for target, _, _ in writes):
         raise ValueError("startup destination is not a file")
-    versions = {}
+    local_bindings = {}
     for name in selected:
         profile = profiles[name][0]
-        if profile["rust_toolchain"] not in versions:
-            _, observed, bindings = bootstrap.toolchain_environment(profile, root)
-            versions[profile["rust_toolchain"]] = (observed, bindings)
-        observed, bindings = versions[profile["rust_toolchain"]]
+        _, observed, bindings = bootstrap.toolchain_environment(profile, root)
         original = json.loads(originals[name])
         if observed != original["versions"]:
             raise ValueError("startup consumer toolchain differs")
         if bindings:
+            local_bindings[name] = [bindings[tool] for tool in ("cargo", "rustc")]
             expected = [{"sha256": bindings[name]["sha256"], "version": bindings[name]["version"]}
                         for name in ("cargo", "rustc")]
             actual = [{"sha256": row.get("sha256"), "version": row.get("version")}
@@ -285,12 +350,8 @@ def install(root, path, config, profiles, config_sha, consumer):
         replace(target, data, mode)
     install_result = {"schema": "chrono-host-startup-install/v1", "binding": binding,
                       "consumer": consumer, "profiles": selected, "source": manifest["source"]}
-    local_bindings = {}
-    for _, (_, local) in versions.items():
-        if local:
-            local_bindings.update(local)
     if local_bindings:
-        install_result["local_executables"] = [local_bindings[name] for name in ("cargo", "rustc")]
+        install_result["local_executables"] = local_bindings
     replace(report_path, encode(install_result))
 
 
@@ -311,6 +372,7 @@ def verify(root, path, config, profiles, config_sha, name):
     profile = profiles[name][0]
     _, versions, bindings = bootstrap.toolchain_environment(profile, root)
     original = json.loads(originals[name])
+    validate_streams(root, original)
     if versions != original["versions"]:
         raise ValueError("installed startup toolchain differs")
     if bindings:
@@ -321,7 +383,7 @@ def verify(root, path, config, profiles, config_sha, name):
         if actual != expected:
             raise ValueError("installed startup executable binding differs")
         local = json.loads(read(root, ".chrono-harness/state/startup-install.json"))
-        if local.get("local_executables") != [bindings[name] for name in ("cargo", "rustc")]:
+        if local.get("local_executables", {}).get(name) != [bindings[tool] for tool in ("cargo", "rustc")]:
             raise ValueError("installed local executable provenance differs")
 
 

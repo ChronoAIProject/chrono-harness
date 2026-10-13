@@ -658,7 +658,11 @@ selected/default bootstraps, invalid or symlinked locations and write failures.
 Core, cache and default profiles now require and declare Cargo/rustc executable
 digests and versions; bootstrap resolves the selected rustup files, rejects PATH/configuration
 or compiler-selection disagreement and persistent executable drift, and records
-the observed paths and effective compiler selection. Shared startup carries and
+the observed paths and effective compiler selection. Original operation commands,
+executable digests, process exits and stdout/stderr bytes accompany the clean
+source identity; failed operations retain their own originals. Shared startup
+validates those originals against the source declarations before installation,
+checks each profile's local selection independently, and carries and
 rechecks this binding before install/verify, preserving installed tools on
 preflight rejection while accepting equivalent relocation with equal identity.
 Cache transport reports record the actual reporting executable's file digest,

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 sys.dont_write_bytecode = True
@@ -152,18 +153,7 @@ class SharedStartup(unittest.TestCase):
         self.assertEqual((self.transfer / "manifest.json").read_bytes(), original)
 
     def test_shared_install_and_verify_recheck_executable_binding(self):
-        bindings = {}
-        for tool in ["cargo", "rustc"]:
-            path = self.host.tools / tool
-            bindings[tool] = {"path": str(path),
-                              "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                              "version": tool + " 1.95.0 (fixture)"}
-        self.host.config["tools"].update({"cargo": str(self.host.tools / "cargo"),
-                                           "rustc": str(self.host.tools / "rustc")})
-        self.host.config["tool_bindings"] = bindings
-        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
-        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
-        self.host.git("commit", "-qm", "bind bootstrap executables")
+        bindings = self.bind_tools()
         self.produce()
         root = self.clone_consumer()
         self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
@@ -172,6 +162,171 @@ class SharedStartup(unittest.TestCase):
         self.assertEqual([row["sha256"] for row in report["executables"]],
                          [bindings[name]["sha256"] for name in ["cargo", "rustc"]])
 
+    def bind_tools(self, relocate=False):
+        bindings = {}
+        for tool in ["cargo", "rustc"]:
+            path = self.host.tools / tool
+            bindings[tool] = {"path": str(path),
+                              "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                              "version": tool + " 1.95.0 (fixture)", "allow_relocation": relocate}
+        self.host.config["tools"].update({"cargo": str(self.host.tools / "cargo"),
+                                           "rustc": str(self.host.tools / "rustc")})
+        self.host.config["tool_bindings"] = bindings
+        self.host.write_json(self.host.ci / "bootstrap.json", self.host.config)
+        self.host.git("add", ".chrono-harness/ci/bootstrap.json")
+        self.host.git("commit", "-qm", "bind bootstrap executables")
+        return bindings
+
+    def test_equivalent_relocation_preserves_producer_and_consumer_paths(self):
+        self.bind_tools(relocate=True)
+        self.produce()
+        original = self.host.state_path.read_bytes()
+        root = self.clone_consumer()
+        local = root / "mock-tools"
+        shutil.copytree(self.host.tools, local)
+        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
+        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
+        self.host.succeeded(self.invoke("verify", "core", root=root))
+        retained = (root / ".chrono-harness/state/startup-originals/core.json").read_bytes()
+        self.assertEqual(retained, original)
+        report = json.loads((root / ".chrono-harness/state/startup-install.json").read_bytes())
+        self.assertEqual([row["path"] for row in report["local_executables"]["core"]],
+                         [str(local / name) for name in ("cargo", "rustc")])
+        self.assertNotEqual(json.loads(retained)["executables"][0]["path"], str(local / "cargo"))
+
+    def test_missing_altered_or_contradictory_execution_originals_reject_before_install(self):
+        self.bind_tools()
+        self.produce()
+        for defect in ["executables", "selection", "compiler", "operations", "argv", "exit", "stream", "stream-missing"]:
+            with self.subTest(defect=defect):
+                root = self.clone_consumer()
+                transfer = root / self.shared["directory"]
+                manifest_path = transfer / "manifest.json"
+                manifest = json.loads(manifest_path.read_bytes())
+                original_path = transfer / manifest["profiles"]["core"]["report"]["path"]
+                report = json.loads(original_path.read_bytes())
+                if defect in ("executables", "selection", "operations"):
+                    del report[defect]
+                elif defect == "compiler": report["environment"]["RUSTC"] = "/different/rustc"
+                elif defect == "argv": report["operations"][0]["argv"][-1] = "different"
+                elif defect == "exit": report["operations"][0]["exit_code"] = 9
+                elif defect == "stream": (transfer / report["operations"][0]["stdout"]["path"]).write_bytes(b"altered")
+                elif defect == "stream-missing": (transfer / report["operations"][0]["stderr"]["path"]).unlink()
+                original_path.write_text(json.dumps(report))
+                manifest["profiles"]["core"]["report"]["sha256"] = hashlib.sha256(original_path.read_bytes()).hexdigest()
+                manifest_path.write_text(json.dumps(manifest))
+                self.environment["CHRONO_STARTUP_BINDING"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+                target = root / ".chrono-harness/bin/tool"
+                target.parent.mkdir()
+                target.write_bytes(b"keep")
+                rejected = self.invoke("install", "unit_fixture", root=root)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(b"E_STARTUP:", rejected.stderr)
+                self.assertEqual(target.read_bytes(), b"keep")
+                self.assertFalse((root / ".chrono-harness/state/startup-install.json").exists())
+
+    def test_same_version_different_local_bytes_reject_install_and_verify(self):
+        self.bind_tools(relocate=True)
+        self.produce()
+        root = self.clone_consumer()
+        self.host.succeeded(self.invoke("install", "unit_fixture", root=root))
+        fresh = self.clone_consumer()
+        target = fresh / ".chrono-harness/bin/tool"
+        target.parent.mkdir()
+        target.write_bytes(b"keep")
+        cargo = self.host.tools / "cargo"
+        cargo.write_bytes(cargo.read_bytes() + b"\n# same version, changed executable\n")
+        for command, arg, consumer in [("install", "unit_fixture", fresh), ("verify", "core", root)]:
+            result = self.invoke(command, arg, root=consumer)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"bound cargo identity mismatch", result.stderr)
+        self.assertEqual(target.read_bytes(), b"keep")
+
+
+class RealSharedStartup(unittest.TestCase):
+    """Explicit native acceptance mode; the ordinary fixture suite stays small."""
+
+    def test_registered_core_shared_and_runner_consumer(self):
+        source_root = SOURCE.parents[1]
+        sys.path.insert(0, str(SOURCE))
+        import bootstrap
+        observed = bootstrap.observe_source(source_root)
+        self.assertIsNone(observed["error"])
+        self.assertIs(observed["dirty"], False, "real consumption requires committed clean candidate source")
+        evidence_owner = source_root / ".chrono-harness/state/bootstrap-real"
+        evidence_owner.mkdir(parents=True, exist_ok=True)
+        evidence = Path(tempfile.mkdtemp(prefix="attempt-", dir=evidence_owner))
+        root = evidence / "fixture"
+        environment = dict(os.environ)
+        for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK", "CHRONO_CHECK_SOURCE"):
+            environment.pop(key, None)
+        environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
+        filemap = json.loads((source_root / ".chrono-harness/FILEMAP.json").read_bytes())
+        deadline = time.monotonic() + filemap["execution_plans"]["test:host-bootstrap-tests"]["timeout_seconds"]
+        host = json.loads((source_root / ".chrono-harness/config.json").read_bytes())
+        tools = {row["id"]: row["program"] for row in host["tools"]}
+        commands = []
+
+        def run(name, argv, cwd):
+            stdout, stderr = evidence / (name + ".stdout"), evidence / (name + ".stderr")
+            started = time.monotonic()
+            with stdout.open("xb") as out, stderr.open("xb") as err:
+                process = subprocess.run(argv, cwd=cwd, env=environment, pass_fds=fixture.PASS_FDS,
+                                         stdout=out, stderr=err, timeout=max(0.001, deadline - started))
+            commands.append({"name": name, "argv": argv, "cwd": str(cwd), "exit_code": process.returncode,
+                             "duration_seconds": time.monotonic() - started,
+                             "stdout": str(stdout), "stderr": str(stderr)})
+            (evidence / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
+            self.assertEqual(process.returncode, 0, name + ": " + stderr.read_text(errors="replace")[-3000:])
+
+        print("real bootstrap consumer originals: " + str(evidence), flush=True)
+        run("clone", [tools["git"], "clone", "--no-local", "--quiet", str(source_root), str(root)], source_root)
+        self.assertEqual(bootstrap.observe_source(root), observed)
+        registry = json.loads((root / ".chrono-harness/projects.json").read_bytes())
+        actions = bootstrap.registered_operations(registry)
+
+        def registered(operation):
+            action = actions[operation]
+            run(operation, [tools[action["tool"]], *action["argv"]], root)
+
+        registered("host.bootstrap-cache")
+        registered("host.bootstrap-shared-produce")
+        binding = (evidence / "github-output").read_text().strip().split("=", 1)[1]
+        environment["CHRONO_STARTUP_BINDING"] = binding
+        registered("host.bootstrap-shared-install-unit_runner")
+        units = json.loads((root / ".chrono-harness/ci/units.json").read_bytes())
+        run("runner-startup", units["units"]["runner"]["bootstrap"], root)
+        run("runner-check", [*host["canonical_check"]["argv"], "--unit", "runner"], root)
+
+        def original(descriptor):
+            raw = (root / descriptor["path"]).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), descriptor["sha256"])
+            return raw
+
+        check_config = json.loads((root / ".chrono-harness/ci/check.json").read_bytes())
+        reference = json.loads((root / check_config["policy"]["units"]["runner"]["report_path"]).read_bytes())
+        report = json.loads(original(reference["original"]))
+        self.assertEqual(report["judge"]["exit_code"], 0)
+        self.assertIsNone(report["judge"]["failure"])
+        response = json.loads(original(report["judge"]["stdout_original"]))
+        original(report["judge"]["stderr_original"])
+        self.assertEqual(response["status"], "passed")
+        self.assertEqual(response["evidence"]["candidate"], observed["commit"])
+        runner = [row for row in response["evidence"]["executed"] if row["operation"] == "test.runner-tests"]
+        self.assertEqual(len(runner), 1, "startup alone cannot satisfy the later independent Cargo action")
+        self.assertEqual(runner[0]["process"]["exit_code"], 0)
+        self.assertIsNone(runner[0]["process"]["failure"])
+        self.assertIn("test result: ok", runner[0]["process"]["stdout"])
+        # Retain exact producer/report/process bytes after every child has joined.
+        # Fixture source/build caches have no remaining consumer on success.
+        shutil.copytree(root / ".chrono-harness/state", evidence / "state")
+        shutil.copytree(root / ".chrono-harness/startup", evidence / "startup")
+        result = {"source": observed, "binding": binding, "commands": commands,
+                  "fixture": str(root), "retained_state": str(evidence / "state"),
+                  "retained_startup": str(evidence / "startup")}
+        (evidence / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+        shutil.rmtree(root)
+
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(defaultTest="SharedStartup")

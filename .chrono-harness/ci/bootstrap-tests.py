@@ -194,17 +194,42 @@ class Bootstrap(unittest.TestCase):
         self.declare("write", "built-tool", "bound")
         declarations = self.declarations("write", "built-tool", "bound")
         declarations["projects"][0]["actions"]["cargo"] = {
-            "operation": "make.cargo", "tool": "cargo", "argv": ["--version"],
+            "operation": "make.cargo", "tool": "cargo", "argv": ["build-fixture", "built-tool"],
         }
         self.write_json(self.registry, declarations)
-        (self.root / "built-tool").write_bytes(b"bound")
         self.write_json(self.ci / "bootstrap.json", config)
         self.succeeded(self.invoke())
         state = self.evidence()
         self.assertEqual([row["version"] for row in state["executables"]],
                          ["cargo 1.95.0 (fixture)", "rustc 1.95.0 (fixture)"])
         self.assertEqual(state["selection"]["compiler"], str(self.tools / "rustc"))
-        self.assertIn(["cargo", "--version"], self.calls())
+        self.assertIn(["cargo", "build-fixture", "built-tool"], self.calls())
+        self.assertIn(["rustc", "compile-fixture", "built-tool"], self.calls())
+        child = json.loads((self.root / ".chrono-harness/bin/tool").read_bytes())
+        self.assertEqual(child, {"compiler": str(self.tools / "rustc"), "wrapper": "", "workspace_wrapper": ""})
+        operation = state["operations"][0]
+        self.assertEqual(operation["operation"], "make.cargo")
+        self.assertEqual(operation["argv"], [str(self.tools / "cargo"), "build-fixture", "built-tool"])
+        self.assertEqual(operation["exit_code"], 0)
+        self.assertEqual((self.root / operation["stdout"]["path"]).read_bytes(), b"cargo original stdout\n")
+        self.assertEqual((self.root / operation["stderr"]["path"]).read_bytes(), b"cargo original stderr\n")
+
+    def test_failed_operation_retains_original_process_without_installing(self):
+        self.declare("fail", "9")
+        failed = self.invoke()
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertFalse(self.state_path.exists())
+        originals = list((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"))
+        self.assertEqual(len(originals), 1)
+        report = json.loads(originals[0].read_bytes())
+        self.assertEqual(report["status"], "failed")
+        operation = report["operations"][0]
+        self.assertEqual(operation["exit_code"], 9)
+        for channel, expected in [("stdout", b"failure stdout\x00\xff\n"), ("stderr", b"failure stderr\xfe\n")]:
+            raw = (self.root / operation[channel]["path"]).read_bytes()
+            self.assertEqual(raw, expected)
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), operation[channel]["sha256"])
+        self.assertFalse((self.root / ".chrono-harness/bin/tool").exists())
 
     def test_binding_mismatch_rejects_before_registered_operation(self):
         config = self.binding_config()
@@ -223,6 +248,25 @@ class Bootstrap(unittest.TestCase):
         self.assertIn(b"requires declared Cargo/rustc bindings", result.stderr)
         self.assertFalse((self.tools / "calls.json").exists())
 
+    def test_unsupported_native_registration_and_compiler_override_reject_before_build(self):
+        config = self.binding_config()
+        for defect in ("missing-native", "unsupported-native", "compiler", "wrapper", "workspace-wrapper"):
+            with self.subTest(defect=defect):
+                candidate = dict(config)
+                environment = dict(self.environment)
+                if defect in ("missing-native", "unsupported-native"):
+                    candidate["require_tool_bindings"] = True
+                    if defect == "unsupported-native":
+                        candidate["native_platform"] = {"system": "unsupported", "machine": "unsupported"}
+                else:
+                    key = {"compiler": "RUSTC", "wrapper": "RUSTC_WRAPPER", "workspace-wrapper": "RUSTC_WORKSPACE_WRAPPER"}[defect]
+                    self.environment[key] = "/different/compiler"
+                self.write_json(self.ci / "bootstrap.json", candidate)
+                rejected = self.invoke()
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertFalse((self.root / "built-tool").exists())
+                self.environment = environment
+
     def test_persistent_bound_executable_drift_rejects_after_operation(self):
         config = self.binding_config()
         config["operations"] = ["make.mutate"]
@@ -238,6 +282,13 @@ class Bootstrap(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(b"bound cargo identity mismatch", result.stderr)
         self.assertFalse(self.state_path.exists())
+        originals = list((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"))
+        self.assertEqual(len(originals), 1)
+        failed = json.loads(originals[0].read_bytes())
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["operations"][0]["exit_code"], 0,
+                         "a successful child does not waive persistent executable drift")
+        self.assertEqual(failed["executables"][0]["sha256"], config["tool_bindings"]["cargo"]["sha256"])
 
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
@@ -375,6 +426,9 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    from bootstrap_shared_tests import SharedStartup
-
-    unittest.main()
+    if sys.argv[1:] == ["--real-consumer"]:
+        from bootstrap_shared_tests import RealSharedStartup
+        unittest.main(argv=[sys.argv[0]], defaultTest="RealSharedStartup")
+    else:
+        from bootstrap_shared_tests import SharedStartup
+        unittest.main()

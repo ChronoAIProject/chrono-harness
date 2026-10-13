@@ -154,6 +154,34 @@ remain equal; its install report retains both producer and local executable
 paths. A missing, conflicting or changed binding rejects the bootstrap before
 acceptance. These observations do not constitute reproducible-build or complete
 compiler/backend/SDK/input-closure certification.
+The profiles explicitly register macOS arm64; other platforms or a missing native
+declaration fail before tool provisioning. Native expectations are committed
+declarations, never populated by the invocation that checks them. Config's input
+inventory and FILEMAP bind these entry executables and compiler-selection variables
+to the bootstrap owner and the runner startup consumer. The later independent
+Cargo action still has the documented incomplete input closure.
+
+Each bootstrap attempt retains its operation argv, cwd, executable digest, PID,
+exit and original stdout/stderr files beside an immutable `bootstrap-*/report.json`
+under the profile's state directory. Streams are forwarded immediately to the
+existing bounded lifecycle owner. Failed operations retain their streams and
+failure report without replacing the last successful report or installing tools.
+Shared produce/install/verify check the source registrations, original operation
+selection and compiler environment as well as each stream's bytes. Transported
+producer paths are provenance; local bindings are checked separately per profile.
+
+The registered `host.bootstrap-real-consumer` action invokes the existing Python
+test entry with `--real-consumer`. It owns a primary fixture cloned from the exact
+clean candidate, runs cache/core builds, shared produce/install and the runner
+unit's registered verify command, then consumes the real runner unit check and
+its independent `test.runner-tests` Cargo result. Its originals remain under
+`.chrono-harness/state/bootstrap-real/`; successful fixtures are removed only
+after all children join and their state/startup originals are retained. Failures
+keep the fixture for diagnosis. The bootstrap test owner retains the existing
+900-second/1-MiB limits, and FILEMAP retains cap 2. Added native time/storage cost
+is unmeasured. These evidence directories are for the current increment's local
+acceptance and independent review; their owner may retire them once those
+consumers finish, preserving any failure evidence still needed for diagnosis.
 A parentless commit can instead use `--candidate FULL_OID --initial` without
 `--base`. The report explicitly says `initial-inventory`; it does not fabricate
 a historical DELTA.

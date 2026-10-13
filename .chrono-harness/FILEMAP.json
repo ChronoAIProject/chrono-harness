@@ -172,6 +172,10 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
         }
       ]
     },
@@ -1013,6 +1017,10 @@
         {
           "kind": "runtime-input",
           "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
         }
       ]
     },
@@ -1029,6 +1037,14 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -3621,6 +3637,14 @@
         {
           "kind": "runtime-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -5451,6 +5475,10 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -5487,6 +5515,10 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner-tests"
         }
       ]
     },
@@ -8337,6 +8369,61 @@
       "from": "project:worktree",
       "kind": "compile",
       "to": "project:ci-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "tool:rustc",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "tool:rustup",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "input:bootstrap-cargo-executable",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "input:bootstrap-rustc-executable",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:CARGO_HOME",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:RUSTUP_HOME",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:RUSTC",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:RUSTC_WRAPPER",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "environment:RUSTC_WORKSPACE_WRAPPER",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    },
+    {
+      "from": "script:host-bootstrap",
+      "kind": "runtime-input",
+      "to": "project:runner-tests"
     }
   ],
   "test_costs": [
@@ -8750,7 +8837,8 @@
     },
     "test:host-bootstrap-tests": {
       "operations": [
-        "host.bootstrap-tests"
+        "host.bootstrap-tests",
+        "host.bootstrap-real-consumer"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
@@ -9244,6 +9332,12 @@
         "outputs": [
           "crates/judge-projects-tests/target/",
           ".chrono-harness/state/"
+        ]
+      },
+      "host.bootstrap-real-consumer": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/bootstrap-real/"
         ]
       }
     }

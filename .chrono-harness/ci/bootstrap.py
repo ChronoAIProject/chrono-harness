@@ -4,10 +4,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -168,6 +172,8 @@ def declared_bindings(root, config, env):
         expected_path = Path(item["path"])
         if not expected_path.is_absolute():
             expected_path = root / expected_path
+        if not item.get("allow_relocation", False) and selected_path != expected_path:
+            raise ValueError("bound " + tool + " relocation is not permitted")
         if expected_path.exists():
             expected = executable_identity(expected_path, tool, env)
             if expected["sha256"] != observed["sha256"] or expected["version"] != observed["version"]:
@@ -201,6 +207,10 @@ def declared_bindings(root, config, env):
 
 
 def toolchain_environment(config, root=None):
+    if config.get("require_tool_bindings"):
+        registered_native = config.get("native_platform")
+        if registered_native != {"system": platform.system(), "machine": platform.machine()}:
+            raise ValueError("unsupported or missing native bootstrap registration")
     toolchain = config["rust_toolchain"]
     probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], cwd=root,
                            pass_fds=PASS_FDS, capture_output=True)
@@ -227,6 +237,78 @@ def toolchain_environment(config, root=None):
     return env, versions, bindings
 
 
+def registered_operations(projects):
+    operations = {}
+    for project in projects["projects"] + projects["scripts"]:
+        for action in project["actions"].values():
+            key = action["operation"]
+            if key in operations:
+                raise ValueError("duplicate operation: " + key)
+            operations[key] = action
+    return operations
+
+
+def run_operation(root, directory, index, operation, action, executable, env):
+    """Retain original bytes while forwarding them to the existing bounded owner.
+
+    Lifecycle descriptors, process ownership, time and output limits remain with
+    the registered invoking owner. Streams are forwarded as they arrive, so
+    retaining them does not hide output from that owner or buffer it in memory.
+    """
+    argv = [executable, *action["argv"]]
+    record = {"operation": operation, "tool": action["tool"], "argv": argv,
+              "cwd": str(root), "executable_sha256": file_digest(Path(executable))}
+    errors = []
+
+    def forward(pipe, channel, destination):
+        path = directory / (str(index) + "." + channel)
+        try:
+            with path.open("xb", buffering=0) as output:
+                while True:
+                    chunk = pipe.read1(65536)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    destination.write(chunk)
+                    destination.flush()
+            record[channel] = {"path": path.relative_to(root).as_posix(),
+                               "sha256": file_digest(path), "size": path.stat().st_size}
+        except (OSError, ValueError) as error:
+            errors.append(error)
+        finally:
+            pipe.close()
+
+    started = time.monotonic()
+    with subprocess.Popen(argv, cwd=root, env=env, pass_fds=PASS_FDS,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+        record["pid"] = process.pid
+        workers = [threading.Thread(target=forward, args=(pipe, channel, destination))
+                   for pipe, channel, destination in [(process.stdout, "stdout", sys.stdout.buffer),
+                                                       (process.stderr, "stderr", sys.stderr.buffer)]]
+        for worker in workers:
+            worker.start()
+        record["exit_code"] = process.wait()
+        for worker in workers:
+            worker.join()
+    record["duration_seconds"] = time.monotonic() - started
+    if errors:
+        raise errors[0]
+    return record
+
+
+def source_identity(before, after):
+    if before["error"] or after["error"]:
+        state = "unavailable"
+    elif before != after:
+        state = "changed"
+    elif before["dirty"]:
+        state = "dirty"
+    else:
+        state = "clean"
+    return {"state": state, "commit": before["commit"] if state == "clean" else None,
+            "tree": before["tree"] if state == "clean" else None, "before": before, "after": after}
+
+
 def main():
     if len(sys.argv) not in (2, 3):
         raise ValueError("usage: bootstrap.py HOST_ROOT [REGISTERED_CONFIG]")
@@ -247,65 +329,54 @@ def main():
     if config["schema"] != "chrono-bootstrap/v1":
         raise ValueError("unsupported bootstrap schema")
     projects = json.loads((root / config["projects"]).read_text())
-    operations = {}
-    for project in projects["projects"] + projects["scripts"]:
-        for action in project["actions"].values():
-            key = action["operation"]
-            if key in operations:
-                raise ValueError("duplicate operation: " + key)
-            operations[key] = action
+    operations = registered_operations(projects)
     env, versions, bindings = toolchain_environment(config, root)
-    for operation in config["operations"]:
-        action = operations[operation]
-        executable = config["tools"][action["tool"]]
-        if bindings and action["tool"] in bindings:
-            executable = bindings[action["tool"]]["path"]
-        subprocess.run([executable, *action["argv"]], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
-    if bindings:
-        # A successful child must not have persistently replaced the selected
-        # compiler or Cargo executable before installation/report publication.
-        current = declared_bindings(root, config, env)
-        if {tool: current[tool]["sha256"] for tool in current} != {
-                tool: bindings[tool]["sha256"] for tool in bindings}:
-            raise ValueError("bound executable changed during bootstrap")
-    installed = []
-    for item in config["install"]:
-        source, target = root / item["source"], root / item["destination"]
-        if not source.is_file():
-            raise ValueError("missing built tool: " + str(source))
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        installed.append({"path": item["destination"], "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
-    source_after = observe_source(root)
-    if source_before["error"] or source_after["error"]:
-        source_state = "unavailable"
-    elif source_before != source_after:
-        source_state = "changed"
-    elif source_before["dirty"]:
-        source_state = "dirty"
-    else:
-        source_state = "clean"
-    # Only clean, agreeing observations bind the installed result to a source commit.
-    source_identity = {
-        "state": source_state,
-        "commit": source_before["commit"] if source_state == "clean" else None,
-        "tree": source_before["tree"] if source_state == "clean" else None,
-        "before": source_before,
-        "after": source_after,
-    }
     report = report_destination(root, config)
     report.parent.mkdir(parents=True, exist_ok=True)
+    directory = Path(tempfile.mkdtemp(prefix="bootstrap-", dir=report.parent))
     result = {"schema": "chrono-bootstrap-result/v1", "config": config_path.as_posix(),
-              "source": source_identity, "versions": versions,
-              "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL"]},
-              "installed": installed}
+              "host_root": str(root), "versions": versions, "status": "failed",
+              "registrations": {path: file_digest(root / path) for path in
+                                [config_path.as_posix(), config["projects"], ".chrono-harness/ci/bootstrap.py"]},
+              "environment": {key: env.get(key) for key in ["RUSTUP_TOOLCHAIN", "CARGO_INCREMENTAL",
+                                                            "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"]},
+              "operations": [], "installed": []}
     if bindings:
         result["executables"] = [bindings[tool] for tool in ("cargo", "rustc")]
         result["selection"] = {"toolchain": config["rust_toolchain"],
                                 "cargo": bindings["cargo"]["path"],
                                 "rustc": bindings["rustc"]["path"],
                                 "compiler": env["RUSTC"]}
-    report.write_text(json.dumps(result, indent=2) + "\n")
+    try:
+        for index, operation in enumerate(config["operations"]):
+            action = operations[operation]
+            executable = config["tools"][action["tool"]]
+            if bindings and action["tool"] in bindings:
+                executable = bindings[action["tool"]]["path"]
+            executable = shutil.which(executable, path=env.get("PATH")) or executable
+            record = run_operation(root, directory, index, operation, action, executable, env)
+            result["operations"].append(record)
+            if record["exit_code"]:
+                raise subprocess.CalledProcessError(record["exit_code"], record["argv"])
+        if bindings and declared_bindings(root, config, env) != bindings:
+            raise ValueError("bound executable changed during bootstrap")
+        for item in config["install"]:
+            source, target = root / item["source"], root / item["destination"]
+            if not source.is_file():
+                raise ValueError("missing built tool: " + str(source))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            result["installed"].append({"path": item["destination"], "sha256": file_digest(target)})
+        result["status"] = "passed"
+    except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
+        result["error"] = str(error)
+        raise
+    finally:
+        result["source"] = source_identity(source_before, observe_source(root))
+        raw = json.dumps(result, indent=2) + "\n"
+        (directory / "report.json").write_text(raw)
+        print("bootstrap original report: " + str(directory / "report.json"), file=sys.stderr)
+    report.write_text(raw)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,8 @@ from process_fds import inherited_fds
 
 mode = sys.argv[1]
 if mode == "fail":
+    sys.stdout.buffer.write(b"failure stdout\x00\xff\n")
+    sys.stderr.buffer.write(b"failure stderr\xfe\n")
     sys.exit(int(sys.argv[2]))
 if mode == "environment":
     Path(sys.argv[2]).write_text(json.dumps({name: os.environ.get(name) for name in sys.argv[3:]}))

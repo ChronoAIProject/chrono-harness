@@ -2439,6 +2439,15 @@
             "-B",
             ".chrono-harness/ci/bootstrap-tests.py"
           ]
+        },
+        "real-consumer": {
+          "operation": "host.bootstrap-real-consumer",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap-tests.py",
+            "--real-consumer"
+          ]
         }
       }
     }

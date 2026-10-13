@@ -69,7 +69,8 @@
       ".chrono-harness/process_fds.py",
       ".chrono-harness/ci/projects-inventory.json",
       ".chrono-harness/ci/bootstrap_shared.py",
-      ".chrono-harness/ci/bootstrap-shared.json"
+      ".chrono-harness/ci/bootstrap-shared.json",
+      ".chrono-harness/ci/bootstrap-cache.json"
     ],
     "adoption_base": "c4536e5c35d06302cdec655b3f11f9c257919155",
     "operation_timeout_seconds": 600,
