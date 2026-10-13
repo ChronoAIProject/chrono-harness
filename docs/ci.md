@@ -202,20 +202,42 @@ interrupted attempt stays protected. The slot is created exclusively, so a prior
 unresolved attempt refuses another clone/build. Historical `attempt-*` directories
 are preserved without migration or any assertion that their ownership is known.
 
-**Custody remains incomplete.** The existing lifecycle retained-producer primitive
-is Rust's `RetainedArtifact` API; the registered CLI has no begin/seal/release route
-for this Python producer. No Python ledger is synthesized. Results explicitly
-record `protected-pending`, unknown descendant quiescence and no requested
-disposal. Both passing and failed fixtures retain source, reports and streams at
-their original paths. A passing behavior result does not establish custody or
-acceptance. A compatible registered lifecycle route and actual consumer release
-are required before the caller can retire this slot; deleting it by name or age
-is not a recovery procedure. Failure diagnosis and caller acceptance/review remain
-consumers. The finite capacity is one unresolved attempt per source root.
+The producer invokes the caller's source-bound `chrono-worktree` against the
+fresh primary fixture before any output is built. The existing `use` operation
+enrolls absent registered main-cache outputs and runs the internal registered
+`host.bootstrap-real-fixture` action. That one lease covers cache/core production,
+shared install/verify, the runner check, and its report assertions. Nested adopted
+commands inherit the same protection. The owner runs from the caller's retained
+bin, so fixture core installation does not overwrite an executing owner.
+
+After the managed child joins, the producer requests the existing `finish
+--artifacts-only` route for this main fixture. It consumes actual release,
+cache-intent and disposal receipts, checks their original digests, exact declared
+outputs and verified absence, then records `outputs-disposed-evidence-retained`.
+No Python cleanup ledger or historical adoption is created. Source, installed
+bin, state reports, stream originals and descriptor targets stay at their original
+paths for failure diagnosis and caller acceptance/review. Main cache release does
+not finish the task or delete the checkout. Missing ownership, partial reports,
+live leases or incomplete disposal keep `protected-pending` and refuse another
+attempt in the same slot. An outer timeout can leave live inherited leases; it
+must remain pending until the caller joins/excludes those consumers and invokes
+the existing owner. This does not establish generic power-loss recovery.
+
+The direct Python custody tests use the real existing owner against small,
+producer-created primary fixtures. They retain their source and original owner
+receipts below `.chrono-harness/state/bootstrap-custody-tests/` for the current
+check's diagnosis/review; each invocation creates at most five fixtures, with no
+retry. Those evidence consumers must release them before the caller retires the
+fixtures through their test lifecycle. Their declared generated outputs are
+reclaimed by the owner during the test. Passing synthetic cases do not establish
+native/canonical or real Cargo acceptance. Historical real fixtures are untouched.
 
 The bootstrap test owner retains the existing 900-second/1-MiB limits and FILEMAP
-cap 2. The producer passes the remaining deadline to each command and rejects
-further work if completed original streams exceed the registered output bound;
+cap 2. The producer reserves 15 seconds of the same deadline for owner release and
+passes the remaining deadline to each command. Normal command originals retain
+the 1-MiB bound. Owner CLI reports contain retained source observations and use
+the existing host protocol's 64-MiB bound; compact results reference their original
+files rather than duplicate them. No process or output budget is increased;
 outer registered process ownership remains responsible for running commands and
 descendants. This producer is not a process reaper or a streaming disk quota.
 Added native time/storage and full lifecycle cost remain unmeasured.

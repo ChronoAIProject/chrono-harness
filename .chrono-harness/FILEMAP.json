@@ -140,6 +140,14 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -256,6 +264,14 @@
         {
           "kind": "runtime-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -3122,6 +3138,14 @@
         {
           "kind": "runtime-input",
           "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -4241,6 +4265,14 @@
         {
           "kind": "test-execution",
           "to": "test:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     },
@@ -8475,6 +8507,16 @@
       "from": "script:host-bootstrap",
       "kind": "runtime-input",
       "to": "project:runner-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "tool:chrono-worktree",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
     }
   ],
   "test_costs": [
@@ -9338,7 +9380,9 @@
       },
       "host.bootstrap-tests": {
         "resources": [],
-        "outputs": []
+        "outputs": [
+          ".chrono-harness/state/bootstrap-custody-tests/"
+        ]
       },
       "fmt.cache": {
         "resources": [],
@@ -9389,6 +9433,20 @@
         "resources": [],
         "outputs": [
           ".chrono-harness/state/bootstrap-real/"
+        ]
+      },
+      "host.bootstrap-real-fixture": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/bin/",
+          ".chrono-harness/state/",
+          ".chrono-harness/startup/",
+          "crates/cache/target/",
+          "crates/runner/target/",
+          "crates/runner-tests/target/",
+          "crates/judge-ci/target/",
+          "crates/ci/target/",
+          "crates/worktree/target/"
         ]
       }
     }

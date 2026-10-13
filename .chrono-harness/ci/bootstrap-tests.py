@@ -505,6 +505,9 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--real-consumer"]:
         from bootstrap_shared_tests import RealSharedStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealSharedStartup")
+    elif sys.argv[1:] == ["--real-fixture"]:
+        from bootstrap_shared_tests import RealFixtureStartup
+        unittest.main(argv=[sys.argv[0]], defaultTest="RealFixtureStartup")
     else:
-        from bootstrap_shared_tests import SharedStartup, AttemptCustody
+        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody
         unittest.main()

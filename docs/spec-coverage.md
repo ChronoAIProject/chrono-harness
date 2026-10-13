@@ -782,12 +782,17 @@ Equal-byte relocation permits absent or stale original personal paths while
 retaining exact-path, current-selection, wrapper and executable-drift rejection.
 
 The real Python fixture producer retains terminal success/nonzero/timeout streams
-and source/report/descriptor originals in one exclusive unresolved-attempt slot.
-It preserves historical failures. **Disposal is still unimplemented for this
-consumer:** the existing retained-producer Rust API has no registered CLI route
-for Python admission/seal/release. The result records protected pending custody,
-unknown descendant quiescence, and no deletion, and refuses a second attempt.
-This is a bounded evidence repair, not automatic cleanup or historical adoption.
+and source/report/descriptor originals in one exclusive attempt slot. Its caller's
+source-bound existing worktree owner enrolls the fresh primary fixture before
+production. One registered managed child covers the complete consumption and
+assertion lifetime; existing main-cache release/disposal receipts establish exact
+output reclamation after exclusion. Python checks the actual owner originals;
+it does not create lifecycle success. Missing ownership or live/unknown consumers
+keep protected pending custody and block accumulation. Historical failures are
+neither adopted nor deleted. Synthetic Python success/failure/timeout/live-consumer
+cases exercise the existing binary and preserve source/evidence while reclaiming
+owned generated outputs. They do not establish real Cargo consumption or generic
+power-loss recovery; actual committed-clean consumer custody remains to be run.
 
 **Mixed registration/runtime change:** the source expectation input, FILEMAP
 consumer edges, canonical required inputs and cache compatibility declarations
