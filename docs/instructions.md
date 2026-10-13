@@ -15,7 +15,7 @@ chrono-instructions generate --host-root "/path/to/existing host"
 
 默认 init 采用编译时内嵌的 `assets/instructions/catalog.json` 与 root-only `default-manifest.json`，创建独立宿主 `.chrono-harness/instructions/catalog.json`、`manifest.json`、空 `host-context.md`。复制后的二进制无需 checkout。产品资产与宿主采用数据不是同一所有者；升级二进制不会覆盖已采用数据。采用新默认须明确比较并编辑宿主数据，然后 generate。
 
-默认根显式选择现有双语叶子，按 `workflow` 的需求→审计→重构→开发四阶段呈现；验证／SPEC 迭代和交付／清理是开发下级。先核实际需求／消费者、当前 SPEC、已有能力、唯一所有权、显式依赖影响和验证／CI／存储成本，再收窄改动。足够就复用，有据才在自然所有者重构，开发只补真实缺口；不要求全仓审计、全测或无条件重构。每项受治理操作只暴露当前登记路径；定制先登记，方法演进更新登记并完成适用验证，保留一个正式入口。完整原子库、`core.general` 与 `general` 布局仍可选择用于自定义 Markdown／skills，不自动覆盖既有宿主的 manifest。
+默认根显式选择现有双语叶子，按 `workflow` 的需求→审计→重构→开发四阶段呈现；验证／SPEC 迭代和交付／清理是开发下级。默认采用成熟、经验证的工程实践，通过现有所有者和复用规则落实 KISS、YAGNI、DRY。先核实际需求／消费者、当前 SPEC、已有能力、唯一所有权、显式依赖影响，再按可观察产品价值、交付时间及实现／构建／验证／CI／存储／维护／复杂度的全生命周期成本选择最简单充分的方案，包含不改或使用现有工具；未知收益／成本不构成扩范围理由。新增依赖、原生工具链、自研／防御机制、兼容层和验证路径须说明当前需求及现有成熟方案为何不足。足够就复用，有据才在自然所有者重构，开发只补真实缺口；审计和测试按实际风险与显式依赖收窄，不要求全仓审计、全测或无条件重构。每项受治理操作只暴露当前登记路径；定制先登记，方法演进更新登记并完成适用验证，保留一个正式入口。完整原子库、`core.general` 与 `general` 布局仍可选择用于自定义 Markdown／skills，不自动覆盖既有宿主的 manifest。
 
 CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`generate --host-root H`。H 已存在，各选项仅一次，参数按 OS 路径运输。新宿主省略 locale 选择 zh-CN；显式 methodology 以一个 opaque file atom 保留，未指定 locale 则绑定 und（未指定语言），指定 locale 则明确绑定该语言而不翻译。初始 locale 必须已在嵌入 catalog 声明。默认 root title 仅属于默认 zh-CN 绑定；改用其他 locale 时省略此可选 title，作者可在 manifest 显式添加本地化 title。context 可独立选择。显式外部 M/C 必须可读 UTF-8 普通文件，可由调用者选择链接。
 
@@ -29,7 +29,7 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
 
 既有宿主采用本方法时，以所选产品源码版本的 `assets/instructions/catalog.json`、`default-manifest.json` 为比较输入，在宿主自己的 catalog 中合入所需原子正文及 `workflow` 布局，再在 manifest 的 root 输出选择相应 roots／layout；保留自定义 atoms、locale、file 源、其他输出、上下文和块外内容。不要整份覆盖宿主 catalog／manifest。已有 opaque file 方法仍由原 file 所有者编辑；不要用 init 替换它。随后从宿主登记的 `instructions.generate` 入口 generate，核真实根、AGENTS 字面链接和所有选中 Markdown／skill 消费者，再重复生成核无写入。本仓采用的是自己的登记源与三个既有输出，产品默认仍只生成根。
 
-这一路径更新可读方法，不激活宿主判官、证明 AI 遵守或建立 full/native 验收。产品默认与宿主政策同改须明示两组变化及实际验证成本；本方法复用生成器及原行为测试，不增加表单、审批或工作流引擎。便携 cleanup 原子要求及时保护／加入／交接及中断恢复；本仓 automatic_cleanup/v2 的操作、租约、回执、兼容切换及保留条件继续由 host_context 与 [worktree](worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2) 维护。
+这一路径更新可读方法，不激活宿主判官、证明 AI 遵守或建立 full/native 验收。产品默认与宿主政策同改须明示两组变化及实际验证成本；本方法复用生成器及原行为测试，不增加表单、审批或工作流引擎。既有成果／清理原子要求运行结果和证据有消费者／用途、所有者、有界保留期限或容量及清理条件；可重建临时产物在条件满足且消费结束后自动回收，失败原件保留至调试／验收义务完成，源码与未保留独有工作受保护。普通 TTL 须声明资格及活跃使用检查；压缩须有实际留存需求和实测总成本收益，不能代替回收。交付原子要求完整小步、限制并行在制工作、及时合并及按实际合并／发布验收报告。以上是既有叶子的措辞要求，不新增本仓保留平台或自动证据清理实现；本仓 automatic_cleanup/v2 的操作、租约、回执、兼容切换及保留条件继续由 host_context 与 [worktree](worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2) 维护。
 
 ## Schema 与可复制组合配方
 

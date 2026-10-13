@@ -55,7 +55,7 @@ Use proportionate controls. Derive affordable controls from real defects, ground
 
 ### Search and reuse
 
-Audit before extending. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change.
+Audit before extending. Default to established, proven software engineering practices; apply KISS, YAGNI and DRY through existing owners, sufficient simplicity, current needs and reuse. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability; scope audits and tests to actual risks and explicit dependencies. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change.
 
 Bound negative searches. State question, scope and method. Verify hits’ originals, versions, conditions and solved scope; separate source conclusions, own deductions and conjectures. No hit means only not found in searched scope; it proves no nonexistence, originality or completed search. Report missing search capability separately.
 
@@ -101,7 +101,7 @@ Correct shared conclusions. On taking authorized work, state understanding/direc
 
 Require handoff evidence. Yield only for claimed work AND (measured work or in-flight delivery showing progress), OR sole source ownership where acting duplicates authority. State blocked scope/resumption actions. Resume within authorization if stalled, without invented waiting windows. Local workarounds do not fix shared causes.
 
-Keep useful artifacts. Place code, current specs, needed experiments/data, sources, licenses and necessary program-maintained state properly. Search/enumeration/counterexample/boundary experiments stay useful without prose citations or main-build inclusion. Preserve reusable failure criteria or regressions.
+Keep useful artifacts. Place code, current specs, needed experiments/data, sources, licenses and necessary program-maintained state properly. Retained run results and evidence need an explicit consumer or purpose, owner, bounded retention period or capacity and cleanup conditions; usefulness does not imply permanent retention. Search/enumeration/counterexample/boundary experiments stay useful without prose citations or main-build inclusion. Preserve reusable failure criteria or regressions.
 
 Keep substance and attribution. Use existing proper locations; retain supporting definitions, assumptions, derivations, examples and limits. Citation/synthesis is not automatically original. Attribute sources, reuse and new work; no wrappers/consumers merely to raise counts.
 
@@ -109,7 +109,7 @@ Honor temporary lifecycles. One-use probes, query snapshots and run artifacts fo
 
 Report results plainly. Use ordinary language by default, retaining material conditions, detail and open limits. State changes, actual checks, measurements and results; a synopsis cannot replace substance. Keep no thought transcripts, diaries, review dialogue, command streams, receipt copies or duplicate snapshots, even via links, archives or required reading. Results must stand alone without the session.
 
-Clean promptly and preserve work. Use the host’s registered lifecycle entry to protect consumption, join all owned/background jobs, verify completion/landing and hand off. Adopted and verified automatic recovery/cleanup paths reclaim reproducible output after interrupted sessions promptly; do not rely only on remembering finish. Cache disposal never claims completion. Before deletion, check actual ownership, active use, required consumers and retention conditions; preserve source, unretained commits, needed evidence and original failures. Age, directory names and idle time prove no disposal eligibility. Host context and the lifecycle owner define operations, compatible rollout and recovery limits.
+Clean promptly and preserve work. Use the host’s registered lifecycle entry to protect consumption, join all owned/background jobs, verify completion/landing and hand off. Adopted and verified automatic recovery/cleanup paths should promptly expire and reclaim reproducible temporary output once retention conditions are met and consumers finish, including after interrupted sessions; do not rely only on remembering finish. Cache disposal never claims completion. Before deletion, check actual ownership, active use, required consumers and retention conditions; protect source, unretained unique work/commits and still-needed evidence. Keep original failure evidence until debugging/acceptance obligations finish, not forever by default. Ordinary TTL retention is allowed after eligibility and active-use checks are declared; age, directory names or idle time alone prove no arbitrary file disposable. Host context and the lifecycle owner define operations, compatible rollout and recovery limits.
 
 ## Execution contracts
 
@@ -121,7 +121,7 @@ Consumption grants no authority. Integrity checks, indexing, compiler increments
 
 One current registered entry per activity. Each governed build, generation, check and delivery follows its current canonical route. Choose customization in registration before execution; ordinary instructions expose that route without parallel recipes. Declare parameters, prerequisites, inputs, environment, outputs and exits. Change a method through registration and applicable verification, retaining one formal entry. Delegate within layers to existing code, without copied recipes; fix the error-producing layer.
 
-Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config.
+Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. A new dependency, native toolchain requirement, custom mechanism/framework, defense, compatibility layer or validation path needs a current requirement/consumer and an explanation of why proven solutions or existing capability are insufficient. Do not add them to support another unneeded mechanism or speculative future need. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config.
 
 Register judges first. Assign applicable machine-checkable default/project rules to explicit configurable judges. Register methods, decision rules and required inputs before acting. Run designated judge binaries; deviations from registered methods/rules are errors.
 
@@ -165,7 +165,7 @@ Shrink debt without swaps. Block new debt before batch migration. Candidate iden
 
 Partition by independent changes. For generated write hotspots/conflicts, measure acceptable independent source changes, output writes and cross-partition dependencies, not file counts. Use stable source keys, partition-bound identity and full inputs per partition. Global attestation may still rewrite all. Measure unit-change effects; samples grant no lasting exemption. Explicit consumer contracts permit aggregates; no directory discovery or blanket bans.
 
-Verify delivery. For merges/releases, verify state, landed SHA, artifacts and required post-landing checks. Commits, open PRs, green checks or CLOSED alone prove no delivery. Explain tested/landed tree differences; validate affected scope. For caller-owned lifecycles, state handoff; this stage is not delivery.
+Deliver small, complete increments and verify landing. Limit concurrent work, resolve blockers and merge accepted changes promptly instead of accumulating undelivered PRs; report actual merges/releases and accepted scope. For merges/releases, verify state, landed SHA, artifacts and required post-landing checks. Commits, open PRs, green checks or CLOSED alone prove no delivery. Explain tested/landed tree differences; validate affected scope. For caller-owned lifecycles, state handoff; this stage is not delivery.
 
 ### Checks and integration
 
@@ -213,7 +213,7 @@ Bind query identity. Pin delivery targets; verify result/check/run ownership. Ol
 
 ### Costs and cache
 
-Improve using measured costs. Check input size, dependency scope and build, validation, CI and storage costs; report method, units, window and comparison basis, leaving unknowns explicit. Remove waste, poor representations and duplicate dependencies, then remeasure and verify real host consumption. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals.
+Choose by value and measured cost. Weigh real consumers, observable product value, delivery time and total lifecycle cost of implementation, builds, validation, CI, storage, maintenance and complexity. Choose the simplest sufficient option, including existing tools or doing nothing when requirements are met. Check input size and dependency scope; report method, units, window and comparison basis. Unknown benefit or cost stays unknown and does not justify added scope. Remove unused work/output, poor or duplicate representations and duplicate dependencies, then remeasure and verify real host consumption. Compression needs a real retained-data requirement and measured total-cost benefit; it never replaces deletion or retention policy. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals.
 
 Stop redundant checks. Deliver after sufficient checks of the same effective inputs, absent new concerns. For change, failure or invalid evidence, identify affected duties/scope before targeted checks. Rerun success does not erase failure; preserve unaffected evidence.
 
