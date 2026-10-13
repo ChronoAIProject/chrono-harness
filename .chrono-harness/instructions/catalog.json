@@ -236,14 +236,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "先审计再扩展。 对照需求、当前 SPEC、实际消费者、现有能力和保留证据，核所有权、显式依赖影响及验证／CI／存储成本。依次查本仓、固定版本直接依赖和允许外部来源，含私有定义与有效失败结论；核接口、假设及适用范围。足够就复用，不把不可见当缺失，不把全局考虑变成每次全仓审计或全测。"
+            "text": "先审计再扩展。 默认采用成熟、经验证的软件工程实践；按 KISS、YAGNI、DRY 在现有所有者处简化、按需开发和复用。对照需求、当前 SPEC、实际消费者、现有能力和保留证据，核所有权、显式依赖影响及验证／CI／存储成本。依次查本仓、固定版本直接依赖和允许外部来源，含私有定义与有效失败结论；核接口、假设及适用范围。足够就复用，审计与测试限于实际风险和显式依赖，不把不可见当缺失，不把全局考虑变成每次全仓审计或全测。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Audit before extending. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change."
+            "text": "Audit before extending. Default to established, proven software engineering practices; apply KISS, YAGNI and DRY through existing owners, sufficient simplicity, current needs and reuse. Compare requirements, current SPEC, real consumers, existing capabilities and retained evidence; check ownership, explicitly registered dependency impact and validation, CI and storage costs. Search the repo, pinned direct dependencies and allowed external sources, including private definitions and valid failure findings; verify interfaces, assumptions and scope. Reuse sufficient capability; scope audits and tests to actual risks and explicit dependencies. Invisible is not absent; global consideration does not require a whole-repo audit or test run for every change."
           }
         }
       ]
@@ -531,14 +531,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "只开发真实缺口。 现有能力不足时，绑定实际消费者和验收再开发，不造空调用、重复平台或未来扩展层。产品共性与宿主政策分居；脚本、插件、判官及配置由宿主在 `.chrono-harness/` 显式登记，可替换演进，不写死宿主实例或改全局配置。"
+            "text": "只开发真实缺口。 现有能力不足时，绑定实际消费者和验收再开发，不造空调用、重复平台或未来扩展层。新增依赖、原生工具链要求、自研机制或框架、防御机制、兼容层或验证路径，须有当前需求／消费者并说明成熟方案或现有能力为何不足；不为另一个无必要机制或假想未来需求增加它们。产品共性与宿主政策分居；脚本、插件、判官及配置由宿主在 `.chrono-harness/` 显式登记，可替换演进，不写死宿主实例或改全局配置。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config."
+            "text": "Develop real gaps. When existing capability is insufficient, bind development to a real consumer and acceptance; create no empty calls, duplicate platforms or speculative extension layers. A new dependency, native toolchain requirement, custom mechanism/framework, defense, compatibility layer or validation path needs a current requirement/consumer and an explanation of why proven solutions or existing capability are insufficient. Do not add them to support another unneeded mechanism or speculative future need. Separate common product behavior from host policy. Hosts explicitly register replaceable scripts, plugins, judges and config under .chrono-harness/; do not hardcode host instances or edit global config."
           }
         }
       ]
@@ -949,14 +949,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "完成须核落地。 合并或发布交付须核实际状态、落地 SHA、产物及必要后验；提交、开 PR、检查绿或 CLOSED 不单独证明交付。被验候选与落地树不同时，说明并核受影响范围。调用方负责生命周期则明确交接边界，不把阶段完成说成已交付。"
+            "text": "小步完整交付并核落地。 限制并行在制工作，及时解决阻碍、合并符合验收的变更，不积压未交付 PR；按实际合并／发布及已验收范围报告进度。合并或发布交付须核实际状态、落地 SHA、产物及必要后验；提交、开 PR、检查绿或 CLOSED 不单独证明交付。被验候选与落地树不同时，说明并核受影响范围。调用方负责生命周期则明确交接边界，不把阶段完成说成已交付。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Verify delivery. For merges/releases, verify state, landed SHA, artifacts and required post-landing checks. Commits, open PRs, green checks or CLOSED alone prove no delivery. Explain tested/landed tree differences; validate affected scope. For caller-owned lifecycles, state handoff; this stage is not delivery."
+            "text": "Deliver small, complete increments and verify landing. Limit concurrent work, resolve blockers and merge accepted changes promptly instead of accumulating undelivered PRs; report actual merges/releases and accepted scope. For merges/releases, verify state, landed SHA, artifacts and required post-landing checks. Commits, open PRs, green checks or CLOSED alone prove no delivery. Explain tested/landed tree differences; validate affected scope. For caller-owned lifecycles, state handoff; this stage is not delivery."
           }
         }
       ]
@@ -993,14 +993,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "用实测成本改进。 核输入规模、依赖范围及构建／验证／CI／存储成本，报方法、单位、窗口和可比口径；未知写未知。先消除无用工作、错误表示、重复依赖，再量改进并验真实宿主消费。不靠抬预算、反复跑、删必要测试或降目标换成功。"
+            "text": "用价值与实测成本取舍。 按真实消费者、可观察产品价值、交付时间和实现／构建／验证／CI／存储／维护／复杂度的全生命周期成本，选最简单且充分的方案；现有工具或不改已满足需求就用之。核输入规模、依赖范围，报方法、单位、窗口和可比口径；收益或成本未知写未知，不构成扩大范围的理由。先消除无用工作与输出、错误或重复表示、重复依赖，再量改进并验真实宿主消费。压缩须有真实的保留数据需求和实测总成本收益，不代替删除或保留政策。不靠抬预算、反复跑、删必要测试或降目标换成功。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Improve using measured costs. Check input size, dependency scope and build, validation, CI and storage costs; report method, units, window and comparison basis, leaving unknowns explicit. Remove waste, poor representations and duplicate dependencies, then remeasure and verify real host consumption. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals."
+            "text": "Choose by value and measured cost. Weigh real consumers, observable product value, delivery time and total lifecycle cost of implementation, builds, validation, CI, storage, maintenance and complexity. Choose the simplest sufficient option, including existing tools or doing nothing when requirements are met. Check input size and dependency scope; report method, units, window and comparison basis. Unknown benefit or cost stays unknown and does not justify added scope. Remove unused work/output, poor or duplicate representations and duplicate dependencies, then remeasure and verify real host consumption. Compression needs a real retained-data requirement and measured total-cost benefit; it never replaces deletion or retention policy. Do not buy success with higher budgets, repeated runs, deleted necessary tests or weaker goals."
           }
         }
       ]
@@ -1119,14 +1119,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "只留有用成果。 代码、当前规范、必要实验程序与数据、来源、许可、程序维护的必要状态各归其位。实验支持搜索、枚举、反例或边界验证即有用，不因未被正文引用或未进主构建删除。失败留下可复用判据或回归用例。"
+            "text": "只留有用成果。 代码、当前规范、必要实验程序与数据、来源、许可、程序维护的必要状态各归其位。留存的运行结果与证据须有明确消费者或用途、所有者、有限保留期限或容量及清理条件；有用不等于永久保留。实验支持搜索、枚举、反例或边界验证即有用，不因未被正文引用或未进主构建删除。失败留下可复用判据或回归用例。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Keep useful artifacts. Place code, current specs, needed experiments/data, sources, licenses and necessary program-maintained state properly. Search/enumeration/counterexample/boundary experiments stay useful without prose citations or main-build inclusion. Preserve reusable failure criteria or regressions."
+            "text": "Keep useful artifacts. Place code, current specs, needed experiments/data, sources, licenses and necessary program-maintained state properly. Retained run results and evidence need an explicit consumer or purpose, owner, bounded retention period or capacity and cleanup conditions; usefulness does not imply permanent retention. Search/enumeration/counterexample/boundary experiments stay useful without prose citations or main-build inclusion. Preserve reusable failure criteria or regressions."
           }
         }
       ]
@@ -2463,14 +2463,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "及时清理，保全工作。 按宿主登记的生命周期入口保护消费、加入所有自有及后台任务、核完成／落地并交接。会话中断后的可重建产物由已采用且验证的自动恢复／清理路径及时回收，不只靠记得 finish；缓存回收不宣称完成。删除前核实际所有权、活跃使用、必要消费者与保留条件；保留源码、未保留提交、必要证据及失败原件，不凭年龄、目录名或空闲猜可删除。具体操作、兼容部署与恢复边界归宿主上下文和生命周期所有者。"
+            "text": "及时清理，保全工作。 按宿主登记的生命周期入口保护消费、加入所有自有及后台任务、核完成／落地并交接。已采用且验证的自动恢复／清理路径应在保留条件满足且消费者结束后及时回收可重建临时产物，含会话中断后的产物；不只靠记得 finish，缓存回收不宣称完成。删除前核实际所有权、活跃使用、必要消费者与保留条件；保全源码、未保留的独有工作及提交、仍必需的证据。失败原件保留至调试／验收义务完成，不默认永久留存。声明删除资格及活跃使用检查后可用普通 TTL 保留策略；年龄、目录名或空闲本身不证明任意文件可删。具体操作、兼容部署与恢复边界归宿主上下文和生命周期所有者。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Clean promptly and preserve work. Use the host’s registered lifecycle entry to protect consumption, join all owned/background jobs, verify completion/landing and hand off. Adopted and verified automatic recovery/cleanup paths reclaim reproducible output after interrupted sessions promptly; do not rely only on remembering finish. Cache disposal never claims completion. Before deletion, check actual ownership, active use, required consumers and retention conditions; preserve source, unretained commits, needed evidence and original failures. Age, directory names and idle time prove no disposal eligibility. Host context and the lifecycle owner define operations, compatible rollout and recovery limits."
+            "text": "Clean promptly and preserve work. Use the host’s registered lifecycle entry to protect consumption, join all owned/background jobs, verify completion/landing and hand off. Adopted and verified automatic recovery/cleanup paths should promptly expire and reclaim reproducible temporary output once retention conditions are met and consumers finish, including after interrupted sessions; do not rely only on remembering finish. Cache disposal never claims completion. Before deletion, check actual ownership, active use, required consumers and retention conditions; protect source, unretained unique work/commits and still-needed evidence. Keep original failure evidence until debugging/acceptance obligations finish, not forever by default. Ordinary TTL retention is allowed after eligibility and active-use checks are declared; age, directory names or idle time alone prove no arbitrary file disposable. Host context and the lifecycle owner define operations, compatible rollout and recovery limits."
           }
         }
       ]
