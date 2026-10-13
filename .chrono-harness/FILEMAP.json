@@ -9381,7 +9381,7 @@
       "host.bootstrap-tests": {
         "resources": [],
         "outputs": [
-          ".chrono-harness/state/bootstrap-custody-tests/"
+          ".chrono-harness/state/"
         ]
       },
       "fmt.cache": {
@@ -9433,20 +9433,6 @@
         "resources": [],
         "outputs": [
           ".chrono-harness/state/bootstrap-real/"
-        ]
-      },
-      "host.bootstrap-real-fixture": {
-        "resources": [],
-        "outputs": [
-          ".chrono-harness/bin/",
-          ".chrono-harness/state/",
-          ".chrono-harness/startup/",
-          "crates/cache/target/",
-          "crates/runner/target/",
-          "crates/runner-tests/target/",
-          "crates/judge-ci/target/",
-          "crates/ci/target/",
-          "crates/worktree/target/"
         ]
       }
     }

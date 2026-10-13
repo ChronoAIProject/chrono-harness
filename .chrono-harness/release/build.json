@@ -537,7 +537,9 @@
       "id": "verify_host_bootstrap_tests",
       "kind": "verify",
       "operation": "host.bootstrap-tests",
-      "needs": [],
+      "needs": [
+        "build_worktree"
+      ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_tests",
       "rust_toolchain": false
     },
@@ -916,8 +918,10 @@
       "release_assets": []
     },
     "verify_host_bootstrap_tests": {
-      "need": "The original host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; it calls no released production executable.",
-      "release_assets": []
+      "need": "The host.bootstrap-tests Python action checks explicit configuration, build/install identity and failure propagation with fixture tools; ManagedAttemptCustody also invokes the released chrono-worktree binary for real custody protection and disposal.",
+      "release_assets": [
+        "chrono-worktree"
+      ]
     },
     "verify_cache_tests": {
       "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",

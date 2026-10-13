@@ -2360,8 +2360,15 @@
       ],
       "artifact_name": "chrono-release-linux-verify_host_bootstrap_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
-      "needs": [],
-      "downloads": []
+      "needs": [
+        "linux_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "linux_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
     },
     {
       "id": "macos_verify_host_bootstrap_tests",
@@ -2377,8 +2384,15 @@
       ],
       "artifact_name": "chrono-release-macos-verify_host_bootstrap_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_tests/",
-      "needs": [],
-      "downloads": []
+      "needs": [
+        "macos_build_worktree"
+      ],
+      "downloads": [
+        {
+          "job": "macos_build_worktree",
+          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
+        }
+      ]
     },
     {
       "id": "linux_build_cache",
