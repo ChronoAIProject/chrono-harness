@@ -821,3 +821,20 @@ canonical checks, both native platforms, review and delivery remain caller
 obligations. Q3/Q4 and complete SPEC acceptance remain outstanding. The nine old
 local evidence originals and three tool binaries reported unlocated by PR #169
 remain unlocated; current passing evidence does not recover those bytes.
+
+The postlanding bootstrap fixture correction preserves a successful empty runner
+DELTA and separately executes the existing registered `test.runner-tests` action
+when that unit selects no work. Selected execution must still have its own passing
+Cargo result; it is reused without a second run. Python regressions distinguish
+these paths, reject missing/failed selected execution, and retain direct-action
+failure streams. The actual clean Q2 source was consumed locally with a nonempty
+DELTA before this correction; that observation does not certify the changed source
+or merged-dev behavior. Committed corrected-source consumption, native checks,
+independent review and actual landing remain caller obligations.
+
+**Fixture behavior and host registration change together:** FILEMAP now records
+the fixture's direct runner-test and Cargo dependencies. No operation, output or
+CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitted
+Q2 increment plus this correction; it makes no publication, remote-acceptance or
+complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
+unmeasured until those actual consumer cases run.

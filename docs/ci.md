@@ -191,8 +191,18 @@ producer paths are provenance; local bindings are checked separately per profile
 The registered `host.bootstrap-real-consumer` action invokes the existing Python
 test entry with `--real-consumer`. It owns a primary fixture cloned from the exact
 clean candidate, runs cache/core builds, shared produce/install and the runner
-unit's registered verify command, then consumes the real runner unit check and
-its independent `test.runner-tests` Cargo result. Its originals remain under
+unit's registered verify command, then consumes the real runner unit check.
+When that check selects `test:runner-tests`, its successful independent
+`test.runner-tests` Cargo result satisfies the consumption assertion. When the
+unit selects no work (including an already-landed candidate equal to dev), the
+fixture invokes that same registered Cargo action explicitly under its existing
+lease and remaining time/output bounds, using the scoped policy's toolchain
+environment. This is a fixture acceptance action: the original DELTA selection,
+report and no-work success remain unchanged. Missing or failed selected execution
+cannot be substituted. The fixture result identifies either the original check
+or the separate registered command as its consumption evidence, so startup alone
+never satisfies acceptance and successful selected work is not repeated.
+Its originals remain under
 `.chrono-harness/state/bootstrap-real/pending-attempt/`. Its producer-owned
 `result.json` records the source, argv/cwd, original stdout/stderr paths, digests,
 sizes, inherited ownership descriptors, and terminal command success, nonzero

@@ -8557,6 +8557,16 @@
       "from": "tool:chrono-worktree",
       "kind": "runtime-input",
       "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "project:runner-tests",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "tool:cargo",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap-tests"
     }
   ],
   "test_costs": [

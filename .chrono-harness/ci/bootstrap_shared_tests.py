@@ -1120,6 +1120,128 @@ class RealSharedStartup(unittest.TestCase):
                     attempt.publish()
 
 
+def consume_runner_operation(response, candidate, registered):
+    """Consume selected execution or explicitly exercise the registered action.
+
+    The normal runner response is immutable evidence, including valid no-work.
+    This fixture acceptance action never supplies a replacement DELTA report.
+    """
+    evidence = response["evidence"]
+    if response["status"] != "passed" or evidence["candidate"] != candidate:
+        raise AssertionError("runner check did not pass for the current candidate")
+    if evidence["blocked"]:
+        raise AssertionError("runner check has blocked operations")
+    if not evidence["selected"]:
+        if evidence["executed"]:
+            raise AssertionError("unselected runner unit has executed operations")
+        command = registered("test.runner-tests")
+        if command["name"] != "test.runner-tests" or command["status"] != "passed" or command["exit_code"] != 0:
+            raise AssertionError("independent runner tests did not pass")
+        stdout = RealAttempt.original(command["stdout"])
+        RealAttempt.original(command["stderr"])
+        if b"test result: ok" not in stdout:
+            raise AssertionError("independent runner tests did not pass")
+        return {"operation": "test.runner-tests", "evidence": "registered-action", "command": command["name"]}
+    if evidence["selected"] != ["test:runner-tests"]:
+        raise AssertionError("unexpected runner unit selection")
+    runner = [row for row in evidence["executed"] if row["operation"] == "test.runner-tests"]
+    if len(runner) != 1:
+        raise AssertionError("startup alone cannot satisfy the later independent Cargo action")
+    process = runner[0]["process"]
+    if process["exit_code"] != 0 or process["failure"] is not None or "test result: ok" not in process["stdout"]:
+        raise AssertionError("independent runner tests did not pass")
+    return {"operation": "test.runner-tests", "evidence": "runner-check"}
+
+
+class RunnerConsumption(unittest.TestCase):
+    """Independent selection expectations and real Python subprocess effects."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="runner consumption ")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.attempt = RealAttempt(self.root / "evidence", {}, time.monotonic() + 10, 1048576)
+        self.response = {"status": "passed", "evidence": {
+            "base": "same-fixture-source", "candidate": "same-fixture-source",
+            "changed_paths": [], "selected": [], "executed": [], "blocked": []}}
+        self.outcome = "success"
+
+    def registered(self, operation):
+        self.assertEqual(operation, "test.runner-tests")
+        self.attempt.run(operation, [sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),
+                                    "runner-consumer", self.outcome], self.root, dict(os.environ))
+        return self.attempt.result["commands"][-1]
+
+    def consume(self):
+        return consume_runner_operation(self.response, "same-fixture-source", self.registered)
+
+    def selected(self):
+        self.response["evidence"].update(base="earlier-fixture-source", changed_paths=["runner-source"],
+            selected=["test:runner-tests"], executed=[{"operation": "test.runner-tests", "process": {
+                "exit_code": 0, "failure": None, "stdout": "test result: ok. 1 passed; 0 failed"}}])
+
+    def test_same_commit_no_work_stays_unchanged_and_runs_registered_consumer(self):
+        before = json.dumps(self.response, sort_keys=True)
+        result = self.consume()
+        self.assertEqual(json.dumps(self.response, sort_keys=True), before)
+        self.assertEqual(result, {"operation": "test.runner-tests", "evidence": "registered-action",
+                                  "command": "test.runner-tests"})
+        self.assertEqual((self.root / "runner-consumed").read_bytes(), b"success")
+        self.assertEqual(len(self.attempt.result["commands"]), 1)
+        row = self.attempt.result["commands"][0]
+        self.assertEqual(row["exit_code"], 0)
+        self.assertIn(b"test result: ok", RealAttempt.original(row["stdout"]))
+        self.assertEqual(RealAttempt.original(row["stderr"]), b"runner consumer stderr\n")
+
+    def test_unselected_nonempty_delta_also_requires_actual_consumption(self):
+        self.response["evidence"].update(base="earlier-fixture-source", changed_paths=["documentation"])
+        self.assertEqual(self.consume()["evidence"], "registered-action")
+        self.assertEqual((self.root / "runner-consumed").read_bytes(), b"success")
+
+    def test_selected_success_reuses_execution_without_duplicate_action(self):
+        self.selected()
+        self.assertEqual(self.consume(), {"operation": "test.runner-tests", "evidence": "runner-check"})
+        self.assertEqual(self.attempt.result["commands"], [])
+        self.assertFalse((self.root / "runner-consumed").exists())
+
+    def test_missing_duplicate_failed_or_unselected_execution_never_substitutes(self):
+        for defect in ("missing", "duplicate", "exit", "failure", "no-tests", "unselected", "blocked",
+                       "check-failed", "source-drift"):
+            with self.subTest(defect=defect):
+                self.selected()
+                self.response["status"] = "passed"
+                self.response["evidence"].update(candidate="same-fixture-source", blocked=[])
+                evidence = self.response["evidence"]
+                if defect == "missing": evidence["executed"] = []
+                elif defect == "duplicate": evidence["executed"] *= 2
+                elif defect == "exit": evidence["executed"][0]["process"]["exit_code"] = 7
+                elif defect == "failure": evidence["executed"][0]["process"]["failure"] = "timeout"
+                elif defect == "no-tests": evidence["executed"][0]["process"]["stdout"] = "startup only"
+                elif defect == "unselected": evidence["selected"] = []
+                elif defect == "blocked": evidence["blocked"] = ["test.runner-tests"]
+                elif defect == "check-failed": self.response["status"] = "failed"
+                elif defect == "source-drift": evidence["candidate"] = "different-fixture-source"
+                with self.assertRaises(AssertionError):
+                    self.consume()
+                self.assertEqual(self.attempt.result["commands"], [])
+
+    def test_direct_failure_retains_exit_and_original_streams(self):
+        self.outcome = "failure"
+        with self.assertRaises(AssertionError):
+            self.consume()
+        row = self.attempt.result["commands"][0]
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(row["exit_code"], 7)
+        self.assertEqual(RealAttempt.original(row["stdout"]), b"runner consumer failure\n")
+        self.assertEqual(RealAttempt.original(row["stderr"]), b"runner consumer stderr\n")
+
+    def test_zero_exit_without_test_result_is_not_consumption(self):
+        self.outcome = "no-tests"
+        with self.assertRaisesRegex(AssertionError, "independent runner tests did not pass"):
+            self.consume()
+        self.assertEqual(self.attempt.result["commands"][0]["exit_code"], 0)
+
+
 class RealFixtureStartup(unittest.TestCase):
     """All fixture production and assertions share one existing owner lease."""
 
@@ -1149,6 +1271,7 @@ class RealFixtureStartup(unittest.TestCase):
             def registered(operation):
                 action = actions[operation]
                 run(operation, [tools[action["tool"]], *action["argv"]], root)
+                return attempt.result["commands"][-1]
 
             registered("host.bootstrap-cache")
             try:
@@ -1186,16 +1309,16 @@ class RealFixtureStartup(unittest.TestCase):
             self.assertIsNone(report["judge"]["failure"])
             response = json.loads(original(report["judge"]["stdout_original"]))
             original(report["judge"]["stderr_original"])
-            self.assertEqual(response["status"], "passed")
-            self.assertEqual(response["evidence"]["candidate"], observed["commit"])
-            runner = [row for row in response["evidence"]["executed"] if row["operation"] == "test.runner-tests"]
-            self.assertEqual(len(runner), 1, "startup alone cannot satisfy the later independent Cargo action")
-            self.assertEqual(runner[0]["process"]["exit_code"], 0)
-            self.assertIsNone(runner[0]["process"]["failure"])
-            self.assertIn("test result: ok", runner[0]["process"]["stdout"])
             # Originals remain at their original paths. No copied reports, forged
             # lifecycle enrollment, or unchecked recursive fixture deletion.
             attempt.result["runner_report"] = reference["original"]
+            attempt.publish()
+            self.assertEqual(bootstrap.observe_source(root), observed)
+            # The explicit acceptance action uses the same registered argv and
+            # scoped toolchain environment, within this fixture's remaining bound.
+            environment.update(check_config["policy"]["environment"])
+            attempt.result["runner_consumption"] = consume_runner_operation(response, observed["commit"], registered)
+            self.assertEqual(bootstrap.observe_source(root), observed)
 
 
 
