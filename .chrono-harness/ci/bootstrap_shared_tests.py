@@ -141,6 +141,32 @@ class SharedStartup(unittest.TestCase):
         state.mkdir()
         (state / "startup-install.json").mkdir()
         self.assertNotEqual(self.invoke("install", "unit_fixture", root=root).returncode, 0)
+        raw = (self.transfer / "manifest.json").read_bytes()
+        retained = self.root / (".chrono-harness/state/startup-originals/manifest-" +
+                                hashlib.sha256(raw).hexdigest() + ".json")
+        self.assertEqual(retained.read_bytes(), raw)
+
+    def test_manifest_original_survives_transfer_disposal_after_consumer_failure(self):
+        self.produce()
+        raw = (self.transfer / "manifest.json").read_bytes()
+        binding = self.environment["CHRONO_STARTUP_BINDING"]
+        retained = self.root / (".chrono-harness/state/startup-originals/manifest-" + binding + ".json")
+        self.host.succeeded(self.invoke("install", "unit_fixture"))
+        self.host.succeeded(self.invoke("verify", "core"))
+        self.assertEqual(retained.read_bytes(), raw)
+        (self.root / ".chrono-harness/bin/tool").write_bytes(b"consumer drift")
+        failed = self.invoke("verify", "core")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn(b"installed startup tool differs", failed.stderr)
+        # Only this test's reconstructible transfer is disposed, after its users.
+        shutil.rmtree(self.transfer)
+        self.assertEqual(retained.read_bytes(), raw)
+        self.assertEqual(hashlib.sha256(retained.read_bytes()).hexdigest(), binding)
+        manifest = json.loads(retained.read_bytes())
+        original = self.root / ".chrono-harness/state/startup-originals/core.json"
+        self.assertEqual(manifest["source"], json.loads(original.read_bytes())["source"]["after"])
+        self.assertEqual(manifest["profiles"]["core"]["report"]["sha256"],
+                         hashlib.sha256(original.read_bytes()).hexdigest())
 
     def test_dirty_producer_and_existing_transfer_are_rejected(self):
         (self.root / "product-source").write_text("dirty")
@@ -574,12 +600,20 @@ class ManagedAttemptCustody(unittest.TestCase):
             with self.subTest(mode=mode):
                 root, attempt = self.host(mode)
                 source = (root / fixture.OPERATION).read_bytes()
-                if mode == "success":
-                    attempt.managed("fixture.custody")
-                else:
-                    with self.assertRaises(AssertionError):
+                try:
+                    if mode == "success":
                         attempt.managed("fixture.custody")
-                self.assertTrue((root / "crates/runner/target/payload").is_file())
+                    else:
+                        with self.assertRaises(AssertionError):
+                            attempt.managed("fixture.custody")
+                finally:
+                    # A drain may happen as soon as use returns. Consume only
+                    # retained assertion evidence after that protection ends.
+                    attempt.dispose()
+                assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
+                self.assertTrue(assertions["ownership_fds"])
+                self.assertEqual(assertions["verified_payloads"],
+                                 ["crates/runner/target/payload", ".chrono-harness/startup/payload"])
                 self.assertEqual((root / ".chrono-harness/state/custody-original").read_bytes(), b"original evidence")
                 managed = json.loads(Path(attempt.result["custody"]["managed_report"]["path"]).read_bytes())
                 process = managed["managed_process"]
@@ -589,7 +623,6 @@ class ManagedAttemptCustody(unittest.TestCase):
                     self.assertIsNotNone(process["failure"])
                 else:
                     self.assertIsNone(process["failure"])
-                attempt.dispose()
                 custody = attempt.result["custody"]
                 self.assertEqual(custody["status"], "outputs-disposed-evidence-retained")
                 self.assertFalse((root / "crates/runner/target").exists())
@@ -623,7 +656,8 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertTrue((root / ".chrono-harness/state/custody-ready").exists())
                 with self.assertRaises((AssertionError, ValueError)):
                     attempt.dispose()
-                self.assertTrue((root / "crates/runner/target/payload").is_file())
+                assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
+                self.assertEqual(len(assertions["verified_payloads"]), 2)
                 self.assertEqual(attempt.result["custody"]["status"], "protected-pending")
             finally:
                 (root / ".chrono-harness/state/custody-release").touch()
@@ -718,7 +752,21 @@ class RealFixtureStartup(unittest.TestCase):
                 run(operation, [tools[action["tool"]], *action["argv"]], root)
 
             registered("host.bootstrap-cache")
-            registered("host.bootstrap-shared-produce")
+            try:
+                registered("host.bootstrap-shared-produce")
+            finally:
+                # The producer retains the exact descriptor before publication,
+                # even when publication/consumer commands later fail.
+                shared = json.loads((root / CONFIG).read_bytes())
+                manifest_path = root / shared["directory"] / "manifest.json"
+                if manifest_path.is_file():
+                    raw = manifest_path.read_bytes()
+                    sha = hashlib.sha256(raw).hexdigest()
+                    retained = root / (".chrono-harness/state/startup-originals/manifest-" + sha + ".json")
+                    attempt.result["startup_manifest"] = {"path": str(retained), "sha256": sha, "size": len(raw)}
+                    attempt.publish()
+                    self.assertEqual(retained.read_bytes(), raw)
+                    self.assertEqual(json.loads(raw)["source"], observed)
             binding = (evidence / "github-output").read_text().strip().split("=", 1)[1]
             attempt.result["binding"] = binding
             environment["CHRONO_STARTUP_BINDING"] = binding

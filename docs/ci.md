@@ -217,6 +217,14 @@ outputs and verified absence, then records `outputs-disposed-evidence-retained`.
 No Python cleanup ledger or historical adoption is created. Source, installed
 bin, state reports, stream originals and descriptor targets stay at their original
 paths for failure diagnosis and caller acceptance/review. Main cache release does
+not remove the exact published startup manifest: the Python producer writes its
+original bytes before publication to
+`.chrono-harness/state/startup-originals/manifest-<binding>.json`. The binding is
+the SHA-256 of those bytes, which contain the source identity and original-report
+associations. A publication or later consumer failure preserves that original;
+the real fixture result references its path, digest and length. It shares the
+fixture evidence's acceptance/review lifetime and caller-owned retirement, while
+the transfer remains disposable. Main cache release does
 not finish the task or delete the checkout. Missing ownership, partial reports,
 live leases or incomplete disposal keep `protected-pending` and refuse another
 attempt in the same slot. An outer timeout can leave live inherited leases; it
@@ -229,7 +237,11 @@ receipts below `.chrono-harness/state/bootstrap-custody-tests/` for the current
 check's diagnosis/review; each invocation creates at most five fixtures, with no
 retry. Those evidence consumers must release them before the caller retires the
 fixtures through their test lifecycle. Their declared generated outputs are
-reclaimed by the owner during the test. Passing synthetic cases do not establish
+reclaimed by the owner during the test. Disposable payload assertions execute
+inside the Python fixture under the inherited owner lease, before success,
+failure or timeout. The parent disposes outputs in `finally` and then reads the
+retained assertion evidence and disposal receipts; it never needs the payload
+after `use` returns. Passing synthetic cases do not establish
 native/canonical or real Cargo acceptance. Historical real fixtures are untouched.
 
 The bootstrap test owner retains the existing 900-second/1-MiB limits and FILEMAP

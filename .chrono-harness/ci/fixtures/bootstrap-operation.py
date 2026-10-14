@@ -13,13 +13,25 @@ from process_fds import inherited_fds
 mode = sys.argv[1]
 if mode == "custody":
     outcome = sys.argv[2]
+    ownership_fds = inherited_fds()
+    if not ownership_fds:
+        raise AssertionError("custody assertions require inherited owner protection")
+    verified_payloads = []
     for name in ("crates/runner/target", ".chrono-harness/startup"):
         path = Path(name)
         path.mkdir(parents=True)
         (path / "payload").write_bytes(b"reconstructible output")
+        if (path / "payload").read_bytes() != b"reconstructible output":
+            raise AssertionError("custody payload differs: " + name)
+        verified_payloads.append((path / "payload").as_posix())
     state = Path(".chrono-harness/state")
     state.mkdir(exist_ok=True)
     (state / "custody-original").write_bytes(b"original evidence")
+    # The parent consumes this original after use returns; payload reads must
+    # finish here, while the inherited owner lease is still held, on every exit.
+    with (state / "custody-assertions.json").open("x") as output:
+        json.dump({"ownership_fds": list(ownership_fds),
+                   "verified_payloads": verified_payloads}, output)
     print("custody stdout", flush=True)
     print("custody stderr", file=sys.stderr, flush=True)
     (state / "custody-ready").touch()

@@ -234,6 +234,14 @@ def produce(root, path, config, profiles, config_sha):
         write_new(staging / "manifest.json", raw)
         if source(root) != observed:
             raise ValueError("startup source changed before publication")
+        # Acceptance/review outlive the reconstructible transfer. Retain the
+        # exact descriptor bytes before publishing it, including output failures.
+        original = safe(root, ".chrono-harness/state/startup-originals/manifest-" + digest(raw) + ".json")
+        if original.exists():
+            if original.read_bytes() != raw:
+                raise ValueError("startup manifest original differs")
+        else:
+            write_new(original, raw)
         staging.rename(transfer)
     # A failed output publication must fail the producer step and prevent use.
     with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
