@@ -1333,6 +1333,15 @@ impl Manager {
                 }
             }
             if let Some(drain) = report.get("drain").and_then(Value::as_array) {
+                for entry in drain {
+                    if let Some(input) = entry.get("input") {
+                        inputs.push(
+                            serde_json::from_value(input.clone())
+                                .map_err(|e| format!("invalid retained drain input: {e}"))?,
+                        );
+                    }
+                }
+                // Historical inline drain reports remain supported unchanged.
                 reports.extend(drain.iter().filter_map(|entry| entry.get("report")));
             }
         }
@@ -1767,7 +1776,11 @@ impl Manager {
                         failures.push(format!("{}: {}", e.path.display(), result["error"]));
                     }
                     self.save()?;
-                    report["drain"].as_array_mut().unwrap().push(value!({"path":e.path,"receipt":{"path":path,"sha256":sha256(&b)},"report":result}));
+                    report["drain"].as_array_mut().unwrap().push(value!({
+                        "path":e.path,"status":result["status"],"error":result["error"],
+                        "receipt":{"path":path,"sha256":sha256(&b)},
+                        "input":self.retained_input(&path, &b, "receipt")
+                    }));
                 }
                 Err(error) => {
                     failures.push(format!("{}: {error}", e.path.display()));

@@ -804,3 +804,44 @@ evidence only. Committed-clean real cache/core/shared/independent runner executi
 canonical DELTA, Darwin and Linux native consumption, lifecycle closure, review
 and actual delivery remain required. Full SPEC scope, CPU acceleration, full-host
 activation and unresolved compiler/backend/SDK/input closure remain unchanged.
+
+Q2's bounded source increment adds optional per-operation contracts at the existing
+registration/routes owners, with scoped DELTA and offline collection using the
+same contracts. Lifecycle drains reference retained child originals through the
+existing input verifier; supported inline history and original managed command
+streams/exits remain readable. The projects migration fixture explicitly binds
+its historical commit/tree and acquires missing metadata/blobs with current code,
+preserving original Git diagnostics. The native historical-fixture repair uses
+explicit platform fixtures with finite predeclared local/native Git identities,
+and a temporary remote-free bare object view for probes and reads. Only explicit
+bounded fetches access the original checkout's origin. It retains cold/warm/error
+originals and all historical decoding, alias/ambiguity and workflow repair checks;
+local acceptance does not establish Linux/macOS native acceptance. See execution.md and worktree.md for the
+contracts and owner-local Rust regressions.
+
+Product source and host test-input policy change together: FILEMAP declares the
+history manifest/helper, platform fixture consumers and the routes tests' actual
+registry inputs. The finite native repair changes fixture implementation and
+fixture policy together; it does not expand the input-governance contract. Scheduling
+cap=2, operation/output/CI limits and CPU acceleration remain unchanged. Committed
+canonical checks, both native platforms, review and delivery remain caller
+obligations. Q3/Q4 and complete SPEC acceptance remain outstanding. The nine old
+local evidence originals and three tool binaries reported unlocated by PR #169
+remain unlocated; current passing evidence does not recover those bytes.
+
+The postlanding bootstrap fixture correction preserves a successful empty runner
+DELTA and separately executes the existing registered `test.runner-tests` action
+when that unit selects no work. Selected execution must still have its own passing
+Cargo result; it is reused without a second run. Python regressions distinguish
+these paths, reject missing/failed selected execution, and retain direct-action
+failure streams. The actual clean Q2 source was consumed locally with a nonempty
+DELTA before this correction; that observation does not certify the changed source
+or merged-dev behavior. Committed corrected-source consumption, native checks,
+independent review and actual landing remain caller obligations.
+
+**Fixture behavior and host registration change together:** FILEMAP now records
+the fixture's direct runner-test and Cargo dependencies. No operation, output or
+CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitted
+Q2 increment plus this correction; it makes no publication, remote-acceptance or
+complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
+unmeasured until those actual consumer cases run.

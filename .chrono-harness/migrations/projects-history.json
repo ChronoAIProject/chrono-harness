@@ -1,0 +1,8 @@
+{
+  "schema": "chrono-test-history/v1",
+  "commit": "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98",
+  "tree": "5c8d85c1df63ad1f8d30724d78ab986a185b12a1",
+  "remote": "origin",
+  "timeout_seconds": 120,
+  "output_limit_bytes": 1048576
+}

@@ -9,6 +9,51 @@ pub struct Plan {
     pub operations: Vec<String>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub operation_bounds: BTreeMap<String, Bounds>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Bounds {
+    pub timeout_seconds: u64,
+    pub output_limit_bytes: usize,
+}
+impl Bounds {
+    fn valid(&self) -> bool {
+        self.timeout_seconds > 0
+            && self.output_limit_bytes > 0
+            && self.output_limit_bytes <= 64 * 1024 * 1024
+    }
+}
+impl Plan {
+    pub fn bounds(&self, operation: &str) -> Bounds {
+        self.operation_bounds
+            .get(operation)
+            .copied()
+            .unwrap_or(Bounds {
+                timeout_seconds: self.timeout_seconds,
+                output_limit_bytes: self.output_limit_bytes,
+            })
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        if self.operations.is_empty()
+            || self.operations.iter().any(|s| s.is_empty())
+            || self.operations.iter().collect::<BTreeSet<_>>().len() != self.operations.len()
+            || !(Bounds {
+                timeout_seconds: self.timeout_seconds,
+                output_limit_bytes: self.output_limit_bytes,
+            })
+            .valid()
+            || self
+                .operation_bounds
+                .iter()
+                .any(|(operation, bounds)| !self.operations.contains(operation) || !bounds.valid())
+        {
+            return Err("E_EXECUTION_PLAN: invalid operations or bounds".into());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -125,17 +170,10 @@ pub fn plans(filemap: &Value) -> Result<BTreeMap<String, Plan>, String> {
     let plans: BTreeMap<String, Plan> = serde_json::from_value(filemap["execution_plans"].clone())
         .map_err(|e| format!("E_EXECUTION_PLAN: {e}"))?;
     for (test, plan) in &plans {
-        if !test.starts_with("test:")
-            || test.len() == 5
-            || plan.operations.is_empty()
-            || plan.operations.iter().any(|s| s.is_empty())
-            || plan.operations.iter().collect::<BTreeSet<_>>().len() != plan.operations.len()
-            || plan.timeout_seconds == 0
-            || plan.output_limit_bytes == 0
-            || plan.output_limit_bytes > 64 * 1024 * 1024
-        {
+        if !test.starts_with("test:") || test.len() == 5 {
             return Err(format!("E_EXECUTION_PLAN: invalid plan {test}"));
         }
+        plan.validate().map_err(|e| format!("{e}: {test}"))?;
     }
     Ok(plans)
 }

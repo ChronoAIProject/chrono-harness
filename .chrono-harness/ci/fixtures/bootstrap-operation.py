@@ -11,6 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from process_fds import inherited_fds
 
 mode = sys.argv[1]
+if mode == "runner-consumer":
+    outcome = sys.argv[2]
+    Path("runner-consumed").write_bytes(outcome.encode())
+    print("test result: ok. 1 passed; 0 failed" if outcome == "success" else "runner consumer " + outcome)
+    print("runner consumer stderr", file=sys.stderr)
+    sys.exit(7 if outcome == "failure" else 0)
 if mode == "custody":
     outcome = sys.argv[2]
     ownership_fds = inherited_fds()

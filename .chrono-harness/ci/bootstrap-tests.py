@@ -520,5 +520,5 @@ if __name__ == "__main__":
         from bootstrap_shared_tests import RealFixtureStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealFixtureStartup")
     else:
-        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition
+        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption
         unittest.main()

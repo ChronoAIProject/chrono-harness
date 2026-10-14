@@ -21,12 +21,33 @@ inherited or owned descriptor still releases the kernel lease.
 
 FILEMAP v2 owns `execution_plans`: a map from `test:ID` to
 `{operations: [operation-ID, ...], timeout_seconds, output_limit_bytes}`.
+An optional `operation_bounds` map supplies complete
+`{timeout_seconds, output_limit_bytes}` contracts for named operations already in
+that sequence. Missing entries inherit the original plan defaults; absent or empty
+maps preserve the historical serialized plan identity. Unknown operations, missing
+bound fields, nonpositive bounds and output limits above 64 MiB reject. This is an
+explicit per-plan declaration, without operation-name special cases or dependency
+inference.
 Sequences are nonempty, ordered and duplicate-free. Actions, tools and argv remain
 in projects/scripts. Plans must include the unique test execute method. Prerequisites
 exist only when listed. Routes merges selected sequences as precedence constraints,
 runs shared operations once, and rejects cycles or conflicting shared bounds before
 tool observation or operation launch. Bounds are positive; each output stream is
 limited to 64 MiB. A timeout is an infrastructure failure, not a functional result.
+Shared operations must have equal resolved contracts in every selected plan;
+an explicit bound does not resolve another consumer's disagreement. Routes neither
+takes the maximum nor the minimum. Override additions, changes and removals retain
+plan DELTA impact in full and scoped checks, and collection reconstructs both the
+registered overrides and resolved operation bounds without business execution.
+
+The current coordinator startup plan contains `host.bootstrap-tests` and
+`host.bootstrap-real-consumer`, each at 900 seconds/1048576 bytes. The existing
+full-host migration consumer additionally lists `build.distribution`, explicitly bounded at 600 seconds/1048576 bytes, while
+its startup test keeps the 900-second default. The distribution and release
+integration plans keep their original 600-second defaults. A compatible candidate
+decoder supports that input without copying the older host's source or changing
+the coordinator's startup policy. Candidate checks and local migration do not
+establish compatible public release, native acceptance or full governance adoption.
 
 FILEMAP v2 may additionally declare one `execution_scheduling` policy:
 
@@ -535,6 +556,65 @@ All six prior incoming verification edges already had equivalent same-source,
 same-kind ci-tests edges. Their effect survives. Adding verification to the ci-tests
 plan also runs it for pre-existing ci-tests-only triggers. Selection equivalence
 and measured costs are not claimed; costs remain unknown.
+
+The migration test's whole historical host is an explicit input in
+`.chrono-harness/migrations/projects-history.json`: commit
+`4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`, tree
+`5c8d85c1df63ad1f8d30724d78ab986a185b12a1`, and remote `origin`.
+Its Rust fixture acquisition and copied migration host use the existing
+`.chrono-harness/migrations/test-hosts.json` platform selection. Darwin/arm64
+and Linux/x86_64 now each name a fixture containing predeclared Python and Git
+evidence. Darwin admits the local developer Git and the actual native release
+Git as separate exact identities; Linux admits the actual native release Git.
+An observed Git must match exactly one declared path/version/SHA-256 tuple.
+Unknown platforms, unmatched or ambiguous identities and Python version drift
+fail with expected declarations and original observations retained. Neither
+acquisition nor fixture repair copies observed versions/digests into expectations;
+the candidate fixture installs the selected declarations without changing the
+historical snapshot or importing the developer host's remaining tool identity.
+The native expectations come from release run 38549541595, Linux job
+115804543818 and macOS job 115804699537. These finite test fixtures do not adopt
+full governance or admit every tool shipped under those OS labels.
+
+The original macOS failed-blob probe attempted its unavailable origin despite
+`GIT_NO_LAZY_FETCH=1`. Upstream Git 2.39.3 does not implement that control.
+Local reads now use a temporary bare Git view of the original object database,
+with no remotes, empty templates and system/global configuration disabled.
+Only explicit fetch processes use the original checkout and its declared origin.
+This uses supported Git object-store access without copying objects, scanning
+unrelated history, changing global configuration or relying on the lazy-fetch
+switch: reads deliberately omit `GIT_NO_LAZY_FETCH`, exercising the same default
+lazy-fetch behavior on current Git as on the older native Git. The helper records object-directory/format discovery and view creation
+under the same process bounds. The temporary view is dropped after acquisition.
+
+It checks the fixed commit/tree locally, probes only that tree's blobs,
+and fetches the exact missing blob OIDs in one explicit bounded request. An absent
+pinned commit first receives its own explicit `--filter=blob:none` metadata fetch,
+with no ref update or shallow-boundary change; the server may include ancestor
+metadata in that fixed commit's transfer. Failed probes, transport errors,
+remaining missing blobs and identity drift fail with original process receipts;
+there is no retry or ref discovery. Wrong/malformed commit probes and missing
+tree metadata still fail. The four historical assertions
+then consume one in-memory acquired snapshot, preserving original historical
+bytes, aliases and ambiguity, version/method binding and workflow drift checks.
+Ordinary reentry with complete local objects requires no remote access. Rust
+regressions retain cold and warm original processes, compare the same tree and
+binary/symlink bytes, export the warm snapshot with an unavailable origin, and
+reject failed cold metadata/blob origins and wrong identities. Receipts are
+retained before acquisition assertions so failed expectations keep their probes.
+
+Acquisition uses the fixed candidate's registered 120-second/1-MiB per-process bounds and caps the
+single fetch's object argv at 64 KiB. Receipts, including expected failed local
+promisor regressions, remain in `.chrono-harness/state/migration-tests/`; fixture
+directories are temporary, and compiled outputs remain in the already registered
+test target. The projects-test owner retains acquisition diagnostics for the
+candidate's debugging, review and acceptance consumers. After those consumers
+finish, the caller retires the fixture state through the existing worktree
+lifecycle; these originals are not a permanent archive. FILEMAP binds the manifest
+and Rust helper to the migration consumer;
+this is host test-input policy, not a new product history or dependency-discovery
+contract. Local fixture acceptance does not establish native acceptance or delivery.
+Remote transfer bytes, billing and full input closure remain unmeasured.
 
 Current host operation sequences live only in FILEMAP. Scoped CI consumes v2 plans
 through routes' planner and projects' executor/receipt path. Historical v1 bindings

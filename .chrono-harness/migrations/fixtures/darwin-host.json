@@ -1,0 +1,31 @@
+{
+  "tools": [
+    {
+      "id": "python3",
+      "program": "/usr/bin/python3",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "Python 3.9.6"
+    }
+  ],
+  "historical_git": {
+    "program": "/usr/bin/git",
+    "version_argv": [
+      "--version"
+    ],
+    "identities": [
+      {
+        "host": "developer-macos",
+        "expected_version": "git version 2.50.1 (Apple Git-155)",
+        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+      },
+      {
+        "host": "native-macos-26-run38549541595",
+        "expected_version": "git version 2.39.3 (Apple Git-146)",
+        "sha256": "4016687c36d60a2bbcab1de3850ebdafdd0a95f9421ff7f05aaf4ca6a002a227"
+      }
+    ]
+  }
+}

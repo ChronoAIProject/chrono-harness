@@ -357,6 +357,71 @@ fn collect(h: &Host, b: &str, c: &str, reports: Value) -> Response {
 }
 
 #[test]
+fn operation_override_delta_selects_its_unit_and_collection_rechecks_original_contract() {
+    let h = report_host();
+    explicit_plans(&h);
+    let b = h.commit();
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:suite"]["operation_bounds"] =
+            json!({"test.suite":{"timeout_seconds":4,"output_limit_bytes":8192}});
+    });
+    let c = h.commit();
+    let other = unit(&h, &b, &c, "beta");
+    pass(&other);
+    assert_eq!(other.evidence["global_selected"], json!(["test:suite"]));
+    assert_eq!(other.evidence["selected"], json!([]));
+    assert_eq!(other.evidence["required_units"], json!(["alpha"]));
+    assert_eq!(h.calls(), 0);
+    assert!(!h.root().join(".chrono-harness/state/other").exists());
+    let input = write_report(&h, &b, &c, "alpha");
+    let path = input["path"].as_str().unwrap();
+    let original = h.read(path);
+    let e = &original["response"]["evidence"];
+    assert_eq!(e["plan"]["operations"][0]["timeout_seconds"], 4);
+    assert_eq!(e["plan"]["operations"][0]["output_limit_bytes"], 8192);
+    assert_eq!(e["plan"]["selected"]["test:suite"]["timeout_seconds"], 3);
+    assert_eq!(
+        e["selection_explanation"]["extra_selections"]["test:suite"],
+        json!(["changed operation bounds"])
+    );
+    pass(&collect(&h, &b, &c, json!([input.clone()])));
+    assert_eq!(h.calls(), 1);
+    let mut forged = original.clone();
+    let plan = &mut forged["response"]["evidence"]["plan"];
+    plan["selected"]["test:suite"]["operation_bounds"]["test.suite"]["timeout_seconds"] = json!(5);
+    let mut identity = plan.clone();
+    identity.as_object_mut().unwrap().remove("identity");
+    plan["identity"] = json!(chrono_harness::wire::digest(&identity).unwrap());
+    let stdout = serde_json::to_vec(&forged["response"]).unwrap();
+    forged["judge"]["stdout"] = json!(String::from_utf8(stdout.clone()).unwrap());
+    forged["judge"]["stdout_bytes"] = json!(stdout);
+    forged["judge"]["stdout_sha256"] = json!(sha256(&stdout));
+    h.json(path, &forged);
+    let mut rewritten = input.clone();
+    rewritten["sha256"] = json!(sha256(&fs::read(h.root().join(path)).unwrap()));
+    fail(&collect(&h, &b, &c, json!([rewritten])), "plan differs");
+    assert_eq!(h.calls(), 1);
+    h.json(path, &original);
+    pass(&collect(&h, &b, &c, json!([input])));
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["execution_plans"]["test:suite"]
+            .as_object_mut()
+            .unwrap()
+            .remove("operation_bounds");
+    });
+    let d = h.commit();
+    let removed = unit(&h, &c, &d, "alpha");
+    pass(&removed);
+    assert_eq!(removed.evidence["selected"], json!(["test:suite"]));
+    assert_eq!(
+        removed.evidence["plan"]["operations"][0]["timeout_seconds"],
+        3
+    );
+    assert_eq!(h.calls(), 2);
+    assert!(!h.root().join(".chrono-harness/state/other").exists());
+}
+
+#[test]
 fn collection_verifies_complete_reports_without_executing_tests() {
     let h = report_host();
     let b = h.head();

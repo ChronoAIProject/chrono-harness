@@ -83,6 +83,30 @@ fn committed_project_and_script_hosts_execute_actual_four_judge_chain() {
     }
 }
 #[test]
+fn full_chain_executes_registered_prerequisite_override_and_original_test_bound() {
+    let mut h = Host::new(false);
+    h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["timeout_seconds"] = json!(900);
+    h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"] =
+        json!({"prepare.p":{"timeout_seconds":600,"output_limit_bytes":4096}});
+    h.save();
+    let (code, report) = h.run(|_| {});
+    check_pass(code, &report);
+    assert_eq!(
+        fs::read_to_string(h.root().join(".chrono-harness/state/order")).unwrap(),
+        "pt"
+    );
+    let route = report["judges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "routes")
+        .unwrap();
+    let operations = &route["response"]["outputs"]["execution_plan"]["operations"];
+    assert_eq!(operations[0]["timeout_seconds"], 600);
+    assert_eq!(operations[1]["timeout_seconds"], 900);
+    assert_eq!(report["tests"]["executed"].as_array().unwrap().len(), 2);
+}
+#[test]
 fn retained_missing_changed_and_wrong_endpoint_cannot_pass() {
     let h = Host::new(true);
     for mode in 0..3 {
