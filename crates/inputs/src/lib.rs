@@ -380,7 +380,9 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
     };
     let root = fs::canonicalize(cwd.join(required("--host-root")?)).map_err(|e| e.to_string())?;
     let result = if command == "observe" {
-        observe(&root, required("--manifest")?, required("--output")?)?
+        let result = observe(&root, required("--manifest")?, required("--output")?)?;
+        value!({"schema":"chrono-input-observation-reference/v1", "status":result["status"],
+            "original":chrono_harness::prepared::original(&root, required("--output")?)?})
     } else if command == "capture" {
         capture_projected(
             &root,

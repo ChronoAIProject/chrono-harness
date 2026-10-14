@@ -1257,3 +1257,16 @@ branch birth and its association are not rewritten. Delivery may likewise retain
 the workflow-owned integration certificate; integration does not consume its own
 prior certificate. This is transport only: input and workflow judges still admit
 snapshots and certificates. Without the field, historical origin semantics remain.
+
+### Immutable input report representation
+
+Worktree process rows carrying `immutable_input_transport` retain stdout and
+stderr once under the surviving report owner's registered `report_directory`.
+Their `stdout_original` / `stderr_original` use the existing `{path, sha256}`
+contract; process identities, exits, failure, data and diagnostic limits remain.
+Read them through `prepared::read_original` and `scoped_report::restore_process`;
+missing or changed bytes fail. Historical inline rows retain their original
+meaning. A publication failure keeps the inline receipt and fails the operation
+with `evidence_error`; it cannot produce a passing prefix. Reports and CLI JSON
+use compact whitespace. Neither representation changes lifecycle release,
+selection, raw original bytes, retention eligibility or capacity limits.

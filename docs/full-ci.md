@@ -216,3 +216,31 @@ Native consumers, generated workflow execution, host activation, complete input
 closure and local/CI comparison are separate evidence obligations. This manual
 dispatch projection does not orchestrate PR creation, merging, required-check
 publication or landing.
+
+## Main-host adoption inputs
+
+The registered native acquisition chain is documented in [inputs](inputs.md).
+Its observation outputs are inputs to engineering adoption, not endpoint
+snapshots or full activation. The main `config.json` still selects local absolute
+paths and scoped CI. Do not dispatch that local policy as a native full policy.
+The source/CI selector and native adapter already implement the required routing;
+the following values require authentic caller production before they can be bound:
+
+| Owner / destination | Required authentic input and remaining action |
+| --- | --- |
+| Supported native bootstrap and input acquisition | On macos-26 arm64 and Linux x86_64, run candidate `host.bootstrap`, `inputs.provision-native`, then the platform observation operation; retain bootstrap source/install/tool identities, original manifests, every launch/stream/exit and observation report. Provide actual Git, Cargo/rustc/backend/linker, SDK/runtime/Python paths and bytes, Cargo target/configuration lookup and directory membership/aliases. Resolve observed absences and required undeclared inputs before adoption. |
+| Main config selector | Retain the local direct policy at its own registered path; supply independently bound CI direct policies for each native platform. Use existing `chrono-git-configs/v2` `platforms[OS-ARCH].local/ci` at the stable entry, registering every target and its own immutable-input capacity. The selected policy must bind candidate runner/judges and actual tool/input/environment selections; unsupported/missing sources fail. Do not copy local Mac observations into CI expectations. |
+| Fixed endpoints | At each actual fixed base/candidate checkout, run `chrono-inputs capture --host-root HOST --config ENTRY --commit OID --output SNAPSHOT`, with applicable `--unit ID --base BASE --candidate CANDIDATE` projections. Retain snapshot source/configuration identities and all addressed blobs. Use `pair` for the real base/candidate snapshots; unavailable historical originals remain unavailable. |
+| Local full-input producer | After producing the exact endpoint pair, set `worktree.json.check_inputs.full_inputs.retained_inputs` to its registered state path. `check-inputs` copies that current reference independently of immutable birth. Supply the existing successful original birth report/origin association; do not rewrite birth to insert current inputs. |
+| Native unit/provider owner | Adopt units/v2 and genuine `native_adoption` values per [CI units](ci-units.md): original tracked lineage path/digest, actual base `composition_sources`, native adapter/interpreter/inputs binary, seed/artifact paths, roles and applicable integration certificate/transport. Register every source, binary, original and generated output. Use the generated adapter as `canonical_check.inputs.ci`; it retains authentic event/payload/revision/run/attempt records and delegates existing preparation/gather. |
+| Governance and collection | Produce candidate governance projection with `capture-governance` using original base sources; produce selected unit snapshots and completed original reports. The existing native seed/acquire/gather/compose chain verifies fixed identities and imports their blobs. Missing, corrupt, nonzero or truncated originals remain failures. Five registry statuses may become active only after the applicable accepted producers and consumers exist. |
+
+The caller must commit a clean candidate, deploy compatible candidate binaries
+and both committed lifecycle policies through the existing surviving coordinator,
+then run the registered bootstrap, committed-parent real bootstrap consumer,
+canonical check and both native/full adoption chains. Ordinary full check retains
+its documented declared-input contract; universal hidden-input proof and VM
+isolation belong to neither this handoff nor a new acceptance gate. Whole-increment
+review, landing/release identity and public consumption remain separate caller
+obligations after complete Q3 engineering/acceptance, not initial review of a
+partial source increment.

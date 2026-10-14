@@ -15,6 +15,8 @@ use std::{
 #[serde(deny_unknown_fields)]
 struct Manifest {
     schema: String,
+    #[serde(default)]
+    platforms: Option<Vec<String>>,
     environment: Environment,
     operations: Vec<Operation>,
     #[serde(default)]
@@ -27,7 +29,9 @@ struct Manifest {
 struct Registered {
     projects: String,
     operations: Vec<String>,
-    tools: BTreeMap<String, String>,
+    tools: BTreeMap<String, Program>,
+    #[serde(default)]
+    environment: BTreeMap<String, Output>,
     timeout_seconds: u64,
     output_limit_bytes: usize,
 }
@@ -41,10 +45,18 @@ struct Environment {
 #[serde(deny_unknown_fields)]
 struct Operation {
     id: String,
-    program: String,
+    program: Program,
+    #[serde(default)]
+    environment: BTreeMap<String, Output>,
     argv: Vec<String>,
     timeout_seconds: u64,
     output_limit_bytes: usize,
+}
+#[derive(Clone, Deserialize)]
+#[serde(untagged)]
+enum Program {
+    Literal(String),
+    Observed(Output),
 }
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -57,7 +69,7 @@ enum Location {
 struct Literal {
     path: String,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Output {
     stdout: String,
@@ -170,6 +182,17 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
     if m.schema != "chrono-input-observation/v1" {
         return Err("invalid observation schema".into());
     }
+    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+    if let Some(platforms) = &m.platforms {
+        if platforms.is_empty()
+            || platforms.iter().collect::<BTreeSet<_>>().len() != platforms.len()
+            || !platforms.contains(&platform)
+        {
+            return Err(format!(
+                "observation has no unique registered native platform {platform}"
+            ));
+        }
+    }
     if let Some(registered) = m.registered_operations.take() {
         let project_bytes =
             fs::read(no_symlink_parents(root, &registered.projects)?).map_err(|e| e.to_string())?;
@@ -207,6 +230,7 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
                     .get(tool)
                     .ok_or_else(|| format!("unbound observation tool {tool}"))?
                     .clone(),
+                environment: registered.environment.clone(),
                 argv: serde_json::from_value(action["argv"].clone()).map_err(|e| e.to_string())?,
                 timeout_seconds: registered.timeout_seconds,
                 output_limit_bytes: registered.output_limit_bytes,
@@ -215,9 +239,30 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
     }
     let mut ids = BTreeSet::new();
     for op in &m.operations {
+        for (key, source) in &op.environment {
+            if key.is_empty()
+                || key.contains(['=', '\0'])
+                || key == "CHRONO_PROCESS_FDS"
+                || !ids.contains(&source.stdout)
+                || !source.suffix.is_empty()
+            {
+                return Err(
+                    "operation environment requires a preceding path selection and ordinary key"
+                        .into(),
+                );
+            }
+        }
+        match &op.program {
+            Program::Literal(p) if p.is_empty() => return Err("empty observation program".into()),
+            Program::Observed(o) if !ids.contains(&o.stdout) || !o.suffix.is_empty() => {
+                return Err(
+                    "executable selection requires a preceding operation and no suffix".into(),
+                );
+            }
+            _ => {}
+        }
         if op.id.is_empty()
             || !ids.insert(op.id.clone())
-            || op.program.is_empty()
             || op.timeout_seconds == 0
             || op.timeout_seconds > 900
             || op.output_limit_bytes == 0
@@ -288,9 +333,26 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
     let mut errors = Vec::new();
     for (i, op) in m.operations.iter().enumerate() {
         let result = (|| {
+            let mut environment = environment.clone();
+            for (key, source) in &op.environment {
+                environment.insert(
+                    key.clone(),
+                    path(root, &Location::Stdout(source.clone()), &processes)?
+                        .to_str()
+                        .ok_or("selected environment path UTF8")?
+                        .to_owned(),
+                );
+            }
+            let selected = match &op.program {
+                Program::Literal(p) => p.clone(),
+                Program::Observed(o) => path(root, &Location::Stdout(o.clone()), &processes)?
+                    .to_str()
+                    .ok_or("selected program UTF8")?
+                    .to_owned(),
+            };
             let executable = resolve_program(
                 root,
-                &op.program,
+                &selected,
                 Some(environment.get("PATH").map(String::as_str).unwrap_or("")),
             )?;
             let digest = file_identity(&executable)?.0;
@@ -352,7 +414,45 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
             Err(e) => errors.push(format!("{}: {e}", d.id)),
         }
     }
-    let result = json!({"schema":"chrono-input-observation-result/v1","manifest":{"path":manifest,"sha256":chrono_harness::sha256(&raw)},"platform":format!("{}-{}",std::env::consts::OS,std::env::consts::ARCH),"status":if errors.is_empty(){"observed"}else{"failed"},"governance":"not-evaluated","sources":sources,"operations":processes,"files":files,"directories":directories,"errors":errors});
+    // Locations use the live process bytes above. Publication references the
+    // already retained originals instead of serializing those streams again.
+    for (i, op) in m.operations.iter().enumerate() {
+        if let Some(process) = processes.get_mut(&op.id) {
+            let retained = (|| {
+                let stdout = chrono_harness::prepared::original(
+                    root,
+                    &format!("{output}.processes/{i}.stdout"),
+                )?;
+                let stderr = chrono_harness::prepared::original(
+                    root,
+                    &format!("{output}.processes/{i}.stderr"),
+                )?;
+                let launch = chrono_harness::prepared::original(
+                    root,
+                    &format!("{output}.processes/{i}.launch.json"),
+                )?;
+                if process["stdout_sha256"] != stdout.sha256
+                    || process["stderr_sha256"] != stderr.sha256
+                {
+                    return Err("observation original stream drift".to_string());
+                }
+                Ok((stdout, stderr, launch))
+            })();
+            match retained {
+                Ok((stdout, stderr, launch)) => {
+                    let fields = process.as_object_mut().unwrap();
+                    for field in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+                        fields.remove(field);
+                    }
+                    fields.insert("stdout_original".into(), json!(stdout));
+                    fields.insert("stderr_original".into(), json!(stderr));
+                    fields.insert("launch_original".into(), json!(launch));
+                }
+                Err(e) => errors.push(format!("{}: {e}; inline receipt preserved", op.id)),
+            }
+        }
+    }
+    let result = json!({"schema":"chrono-input-observation-result/v2","manifest":{"path":manifest,"sha256":chrono_harness::sha256(&raw)},"platform":platform,"status":if errors.is_empty(){"observed"}else{"failed"},"governance":"not-evaluated","sources":sources,"operations":processes,"files":files,"directories":directories,"errors":errors});
     super::publish(root, output, &result)?;
     if !errors.is_empty() {
         return Err(format!(

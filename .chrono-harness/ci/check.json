@@ -14,7 +14,8 @@
       "cargo": "cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
       "python3": "/usr/bin/python3",
-      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo"
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
+      "chrono-inputs": ".chrono-harness/bin/chrono-inputs"
     },
     "artifacts": [
       ".chrono-harness/bin/",

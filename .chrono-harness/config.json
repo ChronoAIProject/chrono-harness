@@ -155,6 +155,15 @@
         "--version"
       ],
       "expected_version": "chrono-judge-cargo 0.1.0"
+    },
+    {
+      "id": "chrono-inputs",
+      "program": ".chrono-harness/bin/chrono-inputs",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "chrono-inputs 0.1.0"
     }
   ],
   "protocol": {

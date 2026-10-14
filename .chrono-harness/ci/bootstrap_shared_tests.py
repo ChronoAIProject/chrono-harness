@@ -907,7 +907,9 @@ class ManagedAttemptCustody(unittest.TestCase):
             acquire("commit", [git, "-C", str(root), *args], root)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
-        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
+        # The ordinary owner suite declares build.worktree as its prerequisite.
+        # Installed-tool identity is exercised separately by RealSharedStartup.
+        attempt.manage(root, SOURCE.parents[1] / "crates/worktree/target/debug/chrono-worktree", environment)
         print("custody fixture originals: " + str(attempt.evidence), flush=True)
         return root, attempt
 

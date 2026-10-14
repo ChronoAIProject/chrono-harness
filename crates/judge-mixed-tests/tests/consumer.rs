@@ -75,7 +75,7 @@ fn checked(h: &Host, expected: i32) -> Value {
         .iter()
         .find(|j| j["id"] == "mixed")
         .unwrap();
-    assert_eq!(j["state"], "executed");
+    assert_eq!(j["state"], "executed", "original check report: {r}");
     assert_eq!(j["process"]["exit_code"], expected);
     r
 }

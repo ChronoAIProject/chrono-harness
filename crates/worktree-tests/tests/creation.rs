@@ -282,11 +282,25 @@ impl Host {
                 if row["process"].is_null() {
                     continue;
                 }
+                let process = if row["process"].get("stdout_original").is_some() {
+                    serde_json::to_value(
+                        chrono_harness::scoped_report::restore_process(&row["process"], |o| {
+                            chrono_harness::prepared::read_original(
+                                Path::new(report["source_root"].as_str().unwrap()),
+                                o,
+                                None,
+                            )
+                        })
+                        .unwrap(),
+                    )
+                    .unwrap()
+                } else {
+                    row["process"].clone()
+                };
                 for stream in ["stdout", "stderr"] {
                     let bytes: Vec<u8> =
-                        serde_json::from_value(row["process"][format!("{stream}_bytes")].clone())
-                            .unwrap();
-                    assert_eq!(row["process"][format!("{stream}_sha256")], sha256(&bytes));
+                        serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+                    assert_eq!(process[format!("{stream}_sha256")], sha256(&bytes));
                 }
             }
         }

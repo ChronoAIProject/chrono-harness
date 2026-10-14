@@ -709,7 +709,11 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    // The deterministic closure is a derived view of these exact union edges
+    // and seed causes. Serializing every (seed, node) predecessor and traversed
+    // seed set repeats the graph quadratically and can exhaust judge transport.
+    // Selection and collection still use the same complete closure above.
+    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "extra_selections":extras, "legacy_only_selections":legacy_only});
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());

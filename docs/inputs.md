@@ -137,14 +137,56 @@ update, historical endpoint capture or governance verdict.
 
 Actual failure, timeout, output overflow and inventory errors retain a failed
 report and raw available streams. A second invocation cannot overwrite an
-original output or process directory. The registered native observation manifest
-reuses all declared host Cargo acquisition/metadata actions and separate Python
-runtime probes, using the existing 1 MiB per-operation diagnostic bound and
-offline Cargo acquisition from already available packages. Missing packages remain
-failures requiring the actual provisioning owner. The Cargo observation declaration
-contains test expectations, not recorded successes. Its local tool/SDK declarations
-are not portable native CI provisioning. Fixed base observations must still come from their actual producer;
-`capture`, `pair`, `compose` and `capture-governance` retain that obligation.
+original output or process directory. Current observation results use
+`chrono-input-observation-result/v2`: process streams reference their already
+retained stdout/stderr/launch files through the existing original contract.
+`scoped_report::restore_process` verifies these references, including the launch
+record; a retention error preserves the inline receipt and fails observation.
+The CLI prints a bounded `chrono-input-observation-reference/v1` containing
+`status` and `original: {path, sha256}`. Consumers read and verify that original;
+they do not treat an isolated status prefix as acceptance. Historical v1 report
+bytes remain original. No compression or stream budget change is involved.
+
+An optional `platforms` list admits only the listed native OS-architecture pairs.
+`program: {stdout: OPERATION_ID}` selects an executable from a preceding successful
+single-path output. `registered_operations.tools` accepts the same selection;
+its optional `environment` maps variable names to preceding path outputs, allowing
+the actual selected `RUSTC` to reach Cargo. Suffixes, missing or later producers,
+failed path observations and reserved ownership variables reject. This is an
+explicit acquisition chain, not input inference or expected digest generation.
+
+Main-host acquisition uses existing registered operations:
+
+| Operation | Manifest | Actual consumer |
+| --- | --- | --- |
+| `inputs.provision-native` | `.chrono-harness/inputs/native-provisioning.json` | Existing `inputs.fetch.*` actions, with network acquisition explicitly allowed |
+| `inputs.observe-macos` | `.chrono-harness/inputs/native-observation.json` | macOS arm64 compiler, SDK, Python and offline Cargo metadata/fetch observations |
+| `inputs.observe-linux` | `.chrono-harness/inputs/linux-observation.json` | Linux x86_64 compiler, header/runtime, Python and offline Cargo observations |
+
+The caller first supplies compatible native bootstrap/lifecycle enrollment and
+candidate tools through the existing native producer. The current local Git and
+interpreter policy is not a native policy. After registered `host.bootstrap`
+installs those tools on that admitted native host, the caller runs
+`chrono-worktree use --operation inputs.provision-native --path HOST`, then the
+one applicable `inputs.observe-macos` or `inputs.observe-linux` operation on that
+native host. These operations have fixed manifest/output paths in projects.json;
+a preexisting output is preserved and refuses reentry. The caller must retain and
+finish its consumer through the existing lifecycle before selecting a new
+explicit output for another production. No second scheduler or native execution
+entry is introduced. Per-operation limits remain 120 seconds and 1 MiB. The
+observer selects actual Cargo/rustc through `rustup which --toolchain 1.95.0`,
+retains those selections and supplies that compiler path to Cargo. The bootstrap
+owner remains responsible for supported toolchain provisioning and its declared
+byte/version checks. Linux metadata actions explicitly use the Linux target.
+
+These manifests collect evidence; they do not activate native policies. Native
+Git, compiler/backend/linker, SDK/system libraries, interpreter, Cargo package and
+configuration/ancestor bindings must still be reviewed against the actual
+originals. A sysroot/path probe is not a complete runtime inventory. Missing
+packages remain failures; observations do not replace fixed endpoint snapshots.
+The Cargo observation declaration contains test expectations, not recorded
+successes. Local tool/SDK declarations are not native CI expectations. The
+remaining adoption bindings are specified in [full CI](full-ci.md#main-host-adoption-inputs).
 
 ```sh
 chrono-inputs capture --host-root /path/to/host \

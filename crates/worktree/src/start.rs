@@ -31,6 +31,40 @@ pub(crate) struct CheckoutIdentity {
     pub(crate) branch: String,
 }
 impl Runner {
+    fn retain_immutable_processes(&mut self, root: &Path) -> Result<(), String> {
+        for record in &mut self.processes {
+            if record.get("immutable_input_transport").is_none()
+                || record["process"].get("stdout_original").is_some()
+            {
+                continue;
+            }
+            // The surviving report owner holds the originals, including failed
+            // reads. Keep the inline receipt intact if publication itself fails.
+            let process: ProcessResult =
+                serde_json::from_value(record["process"].clone()).map_err(|e| e.to_string())?;
+            let stdout = chrono_harness::prepared::retain_original(
+                root,
+                &self.config.report_directory,
+                "git-stdout",
+                &process.stdout_bytes,
+            )?;
+            let stderr = chrono_harness::prepared::retain_original(
+                root,
+                &self.config.report_directory,
+                "git-stderr",
+                &process.stderr_bytes,
+            )?;
+            let fields = record["process"]
+                .as_object_mut()
+                .ok_or("Git process receipt")?;
+            for field in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+                fields.remove(field);
+            }
+            fields.insert("stdout_original".into(), value!(stdout));
+            fields.insert("stderr_original".into(), value!(stderr));
+        }
+        Ok(())
+    }
     pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
         self.input(root, args, &[])
     }
@@ -726,6 +760,12 @@ pub(crate) fn with_report(
         Ok(()) => report["status"] = value!(success),
         Err(e) => report["error"] = value!(e),
     }
+    if let Err(error) =
+        runner.retain_immutable_processes(Path::new(report["source_root"].as_str().unwrap()))
+    {
+        report["status"] = value!("failed");
+        report["evidence_error"] = value!(error);
+    }
     report["processes"] = value!(runner.processes.clone());
     if matches!(operation, "start" | "reconstruct") && report["status"] == success {
         if let Err(error) =
@@ -733,6 +773,10 @@ pub(crate) fn with_report(
         {
             report["status"] = value!("failed");
             report["error"] = value!(error);
+        }
+        if let Err(error) = runner.retain_immutable_processes(root) {
+            report["status"] = value!("failed");
+            report["evidence_error"] = value!(error);
         }
         report["processes"] = value!(runner.processes);
     }
@@ -750,7 +794,7 @@ pub(crate) fn with_report(
             }
         }
     }
-    let mut data = serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?;
+    let mut data = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     data.push(b'\n');
     output.write_all(&data).map_err(|e| e.to_string())?;
     output.as_file().sync_all().map_err(|e| e.to_string())?;

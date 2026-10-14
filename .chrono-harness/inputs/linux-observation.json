@@ -1,0 +1,447 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "TMPDIR",
+      "SDKROOT",
+      "DEVELOPER_DIR"
+    ],
+    "values": {
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_NET_OFFLINE": "true",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": ""
+    }
+  },
+  "operations": [
+    {
+      "id": "selection.cargo",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "cargo"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustc",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustc"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustfmt",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustfmt"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.commit",
+      "program": "git",
+      "argv": [
+        "rev-parse",
+        "HEAD"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.tree",
+      "program": "git",
+      "argv": [
+        "rev-parse",
+        "HEAD^{tree}"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "source.status",
+      "program": "git",
+      "argv": [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=normal"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.cargo",
+      "program": {
+        "stdout": "selection.cargo"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustc",
+      "program": {
+        "stdout": "selection.rustc"
+      },
+      "argv": [
+        "-vV"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustfmt",
+      "program": {
+        "stdout": "selection.rustfmt"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "rust.sysroot",
+      "program": {
+        "stdout": "selection.rustc"
+      },
+      "argv": [
+        "--print",
+        "sysroot"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.git",
+      "program": "/usr/bin/git",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.python",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.executable",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "executable"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.root",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "root"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "cargo.home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "cargo-home"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.linker",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "tool",
+        "cc"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.ar",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "tool",
+        "ar"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "runtime.os",
+      "program": "/usr/bin/uname",
+      "argv": [
+        "-a"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.native-cc",
+      "program": {
+        "stdout": "tool.linker"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.native-ar-version",
+      "program": {
+        "stdout": "tool.ar"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "runtime.libc",
+      "program": {
+        "stdout": "tool.linker"
+      },
+      "argv": [
+        "-print-file-name=libc.so.6"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "compiler.sysroot",
+      "program": {
+        "stdout": "tool.linker"
+      },
+      "argv": [
+        "-print-sysroot"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    }
+  ],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "inputs.fetch.runner",
+      "inputs.metadata.linux.runner",
+      "inputs.fetch.runner-tests",
+      "inputs.metadata.linux.runner-tests",
+      "inputs.fetch.instructions",
+      "inputs.metadata.linux.instructions",
+      "inputs.fetch.instructions-tests",
+      "inputs.metadata.linux.instructions-tests",
+      "inputs.fetch.judge-ci",
+      "inputs.metadata.linux.judge-ci",
+      "inputs.fetch.judge-ci-tests",
+      "inputs.metadata.linux.judge-ci-tests",
+      "inputs.fetch.ci",
+      "inputs.metadata.linux.ci",
+      "inputs.fetch.ci-tests",
+      "inputs.metadata.linux.ci-tests",
+      "inputs.fetch.judge-registration",
+      "inputs.metadata.linux.judge-registration",
+      "inputs.fetch.judge-registration-tests",
+      "inputs.metadata.linux.judge-registration-tests",
+      "inputs.fetch.judge-filemap",
+      "inputs.metadata.linux.judge-filemap",
+      "inputs.fetch.judge-filemap-tests",
+      "inputs.metadata.linux.judge-filemap-tests",
+      "inputs.fetch.judge-routes",
+      "inputs.metadata.linux.judge-routes",
+      "inputs.fetch.judge-routes-tests",
+      "inputs.metadata.linux.judge-routes-tests",
+      "inputs.fetch.judge-projects",
+      "inputs.metadata.linux.judge-projects",
+      "inputs.fetch.judge-projects-tests",
+      "inputs.metadata.linux.judge-projects-tests",
+      "inputs.fetch.judge-cost",
+      "inputs.metadata.linux.judge-cost",
+      "inputs.fetch.judge-cost-tests",
+      "inputs.metadata.linux.judge-cost-tests",
+      "inputs.fetch.judge-mixed",
+      "inputs.metadata.linux.judge-mixed",
+      "inputs.fetch.judge-mixed-tests",
+      "inputs.metadata.linux.judge-mixed-tests",
+      "inputs.fetch.judge-workflow",
+      "inputs.metadata.linux.judge-workflow",
+      "inputs.fetch.judge-workflow-tests",
+      "inputs.metadata.linux.judge-workflow-tests",
+      "inputs.fetch.inputs",
+      "inputs.metadata.linux.inputs",
+      "inputs.fetch.inputs-tests",
+      "inputs.metadata.linux.inputs-tests",
+      "inputs.fetch.distribution",
+      "inputs.metadata.linux.distribution",
+      "inputs.fetch.distribution-tests",
+      "inputs.metadata.linux.distribution-tests",
+      "inputs.fetch.judge-cargo",
+      "inputs.metadata.linux.judge-cargo",
+      "inputs.fetch.judge-cargo-tests",
+      "inputs.metadata.linux.judge-cargo-tests",
+      "inputs.fetch.worktree",
+      "inputs.metadata.linux.worktree",
+      "inputs.fetch.worktree-tests",
+      "inputs.metadata.linux.worktree-tests",
+      "inputs.fetch.diagnostics",
+      "inputs.metadata.linux.diagnostics",
+      "inputs.fetch.diagnostics-tests",
+      "inputs.metadata.linux.diagnostics-tests",
+      "inputs.fetch.cache",
+      "inputs.metadata.linux.cache",
+      "inputs.fetch.cache-tests",
+      "inputs.metadata.linux.cache-tests"
+    ],
+    "tools": {
+      "cargo": {
+        "stdout": "selection.cargo"
+      }
+    },
+    "timeout_seconds": 120,
+    "output_limit_bytes": 1048576,
+    "environment": {
+      "RUSTC": {
+        "stdout": "selection.rustc"
+      }
+    }
+  },
+  "files": [
+    {
+      "id": "tool.native-cc",
+      "location": {
+        "stdout": "tool.linker"
+      }
+    },
+    {
+      "id": "tool.native-ar",
+      "location": {
+        "stdout": "tool.ar"
+      }
+    },
+    {
+      "id": "tool.native-python",
+      "location": {
+        "stdout": "python.executable"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "config"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config.toml",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "config.toml"
+      }
+    },
+    {
+      "id": "configuration.checkout.config",
+      "location": {
+        "path": ".cargo/config"
+      }
+    },
+    {
+      "id": "configuration.checkout.config.toml",
+      "location": {
+        "path": ".cargo/config.toml"
+      }
+    },
+    {
+      "id": "runtime.os-release",
+      "location": {
+        "path": "/etc/os-release"
+      }
+    },
+    {
+      "id": "runtime.libc",
+      "location": {
+        "stdout": "runtime.libc"
+      }
+    }
+  ],
+  "directories": [
+    {
+      "id": "rust",
+      "location": {
+        "stdout": "rust.sysroot"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "python",
+      "location": {
+        "stdout": "python.root"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "cargo-registry",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "registry"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "native.headers",
+      "location": {
+        "path": "/usr/include"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "native.gcc-runtime",
+      "location": {
+        "path": "/usr/lib/gcc"
+      },
+      "max_entries": 200000
+    }
+  ],
+  "platforms": [
+    "linux-x86_64"
+  ]
+}

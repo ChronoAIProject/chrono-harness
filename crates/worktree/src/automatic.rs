@@ -2560,6 +2560,8 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
     let target = no_symlink_parents(&root, path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    write_json(&target, report, true)?;
+    let mut bytes = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    write_bytes(&target, &bytes, true)?;
     Ok(())
 }

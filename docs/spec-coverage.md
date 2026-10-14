@@ -879,3 +879,26 @@ source/CI selector API has not been adopted at that host boundary; native policy
 selection and provisioning remain a Q3 source/adoption obligation. This candidate
 is not ready for native deployment. The original native rejection assertion is
 retained as failure evidence, not native full-host acceptance.
+
+
+Large-registry report transport now omits the scoped graph's reproducible closure
+expansion, preserving exact union edges, seed causes, changes and extra selection
+reasons. Selection and collection still compute the full closure. Worktree
+immutable-input process rows reference original streams at the surviving report
+owner; raw identities, exits and failure evidence remain. Observation v2 likewise
+references already retained streams, and its CLI references the complete report.
+These representation changes do not raise diagnostic/report limits or claim total
+storage savings, retirement or complete retention.
+
+**Product, host declarations and tests change together.** Native acquisition
+manifests now select actual Cargo/rustc paths through retained preceding outputs;
+registered Linux metadata uses its own target. The existing bootstrap and input
+observation owners provide provisioning and native evidence collection, with
+explicit FILEMAP edges and unchanged operation bounds. Rust owner tests cover
+selection, stream restoration and failures; Python tests cover native tool path
+probes. Verification cost includes those owner suites and their explicitly
+registered prerequisites; native and full-host costs remain unknown until caller
+production. The exact remaining authentic inputs and binding actions are in
+[main-host adoption](full-ci.md#main-host-adoption-inputs). This source does not
+adopt source/CI policies from local observations, fill endpoint history, activate
+five registries, establish native acceptance or complete Q3/Q4/all-PR settlement.

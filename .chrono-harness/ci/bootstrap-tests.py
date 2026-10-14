@@ -22,6 +22,19 @@ OPERATION = ".chrono-harness/ci/fixtures/bootstrap-operation.py"
 
 
 class Bootstrap(unittest.TestCase):
+    def test_native_input_tool_probe_preserves_selection_and_missing_tool_failure(self):
+        probe = SOURCE.parent / "inputs/python_probe.py"
+        env = dict(os.environ, PATH=str(Path(sys.executable).parent))
+        selected = subprocess.run([sys.executable, "-B", str(probe), "tool", Path(sys.executable).name],
+                                  env=env, capture_output=True)
+        self.assertEqual(selected.returncode, 0, selected.stderr)
+        self.assertEqual(selected.stdout.decode().strip(), os.path.realpath(sys.executable))
+        missing = subprocess.run([sys.executable, "-B", str(probe), "tool", "chrono-missing-native-tool"],
+                                 env=dict(env, PATH=""), capture_output=True)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertEqual(missing.stdout, b"")
+        self.assertIn(b"missing selected tool", missing.stderr)
+
     def setUp(self):
         directory = tempfile.TemporaryDirectory(prefix="bootstrap host ")
         self.addCleanup(directory.cleanup)

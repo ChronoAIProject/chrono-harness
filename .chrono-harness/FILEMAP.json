@@ -6883,6 +6883,42 @@
         {
           "kind": "runtime-input",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/linux-observation.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/inputs/native-provisioning.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
         }
       ]
     }
@@ -21190,7 +21226,8 @@
     {"from": "tool:git", "kind": "runtime-input", "to": "script:scoped-v1-tests"},
     {"from": "tool:git", "kind": "runtime-input", "to": "script:workflow-inventory"},
     {"from": "tool:git", "kind": "runtime-input", "to": "script:workflow-inventory-tests"},
-    {"from": "environment:CHRONO_IMMUTABLE_FILEMAP_FIXTURE", "kind": "runtime-input", "to": "project:runner-tests"}
+    {"from": "environment:CHRONO_IMMUTABLE_FILEMAP_FIXTURE", "kind": "runtime-input", "to": "project:runner-tests"},
+    {"from": "tool:chrono-inputs", "kind": "runtime-input", "to": "project:inputs"}
   ],
   "test_costs": [
     {

@@ -8,7 +8,7 @@ fn invoke(root: &Path, manifest: &Value, output: &str) -> Result<String, String>
         serde_json::to_vec(manifest).unwrap(),
     )
     .unwrap();
-    chrono_inputs::run(
+    let stdout = chrono_inputs::run(
         root,
         &[
             "observe",
@@ -21,7 +21,15 @@ fn invoke(root: &Path, manifest: &Value, output: &str) -> Result<String, String>
         ]
         .map(String::from)
         .to_vec(),
-    )
+    )?;
+    let reference: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(reference["schema"], "chrono-input-observation-reference/v1");
+    assert!(stdout.len() < 1024);
+    let original = serde_json::from_value(reference["original"].clone()).unwrap();
+    String::from_utf8(chrono_harness::prepared::read_original(
+        root, &original, None,
+    )?)
+    .map_err(|e| e.to_string())
 }
 fn manifest(root: &Path) -> Value {
     json!({"schema":"chrono-input-observation/v1", "environment":{"inherit":[], "values":{}},
@@ -63,6 +71,23 @@ fn observations_retain_actual_processes_absence_and_only_declared_roots() {
             .0
     );
     assert!(process["environment"].as_object().unwrap().is_empty());
+    assert!(process.get("stdout_bytes").is_none());
+    let restore = || {
+        chrono_harness::scoped_report::restore_process(process, |o| {
+            chrono_harness::prepared::read_original(root, o, None)
+        })
+    };
+    let original_process = restore().unwrap();
+    assert_eq!(
+        original_process.stdout_bytes,
+        format!("{}\n", root.join("declared").display()).as_bytes()
+    );
+    let stream = root.join(process["stdout_original"]["path"].as_str().unwrap());
+    fs::write(&stream, b"tampered").unwrap();
+    assert!(restore().is_err());
+    fs::remove_file(&stream).unwrap();
+    assert!(restore().is_err());
+    fs::write(&stream, &original_process.stdout_bytes).unwrap();
     assert!(root.join(format!("{output}.processes/0.stdout")).is_file());
     assert!(
         root.join(format!("{output}.processes/0.launch.json"))
@@ -72,6 +97,81 @@ fn observations_retain_actual_processes_absence_and_only_declared_roots() {
     fs::write(root.join("declared/data"), b"changed").unwrap();
     assert!(invoke(root, &m, output).unwrap_err().contains("EXISTS"));
     assert_eq!(fs::read(root.join(output)).unwrap(), original);
+}
+
+#[test]
+fn native_observation_executes_selected_tool_and_rejects_missing_failed_or_wrong_platform_selection()
+ {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path();
+    let mut m = manifest(root);
+    m["directories"] = json!([]);
+    m["platforms"] = json!([format!(
+        "{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )]);
+    m["operations"][0]["id"] = json!("selection");
+    m["operations"][0]["argv"] = json!(["path", env!("CARGO_BIN_EXE_chrono-inputs-test-observe")]);
+    m["operations"].as_array_mut().unwrap().push(
+        json!({"id":"selected", "program":{"stdout":"selection"},
+        "environment":{"RUSTC":{"stdout":"selection"}},
+        "argv":["path",root],"timeout_seconds":5,"output_limit_bytes":4096}),
+    );
+    let result: Value =
+        serde_json::from_str(&invoke(root, &m, ".chrono-harness/state/selected.json").unwrap())
+            .unwrap();
+    let actual =
+        chrono_harness::scoped_report::restore_process(&result["operations"]["selected"], |o| {
+            chrono_harness::prepared::read_original(root, o, None)
+        })
+        .unwrap();
+    assert_eq!(
+        actual.executable,
+        Path::new(env!("CARGO_BIN_EXE_chrono-inputs-test-observe"))
+    );
+    assert_eq!(
+        actual.environment["RUSTC"],
+        env!("CARGO_BIN_EXE_chrono-inputs-test-observe")
+    );
+    assert_eq!(
+        actual.stdout_bytes,
+        format!("{}\n", root.display()).as_bytes()
+    );
+    m["platforms"] = json!(["unsupported-native"]);
+    assert!(
+        invoke(root, &m, ".chrono-harness/state/platform.json")
+            .unwrap_err()
+            .contains("native platform")
+    );
+    assert!(
+        !root
+            .join(".chrono-harness/state/platform.json.processes")
+            .exists()
+    );
+    m.as_object_mut().unwrap().remove("platforms");
+    m["operations"][1]["program"] = json!({"stdout":"missing"});
+    assert!(
+        invoke(root, &m, ".chrono-harness/state/missing.json")
+            .unwrap_err()
+            .contains("preceding")
+    );
+    m["operations"][1]["program"] = json!({"stdout":"selection"});
+    m["operations"][0]["argv"] = json!(["fail"]);
+    assert!(invoke(root, &m, ".chrono-harness/state/selection-failed.json").is_err());
+    let failed: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/state/selection-failed.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(failed["operations"]["selection"]["exit_code"], 17);
+    assert!(failed["operations"].get("selected").is_none());
+    assert!(
+        !root
+            .join(".chrono-harness/state/selection-failed.json.processes/1.launch.json")
+            .exists()
+    );
+    m["operations"][0]["argv"] = json!(["path", "two\npaths"]);
+    assert!(invoke(root, &m, ".chrono-harness/state/ambiguous-program.json").is_err());
 }
 #[test]
 fn stdout_file_locations_preserve_absent_and_explicit_suffix_paths() {
@@ -281,5 +381,60 @@ fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
             .as_array()
             .unwrap()
             .contains(&json!("GITHUB_JOB"))
+    );
+    let linux: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/inputs/linux-observation.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(linux["platforms"], json!(["linux-x86_64"]));
+    for op in linux["registered_operations"]["operations"]
+        .as_array()
+        .unwrap()
+    {
+        let actions: Vec<_> = projects["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|p| p["actions"].as_object().unwrap().values())
+            .filter(|a| a["operation"] == *op)
+            .collect();
+        assert_eq!(actions.len(), 1);
+        if op.as_str().unwrap().starts_with("inputs.metadata.") {
+            assert!(
+                actions[0]["argv"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("x86_64-unknown-linux-gnu"))
+            );
+            assert!(
+                !actions[0]["argv"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("aarch64-apple-darwin"))
+            );
+        }
+    }
+    let provisioning: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/inputs/native-provisioning.json")).unwrap(),
+    )
+    .unwrap();
+    let fetch: Vec<_> = manifest["registered_operations"]["operations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|id| id.as_str().unwrap().starts_with("inputs.fetch."))
+        .cloned()
+        .collect();
+    assert_eq!(
+        provisioning["registered_operations"]["operations"],
+        json!(fetch)
+    );
+    assert_eq!(
+        provisioning["registered_operations"]["tools"]["cargo"],
+        json!({"stdout":"selection.cargo"})
+    );
+    assert_eq!(
+        provisioning["registered_operations"]["environment"]["RUSTC"],
+        json!({"stdout":"selection.rustc"})
     );
 }

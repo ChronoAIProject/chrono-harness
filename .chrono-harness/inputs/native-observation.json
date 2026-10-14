@@ -13,10 +13,48 @@
     "values": {
       "RUSTUP_TOOLCHAIN": "1.95.0",
       "CARGO_TERM_COLOR": "never",
-      "CARGO_NET_OFFLINE": "true"
+      "CARGO_NET_OFFLINE": "true",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": ""
     }
   },
   "operations": [
+    {
+      "id": "selection.cargo",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "cargo"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustc",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustc"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.rustfmt",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "rustfmt"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
     {
       "id": "source.commit",
       "program": "git",
@@ -50,7 +88,9 @@
     },
     {
       "id": "tool.cargo",
-      "program": "cargo",
+      "program": {
+        "stdout": "selection.cargo"
+      },
       "argv": [
         "--version"
       ],
@@ -59,7 +99,9 @@
     },
     {
       "id": "tool.rustc",
-      "program": "rustc",
+      "program": {
+        "stdout": "selection.rustc"
+      },
       "argv": [
         "-vV"
       ],
@@ -68,7 +110,9 @@
     },
     {
       "id": "tool.rustfmt",
-      "program": "rustfmt",
+      "program": {
+        "stdout": "selection.rustfmt"
+      },
       "argv": [
         "--version"
       ],
@@ -77,7 +121,9 @@
     },
     {
       "id": "rust.sysroot",
-      "program": "rustc",
+      "program": {
+        "stdout": "selection.rustc"
+      },
       "argv": [
         "--print",
         "sysroot"
@@ -257,10 +303,17 @@
       "inputs.metadata.cache-tests"
     ],
     "tools": {
-      "cargo": "cargo"
+      "cargo": {
+        "stdout": "selection.cargo"
+      }
     },
     "timeout_seconds": 120,
-    "output_limit_bytes": 1048576
+    "output_limit_bytes": 1048576,
+    "environment": {
+      "RUSTC": {
+        "stdout": "selection.rustc"
+      }
+    }
   },
   "files": [
     {
@@ -291,6 +344,32 @@
       "id": "tool.native-python",
       "location": {
         "stdout": "python.executable"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "config"
+      }
+    },
+    {
+      "id": "configuration.cargo-home.config.toml",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "config.toml"
+      }
+    },
+    {
+      "id": "configuration.checkout.config",
+      "location": {
+        "path": ".cargo/config"
+      }
+    },
+    {
+      "id": "configuration.checkout.config.toml",
+      "location": {
+        "path": ".cargo/config.toml"
       }
     }
   ],
@@ -346,5 +425,8 @@
       },
       "max_entries": 200000
     }
+  ],
+  "platforms": [
+    "macos-aarch64"
   ]
 }
