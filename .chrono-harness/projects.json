@@ -3251,7 +3251,7 @@
             "--manifest",
             ".chrono-harness/inputs/isolated-production.json",
             "--output",
-            ".chrono-harness/state/isolated-rust/production.json"
+            ".chrono-harness/state/isolated-rust/production-2e939736-20261015.json"
           ]
         },
         "observe_macos": {
