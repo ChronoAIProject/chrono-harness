@@ -183,7 +183,7 @@ CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
 remains `unestablished`. The partial `context` is an input for later work, not a
 complete check context or integration certificate.
 
-### Contemporaneous acquisition evidence (source candidate; execution pending)
+### Contemporaneous acquisition evidence (source candidate)
 
 `with_report` now prepares a unique `chrono-progress/v1` JSONL original beside
 its existing terminal report, in that report owner's `observations/` subdirectory,
@@ -232,7 +232,9 @@ retention; age alone does not authorize deletion. Successful temporary fixtures
 use their existing TempDir teardown. Failed fixture copies remain protected
 until diagnosis/acceptance ends, then have the same seven-day handoff window.
 This source assignment neither disposes old originals nor installs an automatic
-TTL service. Actual machine/native cost and behavior are pending. The original
+TTL service. The complete local worktree suite and registered group inventory
+exercise this owner, including the interrupted-start capture assertions. Native
+behavior and incremental capture cost remain unverified. The original
 Q3 CI stall cause, Rust environment drift, full host adoption and delivery remain
 unresolved.
 

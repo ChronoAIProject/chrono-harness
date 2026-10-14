@@ -1,7 +1,6 @@
 use crate::{Config, Start};
 use chrono_harness::{
-    CommandSpec, ProcessEvidence, ProcessResult, facts, no_symlink_parents, observation,
-    sha256,
+    CommandSpec, ProcessEvidence, ProcessResult, facts, no_symlink_parents, observation, sha256,
 };
 use chrono_judge_registration::Registrations;
 use serde_json::{Value, json as value};
@@ -115,15 +114,28 @@ impl Runner {
         let stdout = self.evidence_root.join(format!("{prefix}.stdout"));
         let stderr = self.evidence_root.join(format!("{prefix}.stderr"));
         let launch = self.evidence_root.join(format!("{prefix}.launch.json"));
-        let stdin = chrono_harness::prepared::retain_original(&self.evidence_root,
-            &format!("{}observations/", self.config.report_directory), "git-stdin", input)?;
+        let stdin = chrono_harness::prepared::retain_original(
+            &self.evidence_root,
+            &format!("{}observations/", self.config.report_directory),
+            "git-stdin",
+            input,
+        )?;
         self.phase("git-invocation", value!({"root":root,"command":spec,"stdin":stdin,
             "sha256":self.tool.sha256,"stdout_limit_bytes":input_limit.unwrap_or(self.config.output_limit_bytes),
             "stdout":stdout,"stderr":stderr,"launch":launch}))?;
         let result = chrono_harness::run_process_observed_data_retained(
-            root, &spec, input, &self.tool.sha256,
-            input_limit.unwrap_or(self.config.output_limit_bytes), &self.evidence_root,
-            &ProcessEvidence { stdout: &stdout, stderr: &stderr, launch: &launch });
+            root,
+            &spec,
+            input,
+            &self.tool.sha256,
+            input_limit.unwrap_or(self.config.output_limit_bytes),
+            &self.evidence_root,
+            &ProcessEvidence {
+                stdout: &stdout,
+                stderr: &stderr,
+                launch: &launch,
+            },
+        );
         match result {
             Ok(process) => {
                 let mut record = value!({"root":root,"argv":argv,"process":process});
@@ -132,11 +144,14 @@ impl Runner {
                         "stderr_limit_bytes":self.config.output_limit_bytes});
                 }
                 self.processes.push(record);
-                self.phase("git-returned", value!({"root":root,"argv":argv,
+                self.phase(
+                    "git-returned",
+                    value!({"root":root,"argv":argv,
                     "launcher_pid":process.launcher_pid,"child_pid":process.child_pid,
                     "exit_code":process.exit_code,"failure":process.failure,
                     "stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256,
-                    "launch_original":process.launch_original}))?;
+                    "launch_original":process.launch_original}),
+                )?;
                 if let Some(error) = &process.failure {
                     return Err(error.clone());
                 }
@@ -145,7 +160,10 @@ impl Runner {
             Err(error) => {
                 self.processes
                     .push(value!({"root":root,"argv":argv,"process":null,"error":error}));
-                self.phase("git-observation-error", value!({"root":root,"argv":argv,"error":error}))?;
+                self.phase(
+                    "git-observation-error",
+                    value!({"root":root,"argv":argv,"error":error}),
+                )?;
                 Err(error)
             }
         }
@@ -725,25 +743,49 @@ pub(crate) fn with_report(
         .to_string();
     let observation_directory = format!("{}observations/", config.report_directory);
     let config_original = chrono_harness::prepared::retain_original(
-        root, &observation_directory, "worktree-config", bytes)?;
-    let mut progress = observation::Progress::open(root, &observation_directory,
-        &format!("{name}-progress-"), value!({"operation":operation,"source_root":root,
+        root,
+        &observation_directory,
+        "worktree-config",
+        bytes,
+    )?;
+    let mut progress = observation::Progress::open(
+        root,
+        &observation_directory,
+        &format!("{name}-progress-"),
+        value!({"operation":operation,"source_root":root,
             "report_path":report_path,"config_path":config_path,"config_original":config_original,
-            "config_sha256":sha256(bytes),"environment":{"inherited":inherited,"effective":environment}}))?;
+            "config_sha256":sha256(bytes),"environment":{"inherited":inherited,"effective":environment}}),
+    )?;
     let version_stdout = root.join(format!("{}-version.stdout", progress.path()));
     let version_stderr = root.join(format!("{}-version.stderr", progress.path()));
     let version_launch = root.join(format!("{}-version.launch.json", progress.path()));
-    progress.record("git-version-invocation", value!({"program":config.git.program,
+    progress.record(
+        "git-version-invocation",
+        value!({"program":config.git.program,
         "argv":["--version"],"timeout_seconds":config.timeout_seconds,
         "output_limit_bytes":config.output_limit_bytes,"stdout":version_stdout,
-        "stderr":version_stderr,"launch":version_launch}))?;
+        "stderr":version_stderr,"launch":version_launch}),
+    )?;
     // Tool observation and every Git invocation use the original process engine.
-    let tool = observation::tool_retained(root, &config.git.program, &["--version".into()],
-        &environment, config.timeout_seconds, config.output_limit_bytes,
-        &ProcessEvidence {stdout:&version_stdout,stderr:&version_stderr,launch:&version_launch})?;
-    progress.record("git-version-returned", value!({"path":tool.path,"sha256":tool.sha256,
+    let tool = observation::tool_retained(
+        root,
+        &config.git.program,
+        &["--version".into()],
+        &environment,
+        config.timeout_seconds,
+        config.output_limit_bytes,
+        &ProcessEvidence {
+            stdout: &version_stdout,
+            stderr: &version_stderr,
+            launch: &version_launch,
+        },
+    )?;
+    progress.record(
+        "git-version-returned",
+        value!({"path":tool.path,"sha256":tool.sha256,
         "exit_code":tool.version.exit_code,"failure":tool.version.failure,
-        "launch_original":tool.version.launch_original}))?;
+        "launch_original":tool.version.launch_original}),
+    )?;
     let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery.","progress_path":progress.path()});
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
@@ -780,11 +822,18 @@ pub(crate) fn with_report(
         immutable_blobs: BTreeMap::new(),
         immutable_trees: BTreeMap::new(),
     };
-    let result = runner.phase("operation-entered", value!({"operation":operation})).and_then(|_| match version_error {
-        Some(e) => Err(e),
-        None => execute(&mut runner, &name, &mut report),
-    });
-    let progress_error = runner.phase("operation-returned", value!({"error":result.as_ref().err()})).err();
+    let result = runner
+        .phase("operation-entered", value!({"operation":operation}))
+        .and_then(|_| match version_error {
+            Some(e) => Err(e),
+            None => execute(&mut runner, &name, &mut report),
+        });
+    let progress_error = runner
+        .phase(
+            "operation-returned",
+            value!({"error":result.as_ref().err()}),
+        )
+        .err();
     match result {
         Ok(()) => report["status"] = value!(success),
         Err(e) => report["error"] = value!(e),
@@ -813,8 +862,11 @@ pub(crate) fn with_report(
         }
         report["processes"] = value!(runner.processes.clone());
     }
-    if let Err(error) = runner.phase("report-ready", value!({"report_path":report_path,"status":report["status"],
-        "error":report["error"],"evidence_error":report["evidence_error"]})) {
+    if let Err(error) = runner.phase(
+        "report-ready",
+        value!({"report_path":report_path,"status":report["status"],
+        "error":report["error"],"evidence_error":report["evidence_error"]}),
+    ) {
         report["status"] = value!("failed");
         report["evidence_error"] = value!(error);
     }

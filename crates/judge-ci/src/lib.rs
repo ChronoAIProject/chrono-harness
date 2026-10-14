@@ -729,8 +729,14 @@ fn ci_impact(
     (paths, selected, explanation, affected)
 }
 
-fn phase(progress: &mut Option<chrono_harness::observation::Progress>, name: &str, details: Value) -> Result<(), String> {
-    if let Some(progress) = progress { progress.record(name, details)?; }
+fn phase(
+    progress: &mut Option<chrono_harness::observation::Progress>,
+    name: &str,
+    details: Value,
+) -> Result<(), String> {
+    if let Some(progress) = progress {
+        progress.record(name, details)?;
+    }
     Ok(())
 }
 pub fn judge(req: &Request) -> Response {
@@ -739,11 +745,18 @@ pub fn judge(req: &Request) -> Response {
     let mut scope = "chrono-ci-check/v1".to_owned();
     let mut progress = None;
     let result = evaluate(req, &mut reader, &mut opening, &mut scope, &mut progress);
-    let publication = phase(&mut progress, "evaluation-returned", object!({
-        "error":result.as_ref().err(),"status":result.as_ref().ok().map(|r| &r.status)}));
+    let publication = phase(
+        &mut progress,
+        "evaluation-returned",
+        object!({
+        "error":result.as_ref().err(),"status":result.as_ref().ok().map(|r| &r.status)}),
+    );
     let result = match publication {
         Ok(()) => result,
-        Err(error) => Err(match result { Ok(_) => error, Err(original) => format!("{original}; {error}") }),
+        Err(error) => Err(match result {
+            Ok(_) => error,
+            Err(original) => format!("{original}; {error}"),
+        }),
     };
     let mut response = match result {
         Ok(r) => r,
@@ -1039,17 +1052,38 @@ fn inventory(
     }
     full_oid(&req.candidate)?;
     if admit_entry {
-        let output = match &req.scope { Some(scope) => scope.report_path(&config)?, None => config.report_path.clone() };
-        let parent = Path::new(&output).parent().ok_or("report parent missing")?.to_str().ok_or("report parent UTF-8")?;
-        let directory = if parent.is_empty() { "process-evidence/".into() } else { format!("{parent}/process-evidence/") };
+        let output = match &req.scope {
+            Some(scope) => scope.report_path(&config)?,
+            None => config.report_path.clone(),
+        };
+        let parent = Path::new(&output)
+            .parent()
+            .ok_or("report parent missing")?
+            .to_str()
+            .ok_or("report parent UTF-8")?;
+        let directory = if parent.is_empty() {
+            "process-evidence/".into()
+        } else {
+            format!("{parent}/process-evidence/")
+        };
         let input = serde_json::to_vec(req).map_err(|e| e.to_string())?;
-        let request_original = chrono_harness::prepared::retain_original(root, &directory, "judge-request", &input)?;
-        let config_original = chrono_harness::prepared::retain_original(root, &directory, "judge-config", &bytes)?;
-        *progress = Some(chrono_harness::observation::Progress::open(root, &directory, "judge-phases-",
+        let request_original =
+            chrono_harness::prepared::retain_original(root, &directory, "judge-request", &input)?;
+        let config_original =
+            chrono_harness::prepared::retain_original(root, &directory, "judge-config", &bytes)?;
+        *progress = Some(chrono_harness::observation::Progress::open(
+            root,
+            &directory,
+            "judge-phases-",
             object!({"request_id":req.request_id,"request_original":request_original,
-                "config_original":config_original,"source_root":root,"report_path":output}))?);
+                "config_original":config_original,"source_root":root,"report_path":output}),
+        )?);
     }
-    phase(progress, "facts-opening", object!({"facts_config":p.facts_config}))?;
+    phase(
+        progress,
+        "facts-opening",
+        object!({"facts_config":p.facts_config}),
+    )?;
     if let Some(path) = &p.facts_config {
         *reader = Reader::for_config_observed(root, path).map_err(|failure| {
             *opening = failure.observation;
@@ -1060,17 +1094,29 @@ fn inventory(
         }
         reader.verify_config(root, &req.candidate)?;
     }
-    phase(progress, "candidate-acquisition", object!({"candidate":req.candidate}))?;
+    phase(
+        progress,
+        "candidate-acquisition",
+        object!({"candidate":req.candidate}),
+    )?;
     verify_oid(reader, root, &req.candidate)?;
     if at(reader, root, &req.candidate, &req.config_path)? != bytes {
         return Err("config does not match candidate/request".into());
     }
-    phase(progress, "candidate-config-accepted", object!({"config_sha256":req.config_sha256}))?;
+    phase(
+        progress,
+        "candidate-config-accepted",
+        object!({"config_sha256":req.config_sha256}),
+    )?;
     if verify_checkout {
         phase(progress, "checkout-validation", object!({}))?;
         clean(reader, root, &req.candidate, &p)?;
     }
-    phase(progress, "endpoint-inventory", object!({"base":req.base,"candidate":req.candidate}))?;
+    phase(
+        progress,
+        "endpoint-inventory",
+        object!({"base":req.base,"candidate":req.candidate}),
+    )?;
     let previous;
     let old = if req.initial {
         if req.base.is_some() {
@@ -1377,7 +1423,11 @@ fn inventory(
         // Validate the complete obligation graph before selecting any unit.
         chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
     }
-    phase(progress, "inventory-ready", object!({"selected":selected,"blocked":blocked}))?;
+    phase(
+        progress,
+        "inventory-ready",
+        object!({"selected":selected,"blocked":blocked}),
+    )?;
     Ok(Inventory {
         config,
         p,
@@ -1427,7 +1477,11 @@ fn evaluate(
         if !blocked.is_empty() {
             return Err(format!("blocked global obligations: {blocked:?}"));
         }
-        phase(progress, "collection-entered", object!({"manifest":manifest}))?;
+        phase(
+            progress,
+            "collection-entered",
+            object!({"manifest":manifest}),
+        )?;
         let mut response = collect::collect(
             req,
             manifest,
@@ -1438,7 +1492,11 @@ fn evaluate(
             &declarations,
             &environment_policy,
         )?;
-        phase(progress, "collection-returned", object!({"status":response.status}))?;
+        phase(
+            progress,
+            "collection-returned",
+            object!({"status":response.status}),
+        )?;
         clean(reader, root, &req.candidate, &p)?;
         response.evidence["changed_paths"] = object!(paths);
         response.evidence["selection_explanation"] = selection_explanation;
@@ -1452,7 +1510,11 @@ fn evaluate(
             unit,
         )?;
     }
-    phase(progress, "plan-preparation", object!({"selected":selected,"blocked":blocked}))?;
+    phase(
+        progress,
+        "plan-preparation",
+        object!({"selected":selected,"blocked":blocked}),
+    )?;
     let plan = if blocked.is_empty() {
         Some(chrono_judge_routes::prepare_scheduled(
             root,
@@ -1491,9 +1553,17 @@ fn evaluate(
         })
     }
     if let Some(plan) = &plan {
-        phase(progress, "operations-entered", object!({"operations":operations}))?;
+        phase(
+            progress,
+            "operations-entered",
+            object!({"operations":operations}),
+        )?;
         let outcome = chrono_judge_projects::execute(plan)?;
-        phase(progress, "operations-returned", object!({"executed":outcome.executed.len(),"blocked":outcome.blocked.len()}))?;
+        phase(
+            progress,
+            "operations-returned",
+            object!({"executed":outcome.executed.len(),"blocked":outcome.blocked.len()}),
+        )?;
         for result in outcome.executed.iter().chain(&outcome.blocked) {
             results.push(CheckResult {
                 id: result.operation.clone(),

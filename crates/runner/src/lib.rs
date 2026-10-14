@@ -865,8 +865,16 @@ pub fn run_process_observed_data_retained(
     evidence_root: &Path,
     evidence: &ProcessEvidence<'_>,
 ) -> Result<ProcessResult, String> {
-    run_process_inner_with_stdout_owned(root, s, input, Some(digest),
-        Duration::from_secs(s.timeout_seconds), stdout_limit, Some(evidence), Some(evidence_root))
+    run_process_inner_with_stdout_owned(
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        stdout_limit,
+        Some(evidence),
+        Some(evidence_root),
+    )
 }
 fn run_process_inner(
     root: &Path,
@@ -895,7 +903,16 @@ fn run_process_inner_with_stdout(
     stdout_limit: usize,
     evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, String> {
-    run_process_inner_with_stdout_owned(root, s, input, expected, timeout, stdout_limit, evidence, None)
+    run_process_inner_with_stdout_owned(
+        root,
+        s,
+        input,
+        expected,
+        timeout,
+        stdout_limit,
+        evidence,
+        None,
+    )
 }
 fn run_process_inner_with_stdout_owned(
     root: &Path,
@@ -916,7 +933,8 @@ fn run_process_inner_with_stdout_owned(
     }
     let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    let evidence_root = fs::canonicalize(evidence_root.unwrap_or(&root)).map_err(|e| e.to_string())?;
+    let evidence_root =
+        fs::canonicalize(evidence_root.unwrap_or(&root)).map_err(|e| e.to_string())?;
     let evidence_paths = evidence
         .map(|paths| validate_process_evidence_paths(&evidence_root, paths))
         .transpose()?;
@@ -1719,22 +1737,36 @@ fn execute_check(
     // destinations before spawn rather than being copied after wait.
     let transport_directory = retention.clone().unwrap_or_else(|| {
         let parent = Path::new(&output_path).parent().unwrap().to_str().unwrap();
-        if parent.is_empty() { "process-evidence/".into() }
-        else { format!("{parent}/process-evidence/") }
+        if parent.is_empty() {
+            "process-evidence/".into()
+        } else {
+            format!("{parent}/process-evidence/")
+        }
     });
     let stdout = format!("{transport_directory}judge-stdout-{request_id}.bytes");
     let stderr = format!("{transport_directory}judge-stderr-{request_id}.bytes");
     let launch = format!("{transport_directory}judge-launch-{request_id}.json");
-    for path in [&stdout, &stderr, &launch] { prepare_publication(&root, path)?; }
+    for path in [&stdout, &stderr, &launch] {
+        prepare_publication(&root, path)?;
+    }
     let process_evidence = Some((stdout, stderr, launch));
     let input = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
-    let request_original = prepared::retain_original(&root, &transport_directory, "judge-request", &input)?;
-    let config_original = prepared::retain_original(&root, &transport_directory, "judge-config", &bytes)?;
-    let mut progress = observation::Progress::open(&root, &transport_directory, "judge-transport-",
+    let request_original =
+        prepared::retain_original(&root, &transport_directory, "judge-request", &input)?;
+    let config_original =
+        prepared::retain_original(&root, &transport_directory, "judge-config", &bytes)?;
+    let mut progress = observation::Progress::open(
+        &root,
+        &transport_directory,
+        "judge-transport-",
         serde_json::json!({"request_id":request_id,"source_root":root,"base":req.base,
             "candidate":req.candidate,"request_original":request_original,"config_original":config_original,
-            "report_path":output_path,"process_evidence":process_evidence}))?;
-    progress.record("judge-invocation", serde_json::json!({"configured_command":c.judge}))?;
+            "report_path":output_path,"process_evidence":process_evidence}),
+    )?;
+    progress.record(
+        "judge-invocation",
+        serde_json::json!({"configured_command":c.judge}),
+    )?;
     let proc = if req.observations["preparation"].is_object() {
         let (_, _, policy, _) = facts_configs::load(&root, ".chrono-harness/config.json")?;
         let credentials = prepared::credential_environment(&policy)?;
@@ -1820,12 +1852,18 @@ fn execute_check(
         )
     };
     let progress_publication = match &proc {
-        Ok(process) => progress.record("judge-transport-returned", serde_json::json!({
+        Ok(process) => progress.record(
+            "judge-transport-returned",
+            serde_json::json!({
             "launcher_pid":process.launcher_pid,"child_pid":process.child_pid,
             "exit_code":process.exit_code,"failure":process.failure,
             "stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256,
-            "launch_original":process.launch_original})),
-        Err(error) => progress.record("judge-observation-error", serde_json::json!({"error":error})),
+            "launch_original":process.launch_original}),
+        ),
+        Err(error) => progress.record(
+            "judge-observation-error",
+            serde_json::json!({"error":error}),
+        ),
     };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});
@@ -1862,7 +1900,9 @@ fn execute_check(
     if let Err(error) = progress_publication {
         let original = report["transport_failure"].as_str();
         report["transport_failure"] = serde_json::json!(match original {
-            Some(original) => format!("{original}; {error}"), None => error });
+            Some(original) => format!("{original}; {error}"),
+            None => error,
+        });
     }
     report["runner"] = runner_identity;
     report["progress_path"] = serde_json::json!(progress.path());

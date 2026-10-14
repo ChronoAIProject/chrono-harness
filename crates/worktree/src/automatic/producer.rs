@@ -364,9 +364,15 @@ impl RetainedArtifact {
                     .find(|p| p.id == producer)
                     .ok_or("retained producer store is not declared by its owner")?;
                 let directory = declaration.directory(&manager.policy.coordinator_root)?;
-                r.phase("producer-store-validation", value!({"producer":producer,"directory":directory}))?;
+                r.phase(
+                    "producer-store-validation",
+                    value!({"producer":producer,"directory":directory}),
+                )?;
                 manager.stable(r)?;
-                r.phase("producer-store-resolved", value!({"producer":producer,"directory":directory}))?;
+                r.phase(
+                    "producer-store-resolved",
+                    value!({"producer":producer,"directory":directory}),
+                )?;
                 report["producer"] = value!(producer);
                 report["coordinator_root"] = value!(manager.policy.coordinator_root);
                 report["directory"] = value!(directory);

@@ -606,11 +606,18 @@ fn fixture_inputs(root: &Path, context: &Value) -> chrono_harness::prepared::Ori
     let directory = ".chrono-harness/state/fixture-inputs/";
     let mut inputs = Vec::new();
     for path in [
-        ".chrono-harness/config.json", ".chrono-harness/FILEMAP.json",
-        ".chrono-harness/projects.json", ".chrono-harness/judges.json",
-        ".chrono-harness/workflow.json", ".chrono-harness/worktree.json",
-        ".chrono-harness/cleanup.json", ".chrono-harness/ci/check.json",
-        ".chrono-harness/ci/units.json", ".git", ".git/HEAD", ".git/config",
+        ".chrono-harness/config.json",
+        ".chrono-harness/FILEMAP.json",
+        ".chrono-harness/projects.json",
+        ".chrono-harness/judges.json",
+        ".chrono-harness/workflow.json",
+        ".chrono-harness/worktree.json",
+        ".chrono-harness/cleanup.json",
+        ".chrono-harness/ci/check.json",
+        ".chrono-harness/ci/units.json",
+        ".git",
+        ".git/HEAD",
+        ".git/config",
     ] {
         if fs::symlink_metadata(root.join(path)).is_ok_and(|metadata| metadata.is_dir()) {
             inputs.push(json!({"path":path,"presence":"present","kind":"directory"}));
@@ -618,20 +625,25 @@ fn fixture_inputs(root: &Path, context: &Value) -> chrono_harness::prepared::Ori
         }
         match fs::read(root.join(path)) {
             Ok(bytes) => {
-                let original = chrono_harness::prepared::retain_original(root, directory, "input", &bytes).unwrap();
+                let original =
+                    chrono_harness::prepared::retain_original(root, directory, "input", &bytes)
+                        .unwrap();
                 inputs.push(json!({"path":path,"presence":"present","original":original}));
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound =>
-                inputs.push(json!({"path":path,"presence":"absent"})),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                inputs.push(json!({"path":path,"presence":"absent"}))
+            }
             // A linked checkout's literal .git attachment is retained above.
             // Nested paths are not missing repository metadata; their parent
             // is a file. Do not follow a new inferred metadata dependency here.
-            Err(error) if error.kind() == std::io::ErrorKind::NotADirectory =>
-                inputs.push(json!({"path":path,"presence":"parent-not-directory","error":error.to_string()})),
+            Err(error) if error.kind() == std::io::ErrorKind::NotADirectory => inputs.push(
+                json!({"path":path,"presence":"parent-not-directory","error":error.to_string()}),
+            ),
             Err(error) => panic!("fixture input {path}: {error}"),
         }
     }
-    let bytes = serde_json::to_vec(&json!({"source_root":root,"context":context,"inputs":inputs})).unwrap();
+    let bytes =
+        serde_json::to_vec(&json!({"source_root":root,"context":context,"inputs":inputs})).unwrap();
     chrono_harness::prepared::retain_original(root, directory, "invocation-inputs", &bytes).unwrap()
 }
 fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
@@ -746,17 +758,29 @@ fn retain_command_result_observed(
     directory_override: Option<&Path>,
     mut birth_observer: Option<&mut dyn FnMut(&str)>,
 ) -> chrono_worktree::RetainedArtifact {
-    let mut progress = chrono_harness::observation::Progress::open(producer_root,
-        ".chrono-harness/state/ci-test-publications/", "publication-", json!({
+    let mut progress = chrono_harness::observation::Progress::open(
+        producer_root,
+        ".chrono-harness/state/ci-test-publications/",
+        "publication-",
+        json!({
             "producer_root":producer_root,"command_root":root,"argv":argv,"context":context,
             "original_command":{"exit":output.status.code(),"status":output.status.to_string(),
                 "stdout_sha256":chrono_harness::sha256(&output.stdout),
                 "stderr_sha256":chrono_harness::sha256(&output.stderr)},
-            "expected_exit":expected_exit})).unwrap();
-    progress.record("fixture-inputs-entered", Value::Null).unwrap();
+            "expected_exit":expected_exit}),
+    )
+    .unwrap();
+    progress
+        .record("fixture-inputs-entered", Value::Null)
+        .unwrap();
     let inputs = fixture_inputs(root, &json!({"argv":argv,"context":context}));
     let owner_inputs = fixture_inputs(producer_root, &json!({"producer":"ci-command-result"}));
-    progress.record("fixture-inputs-returned", json!({"inputs":inputs,"owner_inputs":owner_inputs})).unwrap();
+    progress
+        .record(
+            "fixture-inputs-returned",
+            json!({"inputs":inputs,"owner_inputs":owner_inputs}),
+        )
+        .unwrap();
     let progress_path = progress.path().to_owned();
     let mut last_phase = String::new();
     let mut observe = |phase: &str| {
@@ -766,7 +790,9 @@ fn retain_command_result_observed(
             progress.record(phase, Value::Null).unwrap();
             last_phase = phase.into();
         }
-        if let Some(observer) = birth_observer.as_deref_mut() { observer(phase); }
+        if let Some(observer) = birth_observer.as_deref_mut() {
+            observer(phase);
+        }
     };
     observe("registered-store-entered");
     let (directory, generated_outputs) = chrono_worktree::RetainedArtifact::registered_store(
@@ -851,8 +877,14 @@ fn retain_command_result_observed(
     }
     observe("original-copy-returned");
     let receipt = chrono_worktree::RetainedArtifact::begin_with_birth_observer(
-        &directory, "ci-command-result", &destination, &generated,
-        "command-assertion", reason, &mut observe)
+        &directory,
+        "ci-command-result",
+        &destination,
+        &generated,
+        "command-assertion",
+        reason,
+        &mut observe,
+    )
     .unwrap_or_else(|error| {
         panic!(
             "receipt owner refused admission: {error}; original command evidence: {}",

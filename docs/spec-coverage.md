@@ -6,8 +6,11 @@ Ordinary full-check acceptance means the DELTA satisfies the active registered c
 
 Local/CI must use the same registered command. Universal equal verdicts remain conditional on equal complete effective inputs and deterministic evaluation. The separate parity comparator requires `completeness_proven:true` and complete verdict-bearing observations; absent these stronger premises, parity remains unestablished without gating ordinary full check. Pairwise observations alone do not prove universal determinism. This correction changes contract wording and default content, without changing runtime, schema or test behavior or completing full host adoption.
 
-Q3 contemporaneous capture is currently a source candidate, with machine checks
-pending. Existing worktree/runner/CI receipt owners now prepare accepted input,
+Q3 contemporaneous capture is currently a source candidate with local owner
+runtime evidence and incomplete whole-CI acceptance. Separate managed uses
+reclaimed a registration prerequisite before later initial-inventory fixtures;
+the caller's registered prerequisite/consumer plan must retain one protection
+lifetime. Existing worktree/runner/CI receipt owners now prepare accepted input,
 launch and factual phase originals before terminal observation; Rust expectations
 cover successful/error returns, enclosing deadlines, true partial publication and
 abrupt termination. [The bounded capture and custody contract](ci-units.md#contemporaneous-fixture-evidence)

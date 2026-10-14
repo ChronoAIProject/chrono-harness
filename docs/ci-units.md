@@ -906,8 +906,13 @@ reclamation nor retirement of current manifest readers.
 ## Contemporaneous fixture evidence
 
 This Q3 source candidate addresses missing observations at the existing process
-and receipt boundaries. It has not been built or executed in this source-only
-assignment. It does not diagnose the earlier CI stalls or accept changed Rust
+and receipt boundaries. Local owner checks exercise the capture regressions and
+the complete runner, judge-CI and worktree suites. The whole CI action remains
+unaccepted: its later initial-inventory fixtures require a registration binary
+that separate managed prerequisite uses allowed automatic cleanup to reclaim.
+The caller must protect the registered prerequisite/consumer plan as one lifetime;
+individual completed uses do not reserve outputs for a later consumer.
+This evidence does not diagnose the earlier CI stalls or accept changed Rust
 component inventories. All existing acquisitions, judge bounds, channel bounds,
 threads and semantic assertions remain in scope. Source preparation is not
 canonical, native, adoption, review or delivery acceptance.
@@ -915,7 +920,7 @@ canonical, native, adoption, review or delivery acceptance.
 | Natural owner | Accepted inputs and output | Actual consumer and existing registration |
 | --- | --- | --- |
 | runner `observation::Progress` and `ProcessEvidence` | Unique unbuffered phase original; producer executable bytes/PID, sequence and producer-local elapsed window; existing bounded launch and stdout/stderr originals | `worktree::with_report`, runner check transport, judge-ci inventory/evaluation and CI receipt producer; source compile edges in FILEMAP, existing project dependencies and test-execution edges |
-| worktree `Runner::observe` / `with_report` | Config original, inherited/effective environment, Git version, each argv/stdin/launch and observed return; [worktree contract](worktree.md#contemporaneous-acquisition-evidence-source-candidate-execution-pending) | The four input-acquisition consumers; failure state retained before ShortHost teardown; `worktree-tests` / `worktree-adoption` remain unfiltered |
+| worktree `Runner::observe` / `with_report` | Config original, inherited/effective environment, Git version, each argv/stdin/launch and observed return; [worktree contract](worktree.md#contemporaneous-acquisition-evidence-source-candidate) | The four input-acquisition consumers; failure state retained before ShortHost teardown; `worktree-tests` / `worktree-adoption` remain unfiltered |
 | runner `execute_check` and judge-ci `inventory` / `evaluate` | Exact accepted request and profile originals, configured invocation, child launch and original return; facts, fixed endpoint inventory, plan, collection/execution and evaluation phases | The eight judge transports, including concurrent unit checkouts; `runner-tests`, `judge-ci-tests`, `ci-tests` and their existing declared consumer closure |
 | CI fixture `fixture_inputs` | Before ShortHost/execute_context dispatch, exact declared config/FILEMAP/projects/judges/workflow/worktree/cleanup/check/units and literal Git attachment/HEAD/config bytes, directory or parent-not-directory state, or actual absence, plus caller's fixed endpoint/context inputs | Existing state/receipt retention and diagnosis; `behavior.rs`, `short.rs`, `units.rs` are already FILEMAP compile inputs of `ci-tests` |
 | CI `retain_command_result_observed` and worktree `RetainedArtifact` store | Accepted original command exit/stream digests; input capture, registered-store entry/return, original-copy entry/return, birth gate, registry read/lease, admission and seal boundaries | Existing first publisher and receipt consumer; the birth fixture records the actual result of its unchanged five-second notification wait separately from publisher progress |
@@ -947,8 +952,9 @@ failure under the existing joined fixture's file limit. The new first-publisher
 SIGKILL fixture stops before registry admission and requires the earlier accepted
 identity, phases and original command bytes without a fabricated seal. A legacy
 judge success/business-error consumer checks real request/config and process/phase
-correspondence. All are source-prepared, execution pending; their fixture drivers
-and assertions remain Rust, with no new test project or helper dependency.
+correspondence. These capture regressions have local runtime evidence; their
+fixture drivers and assertions remain Rust, with no new test project or helper
+dependency. Whole CI, canonical, native and delivery acceptance remain separate.
 
 Cost and custody: accepted config/stdin snapshots reuse content-addressed
 originals. Launch/phase rows are additional metadata, and active stream captures
