@@ -1550,6 +1550,7 @@ fn registered_python_consumers_forward_leases_after_both_wrappers_die() {
             "bootstrap" => {
                 let config = target.join(".chrono-harness/ci/python-bootstrap.json");
                 fs::create_dir_all(config.parent().unwrap()).unwrap();
+                fs::copy(&script, target.join(".chrono-harness/ci/bootstrap.py")).unwrap();
                 fs::write(
                     config,
                     serde_json::to_vec(&value!({

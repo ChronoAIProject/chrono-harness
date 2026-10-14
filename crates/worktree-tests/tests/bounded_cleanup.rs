@@ -255,8 +255,8 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
         let h = cargo_host();
         cargo_plan(&h.root, Some(stage));
         let mut command = h.auto_command("use", &["--operation", "use.consumer"]);
-        let child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
-        await_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
+        let mut child = super::interrupted_cleanup::CapturedChild::spawn(&mut command, &h.root);
+        child.await_managed_file(&h.root.join(format!(".chrono-harness/state/{stage}-active")));
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
         assert!(maintained.to_string().contains("live registered consumers"));

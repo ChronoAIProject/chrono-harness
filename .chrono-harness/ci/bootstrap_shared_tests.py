@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Transport real bootstrap fixture outputs, then exercise consumer rejection."""
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 import importlib.util
 import json
 import os
@@ -337,10 +338,20 @@ class RealAttempt:
     def __init__(self, owner, source, deadline, output_limit):
         owner.mkdir(parents=True, exist_ok=True)
         self.evidence = owner / "pending-attempt"
-        try:
-            self.evidence.mkdir()
-        except FileExistsError:
-            raise ValueError("unresolved real-consumer attempt; protected custody: " + str(self.evidence))
+        # Preserve every settled original in place. Atomic mkdir reserves the
+        # first unresolved slot even when two invocations arrive together.
+        number = 1
+        while True:
+            try:
+                self.evidence.mkdir()
+                break
+            except FileExistsError:
+                try:
+                    self.require_settled(self.evidence)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise ValueError("unresolved real-consumer attempt; protected custody: " + str(self.evidence)) from error
+                number += 1
+                self.evidence = owner / ("pending-attempt-" + str(number))
         self.deadline, self.output_limit = deadline, output_limit
         self.result = {"source": source, "fixture": str(self.evidence / "fixture"),
                        "status": "running", "commands": [],
@@ -350,6 +361,40 @@ class RealAttempt:
                                    "consumers": ["real-consumer assertions", "failure diagnosis", "caller acceptance and review"],
                                    "capacity": "one unresolved attempt; no automatic retry or age deletion"}}
         self.publish()
+
+    @staticmethod
+    def original(descriptor, root=Path("/")):
+        path = root / descriptor["path"]
+        raw = path.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != descriptor["sha256"] or (
+                "size" in descriptor and len(raw) != descriptor["size"]):
+            raise ValueError("owner original bytes differ")
+        return raw
+
+    @classmethod
+    def require_settled(cls, evidence):
+        if evidence.is_symlink():
+            raise ValueError("attempt ownership is unknown")
+        result = json.loads((evidence / "result.json").read_bytes())
+        if result["status"] != "passed":
+            raise ValueError("producer success is unresolved")
+        custody, root = result["custody"], Path(result["fixture"])
+        reports = {}
+        for command in result["commands"]:
+            if command["status"] != "passed" or command["exit_code"] != 0:
+                raise ValueError("producer command did not succeed")
+            raw = cls.original(command["stdout"])
+            cls.original(command["stderr"])
+            reports[command["name"]] = raw
+        managed = cls.original(custody["managed_report"])
+        released = cls.original(custody["release_report"])
+        if reports.get("managed-use") != managed or not any(
+                name.startswith("owner-release-") and raw == released for name, raw in reports.items()):
+            raise ValueError("owner reports are not retained command originals")
+        report = json.loads(managed)
+        if report["status"] != "used" or report["managed_process"]["exit_code"] != 0 or report["managed_process"]["failure"] is not None:
+            raise ValueError("managed producer did not succeed")
+        cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
 
     def publish(self):
         path = self.evidence / "result.json"
@@ -441,35 +486,35 @@ class RealAttempt:
                 except ValueError:
                     pass
                 self.publish()
-        report = json.loads(Path(custody["release_report"]["path"]).read_bytes())
+        report = json.loads(self.original(custody["release_report"]))
+        self.verify_disposal(self.root, self.outputs, report)
+        custody.update(status="outputs-disposed-evidence-retained", disposal="verified-absent",
+                       descendants_quiescent=True, reason="Owner acquired exclusive enrollment lease and verified declared output absence.")
+        self.publish()
+
+    @classmethod
+    def verify_disposal(cls, root, outputs, report):
         if report.get("status") != "finished" or not report.get("main_cache_release"):
             raise ValueError("missing actual main-cache release receipt")
-        import bootstrap
         def receipt(descriptor):
-            path = self.root / descriptor["path"]
-            if bootstrap.file_digest(path) != descriptor["sha256"]:
-                raise ValueError("owner receipt bytes differ")
-            return json.loads(path.read_bytes())
+            return json.loads(cls.original(descriptor, root))
         receipt(report["main_cache_release"])
         effects = {}
         for item in report.get("drain", []):
-            if item.get("path") != str(self.root) or "receipt" not in item:
+            if item.get("path") != str(root) or "receipt" not in item:
                 continue
             original = receipt(item["receipt"])
             if original.get("status") != "cleaned" or original.get("protected_historical_artifacts"):
                 raise ValueError("owner has not disposed all freshly owned outputs")
             intent = receipt(original["cache_intent"])
-            if set(intent["binding"]["artifacts"]) != set(self.outputs):
+            if set(intent["binding"]["artifacts"]) != set(outputs):
                 raise ValueError("owner output ownership differs")
             effects.update({row["path"]: row for row in original["artifact_disposals"]})
-        if set(effects) != set(self.outputs) or any(
+        if set(effects) != set(outputs) or any(
                 row["status"] not in ("verified-absent", "already-absent") or row["bytes_after"] != 0
-                or (self.root / name).exists() or (self.root / name).is_symlink()
+                or (root / name).exists() or (root / name).is_symlink()
                 for name, row in effects.items()):
             raise ValueError("no complete registered disposal evidence; preserve pending attempt")
-        custody.update(status="outputs-disposed-evidence-retained", disposal="verified-absent",
-                       descendants_quiescent=True, reason="Owner acquired exclusive enrollment lease and verified declared output absence.")
-        self.publish()
 
     def finish(self, status, error=None):
         self.result["status"] = status
@@ -639,8 +684,52 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual(effect["bytes_after"], 0)
                 self.assertEqual(attempt.result["custody"]["descendants_quiescent"], True)
                 attempt.finish("passed" if mode == "success" else "failed")
-                with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
-                    RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+                originals = {path: path.read_bytes() for path in attempt.evidence.rglob("*") if path.is_file()}
+                for defect in ("running", "failed", "interrupted", "unknown", "missing-release", "altered-release", "missing-stream", "labels-only"):
+                    with self.subTest(defect=defect), tempfile.TemporaryDirectory() as directory:
+                        owner = Path(directory)
+                        pending = owner / "pending-attempt"
+                        pending.mkdir()
+                        retained = json.loads((attempt.evidence / "result.json").read_bytes())
+                        if defect in ("running", "failed", "interrupted", "unknown"):
+                            retained["status"] = defect
+                        elif defect == "missing-release":
+                            del retained["custody"]["release_report"]
+                        elif defect == "altered-release":
+                            retained["custody"]["release_report"]["sha256"] = "0" * 64
+                        elif defect == "missing-stream":
+                            retained["commands"][0]["stdout"]["path"] = str(owner / "absent")
+                        else:
+                            retained["status"] = "passed"
+                            for command in retained["commands"]:
+                                command.update(status="passed", exit_code=0)
+                            if mode == "success":
+                                retained["commands"] = []
+                        raw = json.dumps(retained).encode()
+                        (pending / "result.json").write_bytes(raw)
+                        with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                            RealAttempt(owner, {}, time.monotonic() + 5, 1048576)
+                        self.assertEqual((pending / "result.json").read_bytes(), raw)
+                        self.assertEqual(list(owner.iterdir()), [pending])
+                if mode == "success":
+                    with ThreadPoolExecutor(max_workers=2) as workers:
+                        entrants = [workers.submit(RealAttempt, attempt.evidence.parent, {},
+                                                   time.monotonic() + 5, 1048576) for _ in range(2)]
+                    admitted = [entry.result() for entry in entrants if entry.exception() is None]
+                    rejected = [entry.exception() for entry in entrants if entry.exception() is not None]
+                    self.assertEqual(len(admitted), 1)
+                    self.assertEqual(len(rejected), 1)
+                    self.assertIsInstance(rejected[0], ValueError)
+                    self.assertIn("unresolved real-consumer attempt", str(rejected[0]))
+                    next_attempt = admitted[0]
+                    self.assertNotEqual(next_attempt.evidence, attempt.evidence)
+                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+                else:
+                    with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                        RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+                for path, raw in originals.items():
+                    self.assertEqual(path.read_bytes(), raw)
 
     def test_live_consumer_and_preexisting_output_remain_protected(self):
         root, attempt = self.host("hold")

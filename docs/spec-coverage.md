@@ -782,7 +782,10 @@ Equal-byte relocation permits absent or stale original personal paths while
 retaining exact-path, current-selection, wrapper and executable-drift rejection.
 
 The real Python fixture producer retains terminal success/nonzero/timeout streams
-and source/report/descriptor originals in one exclusive attempt slot. Its caller's
+and source/report/descriptor originals at stable attempt paths, with at most one
+unresolved attempt. A subsequent invocation admits a fresh slot only after
+verifying the prior successful producer streams and original owner release and
+disposal receipts; successful status labels alone cannot release occupancy. Its caller's
 source-bound existing worktree owner enrolls the fresh primary fixture before
 production. One registered managed child covers the complete consumption and
 assertion lifetime; existing main-cache release/disposal receipts establish exact
