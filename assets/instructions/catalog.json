@@ -1882,14 +1882,14 @@
           "locale": "zh-CN",
           "source": {
             "type": "inline",
-            "text": "按能力选一个等待通道。 宿主主动通知就用通知，随后读产物，不另阻塞等待同任务；否则优先原生 wait/watch。仅无原语的外部状态可有界轮询，预定退出判据、按事件节奏定间隔、每轮有时间及关键读数；睡多久不证明完成。"
+            "text": "等待任务不轮询。 每个任务只用一个宿主完成通知或真正阻塞等待通道；完成后一次收取并核对原始结果、退出状态和任务身份。禁止定时反复查询状态、进程或产物，也不以 sleep 后查询、反复空写会话或名为 wait/watch 的状态查询循环代替等待。等待超时或暂时无通知不证明任务终结，不因此重启。缺少通知和阻塞等待能力时保留句柄、继续独立工作并如实说明能力缺口；不另造轮询器或伪造完成。"
           }
         },
         {
           "locale": "en",
           "source": {
             "type": "inline",
-            "text": "Use one waiting channel. Use host completion notices, then read artifacts; no duplicate blocking wait. Else prefer native wait/watch. Only external state lacking primitives permits bounded polling: preset exits, event-appropriate intervals, time and key readings each round. Sleep proves no completion."
+            "text": "Wait for tasks without polling. Use one host completion notification or genuinely blocking wait per task; after completion, collect and verify the original result, exit status and task identity once. Do not repeatedly query status, processes or artifacts on a timer, sleep then query, repeatedly send empty session input, or substitute a status-query loop named wait/watch. A wait timeout or delayed notification does not establish termination or justify restarting. When neither notification nor blocking wait is available, retain the handle, continue independent work and report the capability gap; do not add a poller or fabricate completion."
           }
         }
       ]
@@ -2899,7 +2899,8 @@
             "delta.local-ci",
             "test.behavior",
             "test.same-language",
-            "evidence.program-state"
+            "evidence.program-state",
+            "job.wait"
           ]
         },
         {

@@ -31,6 +31,7 @@
         "test.behavior",
         "test.same-language",
         "evidence.program-state",
+        "job.wait",
         "candidate.landing",
         "artifact.results",
         "artifact.cleanup"
