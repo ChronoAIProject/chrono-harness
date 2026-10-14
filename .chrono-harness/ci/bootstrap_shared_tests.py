@@ -2,6 +2,7 @@
 """Transport real bootstrap fixture outputs, then exercise consumer rejection."""
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
@@ -595,13 +596,7 @@ class RealAttempt:
             self.run("managed-use", self.managed_argv(operation), self.root, self.environment,
                      timeout=max(0.001, self.deadline - time.monotonic() - 15), output_limit=self.owner_output_limit)
         finally:
-            path = self.evidence / "managed-use.stdout"
-            if path.is_file():
-                try:
-                    self.result["custody"]["managed_report"] = self.owner_report(path)
-                except ValueError:
-                    pass  # Missing/partial owner output never establishes release.
-                self.publish()
+            self.retain_owner_report("managed-use", "managed_report")
 
     def owner_report(self, stdout):
         import bootstrap
@@ -612,28 +607,45 @@ class RealAttempt:
             raise ValueError("lifecycle stdout differs from original report")
         return {"path": str(path), "sha256": bootstrap.file_digest(path), "size": path.stat().st_size}
 
+    def retain_owner_report(self, name, key):
+        custody = self.result["custody"]
+        try:
+            descriptor = self.owner_report(self.evidence / (name + ".stdout"))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            # Diagnostic collection must not replace the command's own failure.
+            # Old command streams/reports remain retained; none proves this release.
+            custody[key + "_error"] = repr(error)
+            custody.pop(key, None)
+            self.publish()
+            return None
+        custody[key] = descriptor
+        custody.pop(key + "_error", None)
+        self.publish()
+        return descriptor
+
     def dispose(self):
         custody = self.result["custody"]
-        custody["status"] = "protected-pending"
-        custody["disposal"] = "requested"
+        custody.update(status="protected-pending", disposal="requested", descendants_quiescent=None,
+                       reason="No verified release/disposal receipt for this request.")
         self.publish()
         name = "owner-release-" + str(len(self.result["commands"]))
         try:
-            self.run(name, [self.lifecycle, "finish", "--host-root", str(self.root),
-                           "--path", str(self.root), "--artifacts-only"], self.root, self.environment,
-                     output_limit=self.owner_output_limit)
-        finally:
-            path = self.evidence / (name + ".stdout")
-            if path.is_file():
-                try:
-                    custody["release_report"] = self.owner_report(path)
-                except ValueError:
-                    pass
-                self.publish()
-        report = json.loads(self.original(custody["release_report"]))
-        self.verify_disposal(self.root, self.outputs, report)
+            try:
+                self.run(name, [self.lifecycle, "finish", "--host-root", str(self.root),
+                               "--path", str(self.root), "--artifacts-only"], self.root, self.environment,
+                         output_limit=self.owner_output_limit)
+            finally:
+                released = self.retain_owner_report(name, "release_report")
+            if released is None:
+                raise ValueError("owner release has no valid original report; preserve pending attempt")
+            self.verify_disposal(self.root, self.outputs, json.loads(self.original(released)))
+        except Exception as error:
+            custody["error"] = repr(error)
+            self.publish()
+            raise
         custody.update(status="outputs-disposed-evidence-retained", disposal="verified-absent",
                        descendants_quiescent=True, reason="Owner acquired exclusive enrollment lease and verified declared output absence.")
+        custody.pop("error", None)
         self.publish()
 
     @classmethod
@@ -691,12 +703,7 @@ class RealAttempt:
             raise
         finally:
             row["duration_seconds"] = time.monotonic() - started
-            for channel, path in (("stdout", stdout), ("stderr", stderr)):
-                if path.is_file():
-                    import bootstrap
-                    row[channel] = {"path": str(path), "sha256": bootstrap.file_digest(path),
-                                    "size": path.stat().st_size}
-            self.publish()
+            self.retain_streams(row, stdout, stderr)
         size = sum(command[channel]["size"] for command in self.result["commands"]
                    for channel in ("stdout", "stderr") if channel in command
                    and command["output_limit_bytes"] == row["output_limit_bytes"])
@@ -704,6 +711,14 @@ class RealAttempt:
             raise AssertionError("real-consumer original streams exceed registered output bound")
         if process.returncode:
             raise AssertionError(name + ": " + stderr.read_text(errors="replace")[-3000:])
+
+    def retain_streams(self, row, stdout, stderr):
+        for channel, path in (("stdout", stdout), ("stderr", stderr)):
+            if path.is_file():
+                import bootstrap
+                row[channel] = {"path": str(path), "sha256": bootstrap.file_digest(path),
+                                "size": path.stat().st_size}
+        self.publish()
 
 
 class AttemptCustody(unittest.TestCase):
@@ -757,6 +772,93 @@ class AttemptCustody(unittest.TestCase):
 class ManagedAttemptCustody(unittest.TestCase):
     """Independent expectations against the existing real lifecycle binary."""
 
+    def test_independent_host_rebinds_inherited_tools(self):
+        acquire = acquire_parent_source
+
+        def inherited_host(source, root, git, run):
+            acquire(source, root, git, run)
+            policy_path = root / ".chrono-harness/worktree.json"
+            policy = json.loads(policy_path.read_bytes())
+            policy["git"].update(program="/absent/parent/git", expected_version="parent Git", sha256="0" * 64)
+            policy_path.write_text(json.dumps(policy))
+            config_path = root / ".chrono-harness/config.json"
+            config = json.loads(config_path.read_bytes())
+            next(row for row in config["tools"] if row["id"] == "python3")["program"] = "/absent/parent/python3"
+            config_path.write_text(json.dumps(config))
+
+        with fixture.mock.patch(__name__ + ".acquire_parent_source", side_effect=inherited_host):
+            root, attempt = self.host("success")
+        with attempt:
+            attempt.managed("fixture.custody")
+        report = json.loads(RealAttempt.original(attempt.result["custody"]["managed_report"]))
+        self.assertEqual(report["tool"]["path"], "/usr/bin/git")
+        self.assertEqual(report["tool"]["sha256"], hashlib.sha256(Path("/usr/bin/git").read_bytes()).hexdigest())
+        version = subprocess.run(["/usr/bin/git", "--version"], capture_output=True, check=True,
+                                 pass_fds=fixture.PASS_FDS)
+        self.assertEqual(report["tool"]["version"]["stdout"].encode(), version.stdout)
+        assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
+        self.assertEqual(assertions["python_executable"], sys.executable)
+        self.assertEqual(report["managed_process"]["argv"][0], sys.executable)
+        self.assertEqual(report["tool"]["version"]["environment"], attempt.environment)
+        # Even a zero-exit release needs its own original: an older successful
+        # report must not certify a later request whose report cannot be read.
+        original_release = attempt.result["custody"]["release_report"]
+        original_bytes = RealAttempt.original(original_release)
+        with fixture.mock.patch.object(attempt, "owner_report", side_effect=FileNotFoundError("missing current release")):
+            with self.assertRaisesRegex(ValueError, "owner release has no valid original report"):
+                with attempt:
+                    pass
+        self.assertEqual(RealAttempt.original(original_release), original_bytes)
+        self.assertEqual(attempt.result["commands"][-1]["exit_code"], 0)
+        self.assertEqual(attempt.result["custody"]["status"], "protected-pending")
+        self.assertIsNone(attempt.result["custody"]["descendants_quiescent"])
+        self.assertNotIn("release_report", attempt.result["custody"])
+        with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+            RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+
+    def test_rejected_owner_keeps_primary_failure_and_pending_custody(self):
+        for consumer in ("managed", "live"):
+            with self.subTest(consumer=consumer):
+                root, attempt = self.host("hold" if consumer == "live" else "success")
+                policy_path = root / ".chrono-harness/worktree.json"
+                policy = json.loads(policy_path.read_bytes())
+                policy["git"]["sha256"] = "0" * 64
+                policy_path.write_text(json.dumps(policy))
+                for args in (["add", str(policy_path)], ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                                                        "commit", "-qm", "reject fixture owner before enrollment"]):
+                    subprocess.run(["/usr/bin/git", "-C", str(root), *args], capture_output=True,
+                                   check=True, pass_fds=fixture.PASS_FDS)
+                import bootstrap
+                attempt.result["source"] = bootstrap.observe_source(root)
+                attempt.publish()
+                if consumer == "managed":
+                    # A missing owner original must not replace the real nonzero
+                    # command, just as empty stdout must not do so on native CI.
+                    with fixture.mock.patch.object(attempt, "owner_report", side_effect=FileNotFoundError("missing owner original")):
+                        with self.assertRaisesRegex(AssertionError, "managed-use: E_WORKTREE: Git executable digest mismatch") as failed:
+                            with attempt:
+                                attempt.managed("fixture.custody")
+                else:
+                    with self.assertRaisesRegex(AssertionError, "live consumer readiness.*Git executable digest mismatch") as failed:
+                        with attempt:
+                            with self.live_consumer(root, attempt):
+                                self.fail("rejected owner reached consumer")
+                    self.assertFalse((root / ".chrono-harness/state/custody-release").exists())
+                result = json.loads((attempt.evidence / "result.json").read_bytes())
+                self.assertEqual(result["error"], repr(failed.exception))
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["custody"]["status"], "protected-pending")
+                self.assertIsNone(result["custody"]["descendants_quiescent"])
+                self.assertNotIn("release_report", result["custody"])
+                self.assertIn("Git executable digest mismatch", result["custody"]["error"])
+                for command in result["commands"]:
+                    self.assertNotEqual(command["exit_code"], 0)
+                    self.assertEqual(command["status"], "failed")
+                    self.assertIn(b"Git executable digest mismatch", RealAttempt.original(command["stderr"]))
+                    self.assertEqual(RealAttempt.original(command["stdout"]), b"")
+                with self.assertRaisesRegex(ValueError, "unresolved real-consumer attempt"):
+                    RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 5, 1048576)
+
     def test_clone_failure_exposes_original_subprocess_diagnostic(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory).resolve()
@@ -773,15 +875,27 @@ class ManagedAttemptCustody(unittest.TestCase):
         base.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix=mode + "-", dir=base)).resolve()
         root = directory / "fixture"
+        # This is an independent host, not a replica of the developer's tools.
+        environment = {key: os.environ[key] for key in ("PATH", "HOME", "SSH_AUTH_SOCK") if key in os.environ}
+        environment["GIT_TERMINAL_PROMPT"] = "0"
+        git = "/usr/bin/git"
         def acquire(name, argv, cwd):
-            result = subprocess.run(argv, cwd=cwd, capture_output=True, pass_fds=fixture.PASS_FDS)
+            result = subprocess.run(argv, cwd=cwd, env=environment, capture_output=True, pass_fds=fixture.PASS_FDS)
             self.assertEqual(result.returncode, 0, result)
             return result.stdout
-        acquire_parent_source(SOURCE.parents[1], root, "/usr/bin/git", acquire)
+        acquire_parent_source(SOURCE.parents[1], root, git, acquire)
+        policy_path = root / ".chrono-harness/worktree.json"
+        policy = json.loads(policy_path.read_bytes())
+        policy["environment"] = {"inherit": ["PATH", "HOME", "SSH_AUTH_SOCK"], "values": {"GIT_TERMINAL_PROMPT": "0"}}
+        policy["git"] = {"program": git,
+                         "expected_version": acquire("git-version", [git, "--version"], root).decode().strip(),
+                         "sha256": hashlib.sha256(Path(git).read_bytes()).hexdigest()}
+        policy_path.write_text(json.dumps(policy))
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", root / fixture.OPERATION)
         config_path = root / ".chrono-harness/config.json"
         config = json.loads(config_path.read_bytes())
         config["protocol"]["timeout_seconds"] = 1 if mode == "timeout" else 20
+        next(row for row in config["tools"] if row["id"] == "python3")["program"] = sys.executable
         config_path.write_text(json.dumps(config))
         projects_path = root / ".chrono-harness/projects.json"
         projects = json.loads(projects_path.read_bytes())
@@ -790,12 +904,10 @@ class ManagedAttemptCustody(unittest.TestCase):
             "argv": ["-B", fixture.OPERATION, "custody", mode]}
         projects_path.write_text(json.dumps(projects))
         for args in (["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "custody fixture"]):
-            result = subprocess.run(["/usr/bin/git", "-C", str(root), *args],
-                                    capture_output=True, pass_fds=fixture.PASS_FDS)
-            self.assertEqual(result.returncode, 0, result)
+            acquire("commit", [git, "-C", str(root), *args], root)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
-        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", dict(os.environ))
+        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
         print("custody fixture originals: " + str(attempt.evidence), flush=True)
         return root, attempt
 
@@ -804,16 +916,14 @@ class ManagedAttemptCustody(unittest.TestCase):
             with self.subTest(mode=mode):
                 root, attempt = self.host(mode)
                 source = (root / fixture.OPERATION).read_bytes()
-                try:
+                with attempt:
                     if mode == "success":
                         attempt.managed("fixture.custody")
                     else:
                         with self.assertRaises(AssertionError):
                             attempt.managed("fixture.custody")
-                finally:
-                    # A drain may happen as soon as use returns. Consume only
-                    # retained assertion evidence after that protection ends.
-                    attempt.dispose()
+                # A drain may happen as soon as use returns. Consume only
+                # retained assertion evidence after that protection ends.
                 assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
                 self.assertTrue(assertions["ownership_fds"])
                 self.assertEqual(assertions["verified_payloads"],
@@ -821,6 +931,7 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual((root / ".chrono-harness/state/custody-original").read_bytes(), b"original evidence")
                 managed = json.loads(Path(attempt.result["custody"]["managed_report"]["path"]).read_bytes())
                 process = managed["managed_process"]
+                self.assert_producer_streams(attempt, process)
                 if mode != "timeout":
                     self.assertEqual(process["exit_code"], 0 if mode == "success" else 7)
                 if mode == "timeout":
@@ -890,28 +1001,67 @@ class ManagedAttemptCustody(unittest.TestCase):
                 for path, raw in originals.items():
                     self.assertEqual(path.read_bytes(), raw)
 
-    def test_live_consumer_and_preexisting_output_remain_protected(self):
-        root, attempt = self.host("hold")
+    def assert_producer_streams(self, attempt, process):
+        self.assertEqual(process["argv"][0], sys.executable)
+        for channel in ("stdout", "stderr"):
+            expected = ("custody " + channel + "\n").encode()
+            self.assertEqual(bytes(process[channel + "_bytes"]), expected)
+            self.assertEqual(process[channel + "_sha256"], hashlib.sha256(expected).hexdigest())
+        for row in attempt.result["commands"]:
+            for channel in ("stdout", "stderr"):
+                self.assertEqual(len(RealAttempt.original(row[channel])), row[channel]["size"])
+
+    @contextmanager
+    def live_consumer(self, root, attempt):
         # The actual registered owner, not a mocked lock, protects this consumer.
         command = attempt.managed_argv("fixture.custody")
-        with (attempt.evidence / "live.stdout").open("wb") as out, (attempt.evidence / "live.stderr").open("wb") as err:
+        stdout, stderr = attempt.evidence / "managed-use.stdout", attempt.evidence / "managed-use.stderr"
+        row = {"name": "managed-use", "argv": command, "cwd": str(root), "exit_code": None,
+               "status": "running", "ownership_fds": list(fixture.PASS_FDS),
+               "output_limit_bytes": attempt.owner_output_limit}
+        attempt.result["commands"].append(row)
+        attempt.publish()
+        started = time.monotonic()
+        ready = root / ".chrono-harness/state/custody-ready"
+        with stdout.open("xb") as out, stderr.open("xb") as err:
             child = subprocess.Popen(command, cwd=root, env=attempt.environment,
                                      pass_fds=fixture.PASS_FDS, stdout=out, stderr=err)
             try:
                 until = time.monotonic() + 10
-                while not (root / ".chrono-harness/state/custody-ready").exists() and child.poll() is None and time.monotonic() < until:
+                while not ready.exists() and child.poll() is None and time.monotonic() < until:
                     time.sleep(0.02)
-                self.assertTrue((root / ".chrono-harness/state/custody-ready").exists())
+                self.assertTrue(ready.exists(), "live consumer readiness: " + stderr.read_text(errors="replace")[-3000:])
+                yield
+            finally:
+                primary_error = sys.exc_info()[1]
+                try:
+                    if ready.exists() and child.poll() is None:
+                        (root / ".chrono-harness/state/custody-release").touch()
+                    child.wait(timeout=25)
+                except Exception as error:
+                    attempt.result["custody"]["live_finalize_error"] = repr(error)
+                    if primary_error is None:
+                        raise
+                finally:
+                    row.update(exit_code=child.poll(), duration_seconds=time.monotonic() - started,
+                               status="unresolved" if child.poll() is None else "passed" if child.returncode == 0 else "failed")
+                    attempt.retain_streams(row, stdout, stderr)
+                    attempt.retain_owner_report("managed-use", "managed_report")
+            self.assertEqual(child.returncode, 0)
+
+    def test_live_consumer_and_preexisting_output_remain_protected(self):
+        root, attempt = self.host("hold")
+        with attempt:
+            with self.live_consumer(root, attempt):
                 with self.assertRaises((AssertionError, ValueError)):
                     attempt.dispose()
                 assertions = json.loads((root / ".chrono-harness/state/custody-assertions.json").read_bytes())
                 self.assertEqual(len(assertions["verified_payloads"]), 2)
                 self.assertEqual(attempt.result["custody"]["status"], "protected-pending")
-            finally:
-                (root / ".chrono-harness/state/custody-release").touch()
-                child.wait(timeout=25)
-            self.assertEqual(child.returncode, 0)
-        attempt.dispose()
+        report = json.loads(RealAttempt.original(attempt.result["custody"]["managed_report"]))
+        self.assertEqual(report["managed_process"]["exit_code"], 0)
+        self.assertIsNone(report["managed_process"]["failure"])
+        self.assert_producer_streams(attempt, report["managed_process"])
         self.assertFalse((root / "crates/runner/target").exists())
         attempt.finish("passed")
         other, pending = self.host("success")

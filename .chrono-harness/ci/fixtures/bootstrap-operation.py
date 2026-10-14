@@ -31,6 +31,7 @@ if mode == "custody":
     # finish here, while the inherited owner lease is still held, on every exit.
     with (state / "custody-assertions.json").open("x") as output:
         json.dump({"ownership_fds": list(ownership_fds),
+                   "python_executable": sys.executable,
                    "verified_payloads": verified_payloads}, output)
     print("custody stdout", flush=True)
     print("custody stderr", file=sys.stderr, flush=True)

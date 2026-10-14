@@ -234,15 +234,23 @@ the existing owner. This does not establish generic power-loss recovery.
 The direct Python custody tests use the real existing owner against small,
 producer-created primary fixtures. They retain their source and original owner
 receipts below `.chrono-harness/state/bootstrap-custody-tests/` for the current
-check's diagnosis/review; each invocation creates at most five fixtures, with no
+check's diagnosis/review; each invocation creates at most eight fixtures, with no
 retry. Those evidence consumers must release them before the caller retires the
 fixtures through their test lifecycle. Their declared generated outputs are
 reclaimed by the owner during the test. Disposable payload assertions execute
 inside the Python fixture under the inherited owner lease, before success,
-failure or timeout. The parent disposes outputs in `finally` and then reads the
+failure or timeout. The attempt context finalizes disposal before the parent reads the
 retained assertion evidence and disposal receipts; it never needs the payload
 after `use` returns. Passing synthetic cases do not establish
 native/canonical or real Cargo acceptance. Historical real fixtures are untouched.
+
+Independent custody fixtures bind their own invoked Git path, version and bytes,
+and select the Python interpreter running the test for their managed action.
+Inherited parent-host expectations are not native fixture expectations. Regression
+cases require ordinary success, nonzero exit, timeout and live consumption to
+retain producer streams and status. Missing owner reports and failed live readiness
+must preserve the earlier failure, retain unresolved custody and refuse reentry;
+only verified release/disposal allows successful-attempt reentry.
 
 The bootstrap test owner retains the existing 900-second/1-MiB limits and FILEMAP
 cap 2. The producer reserves 15 seconds of the same deadline for owner release and
