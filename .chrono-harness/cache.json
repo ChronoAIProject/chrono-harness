@@ -905,6 +905,11 @@
       "kind": "json-value",
       "path": ".chrono-harness/ci/check.json",
       "pointer": "/policy/tools/cargo"
+    },
+    "bootstrap.toolchains": {
+      "kind": "file",
+      "path": ".chrono-harness/ci/bootstrap-toolchains.json",
+      "presence": "present"
     }
   },
   "artifacts": {
@@ -1172,7 +1177,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "ci.sources"
@@ -1232,7 +1238,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-ci.sources"
@@ -1291,7 +1298,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "runner.sources"
@@ -1354,7 +1362,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "worktree.sources"
@@ -1400,7 +1409,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "runner-tests.sources"
@@ -1442,7 +1452,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "instructions.sources"
@@ -1486,7 +1497,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "instructions-tests.sources"
@@ -1544,7 +1556,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-ci-tests.sources"
@@ -1604,7 +1617,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "ci-tests.sources"
@@ -1661,7 +1675,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-registration.sources"
@@ -1709,7 +1724,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-registration-tests.sources"
@@ -1768,7 +1784,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-filemap.sources"
@@ -1820,7 +1837,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-filemap-tests.sources"
@@ -1881,7 +1899,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-projects.sources"
@@ -1941,7 +1960,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-routes.sources"
@@ -1995,7 +2015,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-routes-tests.sources"
@@ -2051,7 +2072,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-projects-tests.sources"
@@ -2109,7 +2131,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-cost.sources"
@@ -2163,7 +2186,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-cost-tests.sources"
@@ -2216,7 +2240,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-mixed.sources"
@@ -2270,7 +2295,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-mixed-tests.sources"
@@ -2327,7 +2353,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "inputs.sources"
@@ -2387,7 +2414,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-workflow.sources"
@@ -2445,7 +2473,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -2501,7 +2530,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "inputs-tests.sources"
@@ -2548,7 +2578,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "distribution.sources"
@@ -2596,7 +2627,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "distribution-tests.sources"
@@ -2650,7 +2682,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-cargo.sources"
@@ -2706,7 +2739,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-cargo-tests.sources"
@@ -2766,7 +2800,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "worktree-tests.sources"
@@ -2808,7 +2843,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "diagnostics.sources"
@@ -2852,7 +2888,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "diagnostics-tests.sources"
@@ -2898,7 +2935,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "cache.sources"
@@ -2946,7 +2984,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "cache-tests.sources"
@@ -6263,7 +6302,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -6321,7 +6361,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -6381,7 +6422,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "worktree-tests.sources"
@@ -6437,7 +6479,8 @@
         "runner.manifest",
         "runner.lock",
         "bootstrap.script",
-        "bootstrap.config"
+        "bootstrap.config",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "ci.sources"
@@ -6493,7 +6536,8 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool"
+        "check.cargo-tool",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-projects-tests.sources"
@@ -6535,7 +6579,8 @@
         "runner.manifest",
         "runner.lock",
         "bootstrap.script",
-        "bootstrap.config"
+        "bootstrap.config",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "runner.sources"
@@ -6589,7 +6634,8 @@
         "runner.manifest",
         "runner.lock",
         "bootstrap.script",
-        "bootstrap.config"
+        "bootstrap.config",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "judge-ci.sources"
@@ -6645,7 +6691,8 @@
         "worktree.manifest",
         "worktree.lock",
         "bootstrap.script",
-        "bootstrap.config"
+        "bootstrap.config",
+        "bootstrap.toolchains"
       ],
       "source_inputs": [
         "worktree.sources"

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 
 root = Path(__file__).parent
 name, args = Path(sys.argv[0]).name, sys.argv[1:]
@@ -11,6 +12,9 @@ calls = json.loads(record.read_text()) if record.exists() else []
 calls.append([name, *args])
 record.write_text(json.dumps(calls))
 if name == "rustup":
+    if len(args) == 4 and args[:2] == ["which", "--toolchain"] and args[2] == "1.95.0" and args[3] in ["cargo", "rustc"]:
+        print(str(Path(__file__).resolve().parent / args[3]))
+        sys.exit(0)
     if args == ["run", "1.95.0", "cargo", "--version"]:
         sys.exit(0 if (root / "cargo-ready").exists() else 1)
     if args == ["run", "1.95.0", "rustfmt", "--version"]:
@@ -26,5 +30,13 @@ if name == "rustup":
         sys.exit(99)
 elif name in ["cargo", "rustc"] and args == ["--version"] and os.environ.get("RUSTUP_TOOLCHAIN") == "1.95.0":
     print(name + " 1.95.0 (fixture)")
+elif name == "cargo" and args[:1] == ["build-fixture"]:
+    print("cargo original stdout", flush=True)
+    print("cargo original stderr", file=sys.stderr, flush=True)
+    sys.exit(subprocess.run([os.environ["RUSTC"], "compile-fixture", args[1]]).returncode)
+elif name == "rustc" and args[:1] == ["compile-fixture"]:
+    Path(args[1]).write_text(json.dumps({"compiler": str(Path(__file__).resolve()),
+                                      "wrapper": os.environ.get("RUSTC_WRAPPER"),
+                                      "workspace_wrapper": os.environ.get("RUSTC_WORKSPACE_WRAPPER")}))
 else:
     sys.exit(99)

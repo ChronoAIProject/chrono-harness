@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the real Python bootstrap entry with registered operations and SDK fixtures."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True
 SOURCE = Path(__file__).resolve().parent
@@ -71,11 +73,22 @@ class Bootstrap(unittest.TestCase):
                               pass_fds=PASS_FDS, capture_output=True)
 
     def succeeded(self, result):
-        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertEqual(result.returncode, 0, result)
+
+    def test_subprocess_failure_diagnostic_preserves_command_exit_and_binary_streams(self):
+        argv = [sys.executable, "-B", str(self.root / OPERATION), "fail", "7"]
+        result = subprocess.run(argv, capture_output=True, pass_fds=PASS_FDS)
+        with self.assertRaises(AssertionError) as failed:
+            self.succeeded(result)
+        message = str(failed.exception)
+        for expected in (repr(argv), "returncode=7", repr(b"failure stdout\x00\xff\n"),
+                         repr(b"failure stderr\xfe\n")):
+            self.assertIn(expected, message)
 
     def git(self, *args):
         result = subprocess.run(["git", *args], cwd=self.root, pass_fds=PASS_FDS,
-                                capture_output=True, check=True)
+                                capture_output=True)
+        self.succeeded(result)
         return result.stdout.decode().strip()
 
     def evidence(self):
@@ -172,6 +185,197 @@ class Bootstrap(unittest.TestCase):
                 self.assertIn(b"rust_incremental must be a boolean", result.stderr)
                 self.assertFalse((self.tools / "calls.json").exists())
                 self.assertFalse(self.state_path.exists())
+
+    def binding_config(self):
+        bindings = {}
+        for tool in ["cargo", "rustc"]:
+            path = self.tools / tool
+            bindings[tool] = {
+                "path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "version": tool + " 1.95.0 (fixture)",
+            }
+        config = dict(self.config)
+        config["tools"] = {"python": sys.executable, "cargo": str(self.tools / "cargo"),
+                            "rustc": str(self.tools / "rustc")}
+        config["tool_bindings"] = bindings
+        return config
+
+    def test_relocation_ignores_only_retired_declaration_paths(self):
+        config = self.binding_config()
+        for name in ("cargo", "rustc"):
+            config["tool_bindings"][name]["allow_relocation"] = True
+        local = self.root / "relocated"
+        shutil.copytree(self.tools, local)
+        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
+        for state in ("stale", "absent"):
+            with self.subTest(state=state):
+                for name in ("cargo", "rustc"):
+                    old = self.tools / name
+                    if state == "stale": old.write_bytes(b"retired, not executable")
+                    else: old.unlink()
+                self.write_json(self.ci / "bootstrap.json", config)
+                self.succeeded(self.invoke())
+                self.assertEqual(self.evidence()["selection"]["cargo"], str(local / "cargo"))
+        # A separately configured current selection remains authoritative.
+        other = self.root / "other-current"
+        other.mkdir()
+        cargo = other / "cargo"
+        cargo.write_bytes((local / "cargo").read_bytes() + b"\n# different bytes, same version\n")
+        cargo.chmod(0o755)
+        config["tools"]["cargo"] = str(cargo)
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"configured cargo selection differs", rejected.stderr)
+        config["tools"]["cargo"] = str(self.root / "missing-current-cargo")
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"configured cargo executable is missing", rejected.stderr)
+
+    def test_exact_path_rejects_equal_byte_relocation(self):
+        config = self.binding_config()
+        local = self.root / "relocated"
+        shutil.copytree(self.tools, local)
+        self.environment["PATH"] = str(local) + os.pathsep + os.environ["PATH"]
+        self.write_json(self.ci / "bootstrap.json", config)
+        rejected = self.invoke()
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn(b"relocation is not permitted", rejected.stderr)
+        self.assertFalse((self.root / "built-tool").exists())
+
+    def test_native_registry_selects_independent_tuple_and_rejects_missing_before_tools(self):
+        spec = importlib.util.spec_from_file_location("native_bootstrap", SOURCE / "bootstrap.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        registry = {"schema": "chrono-bootstrap-toolchains/v1", "rust_toolchain": "1.95.0",
+                    "platforms": {}}
+        for system, machine, byte in [("Darwin", "arm64", "a"), ("Linux", "x86_64", "b")]:
+            registry["platforms"][system + "/" + machine] = {
+                "target": "fixture", "tools": {name: {"sha256": byte * 64,
+                    "version": name + " 1.95.0 (fixture)"} for name in ("cargo", "rustc")}}
+        path = ".chrono-harness/ci/native.json"
+        self.write_json(self.root / path, registry)
+        config = dict(self.config, require_tool_bindings=True, tool_bindings_registry=path)
+        for system, machine, byte in [("Darwin", "arm64", "a"), ("Linux", "x86_64", "b")]:
+            with mock.patch.object(module.platform, "system", return_value=system), mock.patch.object(module.platform, "machine", return_value=machine):
+                actual = module.binding_declarations(self.root, config)
+                self.assertEqual(actual["cargo"]["sha256"], byte * 64)
+                self.assertEqual(actual["rustc"]["version"], "rustc 1.95.0 (fixture)")
+        for defect in ("unknown", "missing", "conflict"):
+            with self.subTest(defect=defect), mock.patch.object(module.platform, "system", return_value="Linux"), mock.patch.object(module.platform, "machine", return_value="x86_64"), mock.patch.object(module.subprocess, "run") as run:
+                candidate = dict(config)
+                data = json.loads(json.dumps(registry))
+                if defect == "unknown": data["platforms"].pop("Linux/x86_64")
+                elif defect == "missing": candidate["tool_bindings_registry"] += ".missing"
+                else: candidate["tool_bindings"] = self.binding_config()["tool_bindings"]
+                self.write_json(self.root / path, data)
+                with self.assertRaises((ValueError, OSError)):
+                    module.toolchain_environment(candidate, self.root)
+                run.assert_not_called()
+
+    def test_bound_executables_are_selected_and_reported(self):
+        config = self.binding_config()
+        config["operations"] = ["make.cargo"]
+        self.declare("write", "built-tool", "bound")
+        declarations = self.declarations("write", "built-tool", "bound")
+        declarations["projects"][0]["actions"]["cargo"] = {
+            "operation": "make.cargo", "tool": "cargo", "argv": ["build-fixture", "built-tool"],
+        }
+        self.write_json(self.registry, declarations)
+        self.write_json(self.ci / "bootstrap.json", config)
+        self.succeeded(self.invoke())
+        state = self.evidence()
+        self.assertEqual([row["version"] for row in state["executables"]],
+                         ["cargo 1.95.0 (fixture)", "rustc 1.95.0 (fixture)"])
+        self.assertEqual(state["selection"]["compiler"], str(self.tools / "rustc"))
+        self.assertIn(["cargo", "build-fixture", "built-tool"], self.calls())
+        self.assertIn(["rustc", "compile-fixture", "built-tool"], self.calls())
+        child = json.loads((self.root / ".chrono-harness/bin/tool").read_bytes())
+        self.assertEqual(child, {"compiler": str(self.tools / "rustc"), "wrapper": "", "workspace_wrapper": ""})
+        operation = state["operations"][0]
+        self.assertEqual(operation["operation"], "make.cargo")
+        self.assertEqual(operation["argv"], [str(self.tools / "cargo"), "build-fixture", "built-tool"])
+        self.assertEqual(operation["exit_code"], 0)
+        self.assertEqual((self.root / operation["stdout"]["path"]).read_bytes(), b"cargo original stdout\n")
+        self.assertEqual((self.root / operation["stderr"]["path"]).read_bytes(), b"cargo original stderr\n")
+
+    def test_failed_operation_retains_original_process_without_installing(self):
+        self.declare("fail", "9")
+        failed = self.invoke()
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertFalse(self.state_path.exists())
+        originals = list((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"))
+        self.assertEqual(len(originals), 1)
+        report = json.loads(originals[0].read_bytes())
+        self.assertEqual(report["status"], "failed")
+        operation = report["operations"][0]
+        self.assertEqual(operation["exit_code"], 9)
+        for channel, expected in [("stdout", b"failure stdout\x00\xff\n"), ("stderr", b"failure stderr\xfe\n")]:
+            raw = (self.root / operation[channel]["path"]).read_bytes()
+            self.assertEqual(raw, expected)
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), operation[channel]["sha256"])
+        self.assertFalse((self.root / ".chrono-harness/bin/tool").exists())
+
+    def test_binding_mismatch_rejects_before_registered_operation(self):
+        config = self.binding_config()
+        config["tool_bindings"]["rustc"]["sha256"] = "0" * 64
+        self.write_json(self.ci / "bootstrap.json", config)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"bound rustc identity mismatch", result.stderr)
+        self.assertFalse((self.root / "built-tool").exists())
+
+    def test_required_binding_declaration_cannot_be_omitted(self):
+        config = dict(self.config, require_tool_bindings=True)
+        self.write_json(self.ci / "bootstrap.json", config)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"requires declared Cargo/rustc bindings", result.stderr)
+        self.assertFalse((self.tools / "calls.json").exists())
+
+    def test_unsupported_native_registration_and_compiler_override_reject_before_build(self):
+        config = self.binding_config()
+        for defect in ("missing-native", "unsupported-native", "compiler", "wrapper", "workspace-wrapper"):
+            with self.subTest(defect=defect):
+                candidate = dict(config)
+                environment = dict(self.environment)
+                if defect in ("missing-native", "unsupported-native"):
+                    candidate["require_tool_bindings"] = True
+                    if defect == "unsupported-native":
+                        candidate["native_platform"] = {"system": "unsupported", "machine": "unsupported"}
+                else:
+                    key = {"compiler": "RUSTC", "wrapper": "RUSTC_WRAPPER", "workspace-wrapper": "RUSTC_WORKSPACE_WRAPPER"}[defect]
+                    self.environment[key] = "/different/compiler"
+                self.write_json(self.ci / "bootstrap.json", candidate)
+                rejected = self.invoke()
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertFalse((self.root / "built-tool").exists())
+                self.environment = environment
+
+    def test_persistent_bound_executable_drift_rejects_after_operation(self):
+        config = self.binding_config()
+        config["operations"] = ["make.mutate"]
+        declarations = self.declarations("mutate")
+        declarations["projects"][0]["actions"]["mutate"] = {
+            "operation": "make.mutate", "tool": "python", "argv": [OPERATION, "mutate"],
+        }
+        self.write_json(self.registry, declarations)
+        (self.root / "built-tool").write_bytes(b"keep")
+        self.environment["BOUND_CARGO"] = str(self.tools / "cargo")
+        self.write_json(self.ci / "bootstrap.json", config)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"bound cargo identity mismatch", result.stderr)
+        self.assertFalse(self.state_path.exists())
+        originals = list((self.root / ".chrono-harness/state").glob("bootstrap-*/report.json"))
+        self.assertEqual(len(originals), 1)
+        failed = json.loads(originals[0].read_bytes())
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["operations"][0]["exit_code"], 0,
+                         "a successful child does not waive persistent executable drift")
+        self.assertEqual(failed["executables"][0]["sha256"], config["tool_bindings"]["cargo"]["sha256"])
 
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
@@ -309,6 +513,12 @@ class Bootstrap(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    from bootstrap_shared_tests import SharedStartup
-
-    unittest.main()
+    if sys.argv[1:] == ["--real-consumer"]:
+        from bootstrap_shared_tests import RealSharedStartup
+        unittest.main(argv=[sys.argv[0]], defaultTest="RealSharedStartup")
+    elif sys.argv[1:] == ["--real-fixture"]:
+        from bootstrap_shared_tests import RealFixtureStartup
+        unittest.main(argv=[sys.argv[0]], defaultTest="RealFixtureStartup")
+    else:
+        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition
+        unittest.main()

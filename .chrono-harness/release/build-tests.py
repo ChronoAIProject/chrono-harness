@@ -307,19 +307,19 @@ class ReleaseUnits(unittest.TestCase):
             if u['kind']=='verify':
                 owner=owners[u['operation']]
                 action=next(a for a in owner['actions'].values() if a['operation']==u['operation'])
+                contract=cfg.get('verification_consumers',{}).get(u['id'])
+                if contract is not None:
+                    assets={b['asset'] for b in cfg['units'] if b['id'] in u['needs']}
+                    self.assertEqual(assets,set(contract['release_assets']))
+                else:
+                    self.assertEqual(u['needs'],[])
                 if owner['language']=='rust':
                     self.assertEqual(action['argv'],['test','--locked','--manifest-path',owner['manifest']])
                     self.assertEqual(len(u['needs']),len(set(u['needs'])))
                     self.assertTrue(set(u['needs']) <= builds)
-                    contract=cfg.get('verification_consumers',{}).get(u['id'])
-                    if contract is not None:
-                        assets={b['asset'] for b in cfg['units'] if b['id'] in u['needs']}
-                        self.assertEqual(assets,set(contract['release_assets']))
                     if u['operation']=='test.diagnostics-tests':self.assertEqual(u['needs'],[])
                 else:
                     self.assertEqual(owner['language'],'python')
-                    if u['operation']=='release.tests.integration':self.assertEqual(u['needs'],['build_distribution','build_cache'])
-                    else:self.assertEqual(u['needs'],[])
         self.assertEqual(len(projection['jobs']),sum(len(mapping) for mapping in cfg['native_jobs'].values()))
         jobs={j['id']:j for j in projection['jobs']}
         for mapping in cfg['native_jobs'].values():

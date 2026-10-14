@@ -144,9 +144,129 @@ Legacy host contracts keep their explicit spelling. The current adopted host
 admits only its registered short spelling and rejects partial overrides.
 
 Always bootstrap from the candidate checkout before checking it. The runner
-reports the actual runner/judge/operation executable hashes; bootstrap records
-Cargo/rustc versions and installed binary hashes. These observations do not
-constitute reproducible-build or complete binary-provenance certification.
+reports the actual runner/judge/operation executable hashes. The adopted core,
+cache and default bootstrap profiles additionally bind the rustup-selected
+Cargo and rustc files to declared SHA-256 and version expectations, set the
+effective `RUSTC` selection, and retain the observed local paths in the report.
+Shared startup rechecks those same identities before installation and verify,
+while equivalent relocation is accepted when the declared bytes and versions
+remain equal; its install report retains both producer and local executable
+paths. A missing, conflicting or changed binding rejects the bootstrap before
+acceptance. These observations do not constitute reproducible-build or complete
+compiler/backend/SDK/input-closure certification.
+Core, cache, detector and default profiles select the same source-owned
+`.chrono-harness/ci/bootstrap-toolchains.json` registry. It explicitly declares
+Darwin/arm64 (the macos-26 CI consumer) and Linux/x86_64 (the ubuntu-24.04 release
+cache-bootstrap consumer). Unknown or missing tuples fail before provisioning.
+Each executable SHA-256 was acquired from its exact Cargo/rustc member in an
+official Rust 1.95.0 component archive, independently of the installed toolchain.
+The registry retains the official manifest URL/digest/date and each component's
+URL, archive digest, member, size and version provenance. Archive digests are
+provenance, never substitutes for executable-byte expectations. Cargo's upstream
+version implementation explains the package 0.96.0 / CLI 1.95.0 distinction.
+Acquisition is preparation of committed input; bootstrap does not download or
+learn expectations, and continues to use existing rustup provisioning.
+
+The profiles use rustup selection directly, with no personal installation path.
+For older inline relocatable bindings, a repeated declared/configured original
+path is a historical location and is not probed, even if stale or absent. A
+separate explicitly configured current executable must still exist and match;
+nonrelocatable bindings still require the exact selected path. The actual Cargo,
+effective rustc, inherited compiler conflicts, wrappers and post-build drift
+remain checked. Source reports include the registry digest, and shared
+produce/install/verify all validate the same declarations before installation.
+Config's input inventory, FILEMAP, canonical required inputs and cache compatibility
+inputs explicitly register the new source. The later independent Cargo action
+still has the documented incomplete input closure.
+
+Each bootstrap attempt retains its operation argv, cwd, executable digest, PID,
+exit and original stdout/stderr files beside an immutable `bootstrap-*/report.json`
+under the profile's state directory. Streams are forwarded immediately to the
+existing bounded lifecycle owner. Failed operations retain their streams and
+failure report without replacing the last successful report or installing tools.
+Shared produce/install/verify check the source registrations, original operation
+selection and compiler environment as well as each stream's bytes. Transported
+producer paths are provenance; local bindings are checked separately per profile.
+
+The registered `host.bootstrap-real-consumer` action invokes the existing Python
+test entry with `--real-consumer`. It owns a primary fixture cloned from the exact
+clean candidate, runs cache/core builds, shared produce/install and the runner
+unit's registered verify command, then consumes the real runner unit check and
+its independent `test.runner-tests` Cargo result. Its originals remain under
+`.chrono-harness/state/bootstrap-real/pending-attempt/`. Its producer-owned
+`result.json` records the source, argv/cwd, original stdout/stderr paths, digests,
+sizes, inherited ownership descriptors, and terminal command success, nonzero
+failure or timeout. Timeout records preserve originals and do not invent an exit
+code. The result is written before execution and updated on ordinary exits; an
+interrupted attempt stays protected. The slot is created exclusively, so a prior
+unresolved attempt refuses another clone/build. Historical `attempt-*` directories
+are preserved without migration or any assertion that their ownership is known.
+
+The producer invokes the caller's source-bound `chrono-worktree` against the
+fresh primary fixture before any output is built. The existing `use` operation
+enrolls absent registered main-cache outputs and runs the internal registered
+`host.bootstrap-real-fixture` action. That one lease covers cache/core production,
+shared install/verify, the runner check, and its report assertions. Nested adopted
+commands inherit the same protection. The owner runs from the caller's retained
+bin, so fixture core installation does not overwrite an executing owner.
+
+After the managed child joins, the producer requests the existing `finish
+--artifacts-only` route for this main fixture. It consumes actual release,
+cache-intent and disposal receipts, checks their original digests, exact declared
+outputs and verified absence, then records `outputs-disposed-evidence-retained`.
+No Python cleanup ledger or historical adoption is created. Source, installed
+bin, state reports, stream originals and descriptor targets stay at their original
+paths for failure diagnosis and caller acceptance/review. Main cache release does
+not remove the exact published startup manifest: the Python producer writes its
+original bytes before publication to
+`.chrono-harness/state/startup-originals/manifest-<binding>.json`. The binding is
+the SHA-256 of those bytes, which contain the source identity and original-report
+associations. A publication or later consumer failure preserves that original;
+the real fixture result references its path, digest and length. It shares the
+fixture evidence's acceptance/review lifetime and caller-owned retirement, while
+the transfer remains disposable. Main cache release does
+not finish the task or delete the checkout. Missing ownership, partial reports,
+live leases or incomplete disposal keep `protected-pending` and refuse another
+attempt in the same slot. An outer timeout can leave live inherited leases; it
+must remain pending until the caller joins/excludes those consumers and invokes
+the existing owner. This does not establish generic power-loss recovery.
+
+The direct Python custody tests use the real existing owner against small,
+producer-created primary fixtures. They retain their source and original owner
+receipts below `.chrono-harness/state/bootstrap-custody-tests/` for the current
+check's diagnosis/review; each invocation creates at most eight fixtures, with no
+retry. Those evidence consumers must release them before the caller retires the
+fixtures through their test lifecycle. Their declared generated outputs are
+reclaimed by the owner during the test. Disposable payload assertions execute
+inside the Python fixture under the inherited owner lease, before success,
+failure or timeout. The attempt context finalizes disposal before the parent reads the
+retained assertion evidence and disposal receipts; it never needs the payload
+after `use` returns. Passing synthetic cases do not establish
+native/canonical or real Cargo acceptance. Historical real fixtures are untouched.
+
+Independent custody fixtures bind their own invoked Git path, version and bytes,
+and select the Python interpreter running the test for their managed action.
+Inherited parent-host expectations are not native fixture expectations. Regression
+cases require ordinary success, nonzero exit, timeout and live consumption to
+retain producer streams and status. Missing owner reports and failed live readiness
+must preserve the earlier failure, retain unresolved custody and refuse reentry;
+only verified release/disposal allows successful-attempt reentry.
+
+The bootstrap test owner retains the existing 900-second/1-MiB limits and FILEMAP
+cap 2. The producer reserves 15 seconds of the same deadline for owner release and
+passes the remaining deadline to each command. Normal command originals retain
+the 1-MiB bound. Owner CLI reports contain retained source observations and use
+the existing host protocol's 64-MiB bound; compact results reference their original
+files rather than duplicate them. No process or output budget is increased;
+outer registered process ownership remains responsible for running commands and
+descendants. This producer is not a process reaper or a streaming disk quota.
+Added native time/storage and full lifecycle cost remain unmeasured.
+
+**Mixed registration/runtime change:** native declarations, canonical/cache inputs
+and DELTA edges change with bootstrap/shared selection and real-test evidence
+handling. Direct Python cases cover those behaviors; committed-clean bootstrap,
+real shared/runner consumption, canonical DELTA and both native consumers remain
+separate caller checks. This does not change full SPEC scope or CPU acceleration.
 A parentless commit can instead use `--candidate FULL_OID --initial` without
 `--base`. The report explicitly says `initial-inventory`; it does not fabricate
 a historical DELTA.
@@ -214,6 +334,13 @@ validate every proposed field's semantics.
 | policy.required_inputs | Explicit regular tracked inputs required by this profile |
 | policy.adoption_base | Null or exact full base OID whose missing prior CI profile is deliberately accepted |
 | policy.operation_timeout_seconds / operation_output_limit_bytes | Positive legacy fallback operation process bounds |
+
+The adopted profiles set `require_tool_bindings: true` and declare
+`tool_bindings` for `cargo` and `rustc`. Each entry contains the expected executable path, SHA-256 and exact
+`--version` output, with optional `allow_relocation` for an equivalent local
+rustup installation. The producer resolves the selected toolchain files before
+registered operations, rejects conflicting configured/PATH/compiler selection,
+and reports the actual paths and identities used.
 
 Projects schema v2 uses the registration owner's strict document schema. Scoped CI
 reuses the projects owner's reciprocal dedicated-pair and language checks for the

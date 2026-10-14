@@ -655,12 +655,23 @@ The host bootstrap has an explicit Python production/test script pair and separa
 The bootstrap's optional explicit `report_path` separates the host's cache-tool
 record from the later core-tool record. Python regressions cover consecutive
 selected/default bootstraps, invalid or symlinked locations and write failures.
+Core, cache and default profiles now require and declare Cargo/rustc executable
+digests and versions; bootstrap resolves the selected rustup files, rejects PATH/configuration
+or compiler-selection disagreement and persistent executable drift, and records
+the observed paths and effective compiler selection. Original operation commands,
+executable digests, process exits and stdout/stderr bytes accompany the clean
+source identity; failed operations retain their own originals. Shared startup
+validates those originals against the source declarations before installation,
+checks each profile's local selection independently, and carries and
+rechecks this binding before install/verify, preserving installed tools on
+preflight rejection while accepting equivalent relocation with equal identity.
 Cache transport reports record the actual reporting executable's file digest,
 path and version; the Rust CLI regression verifies the retained identity against
 the invoked binary. Test hosts retain failed probe inputs and raw reports during
 panic, while successful fixtures are removed. These observations permit source
-binding checks against retained clean bootstrap records; they do not establish
-complete build inputs, historical timeout causes or full host acceptance.
+binding checks against retained clean bootstrap records; backend, linker, SDK,
+build-script, Cargo configuration/environment and later independent Cargo
+execution remain outside the achieved closure, as do native/full-host acceptance.
 
 The mixed-judge stale-cost consumer uses a registered Rust fixture that invokes the actual cost judge, checks its exit and corrupts only the candidate-tree binding. The original mixed-judge rejection and empty-output assertions remain; this does not complete remaining foreign-language fixture migrations.
 
@@ -758,3 +769,38 @@ This source increment does not establish full §2.2 compliance, committed
 canonical/native acceptance, delivery, complete provenance/input closure/parity,
 or comparative cost improvement; other fixture families and complete SPEC
 adoption remain separate obligations.
+
+### Native bootstrap selection and real-consumer custody boundary
+
+The existing core/cache/default/detector Python bootstrap profiles now share
+explicit Darwin/arm64 and Linux/x86_64 executable and version expectations from
+`.chrono-harness/ci/bootstrap-toolchains.json`. They bind actual rustup selection
+and effective rustc. Official manifest/component/member identities provide
+independent preparation provenance; acceptance never derives expectations from
+the installation it checks. Shared reports bind the registry as a source input.
+Equal-byte relocation permits absent or stale original personal paths while
+retaining exact-path, current-selection, wrapper and executable-drift rejection.
+
+The real Python fixture producer retains terminal success/nonzero/timeout streams
+and source/report/descriptor originals at stable attempt paths, with at most one
+unresolved attempt. A subsequent invocation admits a fresh slot only after
+verifying the prior successful producer streams and original owner release and
+disposal receipts; successful status labels alone cannot release occupancy. Its caller's
+source-bound existing worktree owner enrolls the fresh primary fixture before
+production. One registered managed child covers the complete consumption and
+assertion lifetime; existing main-cache release/disposal receipts establish exact
+output reclamation after exclusion. Python checks the actual owner originals;
+it does not create lifecycle success. Missing ownership or live/unknown consumers
+keep protected pending custody and block accumulation. Historical failures are
+neither adopted nor deleted. Synthetic Python success/failure/timeout/live-consumer
+cases exercise the existing binary and preserve source/evidence while reclaiming
+owned generated outputs. They do not establish real Cargo consumption or generic
+power-loss recovery; actual committed-clean consumer custody remains to be run.
+
+**Mixed registration/runtime change:** the source expectation input, FILEMAP
+consumer edges, canonical required inputs and cache compatibility declarations
+change alongside Python behavior. Direct Python regressions provide source-leg
+evidence only. Committed-clean real cache/core/shared/independent runner execution,
+canonical DELTA, Darwin and Linux native consumption, lifecycle closure, review
+and actual delivery remain required. Full SPEC scope, CPU acceleration, full-host
+activation and unresolved compiler/backend/SDK/input closure remain unchanged.

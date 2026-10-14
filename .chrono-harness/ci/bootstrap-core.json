@@ -2,9 +2,7 @@
   "schema": "chrono-bootstrap/v1",
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
-  "tools": {
-    "cargo": "cargo"
-  },
+  "tools": {},
   "operations": [
     "build.runner",
     "build.judge-ci",
@@ -39,5 +37,7 @@
     "tool": "python3",
     "script": ".chrono-harness/ci/bootstrap.py"
   },
-  "rust_incremental": true
+  "rust_incremental": true,
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json"
 }
