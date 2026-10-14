@@ -68,8 +68,9 @@ class SharedStartup(unittest.TestCase):
         directory = tempfile.TemporaryDirectory(prefix="startup consumer ")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name).resolve() / "host"
-        subprocess.run(["git", "clone", "-q", str(self.root), str(root)], check=True,
-                       capture_output=True, pass_fds=fixture.PASS_FDS)
+        result = subprocess.run(["git", "clone", "-q", str(self.root), str(root)],
+                                capture_output=True, pass_fds=fixture.PASS_FDS)
+        self.host.succeeded(result)
         shutil.copytree(self.transfer, root / self.shared["directory"])
         return root
 
@@ -613,13 +614,25 @@ class AttemptCustody(unittest.TestCase):
 class ManagedAttemptCustody(unittest.TestCase):
     """Independent expectations against the existing real lifecycle binary."""
 
+    def test_clone_failure_exposes_original_subprocess_diagnostic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory).resolve()
+            with fixture.mock.patch(__name__ + ".SOURCE", source / ".chrono-harness/ci"):
+                with self.assertRaises(AssertionError) as failed:
+                    self.host("clone-failure")
+            message = str(failed.exception)
+            for expected in ("args=['/usr/bin/git', 'clone', '--no-local', '-q'", str(source),
+                             "returncode=128", "stdout=b''", "stderr=b", "fatal:"):
+                self.assertIn(expected, message)
+
     def host(self, mode):
         base = SOURCE.parents[1] / ".chrono-harness/state/bootstrap-custody-tests"
         base.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix=mode + "-", dir=base)).resolve()
         root = directory / "fixture"
-        subprocess.run(["/usr/bin/git", "clone", "--no-local", "-q", str(SOURCE.parents[1]), str(root)],
-                       check=True, capture_output=True, pass_fds=fixture.PASS_FDS)
+        result = subprocess.run(["/usr/bin/git", "clone", "--no-local", "-q", str(SOURCE.parents[1]), str(root)],
+                                capture_output=True, pass_fds=fixture.PASS_FDS)
+        self.assertEqual(result.returncode, 0, result)
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", root / fixture.OPERATION)
         config_path = root / ".chrono-harness/config.json"
         config = json.loads(config_path.read_bytes())
@@ -632,8 +645,9 @@ class ManagedAttemptCustody(unittest.TestCase):
             "argv": ["-B", fixture.OPERATION, "custody", mode]}
         projects_path.write_text(json.dumps(projects))
         for args in (["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "custody fixture"]):
-            subprocess.run(["/usr/bin/git", "-C", str(root), *args], check=True,
-                           capture_output=True, pass_fds=fixture.PASS_FDS)
+            result = subprocess.run(["/usr/bin/git", "-C", str(root), *args],
+                                    capture_output=True, pass_fds=fixture.PASS_FDS)
+            self.assertEqual(result.returncode, 0, result)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
         attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", dict(os.environ))

@@ -73,11 +73,22 @@ class Bootstrap(unittest.TestCase):
                               pass_fds=PASS_FDS, capture_output=True)
 
     def succeeded(self, result):
-        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertEqual(result.returncode, 0, result)
+
+    def test_subprocess_failure_diagnostic_preserves_command_exit_and_binary_streams(self):
+        argv = [sys.executable, "-B", str(self.root / OPERATION), "fail", "7"]
+        result = subprocess.run(argv, capture_output=True, pass_fds=PASS_FDS)
+        with self.assertRaises(AssertionError) as failed:
+            self.succeeded(result)
+        message = str(failed.exception)
+        for expected in (repr(argv), "returncode=7", repr(b"failure stdout\x00\xff\n"),
+                         repr(b"failure stderr\xfe\n")):
+            self.assertIn(expected, message)
 
     def git(self, *args):
         result = subprocess.run(["git", *args], cwd=self.root, pass_fds=PASS_FDS,
-                                capture_output=True, check=True)
+                                capture_output=True)
+        self.succeeded(result)
         return result.stdout.decode().strip()
 
     def evidence(self):
