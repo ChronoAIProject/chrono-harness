@@ -22,6 +22,149 @@ spec.loader.exec_module(fixture)
 CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
 
 
+def acquire_parent_source(source, root, git, run):
+    """Acquire current endpoint trees, without traversing unrelated old blobs.
+
+    check-inputs reads physical commit parent headers (also at shallow tips),
+    then fetches the configured target. Its scoped runner consumes candidate and
+    base snapshots, not the intervening historical file versions. Keep that
+    genuine remote: the parent checkout's local dev branch may be stale/absent.
+    """
+    run("clone", [git, "clone", "--no-local", "-q", "--depth=1", "--single-branch",
+                  "--no-tags", str(source), str(root)], source)
+    remote = json.loads((root / ".chrono-harness/worktree.json").read_bytes())["remote"]
+    branch = json.loads((root / ".chrono-harness/workflow.json").read_bytes())["target_branch"]
+    url = run("source-origin", [git, "-C", str(source), "remote", "get-url", remote], source).decode().strip()
+    if ":" not in url and not os.path.isabs(url):
+        url = str((source / url).resolve())
+    if remote != "origin":
+        run("fixture-remote", [git, "-C", str(root), "remote", "rename", "origin", remote], root)
+    run("fixture-origin", [git, "-C", str(root), "remote", "set-url", remote, url], root)
+    run("fixture-base", [git, "-C", str(root), "fetch", "--depth=1", "--no-tags",
+                         "--no-write-fetch-head", "--", remote,
+                         "refs/heads/" + branch + ":refs/remotes/" + remote + "/" + branch], root)
+
+
+class ParentSourceAcquisition(unittest.TestCase):
+    """Required endpoint bytes and physical parents, independent of old blobs."""
+
+    def setUp(self):
+        owner = SOURCE.parents[1] / ".chrono-harness/state/bootstrap-custody-tests"
+        owner.mkdir(parents=True, exist_ok=True)
+        self.directory = Path(tempfile.mkdtemp(prefix="acquisition-", dir=owner)).resolve()
+        print("acquisition originals: " + str(self.directory), flush=True)
+        self.commands = []
+        self.remote, self.source = self.directory / "remote", self.directory / "source"
+        self.remote.mkdir()
+        self.git(self.remote, "init", "-q", "-b", "dev")
+        self.git(self.remote, "config", "user.name", "Fixture")
+        self.git(self.remote, "config", "user.email", "fixture@example.invalid")
+        (self.remote / "payload").write_bytes(b"irrelevant historical bytes")
+        self.commit(self.remote, "history")
+        self.old_blob = self.git(self.remote, "rev-parse", "HEAD:payload").decode().strip()
+        harness = self.remote / ".chrono-harness"
+        harness.mkdir()
+        (harness / "worktree.json").write_text(json.dumps({"remote": "origin"}))
+        (harness / "workflow.json").write_text(json.dumps({"target_branch": "dev"}))
+        (self.remote / "payload").write_bytes(b"required base snapshot")
+        self.commit(self.remote, "dev")
+        self.base = self.git(self.remote, "rev-parse", "HEAD").decode().strip()
+        self.command("source-clone", ["/usr/bin/git", "clone", "--no-local", "-q",
+                                  str(self.remote), str(self.source)], self.directory)
+        self.git(self.source, "checkout", "-qb", "candidate")
+        self.git(self.source, "config", "user.name", "Fixture")
+        self.git(self.source, "config", "user.email", "fixture@example.invalid")
+        (self.source / "payload").write_bytes(b"required candidate snapshot")
+        self.commit(self.source, "candidate")
+        self.candidate = self.git(self.source, "rev-parse", "HEAD").decode().strip()
+        # One private pack lets omit remove exactly one promised fixture object.
+        self.git(self.source, "repack", "-ad")
+        self.git(self.source, "config", "remote.origin.promisor", "true")
+        self.git(self.source, "config", "remote.origin.partialclonefilter", "blob:none")
+
+    def command(self, name, argv, cwd):
+        result = subprocess.run(argv, cwd=cwd, capture_output=True, pass_fds=fixture.PASS_FDS,
+                                env=dict(os.environ, GIT_NO_LAZY_FETCH="1"))
+        stem = self.directory / (str(len(self.commands)) + "-" + name)
+        stem.with_suffix(".stdout").write_bytes(result.stdout)
+        stem.with_suffix(".stderr").write_bytes(result.stderr)
+        self.commands.append({"argv": argv, "cwd": str(cwd), "exit_code": result.returncode,
+                              "stdout": str(stem.with_suffix(".stdout")),
+                              "stderr": str(stem.with_suffix(".stderr"))})
+        (self.directory / "commands.json").write_text(json.dumps(self.commands, indent=2))
+        self.assertEqual(result.returncode, 0, result)
+        return result.stdout
+
+    def git(self, root, *args):
+        return self.command("git", ["/usr/bin/git", "-C", str(root), *args], root)
+
+    def commit(self, root, message):
+        self.git(root, "add", ".")
+        self.git(root, "commit", "-qm", message)
+
+    def omit(self, root, oid):
+        # Only this newly created fixture object is removed; keep the original
+        # bytes for failure diagnosis alongside the exact process originals.
+        objects = root / ".git/objects"
+        packs = list((objects / "pack").glob("*.pack"))
+        for pack in packs:
+            raw = pack.read_bytes()
+            saved = self.directory / (root.name + "-" + pack.name)
+            saved.write_bytes(raw)
+            pack.rename(pack.with_suffix(".saved"))
+            result = subprocess.run(["/usr/bin/git", "-C", str(root), "unpack-objects"],
+                                    input=raw, capture_output=True, pass_fds=fixture.PASS_FDS)
+            self.assertEqual(result.returncode, 0, result)
+        path = objects / oid[:2] / oid[2:]
+        path.rename(self.directory / (root.name + "-missing-" + oid))
+
+    def test_irrelevant_missing_history_preserves_candidate_and_real_dev_inputs(self):
+        self.omit(self.source, self.old_blob)
+        root = self.directory / "consumer"
+        acquire_parent_source(self.source, root, "/usr/bin/git", self.command)
+        self.assertEqual(self.git(root, "rev-parse", "HEAD").decode().strip(), self.candidate)
+        self.assertEqual(self.git(root, "cat-file", "commit", "HEAD"),
+                         self.git(self.source, "cat-file", "commit", "HEAD"))
+        self.assertIn(("parent " + self.base + "\n").encode(), self.git(root, "cat-file", "commit", "HEAD"))
+        self.assertEqual((root / "payload").read_bytes(), b"required candidate snapshot")
+        self.assertEqual(self.git(root, "remote", "get-url", "origin").decode().strip(), str(self.remote))
+        # Use the unchanged input producer's subsequent fetch shape.
+        self.git(root, "fetch", "--no-tags", "--no-write-fetch-head", "--", "origin",
+                 "refs/heads/dev:refs/chrono-harness/check/fixture")
+        self.assertEqual(self.git(root, "rev-parse", "refs/chrono-harness/check/fixture").decode().strip(), self.base)
+        self.assertEqual(self.git(root, "show", self.base + ":payload"), b"required base snapshot")
+        self.assertEqual(self.git(root, "show", self.base + ":.chrono-harness/workflow.json"),
+                         (self.remote / ".chrono-harness/workflow.json").read_bytes())
+        self.assertEqual(self.git(root, "ls-tree", "-r", "HEAD"),
+                         self.git(self.source, "ls-tree", "-r", "HEAD"))
+        with self.assertRaises(AssertionError):
+            self.git(root, "cat-file", "-e", self.old_blob)
+
+    def test_missing_required_candidate_fails_with_original_diagnostic(self):
+        oid = self.git(self.source, "rev-parse", "HEAD:payload").decode().strip()
+        self.omit(self.source, oid)
+        with self.assertRaises(AssertionError) as failed:
+            acquire_parent_source(self.source, self.directory / "consumer", "/usr/bin/git", self.command)
+        for expected in ("returncode=", "stdout=", "stderr=", "fatal:"):
+            self.assertIn(expected, str(failed.exception))
+
+    def test_missing_genuine_dev_fails_after_candidate_acquisition(self):
+        self.git(self.remote, "branch", "-m", "unavailable-dev")
+        with self.assertRaises(AssertionError) as failed:
+            acquire_parent_source(self.source, self.directory / "consumer", "/usr/bin/git", self.command)
+        self.assertIn("refs/heads/dev", str(failed.exception))
+        self.assertEqual((self.directory / "consumer/payload").read_bytes(), b"required candidate snapshot")
+
+    def test_missing_required_base_snapshot_is_not_clone_success(self):
+        oid = self.git(self.remote, "rev-parse", "HEAD:payload").decode().strip()
+        self.omit(self.remote, oid)
+        with self.assertRaises(AssertionError) as failed:
+            acquire_parent_source(self.source, self.directory / "consumer", "/usr/bin/git", self.command)
+        for expected in ("fetch", "refs/heads/dev", "returncode=", "stdout=", "stderr="):
+            self.assertIn(expected, str(failed.exception))
+        self.assertEqual((self.directory / "consumer/payload").read_bytes(), b"required candidate snapshot")
+
+
 class SharedStartup(unittest.TestCase):
     def setUp(self):
         self.host = fixture.Bootstrap()
@@ -630,9 +773,11 @@ class ManagedAttemptCustody(unittest.TestCase):
         base.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix=mode + "-", dir=base)).resolve()
         root = directory / "fixture"
-        result = subprocess.run(["/usr/bin/git", "clone", "--no-local", "-q", str(SOURCE.parents[1]), str(root)],
-                                capture_output=True, pass_fds=fixture.PASS_FDS)
-        self.assertEqual(result.returncode, 0, result)
+        def acquire(name, argv, cwd):
+            result = subprocess.run(argv, cwd=cwd, capture_output=True, pass_fds=fixture.PASS_FDS)
+            self.assertEqual(result.returncode, 0, result)
+            return result.stdout
+        acquire_parent_source(SOURCE.parents[1], root, "/usr/bin/git", acquire)
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", root / fixture.OPERATION)
         config_path = root / ".chrono-harness/config.json"
         config = json.loads(config_path.read_bytes())
@@ -804,9 +949,10 @@ class RealSharedStartup(unittest.TestCase):
 
             def run(name, argv, cwd):
                 attempt.run(name, argv, cwd, environment)
+                return (evidence / (name + ".stdout")).read_bytes()
 
             print("real bootstrap consumer originals: " + str(evidence), flush=True)
-            run("clone", [tools["git"], "clone", "--no-local", "--quiet", str(source_root), str(root)], source_root)
+            acquire_parent_source(source_root, root, tools["git"], run)
             self.assertEqual(bootstrap.observe_source(root), observed)
             installed = json.loads((source_root / ".chrono-harness/state/bootstrap.json").read_bytes())
             self.assertEqual(installed["source"]["after"], observed)
