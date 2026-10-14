@@ -33,6 +33,126 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     let commit = commit(d.path());
     (d, f, v, commit)
 }
+
+#[test]
+fn context_selector_capture_and_composition_preserve_the_actual_source() {
+    let (d, _f, mut v, _) = fixture();
+    let root = fs::canonicalize(d.path()).unwrap();
+    let git =
+        fs::canonicalize(chrono_harness::resolve_program(&root, "git", None).unwrap()).unwrap();
+    let version = Command::new(&git).arg("--version").output().unwrap();
+    assert!(version.status.success());
+    let c = v.get_mut(CONFIG).unwrap();
+    c["schema_version"] = value!(3);
+    c["facts_git"] = value!({"tool":"git","input":"git-bytes"});
+    c["tools"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({"id":"git","program":git,
+        "resolution":"PATH-once","version_argv":["--version"],
+        "expected_version":String::from_utf8(version.stdout).unwrap().trim()}));
+    c["input_closure"] = value!({"status":"incomplete","unresolved":["bounded test host"]});
+    for input in c["environment"]["inputs"].as_array_mut().unwrap() {
+        input["presence"] = value!("present");
+        input["location"] = value!(fs::canonicalize(input["location"].as_str().unwrap()).unwrap());
+    }
+    c["environment"]["inputs"]
+        .as_array_mut()
+        .unwrap()
+        .push(value!({"id":"git-bytes",
+        "location":git,"presence":"present","sha256":sha256(&fs::read(&git).unwrap())}));
+    let selector = ".chrono-harness/contexts.json";
+    let local = ".chrono-harness/local.json";
+    let native = ".chrono-harness/native.json";
+    let mut native_policy = c.clone();
+    native_policy["environment"]["values"]["INPUT_CONTEXT"] = value!("native");
+    let local_policy = c.clone();
+    v.insert(local.into(), local_policy);
+    v.insert(native.into(), native_policy);
+    v.insert(selector.into(), value!({"schema":"chrono-git-configs/v2",
+        "platforms":{format!("{}-{}", std::env::consts::OS,std::env::consts::ARCH):{"local":local,"ci":native}}}));
+    write_values(&root, &v);
+    let oid = commit(&root);
+    let run = |check_source: &str, args: &[&str]| {
+        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            .env_clear()
+            .env("DECLARED_EMPTY", "")
+            .env("CHRONO_CHECK_SOURCE", check_source)
+            .args(args)
+            .args(["--host-root", root.to_str().unwrap()])
+            .output()
+            .unwrap()
+    };
+    for (source, target) in [("local", local), ("ci", native)] {
+        let output = format!(".chrono-harness/state/{source}.json");
+        let p = run(
+            source,
+            &[
+                "capture", "--config", selector, "--commit", &oid, "--output", &output,
+            ],
+        );
+        assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
+        let snapshot = json(&p.stdout).unwrap();
+        assert_eq!(
+            snapshot["selection"]["schema"],
+            "chrono-registry-selection/v2"
+        );
+        assert_eq!(snapshot["selection"]["check_source"], source);
+        assert_eq!(snapshot["effective_config_path"], target);
+        chrono_judge_registration::inputs::snapshot_shape(&snapshot).unwrap();
+        let mut invalid = snapshot.clone();
+        invalid["selection"]["check_source"] = value!("native");
+        assert!(chrono_judge_registration::inputs::snapshot_shape(&invalid).is_err());
+    }
+    let pair = ".chrono-harness/state/native-pair.json";
+    let p = run(
+        "ci",
+        &[
+            "pair",
+            "--base-snapshot",
+            ".chrono-harness/state/ci.json",
+            "--candidate-snapshot",
+            ".chrono-harness/state/ci.json",
+            "--output",
+            pair,
+        ],
+    );
+    assert!(p.status.success(), "{}", String::from_utf8_lossy(&p.stderr));
+    let manifest = ".chrono-harness/state/manifest.json";
+    let original_pair = fs::read(root.join(pair)).unwrap();
+    fs::write(
+        root.join(manifest),
+        serde_json::to_vec(&value!({"schema":"chrono-input-composition/v1",
+        "sources":[{"pair":{"path":pair,"sha256":sha256(&original_pair)}}]}))
+        .unwrap(),
+    )
+    .unwrap();
+    let args = [
+        "compose",
+        "--config",
+        selector,
+        "--base",
+        &oid,
+        "--candidate",
+        &oid,
+        "--manifest",
+        manifest,
+        "--output",
+        ".chrono-harness/state/composed.json",
+        "--receipt",
+        ".chrono-harness/state/receipt.json",
+    ];
+    let accepted = run("ci", &args);
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stderr)
+    );
+    let rejected = run("local", &args);
+    assert_eq!(rejected.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("E_COMPOSE_HEADER"));
+    assert_eq!(fs::read(root.join(pair)).unwrap(), original_pair);
+}
 #[test]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     let (d, _f, mut v, _) = fixture();

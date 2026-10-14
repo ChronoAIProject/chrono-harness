@@ -83,7 +83,7 @@ def registration(root, path):
         if report in reports:
             raise ValueError("startup profiles must have separate reports")
         reports.add(report)
-        for installed in profile["install"]:
+        for installed in bootstrap.installations(root, profile):
             target = safe(root, installed["destination"], ".chrono-harness/bin/")
             if target in destinations:
                 raise ValueError("startup profiles must have separate tools")
@@ -112,6 +112,13 @@ def original_report(root, item, profile, observed):
         raise ValueError("startup producer report differs from installed tools")
     validate_execution(root, profile, report)
     validate_streams(root, report)
+    if "distribution" in profile:
+        original = read(root, ".chrono-harness/state/distribution.json")
+        bootstrap.validate_distribution(root, profile, original)
+        if report.get("distribution") != bootstrap.distribution_binding(original):
+            raise ValueError("startup distribution receipt differs from producer binding")
+    elif "distribution" in report:
+        raise ValueError("unregistered startup distribution receipt")
     return data
 
 
@@ -219,7 +226,12 @@ def produce(root, path, config, profiles, config_sha):
                 write_new(safe(staging, stream["path"], ".chrono-harness/state/"), read(root, stream["path"]))
             entry = {"config": item["config"], "config_sha256": profile_sha,
                      "report": {"path": report_path, "sha256": digest(report)}, "files": []}
-            for installed in profile["install"]:
+            if "distribution" in profile:
+                original = read(root, ".chrono-harness/state/distribution.json")
+                receipt_path = "reports/" + name + "-distribution.json"
+                write_new(staging / receipt_path, original)
+                entry["distribution_report"] = {"path": receipt_path, "sha256": digest(original)}
+            for installed in bootstrap.installations(root, profile):
                 target = safe(root, installed["destination"])
                 data, mode = target.read_bytes(), target.stat().st_mode & 0o777
                 if not mode & 0o111:
@@ -268,7 +280,7 @@ def validate_artifact(root, path, config, profiles, config_sha, binding):
         entry = manifest["profiles"][name]
         if entry["config"] != config["profiles"][name]["config"] or entry["config_sha256"] != profile_sha:
             raise ValueError("startup profile differs")
-        if [f["destination"] for f in entry["files"]] != [f["destination"] for f in profile["install"]]:
+        if [f["destination"] for f in entry["files"]] != [f["destination"] for f in bootstrap.installations(root, profile)]:
             raise ValueError("startup install set differs")
         original = read(transfer, entry["report"]["path"], "reports/")
         if digest(original) != entry["report"]["sha256"]:
@@ -278,7 +290,8 @@ def validate_artifact(root, path, config, profiles, config_sha, binding):
                 or "provenance" in report or report["source"]["state"] != "clean"
                 or report["source"]["before"] != observed or report["source"]["after"] != observed
                 or report["source"]["commit"] != observed["commit"] or report["source"]["tree"] != observed["tree"]
-                or report["installed"] != [{"path": f["destination"], "sha256": f["sha256"]} for f in entry["files"]]):
+                or report["installed"] != [{"path": f["destination"], "sha256": f["sha256"]}
+                                           for f in entry["files"][:len(profile["install"])]]):
             raise ValueError("startup original report is not bound to this source and payload")
         originals[name] = original
         validate_execution(root, profile, report)
@@ -291,6 +304,15 @@ def validate_artifact(root, path, config, profiles, config_sha, binding):
                 raise ValueError("startup tool bytes or metadata differ")
             seen.add(item["path"])
             payloads[item["destination"]] = data
+        if "distribution" in profile:
+            receipt = entry["distribution_report"]
+            raw_receipt = read(transfer, receipt["path"], "reports/")
+            if (digest(raw_receipt) != receipt["sha256"]
+                    or report.get("distribution") != bootstrap.distribution_binding(raw_receipt)):
+                raise ValueError("startup distribution original report differs")
+            bootstrap.validate_distribution(root, profile, raw_receipt, payloads)
+        elif "distribution_report" in entry or "distribution" in report:
+            raise ValueError("unregistered startup distribution receipt")
     return manifest, payloads, originals
 
 
@@ -336,6 +358,12 @@ def install(root, path, config, profiles, config_sha, consumer):
             if target.exists() and target.read_bytes() != data:
                 raise ValueError("startup original process stream collision")
             writes.append((target, data, 0o644))
+        if "distribution" in profile:
+            original = read(safe(root, config["directory"][:-1]),
+                            manifest["profiles"][name]["distribution_report"]["path"], "reports/")
+            # Preserve installer bytes and its release-source identity without relabelling.
+            writes.append((safe(root, ".chrono-harness/state/distribution.json"), original, 0o644))
+            writes.append((safe(root, ".chrono-harness/state/startup-originals/" + name + "-distribution.json"), original, 0o644))
     if any(target.exists() and not target.is_file() for target, _, _ in writes):
         raise ValueError("startup destination is not a file")
     local_bindings = {}
@@ -394,6 +422,11 @@ def verify(root, path, config, profiles, config_sha, name):
         local = json.loads(read(root, ".chrono-harness/state/startup-install.json"))
         if local.get("local_executables", {}).get(name) != [bindings[tool] for tool in ("cargo", "rustc")]:
             raise ValueError("installed local executable provenance differs")
+    if "distribution" in profiles[name][0]:
+        original = read(safe(root, config["directory"][:-1]),
+                        manifest["profiles"][name]["distribution_report"]["path"], "reports/")
+        if read(root, ".chrono-harness/state/distribution.json") != original:
+            raise ValueError("installed startup distribution report differs")
 
 
 def main():

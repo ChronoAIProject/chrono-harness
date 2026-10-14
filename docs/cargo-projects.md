@@ -152,6 +152,14 @@ the asserted files are absent. Relative home and input locations are explicit
 host choices, not automatic rewrites. Existing v2 policies keep their meaning.
 The product host has not yet activated the guarded operation.
 
+The proposed local host now registers the actual Cargo, compiler, formatter,
+linker/delegates, Rust/SDK/developer directory inventories, package bytes,
+configuration absences and Python/script inputs. Source actions remain selected;
+parallel `guarded_*` actions and acquisition/metadata declarations have explicit
+consumers. These declarations retain unresolved native provisioning, original
+endpoint snapshots and full adoption. They do not select historical beta.21
+enforcement executables. A current candidate is judged by its candidate tools.
+
 Each package row contains `id`, `name`, `version`, `source`, `project`,
 `manifest_input`, `inputs`, `checksum`, `features` and `dependencies`. Local
 packages set `project`; their `source`, `manifest_input` and `checksum` are null
@@ -309,6 +317,28 @@ files and literal link targets, declared inputs and selected paths after the
 consumer. Resolving to the same file does not make different literal link targets
 equal. An otherwise successful consumer that changes a declared alias or redirects
 the directory root fails with its original operation result preserved.
+
+`chrono-input-directory/v3` additionally requires `directories`, explicit
+`{path, entries}` rows binding physical directory membership, including empty
+directories used as alias targets. Names, duplicates, unsupported entries and
+membership drift fail. Earlier versions reject this field. Link target coverage
+uses indexes over the same declared files/directories, without extending the
+inventory or scanning for dependencies.
+
+`chrono-cargo-inputs/v6` requires `target_mode: "native" | "explicit"` alongside
+all v5 bindings. Native mode retains Cargo's original native output layout and
+requires the bound compiler's actual `-vV` host to equal the declared target.
+Metadata still uses the exact filter platform. A competing `CARGO_BUILD_TARGET`,
+`build.target` or configured target environment is rejected. Explicit mode keeps
+the target argument contract. V6 can take offline mode from explicitly set
+`CARGO_NET_OFFLINE=true`; older versions still require their argv flags.
+Named suites/binaries/examples/benches, one test filter and a literal child tail
+after `--` preserve the registered test invocation and real failure assertions.
+The tail cannot change preceding Cargo resolution options. Unsupported Cargo
+commands, including `fmt`, are not admitted by this guard.
+
+Bounded phase observations on stderr retain progress when an enclosing process
+ends before a terminal report. They are not successful terminal receipts.
 Recursive Cargo
 configuration may not provide a second linker or sysroot selection source.
 V5 reports `chrono-cargo-run/v3` with toolchain evidence and the observed linker

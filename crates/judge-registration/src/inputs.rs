@@ -103,13 +103,16 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
             .as_str()
             .ok_or("E_INPUT_SNAPSHOT: missing effective config path")?;
         relative_path(effective)?;
-        let selection = crate::schema::object(
-            &value["selection"],
-            &["schema", "path", "platform", "config_path"],
-            &[],
-        )
-        .map_err(|e| format!("E_INPUT_SNAPSHOT: invalid selector binding: {e}"))?;
-        if selection["schema"] != "chrono-registry-selection/v1"
+        let contextual = value["selection"]["schema"] == "chrono-registry-selection/v2";
+        let fields = if contextual {
+            vec!["schema", "path", "platform", "config_path", "check_source"]
+        } else {
+            vec!["schema", "path", "platform", "config_path"]
+        };
+        let selection = crate::schema::object(&value["selection"], &fields, &[])
+            .map_err(|e| format!("E_INPUT_SNAPSHOT: invalid selector binding: {e}"))?;
+        if (!contextual && selection["schema"] != "chrono-registry-selection/v1")
+            || (contextual && !matches!(selection["check_source"].as_str(), Some("local" | "ci")))
             || !selection["platform"]
                 .as_str()
                 .is_some_and(|s| !s.is_empty() && s.trim() == s)
@@ -355,8 +358,7 @@ pub fn required_plan_files(
         {
             if needed.contains(binding["consumer"].as_str().unwrap()) {
                 needed.extend(
-                    binding["inputs"]
-                        .as_array()
+                    crate::schema::binding_inputs(&r.config()["input_closure"], binding)
                         .unwrap()
                         .iter()
                         .map(|v| v.as_str().unwrap().to_owned()),

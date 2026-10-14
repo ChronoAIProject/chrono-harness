@@ -1681,7 +1681,6 @@ fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
 
 #[test]
 fn immutable_input_contract_reads_complete_large_bytes_with_original_processes() {
-    let h = Host::new(json!({"mode":"passthrough"}));
     let original = if let Some(path) = std::env::var_os("CHRONO_IMMUTABLE_INPUT_FIXTURE") {
         let bytes = fs::read(path).unwrap();
         assert_eq!(bytes.len(), 2_022_211);
@@ -1693,7 +1692,37 @@ fn immutable_input_contract_reads_complete_large_bytes_with_original_processes()
     } else {
         vec![b'x'; 2_022_211]
     };
-    let path = ".chrono-harness/immutable-input.json";
+    assert_large_immutable_input(original, ".chrono-harness/immutable-input.json");
+}
+
+#[test]
+fn registered_full_filemap_capacity_preserves_exact_original_bytes() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let policy: Value =
+        serde_json::from_slice(&fs::read(root.join(".chrono-harness/worktree.json")).unwrap())
+            .unwrap();
+    assert_eq!(policy["output_limit_bytes"], 1_048_576);
+    assert_eq!(
+        policy["immutable_input_limits"][".chrono-harness/FILEMAP.json"],
+        2_097_152
+    );
+    let original = if let Some(path) = std::env::var_os("CHRONO_IMMUTABLE_FILEMAP_FIXTURE") {
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(bytes.len(), 1_791_500);
+        assert_eq!(
+            sha256(&bytes),
+            "df30f935b7d2a7e7a616c3fda1e14b223b31af082cf60cc67f9ede72dcbef862"
+        );
+        bytes
+    } else {
+        fs::read(root.join(".chrono-harness/FILEMAP.json")).unwrap()
+    };
+    assert!(original.len() > 1_048_576 && original.len() <= 2_097_152);
+    assert_large_immutable_input(original, ".chrono-harness/FILEMAP.json");
+}
+
+fn assert_large_immutable_input(original: Vec<u8>, path: &str) {
+    let h = Host::new(json!({"mode":"passthrough"}));
     fs::write(h.root.join(path), &original).unwrap();
     let oid = commit(&h);
     let git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();

@@ -845,3 +845,37 @@ CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitt
 Q2 increment plus this correction; it makes no publication, remote-acceptance or
 complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
 unmeasured until those actual consumer cases run.
+
+Q3 source reconciliation reuses the fixed input-adoption proposal's observation
+producer, Cargo v6 native-target and directory-v3 contracts, source/CI selectors,
+current full-input references, and local Cargo/compiler/SDK/Python declarations.
+Repeated closure vectors now have one registry-owned literal definition; explicit
+FILEMAP edges remain. The actual full-host FILEMAP receives an exact 2 MiB immutable
+input allowance with the ordinary 1 MiB diagnostic bound retained. Existing Q2
+bounds, process transport, CPU acceleration and scheduling cap=2 remain required.
+The obsolete beta.21 enforcement choice is retired; optional installer transport
+preserves independent release and source-build identities.
+
+**Product, policy and test inputs change together.** Current local sparse-index
+identities are separately observed and explicitly adopted; original proposal
+bytes are historical data and are not rewritten. New installer identity tests
+consume the existing distribution binary, so their local and native release
+prerequisites now include that producer. Logical declaration size, actual phase
+elapsed time and input bytes are observations, not physical storage savings;
+complete native/CI/maintenance costs remain unmeasured.
+
+All five main full registries remain proposed, enforcement not implemented and
+input closure incomplete. Local declarations and ordinary owner tests cannot
+supply missing original base snapshots, native provisioning, compatible committed
+candidate bindings or full-host activation. Caller clean checkpoint, registered
+bootstrap/canonical/native acceptance, whole-increment review, landing and public
+release remain mandatory. Q4's retention obligations, the foreign full-adoption
+policy mismatch, and original169's nine unlocated originals/three binaries remain
+unsettled. The release owner plans beta.28; this source does not publish it or
+claim Q3/full-SPEC delivery.
+
+The main configuration currently selects local absolute execution paths. The
+source/CI selector API has not been adopted at that host boundary; native policy
+selection and provisioning remain a Q3 source/adoption obligation. This candidate
+is not ready for native deployment. The original native rejection assertion is
+retained as failure evidence, not native full-host acceptance.

@@ -564,8 +564,8 @@ pub(crate) fn input_closure_findings(n: &Registrations) -> Vec<Finding> {
                 consumer_reference,
             ),
         }
-        for (input_index, input) in binding["inputs"]
-            .as_array()
+        for (input_index, input) in schema::binding_inputs(&n.config["input_closure"], binding)
+            .ok()
             .into_iter()
             .flatten()
             .filter_map(Value::as_str)

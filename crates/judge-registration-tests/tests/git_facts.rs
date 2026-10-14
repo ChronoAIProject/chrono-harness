@@ -7,6 +7,102 @@ mod input_coverage;
 
 const CONFIG: &str = ".chrono-harness/config.json";
 
+#[test]
+fn named_input_vectors_preserve_real_binding_and_missing_edge_rejection() {
+    for missing_edge in [false, true] {
+        let mut h = BoundHost::new(false, "");
+        h.host.edit(CONFIG, |config| {
+            let inputs = config["input_closure"]["bindings"][0]["inputs"].clone();
+            config["input_closure"]["input_sets"] = json!({"git": inputs});
+            let binding = config["input_closure"]["bindings"][0]
+                .as_object_mut()
+                .unwrap();
+            binding.remove("inputs");
+            binding.insert("input_set".into(), json!("git"));
+        });
+        h.host.base = h.host.candidate.clone();
+        if missing_edge {
+            h.host.edit(".chrono-harness/FILEMAP.json", |map| {
+                map["project_edges"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|edge| edge["from"] != "input:facts-git-bytes");
+            });
+        } else {
+            fs::write(
+                h.host.root().join("document.txt"),
+                "candidate after named binding",
+            )
+            .unwrap();
+            h.host.candidate = commit(h.host.root());
+        }
+        let (exit, report, error) = h.run(false);
+        if missing_edge {
+            assert_ne!(exit, 0, "{report} {error}");
+            assert!(
+                report.to_string().contains("lacks explicit project edge"),
+                "{report} {error}"
+            );
+        } else {
+            assert_eq!(exit, 0, "{report} {error}");
+            assert_eq!(
+                report["judges"][0]["response"]["outputs"]["registration"]["completeness_proven"],
+                false
+            );
+        }
+    }
+}
+
+#[test]
+fn named_input_vectors_reject_missing_ambiguous_empty_and_recursive_declarations() {
+    let h = BoundHost::new(false, "");
+    let original: Value =
+        serde_json::from_slice(&fs::read(h.host.root().join(CONFIG)).unwrap()).unwrap();
+    for case in [
+        "missing",
+        "both",
+        "null",
+        "empty",
+        "duplicate",
+        "recursive",
+        "legacy",
+    ] {
+        let mut config = original.clone();
+        config["input_closure"]["input_sets"] = json!({"git": ["input:facts-git-bytes"]});
+        let binding = config["input_closure"]["bindings"][0]
+            .as_object_mut()
+            .unwrap();
+        binding.remove("inputs");
+        binding.insert("input_set".into(), json!("git"));
+        match case {
+            "missing" => config["input_closure"]["bindings"][0]["input_set"] = json!("unknown"),
+            "both" => {
+                config["input_closure"]["bindings"][0]["inputs"] = json!(["input:facts-git-bytes"])
+            }
+            "null" => config["input_closure"]["input_sets"] = Value::Null,
+            "empty" => config["input_closure"]["input_sets"]["git"] = json!([]),
+            "duplicate" => {
+                config["input_closure"]["input_sets"]["git"] =
+                    json!(["input:facts-git-bytes", "input:facts-git-bytes"])
+            }
+            "recursive" => {
+                config["input_closure"]["input_sets"]["git"] = json!({"input_set": "git"})
+            }
+            "legacy" => {
+                config["schema_version"] = json!(2);
+                config.as_object_mut().unwrap().remove("facts_git");
+            }
+            _ => unreachable!(),
+        }
+        let mut values = facts::registry_values(h.host.root(), &h.host.candidate, CONFIG).unwrap();
+        values.insert(CONFIG.into(), config);
+        assert!(
+            chrono_judge_registration::Registrations::load(&values, CONFIG).is_err(),
+            "{case}"
+        );
+    }
+}
+
 fn error_processes(error: &str) -> Vec<Value> {
     let observed: Value =
         serde_json::from_str(error.trim().strip_prefix("E_CHECK: E_GIT_FACTS: ").unwrap()).unwrap();

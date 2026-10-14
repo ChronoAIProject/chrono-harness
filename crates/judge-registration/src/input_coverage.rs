@@ -80,7 +80,7 @@ pub(crate) fn shape(coverage: &Value, closure: &Value) -> Result<(), String> {
             if binding["consumer"] != consumer || !row_ids.insert(id) {
                 return Err(format!("wrong consumer or duplicate coverage binding {id}"));
             }
-            if schema::array(&binding["inputs"])?.is_empty() {
+            if schema::binding_inputs(closure, binding)?.is_empty() {
                 return Err(format!("coverage binding {id} has no inputs"));
             }
             covered.insert(id);
@@ -142,7 +142,7 @@ pub(crate) fn validate(registrations: &Registrations, response: &mut Response) {
             continue;
         }
         for id in row["bindings"].as_array().unwrap() {
-            for input in bindings[id.as_str().unwrap()]["inputs"].as_array().unwrap() {
+            for input in schema::binding_inputs(closure, bindings[id.as_str().unwrap()]).unwrap() {
                 let absent = input
                     .as_str()
                     .and_then(|node| node.strip_prefix("input:"))

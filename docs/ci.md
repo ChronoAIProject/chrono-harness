@@ -728,3 +728,13 @@ FILEMAP and profile bindings explicitly; migration does not infer those choices.
 Subsequent `generate` is idempotent and `verify` detects projection drift without
 repair. This support is candidate source behavior; public installation, native
 first-commit events and compatible release pins require their own delivery evidence.
+
+An explicitly adopted optional bootstrap `distribution: {manifest: PATH}` keeps
+installer and source-build identities separate. The existing generated installer
+owns installation; bootstrap/shared transport checks its original receipt,
+release manifest, installer binding, exact payloads and destination separation.
+Source output cannot replace a selected release destination. Shared consumers
+retain the original release receipt alongside source build/stream evidence and
+never relabel its source as the consuming checkout. The current host continues
+to build its candidate enforcement tools from source; the historical beta.21 pin
+is not a current deployment choice. This optional transport is not full adoption.

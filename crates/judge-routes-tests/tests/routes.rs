@@ -131,21 +131,25 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/projects.json")).unwrap())
             .unwrap();
     let mut plans = plans(&filemap).unwrap();
-    // Current main startup needs no distribution build. Model the existing
-    // full-host consumer's explicit prerequisite without changing main policy.
-    let startup = plans.get_mut("test:host-bootstrap-tests").unwrap();
+    // The actual source/installer identity consumer now adopts this shared
+    // prerequisite. Its ordinary test bounds must still remain unchanged.
+    let startup = &plans["test:host-bootstrap-tests"];
     assert_eq!(
         startup.operations,
-        ["host.bootstrap-tests", "host.bootstrap-real-consumer"]
+        [
+            "build.worktree",
+            "build.distribution",
+            "host.bootstrap-tests",
+            "host.bootstrap-real-consumer"
+        ]
     );
-    assert!(startup.operation_bounds.is_empty());
-    startup.operations.insert(0, "build.distribution".into());
-    startup.operation_bounds.insert(
-        "build.distribution".into(),
+    assert_eq!(startup.operation_bounds.len(), 1);
+    assert_eq!(
+        startup.operation_bounds["build.distribution"],
         Bounds {
             timeout_seconds: 600,
             output_limit_bytes: 1048576,
-        },
+        }
     );
     let execute = test_bindings(&projects)
         .unwrap()
@@ -187,6 +191,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     assert_eq!(
         plans["test:host-bootstrap-tests"].operations,
         [
+            "build.worktree",
             "build.distribution",
             "host.bootstrap-tests",
             "host.bootstrap-real-consumer"

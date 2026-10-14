@@ -304,10 +304,12 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
         let mut config = read_host("config");
         config["schema_version"] = json!(1);
         config.as_object_mut().unwrap().remove("facts_git");
-        config["input_closure"]
-            .as_object_mut()
-            .unwrap()
-            .remove("bindings");
+        // This fixture exercises the original inventory schema. Current host
+        // closure extensions are not schema-1 declarations.
+        config["input_closure"] = json!({
+            "status": "incomplete",
+            "unresolved": ["fixture input closure is not adopted"]
+        });
         config["canonical_check"] = json!({"operation":"validate.delta", "argv":[]});
         config["tools"] = json!([]);
         config["semantic_fields"] = json!([]);

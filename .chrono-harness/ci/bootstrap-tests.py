@@ -50,6 +50,10 @@ class Bootstrap(unittest.TestCase):
             path.chmod(0o755)
         (self.tools / "cargo-ready").touch()
         self.environment = dict(os.environ)
+        # This independent fixture selects its own compiler and wrappers.
+        # Individual rejection cases add conflicting selections explicitly.
+        for key in ("RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER"):
+            self.environment.pop(key, None)
         self.environment["PATH"] = str(self.tools) + os.pathsep + os.environ["PATH"]
         self.environment["GIT_TRACE2_EVENT"] = str(self.tools / "git-trace.jsonl")
         self.state_path = self.root / ".chrono-harness/state/bootstrap.json"
@@ -376,6 +380,13 @@ class Bootstrap(unittest.TestCase):
         self.assertEqual(failed["operations"][0]["exit_code"], 0,
                          "a successful child does not waive persistent executable drift")
         self.assertEqual(failed["executables"][0]["sha256"], config["tool_bindings"]["cargo"]["sha256"])
+    def test_missing_distribution_declaration_stops_before_source_operations(self):
+        self.write_json(self.ci / "bootstrap.json", dict(
+            self.config, distribution={"manifest": ".chrono-harness/distribution-release.json"}))
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0, "missing immutable inputs were ignored")
+        self.assertFalse((self.root / "built-tool").exists())
+        self.assertFalse(self.state_path.exists())
 
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
@@ -520,5 +531,5 @@ if __name__ == "__main__":
         from bootstrap_shared_tests import RealFixtureStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealFixtureStartup")
     else:
-        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption
+        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption, DistributionStartup
         unittest.main()

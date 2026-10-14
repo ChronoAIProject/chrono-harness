@@ -68,7 +68,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 ## 当前未完成边界
 
-五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，开发工具目录仍未显式绑定。
+五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；已登记本地 Cargo guarded、编译器／SDK／Python 输入及观察消费者，尚未选为规范 full 执行。原生 provisioning、固定两端原件、配置及其它适用输入／执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，开发工具目录仍未显式绑定。
 
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 

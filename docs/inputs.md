@@ -110,6 +110,42 @@ it does not prove that the real host has no omitted input. `input_closure.status
 and `unresolved` describe the accountable declaration and its outstanding work;
 Cargo/compiler/SDK inputs still require their applicable registrations and tests.
 
+V3/v4 may factor repeated literal binding vectors into `input_closure.input_sets`,
+an object from a nonempty name to a nonempty, duplicate-free input-node array.
+A binding then carries `input_set: "name"` instead of `inputs`. Exactly one is
+required; missing names, nulls, recursive aliases and mixed forms fail. These
+aliases stay in the original endpoint configuration bytes. Registration resolves
+them at its existing binding, coverage and required-input consumers, with the
+same explicit FILEMAP edge and absence requirements as inline vectors. No edge,
+dependency, test or completeness claim is generated. V1/v2 and older binaries
+reject the extension. This host uses it for repeated local declaration vectors;
+the five full registries remain proposed.
+
+## Actual input observations
+
+`chrono-inputs observe --host-root H --manifest P --output P` consumes an explicit
+`chrono-input-observation/v1` manifest. It runs bounded `operations` and optional
+`registered_operations` from the exact project/script action owner, retaining the
+original manifest, projects bytes, launch records and stdout/stderr. Missing or
+ambiguous actions fail before execution. Literal file/directory locations or one
+successful operation's single-line path output select observations; no operation
+or dependency is inferred. Directory traversal has an explicit entry bound and
+does not select tests. Directory results use `chrono-input-directory-observation/v1`
+and are not directly usable as guarded directory declarations. An observation is
+data for adoption, not an expected-input
+update, historical endpoint capture or governance verdict.
+
+Actual failure, timeout, output overflow and inventory errors retain a failed
+report and raw available streams. A second invocation cannot overwrite an
+original output or process directory. The registered native observation manifest
+reuses all declared host Cargo acquisition/metadata actions and separate Python
+runtime probes, using the existing 1 MiB per-operation diagnostic bound and
+offline Cargo acquisition from already available packages. Missing packages remain
+failures requiring the actual provisioning owner. The Cargo observation declaration
+contains test expectations, not recorded successes. Its local tool/SDK declarations
+are not portable native CI provisioning. Fixed base observations must still come from their actual producer;
+`capture`, `pair`, `compose` and `capture-governance` retain that obligation.
+
 ```sh
 chrono-inputs capture --host-root /path/to/host \
   --config .chrono-harness/config.json --commit FULL_COMMIT_OID \

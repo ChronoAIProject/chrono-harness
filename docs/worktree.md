@@ -93,9 +93,17 @@ For an explicitly named immutable input larger than the ordinary diagnostic
 bound, v1/v2 policies may additionally declare `immutable_input_limits`, a map
 from exact repository-relative paths to positive byte limits of at most
 67,108,864 bytes. An omitted map preserves the original transport contract.
-This host declares `.chrono-harness/config.json` at 2,097,152 bytes while keeping
+This host declares `.chrono-harness/config.json` and `.chrono-harness/FILEMAP.json`
+at 2,097,152 bytes each while keeping
 `output_limit_bytes` at 1,048,576. These declarations grant acquisition capacity;
 they do not register files, outputs, consumers or cleanup eligibility.
+
+The full-host FILEMAP declarations exceed the ordinary 1 MiB stream bound. The
+fixed original 1,791,500-byte FILEMAP and the current expanded host declarations
+are actual consumers of the exact allowance. This does not raise diagnostic
+limits or establish input completeness. The runner's immutable-input tests also
+accept the explicitly supplied original FILEMAP fixture through
+`CHRONO_IMMUTABLE_FILEMAP_FIXTURE`, checking its fixed length and digest.
 
 The existing blob owner first acquires fixed-commit object metadata under the
 ordinary output/time limits. Oversized inputs are refused before acquiring their
@@ -1239,3 +1247,13 @@ initial judge runs; the producer itself never publishes inventory success.
 CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式平台 Git 输入；不把源宿主已部署的 Git 摘要／版本当作原生 fixture 的政策，也不改源宿主绑定。原错误与 passing control 均由实际命令产生。worktree 的未保留 commit-tree fixture 显式提供作者姓名／邮箱。
 
 真实 Cargo retained-rebuild handshake 位于冷构建之后；该 fixture 等待现役 managed process 的实际结果，沿用其原登记的 30 秒进程上限，不用另一个 10 秒 readiness 时钟杀死编译过程。其它 readiness 等待仍为 10 秒。缺 marker 时消费并保留真实退出与过程原件，退出前未完成则仍不产生成功；专属负例用缺失 manifest 检查失败和加入子进程。原生旧失败只留下空 outer 流与 use intent，不能据此断定具体编译阶段或停滞原因；支持平台的修复后原生验证仍待调用方执行。
+
+The local `check_inputs` policy may explicitly name
+`full_inputs: {"retained_inputs": ".chrono-harness/state/current-inputs.json"}`.
+For a full check the current producer output is copied to an immutable,
+content-addressed preparation original and included in the prepared originals.
+Missing current data fails; it never falls back to an earlier pair. Original
+branch birth and its association are not rewritten. Delivery may likewise retain
+the workflow-owned integration certificate; integration does not consume its own
+prior certificate. This is transport only: input and workflow judges still admit
+snapshots and certificates. Without the field, historical origin semantics remain.
