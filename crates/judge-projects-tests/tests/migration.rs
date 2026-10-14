@@ -33,50 +33,182 @@ fn retain_history(processes: &[chrono_harness::ProcessResult], message: &str) ->
     )
 }
 
+const TEST_HOSTS: &str = ".chrono-harness/migrations/test-hosts.json";
+static FIXTURE_TOOLS: OnceLock<Result<FixtureTools, String>> = OnceLock::new();
+
+struct FixtureTools {
+    git: Value,
+    git_input: Value,
+    python: Value,
+    observed: observation::Tool,
+}
+
+fn fixture_path<'a>(hosts: &'a Value, platform: &str) -> Result<&'a str, String> {
+    hosts[platform]
+        .as_str()
+        .ok_or_else(|| format!("unregistered migration test platform: {platform}"))
+}
+
+fn fixture_data() -> Value {
+    let platform = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => "Darwin/arm64".to_owned(),
+        ("linux", "x86_64") => "Linux/x86_64".to_owned(),
+        (os, arch) => format!("{os}/{arch}"),
+    };
+    let hosts: Value =
+        serde_json::from_slice(&fs::read(source().join(TEST_HOSTS)).unwrap()).unwrap();
+    let path = fixture_path(&hosts, &platform).unwrap();
+    serde_json::from_slice(
+        &fs::read(chrono_harness::no_symlink_parents(&source(), path).unwrap()).unwrap(),
+    )
+    .unwrap()
+}
+
+fn bind_fixture_tools(data: &Value) -> Result<FixtureTools, String> {
+    let root = source();
+    let declaration = &data["historical_git"];
+    let program = declaration["program"]
+        .as_str()
+        .ok_or("fixture Git program")?;
+    if !std::path::Path::new(program).is_absolute() {
+        return Err("fixture Git must have an explicit absolute path".into());
+    }
+    let environment = history_environment();
+    let observed = observation::tool(
+        &root,
+        program,
+        &serde_json::from_value::<Vec<String>>(declaration["version_argv"].clone())
+            .map_err(|e| e.to_string())?,
+        &environment,
+        120,
+        1048576,
+    )?;
+    let identities = declaration["identities"]
+        .as_array()
+        .ok_or("fixture Git identities")?;
+    // The platform explicitly admits a finite set of host identities. An
+    // observation selects exactly one existing declaration; it creates none.
+    let matches = identities
+        .iter()
+        .filter(|identity| {
+            identity["sha256"] == observed.sha256
+                && identity["expected_version"] == observed.version.stdout.trim_end()
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 || observation::process_success(&observed.version).is_err() {
+        return Err(retain_history(
+            &[observed.version],
+            &format!(
+                "historical fixture Git binding mismatch: expected {declaration}; observed sha256 {}",
+                observed.sha256
+            ),
+        ));
+    }
+    let identity = matches[0];
+    let git = json!({"id":"git", "program":program, "resolution":"PATH-once",
+        "version_argv":declaration["version_argv"], "expected_version":identity["expected_version"]});
+    let git_input = json!({"id":"git-executable", "location":program,
+        "presence":"present", "sha256":identity["sha256"]});
+    let python = data["tools"]
+        .as_array()
+        .ok_or("fixture tools")?
+        .iter()
+        .find(|tool| tool["id"] == "python3")
+        .ok_or("fixture Python binding")?
+        .clone();
+    let python_observed = observation::tool(
+        &root,
+        python["program"].as_str().ok_or("fixture Python program")?,
+        &serde_json::from_value::<Vec<String>>(python["version_argv"].clone())
+            .map_err(|e| e.to_string())?,
+        &environment,
+        30,
+        1048576,
+    )?;
+    if python_observed.version.stdout.trim_end() != python["expected_version"]
+        || observation::process_success(&python_observed.version).is_err()
+    {
+        return Err(retain_history(
+            &[python_observed.version],
+            &format!("historical fixture Python binding mismatch: expected {python}"),
+        ));
+    }
+    retain_history(
+        &[observed.version.clone(), python_observed.version],
+        &format!(
+            "historical fixture host selected: {}; expected {git}; expected input {git_input}",
+            identity["host"]
+        ),
+    );
+    Ok(FixtureTools {
+        git,
+        git_input,
+        python,
+        observed,
+    })
+}
+
+fn fixture_tools() -> &'static FixtureTools {
+    FIXTURE_TOOLS
+        .get_or_init(|| bind_fixture_tools(&fixture_data()))
+        .as_ref()
+        .unwrap_or_else(|e| panic!("historical fixture tool prerequisite failed: {e}"))
+}
+
+fn history_environment() -> BTreeMap<String, String> {
+    ["PATH", "HOME", "SSH_AUTH_SOCK"]
+        .into_iter()
+        .filter_map(|key| std::env::var(key).ok().map(|value| (key.into(), value)))
+        .collect()
+}
+
+#[test]
+fn historical_platform_bindings_reject_unknown_wrong_and_ambiguous_identities() {
+    let hosts: Value =
+        serde_json::from_slice(&fs::read(source().join(TEST_HOSTS)).unwrap()).unwrap();
+    assert!(
+        fixture_path(&hosts, "unregistered/platform")
+            .unwrap_err()
+            .contains("unregistered")
+    );
+    let fixture = fixture_data();
+    bind_fixture_tools(&fixture).unwrap_or_else(|e| panic!("declared host rejected: {e}"));
+    for field in ["sha256", "expected_version", "duplicate"] {
+        let mut wrong = fixture.clone();
+        let identities = wrong["historical_git"]["identities"]
+            .as_array_mut()
+            .unwrap();
+        if field == "duplicate" {
+            identities.extend(identities.clone());
+        } else {
+            for identity in identities {
+                identity[field] = json!("deliberately wrong binding");
+            }
+        }
+        let error = bind_fixture_tools(&wrong)
+            .err()
+            .expect("invalid fixed binding was adopted");
+        assert!(
+            error.contains("historical fixture Git binding mismatch"),
+            "{error}"
+        );
+        assert!(
+            error.contains("expected") && error.contains("observed sha256"),
+            "{error}"
+        );
+    }
+}
+
 fn historical_input() -> &'static history::Snapshot {
     HISTORICAL_INPUT
         .get_or_init(|| {
             let root = source();
-            let config = chrono_harness::load_selected_config(&root, CONFIG)?;
-            let declaration = &config["tools"]
-                .as_array()
-                .ok_or("missing fixture Git tools")?
-                .iter()
-                .find(|tool| tool["id"] == config["facts_git"]["tool"])
-                .ok_or("missing declared fixture Git")?;
-            let environment = ["PATH", "HOME", "SSH_AUTH_SOCK"]
-                .into_iter()
-                .filter_map(|key| std::env::var(key).ok().map(|value| (key.into(), value)))
-                .collect();
+            let tools = fixture_tools();
+            let observed = tools.observed.clone();
+            let environment = history_environment();
             let binding: history::Binding =
                 serde_json::from_slice(&fs::read(root.join(HISTORY)).map_err(|e| e.to_string())?)
                     .map_err(|e| e.to_string())?;
-            let observed = observation::tool(
-                &root,
-                declaration["program"]
-                    .as_str()
-                    .ok_or("fixture Git program")?,
-                &serde_json::from_value::<Vec<String>>(declaration["version_argv"].clone())
-                    .map_err(|e| e.to_string())?,
-                &environment,
-                binding.timeout_seconds,
-                binding.output_limit_bytes,
-            )?;
-            let input = config["environment"]["inputs"]
-                .as_array()
-                .ok_or("fixture Git inputs")?
-                .iter()
-                .find(|input| input["id"] == config["facts_git"]["input"])
-                .ok_or("fixture Git byte binding")?;
-            if observed.sha256 != input["sha256"]
-                || observed.version.stdout.trim_end() != declaration["expected_version"]
-                || observation::process_success(&observed.version).is_err()
-            {
-                return Err(retain_history(
-                    &[observed.version],
-                    "historical fixture Git binding mismatch",
-                ));
-            }
             let spec = chrono_harness::CommandSpec {
                 program: observed
                     .path
@@ -105,10 +237,9 @@ fn historical_input() -> &'static history::Snapshot {
 }
 
 fn history_spec() -> (chrono_harness::CommandSpec, String) {
-    let program = "/usr/bin/git";
-    let digest = chrono_harness::file_identity(std::path::Path::new(program))
-        .unwrap()
-        .0;
+    let tools = fixture_tools();
+    let program = tools.git["program"].as_str().unwrap();
+    let digest = tools.git_input["sha256"].as_str().unwrap().to_owned();
     let spec = chrono_harness::CommandSpec {
         program: program.into(),
         args: vec![],
@@ -227,7 +358,19 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
     );
     let (spec, digest) = history_spec();
     let snapshot = history::acquire(local.path(), &binding, spec.clone(), &digest).unwrap();
+    // Retain originals before asserting: a regression must not lose its probes.
+    retain_history(
+        &snapshot.processes,
+        "regression: explicit historical acquisition observed",
+    );
     assert_eq!(fetch_count(&snapshot.processes), 1);
+    assert!(
+        snapshot
+            .processes
+            .iter()
+            .filter(|p| !p.argv.iter().any(|a| a == "fetch"))
+            .all(|p| p.stderr_bytes.is_empty())
+    );
     let fetch = snapshot
         .processes
         .iter()
@@ -244,11 +387,8 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
         snapshot
             .processes
             .iter()
-            .all(|p| p.environment["GIT_NO_LAZY_FETCH"] == "1")
-    );
-    retain_history(
-        &snapshot.processes,
-        "regression: explicit historical acquisition passed",
+            .filter(|p| p.argv.iter().any(|arg| arg.starts_with("--git-dir=")))
+            .all(|p| !p.environment.contains_key("GIT_NO_LAZY_FETCH"))
     );
     // Ordinary reentry needs neither a working remote nor a replacement source.
     git(
@@ -261,10 +401,17 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
         ],
     );
     let warm = history::acquire(local.path(), &binding, spec, &digest).unwrap();
+    retain_history(
+        &warm.processes,
+        "regression: warm consumption with unavailable origin",
+    );
     assert_eq!(fetch_count(&warm.processes), 0);
+    assert_eq!(warm.tree, snapshot.tree);
+    assert_eq!(warm.blobs, snapshot.blobs);
+    assert!(warm.processes.iter().all(|p| p.stderr_bytes.is_empty()));
     assert_eq!(git(local.path(), &["rev-parse", "HEAD"]), binding.commit);
     let exported = tempfile::tempdir().unwrap();
-    snapshot.export(exported.path()).unwrap();
+    warm.export(exported.path()).unwrap();
     assert_eq!(
         fs::read(exported.path().join("original bytes λ")).unwrap(),
         [0, 255, 10, 42]
@@ -288,9 +435,37 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
     );
     let (spec, digest) = history_spec();
     let cold_snapshot = history::acquire(cold.path(), &binding, spec, &digest).unwrap();
+    retain_history(
+        &cold_snapshot.processes,
+        "regression: missing pinned commit acquired explicitly",
+    );
     assert_eq!(cold_snapshot.tree, snapshot.tree);
     assert_eq!(cold_snapshot.blobs, snapshot.blobs);
     assert_eq!(fetch_count(&cold_snapshot.processes), 2);
+    let (spec, digest) = history_spec();
+    git(
+        cold.path(),
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            missing_remote.to_str().unwrap(),
+        ],
+    );
+    let cold_warm = history::acquire(cold.path(), &binding, spec, &digest).unwrap();
+    retain_history(
+        &cold_warm.processes,
+        "regression: fetched metadata and blobs consumed offline",
+    );
+    assert_eq!(fetch_count(&cold_warm.processes), 0);
+    assert_eq!(cold_warm.tree, snapshot.tree);
+    assert_eq!(cold_warm.blobs, snapshot.blobs);
+    assert!(
+        cold_warm
+            .processes
+            .iter()
+            .all(|p| p.stderr_bytes.is_empty())
+    );
     assert!(!cold.path().join(".git/shallow").exists());
     assert!(!cold.path().join(".git/FETCH_HEAD").exists());
     assert!(
@@ -298,10 +473,6 @@ fn historical_fixture_acquires_missing_blobs_once_then_consumes_without_network(
             .processes
             .iter()
             .any(|p| p.argv.iter().any(|arg| arg == "--filter=blob:none"))
-    );
-    retain_history(
-        &cold_snapshot.processes,
-        "regression: missing pinned commit acquired explicitly",
     );
 }
 
@@ -321,27 +492,49 @@ fn historical_fixture_retains_failed_fetch_and_rejects_identity_drift() {
     let failure = history::acquire(local.path(), &binding, spec.clone(), &digest)
         .err()
         .unwrap();
+    retain_history(
+        &failure.processes,
+        "regression: unavailable historical origin acquisition observed",
+    );
     assert_eq!(fetch_count(&failure.processes), 1);
     assert!(failure.message.contains("Git failed"));
     let failed = failure.processes.last().unwrap();
     assert_ne!(failed.exit_code, 0);
     assert!(!failed.stderr_bytes.is_empty());
     assert!(
+        failure.processes[..failure.processes.len() - 1]
+            .iter()
+            .all(|p| p.stderr_bytes.is_empty())
+    );
+    assert!(
         failure
             .processes
             .iter()
-            .all(|p| p.environment["GIT_NO_LAZY_FETCH"] == "1")
-    );
-    retain_history(
-        &failure.processes,
-        "regression: unavailable historical origin remains failed",
+            .filter(|p| p.argv.iter().any(|arg| arg.starts_with("--git-dir=")))
+            .all(|p| !p.environment.contains_key("GIT_NO_LAZY_FETCH"))
     );
     let mut wrong = binding.clone();
     wrong.tree = "a".repeat(40);
     let failure = history::acquire(local.path(), &wrong, spec.clone(), &digest)
         .err()
         .unwrap();
+    retain_history(&failure.processes, "regression: wrong pinned tree rejected");
     assert!(failure.message.contains("identity mismatch"));
+    assert_eq!(fetch_count(&failure.processes), 0);
+    let mut wrong_kind = binding.clone();
+    wrong_kind.commit = binding.tree.clone();
+    let failure = history::acquire(local.path(), &wrong_kind, spec.clone(), &digest)
+        .err()
+        .unwrap();
+    retain_history(
+        &failure.processes,
+        "regression: tree cannot substitute for pinned commit",
+    );
+    assert!(
+        failure.message.contains("expected exact historical commit"),
+        "{}",
+        failure.message
+    );
     assert_eq!(fetch_count(&failure.processes), 0);
     // A cold metadata failure has its own original probe/fetch diagnostics;
     // success from the warm blob path cannot stand in for this boundary.
@@ -359,8 +552,20 @@ fn historical_fixture_retains_failed_fetch_and_rejects_identity_drift() {
     let failure = history::acquire(cold.path(), &binding, spec.clone(), &digest)
         .err()
         .unwrap();
+    retain_history(
+        &failure.processes,
+        "regression: unavailable pinned metadata acquisition observed",
+    );
     assert_eq!(fetch_count(&failure.processes), 1);
-    let probe = &failure.processes[0];
+    let probe = failure
+        .processes
+        .iter()
+        .find(|p| {
+            p.argv
+                .iter()
+                .any(|arg| arg == "--batch-check=%(objectname) %(objecttype)")
+        })
+        .unwrap();
     assert_eq!(
         probe.stdout_bytes,
         format!("{} missing\n", binding.commit).as_bytes()
@@ -369,54 +574,36 @@ fn historical_fixture_retains_failed_fetch_and_rejects_identity_drift() {
     assert!(failed.argv.iter().any(|arg| arg == "--filter=blob:none"));
     assert_ne!(failed.exit_code, 0);
     assert!(!failed.stderr_bytes.is_empty());
-    retain_history(
-        &failure.processes,
-        "regression: unavailable pinned metadata remains failed",
-    );
     wrong = binding;
     wrong.commit = "b".repeat(40);
     let failure = history::acquire(local.path(), &wrong, spec, &digest)
         .err()
         .unwrap();
+    retain_history(
+        &failure.processes,
+        "regression: wrong pinned commit remains failed",
+    );
     assert_eq!(fetch_count(&failure.processes), 1);
     assert_ne!(failure.processes.last().unwrap().exit_code, 0);
 }
-fn adopt_fixture_tool(root: &std::path::Path, config: &mut Value, id: &str) -> observation::Tool {
-    let tool = config["tools"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|tool| tool["id"] == id)
-        .unwrap();
-    let env = std::env::vars().collect();
-    let observed = observation::tool(
-        root,
-        tool["program"].as_str().unwrap(),
-        &serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap(),
-        &env,
-        30,
-        1048576,
-    )
-    .unwrap_or_else(|error| panic!("observe fixture {id}: {error}"));
-    observation::process_success(&observed.version)
-        .unwrap_or_else(|error| panic!("observe fixture {id}: {error}; {observed:?}"));
-    tool["program"] = json!(observed.path);
-    tool["expected_version"] = json!(observed.version.stdout.trim_end());
-    observed
-}
-fn adopt_fixture_bindings(root: &std::path::Path, config: &mut Value) {
-    adopt_fixture_tool(root, config, "python3");
-    let git_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
-    let git_input = config["facts_git"]["input"].as_str().unwrap().to_owned();
-    let git = adopt_fixture_tool(root, config, &git_id);
+fn adopt_fixture_bindings(_root: &std::path::Path, config: &mut Value) {
+    let fixture = fixture_tools();
+    for declaration in [&fixture.git, &fixture.python] {
+        let tool = config["tools"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|tool| tool["id"] == declaration["id"])
+            .unwrap();
+        *tool = declaration.clone();
+    }
     let input = config["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|input| input["id"] == git_input)
+        .find(|input| input["id"] == fixture.git_input["id"])
         .unwrap();
-    input["location"] = json!(git.path);
-    input["sha256"] = json!(git.sha256);
+    *input = fixture.git_input.clone();
 }
 fn migration_host() -> (tempfile::TempDir, std::path::PathBuf, String, String) {
     migration_host_with_alias_collision(false)
@@ -581,8 +768,8 @@ fn migration_host_with_alias_collision(
         .unwrap();
     }
     // The copied candidate is a test host on the executing native platform.
-    // Preserve the historical snapshot; adopt observed bindings only in the new
-    // fixture. The copied host's Git digest/version can reject at Reader::for_config
+    // Preserve the historical snapshot; install only the explicitly selected
+    // platform fixture declarations in the new host. The copied host's Git digest/version can reject at Reader::for_config
     // before either historical-method or wrong-Python-version diagnostics.
     let mut config: Value = serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
     adopt_fixture_bindings(&root, &mut config);
@@ -928,7 +1115,7 @@ fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
     let config = facts::registry_values(&root, &candidate, CONFIG).unwrap()[CONFIG].clone();
     // A real forwarding executable has the same Git version but different bytes.
     // Moving a copied host declaration to it must reject the stale digest, then
-    // pass after adopting the fixture's actual observation.
+    // pass with an independently declared digest of the wrapper's source bytes.
     let original_git = config["tools"]
         .as_array()
         .unwrap()
@@ -938,14 +1125,13 @@ fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
         .as_str()
         .unwrap();
     let wrapper = root.join(".chrono-harness/bin/fixture-git");
-    fs::write(
-        &wrapper,
-        format!(
-            "#!/bin/sh\nexec '{}' \"$@\"\n",
-            original_git.replace('\'', "'\\''")
-        ),
+    let wrapper_bytes = format!(
+        "#!/bin/sh\nexec '{}' \"$@\"\n",
+        original_git.replace('\'', "'\\''")
     )
-    .unwrap();
+    .into_bytes();
+    let expected_wrapper_sha256 = chrono_harness::sha256(&wrapper_bytes);
+    fs::write(&wrapper, &wrapper_bytes).unwrap();
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
     let env: BTreeMap<String, String> = std::env::vars().collect();
@@ -1025,6 +1211,25 @@ fn migration_copied_git_binding_rejects_mismatch_before_decoder() {
             );
         }
         adopt_fixture_bindings(&root, &mut wrong);
+        if field == "digest" {
+            // Keep the real forwarding executable as the consumer. Its expected
+            // identity comes from the declared fixture bytes, not observation.
+            wrong["tools"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|tool| tool["id"] == "git")
+                .unwrap()["program"] = json!(wrapper);
+            let input = wrong["environment"]["inputs"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|input| input["id"] == "git-executable")
+                .unwrap();
+            input["location"] = json!(wrapper);
+            input["sha256"] = json!(expected_wrapper_sha256);
+        }
+
         fs::write(
             root.join(CONFIG),
             serde_json::to_vec_pretty(&wrong).unwrap(),

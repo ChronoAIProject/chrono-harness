@@ -3,8 +3,24 @@
     {
       "id": "python3",
       "program": "/usr/bin/python3",
-      "version_argv": ["--version"],
-      "expected_version": "Python 3.12.3"
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": "Python 3.12.3",
+      "resolution": "PATH-once"
     }
-  ]
+  ],
+  "historical_git": {
+    "program": "/usr/bin/git",
+    "version_argv": [
+      "--version"
+    ],
+    "identities": [
+      {
+        "host": "native-linux-run38549541595",
+        "expected_version": "git version 2.55.0",
+        "sha256": "d4d2ba562243015206d4248edfec871a74786499292d00ed072dbca2f5ae8073"
+      }
+    ]
+  }
 }

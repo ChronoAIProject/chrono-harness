@@ -561,19 +561,47 @@ The migration test's whole historical host is an explicit input in
 `.chrono-harness/migrations/projects-history.json`: commit
 `4f08aef7ab40d7b0a3fb6ba42af2620600f18d98`, tree
 `5c8d85c1df63ad1f8d30724d78ab986a185b12a1`, and remote `origin`.
-Its Rust fixture acquisition uses the current host's declared Git bytes/version
-and the existing bounded process and immutable-blob readers. It checks the fixed
-commit/tree locally, probes only that tree's blobs with lazy fetching disabled,
+Its Rust fixture acquisition and copied migration host use the existing
+`.chrono-harness/migrations/test-hosts.json` platform selection. Darwin/arm64
+and Linux/x86_64 now each name a fixture containing predeclared Python and Git
+evidence. Darwin admits the local developer Git and the actual native release
+Git as separate exact identities; Linux admits the actual native release Git.
+An observed Git must match exactly one declared path/version/SHA-256 tuple.
+Unknown platforms, unmatched or ambiguous identities and Python version drift
+fail with expected declarations and original observations retained. Neither
+acquisition nor fixture repair copies observed versions/digests into expectations;
+the candidate fixture installs the selected declarations without changing the
+historical snapshot or importing the developer host's remaining tool identity.
+The native expectations come from release run 38549541595, Linux job
+115804543818 and macOS job 115804699537. These finite test fixtures do not adopt
+full governance or admit every tool shipped under those OS labels.
+
+The original macOS failed-blob probe attempted its unavailable origin despite
+`GIT_NO_LAZY_FETCH=1`. Upstream Git 2.39.3 does not implement that control.
+Local reads now use a temporary bare Git view of the original object database,
+with no remotes, empty templates and system/global configuration disabled.
+Only explicit fetch processes use the original checkout and its declared origin.
+This uses supported Git object-store access without copying objects, scanning
+unrelated history, changing global configuration or relying on the lazy-fetch
+switch: reads deliberately omit `GIT_NO_LAZY_FETCH`, exercising the same default
+lazy-fetch behavior on current Git as on the older native Git. The helper records object-directory/format discovery and view creation
+under the same process bounds. The temporary view is dropped after acquisition.
+
+It checks the fixed commit/tree locally, probes only that tree's blobs,
 and fetches the exact missing blob OIDs in one explicit bounded request. An absent
 pinned commit first receives its own explicit `--filter=blob:none` metadata fetch,
 with no ref update or shallow-boundary change; the server may include ancestor
-metadata in that fixed commit's transfer. Failed
-probes, transport errors, remaining missing blobs and identity drift fail with
-original process receipts; there is no retry or ref discovery. Wrong/malformed
-commit probes and missing tree metadata still fail. The four historical assertions
+metadata in that fixed commit's transfer. Failed probes, transport errors,
+remaining missing blobs and identity drift fail with original process receipts;
+there is no retry or ref discovery. Wrong/malformed commit probes and missing
+tree metadata still fail. The four historical assertions
 then consume one in-memory acquired snapshot, preserving original historical
 bytes, aliases and ambiguity, version/method binding and workflow drift checks.
-Ordinary reentry with complete local objects requires no remote access.
+Ordinary reentry with complete local objects requires no remote access. Rust
+regressions retain cold and warm original processes, compare the same tree and
+binary/symlink bytes, export the warm snapshot with an unavailable origin, and
+reject failed cold metadata/blob origins and wrong identities. Receipts are
+retained before acquisition assertions so failed expectations keep their probes.
 
 Acquisition uses the fixed candidate's registered 120-second/1-MiB per-process bounds and caps the
 single fetch's object argv at 64 KiB. Receipts, including expected failed local

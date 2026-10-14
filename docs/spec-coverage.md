@@ -811,11 +811,18 @@ same contracts. Lifecycle drains reference retained child originals through the
 existing input verifier; supported inline history and original managed command
 streams/exits remain readable. The projects migration fixture explicitly binds
 its historical commit/tree and acquires missing metadata/blobs with current code,
-preserving original Git diagnostics. See execution.md and worktree.md for the
+preserving original Git diagnostics. The native historical-fixture repair uses
+explicit platform fixtures with finite predeclared local/native Git identities,
+and a temporary remote-free bare object view for probes and reads. Only explicit
+bounded fetches access the original checkout's origin. It retains cold/warm/error
+originals and all historical decoding, alias/ambiguity and workflow repair checks;
+local acceptance does not establish Linux/macOS native acceptance. See execution.md and worktree.md for the
 contracts and owner-local Rust regressions.
 
 Product source and host test-input policy change together: FILEMAP declares the
-history manifest/helper and the routes tests' actual registry inputs. Scheduling
+history manifest/helper, platform fixture consumers and the routes tests' actual
+registry inputs. The finite native repair changes fixture implementation and
+fixture policy together; it does not expand the input-governance contract. Scheduling
 cap=2, operation/output/CI limits and CPU acceleration remain unchanged. Committed
 canonical checks, both native platforms, review and delivery remain caller
 obligations. Q3/Q4 and complete SPEC acceptance remain outstanding. The nine old

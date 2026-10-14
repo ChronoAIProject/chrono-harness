@@ -4801,6 +4801,14 @@
         {
           "kind": "test-execution",
           "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
         }
       ]
     },
@@ -4817,6 +4825,14 @@
         {
           "kind": "test-execution",
           "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
         }
       ]
     },
@@ -5838,6 +5854,30 @@
       "edges": [
         {
           "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-projects-migration"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/migrations/fixtures/darwin-host.json",
+      "owner": "scoped-v1-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:scoped-v1-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:scoped-v1-tests"
+        },
+        {
+          "kind": "runtime-input",
           "to": "project:judge-projects-tests"
         },
         {

@@ -53,21 +53,72 @@ pub fn acquire(
         for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"] {
             spec.env.remove(key);
         }
+        // Git 2.39 does not implement GIT_NO_LAZY_FETCH. Read through a bare
+        // view of the same object database with no remotes/configuration; only
+        // explicit fetches below run against the original checkout. This also
+        // prevents missing tree metadata or a subsequent blob read from fetching.
+        let location = invoke(
+            root,
+            &spec,
+            &[
+                "rev-parse".into(),
+                "--path-format=absolute".into(),
+                "--git-path".into(),
+                "objects".into(),
+                "--show-object-format".into(),
+            ],
+            &[],
+            digest,
+            &mut processes,
+        )?
+        .1;
+        let location = std::str::from_utf8(&location).map_err(|_| "object location UTF-8")?;
+        let fields: Vec<_> = location.split_terminator('\n').collect();
+        if fields.len() != 2
+            || !Path::new(fields[0]).is_absolute()
+            || !matches!(fields[1], "sha1" | "sha256")
+        {
+            return Err("invalid historical object database location/format".into());
+        }
+        let view = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let view_path = view.path().to_str().ok_or("object view path UTF-8")?;
+        let mut read_spec = spec.clone();
+        // Exercise the normal lazy-fetch behavior on every supported Git: the
+        // remote-free view, not this newer environment switch, owns offline reads.
+        read_spec.env.remove("GIT_NO_LAZY_FETCH");
+        read_spec
+            .env
+            .insert("GIT_CONFIG_NOSYSTEM".into(), "1".into());
+        read_spec
+            .env
+            .insert("GIT_CONFIG_GLOBAL".into(), "/dev/null".into());
+        invoke(
+            root,
+            &read_spec,
+            &[
+                "init".into(),
+                "--bare".into(),
+                "--quiet".into(),
+                "--template=".into(),
+                format!("--object-format={}", fields[1]),
+                view_path.into(),
+            ],
+            &[],
+            digest,
+            &mut processes,
+        )?;
+        read_spec
+            .env
+            .insert("GIT_OBJECT_DIRECTORY".into(), fields[0].into());
         let mut git = |args: &[String], stdin: &[u8]| -> Result<(usize, Vec<u8>), String> {
-            spec.args = ["--no-optional-locks", "--no-replace-objects"]
-                .into_iter()
-                .map(str::to_owned)
-                .chain(args.iter().cloned())
-                .collect();
-            let process = run_process_observed(root, &spec, stdin, digest)?;
-            let succeeded = process.exit_code == 0 && process.failure.is_none();
-            let bytes = process.stdout_bytes.clone();
-            let index = processes.len();
-            processes.push(process);
-            if !succeeded {
-                return Err(format!("historical input Git failed: {args:?}"));
+            if args.first().map(String::as_str) == Some("fetch") {
+                invoke(root, &spec, args, stdin, digest, &mut processes)
+            } else {
+                let args = std::iter::once(format!("--git-dir={view_path}"))
+                    .chain(args.iter().cloned())
+                    .collect::<Vec<_>>();
+                invoke(root, &read_spec, &args, stdin, digest, &mut processes)
             }
-            Ok((index, bytes))
         };
         let probe = [
             "cat-file".into(),
@@ -184,6 +235,31 @@ pub fn acquire(
         }),
         Err(message) => Err(Failure { message, processes }),
     }
+}
+
+fn invoke(
+    root: &Path,
+    spec: &CommandSpec,
+    args: &[String],
+    stdin: &[u8],
+    digest: &str,
+    processes: &mut Vec<ProcessResult>,
+) -> Result<(usize, Vec<u8>), String> {
+    let mut spec = spec.clone();
+    spec.args = ["--no-optional-locks", "--no-replace-objects"]
+        .into_iter()
+        .map(str::to_owned)
+        .chain(args.iter().cloned())
+        .collect();
+    let process = run_process_observed(root, &spec, stdin, digest)?;
+    let succeeded = process.exit_code == 0 && process.failure.is_none();
+    let bytes = process.stdout_bytes.clone();
+    let index = processes.len();
+    processes.push(process);
+    if !succeeded {
+        return Err(format!("historical input Git failed: {args:?}"));
+    }
+    Ok((index, bytes))
 }
 
 fn missing_blobs(objects: &[String], bytes: &[u8]) -> Result<Vec<String>, String> {
