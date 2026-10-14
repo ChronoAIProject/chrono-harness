@@ -33,6 +33,8 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
 
 ## Schema 与可复制组合配方
 
+默认根现在显式选择 `job.wait`，本仓也在自己的 catalog／manifest 中采用。任务等待只使用一个宿主完成通知或真正阻塞等待通道；完成后一次收取原始结果并核退出状态及任务身份。定时状态／进程／产物查询、sleep 后查询、反复空写会话，以及内部反复查询状态的 wait/watch 都属于轮询。缺少等待能力时保留原任务句柄、继续独立工作并如实报告，不新增轮询器；暂时无通知或等待超时不证明终结。这个可读方法不新增任务调度器或修改底层进程执行引擎。
+
 专用 manifest schema_version=2，producer 固定 `chrono-instructions`（独立于包版本），render 固定 `atomic-rules/relative-alias/v3`。以下是完整示例：默认宿主仅有第一项，增加后两项再 generate 即可得到英文文档与聚焦 skill。本仓以相同输入生成这些实例。
 
 ```json
@@ -43,7 +45,7 @@ CLI：`init --host-root H [--methodology M] [--host-context C] [--locale L]`；`
   "catalog": ".chrono-harness/instructions/catalog.json",
   "host_context": ".chrono-harness/instructions/host-context.md",
   "outputs": [
-    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":["goal.deliverable","action.autonomy","candidate.isolation","reuse.search","registry.explicit","evidence.failure","cost.measure","owner.canonical","core.small-projects","method.host-tools","method.entry","judge.register","policy.evolution","policy.mixed-warning","delta.selection","delta.candidate-judge","delta.local-ci","test.behavior","test.same-language","evidence.program-state","candidate.landing","artifact.results","artifact.cleanup"],"title":"通用工作方法","layout":"workflow"},
+    {"id":"root","path":"CLAUDE.md","format":"root-guide","locale":"zh-CN","roots":["goal.deliverable","action.autonomy","candidate.isolation","reuse.search","registry.explicit","evidence.failure","cost.measure","owner.canonical","core.small-projects","method.host-tools","method.entry","judge.register","policy.evolution","policy.mixed-warning","delta.selection","delta.candidate-judge","delta.local-ci","test.behavior","test.same-language","evidence.program-state","job.wait","candidate.landing","artifact.results","artifact.cleanup"],"title":"通用工作方法","layout":"workflow"},
     {"id":"general-en","path":"docs/generated/general-methods.en.md","format":"markdown","locale":"en","roots":["core.general"],"title":"General working methods","layout":"general"},
     {"id":"repair-skill","path":"skills/diagnose-recurring-failures/SKILL.md","format":"skill","locale":"en","roots":["core.repair-producer"],"skill":{"name":"diagnose-recurring-failures","description":"Diagnose a recurring failure by inspecting actual evidence and repairing its producer. Use when the same symptom requires the same corrective action for a second time."}}
   ]

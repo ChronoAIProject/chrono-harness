@@ -207,7 +207,7 @@ Fix signal producers. Define instance, units, index, window and meaning; report 
 
 Keep jobs in host lifecycles. Beyond foreground budgets or for unknown durations, use available host jobs/sessions; retain handles/results. Launchers await real work, join all children in that lifecycle and propagate actual exits. Detached launch, process presence or launcher zero proves no task success.
 
-Use one waiting channel. Use host completion notices, then read artifacts; no duplicate blocking wait. Else prefer native wait/watch. Only external state lacking primitives permits bounded polling: preset exits, event-appropriate intervals, time and key readings each round. Sleep proves no completion.
+Wait for tasks without polling. Use one host completion notification or genuinely blocking wait per task; after completion, collect and verify the original result, exit status and task identity once. Do not repeatedly query status, processes or artifacts on a timer, sleep then query, repeatedly send empty session input, or substitute a status-query loop named wait/watch. A wait timeout or delayed notification does not establish termination or justify restarting. When neither notification nor blocking wait is available, retain the handle, continue independent work and report the capability gap; do not add a poller or fabricate completion.
 
 Bind query identity. Pin delivery targets; verify result/check/run ownership. Old snapshots cannot judge new targets. Missing/conflicting identity, partial errors, incomplete pages or timeout are not success. Distinguish unavailable, failed, unmerged and complete; read canonical results if wrappers collapse exits.
 
