@@ -6,6 +6,15 @@ Ordinary full-check acceptance means the DELTA satisfies the active registered c
 
 Local/CI must use the same registered command. Universal equal verdicts remain conditional on equal complete effective inputs and deterministic evaluation. The separate parity comparator requires `completeness_proven:true` and complete verdict-bearing observations; absent these stronger premises, parity remains unestablished without gating ordinary full check. Pairwise observations alone do not prove universal determinism. This correction changes contract wording and default content, without changing runtime, schema or test behavior or completing full host adoption.
 
+Q3 contemporaneous capture is currently a source candidate, with machine checks
+pending. Existing worktree/runner/CI receipt owners now prepare accepted input,
+launch and factual phase originals before terminal observation; Rust expectations
+cover successful/error returns, enclosing deadlines, true partial publication and
+abrupt termination. [The bounded capture and custody contract](ci-units.md#contemporaneous-fixture-evidence)
+does not establish the cause of the original thirteen operation failures, repair
+Rust environment drift, or complete canonical/native/full/adoption/delivery
+acceptance. Existing fixed guard expectations and all full SPEC obligations remain.
+
 Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crates/judge-registration-tests/tests/registration_contract.rs`; **L** = `crates/runner-tests/tests/cli_contract.rs`; **C** = `crates/judge-ci-tests/tests/behavior.rs`; **F** = `crates/judge-filemap-tests/tests/impact.rs`; **P** = `crates/judge-filemap-tests/tests/consumer.rs`; **W** = `crates/judge-workflow-tests/tests/{branch,consumer}.rs`; instruction and CI generator tests live in their dedicated test projects. Tests in G invoke the built runner and separately built registration executable against real synthetic Git commits, including real host registry material. Production build prerequisites are explicit in the CI binding. P runs actual runner → registration → filemap subprocesses on committed bounded hosts with absent historical binaries and exact report source pointers. F checks witnesses against independently specified endpoint edges. No peer/independent review evidence is claimed.
 
 | SPEC section | State | Producer and direct evidence | Remaining obligation |

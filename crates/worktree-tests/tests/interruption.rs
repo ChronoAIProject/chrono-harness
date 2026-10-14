@@ -152,6 +152,25 @@ fn interrupted_start_retains_intent_and_recovers_missing_or_partial_result() {
         let intent_bytes = fs::read(h.root.join(&intent_path)).unwrap();
         let result = h.root.join(intent["report_path"].as_str().unwrap());
         assert_eq!(fs::read(&result).unwrap(), b"");
+        let temporal: Vec<_> = fs::read_dir(h.root.join(".chrono-harness/state/worktrees/observations")).unwrap()
+            .map(|row| row.unwrap().path())
+            .filter(|path| path.file_name().unwrap().to_str().unwrap().starts_with("start-")
+                && path.extension().is_some_and(|e| e == "jsonl"))
+            .collect();
+        assert_eq!(temporal.len(), 1);
+        let rows: Vec<Value> = fs::read_to_string(&temporal[0]).unwrap().lines()
+            .map(|line| json(line.as_bytes()).unwrap()).collect();
+        let accepted = &rows[0]["observation"]["identity"];
+        assert_eq!(accepted["operation"], "start");
+        assert_eq!(accepted["report_path"], intent["report_path"]);
+        assert_eq!(accepted["config_sha256"], sha256(&fs::read(h.root.join(POLICY)).unwrap()));
+        let original: chrono_harness::prepared::Original = serde_json::from_value(accepted["config_original"].clone()).unwrap();
+        assert_eq!(chrono_harness::prepared::read_original(&h.root, &original, None).unwrap(), fs::read(h.root.join(POLICY)).unwrap());
+        assert!(rows.iter().any(|row| row["phase"] == "git-version-returned"));
+        assert!(rows.iter().any(|row| row["phase"] == "git-invocation"
+            && row["observation"]["command"]["args"].as_array().unwrap().iter().any(|a| a == "add")));
+        assert!(!rows.iter().any(|row| row["phase"] == "operation-returned" || row["phase"] == "report-ready"));
+
         if state == "absent" {
             fs::remove_file(&result).unwrap();
         }

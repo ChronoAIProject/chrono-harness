@@ -661,6 +661,10 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
     let (resume_tx, resume_rx) = mpsc::channel();
     let (busy_tx, busy_rx) = mpsc::channel();
     let (finished_tx, finished_rx) = mpsc::channel();
+    let mut notification = chrono_harness::observation::Progress::open(&owner.root,
+        ".chrono-harness/state/ci-test-publications/", "birth-notification-",
+        json!({"producer_root":owner.root,"publisher":0,"phase":"lease-created-before-lock",
+            "created_timeout_seconds":5,"resume_timeout_seconds":10})).unwrap();
     let (first, second) = std::thread::scope(|scope| {
         let root = &owner.root;
         let command = &commands[0];
@@ -683,7 +687,11 @@ fn producer_registry_birth_serializes_create_before_lock_and_retains_both_comman
                 Some(&mut observer),
             )
         });
-        created_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        notification.record("created-notification-wait-entered", Value::Null).unwrap();
+        let created = created_rx.recv_timeout(Duration::from_secs(5));
+        notification.record("created-notification-observed", json!({"received":created.is_ok(),
+            "error":created.as_ref().err().map(|e| e.to_string()),"timeout_seconds":5})).unwrap();
+        created.unwrap();
         assert!(!directory.join("objects.json").exists());
         let lease_path = directory.join("registry.lease");
         let lease_identity = fs::metadata(&lease_path).unwrap();
@@ -940,4 +948,57 @@ fn producer_does_not_dispose_copied_outputs_without_exact_source_declarations() 
     for path in GENERATED {
         assert!(owner.object().join(path).exists());
     }
+}
+
+#[test]
+fn publication_interruption_helper() {
+    let Some(root) = std::env::var_os("CHRONO_CI_PUBLICATION_FIXTURE") else { return };
+    let root = PathBuf::from(root);
+    let command_root = PathBuf::from(std::env::var_os("CHRONO_CI_PUBLICATION_COMMAND").unwrap());
+    let argv = vec![env!("CARGO_BIN_EXE_chrono-ci-test-transport").to_owned(), "--version".into()];
+    let output = Command::new(&argv[0]).arg(&argv[1]).current_dir(&command_root).output().unwrap();
+    let mut interrupt = |phase: &str| {
+        if phase == "original-copy-returned" {
+            unsafe extern "C" { fn kill(pid: i32, signal: i32) -> i32; }
+            assert_eq!(unsafe { kill(std::process::id() as i32, 9) }, 0);
+            unreachable!();
+        }
+    };
+    retain_command_result_observed(&root, &command_root, &argv, &json!({"publisher":"abrupt"}),
+        &output, Some(0), None, Some(&mut interrupt));
+    panic!("interrupted publisher must not return");
+}
+
+#[test]
+fn interrupted_publication_retains_pre_birth_phases_and_original_command_without_success() {
+    use std::os::unix::process::ExitStatusExt;
+    let owner = Owner::new();
+    let command = tempfile::tempdir().unwrap();
+    let output = Command::new(std::env::current_exe().unwrap()).args([
+        "--exact", "retained_receipts::publication_interruption_helper", "--nocapture"])
+        .env("CHRONO_CI_PUBLICATION_FIXTURE", &owner.root)
+        .env("CHRONO_CI_PUBLICATION_COMMAND", command.path()).output().unwrap();
+    assert_eq!(output.status.signal(), Some(9));
+    let directory = owner.root.join(".chrono-harness/state/ci-test-publications");
+    let originals: Vec<_> = fs::read_dir(directory).unwrap().map(|e| e.unwrap().path()).collect();
+    assert_eq!(originals.len(), 1);
+    let rows: Vec<Value> = fs::read_to_string(&originals[0]).unwrap().lines()
+        .map(|line| serde_json::from_str(line).unwrap()).collect();
+    let phases: Vec<_> = rows.iter().map(|row| row["phase"].as_str().unwrap()).collect();
+    for phase in ["accepted", "fixture-inputs-entered", "fixture-inputs-returned",
+        "registered-store-entered", "registered-store-returned", "original-copy-entered", "original-copy-returned"] {
+        assert!(phases.contains(&phase), "{phases:?}");
+    }
+    assert!(!phases.contains(&"registry-admitted") && !phases.contains(&"publication-sealed"));
+    assert!(rows.iter().all(|row| row.get("status").is_none()));
+    let identity = &rows[0]["observation"]["identity"];
+    assert_eq!(identity["original_command"]["exit"], 0);
+    assert_eq!(identity["context"]["publisher"], "abrupt");
+    let object = fs::read_dir(owner.root.join(FAMILY)).unwrap().map(|e| e.unwrap().path())
+        .find(|path| path.is_dir()).unwrap();
+    assert_eq!(chrono_harness::sha256(&fs::read(object.join("stdout.bin")).unwrap()), identity["original_command"]["stdout_sha256"]);
+    let binding: Value = serde_json::from_slice(&fs::read(object.join("binding.json")).unwrap()).unwrap();
+    assert_eq!(binding["exit"], 0);
+    assert_eq!(binding["publication_progress"]["path"], originals[0].strip_prefix(&owner.root).unwrap().to_str().unwrap());
+    assert!(!owner.root.join(FAMILY).join("objects.json").exists(), "unadmitted partial copy must remain unknown");
 }

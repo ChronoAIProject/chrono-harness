@@ -1182,6 +1182,9 @@ fn retained_nested_helper() {
         timeout_seconds: 30,
         output_limit_bytes: 4096,
     };
+    let mut progress = chrono_harness::observation::Progress::open(root, "evidence/", "nested-",
+        value!({"command":spec,"stdin_sha256":sha256(&[]),"executable_sha256":sha256(&fs::read(PROCESS_FIXTURE).unwrap())})).unwrap();
+    progress.record("child-invocation", value!({"launch":"launch.json"})).unwrap();
     let result = chrono_harness::run_process_observed_retained(
         root,
         &spec,
@@ -1194,6 +1197,8 @@ fn retained_nested_helper() {
         },
     )
     .unwrap();
+    progress.record("child-returned", value!({"exit_code":result.exit_code,"failure":result.failure,
+        "launcher_pid":result.launcher_pid,"child_pid":result.child_pid})).unwrap();
     let mut terminal = tempfile::NamedTempFile::new_in(root).unwrap();
     serde_json::to_writer(&mut terminal, &result).unwrap();
     terminal
@@ -1316,6 +1321,18 @@ fn retained_stream_publication_failure_helper() {
         libc::SIG_ERR
     );
     assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_FSIZE, &limit) }, 0);
+    let mut progress = chrono_harness::observation::Progress::open(root, "progress-evidence/", "io-",
+        value!({"input":"accepted before sink failure"})).unwrap();
+    let progress_path = root.join(progress.path());
+    let accepted = fs::read(&progress_path).unwrap();
+    let error = progress.record("unpublished", value!({"payload":"x".repeat(1024 * 1024 + 8192)})).unwrap_err();
+    let partial = fs::read(&progress_path).unwrap();
+    assert!(partial.starts_with(&accepted));
+    assert_eq!(partial.len(), 1024 * 1024);
+    assert!(progress.record("fabricated-terminal", value!({"status":"passed"})).is_err());
+    assert_eq!(fs::read(&progress_path).unwrap(), partial, "a failed original must not be replayed or appended");
+    println!("PROGRESS_IO_RECEIPT:{}", value!({"error":error,"accepted_bytes":accepted.len(),
+        "partial_bytes":partial.len(),"terminal_published":false}));
     let result = chrono_harness::run_process_observed_retained(
         root,
         &spec,
@@ -1353,6 +1370,11 @@ fn retained_stream_publication_failure_preserves_bytes_after_partial_write() {
         .unwrap();
     assert!(output.status.success(), "{output:?}");
     let text = std::str::from_utf8(&output.stdout).unwrap();
+    let progress: serde_json::Value = serde_json::from_str(text.lines()
+        .find_map(|line| line.strip_prefix("PROGRESS_IO_RECEIPT:")).unwrap()).unwrap();
+    assert!(progress["error"].as_str().unwrap().contains("publication"));
+    assert_eq!(progress["partial_bytes"], file_limit);
+    assert_eq!(progress["terminal_published"], false);
     let result: chrono_harness::ProcessResult = serde_json::from_str(
         text.lines()
             .find_map(|line| line.strip_prefix("RETAINED_IO_RECEIPT:"))
@@ -1551,6 +1573,22 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
             launch["timeout_seconds"], 30,
             "the enclosing deadline, not the child's bound, fired"
         );
+        let progress_path = fs::read_dir(root.path().join("evidence")).unwrap()
+            .map(|e| e.unwrap().path()).find(|p| p.extension().is_some_and(|e| e == "jsonl")).unwrap();
+        let rows: Vec<serde_json::Value> = fs::read_to_string(progress_path).unwrap().lines()
+            .map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(rows[0]["phase"], "accepted");
+        assert_eq!(rows[0]["observation"]["identity"]["command"]["timeout_seconds"], 30);
+        assert_eq!(rows[0]["observation"]["identity"]["executable_sha256"], launch["sha256"]);
+        assert_eq!(rows[1]["phase"], "child-invocation");
+        assert!(rows.iter().all(|row| row.get("status").is_none()));
+        if case == "pause-launcher" {
+            assert!(!rows.iter().any(|row| row["phase"] == "child-returned"),
+                "abrupt termination must not synthesize a child result");
+        } else if let Some(row) = rows.iter().find(|row| row["phase"] == "child-returned") {
+            assert_ne!(row["observation"]["exit_code"], 0);
+            assert!(row["observation"]["failure"].as_str().unwrap().contains("enclosing owner"));
+        }
         if case == "pause-launcher" {
             assert!(
                 !root.path().join("terminal.json").exists(),
@@ -2583,4 +2621,45 @@ fn failed_handoff_receive_child_helper() {
         error.split(';').next().unwrap().contains("os error 22"),
         "observer diagnostics must preserve the actual spawn errno: {error}"
     );
+}
+
+#[test]
+fn retained_data_uses_the_surviving_owner_without_changing_stream_bounds() {
+    let stdout: Vec<u8> = (0..32).collect();
+    let stderr = vec![255, 0, 10];
+    let (cwd, _, binding) = fixture(value!({"kind":"raw","stdout":stdout,"stderr":stderr,"exit":17}));
+    let owner = tempfile::tempdir().unwrap();
+    let spec = chrono_harness::CommandSpec { program: cwd.path().join("judge").to_string_lossy().into(),
+        args: vec![], env: [("INPUT".into(), "effective".into())].into(),
+        timeout_seconds: 30, output_limit_bytes: 8 };
+    let stdout_path = owner.path().join("stdout");
+    let stderr_path = owner.path().join("stderr");
+    let launch_path = owner.path().join("launch.json");
+    let paths = chrono_harness::ProcessEvidence {stdout:&stdout_path,stderr:&stderr_path,launch:&launch_path};
+    let result = chrono_harness::run_process_observed_data_retained(cwd.path(), &spec, b"accepted stdin",
+        binding.sha256.as_deref().unwrap(), 32, owner.path(), &paths).unwrap();
+    assert_eq!(result.exit_code, 17);
+    assert!(result.failure.is_none(), "{result:?}");
+    assert_eq!(result.stdout_bytes, stdout);
+    assert_eq!(result.stderr_bytes, stderr);
+    assert_eq!(fs::read(stdout_path).unwrap(), stdout);
+    assert_eq!(fs::read(stderr_path).unwrap(), stderr);
+    let launch_bytes = fs::read(&launch_path).unwrap();
+    let launch = json(&launch_bytes).unwrap();
+    assert_eq!(launch["cwd"], value!(fs::canonicalize(cwd.path()).unwrap()));
+    assert_eq!(launch["stdin_sha256"], sha256(b"accepted stdin"));
+    assert_eq!(launch["output_limit_bytes"], 8);
+    assert_eq!(result.launch_original.as_ref().unwrap()["path"], "launch.json");
+    assert!(chrono_harness::run_process_observed_data_retained(cwd.path(), &spec, &[],
+        binding.sha256.as_deref().unwrap(), 32, owner.path(), &paths).is_err());
+    assert_eq!(fs::read(launch_path).unwrap(), launch_bytes);
+}
+
+#[test]
+fn progress_open_error_never_claims_an_accepted_invocation() {
+    let root = tempfile::tempdir().unwrap();
+    fs::write(root.path().join("blocked"), b"original input").unwrap();
+    assert!(chrono_harness::observation::Progress::open(root.path(), "blocked/evidence/", "failure-",
+        value!({"input":"must be retained"})).is_err());
+    assert_eq!(fs::read(root.path().join("blocked")).unwrap(), b"original input");
 }

@@ -123,14 +123,18 @@ impl Store {
         create: bool,
         mut observer: impl FnMut(&str),
     ) -> Result<Self, String> {
+        observer("store-open-entered");
         absolute(directory, false)?;
         if producer.is_empty() {
             return Err("producer identity is required".into());
         }
         let began = std::time::Instant::now();
         let bound = std::time::Duration::from_secs(30);
+        observer("birth-gate-entered");
         let _birth = BirthGate::acquire(directory, began, bound, &mut observer)?;
+        observer("birth-gate-acquired");
         let path = no_symlink_parents(directory, "objects.json")?;
+        observer("registry-read-entered");
         let prior: Option<Registry> = match fs::read(&path) {
             Ok(bytes) => Some(decode(&bytes)?),
             Err(e) if create && e.kind() == std::io::ErrorKind::NotFound => None,
@@ -141,6 +145,8 @@ impl Store {
             }
         };
         let lease_path = no_symlink_parents(directory, "registry.lease")?;
+        observer("registry-read-returned");
+        observer("registry-lease-entered");
         let lease = Lease::acquire_observed(
             &lease_path,
             prior.as_ref().map(|r| r.lease_id.as_str()),
@@ -150,6 +156,7 @@ impl Store {
             || observer("lease-created-before-lock"),
         )?
         .ok_or("producer registry busy")?;
+        observer("registry-lease-acquired");
         // Re-read after exclusion: reference acquisition/release and drain use this gate.
         let registry: Registry = match fs::read(&path) {
             Ok(bytes) => decode(&bytes)?,
@@ -191,6 +198,7 @@ impl Store {
                 return Err("invalid exact producer object registration".into());
             }
         }
+        observer("store-open-returned");
         Ok(Self {
             directory: directory.into(),
             registry,
@@ -345,8 +353,10 @@ impl RetainedArtifact {
             "producer-store",
             "resolved",
             |r, token, report| {
+                r.phase("producer-manager-opening", value!({"producer":producer}))?;
                 let manager = Manager::open(r, &root, config_path, &bytes, token)?
                     .ok_or("retained producer owner is not opted in")?;
+                r.phase("producer-manager-opened", value!({"producer":producer}))?;
                 let declaration = manager
                     .policy
                     .retained_producers
@@ -354,7 +364,9 @@ impl RetainedArtifact {
                     .find(|p| p.id == producer)
                     .ok_or("retained producer store is not declared by its owner")?;
                 let directory = declaration.directory(&manager.policy.coordinator_root)?;
+                r.phase("producer-store-validation", value!({"producer":producer,"directory":directory}))?;
                 manager.stable(r)?;
+                r.phase("producer-store-resolved", value!({"producer":producer,"directory":directory}))?;
                 report["producer"] = value!(producer);
                 report["coordinator_root"] = value!(manager.policy.coordinator_root);
                 report["directory"] = value!(directory);

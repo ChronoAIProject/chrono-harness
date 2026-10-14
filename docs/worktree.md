@@ -183,6 +183,59 @@ CLI exits 0 or 2 respectively. `governance` remains `not-evaluated` and `parity`
 remains `unestablished`. The partial `context` is an input for later work, not a
 complete check context or integration certificate.
 
+### Contemporaneous acquisition evidence (source candidate; execution pending)
+
+`with_report` now prepares a unique `chrono-progress/v1` JSONL original beside
+its existing terminal report, in that report owner's `observations/` subdirectory,
+before the Git version probe. Its accepted row
+binds the actual producer executable bytes, source root, configuration original
+and digest, inherited/effective environment, operation and final report address.
+`Runner::observe` records each accepted command and exact stdin original before
+calling the existing process engine with `ProcessEvidence`. Git version and
+nested commands retain distinct launch/stdout/stderr addresses. The surviving
+report owner supplies the evidence root explicitly when Git's cwd is another
+checkout; the original cwd and effective invocation still belong to the child.
+The existing immutable-data stdout bound and diagnostic stderr bound both remain
+unchanged. No historical executable is launched by this capture.
+
+Rows carry producer PID, sequence, wall timestamp and elapsed milliseconds in
+that producer's observation window. A `git-returned` row contains the engine's
+actual child identity, exit, failure and stream digests. An enclosing deadline
+is a separate observation in the enclosing process receipt. A launch, accepted
+invocation, empty report, partial JSONL tail or missing return is incomplete;
+none supplies a child exit or successful worktree status. `report-ready` records
+the assembled outcome before the existing report publisher runs and cannot
+prove publication. A publication error fails evidence capture; known child
+receipts and the ordinary terminal report are preserved where their original
+publisher can still run. Completed JSONL lines remain factual partial evidence
+after abrupt termination; there is no fsync/durable-storage claim or reader that
+turns a partial journal into an accepted report.
+
+The natural producer is `worktree/src/start.rs`, reusing runner `observation`
+and the bounded process engine. Inputs are the current accepted config bytes,
+environment, Git binding, argv and stdin. Consumers are `check-inputs`, the
+registered retained-store resolver and the existing failure-state/receipt
+consumers described in [CI units](ci-units.md#contemporaneous-fixture-evidence).
+FILEMAP already registers these source files as their owners' compile inputs
+and the runner→worktree dependency; no execution plan, limit or selection rule
+is changed. Per process, extra storage is at most the existing stdout and stderr
+bounds plus one launch, accepted stdin and small phase rows; config/stdin
+originals reuse content addresses. Inline historical/report representations
+still follow their existing contract. Additional IO, hashing, wall time and
+total retained bytes are unmeasured until the caller's registered checks run.
+
+New capture originals share the configured report artifact owner and custody.
+They remain needed through this candidate's diagnostic, validation and review
+consumers. After those consumers finish, the caller owns their exact-address
+retirement through the existing evidence lifecycle, with seven days of further
+retention; age alone does not authorize deletion. Successful temporary fixtures
+use their existing TempDir teardown. Failed fixture copies remain protected
+until diagnosis/acceptance ends, then have the same seven-day handoff window.
+This source assignment neither disposes old originals nor installs an automatic
+TTL service. Actual machine/native cost and behavior are pending. The original
+Q3 CI stall cause, Rust environment drift, full host adoption and delivery remain
+unresolved.
+
 The dedicated tests use real bare remotes, advanced remote commits, arbitrary
 host layouts, spaced/Unicode paths, existing dirty and locked worktrees, local and
 remote policy drift, missing remotes, tool mismatch and real checkout hooks. The

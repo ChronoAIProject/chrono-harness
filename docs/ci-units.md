@@ -901,3 +901,73 @@ selected reference and receives no alias replacement. This avoids duplicate
 report bodies in the actual gathered closure; separate acquisition attempts
 still retain their diagnostic input closures. It is neither global artifact
 reclamation nor retirement of current manifest readers.
+
+
+## Contemporaneous fixture evidence
+
+This Q3 source candidate addresses missing observations at the existing process
+and receipt boundaries. It has not been built or executed in this source-only
+assignment. It does not diagnose the earlier CI stalls or accept changed Rust
+component inventories. All existing acquisitions, judge bounds, channel bounds,
+threads and semantic assertions remain in scope. Source preparation is not
+canonical, native, adoption, review or delivery acceptance.
+
+| Natural owner | Accepted inputs and output | Actual consumer and existing registration |
+| --- | --- | --- |
+| runner `observation::Progress` and `ProcessEvidence` | Unique unbuffered phase original; producer executable bytes/PID, sequence and producer-local elapsed window; existing bounded launch and stdout/stderr originals | `worktree::with_report`, runner check transport, judge-ci inventory/evaluation and CI receipt producer; source compile edges in FILEMAP, existing project dependencies and test-execution edges |
+| worktree `Runner::observe` / `with_report` | Config original, inherited/effective environment, Git version, each argv/stdin/launch and observed return; [worktree contract](worktree.md#contemporaneous-acquisition-evidence-source-candidate-execution-pending) | The four input-acquisition consumers; failure state retained before ShortHost teardown; `worktree-tests` / `worktree-adoption` remain unfiltered |
+| runner `execute_check` and judge-ci `inventory` / `evaluate` | Exact accepted request and profile originals, configured invocation, child launch and original return; facts, fixed endpoint inventory, plan, collection/execution and evaluation phases | The eight judge transports, including concurrent unit checkouts; `runner-tests`, `judge-ci-tests`, `ci-tests` and their existing declared consumer closure |
+| CI fixture `fixture_inputs` | Before ShortHost/execute_context dispatch, exact declared config/FILEMAP/projects/judges/workflow/worktree/cleanup/check/units and literal Git attachment/HEAD/config bytes, directory or parent-not-directory state, or actual absence, plus caller's fixed endpoint/context inputs | Existing state/receipt retention and diagnosis; `behavior.rs`, `short.rs`, `units.rs` are already FILEMAP compile inputs of `ci-tests` |
+| CI `retain_command_result_observed` and worktree `RetainedArtifact` store | Accepted original command exit/stream digests; input capture, registered-store entry/return, original-copy entry/return, birth gate, registry read/lease, admission and seal boundaries | Existing first publisher and receipt consumer; the birth fixture records the actual result of its unchanged five-second notification wait separately from publisher progress |
+
+The recorder has no background task, process sampler, observer polling, retry
+loop, work selection or verdict policy. Owners call it at their existing
+boundaries. Consecutive birth-gate busy notifications retain their first row;
+the existing scheduling callback and lock semantics are unchanged. Capture
+IO errors retain an incomplete original and cannot produce successful evidence.
+The recorder stops appending after a write/flush failure. Existing final report
+and stream producers still own their actual outcome and byte validation.
+
+Launch and phase evidence is distinct from an outer timeout or notification
+expiry. A returned business error is distinct from a transport failure. A
+successful original command in a publisher header does not establish publication,
+registry admission, fixture notification or Q3 success. Missing return rows and
+truncated tails remain incomplete. Source SHA256 fixes the observed executable
+bytes; it does not prove complete environment provenance or the cause of a stall.
+The judge transport keeps the profile's existing stdout representation and bound;
+its new originals are under the selected preparation owner, or the legacy
+configured report parent's `process-evidence/`. Judge phases use that configured
+report parent's evidence namespace. Existing artifact uploads and fixture state
+copies retain those originals without replacing protocol stdout.
+
+Independent Rust expectations extend the existing enclosing-timeout and real
+SIGKILL worktree fixtures, check a surviving report owner with separate data and
+diagnostic bounds and a nonzero child exit, and check true partial-file publication
+failure under the existing joined fixture's file limit. The new first-publisher
+SIGKILL fixture stops before registry admission and requires the earlier accepted
+identity, phases and original command bytes without a fabricated seal. A legacy
+judge success/business-error consumer checks real request/config and process/phase
+correspondence. All are source-prepared, execution pending; their fixture drivers
+and assertions remain Rust, with no new test project or helper dependency.
+
+Cost and custody: accepted config/stdin snapshots reuse content-addressed
+originals. Launch/phase rows are additional metadata, and active stream captures
+are bounded by each original process limit. Legacy inline reports still retain
+their existing stream representation, so those callers add one bounded stream
+copy; immutable-data worktree final reports still have their existing addressed
+originals. Added IO, executable hashing, total bytes, wall time and native/CI
+cost are unknown until measured. FILEMAP's existing `unmeasured` costs and
+execution/resource caps are unchanged. Only current producer/test edges are
+reused; no new checking gate or whole-repository audit is introduced.
+
+Each new capture has the existing state/report/fixture custodian. Its consumers
+are current diagnosis, candidate validation and review. Successful TempDirs end
+with the existing fixture teardown. Failure copies and production captures stay
+protected until those consumers finish; the caller then owns exact-address
+retirement via the existing custody/lifecycle entry with a seven-day further
+retention window. This is a handoff retention obligation, not deployed automatic
+TTL enforcement or permission to remove unknown/active evidence. The retained
+producer registry's existing `evidence_disposal: not-authorized` remains intact.
+No old original is rewritten, removed, compressed or reclassified by this source
+candidate. The full Q3 input/executable/adoption, original shared obligations,
+all-PR queue and full SPEC remain pending.

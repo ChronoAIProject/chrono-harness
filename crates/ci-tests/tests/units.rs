@@ -1126,3 +1126,38 @@ fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
         assert!(root.join(prior).is_file());
     }
 }
+
+#[test]
+fn legacy_judge_capture_binds_actual_inputs_and_returned_success_or_business_error() {
+    for failure in [false, true] {
+        let (host, base, mut candidate) = consumer();
+        if failure {
+            fs::write(host.path().join("a.sh"), "exit 9\n").unwrap();
+            git(host.path(), &["commit", "-qam", "original command error fixture"]);
+            candidate = git(host.path(), &["rev-parse", "HEAD"]);
+        }
+        let context = unit_context(host.path(), &base, &candidate, Some("alpha"));
+        let report = execute_context(host.path(), &context, if failure { 1 } else { 0 });
+        let rows = |path: &str| -> Vec<Value> {
+            fs::read_to_string(host.path().join(path)).unwrap().lines()
+                .map(|line| serde_json::from_str(line).unwrap()).collect()
+        };
+        let transport = rows(report["progress_path"].as_str().unwrap());
+        let accepted = &transport[0]["observation"]["identity"];
+        assert_eq!(accepted["base"], base);
+        assert_eq!(accepted["candidate"], candidate);
+        let request: chrono_harness::prepared::Original = serde_json::from_value(accepted["request_original"].clone()).unwrap();
+        let original = chrono_harness::prepared::read_original(host.path(), &request, None).unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&original).unwrap(), report["request"]);
+        let returned = &transport.last().unwrap()["observation"];
+        assert_eq!(returned["child_pid"], report["judge"]["child_pid"]);
+        assert_eq!(returned["exit_code"], if failure { 1 } else { 0 });
+        assert!(returned["failure"].is_null(), "business rejection is not a transport timeout");
+        let judge = rows(report["response"]["evidence"]["progress_path"].as_str().unwrap());
+        assert!(judge.iter().any(|row| row["phase"] == "facts-opening"));
+        assert!(judge.iter().any(|row| row["phase"] == "operations-entered"));
+        assert_eq!(judge.last().unwrap()["phase"], "evaluation-returned");
+        assert_eq!(judge.last().unwrap()["observation"]["status"], if failure { "failed" } else { "passed" });
+        assert!(judge.iter().all(|row| row.get("status").is_none()));
+    }
+}

@@ -210,6 +210,8 @@ impl ShortHost {
         }
     }
     fn command(&self, args: &[&str]) -> Command {
+        fixture_inputs(&self.root, &json!({"argv":args,"base":self.base,
+            "candidate":self.candidate,"remote":self.remote}));
         let mut c = Command::new(self.root.join(".chrono-harness/bin/chrono-harness"));
         c.current_dir(&self.root)
             .env_remove(prepared::SOURCE)

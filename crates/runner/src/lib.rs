@@ -854,6 +854,20 @@ pub fn run_process_observed_data(
         None,
     )
 }
+/// Same engine and explicit stdout contract, retaining originals in the
+/// surviving report owner's root even when Git's cwd is another checkout.
+pub fn run_process_observed_data_retained(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    stdout_limit: usize,
+    evidence_root: &Path,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<ProcessResult, String> {
+    run_process_inner_with_stdout_owned(root, s, input, Some(digest),
+        Duration::from_secs(s.timeout_seconds), stdout_limit, Some(evidence), Some(evidence_root))
+}
 fn run_process_inner(
     root: &Path,
     s: &CommandSpec,
@@ -881,6 +895,18 @@ fn run_process_inner_with_stdout(
     stdout_limit: usize,
     evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<ProcessResult, String> {
+    run_process_inner_with_stdout_owned(root, s, input, expected, timeout, stdout_limit, evidence, None)
+}
+fn run_process_inner_with_stdout_owned(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    expected: Option<&str>,
+    timeout: Duration,
+    stdout_limit: usize,
+    evidence: Option<&ProcessEvidence<'_>>,
+    evidence_root: Option<&Path>,
+) -> Result<ProcessResult, String> {
     validate_command(s)?;
     if stdout_limit == 0 || stdout_limit > 64 * 1024 * 1024 {
         return Err("invalid immutable input transport bound".into());
@@ -890,8 +916,9 @@ fn run_process_inner_with_stdout(
     }
     let executable = resolve_program(root, &s.program, s.env.get("PATH").map(String::as_str))?;
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let evidence_root = fs::canonicalize(evidence_root.unwrap_or(&root)).map_err(|e| e.to_string())?;
     let evidence_paths = evidence
-        .map(|paths| validate_process_evidence_paths(&root, paths))
+        .map(|paths| validate_process_evidence_paths(&evidence_root, paths))
         .transpose()?;
     let evidence = evidence_paths
         .as_ref()
@@ -1267,7 +1294,7 @@ fn run_process_inner_with_stdout(
                     None => error,
                 });
             }
-            process.launch_original = launch_descriptor(&process.cwd, paths.launch);
+            process.launch_original = launch_descriptor(&evidence_root, paths.launch);
         }
         Ok(process)
     })
@@ -1690,21 +1717,24 @@ fn execute_check(
     // lifecycle owner may terminate this runner as soon as the child starts;
     // the stream readers and launch record must therefore have stable
     // destinations before spawn rather than being copied after wait.
-    let process_evidence = if retained_streams {
-        let directory = retention
-            .as_deref()
-            .ok_or("missing report retention directory")?;
-        let stdout = format!("{directory}judge-stdout-{request_id}.bytes");
-        let stderr = format!("{directory}judge-stderr-{request_id}.bytes");
-        let launch = format!("{directory}judge-launch-{request_id}.json");
-        for path in [&stdout, &stderr, &launch] {
-            prepare_publication(&root, path)?;
-        }
-        Some((stdout, stderr, launch))
-    } else {
-        None
-    };
+    let transport_directory = retention.clone().unwrap_or_else(|| {
+        let parent = Path::new(&output_path).parent().unwrap().to_str().unwrap();
+        if parent.is_empty() { "process-evidence/".into() }
+        else { format!("{parent}/process-evidence/") }
+    });
+    let stdout = format!("{transport_directory}judge-stdout-{request_id}.bytes");
+    let stderr = format!("{transport_directory}judge-stderr-{request_id}.bytes");
+    let launch = format!("{transport_directory}judge-launch-{request_id}.json");
+    for path in [&stdout, &stderr, &launch] { prepare_publication(&root, path)?; }
+    let process_evidence = Some((stdout, stderr, launch));
     let input = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
+    let request_original = prepared::retain_original(&root, &transport_directory, "judge-request", &input)?;
+    let config_original = prepared::retain_original(&root, &transport_directory, "judge-config", &bytes)?;
+    let mut progress = observation::Progress::open(&root, &transport_directory, "judge-transport-",
+        serde_json::json!({"request_id":request_id,"source_root":root,"base":req.base,
+            "candidate":req.candidate,"request_original":request_original,"config_original":config_original,
+            "report_path":output_path,"process_evidence":process_evidence}))?;
+    progress.record("judge-invocation", serde_json::json!({"configured_command":c.judge}))?;
     let proc = if req.observations["preparation"].is_object() {
         let (_, _, policy, _) = facts_configs::load(&root, ".chrono-harness/config.json")?;
         let credentials = prepared::credential_environment(&policy)?;
@@ -1789,6 +1819,14 @@ fn execute_check(
             evidence.as_ref(),
         )
     };
+    let progress_publication = match &proc {
+        Ok(process) => progress.record("judge-transport-returned", serde_json::json!({
+            "launcher_pid":process.launcher_pid,"child_pid":process.child_pid,
+            "exit_code":process.exit_code,"failure":process.failure,
+            "stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256,
+            "launch_original":process.launch_original})),
+        Err(error) => progress.record("judge-observation-error", serde_json::json!({"error":error})),
+    };
     let runner_executable = std::env::current_exe().map_err(|e| e.to_string())?;
     let runner_identity = serde_json::json!({"path":runner_executable,"sha256":sha256(&fs::read(&runner_executable).map_err(|e|e.to_string())?),"version":env!("CARGO_PKG_VERSION")});
     let mut report = match proc {
@@ -1821,7 +1859,13 @@ fn execute_check(
             serde_json::json!({"schema":"chrono-check-report/v1","request":req,"transport_failure":e})
         }
     };
+    if let Err(error) = progress_publication {
+        let original = report["transport_failure"].as_str();
+        report["transport_failure"] = serde_json::json!(match original {
+            Some(original) => format!("{original}; {error}"), None => error });
+    }
     report["runner"] = runner_identity;
+    report["progress_path"] = serde_json::json!(progress.path());
     let code = if report.get("transport_failure").is_some() {
         2
     } else if matches!(
