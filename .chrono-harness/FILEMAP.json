@@ -5104,6 +5104,40 @@
       ]
     },
     {
+      "path": ".chrono-harness/inputs/isolated-production.json",
+      "owner": "inputs",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {"kind": "runtime-input", "to": "project:inputs"},
+        {"kind": "runtime-input", "to": "project:inputs-tests"},
+        {"kind": "runtime-input", "to": "script:host-bootstrap"}
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-isolated.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {"kind": "runtime-input", "to": "script:host-bootstrap"},
+        {"kind": "runtime-input", "to": "project:inputs"},
+        {"kind": "runtime-input", "to": "project:inputs-tests"},
+        {"kind": "runtime-input", "to": "script:host-bootstrap-tests"},
+        {"kind": "test-execution", "to": "test:host-bootstrap-tests"}
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/provision_tests.py",
+      "owner": "host-bootstrap-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {"kind": "runtime-input", "to": "script:host-bootstrap-tests"},
+        {"kind": "test-execution", "to": "test:host-bootstrap-tests"}
+      ]
+    },
+    {
       "path": ".chrono-harness/ci/bootstrap-tests.py",
       "owner": "host-bootstrap-tests",
       "surface": "test",
@@ -21642,6 +21676,7 @@
       "operations": [
         "build.worktree",
         "build.distribution",
+        "host.bootstrap-provision-tests",
         "host.bootstrap-tests",
         "host.bootstrap-real-consumer"
       ],
@@ -22102,6 +22137,10 @@
         "outputs": [
           ".chrono-harness/state/"
         ]
+      },
+      "host.bootstrap-provision-tests": {
+        "resources": [],
+        "outputs": []
       },
       "fmt.cache": {
         "resources": [],

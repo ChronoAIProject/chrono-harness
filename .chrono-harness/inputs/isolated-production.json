@@ -1,0 +1,18 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "platforms": ["macos-aarch64"],
+  "environment": {
+    "inherit": ["PATH", "HOME", "TMPDIR"],
+    "values": {"CARGO_TERM_COLOR": "never", "CARGO_NET_OFFLINE": "false"}
+  },
+  "operations": [],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": ["host.bootstrap-isolated"],
+    "tools": {"python3": "/usr/bin/python3"},
+    "timeout_seconds": 120,
+    "output_limit_bytes": 1048576
+  },
+  "files": [],
+  "directories": []
+}

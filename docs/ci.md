@@ -167,6 +167,22 @@ version implementation explains the package 0.96.0 / CLI 1.95.0 distinction.
 Acquisition is preparation of committed input; bootstrap does not download or
 learn expectations, and continues to use existing rustup provisioning.
 
+The pending `inputs.provision-isolated` action delegates through the existing
+input observer to `host.bootstrap-isolated`. Its bootstrap policy selects
+Rustup's official `default` profile in disjoint host-state Rustup/Cargo homes;
+the retained local inventory requires cargo, clippy, rust-docs, rust-std, rustc
+and rustfmt manifests, which the legacy minimal-plus-rustfmt selection cannot
+supply. Rustup produces all metadata, with self-update disabled. The observer
+retains the actual 120-second/1-MiB child outcome. The bootstrap participation
+policy and entrypoint still require committed bytes before installer effects.
+No canonical/local Cargo binding, retained digest, native expectation or full
+adoption is changed by this preparation. Entry-byte checks remain distinct from
+the original 92-file guard, which must still admit the genuine produced files
+before any private environment can be adopted. The state path is covered by
+the existing evidence-retain policy; the caller must retain it and one enclosing
+managed participation through every declared production/admission consumer.
+Production, storage and cleanup costs remain unmeasured until that work runs.
+
 The profiles use rustup selection directly, with no personal installation path.
 For older inline relocatable bindings, a repeated declared/configured original
 path is a historical location and is not probed, even if stale or absent. A

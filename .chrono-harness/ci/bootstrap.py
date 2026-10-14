@@ -342,18 +342,53 @@ def declared_bindings(root, config, env):
     return selected
 
 
+def provision_environment(root, config):
+    """Resolve the host's opt-in private selection before any installer effect."""
+    env = dict(os.environ)
+    declaration = config.get("toolchain_provision")
+    if "toolchain_provision" in config:
+        if (not isinstance(declaration, dict)
+                or set(declaration) != {"profile", "rustup_home", "cargo_home"}
+                or declaration["profile"] != "default"):
+            raise ValueError("invalid isolated toolchain provision declaration")
+        if any(not isinstance(declaration[key], str) for key in ("rustup_home", "cargo_home")):
+            raise ValueError("isolated toolchain homes must be host-state paths")
+        homes = [host_path(root, declaration[key], ".chrono-harness/state/")
+                 for key in ("rustup_home", "cargo_home")]
+        if homes[0] == homes[1] or any(a in b.parents for a, b in
+                                      [(homes[0], homes[1]), (homes[1], homes[0])]):
+            raise ValueError("isolated Rustup/Cargo homes must be disjoint")
+        env.update(RUSTUP_HOME=str(homes[0]), CARGO_HOME=str(homes[1]))
+        # The opt-in selection replaces the inherited compiler; the existing
+        # declaration still checks and supplies the selected compiler's bytes.
+        env["RUSTC"] = ""
+    return env
+
+
 def toolchain_environment(config, root=None):
-    binding_declarations(root or Path.cwd(), config)
+    root = root or Path.cwd()
+    binding_declarations(root, config)
+    env = provision_environment(root, config)
     toolchain = config["rust_toolchain"]
-    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], cwd=root,
+    if "toolchain_provision" in config:
+        # Delegate component production and metadata to Rustup. The official
+        # default profile includes the six components required by the local
+        # retained inventory; minimal + rustfmt cannot supply that inventory.
+        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "default",
+                        "--no-self-update"], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
+    probe = subprocess.run(["rustup", "run", toolchain, "cargo", "--version"], cwd=root, env=env,
                            pass_fds=PASS_FDS, capture_output=True)
     if probe.returncode:
-        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], cwd=root, pass_fds=PASS_FDS, check=True)
-    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], cwd=root,
+        if "toolchain_provision" in config:
+            raise ValueError("isolated default toolchain Cargo probe failed: " + str(probe.returncode))
+        subprocess.run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal", "--component", "rustfmt"], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
+    fmt_probe = subprocess.run(["rustup", "run", toolchain, "rustfmt", "--version"], cwd=root, env=env,
                                pass_fds=PASS_FDS, capture_output=True)
     if fmt_probe.returncode:
-        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], cwd=root, pass_fds=PASS_FDS, check=True)
-    env = dict(os.environ, RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
+        if "toolchain_provision" in config:
+            raise ValueError("isolated default toolchain rustfmt probe failed: " + str(fmt_probe.returncode))
+        subprocess.run(["rustup", "component", "add", "--toolchain", toolchain, "rustfmt"], cwd=root, env=env, pass_fds=PASS_FDS, check=True)
+    env.update(RUSTUP_TOOLCHAIN=toolchain, CARGO_TERM_COLOR="never")
     if "rust_incremental" in config:
         env["CARGO_INCREMENTAL"] = "1" if config["rust_incremental"] else "0"
     bindings = declared_bindings(root or Path.cwd(), config, env)
@@ -456,6 +491,7 @@ def main():
     if type(config.get("require_tool_bindings", False)) is not bool:
         raise ValueError("require_tool_bindings must be a boolean")
     binding_declarations(root, config)
+    provision_environment(root, config)
     distribution_spec(root, config)
     participate(root, config_path, config)
     source_before = observe_source(root)
@@ -463,7 +499,15 @@ def main():
         raise ValueError("unsupported bootstrap schema")
     projects = json.loads((root / config["projects"]).read_text())
     operations = registered_operations(projects)
-    env, versions, bindings = toolchain_environment(config, root)
+    try:
+        env, versions, bindings = toolchain_environment(config, root)
+    except subprocess.CalledProcessError as error:
+        if "toolchain_provision" not in config:
+            raise
+        # The enclosing input owner retains the original installer streams.
+        # Preserve its real exit rather than relabeling it as bootstrap exit 1.
+        print("E_BOOTSTRAP:", error, file=sys.stderr)
+        sys.exit(error.returncode if 0 < error.returncode <= 255 else 1)
     report = report_destination(root, config)
     report.parent.mkdir(parents=True, exist_ok=True)
     directory = Path(tempfile.mkdtemp(prefix="bootstrap-", dir=report.parent))
@@ -480,6 +524,9 @@ def main():
                                 "cargo": bindings["cargo"]["path"],
                                 "rustc": bindings["rustc"]["path"],
                                 "compiler": env["RUSTC"]}
+    if "toolchain_provision" in config:
+        result["toolchain_provision"] = config["toolchain_provision"]
+        result["environment"].update({key: env[key] for key in ("RUSTUP_HOME", "CARGO_HOME")})
     try:
         for index, operation in enumerate(config["operations"]):
             action = operations[operation]

@@ -1,0 +1,26 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {},
+  "operations": [],
+  "install": [],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "python3",
+    "script": ".chrono-harness/ci/bootstrap.py"
+  },
+  "report_path": ".chrono-harness/state/isolated-rust/bootstrap.json",
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
+  "toolchain_provision": {
+    "profile": "default",
+    "rustup_home": ".chrono-harness/state/isolated-rust/rustup",
+    "cargo_home": ".chrono-harness/state/isolated-rust/cargo"
+  }
+}
