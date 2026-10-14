@@ -726,7 +726,10 @@ fn collection_rejects_consistently_resealed_environment() {
 
 #[test]
 fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
-    let (h, tools) = rust_host();
+    let (mut h, tools) = rust_host();
+    h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"] =
+        json!({"build.p":{"timeout_seconds":29,"output_limit_bytes":32768}});
+    h.save();
     git_facts::prepare_bound(&h, "integration", None);
     for unit in ["one", "two"] {
         let (e, r) = launch(&h.root(), &h, &["--unit", unit]);
@@ -736,6 +739,29 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
     let path = root.join(".chrono-harness/state/unit-one.json");
     let original = fs::read(&path).unwrap();
     let original_report: Value = serde_json::from_slice(&original).unwrap();
+    let route = original_report["judges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == "routes")
+        .unwrap();
+    let operations = route["response"]["outputs"]["execution_plan"]["operations"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        operations
+            .iter()
+            .find(|op| op["method"]["operation"] == "build.p")
+            .unwrap()["timeout_seconds"],
+        29
+    );
+    assert_eq!(
+        operations
+            .iter()
+            .find(|op| op["method"]["operation"] == "execute.t")
+            .unwrap()["timeout_seconds"],
+        30
+    );
     manifest(&root, &["one", "two"]);
     let (e, r) = collected(&root, &h);
     passed(e, &r);
@@ -748,6 +774,7 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
         "receipt-failure",
         "wrong-plan",
         "wrong-method",
+        "wrong-operation-override",
         "wrong-global-graph",
         "wrong-input",
         "wrong-tool",
@@ -820,6 +847,14 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
             "wrong-method" => {
                 report["judges"][ri]["response"]["outputs"]["execution_plan"]["operations"][0]["timeout_seconds"] =
                     json!(29);
+                reseal_plan(&mut report);
+                reseal(&mut report);
+            }
+            "wrong-operation-override" => {
+                report["judges"][ri]["response"]["outputs"]["execution_plan"]["selected"]["test:t"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("operation_bounds");
                 reseal_plan(&mut report);
                 reseal(&mut report);
             }

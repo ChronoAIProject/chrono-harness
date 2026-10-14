@@ -946,8 +946,8 @@ class ManagedAttemptCustody(unittest.TestCase):
                 self.assertEqual((root / ".chrono-harness/state/custody-original").read_bytes(), b"original evidence")
                 released = json.loads(Path(custody["release_report"]["path"]).read_bytes())
                 self.assertTrue(released["main_cache_release"])
-                effects = [effect for row in released["drain"]
-                           for effect in row.get("report", {}).get("artifact_disposals", [])]
+                effects = [effect for row in released["drain"] if "receipt" in row
+                           for effect in json.loads(attempt.original(row["receipt"], root)).get("artifact_disposals", [])]
                 effect = next(row for row in effects if row["path"] == "crates/runner/target/")
                 self.assertEqual(effect["status"], "verified-absent")
                 self.assertGreater(effect["bytes_before"], 0)

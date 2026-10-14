@@ -804,3 +804,20 @@ evidence only. Committed-clean real cache/core/shared/independent runner executi
 canonical DELTA, Darwin and Linux native consumption, lifecycle closure, review
 and actual delivery remain required. Full SPEC scope, CPU acceleration, full-host
 activation and unresolved compiler/backend/SDK/input closure remain unchanged.
+
+Q2's bounded source increment adds optional per-operation contracts at the existing
+registration/routes owners, with scoped DELTA and offline collection using the
+same contracts. Lifecycle drains reference retained child originals through the
+existing input verifier; supported inline history and original managed command
+streams/exits remain readable. The projects migration fixture explicitly binds
+its historical commit/tree and acquires missing metadata/blobs with current code,
+preserving original Git diagnostics. See execution.md and worktree.md for the
+contracts and owner-local Rust regressions.
+
+Product source and host test-input policy change together: FILEMAP declares the
+history manifest/helper and the routes tests' actual registry inputs. Scheduling
+cap=2, operation/output/CI limits and CPU acceleration remain unchanged. Committed
+canonical checks, both native platforms, review and delivery remain caller
+obligations. Q3/Q4 and complete SPEC acceptance remain outstanding. The nine old
+local evidence originals and three tool binaries reported unlocated by PR #169
+remain unlocated; current passing evidence does not recover those bytes.

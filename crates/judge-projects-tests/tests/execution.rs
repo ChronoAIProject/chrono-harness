@@ -150,6 +150,7 @@ fn plan(
                     operations: ops.iter().map(|s| s.to_string()).collect(),
                     timeout_seconds: 5,
                     output_limit_bytes: 4096,
+                    operation_bounds: BTreeMap::new(),
                 },
             )
         })
