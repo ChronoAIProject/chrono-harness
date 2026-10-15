@@ -13,7 +13,11 @@
     "tools": {
       "cargo": "cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "python3": "/usr/bin/python3"
+      "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
+      "python3": "/usr/bin/python3",
+      "rustup": "rustup",
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
+      "chrono-inputs": ".chrono-harness/bin/chrono-inputs"
     },
     "artifacts": [
       ".chrono-harness/bin/",
@@ -355,6 +359,7 @@
       ],
       "build.worktree": [
         "ci",
+        "host-bootstrap",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units",

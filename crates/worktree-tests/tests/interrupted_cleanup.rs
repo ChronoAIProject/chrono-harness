@@ -305,7 +305,24 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
         assert_eq!(child["artifact_disposals"][0]["bytes_before"], 12);
         assert_eq!(child["artifact_disposals"][0]["bytes_after"], 0);
         let mut historical_inline = report.clone();
-        historical_inline["drain"][0]["report"] = child;
+        let mut historical_child = child;
+        // Reconstruct the historical inline stream representation from the
+        // exact originals; current reports no longer repeat immutable data.
+        for legacy in [&mut historical_inline, &mut historical_child] {
+            let root = PathBuf::from(legacy["source_root"].as_str().unwrap());
+            for row in legacy["processes"].as_array_mut().unwrap() {
+                if row["process"].get("stdout_original").is_some() {
+                    row["process"] = serde_json::to_value(
+                        chrono_harness::scoped_report::restore_process(&row["process"], |o| {
+                            chrono_harness::prepared::read_original(&root, o, None)
+                        })
+                        .unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        historical_inline["drain"][0]["report"] = historical_child;
         historical_inline["drain"][0]
             .as_object_mut()
             .unwrap()

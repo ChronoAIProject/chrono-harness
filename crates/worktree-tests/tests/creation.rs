@@ -49,13 +49,48 @@ mod automatic;
 mod bounded_cleanup;
 mod check_inputs;
 mod evidence_retirement;
+mod fixture_body;
 mod interrupted_cleanup;
 mod maintenance;
 mod policy_migration;
 mod rebind;
+mod temporary;
 
+enum HostDirectory {
+    Ephemeral(tempfile::TempDir),
+    Retained(chrono_worktree::TemporaryHost),
+}
+impl HostDirectory {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Ephemeral(host) => host.path(),
+            Self::Retained(host) => host.path(),
+        }
+    }
+    fn bind(&self, command: &mut Command) {
+        if let Self::Retained(host) = self {
+            host.bind_command(command).unwrap();
+        }
+    }
+    fn capture_bound(&self, command: &mut Command) -> std::process::Output {
+        match self {
+            Self::Ephemeral(_) => command.output().unwrap(),
+            Self::Retained(host) => {
+                chrono_worktree::TemporaryHost::capture_bound_output(host.path(), command).unwrap()
+            }
+        }
+    }
+    fn retain_diagnostic(&self, reason: &str) -> Result<(), String> {
+        if let Self::Retained(host) = self {
+            chrono_worktree::RetainedArtifact::resume(
+                host.path().parent().unwrap(), "worktree-test-host", host.path(),
+            )?.acquire("fixture-diagnostic", reason)?;
+        }
+        Ok(())
+    }
+}
 struct Host {
-    _dir: tempfile::TempDir,
+    _dir: HostDirectory,
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
@@ -85,6 +120,11 @@ impl Drop for Host {
                     .then(|| source().join(".chrono-harness/state/worktree-test-failures"))
             });
         let Some(directory) = directory else { return };
+        if let Err(error) = self._dir.retain_diagnostic(
+            "actual requested or failed fixture diagnostics remain to be consumed",
+        ) {
+            eprintln!("worktree fixture diagnostic reference unavailable: {error}");
+        }
         let destination = directory.join(format!(
             "fixture-{}",
             sha256(self.root.as_os_str().as_encoded_bytes())
@@ -146,6 +186,18 @@ impl Host {
             .prefix("worktree host λ ")
             .tempdir()
             .unwrap();
+        Self::in_directory(layout, HostDirectory::Ephemeral(dir))
+    }
+    fn retained(layout: &str) -> Self {
+        let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
+            &source(), POLICY, "worktree-test-host",
+        ).unwrap();
+        let host = chrono_worktree::TemporaryHost::allocate(
+            &store, "worktree-test-host", &outputs, "worktree fixture λ ",
+        ).unwrap();
+        Self::in_directory(layout, HostDirectory::Retained(host))
+    }
+    fn in_directory(layout: &str, dir: HostDirectory) -> Self {
         let parent = fs::canonicalize(dir.path()).unwrap();
         let root = parent.join("source with spaces");
         let remote = parent.join("declared upstream.git");
@@ -159,6 +211,9 @@ impl Host {
         }
         v.get_mut(CONFIG).unwrap()["enforcement"] = value!("not-implemented");
         v.get_mut(CONFIG).unwrap()["input_closure"] = value!({"status":"incomplete","unresolved":["fixture does not certify complete inputs"]});
+        if matches!(&dir, HostDirectory::Retained(_)) {
+            v.get_mut(CONFIG).unwrap()["environment"]["values"]["TMPDIR"] = value!(parent);
+        }
         v.get_mut(PROJECTS).unwrap()["owners"] = value!(["host"]);
         v.get_mut(PROJECTS).unwrap()["projects"] = value!([]);
         let paths = [
@@ -191,7 +246,10 @@ impl Host {
             "literal host input; no dependency inference\n",
         )
         .unwrap();
-        let policy = value!({"schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"warehouse","git":{"program":fixture_git(),"expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{"HOME":parent,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null","GIT_TERMINAL_PROMPT":"0"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"});
+        let mut policy = value!({"schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"warehouse","git":{"program":fixture_git(),"expected_version":null,"sha256":null},"environment":{"inherit":["PATH"],"values":{"HOME":parent,"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null","GIT_TERMINAL_PROMPT":"0"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/"});
+        if matches!(&dir, HostDirectory::Retained(_)) {
+            policy["environment"]["values"]["TMPDIR"] = value!(dir.path());
+        }
         fs::write(
             root.join(POLICY),
             serde_json::to_vec_pretty(&policy).unwrap(),
@@ -221,9 +279,28 @@ impl Host {
         commit(&self.root);
         git(&self.root, &["push", "-q", "warehouse", "dev"]);
     }
+    fn native_output(&self, command: &mut Command) -> std::process::Output {
+        self._dir.bind(command);
+        self._dir.capture_bound(command)
+    }
+    fn native_input(&self, command: &mut Command, input: &[u8]) -> std::process::Output {
+        let HostDirectory::Retained(host) = &self._dir else {
+            panic!("native input capture requires the explicitly retained fixture");
+        };
+        host.bind_command(command).unwrap();
+        chrono_worktree::TemporaryHost::capture_bound_input(host.path(), command, input).unwrap()
+    }
+    fn copied_fixture_input(&self, root: &Path, source: &Path, destination: &Path) {
+        if let HostDirectory::Retained(host) = &self._dir {
+            chrono_worktree::TemporaryHost::register_copy(
+                host.path().parent().unwrap(), "worktree-test-host", source, destination,
+                Some(root), "crates/worktree-tests/tests/creation.rs::copied_fixture_input",
+            ).unwrap();
+        }
+    }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
-            .current_dir("/")
+        let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        command.current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("UNDECLARED_WORKTREE_ENV", "must-not-leak")
@@ -239,9 +316,9 @@ impl Host {
                 name,
                 "--path",
                 target.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
+            ]);
+        self._dir.bind(&mut command);
+        let out = self._dir.capture_bound(&mut command);
         self.received(out)
     }
     fn received(&self, out: std::process::Output) -> (i32, Value, String) {
@@ -282,11 +359,25 @@ impl Host {
                 if row["process"].is_null() {
                     continue;
                 }
+                let process = if row["process"].get("stdout_original").is_some() {
+                    serde_json::to_value(
+                        chrono_harness::scoped_report::restore_process(&row["process"], |o| {
+                            chrono_harness::prepared::read_original(
+                                Path::new(report["source_root"].as_str().unwrap()),
+                                o,
+                                None,
+                            )
+                        })
+                        .unwrap(),
+                    )
+                    .unwrap()
+                } else {
+                    row["process"].clone()
+                };
                 for stream in ["stdout", "stderr"] {
                     let bytes: Vec<u8> =
-                        serde_json::from_value(row["process"][format!("{stream}_bytes")].clone())
-                            .unwrap();
-                    assert_eq!(row["process"][format!("{stream}_sha256")], sha256(&bytes));
+                        serde_json::from_value(process[format!("{stream}_bytes")].clone()).unwrap();
+                    assert_eq!(process[format!("{stream}_sha256")], sha256(&bytes));
                 }
             }
         }
@@ -299,11 +390,12 @@ impl Host {
     fn hook(&self, settings: Value) {
         use std::os::unix::fs::PermissionsExt;
         let p = self.root.join(".git/hooks/post-checkout");
-        let copied = Command::new("/bin/cp")
+        self.copied_fixture_input(
+            &self.root, Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-hook")), &p,
+        );
+        let copied = self.native_output(Command::new("/bin/cp")
             .arg(env!("CARGO_BIN_EXE_chrono-worktree-test-hook"))
-            .arg(&p)
-            .output()
-            .unwrap();
+            .arg(&p));
         assert!(copied.status.success(), "native hook copy: {copied:?}");
         fs::write(
             p.with_extension("json"),
@@ -311,7 +403,7 @@ impl Host {
         )
         .unwrap();
         fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
-        check_inputs::ready_version_program(&self.root, &p, b"fixture\n");
+        check_inputs::ready_version_program_owned(&self.root, &p, b"fixture\n", Some(self));
     }
 }
 
@@ -969,7 +1061,7 @@ fn retains_actual_failed_fetch_and_version_observations() {
 }
 #[test]
 fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
-    let h = Host::new("payload");
+    let h = Host::retained("payload");
     h.hook(value!({"writes":[{"path":"recovery-file","contents":"recoverable\n"}],"stderr":"hook-failure\n","exit":37}));
     let target = h.parent.join("target");
     let (code, r, _) = h.invoke("integration", "task", &target);
@@ -1060,7 +1152,7 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
             .unwrap()
             .push(file(path, value!([])));
         fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
-        let host_config = json(&fs::read(source().join(CONFIG)).unwrap()).unwrap();
+        let host_config = chrono_harness::load_selected_config(&source(), CONFIG).unwrap();
         let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
         config["artifacts"] = host_config["artifacts"].clone();
         for artifact in config["artifacts"].as_array_mut().unwrap() {

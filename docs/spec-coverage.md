@@ -6,6 +6,18 @@ Ordinary full-check acceptance means the DELTA satisfies the active registered c
 
 Local/CI must use the same registered command. Universal equal verdicts remain conditional on equal complete effective inputs and deterministic evaluation. The separate parity comparator requires `completeness_proven:true` and complete verdict-bearing observations; absent these stronger premises, parity remains unestablished without gating ordinary full check. Pairwise observations alone do not prove universal determinism. This correction changes contract wording and default content, without changing runtime, schema or test behavior or completing full host adoption.
 
+Q3 contemporaneous capture is currently a source candidate with local owner
+runtime evidence and incomplete whole-CI acceptance. Separate managed uses
+reclaimed a registration prerequisite before later initial-inventory fixtures;
+the caller's registered prerequisite/consumer plan must retain one protection
+lifetime. Existing worktree/runner/CI receipt owners now prepare accepted input,
+launch and factual phase originals before terminal observation; Rust expectations
+cover successful/error returns, enclosing deadlines, true partial publication and
+abrupt termination. [The bounded capture and custody contract](ci-units.md#contemporaneous-fixture-evidence)
+does not establish the cause of the original thirteen operation failures, repair
+Rust environment drift, or complete canonical/native/full/adoption/delivery
+acceptance. Existing fixed guard expectations and all full SPEC obligations remain.
+
 Test sources: **R** = `crates/runner-tests/tests/protocol_v1.rs`; **G** = `crates/judge-registration-tests/tests/registration_contract.rs`; **L** = `crates/runner-tests/tests/cli_contract.rs`; **C** = `crates/judge-ci-tests/tests/behavior.rs`; **F** = `crates/judge-filemap-tests/tests/impact.rs`; **P** = `crates/judge-filemap-tests/tests/consumer.rs`; **W** = `crates/judge-workflow-tests/tests/{branch,consumer}.rs`; instruction and CI generator tests live in their dedicated test projects. Tests in G invoke the built runner and separately built registration executable against real synthetic Git commits, including real host registry material. Production build prerequisites are explicit in the CI binding. P runs actual runner → registration → filemap subprocesses on committed bounded hosts with absent historical binaries and exact report source pointers. F checks witnesses against independently specified endpoint edges. No peer/independent review evidence is claimed.
 
 | SPEC section | State | Producer and direct evidence | Remaining obligation |
@@ -845,3 +857,80 @@ CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitt
 Q2 increment plus this correction; it makes no publication, remote-acceptance or
 complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
 unmeasured until those actual consumer cases run.
+
+Q3 finite source extraction retains explicit acquisition and failure diagnostics,
+Cargo v6/native-target and directory-v3 runtime behavior, input-vector aliases,
+contemporaneous process originals, bounded CI selection transport, current optional
+full-input references and the exact 2097152-byte FILEMAP allowance. Ordinary
+1048576-byte diagnostics, metadata-first/hash/length/oversize controls, CPU
+acceleration, threads, 26 selected units/groups, unfiltered release inventories
+and cap=2 remain. These are source changes, not executed acceptance.
+
+**Policy and product change together.** The stable entry now uses the existing
+source/platform selector. Local tools and the real runner guard bind the surviving
+primary's private homes with unchanged original expected hashes and 92-file Rust
+manifest. Scoped CI selects its existing platform tools/environment and source
+bootstrap bindings. Its preserved local input graph is declaration data, not full
+native coverage. The worktree owner reuses the selected same-owner input policy
+for default lifecycle calls; explicit policies, committed-byte checks and leases
+remain authoritative. Artifact-only cache/release readers use the direct artifact
+declaration. Source reader fixtures retain original assertions after selection.
+
+Unselected sibling guarded policies/actions and exclusive package-file bindings,
+unused full-native selector/unit/cache/shared/projection sources, and the optional
+unadopted host-bootstrap distribution branch/exclusive tests retire. Source commit
+`87a77182c5da33627deb3b837e7515748eb6fd58` preserves unique bytes. Acquisition
+profiles/observer contracts and their native lifecycle/cleanup inputs remain. The
+identical Mac config/cargo-runner pair remains explicitly owned test data for the
+real observation contract. The installer and all shared implemented Rust runtime,
+observation, input transport, CI and custody behavior remain. Full selected policy
+status stays proposed, enforcement not implemented and input closure incomplete.
+
+The Mac alias escape and Linux's 140 missing configuration facts remain diagnostic
+and future-activation gaps. This batch neither collects new native facts nor
+waives alias, full Developer, package, SDK or configuration assertions. Positive
+native guard/full activation, native full endpoint/lineage/governance adoption and
+stronger parity are unestablished. Original PR169/R4 historical bytes/cause remain
+unknown; the cleared full-SPEC goal is not restored.
+
+Caller must regenerate instructions for the changed host context, validate the
+clean candidate through registered source bootstrap/canonical/native paths under
+existing use protection, complete independent review, and verify actual dev
+landing and surviving-primary consumption before lifecycle cleanup. PR disposition
+and any public release require their own actual identities/evidence. Validation,
+runtime/CI and total retained-storage costs are unknown. No source-stage success
+is canonical/native/dev/PR/cleanup/full-SPEC completion. The finite extraction and
+caller-owned production boundary are detailed in
+[full CI](full-ci.md#main-host-adoption-inputs).
+
+## Finite native fixture custody source boundary
+
+Candidate source extends the existing retained producer/Lease/process-fd owners
+with prospective temporary allocations, exact copied-body/original membership,
+relocation, persistent and nested diagnostic references, native pre-join capture
+and ordinary generated-output recovery without finish. Host policy selects CI
+short fixtures, independent Cargo-producing worktree fixtures, the existing full
+native context/relocation fixture and the failed checkout-hook fixture. Existing
+bounds, retained drain decoding and default temporary teardown remain in their owners.
+
+Policy and product change together; no checks were executed for this source
+batch. Rust expectations cover absence without registry mutation, partial/missing
+originals and sibling progress, Git source/index protection, native descriptor
+handoff and killed overlapping holders, interrupted raw streams, diagnostic
+exclusion and a real Cargo descendant from two working directories. Native request
+bytes/EOF and selected fixture diagnostics use the same capture and retained-reference
+owners. Existing socket partial-failure and pinned Cargo URL consumers retain their assertions on
+spaced/Unicode paths. Registered two-endpoint DELTA, native producer/consumer
+checks and independent review remain unexecuted obligations.
+
+Projects/workflow source now preserves old offline checkouts and external declared
+inputs without making the old path available. The five registered shared-host
+consumers now directly depend on worktree, with independent manifests, locks and
+targets; the historical/current-source migration publisher uses the same custody
+owner. Each owner has one conservative offline Cargo lock-update action, seeded
+from its Q3 locked resolution to retain compatible existing external versions
+while adding the internal worktree graph. This reconciles the source with Q3's
+retained input/acquisition/local bindings and finite unused-path retirement.
+Final-original report retirement, universal §10.1 acceptance, deployment, dev
+landing, PR closeout and auxiliary worktree cleanup remain unestablished. Build,
+native, maintenance, retained-byte and physical-release costs remain unknown.

@@ -55,9 +55,8 @@ impl Host {
             .arg("--version")
             .output()
             .unwrap();
-        let mut cfg: Value =
-            serde_json::from_slice(&fs::read(product.join(".chrono-harness/config.json")).unwrap())
-                .unwrap();
+        let mut cfg =
+            chrono_harness::load_selected_config(&product, ".chrono-harness/config.json").unwrap();
         cfg["tools"] = json!([
             {"id":"git","program":git_program,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},
             {"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},

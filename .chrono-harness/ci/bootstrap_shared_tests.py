@@ -23,6 +23,17 @@ spec.loader.exec_module(fixture)
 CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
 
 
+def host_config_path(root):
+    entry = root / ".chrono-harness/config.json"
+    config = json.loads(entry.read_bytes())
+    if config.get("schema") != "chrono-git-configs/v2":
+        return entry
+    system = {"Darwin": "macos", "Linux": "linux"}[platform.system()]
+    arch = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}[platform.machine()]
+    source = os.environ.get("CHRONO_CHECK_SOURCE", "local")
+    return root / config["platforms"][system + "-" + arch][source]
+
+
 def acquire_parent_source(source, root, git, run):
     """Acquire current endpoint trees, without traversing unrelated old blobs.
 
@@ -572,7 +583,7 @@ class RealAttempt:
         # Invoke the caller-built owner against the fresh fixture. Do not install
         # a running owner into the destination that core bootstrap will replace.
         self.lifecycle = str(program)
-        self.owner_output_limit = json.loads((root / ".chrono-harness/config.json").read_bytes())["protocol"]["stdout_limit_bytes"]
+        self.owner_output_limit = json.loads(host_config_path(root).read_bytes())["protocol"]["stdout_limit_bytes"]
         self.result["fixture"] = str(root)
         self.result["custody"]["owner_executable"] = {"path": str(program), "sha256": bootstrap.file_digest(program)}
         self.result["custody"]["declared_outputs"] = self.outputs
@@ -781,7 +792,7 @@ class ManagedAttemptCustody(unittest.TestCase):
             policy = json.loads(policy_path.read_bytes())
             policy["git"].update(program="/absent/parent/git", expected_version="parent Git", sha256="0" * 64)
             policy_path.write_text(json.dumps(policy))
-            config_path = root / ".chrono-harness/config.json"
+            config_path = host_config_path(root)
             config = json.loads(config_path.read_bytes())
             next(row for row in config["tools"] if row["id"] == "python3")["program"] = "/absent/parent/python3"
             config_path.write_text(json.dumps(config))
@@ -892,11 +903,15 @@ class ManagedAttemptCustody(unittest.TestCase):
                          "sha256": hashlib.sha256(Path(git).read_bytes()).hexdigest()}
         policy_path.write_text(json.dumps(policy))
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", root / fixture.OPERATION)
-        config_path = root / ".chrono-harness/config.json"
+        config_path = host_config_path(root)
         config = json.loads(config_path.read_bytes())
         config["protocol"]["timeout_seconds"] = 1 if mode == "timeout" else 20
         next(row for row in config["tools"] if row["id"] == "python3")["program"] = sys.executable
-        config_path.write_text(json.dumps(config))
+        # This independent fixture owns the policy rebound above. Resolve the
+        # parent's selector once, then register that direct fixture contract.
+        config["canonical_check"]["inputs"]["local"]["argv"] = [
+            "check-inputs", "--config", ".chrono-harness/worktree.json"]
+        (root / ".chrono-harness/config.json").write_text(json.dumps(config))
         projects_path = root / ".chrono-harness/projects.json"
         projects = json.loads(projects_path.read_bytes())
         script = next(row for row in projects["scripts"] if row["id"] == "host-bootstrap-tests")
@@ -907,7 +922,9 @@ class ManagedAttemptCustody(unittest.TestCase):
             acquire("commit", [git, "-C", str(root), *args], root)
         import bootstrap
         attempt = RealAttempt(directory / "evidence", bootstrap.observe_source(root), time.monotonic() + 40, 1048576)
-        attempt.manage(root, SOURCE.parents[1] / ".chrono-harness/bin/chrono-worktree", environment)
+        # The ordinary owner suite declares build.worktree as its prerequisite.
+        # Installed-tool identity is exercised separately by RealSharedStartup.
+        attempt.manage(root, SOURCE.parents[1] / "crates/worktree/target/debug/chrono-worktree", environment)
         print("custody fixture originals: " + str(attempt.evidence), flush=True)
         return root, attempt
 
@@ -1091,10 +1108,10 @@ class RealSharedStartup(unittest.TestCase):
                          deadline, bounds["output_limit_bytes"]) as attempt:
             evidence, root = attempt.evidence, Path(attempt.result["fixture"])
             environment = dict(os.environ)
-            for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK", "CHRONO_CHECK_SOURCE"):
+            for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK"):
                 environment.pop(key, None)
             environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
-            host = json.loads((source_root / ".chrono-harness/config.json").read_bytes())
+            host = json.loads(host_config_path(source_root).read_bytes())
             tools = {row["id"]: row["program"] for row in host["tools"]}
 
             def run(name, argv, cwd):
@@ -1261,7 +1278,7 @@ class RealFixtureStartup(unittest.TestCase):
             attempt.publish()
             environment = dict(os.environ)
             environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
-            host = json.loads((root / ".chrono-harness/config.json").read_bytes())
+            host = json.loads(host_config_path(root).read_bytes())
             tools = {row["id"]: row["program"] for row in host["tools"]}
             def run(name, argv, cwd):
                 attempt.run(name, argv, cwd, environment)
@@ -1323,4 +1340,4 @@ class RealFixtureStartup(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(defaultTest="SharedStartup")
+    unittest.main(defaultTest=["SharedStartup"])

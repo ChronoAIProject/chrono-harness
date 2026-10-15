@@ -179,7 +179,7 @@ use crate::{
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
-pub use producer::RetainedArtifact;
+pub use producer::{RetainedArtifact, TemporaryHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
@@ -2138,6 +2138,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--unit",
             "--bootstrap-config",
             "--adopt-cache",
+            "--adopt-fixtures",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -2160,15 +2161,43 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (operation == "maintain" && values.contains_key("--path"))
         || (operation == "migrate" && !values.contains_key("--path"))
         || (values.contains_key("--adopt-cache") && operation != "migrate")
+        || (values.contains_key("--adopt-fixtures") && operation != "migrate")
     {
         return Err("invalid lifecycle command arguments".into());
     }
     let invoking = fs::canonicalize(values.get("--host-root").copied().unwrap_or("."))
         .map_err(|e| e.to_string())?;
-    let config_path = values
+    // The short check and its local input producer already declare this owner's
+    // policy. Reuse that source/platform selection for the default lifecycle
+    // entry; an explicit --config and legacy hosts keep their original meaning.
+    let mut config_path = values
         .get("--config")
         .copied()
-        .unwrap_or(".chrono-harness/worktree.json");
+        .unwrap_or(".chrono-harness/worktree.json")
+        .to_string();
+    if !values.contains_key("--config") {
+        let host = chrono_harness::load_selected_config(&invoking, ".chrono-harness/config.json")?;
+        if host["schema_version"] == 4 {
+            let canonical = chrono_harness::prepared::declaration(&host)?;
+            if canonical.participation.as_ref().is_some_and(|action| {
+                action.tool == canonical.inputs.local.tool
+                    && action.operation == "worktree.check"
+                    && action.argv == ["check"]
+            }) {
+                match canonical.inputs.local.argv.as_slice() {
+                    [command, flag, path] if command == "check-inputs" && flag == "--config" => {
+                        config_path = path.clone();
+                    }
+                    _ => {
+                        return Err(
+                            "worktree participant requires its declared check-inputs policy".into(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    let config_path = config_path.as_str();
     let (config, bytes) = crate::configuration(&invoking, config_path)?;
     if config.automatic_cleanup.is_none() {
         return Err("automatic cleanup is not opted in".into());
@@ -2218,6 +2247,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.migrate(r, target, report)?;
                     if let Some(plan) = values.get("--adopt-cache") {
                         manager.adopt_main_cache(r, target, plan, report)?;
+                    }
+                    if let Some(plan) = values.get("--adopt-fixtures") {
+                        manager.adopt_fixture_bodies(r, target, plan, report)?;
                     }
                     Ok(())
                 }
@@ -2560,6 +2592,8 @@ pub(crate) fn publish_result(root: &Path, report: &Value) -> Result<(), String> 
     let target = no_symlink_parents(&root, path)?;
     fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
         .map_err(|e| e.to_string())?;
-    write_json(&target, report, true)?;
+    let mut bytes = serde_json::to_vec(report).map_err(|e| e.to_string())?;
+    bytes.push(b'\n');
+    write_bytes(&target, &bytes, true)?;
     Ok(())
 }

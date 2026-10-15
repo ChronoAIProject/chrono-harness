@@ -159,6 +159,8 @@ def validate_execution(root, profile, report):
         action = operations[row["operation"]]
         executable = (selected[action["tool"]] if action["tool"] in selected
                       else profile["tools"][action["tool"]])
+        if not Path(executable).is_absolute() and "/" in executable:
+            executable = str(Path(report["host_root"]) / executable)
         if (row["tool"] != action["tool"] or row["argv"] != [executable, *action["argv"]]
                 or row["cwd"] != report["host_root"] or type(row["exit_code"]) is not int
                 or row["exit_code"] != 0 or type(row["pid"]) is not int or row["pid"] <= 0):
@@ -278,7 +280,8 @@ def validate_artifact(root, path, config, profiles, config_sha, binding):
                 or "provenance" in report or report["source"]["state"] != "clean"
                 or report["source"]["before"] != observed or report["source"]["after"] != observed
                 or report["source"]["commit"] != observed["commit"] or report["source"]["tree"] != observed["tree"]
-                or report["installed"] != [{"path": f["destination"], "sha256": f["sha256"]} for f in entry["files"]]):
+                or report["installed"] != [{"path": f["destination"], "sha256": f["sha256"]}
+                                           for f in entry["files"][:len(profile["install"])]]):
             raise ValueError("startup original report is not bound to this source and payload")
         originals[name] = original
         validate_execution(root, profile, report)

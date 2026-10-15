@@ -216,3 +216,106 @@ Native consumers, generated workflow execution, host activation, complete input
 closure and local/CI comparison are separate evidence obligations. This manual
 dispatch projection does not orchestrate PR creation, merging, required-check
 publication or landing.
+
+## Main-host adoption inputs
+
+The finite Q3 increment keeps the deployed scoped check, input acquisition and
+truthful refusal diagnostics. Full native activation is future work. The persistent
+full-SPEC development goal was cleared; full activation is not a prerequisite to
+this bounded source extraction, dev integration or auxiliary-checkout cleanup.
+
+The stable `.chrono-harness/config.json` now uses the existing
+`chrono-git-configs/v2` source/platform selector. Its local Mac target is
+`.chrono-harness/local-config.json`; scoped CI targets are
+`.chrono-harness/ci/scoped-macos.json` and `scoped-linux.json`. The current generated
+scoped workflow selects macos-26. Linux product/release consumers retain their
+own platform inputs; registering a selector target does not establish a deployed
+Linux scoped workflow. Unsupported platforms/sources still fail without fallback.
+All targets select the existing `ci/check.json` profile, 26 units and the same
+short check. The scoped targets retain the explicit local input graph needed by
+root FILEMAP; those declarations do not assert native input completeness or
+positive native guard admission. Their effective execution environment uses the
+platform's existing source-bootstrap selection. Git expectations come from the
+committed native identities in `migrations/fixtures/*-host.json`; Cargo/rustc
+bootstrap bytes, versions and official component provenance remain in
+`ci/bootstrap-toolchains.json`. No failing executable is measured to redefine its
+expected bytes.
+
+The local guard continues to name the direct local policy. Its private Cargo and
+Rustup homes now belong to the surviving primary
+`/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/`.
+The original 92-file Rust manifest is unchanged, including its original
+`/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin` root.
+`manifest_root` admits that unchanged inventory at the primary's selected root.
+Package/features/dependency-kind, configuration and ancestor absence, SDK/full
+Developer, alias, sysroot/backend/linker and post-consumer checks remain required.
+The local/native expectation split in `cargo/observe.json` remains exact; a
+native rejection of local bindings is diagnostic coverage.
+
+The existing worktree owner now reuses the selected host's local input-producer
+policy for default lifecycle calls when that producer and `worktree.check` name
+the same owner. Explicit `--config` keeps its existing meaning. The owner still
+checks committed policy bytes, coordinator compatibility, registered inputs,
+leases and original results. This closes the stable `check` entry's fixed-policy
+selection gap without another check entry or a native lifecycle bypass.
+Core/cache/detector/local bootstrap participation delegates its omitted config to
+that same default. Acquisition keeps its explicit policies. Real startup carries
+the caller's existing source selector through the protected consumer; independent
+custody fixtures register their own direct host and rebound policy.
+
+The caller must deploy compatible candidate tools and committed policies through
+the surviving coordinator, then run the registered `inputs.provision-isolated`
+action **at the primary root**. Its existing `use` protects Rustup production,
+all 34 fetch actions and the immediate `guard.check.runner` consumer. The caller
+must keep the existing protection alive across any retained prerequisite outputs
+and subsequent real-startup/guard consumption, including primary custody when a
+candidate consumes the primary's private tools. Separate completed uses do not
+protect a later consumer. No produced state, installed identity or successful
+result can be filled in by hand.
+
+### Retired declaration closure
+
+Unique original bytes remain reachable at
+`87a77182c5da33627deb3b837e7515748eb6fd58`, tree
+`adf79eba9137f7c3822c11b138534c953229e94c`; caller owns ref preservation and final
+PR disposition. This source extraction retires the 33 sibling local guard policy
+files and unselected guarded actions, including the unconsumed runner build
+variant. Their exclusive package-file bindings, inputs and edges retire with
+them. Every actual metadata/fetch operation and all nonexclusive source,
+configuration, compiler/SDK, Python and runtime declarations remain.
+
+The unselected native selector, full-native units, native bootstrap/cache/shared
+sources and full-policy/cache/projection declarations retire. Acquisition
+bootstrap profiles directly consume the native worktree/cleanup policies, so
+those four files remain. The original Mac config/cargo-runner pair remains
+byte-identical, explicitly owned test data for
+`inputs-tests::main_host_observation_reuses_all_declared_cargo_acquisition_operations`.
+Its original paths inside the data are opaque fixture values. No action selects
+that pair; the test retains its SDK/full Developer, manifest path and 200000-entry
+assertions against the actual acquisition declarations.
+
+No committed bootstrap profile consumed the optional host-script distribution
+branch. That branch and its exclusive fixture tests retire. The distribution
+installer, independent release inventory, source bootstrap, shared startup,
+custody and real-consumer assertions remain. Preservation is not implementation
+or PR settlement; caller must establish useful retained delivery before closing
+or merging the original mixed proposal.
+
+Known diagnostic gaps remain truthful: the Mac `Developer/usr/bin/altool` alias
+escapes to sibling `Contents/SharedFrameworks`, and the Linux proposal had 140
+unobserved inherited configuration facts. Neither is converted to success,
+collected again, narrowed away or waived by this extraction. Positive native
+guard/full activation, fixed full-input endpoint pairs, lineage/composition,
+governance/integration adoption and stronger parity remain unestablished.
+
+**Policy and product change together.** Validation and total runtime/CI/storage
+costs are unknown. Caller must regenerate registered instructions after the host
+context change, commit a clean candidate, run registered source bootstrap and the
+FILEMAP-selected canonical/native checks, and complete independent review.
+`registered_full_filemap_capacity_preserves_exact_original_bytes` and all ordinary
+metadata/hash/length/oversize/control assertions remain unchanged; its existing
+authenticated original fixture hook remains available. Exact FILEMAP capacity is
+2097152 bytes; ordinary diagnostics stay 1048576 bytes. No source-stage result
+establishes canonical/native acceptance, dev landing, PR settlement, cleanup or
+full SPEC completion. Caller owns actual landing SHA/tree, post-landing primary
+consumption and authorized lifecycle cleanup.

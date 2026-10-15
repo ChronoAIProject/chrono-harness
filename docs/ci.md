@@ -67,7 +67,17 @@ complete test plans. Run units concurrently in separate checkouts. A local check
 without `--unit` executes the whole selected DELTA under FILEMAP scheduling; the same entry with
 value-less `--collect` prepares the declared manifest and verifies unit evidence without running business operations.
 
-The current host uses config schema4. `canonical_check` adds `profile` and
+The stable host entry uses the existing source/platform selector, selecting the
+direct local policy or the supported scoped CI policy. Their full-policy data
+remains proposed; scoped CI does not activate native full inputs. Default lifecycle
+participation follows the same owner's explicitly selected local input policy;
+the core/cache/detector/local bootstrap profiles omit `participation.config` to
+delegate that choice to the same owner. Acquisition profiles retain explicit
+policies. Explicit worktree configuration keeps its meaning. Artifact-only cache/release
+readers name the unchanged direct local artifact declaration. See
+[the finite extraction boundary](full-ci.md#main-host-adoption-inputs).
+
+The selected host uses config schema4. `canonical_check` adds `profile` and
 `inputs.local` plus optional `inputs.ci`; each producer uses the existing
 `{operation,tool,argv}` action shape and tools/environment/protocol bounds.
 The runner observes the real short entry, invokes the bound producer, retains
@@ -166,6 +176,246 @@ provenance, never substitutes for executable-byte expectations. Cargo's upstream
 version implementation explains the package 0.96.0 / CLI 1.95.0 distinction.
 Acquisition is preparation of committed input; bootstrap does not download or
 learn expectations, and continues to use existing rustup provisioning.
+
+The initial native acquisition actions `host.acquire-native-macos` and
+`host.acquire-native-linux` select `bootstrap-acquire-PLATFORM.json` through this
+same bootstrap owner. They preserve the 14 native source builds/installations,
+append the existing ordered observation action before installation, and select
+the existing default-profile provisioner in private checkout-relative
+Rustup/Cargo homes. The initial Git-main missing-owner seeding branch supplies
+the built observer before full direct/lifecycle policies exist. An installed
+owner or linked checkout still requires the existing committed policy and
+participation chain. See [first inputs and original retention](inputs.md#actual-input-observations).
+These profiles are distinct from the proposed native full-unit shared startup;
+collection does not inherit the initial acquisition work. Explicit relative tool
+paths resolve at HOST_ROOT, and shared report validation resolves against the
+original producer's recorded root. The corresponding Python success, failure and
+boundary regressions are defined in `bootstrap-tests.py` and unexecuted for this
+source handoff; no native/full acceptance is asserted.
+
+### Candidate native initial-acquisition entry
+
+The host owns `.chrono-harness/ci/native-acquisition/action.yml`; the workflow
+`.github/workflows/chrono-native-acquisition.yml` delegates to that local composite.
+The first invocation is a **push of the committed candidate containing both files
+to `integration/q3-native-acquisition`** in the caller's GitHub repository. This
+exact branch is the sole trigger. Push uses the candidate's workflow and checks
+out `github.sha`, with the existing pinned checkout action and full history.
+It needs neither default-branch workflow registration nor a dispatch. The trigger
+branch is an event route, not a worktree birth or full-governance lineage claim.
+
+The two matrix candidates are `macos-26` (arm64) and `ubuntu-24.04` (x86_64).
+They have independent outcomes, `fail-fast: false`, at most two concurrent jobs,
+and the existing 45-minute native job limit. The composite invokes exactly the
+existing `host.acquire-native-macos/linux` bootstrap argv registered in
+`projects.json`, selecting `bootstrap-acquire-PLATFORM.json`. It supplies no local
+private-Mac direct policy, installed-owner deletion, ownership marker, enrollment,
+birth or full-policy override. A fresh Git main may use the original missing-owner
+seed branch; existing owners and linked checkouts retain compatible-policy
+participation and leases. No Rustup, compiler, SDK, Cargo or observer recipe is
+implemented in the workflow or action.
+
+The caller supplies a published clean candidate with these sources, Actions
+permission to run the exact branch, actual native images, `/usr/bin/python3`,
+`/usr/bin/git`, Rustup in PATH, native compiler/linker/SDK or system inputs,
+PATH/HOME/TMPDIR and applicable SDK selections, and access to official Rust and
+locked Cargo sources. The external prerequisites remain fallible. A checkout
+failure retains its original GitHub job evidence; it cannot produce a bootstrap
+report. The caller must retain the original job log and conclusion too.
+
+Before Python starts, the composite retains the actual child argv (NUL-separated),
+raw event bytes, native job/source/workflow/runner identifiers, original stdout
+and stderr, and shell exit under `state/native/PLATFORM/job/`. Missing Python and
+early Git/Rustup/SDK failures therefore retain the original observable streams
+even without a bootstrap report. The shell exits with the original command code;
+there is no continue-on-error or success rewrite. Reentry refuses to overwrite
+originals. Forced termination may leave no `job.exit`; absence is not success.
+The inline Bash forwarding has explicitly paired Python behavior tests in
+`host-bootstrap-tests`; they are defined but unexecuted in this source handoff.
+
+The existing pinned upload action runs with `always()`, including after an
+acquisition failure. It uploads `.chrono-harness/state/native/PLATFORM/`,
+`.chrono-harness/state/inputs/` and the 14 explicit install destinations under
+`.chrono-harness/bin/` shared by both `bootstrap-acquire-PLATFORM.json` profiles.
+The bootstrap owns those executable bytes and their `installed[].path`/`sha256`
+records; the composite owns their transport to the caller's original-byte
+verification. It does not select the whole bin directory or build targets.
+The platform's private `rustup/` and `cargo/` homes remain excluded. The common
+transport root is now `.chrono-harness/`; restore the artifact there to preserve
+`bin/` and `state/` and all original root-relative references. This
+retains the outer job files, `acquisition-bootstrap.json` when published, each
+original `bootstrap-*/report.json` and operation stream, `acquisition.json` and
+its `.processes/`, plus the original inner provisioning/observation reports and
+process streams. A failed bootstrap may publish only its original
+`bootstrap-*/report.json`; the upload does not require a passing alias.
+Acquisition failure precedes this attempt's installation; an installation failure
+can leave a newly installed prefix. Selected files may also preexist, so their
+presence alone does not prove this attempt installed them. The upload retains
+available selected bytes without inventing missing files or successful installation. Its
+`if-no-files-found: error` applies to the complete upload, not each executable.
+Compact references and their original byte/digest closure are unchanged. The
+transport exposes its actual artifact ID and digest; the caller verifies these,
+each addressed original/stream digest, source identity and original job/process
+failure. For a passed bootstrap, require all 14 installed originals and compare
+their bytes with the original report and exact pushed candidate registrations.
+Source identity still requires that candidate's fixed Git source bytes; the
+artifact does not duplicate the repository. Failure evidence supports the
+recorded failure, not successful installation or independent byte verification
+of uninstalled tools. Private compiler/toolchain originals and complete native
+inputs are outside this upload. Upload or step success is not native acceptance.
+Actual upload/download layout and binary digest preservation on both native
+runners remain unverified. No new archive tool is
+used and private toolchain/cache contents are not evidence uploads.
+
+Artifacts have seven-day Actions retention. The caller consumes/downloads the
+original closure for native review and acceptance before expiry, preserving
+still-required failure evidence under its registered custody policy. Runner and
+artifact disposal remain caller/GitHub responsibilities; this entry performs no
+lifecycle cleanup. Native build, storage, CI and lifecycle costs are **unknown**.
+Executable selection is limited to those 14 paths per platform/run/attempt
+for the same seven days. Their total bytes, upload/download time, artifact size
+and billed storage remain unknown until measured; the job/stream bounds do not
+provide an executable-size bound.
+
+**Executable transport impact:** the previous state-only artifact omitted all
+installed executable bytes despite retaining their digests. The action now adds
+only the registered 14 install paths and changes the artifact restore root from
+`.chrono-harness/state/` to `.chrono-harness/`. Producer, installer, failure/exit
+handling and seven-day retention are unchanged. Validation requires the existing
+two-end FILEMAP closure and real upload/download plus original-byte verification
+on both native runners; no such checks ran for this source correction. Default
+product policy and independent host adoption remain separate.
+
+**Policy/producer-consumer co-change warning:** previously neither acquisition
+action had a native workflow caller. The new host action, exact-branch trigger,
+artifact selection/retention and explicit FILEMAP edges connect both existing
+producers to caller acceptance. Existing scoped collection, its 26 full-unit IDs,
+acquisition contracts, 14 builds/installations per acquisition,
+92-component inventory, assertions, threads, ignored inventory, Rust 1.95/default
+private provisioning, official digests, aarch64 acceleration and original action
+bounds are preserved. Validation cost is the registered DELTA closure plus two
+real native acquisition jobs, all unexecuted here. Fixed-end relationships are
+the existing `host-bootstrap` actions/profiles and paired tests; candidate FILEMAP
+adds the workflow/action as explicit inputs and test triggers. Existing generated
+collection/release inventories own only their registered projections; this
+independent host workflow does not add a unit or regenerate those inventories.
+The CI fixture that copies current source consumes FILEMAP's per-file inventory
+directly, so the new files enter through that existing consumer. Whole Q3, native
+full activation, real two-end inputs/lineage, remaining shared obligations,
+formal review, delivery, all 28 PR dispositions, Q4 and complete SPEC remain open.
+
+The registered `inputs.provision-isolated` action invokes the existing worktree
+owner's `use` operation for `inputs.produce-admit-isolated`. Run its exact action
+from the committed surviving primary root `/Users/auricstudio/chrono-harness`:
+
+```sh
+.chrono-harness/bin/chrono-worktree use --operation inputs.produce-admit-isolated --path .
+```
+
+The direct local policy selects that primary's private Rustup/Cargo homes;
+bootstrap's relative production paths therefore belong to the same surviving
+host. Candidate-source checks can consume those authenticated tools after caller
+production/deployment. Hold the existing primary/candidate use protection across
+retained prerequisites and real-startup/guard consumers; a completed prerequisite
+use does not protect a later consumer. No auxiliary checkout is a tool owner.
+
+That one enclosing lease covers the input observer, `host.bootstrap-isolated`,
+the existing native provisioning whitelist's 34 Cargo fetch actions, and the
+actual immediate consumer `guard.check.runner`. The bootstrap selects Rustup's
+official `default` profile in disjoint host-state Rustup/Cargo homes. Rustup
+produces all metadata with self-update disabled. The isolated profile then uses
+the existing bootstrap action executor for six registered official Rustup
+component operations. It retains Clippy, removes the other five components,
+then adds Cargo, docs, std and rustfmt individually. Its final `toolchain install`
+explicitly requests all six components with self-update disabled; only rustc is
+still missing at that point.
+
+This sequence follows Rustup 1.29.1 (`d95a37b6ab92cc1e455d1576039333c97ca3e2c5`):
+`src/dist/manifestation.rs` installs completed downloads in queue order,
+`src/dist/component/components.rs` appends installed names and filters removed
+names, and `Update::new` puts explicitly added components first in the persisted
+configuration. A default-profile install alone cannot guarantee the retained
+component byte order. Individual `component add` calls prepend configuration
+entries and obtain extension flags from the manifest; a final no-op add returns
+before rewriting the configuration. In `src/dist/mod.rs`, an explicit
+`toolchain install --component` request instead sorts the requested components
+and sets their extension flags to `false`, matching the retained configuration.
+The missing rustc makes this final transaction write that configuration while
+appending only rustc to the component list. The required component order is
+Clippy, Cargo, docs, std, rustfmt, rustc. Only Rustup writes installed metadata;
+the original 92-file inventory remains authoritative. Actual production and
+admission must still verify these source-derived expectations.
+
+These six actions belong to the existing `host-bootstrap` owner and run only
+when selected by the isolated profile, outside FILEMAP execution plans. They
+reuse its private environment, lease, original-stream retention and fail-fast
+execution. The registration adds producer operations without changing admission
+policy, scheduling claims, cap or test selection. Five component removals and
+reinstallations can require additional downloads; their actual time, network and
+storage costs remain unmeasured until committed-candidate production. The whole
+isolated bootstrap retains its existing 120-second/1-MiB child bound, including
+all six component operations. Each fetch retains its 120-second/1-MiB bound; the guard retains its existing
+600-second/4-MiB bound. The observer stops after any failed prerequisite and
+retains executed originals. This ordered chain does not run canonical or select
+additional tests. The wrapper retains the existing host protocol bounds.
+
+FILEMAP scheduling claims name exactly the operations in its existing execution
+plans. The isolated production actions above and the two owner-local actions
+`test.inputs-observations-owner` and `test.cargo-configuration-owner` remain
+registered methods in `projects.json`, outside those plans. The observer owns
+the ordered production chain; its enclosing worktree lease covers every child.
+Scheduling claims provide no cross-invocation exclusion, so the caller must keep
+production and checks from overlapping in this checkout.
+
+Output ownership remains in `config.artifacts`: repository-owned
+`.chrono-harness/state/` contains the private Rustup/Cargo homes, the isolated
+`bootstrap.json`, and the selected `production-2e939736-20261015.json` with its
+`.processes` originals. The guard writes the runner-owned `crates/runner/target/`;
+the two owner-local test methods retain their respective registered
+`crates/inputs-tests/target/` and `crates/judge-cargo-tests/target/` outputs.
+Their action argv, observation manifest and bootstrap profile retain the exact
+output paths and bounds; removing nonplan scheduling claims changes none of them.
+
+The failed `production-2e939736-20261015.json` and its `.processes` directory are
+occupied immutable evidence. Before another invocation, the caller preserves the
+required original private metadata and controls the enclosing lifetime, selects
+a fresh observer output in the registered action, and commits that selection
+together with the producer changes. The command above then runs the changed
+producer and the unchanged immediate guard under one lease. Do not overwrite
+the failed report or invoke the component steps independently of that lease.
+
+Before production, the caller must commit these producer, observer and guard
+bytes and rebuild/install the candidate through registered `host.bootstrap`.
+That source bootstrap profile explicitly selects its previously verified source
+build environment, independently of the pending private canonical selection;
+it does not learn expectations or produce the private directory. This profile's
+optional `environment` contains explicit string overrides, applied before
+Rustup selection. Reserved ownership variables are rejected. Isolated home
+selection still takes precedence in the default-profile producer.
+
+Config and the scoped canonical profile select private Cargo, compiler, rustfmt,
+sysroot, Cargo package inputs and Cargo-home configuration/credential absences.
+The 34 explicitly registered local Cargo guard policies select the same private
+sysroot. Their `manifest_root` binds the unchanged original
+`.chrono-harness/inputs/local/rust.json`: v2, 92 retained files and zero declared
+symlinks, including the original components and multirust-config digests. The
+actual guard must admit those bytes before invoking Cargo and recheck them after
+its consumer. Entry-byte checks and observer status cannot substitute for this
+admission. The retained global Rustup
+settings input belongs only to the explicit source-build bootstrap profile;
+direct canonical tools use the private homes. The producer observes its own
+Rustup-produced settings without inventing a new expected digest.
+No expected toolchain or package bytes are replaced.
+
+This local selection binds the current host's absolute execution environment;
+file inputs use existing host-relative locations to stay below the unchanged
+2-MiB configuration limit. Native hosts need their own actual selection and
+coordinator migration. Source preparation does not certify private production,
+admission, native or canonical success. The later short canonical entry retains
+its own complete worktree participation through all selected consumers. The
+private tree and original reports remain under existing evidence retention;
+finish, migration and evidence disposal remain caller-owned after consumers end.
+Production, storage and cleanup costs remain unknown until that work runs.
 
 The profiles use rustup selection directly, with no personal installation path.
 For older inline relocatable bindings, a repeated declared/configured original
@@ -728,3 +978,9 @@ FILEMAP and profile bindings explicitly; migration does not infer those choices.
 Subsequent `generate` is idempotent and `verify` detects projection drift without
 repair. This support is candidate source behavior; public installation, native
 first-commit events and compatible release pins require their own delivery evidence.
+
+The optional host-bootstrap distribution branch had no consuming profile and
+retires in the finite extraction. The current host builds candidate enforcement
+tools from source. The independent distribution installer, release/source
+identity assertions and unfiltered release verification inventory remain with
+their existing owners; a historical release pin is not current deployment.

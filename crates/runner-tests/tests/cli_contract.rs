@@ -1491,10 +1491,25 @@ fn bounds_cover_timeout_and_output() {
         let mut cfg: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
         cfg["judge"]["timeout_seconds"] = timeout.into();
         fs::write(&p, serde_json::to_vec(&cfg).unwrap()).unwrap();
+        let wall_start = std::time::SystemTime::now();
         let start = std::time::Instant::now();
         let r = run(&p);
-        assert_eq!(r.exit_code, 2);
-        assert!(start.elapsed().as_secs() < 5);
+        assert_eq!(
+            r.exit_code,
+            2,
+            "expected_cause={cause}, timeout_seconds={timeout}, wall_start={wall_start:?}, elapsed={:?}, stdout={}, stderr={}",
+            start.elapsed(),
+            r.stdout,
+            r.stderr
+        );
+        assert!(
+            start.elapsed().as_secs() < 5,
+            "expected_cause={cause}, timeout_seconds={timeout}, wall_start={wall_start:?}, elapsed={:?}, exit={}, stdout={}, stderr={}",
+            start.elapsed(),
+            r.exit_code,
+            r.stdout,
+            r.stderr
+        );
         let report: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
         assert_eq!(
             report["transport_failure"],

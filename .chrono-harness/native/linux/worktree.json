@@ -1,0 +1,42 @@
+{
+  "schema": "chrono-worktree-config/v2",
+  "host_config": ".chrono-harness/config.json",
+  "remote": "origin",
+  "git": {
+    "program": "/usr/bin/git",
+    "expected_version": "git version 2.55.0",
+    "sha256": "d4d2ba562243015206d4248edfec871a74786499292d00ed072dbca2f5ae8073"
+  },
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "SSH_AUTH_SOCK"
+    ],
+    "values": {
+      "GIT_TERMINAL_PROMPT": "0"
+    }
+  },
+  "timeout_seconds": 120,
+  "output_limit_bytes": 1048576,
+  "immutable_input_limits": {
+    ".chrono-harness/FILEMAP.json": 2097152,
+    ".chrono-harness/local-config.json": 2097152,
+    ".chrono-harness/ci/scoped-macos.json": 2097152,
+    ".chrono-harness/ci/scoped-linux.json": 2097152
+  },
+  "report_directory": ".chrono-harness/state/native/linux/worktrees/",
+  "check_inputs": {
+    "origin_path": ".chrono-harness/state/native/linux/origin.json",
+    "context_path": ".chrono-harness/state/native/linux/local/context.json",
+    "collection_manifest": ".chrono-harness/state/native/linux/collection/manifest.json",
+    "roles": {
+      "feature": "integration",
+      "integration": "integration"
+    },
+    "full_inputs": {
+      "retained_inputs": ".chrono-harness/state/native/linux/inputs/full.json"
+    }
+  },
+  "automatic_cleanup": ".chrono-harness/native/linux/cleanup.json"
+}

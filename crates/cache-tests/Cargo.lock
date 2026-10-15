@@ -53,6 +53,7 @@ name = "chrono-cache-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-cache",
+ "chrono-harness",
  "serde_json",
  "sha2",
  "tempfile",

@@ -1,0 +1,130 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "platforms": [
+    "macos-aarch64"
+  ],
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "TMPDIR"
+    ],
+    "values": {
+      "CARGO_TERM_COLOR": "never",
+      "CARGO_NET_OFFLINE": "false",
+      "CARGO_HOME": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo",
+      "RUSTUP_HOME": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup",
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "RUSTC": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": ""
+    }
+  },
+  "operations": [],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "host.bootstrap-isolated",
+      "inputs.fetch.runner",
+      "inputs.fetch.runner-tests",
+      "inputs.fetch.instructions",
+      "inputs.fetch.instructions-tests",
+      "inputs.fetch.judge-ci",
+      "inputs.fetch.judge-ci-tests",
+      "inputs.fetch.ci",
+      "inputs.fetch.ci-tests",
+      "inputs.fetch.judge-registration",
+      "inputs.fetch.judge-registration-tests",
+      "inputs.fetch.judge-filemap",
+      "inputs.fetch.judge-filemap-tests",
+      "inputs.fetch.judge-routes",
+      "inputs.fetch.judge-routes-tests",
+      "inputs.fetch.judge-projects",
+      "inputs.fetch.judge-projects-tests",
+      "inputs.fetch.judge-cost",
+      "inputs.fetch.judge-cost-tests",
+      "inputs.fetch.judge-mixed",
+      "inputs.fetch.judge-mixed-tests",
+      "inputs.fetch.judge-workflow",
+      "inputs.fetch.judge-workflow-tests",
+      "inputs.fetch.inputs",
+      "inputs.fetch.inputs-tests",
+      "inputs.fetch.distribution",
+      "inputs.fetch.distribution-tests",
+      "inputs.fetch.judge-cargo",
+      "inputs.fetch.judge-cargo-tests",
+      "inputs.fetch.worktree",
+      "inputs.fetch.worktree-tests",
+      "inputs.fetch.diagnostics",
+      "inputs.fetch.diagnostics-tests",
+      "inputs.fetch.cache",
+      "inputs.fetch.cache-tests",
+      "guard.check.runner"
+    ],
+    "tools": {
+      "python3": "/usr/bin/python3",
+      "cargo": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+      "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo"
+    },
+    "timeout_seconds": 120,
+    "output_limit_bytes": 1048576,
+    "operation_bounds": {
+      "guard.check.runner": {
+        "timeout_seconds": 600,
+        "output_limit_bytes": 4194304
+      }
+    }
+  },
+  "files": [
+    {
+      "id": "original.rust-inventory",
+      "location": {
+        "path": ".chrono-harness/inputs/local/rust.json"
+      }
+    },
+    {
+      "id": "private.components",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/components"
+      }
+    },
+    {
+      "id": "private.multirust-config",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/multirust-config.toml"
+      }
+    },
+    {
+      "id": "private.rustup-settings",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/settings.toml"
+      }
+    },
+    {
+      "id": "private.cargo.config",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/config"
+      }
+    },
+    {
+      "id": "private.cargo.config.toml",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/config.toml"
+      }
+    },
+    {
+      "id": "private.cargo.credentials",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/credentials"
+      }
+    },
+    {
+      "id": "private.cargo.credentials.toml",
+      "location": {
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/credentials.toml"
+      }
+    }
+  ],
+  "directories": [],
+  "stop_on_failure": true
+}

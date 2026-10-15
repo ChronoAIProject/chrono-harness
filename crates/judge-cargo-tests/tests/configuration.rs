@@ -4,6 +4,73 @@ use cargo::*;
 use serde_json::json;
 use std::fs;
 
+#[test]
+fn directory_relocation_consumes_original_manifest_and_rejects_wrong_origin_or_bytes() {
+    for case in ["original", "wrong-origin", "changed-byte", "implicit"] {
+        let mut f = Fixture::new();
+        toolchain_binding(&mut f);
+        let path = f.root().join(".chrono-harness/state/sdk.json");
+        let mut inventory: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let original_root = "/unavailable/original-sdk";
+        inventory["root"] = json!(original_root);
+        fs::write(&path, serde_json::to_vec(&inventory).unwrap()).unwrap();
+        for input in f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+        {
+            if input["id"] == "toolchain.sdk.manifest" {
+                input["sha256"] = json!(chrono_harness::sha256(&fs::read(&path).unwrap()));
+            }
+        }
+        if case != "implicit" {
+            f.contract["toolchain"]["sdks"][0]["manifest_root"] =
+                json!(if case == "wrong-origin" {
+                    "/different-origin"
+                } else {
+                    original_root
+                });
+        }
+        if case == "changed-byte" {
+            let directory = f
+                .root()
+                .join(f.contract["toolchain"]["sdks"][0]["root"].as_str().unwrap());
+            fs::write(
+                directory.join(inventory["files"][0]["path"].as_str().unwrap()),
+                b"changed",
+            )
+            .unwrap();
+        }
+        f.save();
+        let (code, report, stderr) = f.call();
+        if case == "original" {
+            assert_eq!(code, 0, "{report}: {stderr}");
+            assert_eq!(
+                report["toolchain"]["sdks"][0]["manifest_root"],
+                original_root
+            );
+            assert_eq!(
+                fs::read(&path).unwrap(),
+                serde_json::to_vec(&inventory).unwrap()
+            );
+        } else {
+            assert_ne!(code, 0, "{case}: {report}");
+            assert!(report["operation"].is_null(), "{report}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains(if case == "changed-byte" {
+                        "directory inventory digest differs"
+                    } else {
+                        "manifest schema/root mismatch"
+                    }),
+                "{case}: {report}"
+            );
+        }
+    }
+}
+
 fn portable(f: &mut Fixture) {
     let root = f.root();
     f.contract["schema"] = "chrono-cargo-inputs/v3".into();
@@ -241,11 +308,7 @@ fn portable_policy_runs_and_rejects_through_both_profiles_without_selecting_docs
                 assert!(rows.is_empty(), "{report}");
             } else {
                 assert_eq!(rows.len(), 1, "{report}");
-                let process = if consumer == Consumer::Full {
-                    &rows[0]["receipt"]["process"]
-                } else {
-                    &rows[0]["process"]
-                };
+                let process = &rows[0]["receipt"]["process"];
                 let bytes: Vec<u8> =
                     serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
                 let actual: serde_json::Value = serde_json::from_slice(&bytes).unwrap();

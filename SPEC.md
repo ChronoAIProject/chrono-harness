@@ -210,6 +210,10 @@ Config v3 可额外登记 `input_closure.bindings`：每项必须有唯一 `id`�
 `E_REFERENCE`。v1/v2 拒绝该字段。bindings 只记录 AI 明确选择的关系，registration
 不扫描目录、语言、命令、manifest 或工具链来补齐依赖，也不把登记成功解释为现实中
 没有遗漏输入；声明范围的登记就绪由 `status`、`unresolved` 和各消费者的实际证据共同决定。
+Config v3/v4 可在同一 `input_closure.input_sets` 登记具名、非空、无重复的字面输入数组；
+binding 用 `input_set` 引用一个数组，且与 `inputs` 恰选其一。未知名、空数组、递归别名、
+混合形式及旧 schema 使用均拒绝。别名保留原配置字节，不产生依赖边；引用、coverage、
+快照所需输入与显式 FILEMAP 边采用相同解析结果，不能因此声明输入完整。
 Config v3 可显式采用版本化 `input_closure.coverage`，合同为
 `{schema: "chrono-input-coverage/v1", required: [{consumer, domains: string[]}], rows: [{consumer, domain, state, bindings: string[], reason}]}`。
 `required` 非空，逐个列出可执行消费者及非空的宿主自定义输入域；rows 必须恰好覆盖
@@ -252,6 +256,11 @@ backend 与 build-script 输入逐项连接 FILEMAP；linker 以独立工具、�
 前后重核，递归配置不得提供第二套 linker/sysroot 来源。v5 报告使用
 `chrono-cargo-run/v3`，仍保持 `input_closure_complete: false`；它不推断未登记的
 编译器库、委托进程、SDK 元数据、构建脚本读取、OS 或网络输入。v2/v3/v4 的解释保持不变。
+可选 guard v6 增加显式 native/explicit target 选择；native 保留原生输出布局，核绑定
+compiler 的实际 host，拒绝另一个配置或环境 target 来源。目录 v3 另绑定显式物理目录
+成员与空目录别名，仍不推断依赖。具体命令、离线环境和漂移合同见 Cargo 所有者文档。
+`chrono-inputs observe` 只按登记动作和具名文件／目录产生有界观察，保留原输入、启动记录、
+输出流和失败；它不改预期摘要、不补历史端点、不启用治理。目录观察不是 guard 目录声明。
 
 v3 可显式选择逐项祖先清单，或断言宿主根的所有严格祖先都没有 Cargo 配置；后一种只核验具名范围的缺失，发现文件即失败，不推断登记或依赖。Cargo home 可显式相对同一宿主根解释，避免将 checkout 深度或个人绝对路径写死进可搬移政策。根、Cargo home、命令行与 include 输入仍逐项登记；v2 合同保留原义。适用迁移与观测边界见同文档，不能由配置可搬移推断整个宿主或完整输入已可移植。
 脚本、fixture、环境文件、生成器输入都必须逐个登记依赖，不能按目录名猜测试集。

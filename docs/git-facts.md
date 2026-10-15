@@ -347,3 +347,11 @@ reported no changed path for an executable-bit change; the canonical check and
 registered cleanup both rejected it, preserving the checkout. Restoring the
 mode restored acceptance. This is a bounded public-binary consumer, not input
 closure or deterministic-parity certification.
+
+`chrono-git-configs/v2` makes each platform entry an explicit `local`/`ci` map.
+`CHRONO_CHECK_SOURCE` selects that map (unset means local); unknown or absent
+choices fail without fallback. Original selectors and direct endpoint policies
+remain distinct fixed bytes. Selection observations and snapshot structural
+bindings carry `check_source` with their v2 identities. A source change after
+reader construction rejects further reads. V1 retains its platform-only shape.
+This selects declared policy; it does not provision or certify native inputs.

@@ -600,12 +600,59 @@ fn example_push(root: &Path, candidate: &str, branch: &str) -> Result<Value, Str
         candidate,
     )
 }
+// Before dispatch/publication, retain the explicit fixture inputs. These bytes
+// survive a child's deadline through the existing state/receipt consumers.
+fn fixture_inputs(root: &Path, context: &Value) -> chrono_harness::prepared::Original {
+    let directory = ".chrono-harness/state/fixture-inputs/";
+    let mut inputs = Vec::new();
+    for path in [
+        ".chrono-harness/config.json",
+        ".chrono-harness/FILEMAP.json",
+        ".chrono-harness/projects.json",
+        ".chrono-harness/judges.json",
+        ".chrono-harness/workflow.json",
+        ".chrono-harness/worktree.json",
+        ".chrono-harness/cleanup.json",
+        ".chrono-harness/ci/check.json",
+        ".chrono-harness/ci/units.json",
+        ".git",
+        ".git/HEAD",
+        ".git/config",
+    ] {
+        if fs::symlink_metadata(root.join(path)).is_ok_and(|metadata| metadata.is_dir()) {
+            inputs.push(json!({"path":path,"presence":"present","kind":"directory"}));
+            continue;
+        }
+        match fs::read(root.join(path)) {
+            Ok(bytes) => {
+                let original =
+                    chrono_harness::prepared::retain_original(root, directory, "input", &bytes)
+                        .unwrap();
+                inputs.push(json!({"path":path,"presence":"present","original":original}));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                inputs.push(json!({"path":path,"presence":"absent"}))
+            }
+            // A linked checkout's literal .git attachment is retained above.
+            // Nested paths are not missing repository metadata; their parent
+            // is a file. Do not follow a new inferred metadata dependency here.
+            Err(error) if error.kind() == std::io::ErrorKind::NotADirectory => inputs.push(
+                json!({"path":path,"presence":"parent-not-directory","error":error.to_string()}),
+            ),
+            Err(error) => panic!("fixture input {path}: {error}"),
+        }
+    }
+    let bytes =
+        serde_json::to_vec(&json!({"source_root":root,"context":context,"inputs":inputs})).unwrap();
+    chrono_harness::prepared::retain_original(root, directory, "invocation-inputs", &bytes).unwrap()
+}
 fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
     // A copied-host fixture owns its receipt policy too. The source checkout's
     // deployed Git binding is host policy, not a native test-platform input.
     let owner = retained_receipts::Owner::new();
     let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
     assert_eq!(argv[1], "check");
+    fixture_inputs(root, &json!({"argv":argv,"context":context}));
     let output = Command::new(root.join(&argv[0]))
         .args(&argv[1..])
         .current_dir(root)
@@ -709,8 +756,45 @@ fn retain_command_result_observed(
     output: &std::process::Output,
     expected_exit: Option<i32>,
     directory_override: Option<&Path>,
-    birth_observer: Option<&mut dyn FnMut(&str)>,
+    mut birth_observer: Option<&mut dyn FnMut(&str)>,
 ) -> chrono_worktree::RetainedArtifact {
+    let mut progress = chrono_harness::observation::Progress::open(
+        producer_root,
+        ".chrono-harness/state/ci-test-publications/",
+        "publication-",
+        json!({
+            "producer_root":producer_root,"command_root":root,"argv":argv,"context":context,
+            "original_command":{"exit":output.status.code(),"status":output.status.to_string(),
+                "stdout_sha256":chrono_harness::sha256(&output.stdout),
+                "stderr_sha256":chrono_harness::sha256(&output.stderr)},
+            "expected_exit":expected_exit}),
+    )
+    .unwrap();
+    progress
+        .record("fixture-inputs-entered", Value::Null)
+        .unwrap();
+    let inputs = fixture_inputs(root, &json!({"argv":argv,"context":context}));
+    let owner_inputs = fixture_inputs(producer_root, &json!({"producer":"ci-command-result"}));
+    progress
+        .record(
+            "fixture-inputs-returned",
+            json!({"inputs":inputs,"owner_inputs":owner_inputs}),
+        )
+        .unwrap();
+    let progress_path = progress.path().to_owned();
+    let mut last_phase = String::new();
+    let mut observe = |phase: &str| {
+        // A busy gate can notify repeatedly; retain its first factual boundary
+        // without a repeated status stream or changing the scheduling callback.
+        if phase != last_phase {
+            progress.record(phase, Value::Null).unwrap();
+            last_phase = phase.into();
+        }
+        if let Some(observer) = birth_observer.as_deref_mut() {
+            observer(phase);
+        }
+    };
+    observe("registered-store-entered");
     let (directory, generated_outputs) = chrono_worktree::RetainedArtifact::registered_store(
         producer_root,
         ".chrono-harness/worktree.json",
@@ -719,6 +803,7 @@ fn retain_command_result_observed(
     .unwrap_or_else(|error| {
         panic!("receipt owner refused publication: {error}; original command: {output:?}")
     });
+    observe("registered-store-returned");
     if let Some(requested) = directory_override {
         assert_eq!(
             requested, directory,
@@ -731,9 +816,7 @@ fn retain_command_result_observed(
         .tempdir_in(&directory)
         .unwrap()
         .keep();
-    let config: Value = fs::read(root.join(".chrono-harness/config.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    let config = chrono_harness::load_selected_config(&root, ".chrono-harness/config.json")
         .unwrap_or(Value::Null);
     let generated: Vec<String> = generated_outputs
         .iter()
@@ -757,11 +840,12 @@ fn retain_command_result_observed(
     } else {
         "unexpected-command-exit; original diagnostics and partial effects required"
     };
+    observe("original-copy-entered");
     // Keep the command's original evidence even if ownership admission fails.
     // An unregistered copy stays unknown and cannot authorize reclamation.
     fs::write(destination.join("stdout.bin"), &output.stdout).unwrap();
     fs::write(destination.join("stderr.bin"), &output.stderr).unwrap();
-    fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"expected_exit":expected_exit,"status":output.status.to_string(),"joined":true,"retention_reason":reason})).unwrap()).unwrap();
+    fs::write(destination.join("binding.json"), serde_json::to_vec_pretty(&json!({"root":root,"argv":argv,"context":context,"exit":output.status.code(),"expected_exit":expected_exit,"status":output.status.to_string(),"joined":true,"retention_reason":reason,"publication_progress":{"source_root":producer_root,"path":progress_path}})).unwrap()).unwrap();
     retain_context_state(
         &root.join(".chrono-harness/state"),
         &destination.join("original-state"),
@@ -778,6 +862,8 @@ fn retain_command_result_observed(
         "projects.json",
         "judges.json",
         "workflow.json",
+        "worktree.json",
+        "cleanup.json",
     ] {
         let path = root.join(".chrono-harness").join(name);
         if path.is_file() {
@@ -787,32 +873,26 @@ fn retain_command_result_observed(
     if !output.status.success() {
         eprintln!("original CI fixture evidence: {}", destination.display());
     }
-    let receipt = match birth_observer {
-        Some(observer) => chrono_worktree::RetainedArtifact::begin_with_birth_observer(
-            &directory,
-            "ci-command-result",
-            &destination,
-            &generated,
-            "command-assertion",
-            reason,
-            observer,
-        ),
-        None => chrono_worktree::RetainedArtifact::begin(
-            &directory,
-            "ci-command-result",
-            &destination,
-            &generated,
-            "command-assertion",
-            reason,
-        ),
-    }
+    observe("original-copy-returned");
+    let receipt = chrono_worktree::RetainedArtifact::begin_with_birth_observer(
+        &directory,
+        "ci-command-result",
+        &destination,
+        &generated,
+        "command-assertion",
+        reason,
+        &mut observe,
+    )
     .unwrap_or_else(|error| {
         panic!(
             "receipt owner refused admission: {error}; original command evidence: {}",
             destination.display()
         )
     });
+    observe("registry-admitted");
+    observe("seal-entered");
     receipt.seal().unwrap();
+    observe("publication-sealed");
     receipt
 }
 fn retain_context_state(root: &Path, destination: &Path) {
@@ -922,7 +1002,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read =
         |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
-    let config = read(".chrono-harness/config.json");
+    let config = chrono_harness::load_selected_config(&source, ".chrono-harness/config.json").unwrap();
     let mut tool = config["tools"]
         .as_array()
         .unwrap()

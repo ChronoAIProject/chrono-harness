@@ -40,13 +40,12 @@ takes the maximum nor the minimum. Override additions, changes and removals reta
 plan DELTA impact in full and scoped checks, and collection reconstructs both the
 registered overrides and resolved operation bounds without business execution.
 
-The current coordinator startup plan contains `host.bootstrap-tests` and
-`host.bootstrap-real-consumer`, each at 900 seconds/1048576 bytes. The existing
-full-host migration consumer additionally lists `build.distribution`, explicitly bounded at 600 seconds/1048576 bytes, while
-its startup test keeps the 900-second default. The distribution and release
-integration plans keep their original 600-second defaults. A compatible candidate
-decoder supports that input without copying the older host's source or changing
-the coordinator's startup policy. Candidate checks and local migration do not
+The current startup plan builds worktree before `host.bootstrap-provision-tests`,
+`host.bootstrap-tests` and `host.bootstrap-real-consumer`, retaining the
+900-second/1048576-byte default. The unconsumed optional host-script distribution
+branch and its exclusive prerequisite retire. The independent distribution and
+release integration plans keep their original producers and 600-second defaults.
+Candidate checks and local migration do not
 establish compatible public release, native acceptance or full governance adoption.
 
 FILEMAP v2 may additionally declare one `execution_scheduling` policy:

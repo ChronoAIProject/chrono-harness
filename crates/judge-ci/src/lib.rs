@@ -258,6 +258,16 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
             .values
             .get(&snapshot.effective_path)
             .ok_or("missing effective registration config")?;
+        let judges_path = config["registries"]["judges"]
+            .as_str()
+            .ok_or("judge registry path missing")?;
+        let judges = snapshot
+            .values
+            .get(judges_path)
+            .ok_or("judge registry missing")?;
+        for judge in judges["judges"].as_array().ok_or("judges missing")? {
+            nodes.insert(format!("judge:{}", text(judge, "id")?));
+        }
         for tool in config["tools"].as_array().ok_or("tools missing")? {
             nodes.insert(format!("tool:{}", text(tool, "id")?));
         }
@@ -699,7 +709,11 @@ fn ci_impact(
         .collect();
     selected.extend(extras.keys().cloned());
     let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
-    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    // The deterministic closure is a derived view of these exact union edges
+    // and seed causes. Serializing every (seed, node) predecessor and traversed
+    // seed set repeats the graph quadratically and can exhaust judge transport.
+    // Selection and collection still use the same complete closure above.
+    let explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "extra_selections":extras, "legacy_only_selections":legacy_only});
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
         affected.extend(new.owner_nodes.values().cloned());
@@ -715,11 +729,35 @@ fn ci_impact(
     (paths, selected, explanation, affected)
 }
 
+fn phase(
+    progress: &mut Option<chrono_harness::observation::Progress>,
+    name: &str,
+    details: Value,
+) -> Result<(), String> {
+    if let Some(progress) = progress {
+        progress.record(name, details)?;
+    }
+    Ok(())
+}
 pub fn judge(req: &Request) -> Response {
     let mut reader = Reader::legacy();
     let mut opening = Value::Null;
     let mut scope = "chrono-ci-check/v1".to_owned();
-    let result = evaluate(req, &mut reader, &mut opening, &mut scope);
+    let mut progress = None;
+    let result = evaluate(req, &mut reader, &mut opening, &mut scope, &mut progress);
+    let publication = phase(
+        &mut progress,
+        "evaluation-returned",
+        object!({
+        "error":result.as_ref().err(),"status":result.as_ref().ok().map(|r| &r.status)}),
+    );
+    let result = match publication {
+        Ok(()) => result,
+        Err(error) => Err(match result {
+            Ok(_) => error,
+            Err(original) => format!("{original}; {error}"),
+        }),
+    };
     let mut response = match result {
         Ok(r) => r,
         Err(e) => Response {
@@ -739,6 +777,9 @@ pub fn judge(req: &Request) -> Response {
         response.evidence["git_facts"] = reader.observation();
     } else if !opening.is_null() {
         response.evidence["git_facts"] = opening;
+    }
+    if let Some(progress) = progress {
+        response.evidence["progress_path"] = object!(progress.path());
     }
     response
 }
@@ -927,6 +968,7 @@ pub fn scheduling_requirements(
         &mut String::new(),
         false,
         false,
+        &mut None,
     )?;
     if !i.blocked.is_empty() {
         return Err(format!("blocked global obligations: {:?}", i.blocked));
@@ -967,6 +1009,7 @@ pub fn collection_requirements(
         &mut String::new(),
         false,
         true,
+        &mut None,
     )?;
     if !i.blocked.is_empty() {
         return Err(format!("blocked global obligations: {:?}", i.blocked));
@@ -990,6 +1033,7 @@ fn inventory(
     scope: &mut String,
     admit_entry: bool,
     verify_checkout: bool,
+    progress: &mut Option<chrono_harness::observation::Progress>,
 ) -> Result<Inventory, String> {
     if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
         return Err("invalid request protocol/identity".into());
@@ -1007,6 +1051,39 @@ fn inventory(
         scope.report_path(&config)?;
     }
     full_oid(&req.candidate)?;
+    if admit_entry {
+        let output = match &req.scope {
+            Some(scope) => scope.report_path(&config)?,
+            None => config.report_path.clone(),
+        };
+        let parent = Path::new(&output)
+            .parent()
+            .ok_or("report parent missing")?
+            .to_str()
+            .ok_or("report parent UTF-8")?;
+        let directory = if parent.is_empty() {
+            "process-evidence/".into()
+        } else {
+            format!("{parent}/process-evidence/")
+        };
+        let input = serde_json::to_vec(req).map_err(|e| e.to_string())?;
+        let request_original =
+            chrono_harness::prepared::retain_original(root, &directory, "judge-request", &input)?;
+        let config_original =
+            chrono_harness::prepared::retain_original(root, &directory, "judge-config", &bytes)?;
+        *progress = Some(chrono_harness::observation::Progress::open(
+            root,
+            &directory,
+            "judge-phases-",
+            object!({"request_id":req.request_id,"request_original":request_original,
+                "config_original":config_original,"source_root":root,"report_path":output}),
+        )?);
+    }
+    phase(
+        progress,
+        "facts-opening",
+        object!({"facts_config":p.facts_config}),
+    )?;
     if let Some(path) = &p.facts_config {
         *reader = Reader::for_config_observed(root, path).map_err(|failure| {
             *opening = failure.observation;
@@ -1017,13 +1094,29 @@ fn inventory(
         }
         reader.verify_config(root, &req.candidate)?;
     }
+    phase(
+        progress,
+        "candidate-acquisition",
+        object!({"candidate":req.candidate}),
+    )?;
     verify_oid(reader, root, &req.candidate)?;
     if at(reader, root, &req.candidate, &req.config_path)? != bytes {
         return Err("config does not match candidate/request".into());
     }
+    phase(
+        progress,
+        "candidate-config-accepted",
+        object!({"config_sha256":req.config_sha256}),
+    )?;
     if verify_checkout {
+        phase(progress, "checkout-validation", object!({}))?;
         clean(reader, root, &req.candidate, &p)?;
     }
+    phase(
+        progress,
+        "endpoint-inventory",
+        object!({"base":req.base,"candidate":req.candidate}),
+    )?;
     let previous;
     let old = if req.initial {
         if req.base.is_some() {
@@ -1330,6 +1423,11 @@ fn inventory(
         // Validate the complete obligation graph before selecting any unit.
         chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
     }
+    phase(
+        progress,
+        "inventory-ready",
+        object!({"selected":selected,"blocked":blocked}),
+    )?;
     Ok(Inventory {
         config,
         p,
@@ -1354,6 +1452,7 @@ fn evaluate(
     reader: &mut Reader,
     opening: &mut Value,
     scope: &mut String,
+    progress: &mut Option<chrono_harness::observation::Progress>,
 ) -> Result<Response, String> {
     let Inventory {
         config,
@@ -1372,12 +1471,17 @@ fn evaluate(
         environment_policy,
         declarations,
         methods,
-    } = inventory(req, reader, opening, scope, true, true)?;
+    } = inventory(req, reader, opening, scope, true, true, progress)?;
     let root = &req.host_root;
     if let Some(chrono_harness::units::Scope::Collect { manifest }) = &req.scope {
         if !blocked.is_empty() {
             return Err(format!("blocked global obligations: {blocked:?}"));
         }
+        phase(
+            progress,
+            "collection-entered",
+            object!({"manifest":manifest}),
+        )?;
         let mut response = collect::collect(
             req,
             manifest,
@@ -1387,6 +1491,11 @@ fn evaluate(
             &methods,
             &declarations,
             &environment_policy,
+        )?;
+        phase(
+            progress,
+            "collection-returned",
+            object!({"status":response.status}),
         )?;
         clean(reader, root, &req.candidate, &p)?;
         response.evidence["changed_paths"] = object!(paths);
@@ -1401,6 +1510,11 @@ fn evaluate(
             unit,
         )?;
     }
+    phase(
+        progress,
+        "plan-preparation",
+        object!({"selected":selected,"blocked":blocked}),
+    )?;
     let plan = if blocked.is_empty() {
         Some(chrono_judge_routes::prepare_scheduled(
             root,
@@ -1439,7 +1553,17 @@ fn evaluate(
         })
     }
     if let Some(plan) = &plan {
+        phase(
+            progress,
+            "operations-entered",
+            object!({"operations":operations}),
+        )?;
         let outcome = chrono_judge_projects::execute(plan)?;
+        phase(
+            progress,
+            "operations-returned",
+            object!({"executed":outcome.executed.len(),"blocked":outcome.blocked.len()}),
+        )?;
         for result in outcome.executed.iter().chain(&outcome.blocked) {
             results.push(CheckResult {
                 id: result.operation.clone(),
@@ -1492,6 +1616,7 @@ fn evaluate(
             exit_code: None,
         });
     }
+    phase(progress, "post-checkout-validation", object!({}))?;
     if let Err(e) = clean(reader, root, &req.candidate, &p) {
         results.push(CheckResult {
             id: "ci.post-snapshot".into(),

@@ -80,8 +80,7 @@
   "participation": {
     "coordinator_root": "git-main-worktree",
     "program": ".chrono-harness/bin/chrono-worktree",
-    "git": "/usr/bin/git",
-    "config": ".chrono-harness/worktree.json"
+    "git": "/usr/bin/git"
   },
   "entrypoint": {
     "tool": "python3",
@@ -89,5 +88,12 @@
   },
   "rust_incremental": true,
   "require_tool_bindings": true,
-  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json"
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
+  "environment": {
+    "CARGO_HOME": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo",
+    "RUSTUP_HOME": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup",
+    "RUSTC": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+    "RUSTFLAGS": "--sysroot=/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
+    "RUSTFMT": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustfmt"
+  }
 }

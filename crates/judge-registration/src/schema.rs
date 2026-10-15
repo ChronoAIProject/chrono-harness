@@ -298,7 +298,7 @@ pub fn config(v: &Value) -> Result {
         }
     }
     let closure_optional = if matches!(v["schema_version"].as_u64(), Some(3 | 4)) {
-        vec!["bindings", "coverage"]
+        vec!["bindings", "coverage", "input_sets"]
     } else {
         vec![]
     };
@@ -318,20 +318,52 @@ pub fn config(v: &Value) -> Result {
     {
         return Err("schema v3 declared-complete input closure requires bindings".into());
     }
-    if let Some(bindings) = v["input_closure"].get("bindings") {
+    let closure = &v["input_closure"];
+    if let Some(sets) = closure.get("input_sets") {
+        let sets = sets.as_object().ok_or("input_sets must be an object")?;
+        for (id, inputs) in sets {
+            if id.is_empty() || array(inputs)?.is_empty() {
+                return Err("input set requires a name and nonempty explicit inputs".into());
+            }
+            unique(inputs, None)?;
+        }
+    }
+    if let Some(bindings) = closure.get("bindings") {
         unique(bindings, Some("id"))?;
         for binding in array(bindings)? {
-            object(binding, &["id", "consumer", "kind", "inputs"], &[])?;
+            object(
+                binding,
+                &["id", "consumer", "kind"],
+                &["inputs", "input_set"],
+            )?;
             string(&binding["id"])?;
             string(&binding["consumer"])?;
             string(&binding["kind"])?;
-            nonempty_strings(&binding["inputs"])?;
+            for input in binding_inputs(closure, binding)? {
+                string(input)?;
+            }
         }
     }
     if let Some(coverage) = v["input_closure"].get("coverage") {
         crate::input_coverage::shape(coverage, &v["input_closure"])?;
     }
     Ok(())
+}
+
+/// A named vector is a literal alias owned by this registry, never an inferred edge.
+/// Keep original configuration bytes intact for endpoint and digest validation.
+pub fn binding_inputs<'a>(closure: &'a Value, binding: &'a Value) -> Result<&'a Vec<Value>> {
+    match (binding.get("inputs"), binding.get("input_set")) {
+        (Some(inputs), None) => array(inputs),
+        (None, Some(name)) => {
+            let name = string(name)?;
+            let inputs = closure["input_sets"]
+                .get(name)
+                .ok_or_else(|| format!("unknown input set {name}"))?;
+            array(inputs)
+        }
+        _ => Err("binding requires exactly one of inputs or input_set".into()),
+    }
 }
 
 fn validate_execution_units(v: &Value) -> Result {

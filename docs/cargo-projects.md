@@ -152,6 +152,28 @@ the asserted files are absent. Relative home and input locations are explicit
 host choices, not automatic rewrites. Existing v2 policies keep their meaning.
 The product host has not yet activated the guarded operation.
 
+The local host retains the runner's real `guard.check.runner` consumer, actual
+Cargo/compiler/formatter/linker and Rust/SDK/full Developer assertions, plus the
+34 metadata/fetch operations. The unselected sibling guarded policies/actions and
+their exclusive package-file declarations are retired; original bytes remain in
+commit `87a77182c5da33627deb3b837e7515748eb6fd58`. The guard names
+`.chrono-harness/local-config.json` directly, including for CI's required local
+binding rejection. Scoped execution uses the stable source/platform selector and
+candidate tools; native full activation and positive native guard are unestablished.
+See [the finite host boundary](full-ci.md#main-host-adoption-inputs).
+
+The source-only native observer repair can produce the existing
+`chrono-input-directory/v3` guard manifests directly from the declared live
+roots. V3 directory-child rows additionally admit `path: "."` for the inventory
+root; this checks additions at the root before and after the operation, as
+nested rows already do. File and alias path grammar is unchanged. Exact root
+children, nested and empty directories, hashes and alias targets/kinds are
+program-produced, then consumed through the existing registered input identity.
+The two proposed Mac SDK declarations retain the SDK and full Developer roots.
+No manifest is inferred from an older flat observation, and publishing an
+original is not guard acceptance. See [native producer repair](inputs.md#native-producer-repair-source-only)
+for acquisition semantics, paired policy changes, costs and unexecuted checks.
+
 Each package row contains `id`, `name`, `version`, `source`, `project`,
 `manifest_input`, `inputs`, `checksum`, `features` and `dependencies`. Local
 packages set `project`; their `source`, `manifest_input` and `checksum` are null
@@ -291,6 +313,14 @@ The object contains:
 | `sdks` | Directory inventories with `{root, manifest, environment}`; each environment variable must select that exact canonical root |
 | `build_script_inputs` | Explicit present input-ID list for build-script external reads |
 
+A directory declaration may additionally bind `manifest_root` to the exact
+original manifest's `root` string. `root` then selects the current directory and
+`manifest_root` identifies the unchanged inventory being admitted there. The
+guard never probes that original location or changes a file/link expectation;
+without this field the existing exact root match remains required. Evidence
+includes the explicit original root. Admission and the post-consumer recheck
+operate on the selected directory, using the original retained manifest bytes.
+
 Each directory manifest lists every retained regular file and its SHA-256 under
 `chrono-input-directory/v1`; empty inventories, duplicate paths, symlinks and
 identity mismatches fail before Cargo. `chrono-input-directory/v2` retains those
@@ -309,6 +339,28 @@ files and literal link targets, declared inputs and selected paths after the
 consumer. Resolving to the same file does not make different literal link targets
 equal. An otherwise successful consumer that changes a declared alias or redirects
 the directory root fails with its original operation result preserved.
+
+`chrono-input-directory/v3` additionally requires `directories`, explicit
+`{path, entries}` rows binding physical directory membership, including empty
+directories used as alias targets. Names, duplicates, unsupported entries and
+membership drift fail. Earlier versions reject this field. Link target coverage
+uses indexes over the same declared files/directories, without extending the
+inventory or scanning for dependencies.
+
+`chrono-cargo-inputs/v6` requires `target_mode: "native" | "explicit"` alongside
+all v5 bindings. Native mode retains Cargo's original native output layout and
+requires the bound compiler's actual `-vV` host to equal the declared target.
+Metadata still uses the exact filter platform. A competing `CARGO_BUILD_TARGET`,
+`build.target` or configured target environment is rejected. Explicit mode keeps
+the target argument contract. V6 can take offline mode from explicitly set
+`CARGO_NET_OFFLINE=true`; older versions still require their argv flags.
+Named suites/binaries/examples/benches, one test filter and a literal child tail
+after `--` preserve the registered test invocation and real failure assertions.
+The tail cannot change preceding Cargo resolution options. Unsupported Cargo
+commands, including `fmt`, are not admitted by this guard.
+
+Bounded phase observations on stderr retain progress when an enclosing process
+ends before a terminal report. They are not successful terminal receipts.
 Recursive Cargo
 configuration may not provide a second linker or sysroot selection source.
 V5 reports `chrono-cargo-run/v3` with toolchain evidence and the observed linker

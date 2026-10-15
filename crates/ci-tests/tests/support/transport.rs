@@ -99,6 +99,36 @@ fn declared_git() -> ! {
     panic!("declared Git execution: {error}");
 }
 
+fn retention_failure() {
+    use serde_json::{Value, json};
+
+    // The judge receives the acquired request before making its evidence owner
+    // unavailable. Keep this transition and the response in this same child.
+    let request: Value = serde_json::from_reader(io::stdin().lock()).unwrap();
+    let acquisition = &request["observations"]["preparation"]["receipts"][0];
+    let acquisition = std::fs::metadata(acquisition["path"].as_str().unwrap()).unwrap();
+    assert!(acquisition.is_file());
+    std::fs::rename(
+        ".chrono-harness/state/preparation",
+        ".chrono-harness/state/saved-preparation",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("saved-preparation", ".chrono-harness/state/preparation").unwrap();
+    let mut stdout = io::stdout().lock();
+    serde_json::to_writer(
+        &mut stdout,
+        &json!({
+            "protocol": request["protocol"], "request_id": request["request_id"],
+            "status": "passed", "results": [{"id": "fixture", "status": "passed",
+                "cause": "actual", "exit_code": 0}],
+            "evidence": {"actual": true, "child_pid": std::process::id()},
+        }),
+    )
+    .unwrap();
+    writeln!(stdout).unwrap();
+    stdout.flush().unwrap();
+}
+
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
@@ -139,6 +169,10 @@ fn main() {
     }
     if matches!(mode.as_str(), "diagnostic" | "deep") {
         diagnostic(&mode);
+        return;
+    }
+    if mode == "retention-failure" {
+        retention_failure();
         return;
     }
     io::copy(&mut io::stdin().lock(), &mut io::sink()).unwrap();

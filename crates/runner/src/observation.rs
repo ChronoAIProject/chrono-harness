@@ -1,11 +1,89 @@
 //! Factual process/tool observations, without expected-version policy or work selection.
-use crate::{CommandSpec, ProcessResult, resolve_program, run_process_observed, sha256};
+use crate::{
+    CommandSpec, ProcessEvidence, ProcessResult, resolve_program, run_process_observed, sha256,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs,
+    io::Write,
     path::{Path, PathBuf},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
+
+/// An owner's unbuffered, unique temporal original. Rows are observations, not
+/// receipts: missing/truncated rows and absence of a terminal remain incomplete.
+/// The caller supplies the evidence namespace and accepted source/input identity.
+pub struct Progress {
+    file: fs::File,
+    path: String,
+    began: Instant,
+    sequence: u64,
+    failed: bool,
+}
+impl Progress {
+    pub fn open(
+        root: &Path,
+        directory: &str,
+        prefix: &str,
+        identity: serde_json::Value,
+    ) -> Result<Self, String> {
+        let dir = crate::no_symlink_parents(root, directory.trim_end_matches('/'))?;
+        fs::create_dir_all(&dir).map_err(|e| format!("progress directory: {e}"))?;
+        let original = tempfile::Builder::new()
+            .prefix(prefix)
+            .suffix(".jsonl")
+            .tempfile_in(&dir)
+            .map_err(|e| format!("progress original: {e}"))?;
+        let (file, path) = original
+            .keep()
+            .map_err(|e| format!("progress original: {e}"))?;
+        let path = path
+            .strip_prefix(root)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("progress path UTF-8")?
+            .to_owned();
+        let mut progress = Self {
+            file,
+            path,
+            began: Instant::now(),
+            sequence: 0,
+            failed: false,
+        };
+        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        progress.record(
+            "accepted",
+            serde_json::json!({"identity":identity,
+            "producer":{"pid":std::process::id(),"executable":executable,
+                "sha256":crate::file_identity(&executable)?.0}}),
+        )?;
+        Ok(progress)
+    }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    pub fn record(&mut self, phase: &str, observation: serde_json::Value) -> Result<(), String> {
+        if self.failed {
+            return Err("progress original has a prior publication failure".into());
+        }
+        let row = serde_json::json!({"schema":"chrono-progress/v1","sequence":self.sequence,
+            "producer_pid":std::process::id(),"phase":phase,"observation":observation,
+            "at_unix_millis":SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e|e.to_string())?.as_millis(),
+            "elapsed_millis":self.began.elapsed().as_millis()});
+        let mut bytes = serde_json::to_vec(&row).map_err(|e| e.to_string())?;
+        bytes.push(b'\n');
+        if let Err(error) = self.file.write_all(&bytes).and_then(|_| self.file.flush()) {
+            self.failed = true;
+            return Err(format!(
+                "progress original {} publication: {error}",
+                self.path
+            ));
+        }
+        self.sequence += 1;
+        Ok(())
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tool {
@@ -22,6 +100,36 @@ pub fn tool(
     env: &BTreeMap<String, String>,
     timeout: u64,
     limit: usize,
+) -> Result<Tool, String> {
+    tool_with_evidence(root, program, version_argv, env, timeout, limit, None)
+}
+pub fn tool_retained(
+    root: &Path,
+    program: &str,
+    version_argv: &[String],
+    env: &BTreeMap<String, String>,
+    timeout: u64,
+    limit: usize,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<Tool, String> {
+    tool_with_evidence(
+        root,
+        program,
+        version_argv,
+        env,
+        timeout,
+        limit,
+        Some(evidence),
+    )
+}
+fn tool_with_evidence(
+    root: &Path,
+    program: &str,
+    version_argv: &[String],
+    env: &BTreeMap<String, String>,
+    timeout: u64,
+    limit: usize,
+    evidence: Option<&ProcessEvidence<'_>>,
 ) -> Result<Tool, String> {
     if !program.contains('/') && !env.contains_key("PATH") {
         return Err("tool resolution requires declared PATH".into());
@@ -40,7 +148,10 @@ pub fn tool(
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let version = run_process_observed(root, &spec, &[], &hash)?;
+    let version = match evidence {
+        Some(paths) => crate::run_process_observed_retained(root, &spec, &[], &hash, paths)?,
+        None => run_process_observed(root, &spec, &[], &hash)?,
+    };
     Ok(Tool {
         program: program.into(),
         basename: path

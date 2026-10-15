@@ -43,6 +43,29 @@ fn main() {
             std::process::exit(93);
         }
         "judge" => judge(),
+        "registry-snapshot" => {
+            let args: Vec<_> = std::env::args().collect();
+            match chrono_harness::facts::registry_snapshot(
+                &std::env::current_dir().unwrap(),
+                &args[2],
+                &args[3],
+            ) {
+                Ok(snapshot) => println!(
+                    "{}",
+                    json!({
+                        "entry_path": snapshot.entry_path,
+                        "effective_path": snapshot.effective_path,
+                        "selection": snapshot.selection,
+                        "identity": chrono_harness::facts::registry_identity(&snapshot.values, &args[3]).unwrap(),
+                        "values": snapshot.values,
+                    })
+                ),
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(2);
+                }
+            }
+        }
         mode => panic!("unknown CLI fixture mode {mode}"),
     }
 }

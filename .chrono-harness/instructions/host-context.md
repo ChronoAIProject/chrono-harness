@@ -18,7 +18,7 @@
 /usr/bin/python3 .chrono-harness/ci/bootstrap.py . .chrono-harness/ci/bootstrap-core.json
 ```
 
-检查前从候选源码 bootstrap。本 macOS 宿主绑定 `/usr/bin/python3`／Python 3.9.6；Rust 版本、操作、安装产物归 bootstrap-core.json／projects.json，不以环境默认替代或改全局默认工具链。工具观察／摘要不证明完整来源。linked checkout 缺兼容协调者／所有权则在构建前失败；Git main 可初始化自己的工具。详见 [CI 启动](../../docs/ci.md#this-repository)及[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
+检查前从候选源码 bootstrap。本 macOS 宿主绑定 `/usr/bin/python3`／Python 3.9.6；Rust 版本、操作、安装产物归 bootstrap-core.json／projects.json，不以环境默认替代或改全局默认工具链。core/cache/detector/local profiles 省略 participation.config，交给同一 worktree 所有者的现有 source/platform 默认选择；acquisition 保留显式政策。工具观察／摘要不证明完整来源。linked checkout 缺兼容协调者／所有权则在构建前失败；Git main 可初始化自己的工具。详见 [CI 启动](../../docs/ci.md#this-repository)及[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
 
 ### 本地／CI 检查
 
@@ -26,7 +26,7 @@
 .chrono-harness/bin/chrono-harness check
 ```
 
-候选必须已提交且检出干净。`--unit ID` 和无值 `--collect` 是同一入口的单元／汇总模式，汇总不重执行业务。schema4 从 config.json 的 `canonical_check` 选择 profile 与输入 action；`CHRONO_CHECK_SOURCE` 未设或 `local` 使用登记 worktree 生产者，`ci` 使用登记 CI 事件生产者，其余值或缺输入失败，不猜范围或回退。本地固定登记 remote 的 workflow target 和 clean HEAD；不手工 prepare。
+候选必须已提交且检出干净。`--unit ID` 和无值 `--collect` 是同一入口的单元／汇总模式，汇总不重执行业务。config.json 的现有 `chrono-git-configs/v2` 按平台／source 选择直接 schema4 政策，再由 `canonical_check` 选择 scoped profile 与输入 action；本地 Mac 归 local-config.json，scoped CI 归 ci/scoped-macos.json／scoped-linux.json。当前已生成工作流仍仅选择 macos-26；Linux target 登记不证明已部署 scoped workflow。`CHRONO_CHECK_SOURCE` 未设或 `local` 使用登记 worktree 生产者，`ci` 使用登记 CI 事件生产者，其余值或缺输入失败，不猜范围或回退。本地固定登记 remote 的 workflow target 和 clean HEAD；不手工 prepare。
 
 本宿主采用 scoped `chrono-ci-check/v3`、26 个单元、一个 DELTA detector 和 always aggregate，只要求 `chrono / collection`。开发／integration 分支通过指向 dev 的 PR 检查；push 只验 dev 落地 DELTA。parent 按 PR 号替换旧运行，push 按 run ID 保留各次 before/after。单元／报告归 check.json，拓扑／共享启动／上传归 units.json；[CI 单元所有者](../../docs/ci-units.md#conditional-jobs-and-the-required-aggregate)拥有原始 producer/artifact attempt 核验、成功前置沿用及共享安装合同，不能按当前重跑 attempt 猜产物。业务构建仍归独立计划，本地／发布保留源码构建。
 
@@ -48,7 +48,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 .chrono-harness/bin/chrono-worktree maintain
 ```
 
-消费登记操作须持有 use 保护。调用方加入全部自有／后台任务、核实际完成／落地后，**从存活协调宿主** finish；maintain 是独立重试。创建、重建、旧 checkout import 和显式政策 migrate 按[worktree 所有者](../../docs/worktree.md)执行，不能从本文推断 Git／GitHub 生命周期授权。
+消费登记操作须持有 use 保护。schema4 的同一 worktree participation／local input owner 让默认生命周期入口复用已选 local input policy；显式 --config 保持原义。本地工具归存活主仓 `/Users/auricstudio/chrono-harness` 的 private Rustup/Cargo state，调用方在主仓执行现有 inputs.provision-isolated action 并有序部署兼容源码工具与已提交政策；保留的前置输出与后续 real-startup／guard 消费必须共享现有 use 保护寿命。调用方加入全部自有／后台任务、核实际完成／落地后，**从存活协调宿主** finish；maintain 是独立重试。创建、重建、旧 checkout import 和显式政策 migrate 按[worktree 所有者](../../docs/worktree.md)执行，不能从本文推断 Git／GitHub 生命周期授权。
 
 本宿主在 worktree.json／cleanup.json 采用 automatic_cleanup/v2，协调锚是 Git owner inventory 的 main worktree，状态在 `.chrono-harness/state/automatic-cleanup-v2/`。start/reconstruct 自动登记并 drain；采用的 bootstrap/check 委托同一 owner。最后内核租约释放后普通入口可回收未 finish 的可重建缓存，保留活子孙、源码、分支、未保留提交、bin 与证据，不设完成。只采用已验证的描述符转交链；不按年龄、目录名或空闲删除。
 
@@ -68,8 +68,10 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 ## 当前未完成边界
 
-五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，开发工具目录仍未显式绑定。
+所选 full 政策与其治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；已登记本地 Cargo guarded、编译器／SDK／Python 输入及观察消费者，尚未选为规范 full 执行。原生 provisioning、固定两端原件、配置及其它适用输入／执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，开发工具目录仍未显式绑定。
 
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 
 缓存已有一个登记消费者的原生 cold miss/save 与 exact-hit 路径验收；changed-source、损坏／不可用、并发、其它消费者及完整成本／生命周期合同仍未完成。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
+
+本轮是用户清除持续全 SPEC 目标后的有限提取。保留实际 34 metadata/fetch、local runner guard、acquisition、startup/custody 与共享 Rust 行为；退休无选择／直接消费者的 sibling guards、独占 package bindings、full-native unit/cache/shared/projection 和无 profile 采用的 host-bootstrap distribution 分支。原 Mac config／cargo-runner 对是 inputs-tests 所有的原样合同 fixture，native acquisition 所需 worktree/cleanup 仍保留。原源身份为 87a77182c5da33627deb3b837e7515748eb6fd58。Mac alias escape、Linux 140 缺事实、positive native guard/full/parity 仍未成立；不为有限交付重启全面激活。详见 [当前源边界与调用方义务](../../docs/full-ci.md#main-host-adoption-inputs)。政策／产品同改的验证和总 CI／存储成本未知；源码阶段不等于 canonical、native、dev、PR、cleanup 或完整 SPEC 完成。

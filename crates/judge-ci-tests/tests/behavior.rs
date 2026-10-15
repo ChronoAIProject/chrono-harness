@@ -118,6 +118,95 @@ impl Host {
 fn pass(r: &Response) {
     assert_eq!(r.status, Status::Passed, "{r:#?}")
 }
+
+#[test]
+fn large_selection_transports_graph_inputs_once_and_preserves_reconstructible_causes() {
+    let h = Host::new();
+    h.change_registry(".chrono-harness/projects.json", |v| {
+        for i in 0..400 {
+            v["owners"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!(format!("node-{i}")));
+            v["projects"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"id":format!("node-{i}"),"actions":{}}));
+        }
+    });
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        for i in 0..400 {
+            let path = format!("input-{i}");
+            h.write(&path, "base");
+            v["files"].as_array_mut().unwrap().push(json!({"path":path,"owner":"host","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:node-0"}]}));
+            v["project_edges"].as_array_mut().unwrap().push(json!({"from":format!("project:node-{i}"),"kind":"compile","to":format!("project:node-{}",(i+1)%400)}));
+        }
+        v["project_edges"].as_array_mut().unwrap().push(json!({"from":"project:node-399","kind":"test-execution","to":"test:suite"}));
+    });
+    let base = h.commit();
+    for i in 0..400 {
+        h.write(&format!("input-{i}"), "candidate");
+    }
+    let candidate = h.commit();
+    let response = h.check(&base, &candidate);
+    pass(&response);
+    assert_eq!(h.calls(), 1);
+    let bytes = serde_json::to_vec(&response).unwrap();
+    assert!(
+        bytes.len() < 8 * 1024 * 1024,
+        "response bytes: {}",
+        bytes.len()
+    );
+    let e = &response.evidence["selection_explanation"];
+    assert_eq!(e["seed_causes"].as_array().unwrap().len(), 400);
+    for i in 0..400 {
+        assert!(
+            e["seed_causes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| s["node"] == format!("file:input-{i}"))
+        );
+        assert!(e["edges"].as_array().unwrap().contains(&json!({"from":format!("project:node-{i}"),"kind":"compile","to":format!("project:node-{}",(i+1)%400),"origin":"both"})));
+    }
+    assert!(e["edges"].as_array().unwrap().contains(&json!({"from":"project:node-399","kind":"test-execution","to":"test:suite","origin":"both"})));
+    assert_eq!(response.evidence["selected"], json!(["test:suite"]));
+}
+
+#[test]
+fn supplied_fixed_registry_selection_preserves_actual_large_consumer() {
+    let Ok(path) = std::env::var("CHRONO_CI_SELECTION_FIXTURE") else {
+        return;
+    };
+    let fixture: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    let result = chrono_judge_ci::scheduling_requirements(
+        Path::new(fixture["root"].as_str().unwrap()),
+        fixture["config"].as_str().unwrap(),
+        Some(fixture["base"].as_str().unwrap().into()),
+        fixture["candidate"].as_str().unwrap().into(),
+        false,
+    )
+    .unwrap();
+    assert!(
+        result["global_selected"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("test:runner-tests"))
+    );
+    let raw = serde_json::to_vec(&result).unwrap();
+    assert!(
+        raw.len() < 8 * 1024 * 1024,
+        "actual selection bytes: {}",
+        raw.len()
+    );
+    use std::io::Write;
+    let mut out = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(fixture["output"].as_str().unwrap())
+        .unwrap();
+    out.write_all(&raw).unwrap();
+}
 fn fail(r: &Response, needle: &str) {
     assert_eq!(r.status, Status::Failed, "{r:#?}");
     assert!(serde_json::to_string(r).unwrap().contains(needle), "{r:#?}")

@@ -34,18 +34,23 @@ pub(super) fn bind(h: &Host) {
     h.policy(|p|{p["schema"]=value!("chrono-worktree-config/v2");p["check_inputs"]=value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}});});
 }
 pub(super) fn install(root: &Path) {
+    install_owned(root, None);
+}
+fn install_owned(root: &Path, owner: Option<&Host>) {
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
     for (project, name) in [
         ("runner", "chrono-harness"),
         ("worktree", "chrono-worktree"),
     ] {
-        install_readonly_executable(root, project, name);
+        let built = source().join(format!("crates/{project}/target/debug/{name}"));
+        install_readonly_file_owned(root, &built, name, format!("{name} 0.1.0\n").as_bytes(), owner);
     }
-    install_readonly_file(
+    install_readonly_file_owned(
         root,
         Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")),
         "context-judge",
         b"fixture\n",
+        owner,
     );
 }
 pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
@@ -53,12 +58,18 @@ pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str
     install_readonly_file(root, &built, name, format!("{name} 0.1.0\n").as_bytes());
 }
 pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
-    let ready = Command::new(program)
+    ready_version_program_owned(root, program, expected, None);
+}
+pub(super) fn ready_version_program_owned(root: &Path, program: &Path, expected: &[u8], owner: Option<&Host>) {
+    let mut command = Command::new(program);
+    command
         .current_dir(root)
         .env_clear()
-        .arg("--version")
-        .output()
-        .unwrap();
+        .arg("--version");
+    let ready = match owner {
+        Some(host) => host.native_output(&mut command),
+        None => command.output().unwrap(),
+    };
     assert!(
         ready.status.success(),
         "fixture readiness {program:?}: {ready:?}"
@@ -70,6 +81,9 @@ pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]
     );
 }
 pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, version: &[u8]) {
+    install_readonly_file_owned(root, built, name, version, None);
+}
+fn install_readonly_file_owned(root: &Path, built: &Path, name: &str, version: &[u8], owner: Option<&Host>) {
     let installed = root.join(format!(".chrono-harness/bin/{name}"));
     assert_eq!(
         fs::symlink_metadata(&installed).unwrap_err().kind(),
@@ -78,16 +92,22 @@ pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, versi
     );
     // Each host owns its executable identity. A joined child owns writable
     // descriptors, so concurrent test forks cannot inherit writable executables.
-    let copied = Command::new("/bin/cp")
+    if let Some(host) = owner {
+        host.copied_fixture_input(root, built, &installed);
+    }
+    let mut command = Command::new("/bin/cp");
+    command
         .arg(built)
-        .arg(&installed)
-        .output()
-        .unwrap();
+        .arg(&installed);
+    let copied = match owner {
+        Some(host) => host.native_output(&mut command),
+        None => command.output().unwrap(),
+    };
     assert!(
         copied.status.success(),
         "fixture executable copy: {copied:?}"
     );
-    ready_version_program(root, &installed, version);
+    ready_version_program_owned(root, &installed, version, owner);
 }
 #[test]
 fn fixture_executable_identity_survives_neighbor_teardown() {
@@ -121,6 +141,9 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     assert!(output.stderr.is_empty());
 }
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
+    inputs_owned(root, None)
+}
+fn inputs_owned(root: &Path, owner: Option<&Host>) -> (std::process::Output, Option<PreparedCheck>) {
     let head = git(root, &["rev-parse", "HEAD"]);
     let cfg = json(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
     let req = InputRequest {
@@ -150,15 +173,19 @@ fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    let mut child = c.spawn().unwrap();
-    use std::io::Write;
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&req).unwrap())
-        .unwrap();
-    let out = child.wait_with_output().unwrap();
+    let out = if let Some(host) = owner {
+        host.native_input(&mut c, &serde_json::to_vec(&req).unwrap())
+    } else {
+        let mut child = c.spawn().unwrap();
+        use std::io::Write;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&req).unwrap())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
     let p = chrono_harness::decode::<PreparedCheck>(&out.stdout).ok();
     if let Some(p) = &p {
         assert_eq!(p.candidate, head);
@@ -401,10 +428,91 @@ fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures
     assert!(String::from_utf8_lossy(&o.stderr).contains("original birth association"));
 }
 #[test]
-fn generated_full_native_short_step_preserves_exact_context_bytes() {
-    let h = Host::new("non rust/input");
+fn full_input_references_preserve_birth_and_raw_producer_data() {
+    let h = Host::new("independent/input");
     bind(&h);
-    install(&h.root);
+    h.policy(|p| {
+        p["check_inputs"]["roles"]["feature"] = value!("delivery");
+        p["check_inputs"]["full_inputs"] =
+            value!({"retained_inputs":".chrono-harness/state/current-inputs.json"});
+    });
+    let dest = h.parent.join("current references");
+    let (exit, birth, err) = h.invoke("feature", "references", &dest);
+    assert_eq!(exit, 0, "{} {err}", birth["error"]);
+    install(&dest);
+    let origin_path = dest.join(".chrono-harness/state/origin.json");
+    let origin_bytes = fs::read(&origin_path).unwrap();
+    let origin = json(&origin_bytes).unwrap();
+    let birth_path = dest.join(origin["birth_report"].as_str().unwrap());
+    let birth_bytes = fs::read(&birth_path).unwrap();
+    assert!(origin["retained_inputs"].is_null());
+    assert!(origin["integration_evidence"].is_null());
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(prepared.is_none());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("current-inputs.json"));
+    // Opaque producer inputs deliberately carry no governance success. The
+    // seven-judge consumer tests separately validate real snapshots/certificates.
+    let raw = b"{\n \"producer\":\"original data\"\n}\n";
+    let input_path = dest.join(".chrono-harness/state/current-inputs.json");
+    fs::write(&input_path, raw).unwrap();
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let first = prepared.unwrap();
+    let ctx = json(&first.context.unwrap().raw).unwrap();
+    let retained_path = dest.join(ctx["retained_inputs"].as_str().unwrap());
+    assert_eq!(fs::read(&retained_path).unwrap(), raw);
+    assert!(ctx["integration_evidence"].is_null());
+    assert_eq!(
+        first.evidence["full_inputs"]["retained_inputs"]["source"]["sha256"],
+        sha256(raw)
+    );
+    assert!(
+        first
+            .originals
+            .iter()
+            .any(|r| r.path == ctx["retained_inputs"].as_str().unwrap() && r.sha256 == sha256(raw))
+    );
+    fs::write(&input_path, b"replacement data").unwrap();
+    // Observing even a failed certificate is not admission; that belongs to workflow.
+    let certificate = b"{\"status\":\"failed\"}\n";
+    fs::write(
+        dest.join(".chrono-harness/state/integration.json"),
+        certificate,
+    )
+    .unwrap();
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let second = prepared.unwrap();
+    let next = json(&second.context.unwrap().raw).unwrap();
+    assert_ne!(next["retained_inputs"], ctx["retained_inputs"]);
+    assert_eq!(next["integration_evidence"], sha256(certificate));
+    assert_eq!(fs::read(&retained_path).unwrap(), raw);
+    assert_eq!(fs::read(&origin_path).unwrap(), origin_bytes);
+    assert_eq!(fs::read(&birth_path).unwrap(), birth_bytes);
+    fs::remove_file(input_path).unwrap();
+    let (out, prepared) = inputs(&dest);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        prepared.is_none(),
+        "must not fall back to an earlier retained pair"
+    );
+}
+#[test]
+fn generated_full_native_short_step_preserves_exact_context_bytes() {
+    let h = Host::retained("non rust/input");
+    bind(&h);
+    install_owned(&h.root, Some(&h));
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     cfg["canonical_check"]["inputs"]["ci"] = value!({"operation":"prepare.ci","tool":"chrono-ci","argv":["check-inputs","--config",".chrono-harness/ci/full.json","--event-env","GITHUB_EVENT_NAME","--payload-env","GITHUB_EVENT_PATH","--revision-env","CHRONO_WORKFLOW_REVISION"]});
     cfg["tools"].as_array_mut().unwrap().push(value!({"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"}));
@@ -424,12 +532,14 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         serde_json::to_vec(&provider).unwrap(),
     )
     .unwrap();
+    h.copied_fixture_input(&h.root, &source().join("crates/ci/target/debug/chrono-ci"),
+        &h.root.join(".chrono-harness/bin/chrono-ci"));
     fs::copy(
         source().join("crates/ci/target/debug/chrono-ci"),
         h.root.join(".chrono-harness/bin/chrono-ci"),
     )
     .unwrap();
-    let output = Command::new(h.root.join(".chrono-harness/bin/chrono-ci"))
+    let output = h.native_output(Command::new(h.root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(&h.root)
         .args([
             "generate",
@@ -438,8 +548,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
             "--config",
             ".chrono-harness/ci/full.json",
         ])
-        .output()
-        .unwrap();
+        );
     assert!(
         output.status.success(),
         "{}",
@@ -458,7 +567,9 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
     let dest = h.parent.join("native destination");
     let (exit, birth, err) = h.invoke("integration", "native", &dest);
     assert_eq!(exit, 0, "{} {err}", birth["error"]);
-    install(&dest);
+    install_owned(&dest, Some(&h));
+    h.copied_fixture_input(&dest, &source().join("crates/ci/target/debug/chrono-ci"),
+        &dest.join(".chrono-harness/bin/chrono-ci"));
     fs::copy(
         source().join("crates/ci/target/debug/chrono-ci"),
         dest.join(".chrono-harness/bin/chrono-ci"),
@@ -466,7 +577,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
     .unwrap();
     fs::write(dest.join("non rust/input"), "delta").unwrap();
     commit(&dest);
-    let (o, p) = inputs(&dest);
+    let (o, p) = inputs_owned(&dest, Some(&h));
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let context = p.unwrap().context.unwrap();
     let raw = [
@@ -491,15 +602,14 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .find(|l| l.contains("'check'"))
         .unwrap()
         .trim();
-    let o = Command::new("/bin/bash")
+    let o = h.native_output(Command::new("/bin/bash")
         .current_dir(&dest)
         .args(["-c", line])
         .env(prepared::SOURCE, "ci")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GITHUB_EVENT_PATH", &payload)
         .env("CHRONO_WORKFLOW_REVISION", &revision)
-        .output()
-        .unwrap();
+        );
     if !o.status.success() {
         // The console points to the complete producer evidence. Preserve that
         // specific failure before the fixture's temporary host is dropped.
@@ -547,15 +657,14 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         .unwrap(),
     )
     .unwrap();
-    let repeated = Command::new("/bin/bash")
+    let repeated = h.native_output(Command::new("/bin/bash")
         .current_dir(&dest)
         .args(["-c", line])
         .env(prepared::SOURCE, "ci")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GITHUB_EVENT_PATH", &payload)
         .env("CHRONO_WORKFLOW_REVISION", &revision)
-        .output()
-        .unwrap();
+        );
     assert!(
         repeated.status.success(),
         "{}",
@@ -595,6 +704,10 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
         &dest.join(".chrono-harness/state/native evidence λ"),
         &consumer.join(".chrono-harness/state/native evidence λ"),
     );
+    chrono_worktree::TemporaryHost::relocate_copies(
+        h.parent.parent().unwrap(), "worktree-test-host", &dest,
+        &h.parent.join("original full paths unavailable"),
+    ).unwrap();
     fs::rename(&dest, h.parent.join("original full paths unavailable")).unwrap();
     prepared::validate_portable_binding(&consumer, &r["preparation"], None).unwrap();
     prepared::validate_portable_binding(&consumer, &next["preparation"], None).unwrap();

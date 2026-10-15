@@ -345,7 +345,25 @@ fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_dr
         );
         assert_eq!(row["process"]["stdout_sha256"], sha256(&bytes));
         assert_eq!(row["process"]["exit_code"], 0);
+        assert!(row["process"].get("stdout_bytes").is_none());
+        assert!(row["process"].get("stdout").is_none());
+        let restore = || {
+            chrono_harness::scoped_report::restore_process(&row["process"], |o| {
+                chrono_harness::prepared::read_original(&h.root, o, None)
+            })
+        };
+        assert_eq!(restore().unwrap().stdout_bytes, bytes);
+        let original = h
+            .root
+            .join(row["process"]["stdout_original"]["path"].as_str().unwrap());
+        fs::write(&original, b"corrupt").unwrap();
+        assert!(restore().is_err());
+        fs::remove_file(&original).unwrap();
+        assert!(restore().is_err());
+        fs::write(&original, &bytes).unwrap();
+        assert_eq!(restore().unwrap().stdout_bytes, bytes);
     }
+    assert!(serde_json::to_vec(&report).unwrap().len() < 1_048_576);
     // Creation is allowed to leave unrelated dirty source files alone. Its
     // governing worktree policy must still match the fixed source commit.
     let policy = fs::read(h.root.join(POLICY)).unwrap();
@@ -354,6 +372,45 @@ fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_dr
     let (code, report, error) = h.invoke("integration", "changed-input", &second);
     assert_ne!(code, 0, "{} {error}", report["error"]);
     assert!(!second.exists());
+}
+
+#[test]
+fn immutable_original_publication_failure_preserves_inline_bytes_and_never_passes() {
+    let h = Host::new("payload");
+    let mut bytes = fs::read(h.root.join(CONFIG)).unwrap();
+    bytes.resize(2_022_211, b' ');
+    fs::write(h.root.join(CONFIG), &bytes).unwrap();
+    h.policy(|p| p["immutable_input_limits"] = value!({CONFIG:2_097_152}));
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let original = h.root.join(format!(
+        ".chrono-harness/state/worktrees/git-stdout-{}.json",
+        sha256(&bytes)
+    ));
+    fs::create_dir_all(original.parent().unwrap()).unwrap();
+    fs::write(&original, b"corrupt existing original").unwrap();
+    let (code, report, _) = h.invoke(
+        "integration",
+        "publication-failed",
+        &h.parent.join("publication-failed"),
+    );
+    assert_eq!(code, 2);
+    assert_eq!(report["status"], "failed");
+    assert!(
+        report["evidence_error"]
+            .as_str()
+            .unwrap()
+            .contains("original bytes mismatch")
+    );
+    assert_eq!(fs::read(&original).unwrap(), b"corrupt existing original");
+    let row = report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r.get("immutable_input_transport").is_some())
+        .unwrap();
+    assert_eq!(row["process"]["stdout_bytes"], value!(bytes));
+    assert_eq!(row["process"]["exit_code"], 0);
 }
 
 #[test]

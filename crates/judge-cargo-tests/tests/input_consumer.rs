@@ -17,11 +17,9 @@ fn nested(report: &Value, consumer: Consumer) -> Value {
     let rows = executions(report, consumer);
     assert_eq!(rows.len(), 1, "{report}");
     assert_eq!(rows[0]["operation"], "test.t");
-    let process = if consumer == Consumer::Full {
-        &rows[0]["receipt"]["process"]
-    } else {
-        &rows[0]["process"]
-    };
+    // Complete operation output is retained once in the receipt. The adjacent
+    // process projection intentionally omits large streams.
+    let process = &rows[0]["receipt"]["process"];
     serde_json::from_slice(
         &serde_json::from_value::<Vec<u8>>(process["stdout_bytes"].clone()).unwrap(),
     )

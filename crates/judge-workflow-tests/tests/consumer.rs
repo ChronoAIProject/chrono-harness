@@ -204,22 +204,12 @@ fn retained_delivery_retry_expires_independently_born_producer_at_current_nanose
         }
         template.seal().unwrap();
         let request = full::judge_request(&template, &binding, &history).unwrap();
-        use std::io::Write;
-        use std::process::{Command, Stdio};
-        let mut child = Command::new(h.root().join(".chrono-harness/bin/chrono-judge-workflow"))
-            .args(["--protocol", "chrono-judge/v1"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(&serde_json::to_vec(&request).unwrap())
-            .unwrap();
-        let out = child.wait_with_output().unwrap();
+        use std::process::Command;
+        let out = h.capture_native_input(
+            Command::new(h.root().join(".chrono-harness/bin/chrono-judge-workflow"))
+                .args(["--protocol", "chrono-judge/v1"]),
+            &serde_json::to_vec(&request).unwrap(),
+        );
         let response: wire::Response = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
             panic!(
                 "{e}: status={} stdout={} stderr={}",

@@ -140,6 +140,10 @@ impl Lease {
             }))
         }
     }
+    pub(crate) fn capability(&self) -> Result<File, String> {
+        self.stable()?;
+        self.file.try_clone().map_err(|e| e.to_string())
+    }
     pub(crate) fn id(&self) -> &str {
         &self.id
     }
