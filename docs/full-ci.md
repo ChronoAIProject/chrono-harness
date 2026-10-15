@@ -228,10 +228,10 @@ the following values require authentic caller production before they can be boun
 
 | Owner / destination | Required authentic input and remaining action |
 | --- | --- |
-| Supported native bootstrap and input acquisition | On macos-26 arm64 and Linux x86_64, run candidate `host.bootstrap`, `inputs.provision-native`, then the platform observation operation; retain bootstrap source/install/tool identities, original manifests, every launch/stream/exit and observation report. Provide actual Git, Cargo/rustc/backend/linker, SDK/runtime/Python paths and bytes, Cargo target/configuration lookup and directory membership/aliases. Resolve observed absences and required undeclared inputs before adoption. |
+| Supported native bootstrap and input acquisition | On macos-26 arm64 use `host.bootstrap-native-macos`, then `inputs.acquire-macos`; on Linux x86_64 use `host.bootstrap-native-linux`, then `inputs.acquire-linux`. Acquisition delegates the existing provisioning and platform observation operations. Supply the declared native lifecycle policy first; retain bootstrap source/install/tool identities, original manifests, every launch/stream/exit and observation report, including the inner `.chrono-harness/state/inputs/` closure. Provide actual Git, Cargo/rustc/backend/linker, SDK/runtime/Python paths and bytes, Cargo target/configuration lookup and directory membership/aliases. Resolve observed absences and required undeclared inputs before adoption. |
 | Main config selector | Retain the local direct policy at its own registered path; supply independently bound CI direct policies for each native platform. Use existing `chrono-git-configs/v2` `platforms[OS-ARCH].local/ci` at the stable entry, registering every target and its own immutable-input capacity. The selected policy must bind candidate runner/judges and actual tool/input/environment selections; unsupported/missing sources fail. Do not copy local Mac observations into CI expectations. |
 | Fixed endpoints | At each actual fixed base/candidate checkout, run `chrono-inputs capture --host-root HOST --config ENTRY --commit OID --output SNAPSHOT`, with applicable `--unit ID --base BASE --candidate CANDIDATE` projections. Retain snapshot source/configuration identities and all addressed blobs. Use `pair` for the real base/candidate snapshots; unavailable historical originals remain unavailable. |
-| Local full-input producer | After producing the exact endpoint pair, set `worktree.json.check_inputs.full_inputs.retained_inputs` to its registered state path. `check-inputs` copies that current reference independently of immutable birth. Supply the existing successful original birth report/origin association; do not rewrite birth to insert current inputs. |
+| Local full-input producer | `worktree.json.check_inputs.full_inputs.retained_inputs` now names `.chrono-harness/state/inputs/full.json`. Produce the exact endpoint pair there. `check-inputs` copies that current reference independently of immutable birth; missing bytes fail when a full profile is selected. Supply the existing successful original birth report/origin association; do not rewrite birth to insert current inputs. The independent source-staging checkout has no such origin claim. |
 | Native unit/provider owner | Adopt units/v2 and genuine `native_adoption` values per [CI units](ci-units.md): original tracked lineage path/digest, actual base `composition_sources`, native adapter/interpreter/inputs binary, seed/artifact paths, roles and applicable integration certificate/transport. Register every source, binary, original and generated output. Use the generated adapter as `canonical_check.inputs.ci`; it retains authentic event/payload/revision/run/attempt records and delegates existing preparation/gather. |
 | Governance and collection | Produce candidate governance projection with `capture-governance` using original base sources; produce selected unit snapshots and completed original reports. The existing native seed/acquire/gather/compose chain verifies fixed identities and imports their blobs. Missing, corrupt, nonzero or truncated originals remain failures. Five registry statuses may become active only after the applicable accepted producers and consumers exist. |
 
@@ -244,3 +244,72 @@ isolation belong to neither this handoff nor a new acceptance gate. Whole-increm
 review, landing/release identity and public consumption remain separate caller
 obligations after complete Q3 engineering/acceptance, not initial review of a
 partial source increment.
+
+## Registered native source handoff
+
+This source adds proposed `units-native-macos.json` and `units-native-linux.json`
+under `.chrono-harness/ci/`. Both use the existing units/v2 generator, conditional
+parent, native adapter, seed/acquire/gather/compose chain and all 26 existing unit
+IDs. Native source/install inventory, shared startup, pinned actions, caches,
+business operation owners, 45-minute job deadlines and gather limits are reused.
+Per-platform collection, unit, seed, detector and startup roots are separate.
+This is source registration, with no generated workflow or adapter published here.
+The current scoped provider remains the deployed source until complete caller
+cutover; the proposed native sources are not an additional active check pipeline.
+
+The exact registered projection actions are `ci.native.macos.generate` /
+`ci.native.macos.verify` and `ci.native.linux.generate` /
+`ci.native.linux.verify`. Each invokes `chrono-ci generate` or `verify` with
+`--host-root . --config .chrono-harness/ci/units-native-PLATFORM.json`.
+Set `CHRONO_CHECK_SOURCE=ci` in the admitted native environment for these actions
+and endpoint capture. The native selector is
+`.chrono-harness/native-config.json`; it routes CI only to the required native
+direct policy, with no fallback to the local Mac policy. Its Mac `local` route
+keeps the existing direct policy; the Linux routes require their own direct
+policy. This preparatory entry does not switch the main canonical command.
+
+The remaining bindings below are inputs, not generated expectations:
+
+| Source / destination | Exact caller binding |
+| --- | --- |
+| `.chrono-harness/native/macos/config.json`, `.chrono-harness/native/linux/config.json` | Independently authored and byte-bound direct v4 policies from actual native acquisition. Keep all applicable declared inputs, Cargo target/configuration/alias checks, runner/judge pins and cap2. Bind native interpreter/environment/Git selections, FILEMAP dependencies, artifact roots and selected policy input capacities; do not copy the local policy's paths or expected bytes. Register these actual source files before generation. |
+| Each direct policy's `execution_units` | Preserve the current check source's exact unit-to-test assignments and shared operations; declare all 26 units. For platform `P`, use report paths under `.chrono-harness/state/native/P/units/ID/`, collection report under `.../collection/`, and the current collection limits. These paths must be distinct from the provider's context/full-context/manifest/gather outputs. Registration and the existing generator own admission. |
+| Each direct policy's `canonical_check` | Bind its full profile to its own direct policy path. Bind the CI action to the native interpreter tool and argv `[".chrono-harness/ci/native-P.py", "forward", "--config", ".chrono-harness/ci/units-native-P.json"]`. Keep `CHRONO_CHECK_SOURCE`; move acquisition-only event/payload/revision/repository names out of business inheritance as required by the adapter contract. Bind the local producer to the genuine platform lifecycle policy. |
+| `.chrono-harness/native/P/worktree.json` | Actual compatible native Git byte/version/environment binding, host selector/policy, cleanup/configuration and origin paths. Native bootstrap and cache profiles explicitly require this policy. Deploy compatible candidate tools and both committed lifecycle policies through the surviving coordinator; source staging is not enrollment or birth. |
+| `.chrono-harness/native/P/cargo-runner.json` | Authentic platform Cargo guarded policy, preserving package, target, configuration, sysroot/SDK/runtime and alias assertions. Its `guard.check.native.P.runner` operation must preserve the original guard's exact Cargo check argv. The registered guard entry names that same operation ID and the actual direct native config; the guard's existing direct-policy API does not resolve the selector. Require an actual positive result on both platforms. The prior local/native negative expectation in `cargo/observe.json` remains separate evidence. |
+| `.chrono-harness/native/P/cache.json` | Adopt the existing cache registration for the actual native provider, preserving all declared cache IDs, consumer operations, source inputs, capacity and transport assertions. Bind the native bootstrap/profile sources and the native artifact registry; do not dispatch the local cache policy or its macOS-only probes on Linux. Detector preparation names the native cache bootstrap, so its original report is the one native shared startup consumes. This authentic host-policy binding remains absent. |
+| `units-native-P.json.native_adoption.lineage` | Preserve successful original start/reconstruct bytes at the declared tracked `.chrono-harness/native/P/lineage.json` path and supply their actual digest. The source deliberately has `sha256:null`, which the existing decoder rejects. Supply genuine event/branch/fork/time association; do not manufacture birth for this source-staging checkout. |
+| `units-native-P.json.native_adoption.composition_sources` | Supply original base snapshot/pair bytes at the declared `.../native/P/originals/base-capture.json` path and their actual digest, plus all addressed blobs. Its null digest deliberately prevents generation. Capture at the actual fixed base using its committed policy; unavailable originals remain unavailable. Add other genuine sources explicitly if required. |
+| Native roles and delivery evidence | The proposed feature/integration push and PR role is integration; dev push is delivery. Reconcile these host choices with the actual tracked lineage and workflow policy. Supply the existing integration certificate/path/transport when impact requires it; null is not a waiver. |
+| Generated sources and retained outputs | After binding originals, generate and register each owned workflow, native adapter and exact bootstrap/selector/native-policy/original dependency. Add the two `startup-native-P/` artifact roots to the admitted native policies. Retain the detector seed and each selected unit's capture, original reports and streams through collection and caller acceptance; lifecycle retention remains caller-owned. |
+
+The native shared-startup sources select the complete native bootstrap as `core`
+and the existing cache bootstrap as `cache`, with disjoint installed binaries and
+native lifecycle paths. They do not acquire SDK/business inputs for collection.
+Caller bootstrap hooks must supply the actual selected-unit native input closure
+before the existing adapter captures it; the registered acquisition operations
+provide the producer path, not a claim that those bytes are installed. Do not run
+all SDK/business acquisition in an unselected aggregate.
+
+**Host policy and consumer routing change together.** Previously only the local
+bootstrap/environment and scoped provider were selected; the new sources declare
+native tool production, independent native policy routes, full-context ownership
+and positive guard entries. No product API or guard assertion is weakened. Source
+and CI projection compatibility, generation and runtime behavior are unverified.
+Validation costs and native closure/storage costs are unknown; the source adds
+two platform configurations and their explicitly owned outputs, not more business
+capacity. All five full registries and ordinary full enforcement remain incomplete.
+Stronger parity is separately unestablished.
+
+Caller validation must use FILEMAP's two-end DELTA closure and existing registered
+plans, including `test:ci-tests`, `test:inputs-tests`, `test:runner-tests`,
+`test:judge-cargo-tests`, `test:worktree-tests` and `test:host-bootstrap-tests` when
+selected. Their existing behavioral expectations include source/CI selection with
+no fallback; original endpoint preservation; wrong/missing/corrupt lineage or
+composition failure; ordered acquisition stopping after failure; immutable
+publication; current retained inputs independent of birth; and collection with
+zero business executions. No implementation logic was added, so no new bearing
+test fixture is introduced. All checks, native source projection, bootstrap,
+committed-parent real consumer, canonical/native full runs and acceptance remain
+unexecuted for this handoff. The null/missing inputs must first produce the
+existing failures; success requires the actual accepted producer/consumer chain.

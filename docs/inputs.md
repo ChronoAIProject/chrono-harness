@@ -168,21 +168,34 @@ Main-host acquisition uses existing registered operations:
 
 | Operation | Manifest | Actual consumer |
 | --- | --- | --- |
+| `inputs.acquire-macos` | `.chrono-harness/inputs/acquire-macos.json` | Ordered delegation to `inputs.provision-native`, then `inputs.observe-macos` |
+| `inputs.acquire-linux` | `.chrono-harness/inputs/acquire-linux.json` | Ordered delegation to `inputs.provision-native`, then `inputs.observe-linux` |
 | `inputs.provision-native` | `.chrono-harness/inputs/native-provisioning.json` | Existing `inputs.fetch.*` actions, with network acquisition explicitly allowed |
 | `inputs.observe-macos` | `.chrono-harness/inputs/native-observation.json` | macOS arm64 compiler, SDK, Python and offline Cargo metadata/fetch observations |
 | `inputs.observe-linux` | `.chrono-harness/inputs/linux-observation.json` | Linux x86_64 compiler, header/runtime, Python and offline Cargo observations |
 
 The caller first supplies compatible native bootstrap/lifecycle enrollment and
 candidate tools through the existing native producer. The current local Git and
-interpreter policy is not a native policy. After registered `host.bootstrap`
-installs those tools on that admitted native host, the caller runs
-`chrono-worktree use --operation inputs.provision-native --path HOST`, then the
-one applicable `inputs.observe-macos` or `inputs.observe-linux` operation on that
-native host. These operations have fixed manifest/output paths in projects.json;
+interpreter policy is not a native policy. The registered native bootstrap is
+`host.bootstrap-native-macos` on macos-26 arm64 and
+`host.bootstrap-native-linux` on Linux x86_64. Their source profiles reuse the
+complete existing source build/install inventory and official toolchain registry,
+select the platform's required lifecycle policy, and inherit that admitted host's
+Rust homes instead of the local profile's absolute environment overrides.
+They do not install metadata or infer native input expectations.
+
+After that bootstrap, the caller uses the existing lifecycle owner to execute the
+one applicable `inputs.acquire-macos` or `inputs.acquire-linux` operation.
+The existing observer executes the two declared producer actions in order and
+stops on failure. The delegated actions remain their sole implementation; the
+acquisition manifests add no subprocess engine or workflow scheduler.
+These operations have fixed manifest/output paths in projects.json;
 a preexisting output is preserved and refuses reentry. The caller must retain and
 finish its consumer through the existing lifecycle before selecting a new
 explicit output for another production. No second scheduler or native execution
-entry is introduced. Per-operation limits remain 120 seconds and 1 MiB. The
+entry is introduced. Inner acquisition limits remain 120 seconds and 1 MiB. Each
+delegation of a complete observation uses the existing observer's 900-second
+maximum and 1 MiB console bound; elapsed acquisition cost is unmeasured. The
 observer selects actual Cargo/rustc through `rustup which --toolchain 1.95.0`,
 retains those selections and supplies that compiler path to Cargo. The bootstrap
 owner remains responsible for supported toolchain provisioning and its declared
@@ -196,6 +209,12 @@ packages remain failures; observations do not replace fixed endpoint snapshots.
 The Cargo observation declaration contains test expectations, not recorded
 successes. Local tool/SDK declarations are not native CI expectations. The
 remaining adoption bindings are specified in [full CI](full-ci.md#main-host-adoption-inputs).
+The new acquisition manifests retain their outer originals under
+`.chrono-harness/state/native/{macos,linux}/acquisition.json` and its
+`.processes` directory. The inner original provisioning/observation reports and
+their streams remain under `.chrono-harness/state/inputs/`; retain both declared
+closures. Reentry preserves these originals and fails. No acquisition has been
+executed for this source handoff.
 
 ```sh
 chrono-inputs capture --host-root /path/to/host \

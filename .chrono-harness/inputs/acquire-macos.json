@@ -1,0 +1,39 @@
+{
+  "schema": "chrono-input-observation/v1",
+  "platforms": [
+    "macos-aarch64"
+  ],
+  "environment": {
+    "inherit": [
+      "PATH",
+      "HOME",
+      "CARGO_HOME",
+      "RUSTUP_HOME",
+      "TMPDIR",
+      "SDKROOT",
+      "DEVELOPER_DIR"
+    ],
+    "values": {
+      "RUSTUP_TOOLCHAIN": "1.95.0",
+      "CARGO_TERM_COLOR": "never",
+      "RUSTC_WRAPPER": "",
+      "RUSTC_WORKSPACE_WRAPPER": ""
+    }
+  },
+  "operations": [],
+  "registered_operations": {
+    "projects": ".chrono-harness/projects.json",
+    "operations": [
+      "inputs.provision-native",
+      "inputs.observe-macos"
+    ],
+    "tools": {
+      "chrono-inputs": ".chrono-harness/bin/chrono-inputs"
+    },
+    "timeout_seconds": 900,
+    "output_limit_bytes": 1048576
+  },
+  "stop_on_failure": true,
+  "files": [],
+  "directories": []
+}

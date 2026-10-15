@@ -40,3 +40,5 @@ crates/inputs-tests/target/
 /crates/cache/target/
 /crates/cache-tests/target/
 /.chrono-harness/startup/
+/.chrono-harness/startup-native-macos/
+/.chrono-harness/startup-native-linux/

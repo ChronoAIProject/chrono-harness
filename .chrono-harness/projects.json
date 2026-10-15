@@ -154,6 +154,36 @@
             "--manifest-path",
             "crates/runner/Cargo.toml"
           ]
+        },
+        "guarded_check_native_macos": {
+          "operation": "guard.check.native.macos.runner",
+          "tool": "cargo-guard",
+          "argv": [
+            "run",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/native/macos/config.json",
+            "--policy",
+            ".chrono-harness/native/macos/cargo-runner.json",
+            "--operation",
+            "guard.check.native.macos.runner"
+          ]
+        },
+        "guarded_check_native_linux": {
+          "operation": "guard.check.native.linux.runner",
+          "tool": "cargo-guard",
+          "argv": [
+            "run",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/native/linux/config.json",
+            "--policy",
+            ".chrono-harness/native/linux/cargo-runner.json",
+            "--operation",
+            "guard.check.native.linux.runner"
+          ]
         }
       },
       "language": "rust"
@@ -984,6 +1014,50 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/ci/Cargo.toml"
+          ]
+        },
+        "generate_native_macos": {
+          "operation": "ci.native.macos.generate",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units-native-macos.json"
+          ]
+        },
+        "verify_native_macos": {
+          "operation": "ci.native.macos.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units-native-macos.json"
+          ]
+        },
+        "generate_native_linux": {
+          "operation": "ci.native.linux.generate",
+          "tool": "chrono-ci",
+          "argv": [
+            "generate",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units-native-linux.json"
+          ]
+        },
+        "verify_native_linux": {
+          "operation": "ci.native.linux.verify",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            ".",
+            "--config",
+            ".chrono-harness/ci/units-native-linux.json"
           ]
         }
       },
@@ -3290,6 +3364,32 @@
             "--output",
             ".chrono-harness/state/isolated-rust/production-components-1afeac0-20261015.json"
           ]
+        },
+        "acquire_macos": {
+          "operation": "inputs.acquire-macos",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/acquire-macos.json",
+            "--output",
+            ".chrono-harness/state/native/macos/acquisition.json"
+          ]
+        },
+        "acquire_linux": {
+          "operation": "inputs.acquire-linux",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/acquire-linux.json",
+            "--output",
+            ".chrono-harness/state/native/linux/acquisition.json"
+          ]
         }
       },
       "test_project": "inputs-tests",
@@ -5407,6 +5507,26 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "aggregate"
+          ]
+        },
+        "native-macos": {
+          "operation": "host.bootstrap-native-macos",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-native-macos.json"
+          ]
+        },
+        "native-linux": {
+          "operation": "host.bootstrap-native-linux",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-native-linux.json"
           ]
         }
       }
