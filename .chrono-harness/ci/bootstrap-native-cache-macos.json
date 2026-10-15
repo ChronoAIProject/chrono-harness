@@ -25,5 +25,14 @@
   },
   "rust_incremental": true,
   "require_tool_bindings": true,
-  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json"
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
+  "toolchain_provision": {
+    "profile": "default",
+    "rustup_home": ".chrono-harness/state/native/macos/rustup",
+    "cargo_home": ".chrono-harness/state/native/macos/cargo"
+  },
+  "environment": {
+    "DEVELOPER_DIR": "/Applications/Xcode_26.6.app/Contents/Developer",
+    "SDKROOT": "/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk"
+  }
 }

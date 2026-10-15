@@ -52,6 +52,18 @@ and selected obligations pass: that DELTA satisfies the active registered
 contract. Ordinary acceptance requires neither a universal proof of hidden-input
 absence nor a VM. This host's declarations remain proposed/incomplete.
 
+The separately owned proposed Mac policy at
+`.chrono-harness/native/macos/config.json` now binds supported native inputs from
+run 38697657077/job 116297942471 retained originals. Its original input IDs and
+consumer scopes are preserved, with independent native executable, interpreter,
+toolchain, package and environment bindings. Two exact directory inventories,
+19 external configuration inputs and three tool-version observations remain
+unavailable; required nulls still fail their consumers. Native lineage, endpoint
+composition, positive guard and activation are not produced by initial
+observation. See the [exact source handoff](full-ci.md#mac-source-bindings-from-initial-acquisition)
+for provenance, current consumer boundaries, caller acceptance and costs. The
+custom local policy and unresolved Linux producer remain separate.
+
 Local and CI must use the same registered check command. Equal verdicts across
 environments additionally require equal complete effective inputs and deterministic
 evaluation. The separate runner parity comparator requires

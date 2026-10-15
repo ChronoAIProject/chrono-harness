@@ -272,12 +272,12 @@ The remaining bindings below are inputs, not generated expectations:
 
 | Source / destination | Exact caller binding |
 | --- | --- |
-| `.chrono-harness/native/macos/config.json`, `.chrono-harness/native/linux/config.json` | Independently authored and byte-bound direct v4 policies from actual native acquisition. Keep all applicable declared inputs, Cargo target/configuration/alias checks, runner/judge pins and cap2. Bind native interpreter/environment/Git selections, FILEMAP dependencies, artifact roots and selected policy input capacities; do not copy the local policy's paths or expected bytes. Register these actual source files before generation. |
+| `.chrono-harness/native/macos/config.json`, `.chrono-harness/native/linux/config.json` | The Mac direct v4 source is independently bound as described below; its required unavailable inputs still fail. Linux still requires its own original producer and direct policy. Preserve declared inputs, Cargo target/configuration/alias checks, runner/judge pins and cap2. Register actual sources before generation; Mac values never supply the Linux row. |
 | Each direct policy's `execution_units` | Preserve the current check source's exact unit-to-test assignments and shared operations; declare all 26 units. For platform `P`, use report paths under `.chrono-harness/state/native/P/units/ID/`, collection report under `.../collection/`, and the current collection limits. These paths must be distinct from the provider's context/full-context/manifest/gather outputs. Registration and the existing generator own admission. |
 | Each direct policy's `canonical_check` | Bind its full profile to its own direct policy path. Bind the CI action to the native interpreter tool and argv `[".chrono-harness/ci/native-P.py", "forward", "--config", ".chrono-harness/ci/units-native-P.json"]`. Keep `CHRONO_CHECK_SOURCE`; move acquisition-only event/payload/revision/repository names out of business inheritance as required by the adapter contract. Bind the local producer to the genuine platform lifecycle policy. |
 | `.chrono-harness/native/P/worktree.json` | Actual compatible native Git byte/version/environment binding, host selector/policy, cleanup/configuration and origin paths. Managed native bootstrap/cache and later acquisition through an existing owner require this committed policy. The first missing-owner Git-main seed uses the existing exception, without claiming enrollment. Deploy compatible candidate tools and both committed lifecycle policies through the surviving coordinator; source staging is not enrollment or birth. |
 | `.chrono-harness/native/P/cargo-runner.json` | Authentic platform Cargo guarded policy, preserving package, target, configuration, sysroot/SDK/runtime and alias assertions. Its `guard.check.native.P.runner` operation must preserve the original guard's exact Cargo check argv. The registered guard entry names that same operation ID and the actual direct native config; the guard's existing direct-policy API does not resolve the selector. Require an actual positive result on both platforms. The prior local/native negative expectation in `cargo/observe.json` remains separate evidence. |
-| `.chrono-harness/native/P/cache.json` | Adopt the existing cache registration for the actual native provider, preserving all declared cache IDs, consumer operations, source inputs, capacity and transport assertions. Bind the native bootstrap/profile sources and the native artifact registry; do not dispatch the local cache policy or its macOS-only probes on Linux. Detector preparation names the native cache bootstrap, so its original report is the one native shared startup consumes. This authentic host-policy binding remains absent. |
+| `.chrono-harness/native/P/cache.json` | The Mac source reuses the existing cache registration with native profile, FILEMAP, lifecycle, private homes and bootstrap inputs. Cache IDs, producer/consumer assignments, source inputs and restore/backend assertions remain. Detector preparation still names the native cache bootstrap whose report shared startup consumes. Actual cache production/transport is unverified. Linux requires its independent policy. |
 | `units-native-P.json.native_adoption.lineage` | Preserve successful original start/reconstruct bytes at the declared tracked `.chrono-harness/native/P/lineage.json` path and supply their actual digest. The source deliberately has `sha256:null`, which the existing decoder rejects. Supply genuine event/branch/fork/time association; do not manufacture birth for this source-staging checkout. |
 | `units-native-P.json.native_adoption.composition_sources` | Supply original base snapshot/pair bytes at the declared `.../native/P/originals/base-capture.json` path and their actual digest, plus all addressed blobs. Its null digest deliberately prevents generation. Capture at the actual fixed base using its committed policy; unavailable originals remain unavailable. Add other genuine sources explicitly if required. |
 | Native roles and delivery evidence | The proposed feature/integration push and PR role is integration; dev push is delivery. Reconcile these host choices with the actual tracked lineage and workflow policy. Supply the existing integration certificate/path/transport when impact requires it; null is not a waiver. |
@@ -290,6 +290,104 @@ Caller bootstrap hooks must supply the actual selected-unit native input closure
 before the existing adapter captures it; the registered acquisition operations
 provide the producer path, not a claim that those bytes are installed. Do not run
 all SDK/business acquisition in an unselected aggregate.
+
+### Mac source bindings from initial acquisition
+
+The nine sources under `.chrono-harness/native/macos/` supply the direct policy,
+judge registry, FILEMAP, guarded runner, lifecycle, cleanup, cache and selected
+Rust/Python inventory consumers above. They remain proposed; the main custom
+local policy is unchanged. The
+existing native core/cache bootstrap profiles select the initial acquisition's
+private default Rustup/Cargo homes and native developer/SDK environment, preserving
+their build/install inventories and separate shared-startup roles. No source
+enrollment, installed state, workflow/adapter projection or full activation is
+produced by editing these declarations.
+
+The source is macos-26 arm64 job `116297942471`, run `38697657077`, attempt 1,
+commit `5333a5b8feb25c627a9bef88d817cbc62a0dc2db`, tree
+`a49ca1f2e11aba94cdd82ad53c016d914713c8b9`. Its independently retained artifact
+ZIP has SHA-256 `7cdbc3872ee1e4789d1d84541a93343c89f7194354ce24164ef7a3e1bb091573`
+and restore root `.chrono-harness/`. Source inspection rehashed the 438 addressed
+originals, including all 14 installed tools, plus observation stdout/stderr/launch
+references. No downloaded binary was executed. Runner and seven judge pins use
+installed bytes; installer, Cargo/rustc, Python launcher/interpreter and native
+compiler/delegates retain separate identities. External hashes are observer
+records, not independent rereading of excluded private homes, SDK or runtime bytes.
+
+Existing input IDs and consumer bindings are preserved. Supported native locations
+and hashes come from `observe-macos.json`; unchanged source declarations retain
+their source meaning. Selection uses Rust 1.95.0, Xcode 26.6, the resolved
+MacOSX26.5 SDK, private toolchain and recorded runner PATH. The guard retains the
+original native target, configuration, sysroot, full Developer-root and SDK alias
+assertions. Four observed Cargo configuration absences remain absences;
+unobserved external configuration remains required with null hash. The existing
+`cargo/observe.json` negative regression expectation is unchanged; acquisition
+executed no guard.
+
+The Rust v2 inventory preserves its exact 92 selected file paths and empty link
+list, with all native digests read from the retained directory observation. The
+Python inventory preserves its exact 785 selected files with native hashes and
+root. This reuses the existing contracts without enrolling the observer's extra
+documentation, cache or runtime inventory as new mandatory scope.
+
+The native FILEMAP is an explicit policy snapshot because the local table names
+acquisition environment nodes excluded from native business inheritance. It keeps
+the same files, 26 execution plans, costs, cap2, claims, inventories and operations;
+native input edges and acquisition-variable edges differ. Standard compact JSON
+keeps this table within the unchanged 2 MiB immutable-input bound, with no
+compression dependency. Root FILEMAP registers every new source and actual
+consumer. Both native immutable-input capacities remain 2097152 bytes. Full units
+copy the current check's exact 26 assignments/shared operations, separate native
+report paths and omitted-policy collection defaults of 67108864 bytes per limit.
+
+**Policy and routing change together; runtime behavior remains unverified.** The
+finite remaining Mac producer/consumer handoff is:
+
+1. Produce exact native `chrono-input-directory/v3` inputs at
+   `.chrono-harness/state/native/macos/guard-inputs/{sdk,developer}.json`
+   and bind their genuine digests. The retained file/link observations lack exact
+   directory-child records; Developer scope covers only
+   `Toolchains/XcodeDefault.xctoolchain`, while the preserved guard requires the
+   full Developer root. Guard consumption already supports v3, but the current
+   `chrono-inputs observe` inventory API emits neither directory-child records
+   nor link target kinds. No registered producer of those v3 records exists in
+   the audited input/guard owners. The remaining producer work belongs in that
+   acquisition owner, including the full Developer selection, before these guard
+   inputs can be bound. Do not downgrade inventories, infer empty directories or
+   fabricate missing scope.
+2. Resolve the 19 other null-hash inputs at their declared locations: ancestor/HOME
+   Cargo, rustfmt and rust-toolchain lookups, private Cargo credentials and private
+   Rustup settings. Produce actual byte/absence originals and update declarations
+   and coverage. Obtain clang, Rustup and cargo-fmt version outputs; their native
+   `expected_version` is null. The guard requires a bound linker version before
+   positive admission. No alternative probing entry is introduced here.
+3. Complete genuine lineage, fixed base composition and addressed blobs, endpoint
+   pair, governance projections, applicable integration evidence and original
+   reports. Provider lineage/composition digests remain null; its decoder must
+   continue rejecting them.
+4. Reconcile existing stable-entry/lifecycle consumers before activation:
+   `prepared::participate` and short check load `.chrono-harness/config.json`;
+   participation defaults to `.chrono-harness/worktree.json`, and
+   `automatic::check_command` requires literal `worktree.check` / `["check"]`.
+   A separate native policy cannot switch those consumers with alternative argv.
+   The native local-input producer/lifecycle sources await compatible caller
+   selector/policy cutover. Preserve the custom local policy; no second short
+   entry or lifecycle workaround is introduced.
+5. Following those bindings and a clean commit, caller runs registered bootstrap,
+   committed-parent real bootstrap consumption, FILEMAP DELTA-selected canonical,
+   `guard.check.native.macos.runner`, native generate/verify, original unit
+   acquisition/capture, adapter, cache/shared startup and collection/full adoption.
+   Linux requires its original producer and independent equivalent acceptance.
+   Whole-Q3 review/landing/release and original R4 cause/consumer work remain open.
+
+Cost accounting is UTF-8 source bytes against the fixed source above; the worker
+result lists each changed path and before/after bytes. Native snapshots have
+explicit FILEMAP ownership and consumers, and add no active workflow pipeline.
+Runtime/CI/peak storage/retention costs remain unmeasured; no saving is claimed.
+This assignment executed zero build/test/generate/bootstrap/probe/provision/guard/
+observer/reproduction operations. Retain original acquisition inputs through
+native/full acceptance and whole-Q3 review, then use existing caller retention
+and lifecycle policy. Source staging is neither acceptance nor partial release.
 
 **Host policy and consumer routing change together.** Previously only the local
 bootstrap/environment and scoped provider were selected; the new sources declare
