@@ -204,6 +204,26 @@ the same traversal. Entry bounds apply during enumeration, before collecting
 an oversized directory; publication reuses the existing atomic, no-clobber
 state-output owner. Existing manifest paths reject before child execution.
 
+Rejected manifest aliases now retain a failed directory row in the original
+observation report. Its `location` preserves the selected root spelling and
+`root` records the canonical inventory scope. `error` preserves the existing
+rejection; `alias_failure` records the root-relative alias `path`, literal
+`target`, `literal_absolute`, `canonical_destination` and `within_root`. Failed
+canonical resolution leaves the last two fields null and retains the exact
+`resolution_error` message and raw OS error code. `target_kind` records an
+`observed` file, directory or other kind from metadata at the canonical
+destination, or an honest `unavailable` result with its metadata error/code
+(or the reason that canonical resolution failed). Resolution and metadata are
+sequential observations, not an atomic filesystem snapshot. The failed row
+has no manifest reference or partial file inventory. Successful observation
+and v3 manifest shapes, rejection predicates, entry bounds and guard acceptance
+are unchanged; no new schema, platform or acquisition policy is introduced.
+Existing report/source/process originals and no-clobber publication remain the
+evidence owners. This diagnostic addition has not been executed or validated;
+its extra failure-only metadata read and retained facts have unmeasured cost.
+It cannot recover the unobserved target of the old native `usr/bin/altool`
+failure; fresh native acquisition is still required.
+
 The Mac declarations produce both guard originals at
 `.chrono-harness/state/native/macos/guard-inputs/{sdk,developer}.json`. The SDK
 root and full `/Applications/Xcode_26.6.app/Contents/Developer` root match the

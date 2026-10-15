@@ -643,6 +643,140 @@ fn v3_manifest_is_published_from_real_nested_empty_and_alias_topology() {
 
 #[cfg(unix)]
 #[test]
+fn rejected_manifest_aliases_retain_literal_resolution_and_kind_in_failed_originals() {
+    use std::os::unix::fs::symlink;
+    for case in [
+        "absolute-inside",
+        "relative-escape",
+        "absolute-escape",
+        "dangling",
+        "loop",
+        "unsupported-kind",
+    ] {
+        let d = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(d.path()).unwrap();
+        fs::create_dir_all(root.join("declared/bin")).unwrap();
+        fs::create_dir(root.join("declared/nested")).unwrap();
+        fs::create_dir(root.join("other")).unwrap();
+        fs::write(root.join("declared/data"), b"inside").unwrap();
+        fs::write(root.join("other/data"), b"outside").unwrap();
+        symlink("declared", root.join("selected")).unwrap();
+        let socket = (case == "unsupported-kind").then(|| {
+            std::os::unix::net::UnixListener::bind(root.join("declared/bin/z-socket")).unwrap()
+        });
+        let (literal, destination, kind) = match case {
+            "absolute-inside" => (
+                root.join("declared/nested/../data"),
+                Some(root.join("declared/data")),
+                Some("file"),
+            ),
+            "relative-escape" => (
+                "../../other".into(),
+                Some(root.join("other")),
+                Some("directory"),
+            ),
+            "absolute-escape" => (
+                root.join("other/data"),
+                Some(root.join("other/data")),
+                Some("file"),
+            ),
+            "dangling" => ("missing".into(), None, None),
+            "loop" => ("alias".into(), None, None),
+            // The alias sorts before the physical socket in the same directory.
+            "unsupported-kind" => (
+                "z-socket".into(),
+                Some(root.join("declared/bin/z-socket")),
+                Some("other"),
+            ),
+            _ => unreachable!(),
+        };
+        let alias = root.join("declared/bin/alias");
+        symlink(&literal, &alias).unwrap();
+        let resolution_error = if destination.is_none() {
+            let error = fs::canonicalize(&alias).unwrap_err();
+            Some(json!({"message":error.to_string(),"raw_os_error":error.raw_os_error()}))
+        } else {
+            None
+        };
+        let mut m = manifest(&root);
+        m["operations"][0]["argv"][1] = json!(root.join("selected"));
+        let artifact = ".chrono-harness/state/guard/directory.json";
+        m["directories"][0]["manifest"] = json!({"path":artifact,"root":"selected"});
+        let output = ".chrono-harness/state/alias-failed.json";
+        assert!(invoke(&root, &m, output).unwrap_err().contains("E_OBSERVATION"));
+        let original = fs::read(root.join(output)).unwrap();
+        let report: Value = serde_json::from_slice(&original).unwrap();
+        assert_eq!(report["status"], "failed", "{case}");
+        assert_eq!(report["governance"], "not-evaluated");
+        assert!(!root.join(artifact).exists(), "{case}");
+        let directory = &report["directories"]["declared"];
+        assert_eq!(directory["location"], json!(root.join("selected")));
+        assert_eq!(directory["root"], json!(root.join("declared")));
+        assert!(directory.get("manifest").is_none());
+        assert!(directory.get("files").is_none());
+        let failure = &directory["alias_failure"];
+        assert_eq!(failure["path"], "bin/alias", "{case}");
+        assert_eq!(failure["target"], json!(literal), "{case}");
+        assert_eq!(failure["literal_absolute"], case.starts_with("absolute-"));
+        assert_eq!(failure["canonical_destination"], json!(destination));
+        assert_eq!(
+            failure["within_root"],
+            match case {
+                "absolute-inside" | "unsupported-kind" => json!(true),
+                "relative-escape" | "absolute-escape" => json!(false),
+                _ => Value::Null,
+            },
+            "{case}"
+        );
+        assert_eq!(failure["resolution_error"], json!(resolution_error));
+        assert_eq!(
+            failure["target_kind"],
+            match kind {
+                Some(kind) => json!({"observed":kind}),
+                None => json!({"unavailable":"canonical resolution failed"}),
+            },
+            "{case}"
+        );
+        let error = directory["error"].as_str().unwrap();
+        if let Some(resolution_error) = resolution_error {
+            assert_eq!(error, resolution_error["message"].as_str().unwrap());
+        } else if case == "unsupported-kind" {
+            assert_eq!(error, "directory manifest alias has unsupported target kind");
+        } else {
+            assert_eq!(error, "directory manifest alias escapes scope: bin/alias");
+        }
+        assert_eq!(report["errors"], json!([format!("declared: {error}")]));
+        let source = &report["sources"][0];
+        assert_eq!(report["sources"].as_array().unwrap().len(), 1);
+        assert_eq!(source["path"], ".chrono-harness/observe.json");
+        let reference = serde_json::from_value(json!({
+            "path":source["retained"],"sha256":source["sha256"]
+        }))
+        .unwrap();
+        assert_eq!(
+            chrono_harness::prepared::read_original(&root, &reference, None).unwrap(),
+            serde_json::to_vec(&m).unwrap()
+        );
+        let process = chrono_harness::scoped_report::restore_process(
+            &report["operations"]["location"],
+            |o| chrono_harness::prepared::read_original(&root, o, None),
+        )
+        .unwrap();
+        assert_eq!(process.exit_code, 0);
+        assert_eq!(
+            process.stdout_bytes,
+            format!("{}\n", root.join("selected").display()).as_bytes()
+        );
+        assert!(process.stderr_bytes.is_empty());
+        assert!(invoke(&root, &m, output).unwrap_err().contains("EXISTS"));
+        assert_eq!(fs::read(root.join(output)).unwrap(), original);
+        assert!(!root.join(artifact).exists());
+        drop(socket);
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn v3_manifest_failure_preserves_outputs_and_enforces_scope_aliases_and_entry_bounds() {
     use std::os::unix::fs::symlink;
     for case in ["bound", "escape", "dangling", "wrong-root", "success"] {

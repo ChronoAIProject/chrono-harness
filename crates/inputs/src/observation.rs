@@ -206,6 +206,7 @@ fn inventory(
     max: usize,
     output: Option<&DirectoryOutput>,
     host: &Path,
+    alias_failure: &mut Option<Value>,
 ) -> Result<(Value, Option<Value>), String> {
     let resolved = match fs::canonicalize(root) {
         Ok(path) => path,
@@ -271,18 +272,57 @@ fn inventory(
                 let target_text = target.to_str().ok_or("link target UTF8")?;
                 links.push(json!({"path":relative,"target":target_text}));
                 if output.is_some() {
-                    let actual = fs::canonicalize(&p).map_err(|e| e.to_string())?;
-                    if target.is_absolute() || !actual.starts_with(&resolved) {
-                        return Err(format!(
-                            "directory manifest alias escapes scope: {relative}"
-                        ));
-                    }
-                    let kind = if actual.is_file() {
-                        "file"
-                    } else if actual.is_dir() {
-                        "directory"
-                    } else {
-                        return Err("directory manifest alias has unsupported target kind".into());
+                    let actual = fs::canonicalize(&p);
+                    let result = (|| {
+                        let actual = actual.as_ref().map_err(|e| e.to_string())?;
+                        if target.is_absolute() || !actual.starts_with(&resolved) {
+                            return Err(format!(
+                                "directory manifest alias escapes scope: {relative}"
+                            ));
+                        }
+                        if actual.is_file() {
+                            Ok("file")
+                        } else if actual.is_dir() {
+                            Ok("directory")
+                        } else {
+                            Err("directory manifest alias has unsupported target kind".into())
+                        }
+                    })();
+                    let kind = match result {
+                        Ok(kind) => kind,
+                        Err(error) => {
+                            // Failure facts belong to the retained observation, never
+                            // a partial guard manifest. Preserve the original rejection.
+                            let (destination, resolution_error, target_kind) = match &actual {
+                                Ok(actual) => {
+                                    let kind = match fs::metadata(actual) {
+                                        Ok(metadata) => {
+                                            let kind = if metadata.is_file() {
+                                                "file"
+                                            } else if metadata.is_dir() {
+                                                "directory"
+                                            } else {
+                                                "other"
+                                            };
+                                            json!({"observed":kind})
+                                        }
+                                        Err(e) => json!({"unavailable":e.to_string(),"raw_os_error":e.raw_os_error()}),
+                                    };
+                                    (Some(actual), None, kind)
+                                }
+                                Err(e) => (
+                                    None,
+                                    Some(json!({"message":e.to_string(),"raw_os_error":e.raw_os_error()})),
+                                    json!({"unavailable":"canonical resolution failed"}),
+                                ),
+                            };
+                            *alias_failure = Some(json!({"location":root,"root":resolved,"error":error,
+                                "alias_failure":{"path":relative,"target":target_text,
+                                "literal_absolute":target.is_absolute(),"canonical_destination":destination,
+                                "within_root":actual.as_ref().ok().map(|p|p.starts_with(&resolved)),
+                                "resolution_error":resolution_error,"target_kind":target_kind}}));
+                            return Err(error);
+                        }
                     };
                     aliases.push(json!({"path":relative,"target":target_text,"kind":kind}));
                 }
@@ -601,10 +641,16 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         if m.stop_on_failure && !errors.is_empty() {
             break;
         }
+        let mut alias_failure = None;
         let result = (|| {
             let location = path(root, &d.location, &processes)?;
-            let (mut observation, manifest) =
-                inventory(&location, d.max_entries, d.manifest.as_ref(), root)?;
+            let (mut observation, manifest) = inventory(
+                &location,
+                d.max_entries,
+                d.manifest.as_ref(),
+                root,
+                &mut alias_failure,
+            )?;
             if let Some((output, manifest)) = d.manifest.as_ref().zip(manifest) {
                 super::publish(root, &output.path, &manifest)?;
                 observation["manifest"] =
@@ -616,7 +662,12 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
             Ok(value) => {
                 directories.insert(d.id, value);
             }
-            Err(e) => errors.push(format!("{}: {e}", d.id)),
+            Err(e) => {
+                if let Some(failure) = alias_failure {
+                    directories.insert(d.id.clone(), failure);
+                }
+                errors.push(format!("{}: {e}", d.id));
+            }
         }
     }
     // Locations use the live process bytes above. Publication references the
