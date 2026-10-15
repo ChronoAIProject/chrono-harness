@@ -31,9 +31,9 @@ class NativeAcquisitionForwarding(unittest.TestCase):
     """
 
     def setUp(self):
-        directory = tempfile.TemporaryDirectory(prefix="native acquisition forwarding ")
-        self.addCleanup(directory.cleanup)
-        self.root = Path(directory.name)
+        self.root = Path(tempfile.mkdtemp(prefix="native acquisition forwarding "))
+        self.retain_failed_fixture = False
+        self.addCleanup(self.cleanup_fixture)
         source = (SOURCE / "native-acquisition/action.yml").read_text()
         # Exercise the production Bash function, supplying only its child argv.
         # The surrounding workflow/action metadata is forwarding, not a test oracle.
@@ -51,6 +51,10 @@ class NativeAcquisitionForwarding(unittest.TestCase):
                                 CHRONO_NATIVE_WORKFLOW_REVISION="fixture-workflow",
                                 GITHUB_EVENT_NAME="push", RUNNER_OS="fixture-os",
                                 RUNNER_ARCH="fixture-arch")
+
+    def cleanup_fixture(self):
+        if not self.retain_failed_fixture:
+            shutil.rmtree(self.root)
 
     def invoke(self, argv):
         return subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail",
@@ -78,11 +82,22 @@ class NativeAcquisitionForwarding(unittest.TestCase):
 
     def test_missing_interpreter_preserves_shell_failure_without_a_bootstrap_report(self):
         result = self.invoke([str(self.root / "missing interpreter"), "-B", "bootstrap.py"])
-        self.assertEqual(result.returncode, 127, result)
-        self.assertEqual((self.output / "job.exit").read_bytes(), b"127\n")
-        self.assertEqual((self.output / "job.stdout").read_bytes(), b"")
-        self.assertIn(b"missing interpreter", (self.output / "job.stderr").read_bytes())
-        self.assertFalse((self.output / "report.json").exists())
+        try:
+            self.assertEqual(result.returncode, 127, result)
+            self.assertEqual((self.output / "job.exit").read_bytes(), b"127\n")
+            self.assertEqual((self.output / "job.stdout").read_bytes(), b"")
+            self.assertIn(b"missing interpreter", (self.output / "job.stderr").read_bytes())
+            self.assertFalse((self.output / "report.json").exists())
+        except Exception:
+            # Keep the actual inner originals and outer shell streams until the
+            # caller finishes debugging/acceptance; successful fixtures are removed.
+            self.retain_failed_fixture = True
+            print("native acquisition forwarding fixture originals: " + str(self.root), flush=True)
+            (self.root / "retain.bash").write_text(self.capture)
+            (self.root / "shell.stdout").write_bytes(result.stdout)
+            (self.root / "shell.stderr").write_bytes(result.stderr)
+            (self.root / "shell.exit").write_text(str(result.returncode) + "\n")
+            raise
 
     def test_reentry_preserves_originals_and_does_not_run_another_child(self):
         first = self.invoke([sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),

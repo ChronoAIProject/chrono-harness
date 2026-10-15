@@ -33,7 +33,9 @@ runs:
             "$GITHUB_REF" "$CHRONO_NATIVE_WORKFLOW_REVISION" "$GITHUB_EVENT_NAME" \
             "$RUNNER_OS" "$RUNNER_ARCH" > "$directory/job.identity.tsv"
           local code=0
-          "$@" > "$directory/job.stdout" 2> "$directory/job.stderr" || code=$?
+          # Bash 3.2's exec-error reporter exits 1 under -e before returning 126/127.
+          # Disable -e only for the command; retention writes keep errexit/noclobber.
+          ( set +e; "$@" ) > "$directory/job.stdout" 2> "$directory/job.stderr" || code=$?
           printf '%s\n' "$code" > "$directory/job.exit"
           exit "$code"
         }
