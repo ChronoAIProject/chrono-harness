@@ -15,8 +15,7 @@
   "participation": {
     "coordinator_root": "git-main-worktree",
     "program": ".chrono-harness/bin/chrono-worktree",
-    "git": "/usr/bin/git",
-    "config": ".chrono-harness/worktree.json"
+    "git": "/usr/bin/git"
   },
   "entrypoint": {
     "tool": "python3",

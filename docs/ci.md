@@ -67,7 +67,17 @@ complete test plans. Run units concurrently in separate checkouts. A local check
 without `--unit` executes the whole selected DELTA under FILEMAP scheduling; the same entry with
 value-less `--collect` prepares the declared manifest and verifies unit evidence without running business operations.
 
-The current host uses config schema4. `canonical_check` adds `profile` and
+The stable host entry uses the existing source/platform selector, selecting the
+direct local policy or the supported scoped CI policy. Their full-policy data
+remains proposed; scoped CI does not activate native full inputs. Default lifecycle
+participation follows the same owner's explicitly selected local input policy;
+the core/cache/detector/local bootstrap profiles omit `participation.config` to
+delegate that choice to the same owner. Acquisition profiles retain explicit
+policies. Explicit worktree configuration keeps its meaning. Artifact-only cache/release
+readers name the unchanged direct local artifact declaration. See
+[the finite extraction boundary](full-ci.md#main-host-adoption-inputs).
+
+The selected host uses config schema4. `canonical_check` adds `profile` and
 `inputs.local` plus optional `inputs.ci`; each producer uses the existing
 `{operation,tool,argv}` action shape and tools/environment/protocol bounds.
 The runner observes the real short entry, invokes the bound producer, retains
@@ -280,7 +290,7 @@ product policy and independent host adoption remain separate.
 action had a native workflow caller. The new host action, exact-branch trigger,
 artifact selection/retention and explicit FILEMAP edges connect both existing
 producers to caller acceptance. Existing scoped collection, its 26 full-unit IDs,
-native full/shared/cache/lineage proposals, 14 builds/installations per acquisition,
+acquisition contracts, 14 builds/installations per acquisition,
 92-component inventory, assertions, threads, ignored inventory, Rust 1.95/default
 private provisioning, official digests, aarch64 acceleration and original action
 bounds are preserved. Validation cost is the registered DELTA closure plus two
@@ -296,11 +306,18 @@ formal review, delivery, all 28 PR dispositions, Q4 and complete SPEC remain ope
 
 The registered `inputs.provision-isolated` action invokes the existing worktree
 owner's `use` operation for `inputs.produce-admit-isolated`. Run its exact action
-from the committed candidate root:
+from the committed surviving primary root `/Users/auricstudio/chrono-harness`:
 
 ```sh
 .chrono-harness/bin/chrono-worktree use --operation inputs.produce-admit-isolated --path .
 ```
+
+The direct local policy selects that primary's private Rustup/Cargo homes;
+bootstrap's relative production paths therefore belong to the same surviving
+host. Candidate-source checks can consume those authenticated tools after caller
+production/deployment. Hold the existing primary/candidate use protection across
+retained prerequisites and real-startup/guard consumers; a completed prerequisite
+use does not protect a later consumer. No auxiliary checkout is a tool owner.
 
 That one enclosing lease covers the input observer, `host.bootstrap-isolated`,
 the existing native provisioning whitelist's 34 Cargo fetch actions, and the
@@ -962,12 +979,8 @@ Subsequent `generate` is idempotent and `verify` detects projection drift withou
 repair. This support is candidate source behavior; public installation, native
 first-commit events and compatible release pins require their own delivery evidence.
 
-An explicitly adopted optional bootstrap `distribution: {manifest: PATH}` keeps
-installer and source-build identities separate. The existing generated installer
-owns installation; bootstrap/shared transport checks its original receipt,
-release manifest, installer binding, exact payloads and destination separation.
-Source output cannot replace a selected release destination. Shared consumers
-retain the original release receipt alongside source build/stream evidence and
-never relabel its source as the consuming checkout. The current host continues
-to build its candidate enforcement tools from source; the historical beta.21 pin
-is not a current deployment choice. This optional transport is not full adoption.
+The optional host-bootstrap distribution branch had no consuming profile and
+retires in the finite extraction. The current host builds candidate enforcement
+tools from source. The independent distribution installer, release/source
+identity assertions and unfiltered release verification inventory remain with
+their existing owners; a historical release pin is not current deployment.

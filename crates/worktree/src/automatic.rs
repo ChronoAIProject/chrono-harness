@@ -2165,10 +2165,37 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     }
     let invoking = fs::canonicalize(values.get("--host-root").copied().unwrap_or("."))
         .map_err(|e| e.to_string())?;
-    let config_path = values
+    // The short check and its local input producer already declare this owner's
+    // policy. Reuse that source/platform selection for the default lifecycle
+    // entry; an explicit --config and legacy hosts keep their original meaning.
+    let mut config_path = values
         .get("--config")
         .copied()
-        .unwrap_or(".chrono-harness/worktree.json");
+        .unwrap_or(".chrono-harness/worktree.json")
+        .to_string();
+    if !values.contains_key("--config") {
+        let host = chrono_harness::load_selected_config(&invoking, ".chrono-harness/config.json")?;
+        if host["schema_version"] == 4 {
+            let canonical = chrono_harness::prepared::declaration(&host)?;
+            if canonical.participation.as_ref().is_some_and(|action| {
+                action.tool == canonical.inputs.local.tool
+                    && action.operation == "worktree.check"
+                    && action.argv == ["check"]
+            }) {
+                match canonical.inputs.local.argv.as_slice() {
+                    [command, flag, path] if command == "check-inputs" && flag == "--config" => {
+                        config_path = path.clone();
+                    }
+                    _ => {
+                        return Err(
+                            "worktree participant requires its declared check-inputs policy".into(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    let config_path = config_path.as_str();
     let (config, bytes) = crate::configuration(&invoking, config_path)?;
     if config.automatic_cleanup.is_none() {
         return Err("automatic cleanup is not opted in".into());

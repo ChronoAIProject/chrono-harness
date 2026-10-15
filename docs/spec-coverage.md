@@ -858,59 +858,47 @@ Q2 increment plus this correction; it makes no publication, remote-acceptance or
 complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
 unmeasured until those actual consumer cases run.
 
-Q3 source reconciliation reuses the fixed input-adoption proposal's observation
-producer, Cargo v6 native-target and directory-v3 contracts, source/CI selectors,
-current full-input references, and local Cargo/compiler/SDK/Python declarations.
-Repeated closure vectors now have one registry-owned literal definition; explicit
-FILEMAP edges remain. The actual full-host FILEMAP receives an exact 2 MiB immutable
-input allowance with the ordinary 1 MiB diagnostic bound retained. Existing Q2
-bounds, process transport, CPU acceleration and scheduling cap=2 remain required.
-The obsolete beta.21 enforcement choice is retired; optional installer transport
-preserves independent release and source-build identities.
+Q3 finite source extraction retains explicit acquisition and failure diagnostics,
+Cargo v6/native-target and directory-v3 runtime behavior, input-vector aliases,
+contemporaneous process originals, bounded CI selection transport, current optional
+full-input references and the exact 2097152-byte FILEMAP allowance. Ordinary
+1048576-byte diagnostics, metadata-first/hash/length/oversize controls, CPU
+acceleration, threads, 26 selected units/groups, unfiltered release inventories
+and cap=2 remain. These are source changes, not executed acceptance.
 
-**Product, policy and test inputs change together.** Current local sparse-index
-identities are separately observed and explicitly adopted; original proposal
-bytes are historical data and are not rewritten. New installer identity tests
-consume the existing distribution binary, so their local and native release
-prerequisites now include that producer. Logical declaration size, actual phase
-elapsed time and input bytes are observations, not physical storage savings;
-complete native/CI/maintenance costs remain unmeasured.
+**Policy and product change together.** The stable entry now uses the existing
+source/platform selector. Local tools and the real runner guard bind the surviving
+primary's private homes with unchanged original expected hashes and 92-file Rust
+manifest. Scoped CI selects its existing platform tools/environment and source
+bootstrap bindings. Its preserved local input graph is declaration data, not full
+native coverage. The worktree owner reuses the selected same-owner input policy
+for default lifecycle calls; explicit policies, committed-byte checks and leases
+remain authoritative. Artifact-only cache/release readers use the direct artifact
+declaration. Source reader fixtures retain original assertions after selection.
 
-All five main full registries remain proposed, enforcement not implemented and
-input closure incomplete. Local declarations and ordinary owner tests cannot
-supply missing original base snapshots, native provisioning, compatible committed
-candidate bindings or full-host activation. Caller clean checkpoint, registered
-bootstrap/canonical/native acceptance, whole-increment review, landing and public
-release remain mandatory. Q4's retention obligations, the foreign full-adoption
-policy mismatch, and original169's nine unlocated originals/three binaries remain
-unsettled. The release owner plans beta.28; this source does not publish it or
-claim Q3/full-SPEC delivery.
+Unselected sibling guarded policies/actions and exclusive package-file bindings,
+unused full-native selector/unit/cache/shared/projection sources, and the optional
+unadopted host-bootstrap distribution branch/exclusive tests retire. Source commit
+`87a77182c5da33627deb3b837e7515748eb6fd58` preserves unique bytes. Acquisition
+profiles/observer contracts and their native lifecycle/cleanup inputs remain. The
+identical Mac config/cargo-runner pair remains explicitly owned test data for the
+real observation contract. The installer and all shared implemented Rust runtime,
+observation, input transport, CI and custody behavior remain. Full selected policy
+status stays proposed, enforcement not implemented and input closure incomplete.
 
-The main configuration currently selects local absolute execution paths. The
-source/CI selector API has not been adopted at that host boundary; native policy
-selection and provisioning remain a Q3 source/adoption obligation. This candidate
-is not ready for native deployment. The original native rejection assertion is
-retained as failure evidence, not native full-host acceptance.
+The Mac alias escape and Linux's 140 missing configuration facts remain diagnostic
+and future-activation gaps. This batch neither collects new native facts nor
+waives alias, full Developer, package, SDK or configuration assertions. Positive
+native guard/full activation, native full endpoint/lineage/governance adoption and
+stronger parity are unestablished. Original PR169/R4 historical bytes/cause remain
+unknown; the cleared full-SPEC goal is not restored.
 
-
-Large-registry report transport now omits the scoped graph's reproducible closure
-expansion, preserving exact union edges, seed causes, changes and extra selection
-reasons. Selection and collection still compute the full closure. Worktree
-immutable-input process rows reference original streams at the surviving report
-owner; raw identities, exits and failure evidence remain. Observation v2 likewise
-references already retained streams, and its CLI references the complete report.
-These representation changes do not raise diagnostic/report limits or claim total
-storage savings, retirement or complete retention.
-
-**Product, host declarations and tests change together.** Native acquisition
-manifests now select actual Cargo/rustc paths through retained preceding outputs;
-registered Linux metadata uses its own target. The existing bootstrap and input
-observation owners provide provisioning and native evidence collection, with
-explicit FILEMAP edges and unchanged operation bounds. Rust owner tests cover
-selection, stream restoration and failures; Python tests cover native tool path
-probes. Verification cost includes those owner suites and their explicitly
-registered prerequisites; native and full-host costs remain unknown until caller
-production. The exact remaining authentic inputs and binding actions are in
-[main-host adoption](full-ci.md#main-host-adoption-inputs). This source does not
-adopt source/CI policies from local observations, fill endpoint history, activate
-five registries, establish native acceptance or complete Q3/Q4/all-PR settlement.
+Caller must regenerate instructions for the changed host context, validate the
+clean candidate through registered source bootstrap/canonical/native paths under
+existing use protection, complete independent review, and verify actual dev
+landing and surviving-primary consumption before lifecycle cleanup. PR disposition
+and any public release require their own actual identities/evidence. Validation,
+runtime/CI and total retained-storage costs are unknown. No source-stage success
+is canonical/native/dev/PR/cleanup/full-SPEC completion. The finite extraction and
+caller-owned production boundary are detailed in
+[full CI](full-ci.md#main-host-adoption-inputs).

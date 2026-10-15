@@ -247,8 +247,7 @@ These are observation rows, never handwritten expected hashes or successes.
 Rust regressions live in the existing inputs-tests inventory; the existing
 Cargo guard tests consume the exact observer-produced original and exercise
 file, child-list and alias drift. Their only added dependency is the existing
-local inputs production project, with lock, guarded Cargo declaration and
-FILEMAP compile edge paired. Python runtime selection has Python behavior
+local inputs production project, with its lock and FILEMAP compile edge paired. Python runtime selection has Python behavior
 coverage in the existing host-bootstrap-tests script. Existing project/script
 actions, test inventories, execution plans, scheduling caps and native bounds
 are retained. Costs are unmeasured: full Developer traversal and the retained
@@ -256,12 +255,13 @@ legacy subtree overlap; separate Python components may overlap as well. Each
 root still has its original 200000-entry bound; failure is preserved without
 raising it or narrowing the declared guard scope.
 
-This source repair has not been executed. All 21 proposed Mac null input
-bindings, three missing expected tool versions, native topology acceptance,
-authentic endpoints/governance/CI lineage, activation and complete Q3/SPEC
-acceptance remain caller obligations. Fresh native originals must be consumed
-before updating proposed bindings. Earlier source-bound observations and
-immutable failed Linux originals retain their original scope.
+This source repair has not been executed here. Native topology admission,
+positive guarded consumption and full activation remain future work. The finite
+extraction retains the Mac policy pair as identical, explicitly owned observation
+contract data; unselected native deployment declarations retire as described in
+[the host boundary](full-ci.md#main-host-adoption-inputs). Original native refusal,
+missing Linux facts and earlier evidence retain their scope. No full-native input
+success is manufactured from these declarations.
 
 Main-host acquisition uses existing registered operations:
 
@@ -309,8 +309,9 @@ expected digest is changed.
 `bootstrap.participate` already permits a Git main whose worktree-owner binary
 is absent to seed its tools. In that branch it does not open the referenced
 native lifecycle policy. Acquisition now runs inside that same invocation,
-before installing the owner, so the missing native direct/worktree/Cargo/cache
-policies are later adoption inputs. This branch creates no birth, enrollment or
+before installing the owner, without consuming proposed native full/Cargo/cache
+policies. The retained native worktree/cleanup policies serve existing-owner
+participation. This seed branch creates no birth, enrollment or
 full admission. An existing owner or linked checkout still goes through the
 original participation path and needs genuine compatible committed policies and
 enrollment/leases; a refusal never falls back to seeding. Do not remove an owner
@@ -337,7 +338,8 @@ configuration/ancestor bindings must still be reviewed against the actual
 originals. A sysroot/path probe is not a complete runtime inventory. Missing
 packages remain failures; observations do not replace fixed endpoint snapshots.
 The Cargo observation declaration contains test expectations, not recorded
-successes. Local tool/SDK declarations are not native CI expectations. The
+successes. Local tool/SDK declarations do not establish native full-input expectations;
+scoped CI retains their explicit root graph as declaration data only. The
 remaining adoption bindings are specified in [full CI](full-ci.md#main-host-adoption-inputs).
 The new acquisition manifests retain their outer originals under
 `.chrono-harness/state/native/{macos,linux}/acquisition.json` and its

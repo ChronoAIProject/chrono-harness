@@ -32,15 +32,6 @@
     ]
   },
   "operations": {
-    "guard.build.runner": {
-      "tool": "cargo",
-      "argv": [
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/runner/Cargo.toml"
-      ]
-    },
     "guard.check.runner": {
       "tool": "cargo",
       "argv": [
@@ -63,11 +54,11 @@
       "input": null
     },
     {
-      "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/config",
+      "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/config",
       "input": null
     },
     {
-      "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/config.toml",
+      "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/config.toml",
       "input": null
     }
   ],
@@ -79,7 +70,7 @@
   },
   "toolchain": {
     "sysroot": {
-      "root": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "root": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
       "manifest_root": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
       "manifest": "toolchain.rust.inventory"
     },

@@ -21,7 +21,10 @@
   "output_limit_bytes": 1048576,
   "immutable_input_limits": {
     ".chrono-harness/config.json": 2097152,
-    ".chrono-harness/FILEMAP.json": 2097152
+    ".chrono-harness/FILEMAP.json": 2097152,
+    ".chrono-harness/local-config.json": 2097152,
+    ".chrono-harness/ci/scoped-macos.json": 2097152,
+    ".chrono-harness/ci/scoped-linux.json": 2097152
   },
   "report_directory": ".chrono-harness/state/worktrees/",
   "check_inputs": {

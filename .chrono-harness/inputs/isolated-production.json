@@ -12,10 +12,10 @@
     "values": {
       "CARGO_TERM_COLOR": "never",
       "CARGO_NET_OFFLINE": "false",
-      "CARGO_HOME": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo",
-      "RUSTUP_HOME": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup",
+      "CARGO_HOME": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo",
+      "RUSTUP_HOME": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup",
       "RUSTUP_TOOLCHAIN": "1.95.0",
-      "RUSTC": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
+      "RUSTC": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/rustc",
       "RUSTC_WRAPPER": "",
       "RUSTC_WORKSPACE_WRAPPER": ""
     }
@@ -63,7 +63,7 @@
     ],
     "tools": {
       "python3": "/usr/bin/python3",
-      "cargo": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+      "cargo": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
       "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo"
     },
     "timeout_seconds": 120,
@@ -85,43 +85,43 @@
     {
       "id": "private.components",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/components"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/components"
       }
     },
     {
       "id": "private.multirust-config",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/multirust-config.toml"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/multirust-config.toml"
       }
     },
     {
       "id": "private.rustup-settings",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/settings.toml"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/rustup/settings.toml"
       }
     },
     {
       "id": "private.cargo.config",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/config"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/config"
       }
     },
     {
       "id": "private.cargo.config.toml",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/config.toml"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/config.toml"
       }
     },
     {
       "id": "private.cargo.credentials",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/credentials"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/credentials"
       }
     },
     {
       "id": "private.cargo.credentials.toml",
       "location": {
-        "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/credentials.toml"
+        "path": "/Users/auricstudio/chrono-harness/.chrono-harness/state/isolated-rust/cargo/credentials.toml"
       }
     }
   ],
