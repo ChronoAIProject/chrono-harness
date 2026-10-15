@@ -273,6 +273,12 @@ enum ToolProbe {
 }
 
 fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
+    install_tools_owned(root, tools, false);
+}
+fn install_retained_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
+    install_tools_owned(root, tools, true);
+}
+fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained: bool) {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
@@ -287,10 +293,19 @@ fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
             fs::symlink_metadata(bin.join(name)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound
         ));
+        if retained {
+            crate::tools::copied_fixture_input(root, &built, &bin.join(name));
+        }
         copy.arg(built);
     }
     if !tools.is_empty() {
-        let copied = copy.arg(&bin).output().unwrap();
+        copy.arg(&bin);
+        let copied = if retained {
+            chrono_harness::process_fds::forward_command(&mut copy, &[]).unwrap();
+            chrono_worktree::TemporaryHost::capture_bound_output(root, &mut copy).unwrap()
+        } else {
+            copy.output().unwrap()
+        };
         assert!(
             copied.status.success(),
             "candidate fixture installation: {}",
@@ -312,7 +327,12 @@ fn install_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
             .chain(command.get_args())
             .map(|arg| arg.to_string_lossy().into_owned())
             .collect();
-        let output = command.output().unwrap();
+        let output = if retained {
+            chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+            chrono_worktree::TemporaryHost::capture_bound_output(root, &mut command).unwrap()
+        } else {
+            command.output().unwrap()
+        };
         let ready = match probe {
             ToolProbe::Version => output.status.success(),
             ToolProbe::JudgeEof => {

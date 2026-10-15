@@ -1156,6 +1156,18 @@
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
           ]
+        },
+        "update_lockfile": {
+          "operation": "lock.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-judge-filemap-tests",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -1529,6 +1541,18 @@
             "1",
             "--filter-platform",
             "x86_64-unknown-linux-gnu",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
+          ]
+        },
+        "update_lockfile": {
+          "operation": "lock.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-judge-projects-tests",
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
@@ -2151,6 +2175,18 @@
             "--manifest-path",
             "crates/judge-workflow-tests/Cargo.toml"
           ]
+        },
+        "update_lockfile": {
+          "operation": "lock.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-judge-workflow-tests",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-workflow",
@@ -2430,6 +2466,18 @@
             "crates/inputs-tests/Cargo.toml",
             "--test",
             "observations"
+          ]
+        },
+        "update_lockfile": {
+          "operation": "lock.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-inputs-tests",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
           ]
         }
       },
@@ -2790,6 +2838,18 @@
             "crates/judge-cargo-tests/Cargo.toml",
             "--test",
             "configuration"
+          ]
+        },
+        "update_lockfile": {
+          "operation": "lock.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-judge-cargo-tests",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
           ]
         }
       },

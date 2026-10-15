@@ -179,7 +179,7 @@ use crate::{
 };
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
 use chrono_judge_registration::Registrations;
-pub use producer::RetainedArtifact;
+pub use producer::{RetainedArtifact, TemporaryHost};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
@@ -2138,6 +2138,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             "--unit",
             "--bootstrap-config",
             "--adopt-cache",
+            "--adopt-fixtures",
         ]
         .contains(&key.as_str())
             || n + 1 >= args.len()
@@ -2160,6 +2161,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         || (operation == "maintain" && values.contains_key("--path"))
         || (operation == "migrate" && !values.contains_key("--path"))
         || (values.contains_key("--adopt-cache") && operation != "migrate")
+        || (values.contains_key("--adopt-fixtures") && operation != "migrate")
     {
         return Err("invalid lifecycle command arguments".into());
     }
@@ -2245,6 +2247,9 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.migrate(r, target, report)?;
                     if let Some(plan) = values.get("--adopt-cache") {
                         manager.adopt_main_cache(r, target, plan, report)?;
+                    }
+                    if let Some(plan) = values.get("--adopt-fixtures") {
+                        manager.adopt_fixture_bodies(r, target, plan, report)?;
                     }
                     Ok(())
                 }

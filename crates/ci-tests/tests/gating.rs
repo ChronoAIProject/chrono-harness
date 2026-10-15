@@ -1341,7 +1341,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     git(&root, &["push", "-q", "origin", "dev"]);
     let mut h = GatedHost {
         host: ShortHost {
-            _dir: dir,
+            _dir: crate::tools::FixtureDirectory::Ephemeral(dir),
             root,
             remote,
             base: base.clone(),

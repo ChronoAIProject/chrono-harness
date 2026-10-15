@@ -1032,7 +1032,7 @@ protected. Store resolution does not release consumers or grant main checkout
 or branch deletion authority. Earlier linked stores have no adopted forwarding
 route and remain protected unknown evidence.
 
-This host admits only the two copied independent Cargo outputs at
+For `ci-command-result`, this host admits exactly the two copied independent Cargo outputs at
 `original-state/cargo/producer/target/` and `original-state/cargo/tests/target/`,
 and the producer additionally requires their exact source artifact declarations.
 The selected expected-exit assertion publishes release after consuming the
@@ -1286,9 +1286,10 @@ referenced custody declaration and authority remain required retained inputs;
 reports do not guarantee a self-contained or independently immutable declaration
 copy. Logical removal counts do not establish physical shared-volume disk release.
 
-Worktree test fixture retention remains explicitly requested by
+Ordinary worktree test fixture evidence copies remain explicitly requested by
 `CHRONO_WORKTREE_TEST_RECEIPTS` or panic. Successful default fixtures do not copy
-all state. Retained fixture assertions and failure diagnosis remain consumers
+all state. Selected Cargo-producing fixtures additionally use the prospective
+allocation contract below. Retained fixture assertions and failure diagnosis remain consumers
 until their current custodian explicitly ends those copied-path obligations.
 
 ### Local initial input preparation
@@ -1337,3 +1338,110 @@ selected declarations fail. The selected policy still requires committed bytes,
 coordinator compatibility and the same use-protection lifetime. This owner
 correction has an unexecuted paired Rust regression covering actual consumption,
 unselected-policy nonuse, explicit override refusal and selected-policy drift.
+
+### Prospective custody for selected native fixtures
+
+**Policy and product change:** cleanup policy selects the executing CI short hosts,
+independent Cargo-producing worktree hosts, the existing full native context/relocation
+and failed checkout-hook fixtures, and the finite projects/workflow/migration
+publishers described below. Compatible candidate binaries and committed policy
+must be deployed together. This source change has
+not established local or native acceptance, deployment, delivery or cleanup.
+
+`TemporaryHost::registered_store` resolves the existing coordinator and retained
+producer policy. `allocate` retains one exact allocation and publishes its intent
+before native outputs are produced. `temporary: true` enables this prospective
+route; `generated_outputs` lists exact disposable directories and `source_roots`
+lists their actual Git roots. Source, refs, object databases, unknown neighboring
+allocations and original captures remain protected. Other temporary fixtures keep
+their existing teardown. No command-wide TMPDIR policy is installed.
+
+A selected native command is configured before `bind_command` forwards the
+existing scopes once. The command owns descriptor copies after scope release and
+can cross a thread boundary. Rebinding an explicit native carrier fails. Only
+these selected commands receive the allocation as TMPDIR; their fixture policy
+records that value. `capture_output` binds an unbound command;
+`capture_bound_output` records an already bound route without binding it again.
+Both preserve raw stdout/stderr files before spawn and retain literal argv/cwd
+and explicit environment digests. Only an actual wait produces a joined result.
+The selected native input-producer request uses `capture_bound_input` to retain
+the same protocol bytes before spawn, supplying those bytes and EOF from a file.
+Interruption, spawn failure or a missing result establishes no exit or completion.
+Captures are evidence, outside the generated-output whitelist.
+
+`register_copy` records an exact destination and retains a verified same-byte
+source original before the existing copy operation. `relocate_copies` carries
+only enrolled, unchanged members within that allocation before its actual rename;
+it does not move source or infer membership. The producer policy must explicitly
+opt into `fixture_bodies`. Only declared regular members are removable, including
+an exact copied hook leaf; Git metadata and committed/index source are protected.
+Missing originals, partial or changed copies and unavailable ownership retain
+their errors. Independent eligible members and allocations can still progress.
+
+The existing `migrate --adopt-fixtures STATE_PATH` consumes a fixed-HEAD
+`chrono-fixture-body-custody/v1` input. It binds each already enrolled allocation,
+original intent, physical identity, recipe source, exact member bytes, declared
+Git root and any nested registry/lease references. The current custodian must
+state actual consumer release. Migration preserves historical producer outcomes
+and performs no disposal; it does not discover or import unknown allocations.
+
+Ordinary drain requires exclusive allocation ownership and explicit release of
+all persistent diagnostic references. Nested copies also require their declared
+leases and nested diagnostic references to release. Reference publication and
+removal share the existing exclusion. Unrelated publication can proceed while a
+released allocation's source is checked. No finish is required for generated
+output recovery after the actual holders have joined. Entirely absent output is
+observation only: registry/intent bytes stay unchanged and no disposal result is
+invented. Explicit maintain still fails when any selected member remains failed.
+Logical bytes and allocated blocks do not establish physical volume savings.
+Selected failed fixtures acquire a persistent `fixture-diagnostic` reference;
+requested worktree receipt retention does the same. The actual diagnostic
+custodian must release it after consuming the originals. Successful ordinary
+fixtures keep only kernel custody until their children and assertions have joined.
+
+The shared projects Host and its explicitly registered workflow, FILEMAP,
+inputs and Cargo consumers now directly depend on the existing worktree library.
+Each keeps its independent manifest, Cargo-generated lock and target. The host
+policy adds three finite publishers: `projects-test-host` for the shared hosts
+and copied unit/collector/delivery checkouts, `workflow-test-tools` for real
+native tools and the `local-lane` producer, and `projects-migration-host` for the
+actual historical/current-source migration fixture. Their exact generated-output
+paths and Git roots live only in cleanup.json; FILEMAP declares each consumer.
+The five owners each register one `update_lockfile` action delegating to
+`cargo update --offline --package chrono-<owner> --manifest-path <owned manifest>`.
+Resolution starts from that owner's Q3 lock, retains compatible existing external
+locked versions and adds the necessary INTERNAL worktree graph, one command at
+a time. Cargo produces the resulting checksums and dependency rows. This adds no
+external package family or changed hashing acceleration/profile contract.
+
+Allocation intent precedes checkout/output production. Actual cp, fs::copy,
+hard-link, Git clone, native readiness, Cargo and check commands remain their
+original operations. Copy publishers retain original executable bytes before
+production and explicitly name their actual fixture root for source exclusion;
+the local lane enrolls future hard links before birth starts its
+existing freshness clock. Capture files and TMPDIR live beside clone destinations
+so an actual clone still receives an empty destination. Native arguments and
+cleared/selected environments are configured before the single capability bind.
+Original input bytes exist before the read-to-EOF judge starts, and actual wait
+produces its joined status. Engine consumers inherit the same held scopes.
+
+Offline relocation carries enrolled copies before rename, retains the checkout
+and external declared inputs, and makes the old path absent. Source, Git identity,
+manifest/lock files, captures and large offline originals are never generated
+output members. Panics and explicitly requested full/repair evidence acquire a
+persistent diagnostic reference before the allocation lease releases; original
+native collection/publication failures also protect their source allocation.
+The diagnostic custodian releases `fixture-diagnostic` through the existing
+RetainedArtifact reference API after consuming those originals. Ordinary joined
+fixtures need no finish for eligible generated-output drain. Source-preserving
+retirement remains a separate caller obligation; final-original report retirement
+is outside this contract.
+
+**Combined policy/consumer change, unaccepted:** these declarations and source
+consumers require compatible candidate binaries and committed policy together.
+Rust expectations cover prospective copies/offline source and external-input
+preservation, spawn failure with original empty streams and no fabricated join,
+and panic diagnostic protection. Existing custody/native/drain tests retain their
+obligations. Bootstrap, formatting, dedicated tests, canonical two-endpoint DELTA,
+native platforms and independent review remain caller acceptance work; this source
+reconciliation and Cargo lock updates establish none of those results.

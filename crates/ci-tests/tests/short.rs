@@ -90,7 +90,7 @@ for prefix,code,timeout,expected in [
 }
 
 struct ShortHost {
-    _dir: tempfile::TempDir,
+    _dir: crate::tools::FixtureDirectory,
     root: PathBuf,
     remote: PathBuf,
     base: String,
@@ -99,19 +99,17 @@ struct ShortHost {
 impl ShortHost {
     fn new() -> Self {
         let (old, _, _) = consumer_source();
-        let dir = tempfile::Builder::new()
-            .prefix("short host λ ")
-            .tempdir()
-            .unwrap();
+        let dir = crate::tools::temporary_host("short host λ ");
         let parent = fs::canonicalize(dir.path()).unwrap();
         let root = parent.join("arbitrary non Cargo layout");
         fs::create_dir(&root).unwrap();
         git(&root, &["clone", "-q", old.path().to_str().unwrap(), "."]);
-        install(&root);
-        install_tools(
-            &root,
-            &[("worktree", "chrono-worktree", ToolProbe::Version)],
-        );
+        install_retained_tools(&root, &[
+            ("runner", "chrono-harness", ToolProbe::Version),
+            ("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof),
+            ("ci", "chrono-ci", ToolProbe::Version),
+        ]);
+        install_retained_tools(&root, &[("worktree", "chrono-worktree", ToolProbe::Version)]);
         git(&root, &["config", "user.name", "Fixture"]);
         git(&root, &["config", "user.email", "fixture@example.invalid"]);
         let remote = parent.join("explicit target.git");
@@ -125,6 +123,8 @@ impl ShortHost {
         let version = Command::new(&git_bin).arg("--version").output().unwrap();
         let native = json!({"operation":"prepare.check.ci","tool":"chrono-ci","argv":["check-inputs","--config",".chrono-harness/ci/units.json","--event-env","GITHUB_EVENT_NAME","--payload-env","GITHUB_EVENT_PATH","--revision-env","CHRONO_WORKFLOW_REVISION","--repository-env","GITHUB_REPOSITORY"]});
         let cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"sh","program":"/bin/sh","resolution":"PATH-once","version_argv":["-c","printf shell"],"expected_version":"shell"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
+        let mut cfg = cfg;
+        cfg["environment"]["values"]["TMPDIR"] = json!(dir.path());
         json_file(&root, ".chrono-harness/config.json", &cfg);
         json_file(
             &root,
@@ -209,7 +209,7 @@ impl ShortHost {
             candidate,
         }
     }
-    fn command(&self, args: &[&str]) -> Command {
+    fn prepared_command(&self, args: &[&str]) -> Command {
         fixture_inputs(
             &self.root,
             &json!({"argv":args,"base":self.base,
@@ -221,8 +221,13 @@ impl ShortHost {
             .args(args);
         c
     }
+    fn command(&self, args: &[&str]) -> Command {
+        let mut command = self.prepared_command(args);
+        self._dir.bind_command(&mut command).unwrap();
+        command
+    }
     fn run(&self, args: &[&str], exit: i32) -> Value {
-        let out = self.command(args).output().unwrap();
+        let out = self._dir.capture_output(&mut self.prepared_command(args)).unwrap();
         if out.status.code() != Some(exit) {
             let argv = std::iter::once(".chrono-harness/bin/chrono-harness".to_owned())
                 .chain(args.iter().map(|arg| (*arg).to_owned()))
@@ -370,6 +375,9 @@ impl Drop for ShortHost {
         if !std::thread::panicking() {
             return;
         }
+        if let Err(error) = self._dir.retain_diagnostic() {
+            eprintln!("Failed fixture diagnostic reference unavailable: {error}");
+        }
         let directory = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
             .map(PathBuf::from)
             .unwrap_or_else(|| {
@@ -414,7 +422,7 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
         .join(sha256(root.as_os_str().as_encoded_bytes()));
     assert!(!evidence.exists());
     let host = ShortHost {
-        _dir: directory,
+        _dir: crate::tools::FixtureDirectory::Ephemeral(directory),
         root: root.clone(),
         remote: root.join("remote"),
         base: String::new(),
@@ -1727,6 +1735,10 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
         );
     }
     // Original absolute paths are unavailable. Only the selected uploaded roots are delivered.
+    chrono_worktree::TemporaryHost::relocate_copies(
+        h._dir.path().parent().unwrap(), "ci-test-host", &h.root,
+        &h._dir.path().join("unavailable original checkout"),
+    ).unwrap();
     fs::rename(&h.root, h._dir.path().join("unavailable original checkout")).unwrap();
     install_mock_transport(&consumer, "success", &h.candidate);
     json_file(&consumer, ".chrono-harness/state/event.json", &payload);
@@ -2103,6 +2115,9 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
         .join(format!("target-local-{}", "x".repeat(220)));
     fs::create_dir_all(&long_parent).unwrap();
     let long_root = long_parent.join("host");
+    chrono_worktree::TemporaryHost::relocate_copies(
+        h._dir.path().parent().unwrap(), "ci-test-host", &h.root, &long_root,
+    ).unwrap();
     fs::rename(&h.root, &long_root).unwrap();
     h.root = long_root;
     h.modify(".chrono-harness/ci/check.json", |c| {

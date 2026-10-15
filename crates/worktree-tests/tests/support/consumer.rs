@@ -178,6 +178,42 @@ fn main() -> ExitCode {
             }
             exec(cargo);
         }
+        "custody-holder" => {
+            use std::io::Read;
+            let root = std::path::PathBuf::from(std::env::var_os("CHRONO_TEMPORARY_CARGO_ROOT").unwrap());
+            assert!(root.is_absolute());
+            assert_eq!(std::env::temp_dir(), root);
+            let mut stream = std::net::TcpStream::connect(std::env::var("CHRONO_TEMPORARY_SYNC").unwrap()).unwrap();
+            stream.write_all(b"ready").unwrap();
+            stream.read_exact(&mut [0]).unwrap();
+            if let Some(member) = std::env::var_os("CHRONO_TEMPORARY_MEMBER") {
+                assert!(!fs::read(root.join(member)).unwrap().is_empty());
+            } else {
+                assert_eq!(fs::read(root.join("cache 空白/output")).unwrap(), b"rebuildable");
+            }
+        }
+        "capture-once" => {
+            io::stdout().write_all(b"\xffpartial stdout\0\n").unwrap();
+            io::stderr().write_all(b"\xfepartial stderr\0\n").unwrap();
+            io::stdout().flush().unwrap();
+            io::stderr().flush().unwrap();
+            if std::env::var_os("CHRONO_CAPTURE_INTERRUPT").is_some() {
+                unsafe extern "C" {
+                    fn getppid() -> i32;
+                    fn kill(pid: i32, signal: i32) -> i32;
+                }
+                assert_eq!(unsafe { kill(getppid(), 9) }, 0);
+            }
+            return ExitCode::from(7);
+        }
+        "capture-input" => {
+            use std::io::Read;
+            let mut bytes = vec![];
+            io::stdin().read_to_end(&mut bytes).unwrap();
+            io::stdout().write_all(&bytes).unwrap();
+            io::stderr().write_all(b"\xfeinput\0\n").unwrap();
+            return ExitCode::from(9);
+        }
         "bounded-cargo" => {
             let plan: serde_json::Value = serde_json::from_slice(
                 &fs::read(Path::new(STATE).join("cargo-plan.json")).unwrap(),
