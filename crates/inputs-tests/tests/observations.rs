@@ -421,6 +421,271 @@ fn inventory_bounds_and_child_timeout_remain_failures_with_originals() {
     );
 }
 
+// Expected behavior is independent of a native machine: the Linux spellings
+// remain rejected by strict input validation and work only by explicit target
+// acquisition, with both the selected spelling and actual aliases retained.
+#[cfg(unix)]
+#[test]
+fn explicit_canonical_file_acquisition_preserves_linux_aliases_and_parent_components() {
+    use std::os::unix::fs::symlink;
+    let d = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(d.path()).unwrap();
+    fs::create_dir_all(root.join("etc")).unwrap();
+    fs::create_dir_all(root.join("usr/lib/gcc/x86_64-linux-gnu/13")).unwrap();
+    fs::create_dir_all(root.join("usr/lib/x86_64-linux-gnu")).unwrap();
+    fs::write(root.join("usr/lib/os-release"), b"native release").unwrap();
+    fs::write(root.join("usr/lib/x86_64-linux-gnu/libc.so.6"), b"native libc").unwrap();
+    symlink("../usr/lib/os-release", root.join("etc/os-release")).unwrap();
+    symlink(
+        "usr/lib/gcc/x86_64-linux-gnu/13",
+        root.join("compiler-directory"),
+    )
+    .unwrap();
+    for (index, spelling, actual, bytes) in [
+        (
+            0,
+            "etc/os-release",
+            "usr/lib/os-release",
+            b"native release".as_slice(),
+        ),
+        (
+            1,
+            "usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/libc.so.6",
+            "usr/lib/x86_64-linux-gnu/libc.so.6",
+            b"native libc".as_slice(),
+        ),
+        (
+            2,
+            "compiler-directory/../../../x86_64-linux-gnu/libc.so.6",
+            "usr/lib/x86_64-linux-gnu/libc.so.6",
+            b"native libc".as_slice(),
+        ),
+    ] {
+        let location = root.join(spelling);
+        assert!(chrono_harness::input_file::observe_file(&location).is_err());
+        let mut m = manifest(&root);
+        m["directories"] = json!([]);
+        m["operations"][0]["argv"] = json!(["path", location]);
+        m["files"] = json!([{"id":"runtime","location":{"stdout":"location"}}]);
+        let strict = format!(".chrono-harness/state/strict-{index}.json");
+        assert!(invoke(&root, &m, &strict).is_err());
+        m["files"][0]["resolution"] = json!("canonical-target");
+        let output = format!(".chrono-harness/state/canonical-{index}.json");
+        let report: Value = serde_json::from_str(&invoke(&root, &m, &output).unwrap()).unwrap();
+        let file = &report["files"]["runtime"];
+        assert_eq!(file["location"], json!(location));
+        assert_eq!(file["resolution"]["location"], json!(root.join(actual)));
+        assert_eq!(file["observation"]["sha256"], chrono_harness::sha256(bytes));
+        let aliases = file["resolution"]["symlinks"].as_array().unwrap();
+        if index == 0 {
+            assert_eq!(
+                aliases,
+                &vec![json!({"path":root.join("etc/os-release"),
+                "target":"../usr/lib/os-release","kind":"file"})]
+            );
+        } else if index == 2 {
+            assert_eq!(
+                aliases,
+                &vec![json!({"path":root.join("compiler-directory"),
+                "target":"usr/lib/gcc/x86_64-linux-gnu/13","kind":"directory"})]
+            );
+        } else {
+            assert!(aliases.is_empty());
+        }
+        let process =
+            chrono_harness::scoped_report::restore_process(&report["operations"]["location"], |o| {
+                chrono_harness::prepared::read_original(&root, o, None)
+            })
+            .unwrap();
+        assert_eq!(
+            process.stdout_bytes,
+            format!("{}\n", location.display()).as_bytes()
+        );
+        assert!(chrono_harness::input_file::observe_file(&location).is_err());
+    }
+    symlink("missing", root.join("etc/dangling")).unwrap();
+    let mut m = manifest(&root);
+    m["operations"] = json!([]);
+    m["directories"] = json!([]);
+    m["files"] = json!([{"id":"dangling","location":{"path":"etc/dangling"},"resolution":"canonical-target"}]);
+    let output = ".chrono-harness/state/dangling.json";
+    assert!(invoke(&root, &m, output).is_err());
+    let report: Value = serde_json::from_slice(&fs::read(root.join(output)).unwrap()).unwrap();
+    assert!(report["files"].get("dangling").is_none());
+    assert_eq!(report["status"], "failed");
+}
+
+#[test]
+fn runtime_scope_observes_python_components_without_other_prefix_owners() {
+    let d = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(d.path()).unwrap();
+    for directory in ["usr/lib/python3.12/lib-dynload", "usr/lib/other-runtime"] {
+        fs::create_dir_all(root.join(directory)).unwrap();
+    }
+    fs::write(root.join("usr/lib/python3.12/os.py"), b"stdlib").unwrap();
+    fs::write(
+        root.join("usr/lib/python3.12/lib-dynload/native.so"),
+        b"extension",
+    )
+    .unwrap();
+    fs::write(root.join("usr/lib/other-runtime/unrelated"), b"other owner").unwrap();
+    let mut m = manifest(&root);
+    m["operations"][0]["argv"] = json!(["path", root.join("usr/lib/python3.12")]);
+    m["directories"][0]["max_entries"] = json!(3);
+    let result: Value = serde_json::from_str(
+        &invoke(&root, &m, ".chrono-harness/state/runtime.json").unwrap(),
+    )
+    .unwrap();
+    let inventory = &result["directories"]["declared"];
+    assert_eq!(inventory["root"], json!(root.join("usr/lib/python3.12")));
+    assert_eq!(
+        inventory["files"],
+        json!([
+        {"path":"lib-dynload/native.so","sha256":chrono_harness::sha256(b"extension")},
+        {"path":"os.py","sha256":chrono_harness::sha256(b"stdlib")}
+        ])
+    );
+}
+
+#[test]
+fn configuration_observation_retains_identity_and_absence_without_credential_contents() {
+    let d = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(d.path()).unwrap();
+    fs::create_dir(root.join("cargo")).unwrap();
+    let secret = b"fixture credential content must stay at its owner";
+    fs::write(root.join("cargo/credentials.toml"), secret).unwrap();
+    let mut m = manifest(&root);
+    m["operations"] = json!([]);
+    m["directories"] = json!([]);
+    m["files"] = json!([
+        {"id":"present","location":{"path":"cargo/credentials.toml"}},
+        {"id":"absent","location":{"path":"cargo/credentials"}}
+    ]);
+    let output = ".chrono-harness/state/credentials.json";
+    let original = invoke(&root, &m, output).unwrap();
+    let report: Value = serde_json::from_str(&original).unwrap();
+    assert_eq!(
+        report["files"]["present"]["observation"],
+        json!({"sha256":chrono_harness::sha256(secret),"length":secret.len()})
+    );
+    assert_eq!(report["files"]["absent"]["absent"], true);
+    assert!(!original.contains(std::str::from_utf8(secret).unwrap()));
+    let retained: Vec<_> = fs::read_dir(root.join(format!("{output}.processes")))
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(retained, vec![std::ffi::OsString::from("source-0.json")]);
+    assert_eq!(fs::read(root.join("cargo/credentials.toml")).unwrap(), secret);
+}
+
+#[cfg(unix)]
+#[test]
+fn v3_manifest_is_published_from_real_nested_empty_and_alias_topology() {
+    use std::os::unix::fs::symlink;
+    let d = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(d.path()).unwrap();
+    fs::create_dir_all(root.join("declared/nested/empty")).unwrap();
+    fs::write(root.join("declared/nested/data"), b"directory bytes").unwrap();
+    symlink("nested/data", root.join("declared/file-alias")).unwrap();
+    symlink("file-alias", root.join("declared/chain")).unwrap();
+    symlink("nested/empty", root.join("declared/directory-alias")).unwrap();
+    let mut m = manifest(&root);
+    let artifact = ".chrono-harness/state/guard/directory.json";
+    m["directories"][0]["manifest"] = json!({"path":artifact,"root":"declared"});
+    let output = ".chrono-harness/state/topology.json";
+    let report: Value = serde_json::from_str(&invoke(&root, &m, output).unwrap()).unwrap();
+    let reference =
+        serde_json::from_value(report["directories"]["declared"]["manifest"].clone()).unwrap();
+    let bytes = chrono_harness::prepared::read_original(&root, &reference, None).unwrap();
+    let actual: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        actual,
+        json!({"schema":"chrono-input-directory/v3","root":"declared",
+        "files":[{"path":"nested/data","sha256":chrono_harness::sha256(b"directory bytes")}],
+        "symlinks":[
+            {"path":"chain","target":"file-alias","kind":"file"},
+            {"path":"directory-alias","target":"nested/empty","kind":"directory"},
+            {"path":"file-alias","target":"nested/data","kind":"file"}],
+        "directories":[
+            {"path":".","entries":["chain","directory-alias","file-alias","nested"]},
+            {"path":"nested","entries":["data","empty"]},
+            {"path":"nested/empty","entries":[]}]})
+    );
+    // Legacy observations retain their schema and literal untyped alias rows.
+    assert_eq!(
+        report["directories"]["declared"]["schema"],
+        "chrono-input-directory-observation/v1"
+    );
+    assert!(
+        report["directories"]["declared"]["symlinks"][0]
+            .get("kind")
+            .is_none()
+    );
+    fs::write(root.join("declared/new-child"), b"drift").unwrap();
+    assert!(
+        invoke(&root, &m, ".chrono-harness/state/reentry.json")
+            .unwrap_err()
+            .contains("EXISTS")
+    );
+    assert_eq!(fs::read(root.join(artifact)).unwrap(), bytes);
+    assert!(
+        !root
+            .join(".chrono-harness/state/reentry.json.processes")
+            .exists()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn v3_manifest_failure_preserves_outputs_and_enforces_scope_aliases_and_entry_bounds() {
+    use std::os::unix::fs::symlink;
+    for case in ["bound", "escape", "dangling", "wrong-root", "success"] {
+        let d = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(d.path()).unwrap();
+        fs::create_dir_all(root.join("declared/empty")).unwrap();
+        fs::create_dir(root.join("other")).unwrap();
+        fs::write(root.join("declared/data"), b"bytes").unwrap();
+        fs::write(root.join("other/data"), b"external").unwrap();
+        let artifact = ".chrono-harness/state/guard/directory.json";
+        let mut m = manifest(&root);
+        m["directories"][0]["manifest"] = json!({"path":artifact,"root":"declared"});
+        m["directories"][0]["max_entries"] = json!(2);
+        match case {
+            "bound" => m["directories"][0]["max_entries"] = json!(1),
+            "wrong-root" => m["directories"][0]["manifest"]["root"] = json!("other"),
+            "escape" | "dangling" => {
+                m["directories"][0]["max_entries"] = json!(3);
+                symlink(
+                    if case == "escape" {
+                        "../other/data"
+                    } else {
+                        "missing"
+                    },
+                    root.join("declared/alias"),
+                )
+                .unwrap();
+            }
+            _ => {}
+        }
+        let output = ".chrono-harness/state/manifest.json";
+        let result = invoke(&root, &m, output);
+        let original = fs::read(root.join(output)).unwrap();
+        let report: Value = serde_json::from_slice(&original).unwrap();
+        if case == "success" {
+            assert!(result.is_ok(), "{result:?}");
+            assert!(root.join(artifact).is_file());
+        } else {
+            assert!(result.is_err(), "{case}");
+            assert_eq!(report["status"], "failed");
+            assert!(!root.join(artifact).exists());
+            assert!(report["operations"]["location"]["stdout_original"].is_object());
+            assert!(!report["errors"].as_array().unwrap().is_empty());
+        }
+        assert!(invoke(&root, &m, output).unwrap_err().contains("EXISTS"));
+        assert_eq!(fs::read(root.join(output)).unwrap(), original);
+    }
+}
+
 #[test]
 fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -525,4 +790,83 @@ fn main_host_observation_reuses_all_declared_cargo_acquisition_operations() {
         provisioning["registered_operations"]["environment"]["RUSTC"],
         json!({"stdout":"selection.rustc"})
     );
+    for native in [&manifest, &linux] {
+        for id in [
+            "configuration.0a24bcbbe88ebae0",
+            "configuration.22e1529f27755c5a",
+            "configuration.4971e26cb7d81352",
+            "configuration.53f66258050caac2",
+            "configuration.6578aa671e061376",
+            "configuration.70d663ddab3591b1",
+            "configuration.70f054831d3eb9be",
+            "configuration.770c0f688c0d8fc5",
+            "configuration.98f18b28b308b630",
+            "configuration.9cef6b2441aab2d0",
+            "configuration.9f2e73c2801230e0",
+            "configuration.b8e1dc7fc228914e",
+            "configuration.c7dc5e26eaf9702a",
+            "configuration.cd80172321df8988",
+            "configuration.credentials",
+            "configuration.credentials.toml",
+            "configuration.e3e19abc5bd066d6",
+            "configuration.eca50d195b820816",
+            "configuration.rustup-settings",
+            "runtime.python.shared-library",
+        ] {
+            assert_eq!(
+                native["files"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|r| r["id"] == id)
+                    .count(),
+                1,
+                "{id}"
+            );
+        }
+        for id in ["tool.native-cc", "tool.rustup", "tool.cargo-fmt"] {
+            let op = native["operations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["id"] == id)
+                .unwrap();
+            assert_eq!(op["argv"], json!(["--version"]));
+        }
+        for id in ["python", "python.platstdlib", "python.extensions"] {
+            let dir = native["directories"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["id"] == id)
+                .unwrap();
+            assert_eq!(dir["max_entries"], 200000);
+        }
+    }
+    let guard: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/native/macos/cargo-runner.json")).unwrap(),
+    )
+    .unwrap();
+    let config: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/native/macos/config.json")).unwrap(),
+    )
+    .unwrap();
+    for (index, id) in [(0, "sdk"), (1, "developer")] {
+        let declaration = manifest["directories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == id)
+            .unwrap();
+        let scope = &guard["toolchain"]["sdks"][index];
+        let input = config["environment"]["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == scope["manifest"])
+            .unwrap();
+        assert_eq!(declaration["manifest"]["root"], scope["root"]);
+        assert_eq!(declaration["manifest"]["path"], input["location"]);
+        assert_eq!(declaration["max_entries"], 200000);
+    }
 }

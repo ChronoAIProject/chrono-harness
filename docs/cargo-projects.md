@@ -160,6 +160,18 @@ consumers. These declarations retain unresolved native provisioning, original
 endpoint snapshots and full adoption. They do not select historical beta.21
 enforcement executables. A current candidate is judged by its candidate tools.
 
+The source-only native observer repair can produce the existing
+`chrono-input-directory/v3` guard manifests directly from the declared live
+roots. V3 directory-child rows additionally admit `path: "."` for the inventory
+root; this checks additions at the root before and after the operation, as
+nested rows already do. File and alias path grammar is unchanged. Exact root
+children, nested and empty directories, hashes and alias targets/kinds are
+program-produced, then consumed through the existing registered input identity.
+The two proposed Mac SDK declarations retain the SDK and full Developer roots.
+No manifest is inferred from an older flat observation, and publishing an
+original is not guard acceptance. See [native producer repair](inputs.md#native-producer-repair-source-only)
+for acquisition semantics, paired policy changes, costs and unexecuted checks.
+
 Each package row contains `id`, `name`, `version`, `source`, `project`,
 `manifest_input`, `inputs`, `checksum`, `features` and `dependencies`. Local
 packages set `project`; their `source`, `manifest_input` and `checksum` are null

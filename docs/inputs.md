@@ -176,6 +176,73 @@ the actual selected `RUSTC` to reach Cargo. Suffixes, missing or later producers
 failed path observations and reserved ownership variables reject. This is an
 explicit acquisition chain, not input inference or expected digest generation.
 
+### Native producer repair (source only)
+
+**Product and acquisition policy change together.** File declarations may now
+explicitly select `resolution: "canonical-target"`. Only that acquisition row
+resolves an existing target; its result retains the original `location`, the
+canonical `resolution.location`, and traversed symlink paths, literal targets and
+actual file/directory kinds. Broken links and resolution failures remain failures,
+not absence. Omission preserves strict regular-file/absence validation. The Linux
+OS-release and compiler-reported libc rows select this mode; shared snapshot,
+registration and Cargo file validators retain their rejection of symlinks and
+non-normal paths. A logical alias observation does not itself authorize a later
+strict input binding at the alias location.
+
+An explicit directory row may additionally declare
+`manifest: {"path": ".chrono-harness/state/guard/sdk.json", "root": "/declared/sdk"}`.
+The existing inventory traversal produces `chrono-input-directory/v3` at that
+state path and references its original bytes from the directory observation.
+The declared manifest root must resolve to the selected inventory scope. The
+manifest contains all physical file hashes, each physical directory's exact
+direct child names (including empty directories and the root row `"."`), and
+actual relative symlink targets and file/directory kinds. Traversal does not
+follow aliases to add files. Escaping, absolute, broken or unsupported aliases
+fail this production; no manifest is reconstructed from an old flat observation.
+Legacy observation rows retain their existing schema and alias shape, sharing
+the same traversal. Entry bounds apply during enumeration, before collecting
+an oversized directory; publication reuses the existing atomic, no-clobber
+state-output owner. Existing manifest paths reject before child execution.
+
+The Mac declarations produce both guard originals at
+`.chrono-harness/state/native/macos/guard-inputs/{sdk,developer}.json`. The SDK
+root and full `/Applications/Xcode_26.6.app/Contents/Developer` root match the
+two existing Cargo guard scopes; the older toolchain-only observation is also
+retained. Both native declarations select Python's configured `stdlib`,
+`platstdlib`, extension directory and shared runtime image separately from its
+interpreter. The `python.root` operation now means `sysconfig`'s stdlib, rather
+than `sys.base_prefix` (which is `/usr` on the failed Linux acquisition). Framework
+and static interpreter builds retain their explicit runtime-image ownership;
+missing configuration fails without falling back to capturing a prefix tree.
+
+Both manifests explicitly acquire the 18 previously missing parent/home
+configuration and credential-file presence/digest observations, the private
+Rustup `settings.toml`, and selected linker, Rustup and cargo-fmt version outputs.
+HOME, its parent and the private Cargo/Rustup homes are selected by the existing
+Python probe; root paths and configuration suffixes are declared literals.
+Configuration acquisition records absence or hash/length only: credential
+contents are neither printed nor copied into retained transport artifacts.
+These are observation rows, never handwritten expected hashes or successes.
+
+Rust regressions live in the existing inputs-tests inventory; the existing
+Cargo guard tests consume the exact observer-produced original and exercise
+file, child-list and alias drift. Their only added dependency is the existing
+local inputs production project, with lock, guarded Cargo declaration and
+FILEMAP compile edge paired. Python runtime selection has Python behavior
+coverage in the existing host-bootstrap-tests script. Existing project/script
+actions, test inventories, execution plans, scheduling caps and native bounds
+are retained. Costs are unmeasured: full Developer traversal and the retained
+legacy subtree overlap; separate Python components may overlap as well. Each
+root still has its original 200000-entry bound; failure is preserved without
+raising it or narrowing the declared guard scope.
+
+This source repair has not been executed. All 21 proposed Mac null input
+bindings, three missing expected tool versions, native topology acceptance,
+authentic endpoints/governance/CI lineage, activation and complete Q3/SPEC
+acceptance remain caller obligations. Fresh native originals must be consumed
+before updating proposed bindings. Earlier source-bound observations and
+immutable failed Linux originals retain their original scope.
+
 Main-host acquisition uses existing registered operations:
 
 | Operation | Manifest | Actual consumer |

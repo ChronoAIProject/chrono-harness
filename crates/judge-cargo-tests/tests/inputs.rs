@@ -1953,6 +1953,107 @@ fn v3_directory_aliases_cover_empty_and_alias_only_directories_and_detect_drift(
 
 #[cfg(unix)]
 #[test]
+fn observer_v3_original_is_consumed_by_the_guard_and_detects_real_topology_drift() {
+    use std::os::unix::fs::symlink;
+    for case in [
+        "accepted",
+        "file-drift",
+        "root-addition",
+        "nested-addition",
+        "missing",
+        "alias-drift",
+        "escape",
+        "mutation",
+    ] {
+        let mut f = Fixture::new();
+        sdk_links(&mut f);
+        let root = f.root();
+        let sdk = root.join(".chrono-harness/state/sdk");
+        fs::create_dir_all(sdk.join("nested/empty")).unwrap();
+        symlink("nested/empty", sdk.join("empty-alias")).unwrap();
+        let manifest_path = ".chrono-harness/state/observed-sdk.json";
+        let declaration = json!({"schema":"chrono-input-observation/v1",
+            "environment":{"inherit":[],"values":{}},"operations":[],"files":[],
+            "directories":[{"id":"sdk","location":{"path":".chrono-harness/state/sdk"},
+                "max_entries":32,"manifest":{"path":manifest_path,"root":".chrono-harness/state/sdk"}}]});
+        write(
+            &root,
+            ".chrono-harness/observe-sdk.json",
+            &declaration.to_string(),
+        );
+        let observed = chrono_inputs::observe(
+            &root,
+            ".chrono-harness/observe-sdk.json",
+            ".chrono-harness/state/sdk-observation.json",
+        )
+        .unwrap();
+        let original =
+            serde_json::from_value(observed["directories"]["sdk"]["manifest"].clone()).unwrap();
+        let bytes = chrono_harness::prepared::read_original(&root, &original, None).unwrap();
+        // Point the real guard at exactly the published original; no manifest
+        // regeneration, reconstruction or fixture replacement supplies topology.
+        let input = f.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|r| r["id"] == "toolchain.sdk.manifest")
+            .unwrap();
+        input["location"] = json!(manifest_path);
+        input["sha256"] = json!(sha256(&bytes));
+        match case {
+            "file-drift" => fs::write(sdk.join("include/header"), b"changed").unwrap(),
+            "root-addition" => fs::write(sdk.join("new-child"), b"unlisted").unwrap(),
+            "nested-addition" => fs::write(sdk.join("nested/empty/new-child"), b"unlisted").unwrap(),
+            "missing" => fs::remove_dir(sdk.join("nested/empty")).unwrap(),
+            "alias-drift" | "escape" => {
+                fs::remove_file(sdk.join("alias")).unwrap();
+                symlink(
+                    if case == "escape" {
+                        "../build-script.input"
+                    } else {
+                        "include/header"
+                    },
+                    sdk.join("alias"),
+                )
+                .unwrap();
+            }
+            "mutation" => {
+                f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
+                    json!(sdk.join("new-child"));
+                write(&root, "t/src/lib.rs",
+                    "#[test] fn add_root_child() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n");
+            }
+            _ => {}
+        }
+        f.save();
+        let (exit, report, stderr) = f.call();
+        if case == "accepted" {
+            assert_eq!(exit, 0, "{report} {stderr}");
+            assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+        } else if case == "mutation" {
+            assert_ne!(exit, 0, "{report} {stderr}");
+            assert_eq!(report["operation"]["exit_code"], 0, "{report}");
+            assert!(
+                report["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("directory children differ"),
+                "{report}"
+            );
+        } else {
+            assert_ne!(exit, 0, "{case}: {report} {stderr}");
+            assert!(report["operation"].is_null(), "{case}: {report}");
+            assert!(
+                report["error"].as_str().unwrap().contains("directory"),
+                "{case}: {report}"
+            );
+        }
+        assert_eq!(fs::read(root.join(manifest_path)).unwrap(), bytes);
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn directory_links_are_explicit_and_consumed_by_the_real_compiler() {
     let mut f = Fixture::new();
     let mut manifest = sdk_links(&mut f);

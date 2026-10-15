@@ -6,9 +6,9 @@ use chrono_harness::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 #[derive(Deserialize)]
@@ -91,6 +91,15 @@ struct Output {
 struct File {
     id: String,
     location: Location,
+    #[serde(default)]
+    resolution: FileResolution,
+}
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum FileResolution {
+    #[default]
+    Strict,
+    CanonicalTarget,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -98,6 +107,14 @@ struct Directory {
     id: String,
     location: Location,
     max_entries: usize,
+    #[serde(default)]
+    manifest: Option<DirectoryOutput>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DirectoryOutput {
+    path: String,
+    root: String,
 }
 
 fn path(
@@ -130,30 +147,117 @@ fn path(
     };
     Ok(root.join(path))
 }
-fn inventory(root: &Path, max: usize) -> Result<Value, String> {
+// Canonicalization is an explicit acquisition choice, never the shared input
+// validator's default. Retain the original spelling and every traversed alias.
+fn canonical_target(location: &Path) -> Result<(PathBuf, Vec<Value>), String> {
+    let target = fs::canonicalize(location).map_err(|e| e.to_string())?;
+    let mut pending: VecDeque<_> = location
+        .components()
+        .map(|c| c.as_os_str().to_owned())
+        .collect();
+    let mut current = PathBuf::new();
+    let mut links = Vec::new();
+    while let Some(part) = pending.pop_front() {
+        if part == "." {
+            continue;
+        }
+        if part == ".." {
+            current.pop();
+            continue;
+        }
+        current.push(&part);
+        if fs::symlink_metadata(&current)
+            .map_err(|e| e.to_string())?
+            .file_type()
+            .is_symlink()
+        {
+            if links.len() == 64 {
+                return Err("selected file alias resolution exceeds bound".into());
+            }
+            let link = fs::read_link(&current).map_err(|e| e.to_string())?;
+            link.to_str().ok_or("selected file alias target UTF8")?;
+            current.to_str().ok_or("selected file alias path UTF8")?;
+            let metadata = fs::metadata(&current).map_err(|e| e.to_string())?;
+            let kind = if metadata.is_file() {
+                "file"
+            } else if metadata.is_dir() {
+                "directory"
+            } else {
+                return Err("selected file alias has unsupported target kind".into());
+            };
+            links.push(json!({"path":current,"target":link,"kind":kind}));
+            current.pop();
+            if link.is_absolute() {
+                current.clear();
+            }
+            for component in link.components().rev() {
+                pending.push_front(component.as_os_str().to_owned());
+            }
+        }
+    }
+    if current != target {
+        return Err("selected file alias resolution changed during observation".into());
+    }
+    Ok((target, links))
+}
+
+fn inventory(
+    root: &Path,
+    max: usize,
+    output: Option<&DirectoryOutput>,
+    host: &Path,
+) -> Result<(Value, Option<Value>), String> {
     let resolved = match fs::canonicalize(root) {
         Ok(path) => path,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(json!({"location":root,"absent":true}));
+            if output.is_some() {
+                return Err("required directory manifest root is absent".into());
+            }
+            return Ok((json!({"location":root,"absent":true}), None));
         }
         Err(e) => return Err(format!("{}: {e}", root.display())),
     };
     if !resolved.is_dir() {
         return Err("inventory root is not a directory".into());
     }
+    if let Some(output) = output {
+        if fs::canonicalize(host.join(&output.root)).map_err(|e| e.to_string())? != resolved {
+            return Err("directory manifest root differs from selected scope".into());
+        }
+    }
     let mut pending = vec![resolved.clone()];
     let (mut files, mut links, mut count) = (Vec::new(), Vec::new(), 0);
+    let (mut topology, mut aliases) = (Vec::new(), Vec::new());
     while let Some(directory) = pending.pop() {
-        let mut entries = fs::read_dir(directory)
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        entries.sort_by_key(|e| e.file_name());
-        for entry in entries {
+        let mut entries = Vec::new();
+        for entry in fs::read_dir(&directory).map_err(|e| e.to_string())? {
             count += 1;
             if count > max {
                 return Err("explicit inventory entry bound exceeded".into());
             }
+            entries.push(entry.map_err(|e| e.to_string())?);
+        }
+        entries.sort_by_key(|e| e.file_name());
+        if output.is_some() {
+            let relative = directory
+                .strip_prefix(&resolved)
+                .map_err(|e| e.to_string())?;
+            let names = entries
+                .iter()
+                .map(|e| {
+                    e.file_name()
+                        .into_string()
+                        .map_err(|_| "inventory child UTF8".to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let relative = if relative.as_os_str().is_empty() {
+                "."
+            } else {
+                relative.to_str().ok_or("inventory directory UTF8")?
+            };
+            topology.push(json!({"path":relative,"entries":names}));
+        }
+        for entry in entries {
             let p = entry.path();
             let relative = p
                 .strip_prefix(&resolved)
@@ -163,7 +267,23 @@ fn inventory(root: &Path, max: usize) -> Result<Value, String> {
                 .to_string();
             let kind = entry.file_type().map_err(|e| e.to_string())?;
             if kind.is_symlink() {
-                links.push(json!({"path":relative,"target":fs::read_link(&p).map_err(|e| e.to_string())?.to_str().ok_or("link target UTF8")?}));
+                let target = fs::read_link(&p).map_err(|e| e.to_string())?;
+                let target_text = target.to_str().ok_or("link target UTF8")?;
+                links.push(json!({"path":relative,"target":target_text}));
+                if output.is_some() {
+                    let actual = fs::canonicalize(&p).map_err(|e| e.to_string())?;
+                    if target.is_absolute() || !actual.starts_with(&resolved) {
+                        return Err(format!("directory manifest alias escapes scope: {relative}"));
+                    }
+                    let kind = if actual.is_file() {
+                        "file"
+                    } else if actual.is_dir() {
+                        "directory"
+                    } else {
+                        return Err("directory manifest alias has unsupported target kind".into());
+                    };
+                    aliases.push(json!({"path":relative,"target":target_text,"kind":kind}));
+                }
             } else if kind.is_dir() {
                 pending.push(p);
             } else if kind.is_file() {
@@ -176,9 +296,17 @@ fn inventory(root: &Path, max: usize) -> Result<Value, String> {
     }
     files.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
     links.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
-    Ok(
-        json!({"schema":"chrono-input-directory-observation/v1","root":resolved,"files":files,"symlinks":links}),
-    )
+    topology.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+    aliases.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+    let manifest = output.map(|o| {
+        json!({"schema":"chrono-input-directory/v3","root":o.root,
+        "files":files,"symlinks":aliases,"directories":topology})
+    });
+    Ok((
+        json!({"schema":"chrono-input-directory-observation/v1","root":resolved,
+        "files":files,"symlinks":links}),
+        manifest,
+    ))
 }
 
 pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, String> {
@@ -317,6 +445,29 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
     if m.directories.iter().any(|d| d.max_entries == 0) {
         return Err("inventory requires explicit positive entry bound".into());
     }
+    let mut outputs = BTreeSet::new();
+    for directory in &m.directories {
+        if let Some(manifest) = &directory.manifest {
+            let path = super::state(root, &manifest.path)?;
+            if manifest.root.is_empty()
+                || Path::new(&manifest.root).components().any(|c| {
+                    !matches!(
+                        c,
+                        Component::RootDir | Component::Prefix(_) | Component::Normal(_)
+                    )
+                })
+                || manifest.path == output
+                || manifest.path == format!("{output}.processes")
+                || manifest.path.starts_with(&format!("{output}.processes/"))
+                || !outputs.insert(manifest.path.clone())
+            {
+                return Err("invalid/duplicate directory manifest output or root".into());
+            }
+            if path.exists() {
+                return Err("E_OBSERVATION_EXISTS: preserve original directory manifest".into());
+            }
+        }
+    }
     let mut environment = BTreeMap::new();
     for key in &m.environment.inherit {
         if key == "CHRONO_PROCESS_FDS" || key.is_empty() || environment.contains_key(key) {
@@ -415,13 +566,26 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         }
         let result = (|| {
             let location = path(root, &f.location, &processes)?;
-            let value = match chrono_harness::input_file::observe_file(&location)? {
+            let (selected, resolution) = match f.resolution {
+                FileResolution::Strict => (location.clone(), None),
+                FileResolution::CanonicalTarget => {
+                    let (target, aliases) = canonical_target(&location)?;
+                    let evidence = json!({"semantics":"canonical-target","location":target,"symlinks":aliases});
+                    (target, Some(evidence))
+                }
+            };
+            let value = match chrono_harness::input_file::observe_file(&selected)? {
                 Some((digest, length)) => json!({"sha256":digest,"length":length}),
+                None if resolution.is_some() => {
+                    return Err("selected canonical file disappeared during observation".into());
+                }
                 None => json!({"absent":true}),
             };
-            Ok::<_, String>(
-                json!({"location":location,"observation":value,"absent":value["absent"]==true}),
-            )
+            let mut result = json!({"location":location,"observation":value,"absent":value["absent"]==true});
+            if let Some(resolution) = resolution {
+                result["resolution"] = resolution;
+            }
+            Ok::<_, String>(result)
         })();
         match result {
             Ok(value) => {
@@ -434,7 +598,16 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         if m.stop_on_failure && !errors.is_empty() {
             break;
         }
-        let result = (|| inventory(&path(root, &d.location, &processes)?, d.max_entries))();
+        let result = (|| {
+            let location = path(root, &d.location, &processes)?;
+            let (mut observation, manifest) =
+                inventory(&location, d.max_entries, d.manifest.as_ref(), root)?;
+            if let Some((output, manifest)) = d.manifest.as_ref().zip(manifest) {
+                super::publish(root, &output.path, &manifest)?;
+                observation["manifest"] = json!(chrono_harness::prepared::original(root, &output.path)?);
+            }
+            Ok::<_, String>(observation)
+        })();
         match result {
             Ok(value) => {
                 directories.insert(d.id, value);

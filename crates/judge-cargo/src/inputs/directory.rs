@@ -72,7 +72,11 @@ impl Binding {
                 .map_err(error)?
                 .to_str()
                 .ok_or_else(|| error("non UTF-8 empty directory"))?;
-            directory_entries(&self.root, relative, entries)?;
+            directory_entries(
+                &self.root,
+                if relative.is_empty() { "." } else { relative },
+                entries,
+            )?;
         }
         self.check_links()
     }
@@ -231,7 +235,13 @@ fn regular_path(root: &Path, relative: &str) -> Result<PathBuf> {
     Ok(path)
 }
 fn directory_entries(root: &Path, relative: &str, expected: &[String]) -> Result<PathBuf> {
-    let path = physical_path(root, relative)?;
+    // V3's explicit root row uses ".". Files and aliases retain their strict
+    // relative-path grammar; only directory child inventories admit this row.
+    let path = if relative == "." {
+        root.to_path_buf()
+    } else {
+        physical_path(root, relative)?
+    };
     let declared: BTreeSet<_> = expected.iter().cloned().collect();
     if declared.len() != expected.len()
         || expected.iter().any(|s| {

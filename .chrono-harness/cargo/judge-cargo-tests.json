@@ -57,6 +57,13 @@
       "lockfile": "crates/runner/Cargo.lock",
       "output": "crates/runner/target/",
       "ancestor_manifests": []
+    },
+    {
+      "project": "inputs",
+      "manifest": "crates/inputs/Cargo.toml",
+      "lockfile": "crates/inputs/Cargo.lock",
+      "output": "crates/inputs/target/",
+      "ancestor_manifests": []
     }
   ],
   "metadata": {
@@ -755,6 +762,16 @@
         {
           "package": "tempfile@3.27.0",
           "name": "tempfile",
+          "kinds": [
+            {
+              "kind": "dev",
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "inputs",
+          "name": "chrono_inputs",
           "kinds": [
             {
               "kind": "dev",
@@ -5185,6 +5202,89 @@
       "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
       "features": [],
       "dependencies": []
+    },
+    {
+      "id": "inputs",
+      "name": "chrono-inputs",
+      "version": "0.1.0",
+      "source": null,
+      "project": "inputs",
+      "manifest_input": null,
+      "inputs": [],
+      "checksum": null,
+      "features": [],
+      "dependencies": [
+        {
+          "package": "runner",
+          "name": "chrono_harness",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "judge-filemap",
+          "name": "chrono_judge_filemap",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "judge-registration",
+          "name": "chrono_judge_registration",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "judge-routes",
+          "name": "chrono_judge_routes",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "serde@1.0.229",
+          "name": "serde",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "serde_json@1.0.151",
+          "name": "serde_json",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        },
+        {
+          "package": "tempfile@3.27.0",
+          "name": "tempfile",
+          "kinds": [
+            {
+              "kind": null,
+              "target": null
+            }
+          ]
+        }
+      ]
     }
   ],
   "timeout_seconds": 600,

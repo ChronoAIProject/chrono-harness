@@ -7086,6 +7086,10 @@
         {
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
         }
       ]
     },
@@ -7534,6 +7538,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
         }
       ]
     },
@@ -7578,6 +7586,10 @@
         {
           "kind": "test-execution",
           "to": "test:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
         }
       ]
     },
@@ -7755,6 +7767,7 @@
     }
   ],
   "project_edges": [
+    {"from": "project:inputs", "kind": "compile", "to": "project:judge-cargo-tests"},
     {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "script:host-bootstrap"},
     {"from": "project:runner", "kind": "compile", "to": "project:runner-tests"},
     {"from": "project:runner", "kind": "runtime-input", "to": "project:runner-tests"},

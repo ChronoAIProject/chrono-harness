@@ -228,6 +228,115 @@
       "argv": [],
       "timeout_seconds": 120,
       "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.platstdlib",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "platstdlib"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.extensions",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "extensions"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "python.shared-library",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "shared-library"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "home"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "home.parent",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "home-parent"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "rustup.home",
+      "program": "/usr/bin/python3",
+      "argv": [
+        "-B",
+        ".chrono-harness/inputs/python_probe.py",
+        "rustup-home"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "selection.cargo-fmt",
+      "program": "rustup",
+      "argv": [
+        "which",
+        "--toolchain",
+        "1.95.0",
+        "cargo-fmt"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.cargo-fmt",
+      "program": {
+        "stdout": "selection.cargo-fmt"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.rustup",
+      "program": "rustup",
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
+    },
+    {
+      "id": "tool.native-cc",
+      "program": {
+        "stdout": "tool.linker"
+      },
+      "argv": [
+        "--version"
+      ],
+      "timeout_seconds": 120,
+      "output_limit_bytes": 1048576
     }
   ],
   "registered_operations": {
@@ -371,6 +480,140 @@
       "location": {
         "path": ".cargo/config.toml"
       }
+    },
+    {
+      "id": "configuration.0a24bcbbe88ebae0",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": "rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.22e1529f27755c5a",
+      "location": {
+        "path": "/rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.4971e26cb7d81352",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": "rust-toolchain.toml"
+      }
+    },
+    {
+      "id": "configuration.53f66258050caac2",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": "rust-toolchain"
+      }
+    },
+    {
+      "id": "configuration.6578aa671e061376",
+      "location": {
+        "stdout": "home",
+        "suffix": ".rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.70d663ddab3591b1",
+      "location": {
+        "path": "/.cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.70f054831d3eb9be",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": ".rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.770c0f688c0d8fc5",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": ".cargo/config"
+      }
+    },
+    {
+      "id": "configuration.98f18b28b308b630",
+      "location": {
+        "path": "/.rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.9cef6b2441aab2d0",
+      "location": {
+        "stdout": "home.parent",
+        "suffix": ".cargo/config.toml"
+      }
+    },
+    {
+      "id": "configuration.9f2e73c2801230e0",
+      "location": {
+        "path": "/.cargo/config"
+      }
+    },
+    {
+      "id": "configuration.b8e1dc7fc228914e",
+      "location": {
+        "path": "/rust-toolchain"
+      }
+    },
+    {
+      "id": "configuration.c7dc5e26eaf9702a",
+      "location": {
+        "stdout": "home",
+        "suffix": "rust-toolchain.toml"
+      }
+    },
+    {
+      "id": "configuration.cd80172321df8988",
+      "location": {
+        "stdout": "home",
+        "suffix": "rust-toolchain"
+      }
+    },
+    {
+      "id": "configuration.credentials",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "credentials"
+      }
+    },
+    {
+      "id": "configuration.credentials.toml",
+      "location": {
+        "stdout": "cargo.home",
+        "suffix": "credentials.toml"
+      }
+    },
+    {
+      "id": "configuration.e3e19abc5bd066d6",
+      "location": {
+        "path": "/rust-toolchain.toml"
+      }
+    },
+    {
+      "id": "configuration.eca50d195b820816",
+      "location": {
+        "stdout": "home",
+        "suffix": "rustfmt.toml"
+      }
+    },
+    {
+      "id": "configuration.rustup-settings",
+      "location": {
+        "stdout": "rustup.home",
+        "suffix": "settings.toml"
+      }
+    },
+    {
+      "id": "runtime.python.shared-library",
+      "location": {
+        "stdout": "python.shared-library"
+      },
+      "resolution": "canonical-target"
     }
   ],
   "directories": [
@@ -386,7 +629,11 @@
       "location": {
         "stdout": "sdk.root"
       },
-      "max_entries": 200000
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/native/macos/guard-inputs/sdk.json",
+        "root": "/Applications/Xcode_26.6.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+      }
     },
     {
       "id": "developer-toolchain",
@@ -424,6 +671,31 @@
         "path": "/System/Volumes/Preboot/Cryptexes/OS/System/Library/dyld"
       },
       "max_entries": 200000
+    },
+    {
+      "id": "python.platstdlib",
+      "location": {
+        "stdout": "python.platstdlib"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "python.extensions",
+      "location": {
+        "stdout": "python.extensions"
+      },
+      "max_entries": 200000
+    },
+    {
+      "id": "developer",
+      "location": {
+        "stdout": "developer.root"
+      },
+      "max_entries": 200000,
+      "manifest": {
+        "path": ".chrono-harness/state/native/macos/guard-inputs/developer.json",
+        "root": "/Applications/Xcode_26.6.app/Contents/Developer"
+      }
     }
   ],
   "platforms": [

@@ -21,6 +21,72 @@ PASS_FDS = inherited_fds()
 OPERATION = ".chrono-harness/ci/fixtures/bootstrap-operation.py"
 
 
+class NativeRuntimeLocations(unittest.TestCase):
+    """Own /usr's Python components, never /usr; keep split runtimes and errors."""
+
+    def setUp(self):
+        path = SOURCE.parent / "inputs/python_probe.py"
+        spec = importlib.util.spec_from_file_location("native_runtime_locations", path)
+        self.probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.probe)
+
+    def test_linux_prefix_is_not_the_runtime_and_split_components_are_retained(self):
+        paths = {"stdlib": "/usr/lib/python3.12", "platstdlib": "/usr/lib64/python3.12"}
+        config = {"DESTSHARED": "/usr/lib64/python3.12/lib-dynload",
+                  "Py_ENABLE_SHARED": 1, "LIBDIR": "/usr/lib/x86_64-linux-gnu",
+                  "LDLIBRARY": "libpython3.12.so.1.0"}
+        with mock.patch.object(self.probe.sys, "base_prefix", "/usr"), \
+                mock.patch.object(self.probe.sysconfig, "get_path", side_effect=paths.get), \
+                mock.patch.object(self.probe.sysconfig, "get_config_var", side_effect=config.get):
+            self.assertEqual(self.probe.location(["root"]), "/usr/lib/python3.12")
+            self.assertEqual(self.probe.location(["platstdlib"]), "/usr/lib64/python3.12")
+            self.assertEqual(self.probe.location(["extensions"]), config["DESTSHARED"])
+            self.assertEqual(self.probe.location(["shared-library"]),
+                             "/usr/lib/x86_64-linux-gnu/libpython3.12.so.1.0")
+
+    def test_framework_and_static_runtime_ownership_and_missing_config(self):
+        config = {"PYTHONFRAMEWORK": "Python3", "PYTHONFRAMEWORKPREFIX": "/Developer/Library/Frameworks",
+                  "VERSION": "3.9"}
+        with mock.patch.object(self.probe.sysconfig, "get_config_var", side_effect=config.get):
+            self.assertEqual(self.probe.location(["shared-library"]),
+                             "/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Python3")
+            config.clear()
+            self.assertEqual(self.probe.location(["shared-library"]), os.path.realpath(sys.executable))
+            with self.assertRaises(ValueError):
+                self.probe.location(["extensions"])
+            config.update(Py_ENABLE_SHARED=1, LIBDIR="/lib", LDLIBRARY="../outside.so")
+            with self.assertRaises(ValueError):
+                self.probe.location(["shared-library"])
+        with mock.patch.object(self.probe.sysconfig, "get_path", return_value=None):
+            with self.assertRaises(ValueError):
+                self.probe.location(["root"])
+
+    def test_configuration_locations_respect_private_homes_without_reading_contents(self):
+        with mock.patch.dict(os.environ, {"HOME": "/home/fixture"}, clear=True):
+            self.assertEqual(self.probe.location(["home"]), "/home/fixture")
+            self.assertEqual(self.probe.location(["home-parent"]), "/home")
+            self.assertEqual(self.probe.location(["cargo-home"]), "/home/fixture/.cargo")
+            self.assertEqual(self.probe.location(["rustup-home"]), "/home/fixture/.rustup")
+            with mock.patch.dict(os.environ, {"CARGO_HOME": "/private/cargo", "RUSTUP_HOME": "/private/rustup"}):
+                self.assertEqual(self.probe.location(["cargo-home"]), "/private/cargo")
+                self.assertEqual(self.probe.location(["rustup-home"]), "/private/rustup")
+            with mock.patch.dict(os.environ, {"RUSTUP_HOME": "relative"}):
+                self.assertEqual(self.probe.location(["rustup-home"]), "relative")
+
+    def test_actual_cli_selects_this_interpreters_stdlib_and_rejects_unknown_mode(self):
+        import sysconfig
+        path = SOURCE.parent / "inputs/python_probe.py"
+        result = subprocess.run([sys.executable, "-B", str(path), "root"],
+                                capture_output=True, pass_fds=PASS_FDS)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.decode(), sysconfig.get_path("stdlib") + "\n")
+        rejected = subprocess.run([sys.executable, "-B", str(path), "unknown"],
+                                  capture_output=True, pass_fds=PASS_FDS)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertEqual(rejected.stdout, b"")
+        self.assertIn(b"usage:", rejected.stderr)
+
+
 class NativeAcquisitionForwarding(unittest.TestCase):
     """Behavior of the host composite's Bash forwarding; Shell/Python pairing.
 
