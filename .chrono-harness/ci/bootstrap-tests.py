@@ -117,6 +117,126 @@ class Bootstrap(unittest.TestCase):
     def observation(self, commit, tree, dirty):
         return {"commit": commit, "tree": tree, "dirty": dirty, "error": None}
 
+    def acquisition_config(self, mode="acquisition"):
+        built = "crates/inputs/target/debug/fixture-inputs"
+        installed = ".chrono-harness/bin/chrono-worktree"
+        original = ".chrono-harness/state/native/fixture/acquisition.json"
+        interface = self.ci / "fixtures/acquirer"
+        interface.write_bytes(b"#!" + os.fsencode(sys.executable) + b"\n" +
+                              (self.root / OPERATION).read_bytes())
+        interface.chmod(0o755)
+        self.environment["PYTHONPATH"] = str(self.ci.parent)
+        self.environment.pop("CHRONO_WORKTREE_BOOTSTRAP", None)
+        declarations = self.declarations("copy-executable", str(interface), built)
+        declarations["projects"][0]["actions"]["acquire"] = {
+            "operation": "acquire.inputs", "tool": "inputs",
+            "argv": ["acquisition", original, installed] if mode == "acquisition" else ["fail", "7"],
+        }
+        self.write_json(self.registry, declarations)
+        config = self.binding_config()
+        config["tools"]["inputs"] = built
+        config["operations"] = ["make.tool", "acquire.inputs"]
+        config["install"] = [{"source": built, "destination": installed}]
+        config["toolchain_provision"] = {
+            "profile": "default", "rustup_home": ".chrono-harness/state/native/fixture/rustup",
+            "cargo_home": ".chrono-harness/state/native/fixture/cargo",
+        }
+        config["participation"] = {
+            "coordinator_root": "git-main-worktree", "program": installed, "git": "git",
+            "config": ".chrono-harness/native/fixture/worktree.json",
+        }
+        self.write_json(self.ci / "bootstrap.json", config)
+        self.git("init", "-q")
+        (self.root / ".gitignore").write_text(
+            "/crates/inputs/target/\n/.chrono-harness/bin/\n/.chrono-harness/state/\n/mock-tools/\n")
+        self.git("config", "user.email", "fixture@example.invalid")
+        self.git("config", "user.name", "Fixture")
+        self.git("add", ".")
+        self.git("commit", "-qm", "first native acquisition fixture")
+        return config, built, installed, original
+
+    def test_first_main_seed_acquires_with_built_tool_before_install_and_without_full_policy(self):
+        config, built, installed, original = self.acquisition_config()
+        self.assertFalse((self.root / config["participation"]["config"]).exists())
+        self.succeeded(self.invoke())  # invoke deliberately runs outside HOST_ROOT
+        report = self.evidence()
+        self.assertEqual(report["source"]["state"], "clean")
+        self.assertEqual([r["operation"] for r in report["operations"]],
+                         ["make.tool", "acquire.inputs"])
+        acquisition = report["operations"][1]
+        self.assertEqual(acquisition["argv"][0], str(self.root / built))
+        self.assertEqual(acquisition["cwd"], str(self.root))
+        raw = (self.root / original).read_bytes()
+        observed = json.loads(raw)
+        self.assertFalse(observed["installed_before"], "acquisition required its future owner")
+        self.assertEqual(observed["environment"], {
+            "RUSTUP_HOME": str(self.root / config["toolchain_provision"]["rustup_home"]),
+            "CARGO_HOME": str(self.root / config["toolchain_provision"]["cargo_home"]),
+            "RUSTC": str(self.tools / "rustc"),
+        })
+        stdout = (self.root / acquisition["stdout"]["path"]).read_bytes()
+        self.assertEqual(json.loads(stdout)["fixture_original"], {
+            "path": original, "sha256": hashlib.sha256(raw).hexdigest()})
+        self.assertEqual(acquisition["stdout"]["sha256"], hashlib.sha256(stdout).hexdigest())
+        self.assertEqual((self.root / installed).read_bytes(), (self.root / built).read_bytes())
+        self.assertEqual(acquisition["executable_sha256"], report["installed"][0]["sha256"])
+        self.assertFalse((self.root / config["participation"]["config"]).exists())
+
+        # Shared consumers validate a fixed producer location, never their own cwd.
+        import bootstrap_shared
+        bootstrap_shared.validate_execution(self.root, config, report)
+        changed = json.loads(json.dumps(report))
+        changed["operations"][1]["argv"][0] = str(self.root / installed)
+        with self.assertRaisesRegex(ValueError, "operation execution differs"):
+            bootstrap_shared.validate_execution(self.root, config, changed)
+
+    def test_first_seed_acquisition_failure_retains_originals_and_stops_installation(self):
+        config, built, installed, original = self.acquisition_config("fail")
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / installed).exists())
+        self.assertTrue((self.root / built).is_file())
+        self.assertFalse((self.root / original).exists())
+        reports = list(self.state_path.parent.glob("bootstrap-*/report.json"))
+        self.assertEqual(len(reports), 1)
+        report = json.loads(reports[0].read_bytes())
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["installed"], [])
+        acquisition = report["operations"][1]
+        self.assertEqual(acquisition["exit_code"], 7)
+        for channel, expected in [("stdout", b"failure stdout\x00\xff\n"),
+                                  ("stderr", b"failure stderr\xfe\n")]:
+            self.assertEqual((self.root / acquisition[channel]["path"]).read_bytes(), expected)
+            self.assertEqual(acquisition[channel]["sha256"], hashlib.sha256(expected).hexdigest())
+
+    def test_existing_owner_refusal_does_not_fall_back_to_main_seed(self):
+        config, built, installed, original = self.acquisition_config("fail")
+        owner = self.root / installed
+        owner.parent.mkdir(parents=True)
+        shutil.copy2(self.ci / "fixtures/acquirer", owner)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b"bootstrap ownership refused", result.stderr)
+        self.assertFalse((self.root / built).exists())
+        self.assertFalse((self.root / original).exists())
+        self.assertFalse((self.tools / "calls.json").exists())
+
+    def test_main_seed_boundary_rejects_linked_checkout_without_owner(self):
+        spec = importlib.util.spec_from_file_location("bootstrap_participation", SOURCE / "bootstrap.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        config = dict(self.config, participation={
+            "coordinator_root": "git-main-worktree", "program": ".chrono-harness/bin/chrono-worktree",
+            "git": "git", "config": ".chrono-harness/native/fixture/worktree.json"})
+        anchor = self.root / "independent-anchor"
+        (self.root / ".git").write_text("gitdir: retained-fixture-attachment\n")
+        inventory = b"worktree " + os.fsencode(anchor) + b"\0"
+        with mock.patch.object(module.subprocess, "check_output", return_value=inventory), \
+                mock.patch.object(module.subprocess, "run", side_effect=FileNotFoundError("missing owner")) as run:
+            with self.assertRaises(FileNotFoundError):
+                module.participate(self.root, Path(".chrono-harness/ci/bootstrap.json"), config)
+        self.assertEqual(run.call_args.args[0][0], str(anchor / config["participation"]["program"]))
+
     def test_selected_report_survives_a_later_bootstrap(self):
         selected = dict(self.config, report_path=".chrono-harness/state/cache/bootstrap.json")
         self.write_json(self.ci / "cache.json", selected)

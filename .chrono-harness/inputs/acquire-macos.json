@@ -28,7 +28,7 @@
       "inputs.observe-macos"
     ],
     "tools": {
-      "chrono-inputs": ".chrono-harness/bin/chrono-inputs"
+      "chrono-inputs": "crates/inputs/target/debug/chrono-inputs"
     },
     "timeout_seconds": 900,
     "output_limit_bytes": 1048576

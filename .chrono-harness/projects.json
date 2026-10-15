@@ -5528,6 +5528,26 @@
             ".",
             ".chrono-harness/ci/bootstrap-native-linux.json"
           ]
+        },
+        "acquire-macos": {
+          "operation": "host.acquire-native-macos",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-acquire-macos.json"
+          ]
+        },
+        "acquire-linux": {
+          "operation": "host.acquire-native-linux",
+          "tool": "python3",
+          "argv": [
+            "-B",
+            ".chrono-harness/ci/bootstrap.py",
+            ".",
+            ".chrono-harness/ci/bootstrap-acquire-linux.json"
+          ]
         }
       }
     },

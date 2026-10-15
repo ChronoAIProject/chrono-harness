@@ -7058,6 +7058,10 @@
         {
           "kind": "runtime-input",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
         }
       ]
     },
@@ -7094,6 +7098,10 @@
         {
           "kind": "runtime-input",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
         }
       ]
     },
@@ -7110,6 +7118,10 @@
         {
           "kind": "runtime-input",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
         }
       ]
     },
@@ -7270,6 +7282,10 @@
         {
           "kind": "test-execution",
           "to": "test:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
         }
       ]
     },
@@ -7390,6 +7406,42 @@
         {
           "kind": "test-execution",
           "to": "test:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-acquire-macos.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/bootstrap-acquire-linux.json",
+      "owner": "host-bootstrap",
+      "surface": "membership",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
         }
       ]
     }
@@ -21665,7 +21717,12 @@
     {"from": "tool:git", "kind": "runtime-input", "to": "script:workflow-inventory"},
     {"from": "tool:git", "kind": "runtime-input", "to": "script:workflow-inventory-tests"},
     {"from": "environment:CHRONO_IMMUTABLE_FILEMAP_FIXTURE", "kind": "runtime-input", "to": "project:runner-tests"},
-    {"from": "tool:chrono-inputs", "kind": "runtime-input", "to": "project:inputs"}
+    {"from": "tool:chrono-inputs", "kind": "runtime-input", "to": "project:inputs"},
+    {
+      "from": "project:inputs",
+      "kind": "runtime-input",
+      "to": "script:host-bootstrap"
+    }
   ],
   "test_costs": [
     {
