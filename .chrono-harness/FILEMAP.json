@@ -230,6 +230,10 @@
       "cost": "unmeasured",
       "edges": [
         {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        },
+        {
           "kind": "judge-trigger",
           "to": "judge:filemap"
         },
@@ -7438,6 +7442,50 @@
         {
           "kind": "runtime-input",
           "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/chrono-native-acquisition.yml",
+      "owner": "host-bootstrap",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/native-acquisition/action.yml",
+      "owner": "host-bootstrap",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci-tests"
         },
         {
           "kind": "test-execution",

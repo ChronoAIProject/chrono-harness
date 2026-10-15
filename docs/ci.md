@@ -183,6 +183,86 @@ original producer's recorded root. The corresponding Python success, failure and
 boundary regressions are defined in `bootstrap-tests.py` and unexecuted for this
 source handoff; no native/full acceptance is asserted.
 
+### Candidate native initial-acquisition entry
+
+The host owns `.chrono-harness/ci/native-acquisition/action.yml`; the workflow
+`.github/workflows/chrono-native-acquisition.yml` delegates to that local composite.
+The first invocation is a **push of the committed candidate containing both files
+to `integration/q3-native-acquisition`** in the caller's GitHub repository. This
+exact branch is the sole trigger. Push uses the candidate's workflow and checks
+out `github.sha`, with the existing pinned checkout action and full history.
+It needs neither default-branch workflow registration nor a dispatch. The trigger
+branch is an event route, not a worktree birth or full-governance lineage claim.
+
+The two matrix candidates are `macos-26` (arm64) and `ubuntu-24.04` (x86_64).
+They have independent outcomes, `fail-fast: false`, at most two concurrent jobs,
+and the existing 45-minute native job limit. The composite invokes exactly the
+existing `host.acquire-native-macos/linux` bootstrap argv registered in
+`projects.json`, selecting `bootstrap-acquire-PLATFORM.json`. It supplies no local
+private-Mac direct policy, installed-owner deletion, ownership marker, enrollment,
+birth or full-policy override. A fresh Git main may use the original missing-owner
+seed branch; existing owners and linked checkouts retain compatible-policy
+participation and leases. No Rustup, compiler, SDK, Cargo or observer recipe is
+implemented in the workflow or action.
+
+The caller supplies a published clean candidate with these sources, Actions
+permission to run the exact branch, actual native images, `/usr/bin/python3`,
+`/usr/bin/git`, Rustup in PATH, native compiler/linker/SDK or system inputs,
+PATH/HOME/TMPDIR and applicable SDK selections, and access to official Rust and
+locked Cargo sources. The external prerequisites remain fallible. A checkout
+failure retains its original GitHub job evidence; it cannot produce a bootstrap
+report. The caller must retain the original job log and conclusion too.
+
+Before Python starts, the composite retains the actual child argv (NUL-separated),
+raw event bytes, native job/source/workflow/runner identifiers, original stdout
+and stderr, and shell exit under `state/native/PLATFORM/job/`. Missing Python and
+early Git/Rustup/SDK failures therefore retain the original observable streams
+even without a bootstrap report. The shell exits with the original command code;
+there is no continue-on-error or success rewrite. Reentry refuses to overwrite
+originals. Forced termination may leave no `job.exit`; absence is not success.
+The inline Bash forwarding has explicitly paired Python behavior tests in
+`host-bootstrap-tests`; they are defined but unexecuted in this source handoff.
+
+The existing pinned upload action runs with `always()`, including after an
+acquisition failure. It uploads both `.chrono-harness/state/native/PLATFORM/` and
+`.chrono-harness/state/inputs/`, excluding only that platform's private `rustup/`
+and `cargo/` homes. The common transport root is `.chrono-harness/state/`; restore
+the artifact there to preserve all original root-relative references. This
+retains the outer job files, `acquisition-bootstrap.json` when published, each
+original `bootstrap-*/report.json` and operation stream, `acquisition.json` and
+its `.processes/`, plus the original inner provisioning/observation reports and
+process streams. A failed bootstrap may publish only its original
+`bootstrap-*/report.json`; the upload does not require a passing alias.
+Compact references and their original byte/digest closure are unchanged. The
+transport exposes its actual artifact ID and digest; the caller verifies these,
+each addressed original/stream digest, source identity and original job/process
+failure. Upload or step success is not native acceptance. No new archive tool is
+used and private toolchain/cache contents are not evidence uploads.
+
+Artifacts have seven-day Actions retention. The caller consumes/downloads the
+original closure for native review and acceptance before expiry, preserving
+still-required failure evidence under its registered custody policy. Runner and
+artifact disposal remain caller/GitHub responsibilities; this entry performs no
+lifecycle cleanup. Native build, storage, CI and lifecycle costs are **unknown**.
+
+**Policy/producer-consumer co-change warning:** previously neither acquisition
+action had a native workflow caller. The new host action, exact-branch trigger,
+artifact selection/retention and explicit FILEMAP edges connect both existing
+producers to caller acceptance. Existing scoped collection, its 26 full-unit IDs,
+native full/shared/cache/lineage proposals, 14 builds/installations per acquisition,
+92-component inventory, assertions, threads, ignored inventory, Rust 1.95/default
+private provisioning, official digests, aarch64 acceleration and original action
+bounds are preserved. Validation cost is the registered DELTA closure plus two
+real native acquisition jobs, all unexecuted here. Fixed-end relationships are
+the existing `host-bootstrap` actions/profiles and paired tests; candidate FILEMAP
+adds the workflow/action as explicit inputs and test triggers. Existing generated
+collection/release inventories own only their registered projections; this
+independent host workflow does not add a unit or regenerate those inventories.
+The CI fixture that copies current source consumes FILEMAP's per-file inventory
+directly, so the new files enter through that existing consumer. Whole Q3, native
+full activation, real two-end inputs/lineage, remaining shared obligations,
+formal review, delivery, all 28 PR dispositions, Q4 and complete SPEC remain open.
+
 The registered `inputs.provision-isolated` action invokes the existing worktree
 owner's `use` operation for `inputs.produce-admit-isolated`. Run its exact action
 from the committed candidate root:

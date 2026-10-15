@@ -1,0 +1,32 @@
+name: "chrono / native initial acquisition"
+on:
+  push:
+    branches: ["integration/q3-native-acquisition"]
+permissions:
+  contents: read
+jobs:
+  acquire:
+    name: "Initial acquisition / ${{ matrix.platform }}"
+    if: ${{ github.event.deleted != true }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - platform: macos
+            runner: macos-26
+          - platform: linux
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact pushed candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Run registered initial acquisition and retain originals
+        uses: ./.chrono-harness/ci/native-acquisition
+        with:
+          platform: ${{ matrix.platform }}

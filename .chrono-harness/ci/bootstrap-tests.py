@@ -21,6 +21,94 @@ PASS_FDS = inherited_fds()
 OPERATION = ".chrono-harness/ci/fixtures/bootstrap-operation.py"
 
 
+class NativeAcquisitionForwarding(unittest.TestCase):
+    """Behavior of the host composite's Bash forwarding; Shell/Python pairing.
+
+    Expectations precede execution: preserve binary streams and the real exit,
+    including interpreter lookup failure before a bootstrap report exists.
+    Reentry must preserve originals and must not launch the child again.
+    This fixture supplies an external command, not a native bootstrap result.
+    """
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory(prefix="native acquisition forwarding ")
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        source = (SOURCE / "native-acquisition/action.yml").read_text()
+        # Exercise the production Bash function, supplying only its child argv.
+        # The surrounding workflow/action metadata is forwarding, not a test oracle.
+        body = source.split("      run: |\n", 1)[1].split("    - name:", 1)[0]
+        body = "\n".join(line[8:] for line in body.splitlines())
+        self.capture = body.split("\nretain ", 1)[0] + '\nretain "$@"\n'
+        self.output = self.root / "original evidence"
+        event = self.root / "event.json"
+        self.event_bytes = b' {"fixture": "original event bytes"}\n'
+        event.write_bytes(self.event_bytes)
+        self.environment = dict(os.environ, GITHUB_EVENT_PATH=str(event),
+                                GITHUB_RUN_ID="fixture-run", GITHUB_RUN_ATTEMPT="1",
+                                GITHUB_JOB="acquire", GITHUB_SHA="fixture-candidate",
+                                GITHUB_REF="refs/heads/integration/q3-native-acquisition",
+                                CHRONO_NATIVE_WORKFLOW_REVISION="fixture-workflow",
+                                GITHUB_EVENT_NAME="push", RUNNER_OS="fixture-os",
+                                RUNNER_ARCH="fixture-arch")
+
+    def invoke(self, argv):
+        return subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail",
+                               "-c", self.capture, "native-acquisition", str(self.output), *argv],
+                              cwd=self.root, env=self.environment, pass_fds=PASS_FDS,
+                              capture_output=True)
+
+    def test_success_and_original_failure_preserve_binary_streams_and_exit(self):
+        for code in (0, 17):
+            with self.subTest(code=code):
+                self.output = self.root / ("original evidence " + str(code))
+                argv = [sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),
+                        "fail", str(code)]
+                result = self.invoke(argv)
+                self.assertEqual(result.returncode, code, result)
+                self.assertEqual((self.output / "job.exit").read_bytes(), str(code).encode() + b"\n")
+                self.assertEqual((self.output / "job.stdout").read_bytes(), b"failure stdout\x00\xff\n")
+                self.assertEqual((self.output / "job.stderr").read_bytes(), b"failure stderr\xfe\n")
+                self.assertEqual((self.output / "job.argv").read_bytes(),
+                                 b"\0".join(os.fsencode(arg) for arg in argv) + b"\0")
+                self.assertEqual((self.output / "event.json").read_bytes(), self.event_bytes)
+                self.assertIn(b"candidate\tfixture-candidate\n",
+                              (self.output / "job.identity.tsv").read_bytes())
+                self.assertFalse((self.output / "report.json").exists())
+
+    def test_missing_interpreter_preserves_shell_failure_without_a_bootstrap_report(self):
+        result = self.invoke([str(self.root / "missing interpreter"), "-B", "bootstrap.py"])
+        self.assertEqual(result.returncode, 127, result)
+        self.assertEqual((self.output / "job.exit").read_bytes(), b"127\n")
+        self.assertEqual((self.output / "job.stdout").read_bytes(), b"")
+        self.assertIn(b"missing interpreter", (self.output / "job.stderr").read_bytes())
+        self.assertFalse((self.output / "report.json").exists())
+
+    def test_reentry_preserves_originals_and_does_not_run_another_child(self):
+        first = self.invoke([sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),
+                             "fail", "17"])
+        self.assertEqual(first.returncode, 17, first)
+        originals = {path.name: path.read_bytes() for path in self.output.iterdir()}
+        marker = self.root / "must not be produced"
+        second = self.invoke([sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),
+                              "write", str(marker), "new child"])
+        self.assertNotEqual(second.returncode, 0, second)
+        self.assertFalse(marker.exists())
+        self.assertEqual({path.name: path.read_bytes() for path in self.output.iterdir()}, originals)
+
+    def test_partial_original_event_is_not_overwritten_or_relabelled(self):
+        self.output.mkdir()
+        original = self.output / "event.json"
+        original.write_bytes(b"retained partial original event\n")
+        marker = self.root / "must not be produced"
+        result = self.invoke([sys.executable, "-B", str(SOURCE / "fixtures/bootstrap-operation.py"),
+                              "write", str(marker), "new child"])
+        self.assertNotEqual(result.returncode, 0, result)
+        self.assertFalse(marker.exists())
+        self.assertEqual(original.read_bytes(), b"retained partial original event\n")
+        self.assertFalse((self.output / "job.exit").exists())
+
+
 class Bootstrap(unittest.TestCase):
     def test_native_input_tool_probe_preserves_selection_and_missing_tool_failure(self):
         probe = SOURCE.parent / "inputs/python_probe.py"
