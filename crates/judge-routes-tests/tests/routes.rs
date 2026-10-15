@@ -139,6 +139,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         [
             "build.worktree",
             "build.distribution",
+            "host.bootstrap-provision-tests",
             "host.bootstrap-tests",
             "host.bootstrap-real-consumer"
         ]
@@ -168,15 +169,19 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     .map(str::to_owned)
     .collect();
     let (_, operations) = order(&selected, &plans, &methods(&projects).unwrap(), &execute).unwrap();
-    assert_eq!(
-        operations
-            .iter()
-            .filter(|o| o.method.operation == "build.distribution")
-            .count(),
-        1
-    );
+    for shared in ["build.distribution", "host.bootstrap-provision-tests"] {
+        assert_eq!(
+            operations
+                .iter()
+                .filter(|o| o.method.operation == shared)
+                .count(),
+            1,
+            "{shared}"
+        );
+    }
     for (operation, timeout) in [
         ("build.distribution", 600),
+        ("host.bootstrap-provision-tests", 900),
         ("host.bootstrap-tests", 900),
         ("test.distribution-tests", 600),
         ("release.tests.integration", 600),
@@ -193,6 +198,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         [
             "build.worktree",
             "build.distribution",
+            "host.bootstrap-provision-tests",
             "host.bootstrap-tests",
             "host.bootstrap-real-consumer"
         ]
