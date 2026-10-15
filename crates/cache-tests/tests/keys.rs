@@ -85,6 +85,47 @@ fn plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
     result
 }
 
+// Record actual owner calls, including failures, in the existing raw test stream.
+// This changes neither cache observations/keys nor the command or its bounds.
+fn observed_plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
+    fs::write(root.join("probe-observation.enabled"), b"").unwrap();
+    let started_at = std::time::SystemTime::now();
+    let started = std::time::Instant::now();
+    let result = plan(root, value, consumer);
+    let elapsed_ns = started.elapsed().as_nanos();
+    let finished_at = std::time::SystemTime::now();
+    let original = match &result {
+        Ok(report) => report["inputs"]["compiler"]["original"].as_str(),
+        Err(error) => error.split_once("; original ").map(|(_, path)| path),
+    };
+    let original_bytes = original.map(|path| fs::read(root.join(path)).unwrap());
+    let process: Option<Value> = original_bytes
+        .as_ref()
+        .map(|bytes| serde_json::from_slice(bytes).unwrap());
+    let entry_bytes = process.as_ref().and_then(|process| {
+        fs::read(root.join(format!(
+            "probe-observation-{}.bytes",
+            process["child_pid"].as_u64().unwrap()
+        )))
+        .ok()
+    });
+    let evidence = json!({
+        "schema":"chrono-cache-probe-diagnostic/v1", "consumer":consumer,
+        "root":root, "command_input":value["inputs"]["compiler"],
+        "started_unix_ns":started_at.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        "finished_unix_ns":finished_at.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
+        "elapsed_ns":elapsed_ns, "error":result.as_ref().err(),
+        "original":original,
+        "original_bytes":original_bytes.as_ref().map(|bytes| std::str::from_utf8(bytes).unwrap()),
+        "entry_bytes":entry_bytes.as_ref().map(|bytes| std::str::from_utf8(bytes).unwrap()),
+        "entry_clock":"SystemTime Unix epoch at main entry; per-stage elapsed uses Instant"
+    });
+    use std::io::Write;
+    let mut stream = std::io::stderr().lock();
+    writeln!(stream, "Cache probe observation: {evidence}").unwrap();
+    result
+}
+
 #[test]
 fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     let (root, mut config) = fixture();
@@ -1002,8 +1043,8 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),
         "args":["file",compiler],"env":{},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"file-path"});
-    let first = plan(root.path(), &config, "check.one").unwrap();
-    let repeated = plan(root.path(), &config, "check.one").unwrap();
+    let first = observed_plan(root.path(), &config, "check.one").unwrap();
+    let repeated = observed_plan(root.path(), &config, "check.one").unwrap();
     let mut stable = first.clone();
     let mut stable_repeated = repeated.clone();
     let mut originals = Vec::new();
@@ -1036,7 +1077,7 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
         "distinct invocation originals must not change observed inputs or cache keys"
     );
     fs::write(&compiler, b"compiler-two").unwrap();
-    let next = plan(root.path(), &config, "check.one").unwrap();
+    let next = observed_plan(root.path(), &config, "check.one").unwrap();
     assert_ne!(
         first["caches"]["project"]["restore_keys"],
         next["caches"]["project"]["restore_keys"]
@@ -1058,7 +1099,7 @@ fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
         "program":"registered-probe", "args":["echo","actual compiler"],
         "env":{"PATH":tools},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"stdout"});
-    let prepared = plan(root.path(), &config, "check.one").unwrap();
+    let prepared = observed_plan(root.path(), &config, "check.one").unwrap();
     let observed = Path::new(
         prepared["inputs"]["compiler"]["observation"]["executable"]
             .as_str()
@@ -1071,7 +1112,7 @@ fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
     );
     config["inputs"]["compiler"]["command"]["env"] = json!({});
     assert!(
-        plan(root.path(), &config, "check.one").is_err(),
+        observed_plan(root.path(), &config, "check.one").is_err(),
         "a missing declared PATH must not fall back to ambient tools"
     );
 }
