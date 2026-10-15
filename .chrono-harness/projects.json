@@ -661,6 +661,16 @@
             "--manifest-path",
             "crates/judge-filemap-tests/Cargo.toml"
           ]
+        },
+        "generate_lockfile": {
+          "operation": "lock.judge-filemap-tests",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml"
+          ]
         }
       },
       "language": "rust"
@@ -876,6 +886,16 @@
             "crates/judge-projects-tests/Cargo.toml",
             "--test",
             "migration"
+          ]
+        },
+        "generate_lockfile": {
+          "operation": "lock.judge-projects-tests",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml"
           ]
         }
       },
@@ -1256,6 +1276,16 @@
             "consumer",
             "full_units::full_short::"
           ]
+        },
+        "generate_lockfile": {
+          "operation": "lock.judge-workflow-tests",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--offline",
+            "--manifest-path",
+            "crates/judge-workflow-tests/Cargo.toml"
+          ]
         }
       },
       "tests_for": "judge-workflow",
@@ -1352,6 +1382,16 @@
           "argv": [
             "test",
             "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "generate_lockfile": {
+          "operation": "lock.inputs-tests",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--offline",
             "--manifest-path",
             "crates/inputs-tests/Cargo.toml"
           ]
@@ -1540,6 +1580,16 @@
           "argv": [
             "test",
             "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml"
+          ]
+        },
+        "generate_lockfile": {
+          "operation": "lock.judge-cargo-tests",
+          "tool": "cargo",
+          "argv": [
+            "generate-lockfile",
+            "--offline",
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
           ]

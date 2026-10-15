@@ -3154,6 +3154,26 @@
         {
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -4281,6 +4301,26 @@
         {
           "kind": "test-execution",
           "to": "test:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo-tests"
         }
       ]
     },
@@ -5947,6 +5987,18 @@
         {
           "kind": "build-input",
           "to": "project:judge-cargo-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/fixture_custody.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
         }
       ]
     }
@@ -8671,6 +8723,31 @@
       "from": "tool:cargo",
       "kind": "runtime-input",
       "to": "script:host-bootstrap-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-projects-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-workflow-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-filemap-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:inputs-tests"
+    },
+    {
+      "from": "project:worktree",
+      "kind": "compile",
+      "to": "project:judge-cargo-tests"
     }
   ],
   "test_costs": [

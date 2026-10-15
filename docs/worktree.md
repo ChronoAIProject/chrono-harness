@@ -1243,10 +1243,11 @@ CI copied-host 断言现在复用专属测试的独立 receipt owner 和显式�
 
 ### Prospective custody for selected native fixtures
 
-**Policy and product change:** cleanup policy now selects only the executing CI
-short hosts, independent Cargo-producing worktree hosts, the existing full native
-context/relocation fixture and the existing failed checkout-hook fixture. Compatible candidate
-binaries and committed policy must be deployed together. This source change has
+**Policy and product change:** cleanup policy selects the executing CI short hosts,
+independent Cargo-producing worktree hosts, the existing full native context/relocation
+and failed checkout-hook fixtures, and the finite projects/workflow/migration
+publishers described below. Compatible candidate binaries and committed policy
+must be deployed together. This source change has
 not established local or native acceptance, deployment, delivery or cleanup.
 
 `TemporaryHost::registered_store` resolves the existing coordinator and retained
@@ -1300,13 +1301,46 @@ requested worktree receipt retention does the same. The actual diagnostic
 custodian must release it after consuming the originals. Successful ordinary
 fixtures keep only kernel custody until their children and assertions have joined.
 
-The projects/workflow offline fixture helper retains the moved checkout and
-external declared input while making the old source path absent. Normal helper
-teardown remains temporary. It does not enroll copied bodies or generated outputs:
-those test projects currently lack a direct worktree-library dependency, and the
-finite source allowance excludes adding dependencies/manifests/lockfiles. Their
-full prospective/native/copy adoption and the migration fixture publisher remain
-unresolved. Retained offline source remains owned by those fixture consumers for
-assertion/diagnosis and subsequent explicit source-preserving disposition; this
-change grants no automatic source deletion. Final-original report retirement is
-outside this contract.
+The shared projects Host and its explicitly registered workflow, FILEMAP,
+inputs and Cargo consumers now directly depend on the existing worktree library.
+Each keeps its independent manifest, Cargo-generated lock and target. The host
+policy adds three finite publishers: `projects-test-host` for the shared hosts
+and copied unit/collector/delivery checkouts, `workflow-test-tools` for real
+native tools and the `local-lane` producer, and `projects-migration-host` for the
+actual historical/current-source migration fixture. Their exact generated-output
+paths and Git roots live only in cleanup.json; FILEMAP declares each consumer.
+The five owner lock-generation actions use the registered Cargo with offline
+resolution, one command at a time. This adds INTERNAL dependencies, with no new
+external package family or changed hashing acceleration/profile contract.
+
+Allocation intent precedes checkout/output production. Actual cp, fs::copy,
+hard-link, Git clone, native readiness, Cargo and check commands remain their
+original operations. Copy publishers retain original executable bytes before
+production and explicitly name their actual fixture root for source exclusion;
+the local lane enrolls future hard links before birth starts its
+existing freshness clock. Capture files and TMPDIR live beside clone destinations
+so an actual clone still receives an empty destination. Native arguments and
+cleared/selected environments are configured before the single capability bind.
+Original input bytes exist before the read-to-EOF judge starts, and actual wait
+produces its joined status. Engine consumers inherit the same held scopes.
+
+Offline relocation carries enrolled copies before rename, retains the checkout
+and external declared inputs, and makes the old path absent. Source, Git identity,
+manifest/lock files, captures and large offline originals are never generated
+output members. Panics and explicitly requested full/repair evidence acquire a
+persistent diagnostic reference before the allocation lease releases; original
+native collection/publication failures also protect their source allocation.
+The diagnostic custodian releases `fixture-diagnostic` through the existing
+RetainedArtifact reference API after consuming those originals. Ordinary joined
+fixtures need no finish for eligible generated-output drain. Source-preserving
+retirement remains a separate caller obligation; final-original report retirement
+is outside this contract.
+
+**Combined policy/consumer change, unaccepted:** these declarations and source
+consumers require compatible candidate binaries and committed policy together.
+Rust expectations cover prospective copies/offline source and external-input
+preservation, spawn failure with original empty streams and no fabricated join,
+and panic diagnostic protection. Existing custody/native/drain tests retain their
+obligations. Bootstrap, formatting, dedicated tests, canonical two-endpoint DELTA,
+native platforms and independent review remain caller acceptance work; this source
+implementation and Cargo lock generation establish none of those results.

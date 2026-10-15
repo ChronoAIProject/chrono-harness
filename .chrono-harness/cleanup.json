@@ -201,6 +201,58 @@
         "arbitrary non Cargo layout/",
         "unavailable original checkout/"
       ]
+    },
+    {
+      "id": "projects-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/projects/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "fixture/p/target/",
+        "fixture/t/target/",
+        "fixture/p2/target/",
+        "fixture/t2/target/",
+        "retained-offline-checkout/p/target/",
+        "retained-offline-checkout/t/target/",
+        "retained-offline-checkout/p2/target/",
+        "retained-offline-checkout/t2/target/"
+      ],
+      "source_roots": [
+        "fixture/",
+        "retained-offline-checkout/"
+      ]
+    },
+    {
+      "id": "workflow-test-tools",
+      "directory": ".chrono-harness/state/temporary-hosts/workflow-tools/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "fixture/local-lane/p/target/",
+        "fixture/local-lane/t/target/",
+        "fixture/local-lane/p2/target/",
+        "fixture/local-lane/t2/target/"
+      ],
+      "source_roots": [
+        "fixture/local-lane/"
+      ]
+    },
+    {
+      "id": "projects-migration-host",
+      "directory": ".chrono-harness/state/temporary-hosts/migration/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "fixture/crates/runner/target/",
+        "fixture/crates/judge-registration/target/",
+        "fixture/crates/judge-ci/target/",
+        "fixture/crates/ci/target/",
+        "fixture/crates/worktree/target/",
+        "fixture/crates/ci-tests/target/"
+      ],
+      "source_roots": [
+        "fixture/"
+      ]
     }
   ]
 }
