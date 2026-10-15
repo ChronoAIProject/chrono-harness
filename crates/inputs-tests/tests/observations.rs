@@ -703,7 +703,11 @@ fn rejected_manifest_aliases_retain_literal_resolution_and_kind_in_failed_origin
         let artifact = ".chrono-harness/state/guard/directory.json";
         m["directories"][0]["manifest"] = json!({"path":artifact,"root":"selected"});
         let output = ".chrono-harness/state/alias-failed.json";
-        assert!(invoke(&root, &m, output).unwrap_err().contains("E_OBSERVATION"));
+        assert!(
+            invoke(&root, &m, output)
+                .unwrap_err()
+                .contains("E_OBSERVATION")
+        );
         let original = fs::read(root.join(output)).unwrap();
         let report: Value = serde_json::from_slice(&original).unwrap();
         assert_eq!(report["status"], "failed", "{case}");
@@ -741,7 +745,10 @@ fn rejected_manifest_aliases_retain_literal_resolution_and_kind_in_failed_origin
         if let Some(resolution_error) = resolution_error {
             assert_eq!(error, resolution_error["message"].as_str().unwrap());
         } else if case == "unsupported-kind" {
-            assert_eq!(error, "directory manifest alias has unsupported target kind");
+            assert_eq!(
+                error,
+                "directory manifest alias has unsupported target kind"
+            );
         } else {
             assert_eq!(error, "directory manifest alias escapes scope: bin/alias");
         }
