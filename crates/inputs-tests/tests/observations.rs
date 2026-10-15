@@ -434,7 +434,11 @@ fn explicit_canonical_file_acquisition_preserves_linux_aliases_and_parent_compon
     fs::create_dir_all(root.join("usr/lib/gcc/x86_64-linux-gnu/13")).unwrap();
     fs::create_dir_all(root.join("usr/lib/x86_64-linux-gnu")).unwrap();
     fs::write(root.join("usr/lib/os-release"), b"native release").unwrap();
-    fs::write(root.join("usr/lib/x86_64-linux-gnu/libc.so.6"), b"native libc").unwrap();
+    fs::write(
+        root.join("usr/lib/x86_64-linux-gnu/libc.so.6"),
+        b"native libc",
+    )
+    .unwrap();
     symlink("../usr/lib/os-release", root.join("etc/os-release")).unwrap();
     symlink(
         "usr/lib/gcc/x86_64-linux-gnu/13",
@@ -492,11 +496,11 @@ fn explicit_canonical_file_acquisition_preserves_linux_aliases_and_parent_compon
         } else {
             assert!(aliases.is_empty());
         }
-        let process =
-            chrono_harness::scoped_report::restore_process(&report["operations"]["location"], |o| {
-                chrono_harness::prepared::read_original(&root, o, None)
-            })
-            .unwrap();
+        let process = chrono_harness::scoped_report::restore_process(
+            &report["operations"]["location"],
+            |o| chrono_harness::prepared::read_original(&root, o, None),
+        )
+        .unwrap();
         assert_eq!(
             process.stdout_bytes,
             format!("{}\n", location.display()).as_bytes()
@@ -532,10 +536,9 @@ fn runtime_scope_observes_python_components_without_other_prefix_owners() {
     let mut m = manifest(&root);
     m["operations"][0]["argv"] = json!(["path", root.join("usr/lib/python3.12")]);
     m["directories"][0]["max_entries"] = json!(3);
-    let result: Value = serde_json::from_str(
-        &invoke(&root, &m, ".chrono-harness/state/runtime.json").unwrap(),
-    )
-    .unwrap();
+    let result: Value =
+        serde_json::from_str(&invoke(&root, &m, ".chrono-harness/state/runtime.json").unwrap())
+            .unwrap();
     let inventory = &result["directories"]["declared"];
     assert_eq!(inventory["root"], json!(root.join("usr/lib/python3.12")));
     assert_eq!(
@@ -575,7 +578,10 @@ fn configuration_observation_retains_identity_and_absence_without_credential_con
         .map(|e| e.unwrap().file_name())
         .collect();
     assert_eq!(retained, vec![std::ffi::OsString::from("source-0.json")]);
-    assert_eq!(fs::read(root.join("cargo/credentials.toml")).unwrap(), secret);
+    assert_eq!(
+        fs::read(root.join("cargo/credentials.toml")).unwrap(),
+        secret
+    );
 }
 
 #[cfg(unix)]
