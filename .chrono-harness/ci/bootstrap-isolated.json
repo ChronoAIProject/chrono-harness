@@ -2,8 +2,17 @@
   "schema": "chrono-bootstrap/v1",
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
-  "tools": {},
-  "operations": [],
+  "tools": {
+    "rustup": "rustup"
+  },
+  "operations": [
+    "host.bootstrap-isolated-remove-components",
+    "host.bootstrap-isolated-add-cargo",
+    "host.bootstrap-isolated-add-rust-docs",
+    "host.bootstrap-isolated-add-rust-std",
+    "host.bootstrap-isolated-add-rustfmt",
+    "host.bootstrap-isolated-complete-components"
+  ],
   "install": [],
   "participation": {
     "coordinator_root": "git-main-worktree",

@@ -179,8 +179,38 @@ That one enclosing lease covers the input observer, `host.bootstrap-isolated`,
 the existing native provisioning whitelist's 34 Cargo fetch actions, and the
 actual immediate consumer `guard.check.runner`. The bootstrap selects Rustup's
 official `default` profile in disjoint host-state Rustup/Cargo homes. Rustup
-produces all metadata with self-update disabled. Each installer/fetch retains its
-existing 120-second/1-MiB child bound; the guard retains its existing
+produces all metadata with self-update disabled. The isolated profile then uses
+the existing bootstrap action executor for six registered official Rustup
+component operations. It retains Clippy, removes the other five components,
+then adds Cargo, docs, std and rustfmt individually. Its final `toolchain install`
+explicitly requests all six components with self-update disabled; only rustc is
+still missing at that point.
+
+This sequence follows Rustup 1.29.1 (`d95a37b6ab92cc1e455d1576039333c97ca3e2c5`):
+`src/dist/manifestation.rs` installs completed downloads in queue order,
+`src/dist/component/components.rs` appends installed names and filters removed
+names, and `Update::new` puts explicitly added components first in the persisted
+configuration. A default-profile install alone cannot guarantee the retained
+component byte order. Individual `component add` calls prepend configuration
+entries and obtain extension flags from the manifest; a final no-op add returns
+before rewriting the configuration. In `src/dist/mod.rs`, an explicit
+`toolchain install --component` request instead sorts the requested components
+and sets their extension flags to `false`, matching the retained configuration.
+The missing rustc makes this final transaction write that configuration while
+appending only rustc to the component list. The required component order is
+Clippy, Cargo, docs, std, rustfmt, rustc. Only Rustup writes installed metadata;
+the original 92-file inventory remains authoritative. Actual production and
+admission must still verify these source-derived expectations.
+
+These six actions belong to the existing `host-bootstrap` owner and run only
+when selected by the isolated profile, outside FILEMAP execution plans. They
+reuse its private environment, lease, original-stream retention and fail-fast
+execution. The registration adds producer operations without changing admission
+policy, scheduling claims, cap or test selection. Five component removals and
+reinstallations can require additional downloads; their actual time, network and
+storage costs remain unmeasured until committed-candidate production. The whole
+isolated bootstrap retains its existing 120-second/1-MiB child bound, including
+all six component operations. Each fetch retains its 120-second/1-MiB bound; the guard retains its existing
 600-second/4-MiB bound. The observer stops after any failed prerequisite and
 retains executed originals. This ordered chain does not run canonical or select
 additional tests. The wrapper retains the existing host protocol bounds.
@@ -201,6 +231,14 @@ the two owner-local test methods retain their respective registered
 `crates/inputs-tests/target/` and `crates/judge-cargo-tests/target/` outputs.
 Their action argv, observation manifest and bootstrap profile retain the exact
 output paths and bounds; removing nonplan scheduling claims changes none of them.
+
+The failed `production-2e939736-20261015.json` and its `.processes` directory are
+occupied immutable evidence. Before another invocation, the caller preserves the
+required original private metadata and controls the enclosing lifetime, selects
+a fresh observer output in the registered action, and commits that selection
+together with the producer changes. The command above then runs the changed
+producer and the unchanged immediate guard under one lease. Do not overwrite
+the failed report or invoke the component steps independently of that lease.
 
 Before production, the caller must commit these producer, observer and guard
 bytes and rebuild/install the candidate through registered `host.bootstrap`.

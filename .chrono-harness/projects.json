@@ -3288,7 +3288,7 @@
             "--manifest",
             ".chrono-harness/inputs/isolated-production.json",
             "--output",
-            ".chrono-harness/state/isolated-rust/production-2e939736-20261015.json"
+            ".chrono-harness/state/isolated-rust/production-components-1afeac0-20261015.json"
           ]
         }
       },
@@ -4955,6 +4955,79 @@
             ".chrono-harness/ci/bootstrap.py",
             ".",
             ".chrono-harness/ci/bootstrap-isolated.json"
+          ]
+        },
+        "isolated-remove-components": {
+          "operation": "host.bootstrap-isolated-remove-components",
+          "tool": "rustup",
+          "argv": [
+            "component",
+            "remove",
+            "--toolchain",
+            "1.95.0",
+            "cargo",
+            "rust-docs",
+            "rust-std",
+            "rustfmt-preview",
+            "rustc"
+          ]
+        },
+        "isolated-add-cargo": {
+          "operation": "host.bootstrap-isolated-add-cargo",
+          "tool": "rustup",
+          "argv": [
+            "component",
+            "add",
+            "--toolchain",
+            "1.95.0",
+            "cargo"
+          ]
+        },
+        "isolated-add-rust-docs": {
+          "operation": "host.bootstrap-isolated-add-rust-docs",
+          "tool": "rustup",
+          "argv": [
+            "component",
+            "add",
+            "--toolchain",
+            "1.95.0",
+            "rust-docs"
+          ]
+        },
+        "isolated-add-rust-std": {
+          "operation": "host.bootstrap-isolated-add-rust-std",
+          "tool": "rustup",
+          "argv": [
+            "component",
+            "add",
+            "--toolchain",
+            "1.95.0",
+            "rust-std"
+          ]
+        },
+        "isolated-add-rustfmt": {
+          "operation": "host.bootstrap-isolated-add-rustfmt",
+          "tool": "rustup",
+          "argv": [
+            "component",
+            "add",
+            "--toolchain",
+            "1.95.0",
+            "rustfmt-preview"
+          ]
+        },
+        "isolated-complete-components": {
+          "operation": "host.bootstrap-isolated-complete-components",
+          "tool": "rustup",
+          "argv": [
+            "toolchain",
+            "install",
+            "1.95.0",
+            "--profile",
+            "default",
+            "--component",
+            "cargo,clippy-preview,rust-docs,rust-std,rustc,rustfmt-preview",
+            "--no-self-update"
           ]
         },
         "cache": {
