@@ -2065,6 +2065,37 @@ fn short_producer_failure_version_decode_and_validation_keep_originals() {
 
 #[test]
 fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
+    fn check_case<T>(
+        h: &ShortHost,
+        case: &str,
+        inspect: impl FnOnce(&std::process::Output) -> T,
+    ) -> T {
+        let mut command = h.command(&["check"]);
+        let argv: Vec<String> = std::iter::once(command.get_program())
+            .chain(command.get_args())
+            .map(|arg| arg.to_str().unwrap().to_owned())
+            .collect();
+        let context = json!({"case":case,"base":h.base,"candidate":h.candidate,"remote":h.remote});
+        let out = command.output().unwrap();
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inspect(&out))) {
+            Ok(value) => value,
+            Err(failure) => {
+                // Preserve the actual command and pre-dispatch fixture inputs
+                // for every assertion failure, including an unexpected console.
+                let retained = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    retain_command_result(&h.root, &argv, &context, &out);
+                }));
+                if retained.is_err() {
+                    eprintln!(
+                        "Command result retention failed; root {}; argv {argv:?}; context {context}; original command: {out:?}",
+                        h.root.display()
+                    );
+                }
+                std::panic::resume_unwind(failure);
+            }
+        }
+    }
+
     let mut h = ShortHost::new();
     let long_parent = h
         ._dir
@@ -2079,57 +2110,120 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
     });
     fs::create_dir_all(h.root.join(".chrono-harness/state/elsewhere")).unwrap();
     std::os::unix::fs::symlink("elsewhere", h.root.join(".chrono-harness/state/blocked")).unwrap();
-    let out = h.command(&["check"]).output().unwrap();
-    assert_eq!(out.status.code(), Some(2));
-    assert!(out.stdout.is_empty());
-    let error = fs::read_dir(h.root.join(".chrono-harness/state/preparation"))
-        .unwrap()
-        .map(Result::unwrap)
-        .find(|e| e.file_name().to_str().unwrap().starts_with("check-error-"))
-        .unwrap();
-    let original = fs::read_to_string(error.path()).unwrap();
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    let clipped: String = original.chars().take(240).collect();
-    assert!(stderr.contains(&clipped), "{stderr}");
-    assert!(stderr.contains("[text omitted; see original]"), "{stderr}");
-    assert!(stderr.contains(&sha256(original.as_bytes())), "{stderr}");
-    assert!(
-        stderr.contains(
-            error
-                .path()
-                .strip_prefix(&h.root)
-                .unwrap()
-                .to_str()
-                .unwrap()
-        )
-    );
-    assert!(stderr.contains("Original check error:"));
-    assert!(!stderr.contains("Original report:"));
-    assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+    let (error_name, original) = check_case(&h, "long-path-report-symlink", |out| {
+        assert_eq!(out.status.code(), Some(2));
+        assert!(out.stdout.is_empty());
+        let error = fs::read_dir(h.root.join(".chrono-harness/state/preparation"))
+            .unwrap()
+            .map(Result::unwrap)
+            .find(|e| e.file_name().to_str().unwrap().starts_with("check-error-"))
+            .unwrap();
+        let original = fs::read_to_string(error.path()).unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let clipped: String = original.chars().take(240).collect();
+        assert!(stderr.contains(&clipped), "{stderr}");
+        assert!(stderr.contains("[text omitted; see original]"), "{stderr}");
+        assert!(stderr.contains(&sha256(original.as_bytes())), "{stderr}");
+        assert!(
+            stderr.contains(
+                error
+                    .path()
+                    .strip_prefix(&h.root)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            )
+        );
+        assert!(stderr.contains("Original check error:"));
+        assert!(!stderr.contains("Original report:"));
+        assert!(!h.root.join(".chrono-harness/state/calls-a").exists());
+        (error.file_name(), original)
+    });
 
     // Force the evidence owner to become unavailable after acquisition, in the
     // judge process. Publication and outer-error retention must both fail.
     fs::remove_file(h.root.join(".chrono-harness/state/blocked")).unwrap();
-    script(
-        &h.root,
-        ".chrono-harness/bin/retention-failure",
-        "#!/bin/sh\nmv .chrono-harness/state/preparation .chrono-harness/state/saved-preparation\nln -s saved-preparation .chrono-harness/state/preparation\nexec /usr/bin/python3 -c 'import json,sys; r=json.load(sys.stdin); print(json.dumps(dict(protocol=r[\"protocol\"],request_id=r[\"request_id\"],status=\"passed\",results=[dict(id=\"fixture\",status=\"passed\",cause=\"actual\",exit_code=0)],evidence=dict(actual=True))))'\n",
-    );
+    let transport = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["report_path"] = json!(".chrono-harness/state/check.json");
-        c["judge"]["program"] = json!(".chrono-harness/bin/retention-failure");
+        c["judge"]["program"] = json!(transport);
+        c["judge"]["args"] = json!(["retention-failure"]);
     });
-    let out = h.command(&["check"]).output().unwrap();
-    assert_eq!(out.status.code(), Some(2));
-    assert!(out.stdout.is_empty());
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("symlink"), "{stderr}");
-    assert!(
-        stderr.contains("Original check error retention failed:"),
-        "{stderr}"
-    );
-    assert!(!stderr.contains("Original check error:"));
-    assert!(!stderr.contains("Original report:"));
+    check_case(&h, "child-retention-loss", |out| {
+        assert_eq!(out.status.code(), Some(2));
+        assert!(out.stdout.is_empty());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("symlink"), "{stderr}");
+        assert!(
+            stderr.contains("Original check error retention failed:"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains("Original check error:"));
+        assert!(!stderr.contains("Original report:"));
+
+        let preparation = h.root.join(".chrono-harness/state/preparation");
+        assert!(fs::symlink_metadata(&preparation).unwrap().is_symlink());
+        assert_eq!(
+            fs::read_link(preparation).unwrap(),
+            Path::new("saved-preparation")
+        );
+        let saved = h.root.join(".chrono-harness/state/saved-preparation");
+        assert_eq!(fs::read(saved.join(error_name)).unwrap(), original.as_bytes());
+        let (_, input, request) = retained_receipt(&h.root, "judge-request-");
+        assert_eq!(request["base"], h.base);
+        assert_eq!(request["candidate"], h.candidate);
+        let acquisition = &request["observations"]["preparation"]["receipts"][0];
+        assert_eq!(
+            sha256(&fs::read(h.root.join(acquisition["path"].as_str().unwrap())).unwrap()),
+            acquisition["sha256"]
+        );
+        let id = request["request_id"].as_str().unwrap();
+        let stdout = fs::read(saved.join(format!("judge-stdout-{id}.bytes"))).unwrap();
+        let stderr = fs::read(saved.join(format!("judge-stderr-{id}.bytes"))).unwrap();
+        let response: chrono_harness::Response = chrono_harness::decode(&stdout).unwrap();
+        chrono_harness::validate_response_protocol(
+            &response,
+            id,
+            0,
+            request["protocol"].as_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(response.status, chrono_harness::Status::Passed);
+        assert_eq!(response.evidence["actual"], true);
+        assert!(stderr.is_empty());
+        let launch: Value = serde_json::from_slice(
+            &fs::read(saved.join(format!("judge-launch-{id}.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(launch["child_pid"], response.evidence["child_pid"]);
+        assert_eq!(launch["argv"], json!([transport, "retention-failure"]));
+        assert_eq!(launch["stdin_sha256"], sha256(&input));
+        assert_eq!(launch["sha256"], sha256(&fs::read(transport).unwrap()));
+        assert_eq!(launch["timeout_seconds"], 20);
+        assert_eq!(launch["output_limit_bytes"], 67108864);
+        let progress = fs::read_dir(&saved)
+            .unwrap()
+            .map(Result::unwrap)
+            .find(|e| e.file_name().to_str().unwrap().starts_with("judge-transport-"))
+            .unwrap();
+        let rows: Vec<Value> = fs::read_to_string(progress.path())
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert_eq!(rows[0]["observation"]["identity"]["request_id"], id);
+        let returned = &rows
+            .iter()
+            .find(|row| row["phase"] == "judge-transport-returned")
+            .unwrap()["observation"];
+        assert_eq!(returned["child_pid"], launch["child_pid"]);
+        assert_eq!(returned["exit_code"], 0);
+        assert!(returned["failure"].is_null(), "{returned}");
+        assert_eq!(returned["stdout_sha256"], sha256(&stdout));
+        assert_eq!(returned["stderr_sha256"], sha256(&stderr));
+        assert!(!saved.join(format!("check-{id}.json")).exists());
+        assert!(!h.root.join(".chrono-harness/state/check.json").exists());
+    });
 }
 
 #[test]
