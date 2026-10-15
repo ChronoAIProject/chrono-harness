@@ -88,7 +88,34 @@ fn plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
 // Record actual owner calls, including failures, in the existing raw test stream.
 // This changes neither cache observations/keys nor the command or its bounds.
 fn observed_plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
-    fs::write(root.join("probe-observation.enabled"), b"").unwrap();
+    use std::io::Write;
+    let (mut observation, observation_path) = tempfile::Builder::new()
+        .prefix("probe-observation-")
+        .suffix(".bytes")
+        .tempfile_in(root)
+        .unwrap()
+        .keep()
+        .unwrap();
+    observation
+        .write_all(b"chrono-cache-test-probe-observation/v2\n")
+        .unwrap();
+    writeln!(
+        observation,
+        "{}\tparent-prepared\t{}\t0",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    )
+    .unwrap();
+    // Transfer owns its copies; the fixture keeps the raw file even on failure.
+    // Neither the carrier nor this observation becomes a business input/key.
+    #[cfg(unix)]
+    let _observation_scope = {
+        use std::os::fd::AsFd;
+        chrono_harness::process_fds::Scope::new(&[observation.as_fd()]).unwrap()
+    };
     let started_at = std::time::SystemTime::now();
     let started = std::time::Instant::now();
     let result = plan(root, value, consumer);
@@ -102,28 +129,72 @@ fn observed_plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, St
     let process: Option<Value> = original_bytes
         .as_ref()
         .map(|bytes| serde_json::from_slice(bytes).unwrap());
-    let entry_bytes = process.as_ref().and_then(|process| {
-        fs::read(root.join(format!(
-            "probe-observation-{}.bytes",
-            process["child_pid"].as_u64().unwrap()
-        )))
-        .ok()
-    });
+    let entry_bytes = fs::read(&observation_path);
     let evidence = json!({
-        "schema":"chrono-cache-probe-diagnostic/v1", "consumer":consumer,
+        "schema":"chrono-cache-probe-diagnostic/v2", "consumer":consumer,
         "root":root, "command_input":value["inputs"]["compiler"],
         "started_unix_ns":started_at.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
         "finished_unix_ns":finished_at.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
         "elapsed_ns":elapsed_ns, "error":result.as_ref().err(),
         "original":original,
         "original_bytes":original_bytes.as_ref().map(|bytes| std::str::from_utf8(bytes).unwrap()),
-        "entry_bytes":entry_bytes.as_ref().map(|bytes| std::str::from_utf8(bytes).unwrap()),
-        "entry_clock":"SystemTime Unix epoch at main entry; per-stage elapsed uses Instant"
+        "entry_path":observation_path,
+        "entry_bytes":entry_bytes.as_ref().ok().map(|bytes| std::str::from_utf8(bytes).unwrap()),
+        "entry_sha256":entry_bytes.as_ref().ok().map(|bytes| format!("{:x}", Sha256::digest(bytes))),
+        "entry_read_error":entry_bytes.as_ref().err().map(|error| error.to_string()),
+        "entry_transport":if cfg!(unix) { "parent-opened scoped descriptor" } else { "unsupported" },
+        "entry_clock":"parent-prepared is not child entry; child SystemTime at main entry and per-stage Instant elapsed; absent child rows do not prove main never entered"
     });
-    use std::io::Write;
     let mut stream = std::io::stderr().lock();
     writeln!(stream, "Cache probe observation: {evidence}").unwrap();
+    drop(stream);
+    #[cfg(unix)]
+    if let Some(process) = &process {
+        let stages = observation_stages(
+            entry_bytes.as_ref().unwrap(),
+            process["child_pid"].as_u64().unwrap(),
+        );
+        let mode = value["inputs"]["compiler"]["command"]["args"][0].as_str();
+        if process["exit_code"] == 0 && matches!(mode, Some("echo" | "file")) {
+            assert_eq!(
+                stages,
+                ["main-entry", "args-ready", "println-return", "main-end"]
+            );
+        } else if process["exit_code"] == 7 && mode == Some("exit") {
+            assert_eq!(stages, ["main-entry", "args-ready", "exit-request"]);
+        } else if process["failure"] == "process output limit exceeded" {
+            assert!(stages.starts_with(&["main-entry", "args-ready"]));
+        }
+    }
     result
+}
+
+#[cfg(unix)]
+fn observation_stages(bytes: &[u8], child_pid: u64) -> Vec<&str> {
+    // A bound can terminate a child partway through its last write. Preserve
+    // that tail in the raw evidence, but only complete rows establish a stage.
+    let text = std::str::from_utf8(bytes).unwrap();
+    let (complete, _) = text.rsplit_once('\n').unwrap();
+    let mut lines = complete.lines();
+    assert_eq!(lines.next(), Some("chrono-cache-test-probe-observation/v2"));
+    let mut stages = Vec::new();
+    let mut entry_clock = None;
+    let mut previous_elapsed = 0;
+    for line in lines {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 4, "{line}");
+        if fields[0].parse::<u64>().unwrap() != child_pid {
+            assert_eq!(fields[1], "parent-prepared");
+            continue;
+        }
+        let entered = fields[2].parse::<u128>().unwrap();
+        assert_eq!(*entry_clock.get_or_insert(entered), entered);
+        let elapsed = fields[3].parse::<u128>().unwrap();
+        assert!(elapsed >= previous_elapsed);
+        previous_elapsed = elapsed;
+        stages.push(fields[1]);
+    }
+    stages
 }
 
 #[test]
@@ -134,7 +205,7 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
         "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":["exit"],"env":{},
         "timeout_seconds":5,"output_limit_bytes":4096},"inherit":[],"result":"stdout"});
     let failure = std::panic::catch_unwind(move || {
-        plan(root.path(), &config, "check.one").unwrap();
+        observed_plan(root.path(), &config, "check.one").unwrap();
     });
     assert!(failure.is_err());
     let original: Value =
@@ -1119,12 +1190,29 @@ fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
 
 #[test]
 fn failed_and_bounded_probes_retain_original_results_and_stop_planning() {
+    #[cfg(unix)]
+    {
+        assert!(
+            observation_stages(
+                b"chrono-cache-test-probe-observation/v2\n1\tparent-prepared\t100\t0\n",
+                2,
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            observation_stages(
+                b"chrono-cache-test-probe-observation/v2\n1\tparent-prepared\t100\t0\n2\tmain-entry\t101\t1\n2\targs-ready\t101",
+                2,
+            ),
+            ["main-entry"]
+        );
+    }
     for (mode, limit, timeout) in [("exit", 4096, 5), ("sleep", 4096, 1), ("flood", 64, 5)] {
         let (root, mut config) = fixture();
         config["inputs"]["compiler"] = json!({"kind":"command","command":{
             "program":env!("CARGO_BIN_EXE_chrono-cache-test-probe"),"args":[mode],"env":{},
             "timeout_seconds":timeout,"output_limit_bytes":limit},"inherit":[],"result":"stdout"});
-        let error = plan(root.path(), &config, "check.one").unwrap_err();
+        let error = observed_plan(root.path(), &config, "check.one").unwrap_err();
         assert!(error.contains("E_CACHE_PROBE"), "{error}");
         let files = fs::read_dir(root.path().join(".chrono-harness/state/cache-probes"))
             .unwrap()

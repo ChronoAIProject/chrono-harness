@@ -8017,6 +8017,7 @@
     {"from": "environment:CARGO_TERM_COLOR", "kind": "runtime-input", "to": "project:cache-tests"},
     {"from": "project:runner", "kind": "compile", "to": "project:cache"},
     {"from": "project:cache", "kind": "compile", "to": "project:cache-tests"},
+    {"from": "project:runner", "kind": "compile", "to": "project:cache-tests"},
     {"from": "project:cache", "kind": "runtime-input", "to": "project:cache-tests"},
     {"from": "project:cache", "kind": "test-execution", "to": "test:cache-tests"},
     {"from": "project:cache-tests", "kind": "test-execution", "to": "test:cache-tests"},

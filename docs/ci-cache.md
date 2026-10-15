@@ -7,6 +7,36 @@ CI unit and central release asset. It does not compile with the CI generator.
 --consumer ID` prepares keys for one explicitly registered consumer. This is an
 internal provider entry; the daily check remains `chrono-harness check`.
 
+The dedicated Rust cache fixtures observe helper entry through a parent-opened
+file on Unix. They append one diagnostic capability with the runner's existing
+`process_fds::Scope`; the helper checks only that final carrier's fixed header
+and writes entry before any observation pathname lookup or creation. The runner
+is already a cache dependency; its direct test dependency exposes this existing
+transport without adding a package or changing the helper's business argv,
+environment, stdout/stderr, keys, process limits or test concurrency. FILEMAP
+declares the direct compile edge. Non-Unix fixtures report this observation as
+unsupported. This instrumentation does not repair executable-policy delays.
+
+The existing 45-test inventory exercises the observation contract without extra
+probe invocations: successful `echo`/`file` calls must record entry, argument
+collection, output return and main end for the actual child PID; explicit exit 7
+must retain entry, argument collection and exit request alongside its original
+stderr. An output-bound failure with actual stdout must have reached argument
+collection. Timeout or prelaunch rejection may leave only the parent's prepared
+record; that is never child-entry or success evidence. Observation read errors
+remain explicit in the existing raw diagnostic stream. Only complete child rows
+establish a stage; a partial final write stays in the retained raw bytes. Child
+rows use the Unix entry clock and elapsed monotonic time. The bounded case also
+asserts parent-only and partial-tail interpretation in memory. Cloning,
+validating and writing the descriptor still precede the first child row, so its
+absence cannot prove that main never entered. Failed fixtures retain the raw file
+and process original for debugging, review and acceptance; successful fixtures
+remove them with their host. The caller retires retained failures only after
+those consumers finish.
+Per-invocation observation IO and its runtime cost are unmeasured. Validation
+uses the current registered bootstrap and `chrono-harness check`; source
+preparation alone establishes no runtime or native acceptance.
+
 ## Bounded native acceptance
 
 The host has a real GitHub Actions consumer for the registered `cache` unit. The

@@ -1,15 +1,33 @@
 use std::io::Write;
+
+#[cfg(unix)]
+fn observation() -> Option<std::fs::File> {
+    use std::os::{fd::BorrowedFd, unix::fs::FileExt};
+
+    // observed_plan appends exactly one scoped file after inherited ownership
+    // capabilities. Check only that last descriptor, without pathname IO or
+    // changing its shared offset while recognizing the fixture's header.
+    let carrier = std::env::var("CHRONO_PROCESS_FDS").ok()?;
+    let fd: i32 = carrier.rsplit(',').next()?.parse().ok()?;
+    if fd < 3 {
+        return None;
+    }
+    // The runner supplies live inherited descriptors in its reserved carrier.
+    let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
+    let file = std::fs::File::from(borrowed.try_clone_to_owned().ok()?);
+    const HEADER: &[u8] = b"chrono-cache-test-probe-observation/v2\n";
+    let mut header = [0u8; HEADER.len()];
+    file.read_exact_at(&mut header, 0).ok()?;
+    (header.as_slice() == HEADER).then_some(file)
+}
+
 fn main() {
     let entered = std::time::SystemTime::now();
     let started = std::time::Instant::now();
-    // Enabled only by the two owner fixtures. Keep observations out of the
-    // probe's stdout/stderr and declared command environment.
-    let mut observation = std::path::Path::new("probe-observation.enabled")
-        .exists()
-        .then(|| {
-            std::fs::File::create_new(format!("probe-observation-{}.bytes", std::process::id()))
-                .unwrap()
-        });
+    #[cfg(unix)]
+    let mut observation = observation();
+    #[cfg(not(unix))]
+    let mut observation: Option<std::fs::File> = None;
     let mut observe = |stage: &str| {
         if let Some(file) = &mut observation {
             writeln!(
@@ -28,6 +46,7 @@ fn main() {
     };
     observe("main-entry");
     let args: Vec<_> = std::env::args().skip(1).collect();
+    observe("args-ready");
     match args[0].as_str() {
         "echo" | "file" => {
             println!("{}", args[1]);
@@ -48,10 +67,14 @@ fn main() {
                 .unwrap();
         }
         "exit" => {
+            observe("exit-request");
             eprintln!("original probe failure");
             std::process::exit(7);
         }
-        "sleep" => std::thread::sleep(std::time::Duration::from_secs(4)),
+        "sleep" => {
+            observe("sleep-start");
+            std::thread::sleep(std::time::Duration::from_secs(4));
+        }
         "flood" => std::io::stdout().write_all(&vec![b'x'; 4096]).unwrap(),
         _ => std::process::exit(99),
     }
