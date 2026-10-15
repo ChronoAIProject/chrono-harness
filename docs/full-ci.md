@@ -272,12 +272,12 @@ The remaining bindings below are inputs, not generated expectations:
 
 | Source / destination | Exact caller binding |
 | --- | --- |
-| `.chrono-harness/native/macos/config.json`, `.chrono-harness/native/linux/config.json` | The Mac direct v4 source is independently bound as described below; its required unavailable inputs still fail. Linux still requires its own original producer and direct policy. Preserve declared inputs, Cargo target/configuration/alias checks, runner/judge pins and cap2. Register actual sources before generation; Mac values never supply the Linux row. |
+| `.chrono-harness/native/macos/config.json`, `.chrono-harness/native/linux/config.json` | The Mac direct v4 source is independently bound as described below; its required unavailable inputs still fail. The Linux direct source is independently bound below; both platforms retain unavailable requirements as rejecting gaps. Preserve declared inputs, Cargo target/configuration/alias checks, runner/judge pins and cap2. Register actual sources before generation; Mac values never supply the Linux row. |
 | Each direct policy's `execution_units` | Preserve the current check source's exact unit-to-test assignments and shared operations; declare all 26 units. For platform `P`, use report paths under `.chrono-harness/state/native/P/units/ID/`, collection report under `.../collection/`, and the current collection limits. These paths must be distinct from the provider's context/full-context/manifest/gather outputs. Registration and the existing generator own admission. |
 | Each direct policy's `canonical_check` | Bind its full profile to its own direct policy path. Bind the CI action to the native interpreter tool and argv `[".chrono-harness/ci/native-P.py", "forward", "--config", ".chrono-harness/ci/units-native-P.json"]`. Keep `CHRONO_CHECK_SOURCE`; move acquisition-only event/payload/revision/repository names out of business inheritance as required by the adapter contract. Bind the local producer to the genuine platform lifecycle policy. |
 | `.chrono-harness/native/P/worktree.json` | Actual compatible native Git byte/version/environment binding, host selector/policy, cleanup/configuration and origin paths. Managed native bootstrap/cache and later acquisition through an existing owner require this committed policy. The first missing-owner Git-main seed uses the existing exception, without claiming enrollment. Deploy compatible candidate tools and both committed lifecycle policies through the surviving coordinator; source staging is not enrollment or birth. |
 | `.chrono-harness/native/P/cargo-runner.json` | Authentic platform Cargo guarded policy, preserving package, target, configuration, sysroot/SDK/runtime and alias assertions. Its `guard.check.native.P.runner` operation must preserve the original guard's exact Cargo check argv. The registered guard entry names that same operation ID and the actual direct native config; the guard's existing direct-policy API does not resolve the selector. Require an actual positive result on both platforms. The prior local/native negative expectation in `cargo/observe.json` remains separate evidence. |
-| `.chrono-harness/native/P/cache.json` | The Mac source reuses the existing cache registration with native profile, FILEMAP, lifecycle, private homes and bootstrap inputs. Cache IDs, producer/consumer assignments, source inputs and restore/backend assertions remain. Detector preparation still names the native cache bootstrap whose report shared startup consumes. Actual cache production/transport is unverified. Linux requires its independent policy. |
+| `.chrono-harness/native/P/cache.json` | The Mac source reuses the existing cache registration with native profile, FILEMAP, lifecycle, private homes and bootstrap inputs. Cache IDs, producer/consumer assignments, source inputs and restore/backend assertions remain. Detector preparation still names the native cache bootstrap whose report shared startup consumes. Actual cache production/transport is unverified. The Linux source below binds its independent acquisition record and private homes; it does not certify current cache production. |
 | `units-native-P.json.native_adoption.lineage` | Preserve successful original start/reconstruct bytes at the declared tracked `.chrono-harness/native/P/lineage.json` path and supply their actual digest. The source deliberately has `sha256:null`, which the existing decoder rejects. Supply genuine event/branch/fork/time association; do not manufacture birth for this source-staging checkout. |
 | `units-native-P.json.native_adoption.composition_sources` | Supply original base snapshot/pair bytes at the declared `.../native/P/originals/base-capture.json` path and their actual digest, plus all addressed blobs. Its null digest deliberately prevents generation. Capture at the actual fixed base using its committed policy; unavailable originals remain unavailable. Add other genuine sources explicitly if required. |
 | Native roles and delivery evidence | The proposed feature/integration push and PR role is integration; dev push is delivery. Reconcile these host choices with the actual tracked lineage and workflow policy. Supply the existing integration certificate/path/transport when impact requires it; null is not a waiver. |
@@ -377,7 +377,7 @@ finite remaining Mac producer/consumer handoff is:
    committed-parent real bootstrap consumption, FILEMAP DELTA-selected canonical,
    `guard.check.native.macos.runner`, native generate/verify, original unit
    acquisition/capture, adapter, cache/shared startup and collection/full adoption.
-   Linux requires its original producer and independent equivalent acceptance.
+   Linux requires independent current-candidate native/full production and acceptance.
    Whole-Q3 review/landing/release and original R4 cause/consumer work remain open.
 
 Cost accounting is UTF-8 source bytes against the fixed source above; the worker
@@ -389,10 +389,65 @@ observer/reproduction operations. Retain original acquisition inputs through
 native/full acceptance and whole-Q3 review, then use existing caller retention
 and lifecycle policy. Source staging is neither acceptance nor partial release.
 
+### Linux direct-policy source bindings
+
+The Linux row now has the same nine natural-owner sources as the Mac row under
+`.chrono-harness/native/linux/`: `config.json`, `judges.json`, `cargo-runner.json`,
+`worktree.json`, `cleanup.json`, `cache.json`, `FILEMAP.json`, `rust.json` and
+`python.json`. They are proposed source declarations and do not activate a new
+workflow or replace the stable local profile. The root FILEMAP records each source
+with its existing runner, CI, inputs, registration, Cargo, worktree and cache
+consumers and leaves their costs `unmeasured`.
+
+The bindings use the authentic Linux x86_64 acquisition `run 38716787272`,
+`job 116361317528`, source `dc254c556072d535f3399ce2ccccd49e6c69d858`, tree
+`c887f8fd06439b7be8e8a1d5f2fbee4d8fa7c996`, and retained ZIP SHA-256
+`41d007ae1ec28ef734e0238252573e300841aa06e9ba7bb73414f712bea2396b`. Its
+`state/inputs/observe-linux.json` member is 10,496,919 bytes with SHA-256
+`804b0a023701bc4b4107c14a3eb95c28970fe3cafb4a1c654b1ee1ead404a189`. The
+source preserves the observed Cargo/rustc 1.95.0 host
+`x86_64-unknown-linux-gnu`, Rustup/Cargo private-home locations, Git 2.55.0
+(`/usr/bin/git`), Python 3.12.3 (`/usr/bin/python3.12`), GCC 13
+(`/usr/bin/x86_64-linux-gnu-gcc-13`), archive tool, libc, os-release and Python
+shared-library identities. Rust and Python declarations retain every observed
+file digest. Python retains the original inline v1 observation and its three
+literal aliases; it is not a v2/v3 guard manifest. Python `root` and `platstdlib`
+share `/usr/lib/python3.12`; the extension role reuses the same physical file
+inputs, as the producer reported. The guarded runner preserves the original
+Linux metadata resolution, including `linux-raw-sys`, exact target predicates,
+features, checksums and package file identities. The other consumers retain
+their inherited explicit package subsets as incomplete declarations.
+
+The producer observed 22 external configuration absences and private Rustup
+settings. The 140 inherited configuration requirements without Linux observations
+remain present/null (unbound, with no assertion of observed presence or absence).
+Its inline `/usr/include` and `/usr/lib/gcc` inventories contain aliases outside
+their roots; compatible guard manifests, delegate closure and alias target
+admission remain unavailable. The required Linux
+SDK-equivalent, Python runtime and other package coverage rows remain unresolved
+and reject activation; the guard's empty `sdks` list is not full input acceptance.
+Mac SDK/Developer assertions remain in the Mac sources. The producer did not
+supply v3 directory-child manifests, a birth or endpoint pair, a fixed base or
+composition, governance projection, positive Cargo guard, native adapter, full
+adoption or delivery evidence. These pins identify the retained acquisition
+bytes; Linux expectations require Linux originals, and fresh candidate-byte
+evidence is still required. The caller must
+rebind excluded private/system bytes on the real Linux endpoint and run the
+registered bootstrap, positive Cargo guard, native generation/verification and
+full consumer acceptance before changing `proposed` or claiming Q3 completion.
+The Linux FILEMAP retains both platforms' source registrations and the existing
+26 plans, and connects every declared Linux input to its actual consumer. Its
+2,345,120 source bytes exceed the existing 2,097,152-byte immutable FILEMAP bound;
+that bound is unchanged, so native lifecycle admission remains rejecting until
+the caller resolves this owner/capacity gap. The direct config remains within its
+existing bound. Source-byte accounting is exact for this delta; native execution,
+CI, peak storage, retention and complete input-closure costs remain unknown.
+
 **Host policy and consumer routing change together.** Previously only the local
 bootstrap/environment and scoped provider were selected; the new sources declare
 native tool production, independent native policy routes, full-context ownership
-and positive guard entries. No product API or guard assertion is weakened. Source
+and positive guard entries. The Mac SDK/Developer guard assertions remain
+required; the Linux equivalent coverage gaps above reject full activation. Source
 and CI projection compatibility, generation and runtime behavior are unverified.
 Validation costs and native closure/storage costs are unknown; the source adds
 two platform configurations and their explicitly owned outputs, not more business

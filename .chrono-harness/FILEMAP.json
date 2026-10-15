@@ -7764,6 +7764,274 @@
           "to": "test:host-bootstrap-tests"
         }
       ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/config.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-registration"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:runner-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/judges.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-registration"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/cargo-runner.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/worktree.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/cleanup.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:worktree"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/cache.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:cache-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/FILEMAP.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-filemap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-registration"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-filemap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-registration-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:ci-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/rust.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-registration"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:runner"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:judge-cargo-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/native/linux/python.json",
+      "owner": "repository",
+      "surface": "judge-policy",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-registration"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:inputs-tests"
+        },
+        {
+          "kind": "test-execution",
+          "to": "test:host-bootstrap-tests"
+        }
+      ]
     }
   ],
   "project_edges": [
