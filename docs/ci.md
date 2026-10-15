@@ -185,6 +185,23 @@ existing 120-second/1-MiB child bound; the guard retains its existing
 retains executed originals. This ordered chain does not run canonical or select
 additional tests. The wrapper retains the existing host protocol bounds.
 
+FILEMAP scheduling claims name exactly the operations in its existing execution
+plans. The isolated production actions above and the two owner-local actions
+`test.inputs-observations-owner` and `test.cargo-configuration-owner` remain
+registered methods in `projects.json`, outside those plans. The observer owns
+the ordered production chain; its enclosing worktree lease covers every child.
+Scheduling claims provide no cross-invocation exclusion, so the caller must keep
+production and checks from overlapping in this checkout.
+
+Output ownership remains in `config.artifacts`: repository-owned
+`.chrono-harness/state/` contains the private Rustup/Cargo homes, the isolated
+`bootstrap.json`, and the selected `production-2e939736-20261015.json` with its
+`.processes` originals. The guard writes the runner-owned `crates/runner/target/`;
+the two owner-local test methods retain their respective registered
+`crates/inputs-tests/target/` and `crates/judge-cargo-tests/target/` outputs.
+Their action argv, observation manifest and bootstrap profile retain the exact
+output paths and bounds; removing nonplan scheduling claims changes none of them.
+
 Before production, the caller must commit these producer, observer and guard
 bytes and rebuild/install the candidate through registered `host.bootstrap`.
 That source bootstrap profile explicitly selects its previously verified source
