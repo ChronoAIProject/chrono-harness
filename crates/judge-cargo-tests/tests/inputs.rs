@@ -2003,7 +2003,9 @@ fn observer_v3_original_is_consumed_by_the_guard_and_detects_real_topology_drift
         match case {
             "file-drift" => fs::write(sdk.join("include/header"), b"changed").unwrap(),
             "root-addition" => fs::write(sdk.join("new-child"), b"unlisted").unwrap(),
-            "nested-addition" => fs::write(sdk.join("nested/empty/new-child"), b"unlisted").unwrap(),
+            "nested-addition" => {
+                fs::write(sdk.join("nested/empty/new-child"), b"unlisted").unwrap()
+            }
             "missing" => fs::remove_dir(sdk.join("nested/empty")).unwrap(),
             "alias-drift" | "escape" => {
                 fs::remove_file(sdk.join("alias")).unwrap();
@@ -2020,8 +2022,11 @@ fn observer_v3_original_is_consumed_by_the_guard_and_detects_real_topology_drift
             "mutation" => {
                 f.values.get_mut(CONFIG).unwrap()["environment"]["values"]["CHRONO_MUTATE"] =
                     json!(sdk.join("new-child"));
-                write(&root, "t/src/lib.rs",
-                    "#[test] fn add_root_child() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n");
+                write(
+                    &root,
+                    "t/src/lib.rs",
+                    "#[test] fn add_root_child() { std::fs::write(std::env::var(\"CHRONO_MUTATE\").unwrap(),b\"changed\").unwrap(); }\n",
+                );
             }
             _ => {}
         }

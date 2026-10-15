@@ -273,7 +273,9 @@ fn inventory(
                 if output.is_some() {
                     let actual = fs::canonicalize(&p).map_err(|e| e.to_string())?;
                     if target.is_absolute() || !actual.starts_with(&resolved) {
-                        return Err(format!("directory manifest alias escapes scope: {relative}"));
+                        return Err(format!(
+                            "directory manifest alias escapes scope: {relative}"
+                        ));
                     }
                     let kind = if actual.is_file() {
                         "file"
@@ -581,7 +583,8 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
                 }
                 None => json!({"absent":true}),
             };
-            let mut result = json!({"location":location,"observation":value,"absent":value["absent"]==true});
+            let mut result =
+                json!({"location":location,"observation":value,"absent":value["absent"]==true});
             if let Some(resolution) = resolution {
                 result["resolution"] = resolution;
             }
@@ -604,7 +607,8 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
                 inventory(&location, d.max_entries, d.manifest.as_ref(), root)?;
             if let Some((output, manifest)) = d.manifest.as_ref().zip(manifest) {
                 super::publish(root, &output.path, &manifest)?;
-                observation["manifest"] = json!(chrono_harness::prepared::original(root, &output.path)?);
+                observation["manifest"] =
+                    json!(chrono_harness::prepared::original(root, &output.path)?);
             }
             Ok::<_, String>(observation)
         })();
