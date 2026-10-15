@@ -31,6 +31,9 @@
     "roles": {
       "feature": "integration",
       "integration": "integration"
+    },
+    "full_inputs": {
+      "retained_inputs": ".chrono-harness/state/inputs/full.json"
     }
   },
   "automatic_cleanup": ".chrono-harness/cleanup.json"

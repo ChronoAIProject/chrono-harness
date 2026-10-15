@@ -540,6 +540,8 @@ def main():
             action = operations[operation]
             executable = (bindings[action["tool"]]["path"] if bindings and action["tool"] in bindings
                           else config["tools"][action["tool"]])
+            if not Path(executable).is_absolute() and "/" in executable:
+                executable = str(root / executable)
             executable = shutil.which(executable, path=env.get("PATH")) or executable
             record = run_operation(root, directory, index, operation, action, executable, env)
             result["operations"].append(record)

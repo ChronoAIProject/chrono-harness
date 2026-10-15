@@ -1,0 +1,13 @@
+{
+  "schema": "chrono-git-configs/v2",
+  "platforms": {
+    "macos-aarch64": {
+      "local": ".chrono-harness/config.json",
+      "ci": ".chrono-harness/native/macos/config.json"
+    },
+    "linux-x86_64": {
+      "local": ".chrono-harness/native/linux/config.json",
+      "ci": ".chrono-harness/native/linux/config.json"
+    }
+  }
+}

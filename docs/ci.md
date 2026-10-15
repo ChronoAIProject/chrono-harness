@@ -167,6 +167,22 @@ version implementation explains the package 0.96.0 / CLI 1.95.0 distinction.
 Acquisition is preparation of committed input; bootstrap does not download or
 learn expectations, and continues to use existing rustup provisioning.
 
+The initial native acquisition actions `host.acquire-native-macos` and
+`host.acquire-native-linux` select `bootstrap-acquire-PLATFORM.json` through this
+same bootstrap owner. They preserve the 14 native source builds/installations,
+append the existing ordered observation action before installation, and select
+the existing default-profile provisioner in private checkout-relative
+Rustup/Cargo homes. The initial Git-main missing-owner seeding branch supplies
+the built observer before full direct/lifecycle policies exist. An installed
+owner or linked checkout still requires the existing committed policy and
+participation chain. See [first inputs and original retention](inputs.md#actual-input-observations).
+These profiles are distinct from the proposed native full-unit shared startup;
+collection does not inherit the initial acquisition work. Explicit relative tool
+paths resolve at HOST_ROOT, and shared report validation resolves against the
+original producer's recorded root. The corresponding Python success, failure and
+boundary regressions are defined in `bootstrap-tests.py` and unexecuted for this
+source handoff; no native/full acceptance is asserted.
+
 The registered `inputs.provision-isolated` action invokes the existing worktree
 owner's `use` operation for `inputs.produce-admit-isolated`. Run its exact action
 from the committed candidate root:

@@ -166,6 +166,8 @@ def validate_execution(root, profile, report):
         action = operations[row["operation"]]
         executable = (selected[action["tool"]] if action["tool"] in selected
                       else profile["tools"][action["tool"]])
+        if not Path(executable).is_absolute() and "/" in executable:
+            executable = str(Path(report["host_root"]) / executable)
         if (row["tool"] != action["tool"] or row["argv"] != [executable, *action["argv"]]
                 or row["cwd"] != report["host_root"] or type(row["exit_code"]) is not int
                 or row["exit_code"] != 0 or type(row["pid"]) is not int or row["pid"] <= 0):
