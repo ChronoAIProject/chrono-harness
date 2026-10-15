@@ -394,17 +394,24 @@ class Bootstrap(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("bootstrap_participation", SOURCE / "bootstrap.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        config = dict(self.config, participation={
-            "coordinator_root": "git-main-worktree", "program": ".chrono-harness/bin/chrono-worktree",
-            "git": "git", "config": ".chrono-harness/native/fixture/worktree.json"})
         anchor = self.root / "independent-anchor"
         (self.root / ".git").write_text("gitdir: retained-fixture-attachment\n")
         inventory = b"worktree " + os.fsencode(anchor) + b"\0"
-        with mock.patch.object(module.subprocess, "check_output", return_value=inventory), \
-                mock.patch.object(module.subprocess, "run", side_effect=FileNotFoundError("missing owner")) as run:
-            with self.assertRaises(FileNotFoundError):
-                module.participate(self.root, Path(".chrono-harness/ci/bootstrap.json"), config)
-        self.assertEqual(run.call_args.args[0][0], str(anchor / config["participation"]["program"]))
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit):
+                adoption = {"coordinator_root": "git-main-worktree",
+                            "program": ".chrono-harness/bin/chrono-worktree", "git": "git"}
+                policy = ["--config", ".chrono-harness/native/fixture/worktree.json"] if explicit else []
+                if explicit:
+                    adoption["config"] = policy[1]
+                config = dict(self.config, participation=adoption)
+                with mock.patch.object(module.subprocess, "check_output", return_value=inventory), \
+                        mock.patch.object(module.subprocess, "run", side_effect=FileNotFoundError("missing owner")) as run:
+                    with self.assertRaises(FileNotFoundError):
+                        module.participate(self.root, Path(".chrono-harness/ci/bootstrap.json"), config)
+                self.assertEqual(run.call_args.args[0], [str(anchor / adoption["program"]),
+                    "bootstrap", "--host-root", str(self.root), *policy,
+                    "--bootstrap-config", ".chrono-harness/ci/bootstrap.json"])
 
     def test_selected_report_survives_a_later_bootstrap(self):
         selected = dict(self.config, report_path=".chrono-harness/state/cache/bootstrap.json")
@@ -682,14 +689,6 @@ class Bootstrap(unittest.TestCase):
         self.assertEqual(failed["operations"][0]["exit_code"], 0,
                          "a successful child does not waive persistent executable drift")
         self.assertEqual(failed["executables"][0]["sha256"], config["tool_bindings"]["cargo"]["sha256"])
-    def test_missing_distribution_declaration_stops_before_source_operations(self):
-        self.write_json(self.ci / "bootstrap.json", dict(
-            self.config, distribution={"manifest": ".chrono-harness/distribution-release.json"}))
-        result = self.invoke()
-        self.assertNotEqual(result.returncode, 0, "missing immutable inputs were ignored")
-        self.assertFalse((self.root / "built-tool").exists())
-        self.assertFalse(self.state_path.exists())
-
     def source_equals(self, expected):
         # Compare JSON types too: Python alone equates False with numeric zero.
         self.assertEqual(json.dumps(self.evidence()["source"], sort_keys=True),
@@ -833,5 +832,5 @@ if __name__ == "__main__":
         from bootstrap_shared_tests import RealFixtureStartup
         unittest.main(argv=[sys.argv[0]], defaultTest="RealFixtureStartup")
     else:
-        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption, DistributionStartup
+        from bootstrap_shared_tests import SharedStartup, AttemptCustody, ManagedAttemptCustody, ParentSourceAcquisition, RunnerConsumption
         unittest.main()

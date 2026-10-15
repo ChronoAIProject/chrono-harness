@@ -93,8 +93,8 @@ For an explicitly named immutable input larger than the ordinary diagnostic
 bound, v1/v2 policies may additionally declare `immutable_input_limits`, a map
 from exact repository-relative paths to positive byte limits of at most
 67,108,864 bytes. An omitted map preserves the original transport contract.
-This host declares `.chrono-harness/config.json` and `.chrono-harness/FILEMAP.json`
-at 2,097,152 bytes each while keeping
+This host declares `.chrono-harness/FILEMAP.json` and its selected direct host
+policy paths at 2,097,152 bytes each while keeping
 `output_limit_bytes` at 1,048,576. These declarations grant acquisition capacity;
 they do not register files, outputs, consumers or cleanup eligibility.
 
@@ -1213,7 +1213,10 @@ errors with their original report reference. The CLI's string result preserves
 UTF-8 console bytes; owner process reports retain the original byte arrays.
 The worktree owner admits the existing runner before acquisition and forwards its
 original console/exit. Bootstrap separately declares `entrypoint` tool/script and
-`participation` coordinator/program/Git/config. Standalone bootstrap delegates to
+`participation` coordinator/program/Git and optional config. Omitting config
+delegates to this owner's existing default selection; an explicit policy remains
+authoritative. The current core/cache/detector/local bootstrap profiles use that
+default, while acquisition profiles name their policies explicitly. Standalone bootstrap delegates to
 the registered deployed coordinator binary before build effects, including fresh
 linked checkouts with no local bin. Missing ownership fails explicitly.
 
@@ -1325,3 +1328,12 @@ meaning. A publication failure keeps the inline receipt and fails the operation
 with `evidence_error`; it cannot produce a passing prefix. Reports and CLI JSON
 use compact whitespace. Neither representation changes lifecycle release,
 selection, raw original bytes, retention eligibility or capacity limits.
+
+Default lifecycle calls on a schema4 host reuse its explicitly declared local
+`check-inputs --config PATH` policy when that input producer and `worktree.check`
+are the same owner. Host platform/source selection stays in the existing selector.
+Explicit `--config` and legacy hosts retain their meaning; missing or malformed
+selected declarations fail. The selected policy still requires committed bytes,
+coordinator compatibility and the same use-protection lifetime. This owner
+correction has an unexecuted paired Rust regression covering actual consumption,
+unselected-policy nonuse, explicit override refusal and selected-policy drift.

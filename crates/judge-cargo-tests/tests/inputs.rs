@@ -716,8 +716,10 @@ fn main_host_declared_contexts_preserve_local_success_and_exact_binding_rejectio
         .tempdir_in(&retained)
         .unwrap()
         .keep();
-    let mut config: serde_json::Value =
-        serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    let mut config: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/local-config.json")).unwrap(),
+    )
+    .unwrap();
     bind_main_host_source_guard(&root, &mut config);
     let input = config["environment"]["inputs"]
         .as_array_mut()
@@ -940,8 +942,10 @@ fn main_host_native_spec(
         .keep();
     let config_path = directory.join("config.json");
     let relative_config = config_path.strip_prefix(root).unwrap().to_str().unwrap();
-    let mut config: serde_json::Value =
-        serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    let mut config: serde_json::Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/local-config.json")).unwrap(),
+    )
+    .unwrap();
     bind_main_host_source_guard(root, &mut config);
     let mut projects: serde_json::Value = serde_json::from_slice(
         &fs::read(root.join(config["registries"]["projects"].as_str().unwrap())).unwrap(),

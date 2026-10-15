@@ -158,10 +158,6 @@
     {
       "path": ".chrono-harness/startup/",
       "disposition": "dispose"
-    },
-    {
-      "path": ".chrono-harness/startup-native-macos/",
-      "disposition": "dispose"
     }
   ],
   "main_cache_only": true,

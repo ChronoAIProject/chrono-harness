@@ -1557,7 +1557,8 @@ fn actual_host_registries_cannot_pass_full_governance() {
         serde_json::from_slice(&fs::read(h.root().join(".chrono-harness/config.json")).unwrap())
             .unwrap();
     for name in ["config", "projects", "FILEMAP", "workflow"] {
-        let bytes = fs::read(source().join(format!(".chrono-harness/{name}.json"))).unwrap();
+        let input = if name == "config" { "local-config" } else { name };
+        let bytes = fs::read(source().join(format!(".chrono-harness/{input}.json"))).unwrap();
         fs::write(h.root().join(format!(".chrono-harness/{name}.json")), bytes).unwrap();
     }
     // This host supplies its own fixed endpoints/context. Register that explicit

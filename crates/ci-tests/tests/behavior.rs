@@ -816,9 +816,7 @@ fn retain_command_result_observed(
         .tempdir_in(&directory)
         .unwrap()
         .keep();
-    let config: Value = fs::read(root.join(".chrono-harness/config.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+    let config = chrono_harness::load_selected_config(&root, ".chrono-harness/config.json")
         .unwrap_or(Value::Null);
     let generated: Vec<String> = generated_outputs
         .iter()
@@ -1004,7 +1002,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read =
         |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
-    let config = read(".chrono-harness/config.json");
+    let config = chrono_harness::load_selected_config(&source, ".chrono-harness/config.json").unwrap();
     let mut tool = config["tools"]
         .as_array()
         .unwrap()

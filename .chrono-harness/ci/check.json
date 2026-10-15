@@ -11,7 +11,7 @@
     "filemap": ".chrono-harness/FILEMAP.json",
     "projects": ".chrono-harness/projects.json",
     "tools": {
-      "cargo": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
+      "cargo": "cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "python3": "/usr/bin/python3",
@@ -383,7 +383,6 @@
       ],
       "build.distribution": [
         "distribution",
-        "host-bootstrap",
         "release-build-integration"
       ],
       "fmt.worktree": [

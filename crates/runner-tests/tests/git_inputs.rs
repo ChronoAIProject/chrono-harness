@@ -88,7 +88,7 @@ fn expanded_observation(reader: &Reader) -> Value {
 #[test]
 fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let path = ".chrono-harness/config.json";
+    let path = ".chrono-harness/local-config.json";
     let config: Value = serde_json::from_slice(&fs::read(product.join(path)).unwrap()).unwrap();
     let filemap: Value =
         serde_json::from_slice(&fs::read(product.join(".chrono-harness/FILEMAP.json")).unwrap())
@@ -180,7 +180,7 @@ fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
 fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
     let mut h = Host::new(json!({"mode":"passthrough"}));
     let original = fs::read(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/config.json"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/local-config.json"),
     )
     .unwrap();
     let path = ".chrono-harness/registry-source.json";

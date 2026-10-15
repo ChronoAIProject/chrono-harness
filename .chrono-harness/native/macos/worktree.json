@@ -1,11 +1,11 @@
 {
   "schema": "chrono-worktree-config/v2",
-  "host_config": ".chrono-harness/native/macos/config.json",
+  "host_config": ".chrono-harness/config.json",
   "remote": "origin",
   "git": {
     "program": "/usr/bin/git",
-    "expected_version": "git version 2.50.1 (Apple Git-155)",
-    "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+    "expected_version": "git version 2.39.3 (Apple Git-146)",
+    "sha256": "4016687c36d60a2bbcab1de3850ebdafdd0a95f9421ff7f05aaf4ca6a002a227"
   },
   "environment": {
     "inherit": [
@@ -20,8 +20,10 @@
   "timeout_seconds": 120,
   "output_limit_bytes": 1048576,
   "immutable_input_limits": {
-    ".chrono-harness/native/macos/config.json": 2097152,
-    ".chrono-harness/native/macos/FILEMAP.json": 2097152
+    ".chrono-harness/FILEMAP.json": 2097152,
+    ".chrono-harness/local-config.json": 2097152,
+    ".chrono-harness/ci/scoped-macos.json": 2097152,
+    ".chrono-harness/ci/scoped-linux.json": 2097152
   },
   "report_directory": ".chrono-harness/state/native/macos/worktrees/",
   "check_inputs": {

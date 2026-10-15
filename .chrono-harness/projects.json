@@ -100,21 +100,6 @@
             "crates/runner/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.runner",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/runner.json",
-            "--operation",
-            "guard.build.runner"
-          ]
-        },
         "guarded_check": {
           "operation": "guard.check.runner",
           "tool": "cargo-guard",
@@ -123,7 +108,7 @@
             "--host-root",
             ".",
             "--config",
-            ".chrono-harness/config.json",
+            ".chrono-harness/local-config.json",
             "--policy",
             ".chrono-harness/cargo/runner.json",
             "--operation",
@@ -153,36 +138,6 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/runner/Cargo.toml"
-          ]
-        },
-        "guarded_check_native_macos": {
-          "operation": "guard.check.native.macos.runner",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/native/macos/config.json",
-            "--policy",
-            ".chrono-harness/native/macos/cargo-runner.json",
-            "--operation",
-            "guard.check.native.macos.runner"
-          ]
-        },
-        "guarded_check_native_linux": {
-          "operation": "guard.check.native.linux.runner",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/native/linux/config.json",
-            "--policy",
-            ".chrono-harness/native/linux/cargo-runner.json",
-            "--operation",
-            "guard.check.native.linux.runner"
           ]
         }
       },
@@ -251,51 +206,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.runner-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/runner-tests.json",
-            "--operation",
-            "guard.build.runner-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.runner-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/runner-tests.json",
-            "--operation",
-            "guard.check.runner-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.runner-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/runner-tests.json",
-            "--operation",
-            "guard.test.runner-tests"
           ]
         },
         "inputs_fetch": {
@@ -411,66 +321,6 @@
             "crates/instructions/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.instructions",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions.json",
-            "--operation",
-            "guard.build.instructions"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.instructions",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions.json",
-            "--operation",
-            "guard.check.instructions"
-          ]
-        },
-        "guarded_init": {
-          "operation": "guard.instructions.init",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions.json",
-            "--operation",
-            "guard.instructions.init"
-          ]
-        },
-        "guarded_generate": {
-          "operation": "guard.instructions.generate",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions.json",
-            "--operation",
-            "guard.instructions.generate"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.instructions",
           "tool": "cargo",
@@ -564,51 +414,6 @@
             "crates/instructions-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.instructions-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions-tests.json",
-            "--operation",
-            "guard.build.instructions-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.instructions-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions-tests.json",
-            "--operation",
-            "guard.check.instructions-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.instructions-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/instructions-tests.json",
-            "--operation",
-            "guard.test.instructions-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.instructions-tests",
           "tool": "cargo",
@@ -688,36 +493,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-ci/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-ci",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-ci.json",
-            "--operation",
-            "guard.build.judge-ci"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-ci",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-ci.json",
-            "--operation",
-            "guard.check.judge-ci"
           ]
         },
         "inputs_fetch": {
@@ -811,51 +586,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-ci-tests/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-ci-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-ci-tests.json",
-            "--operation",
-            "guard.build.judge-ci-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-ci-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-ci-tests.json",
-            "--operation",
-            "guard.check.judge-ci-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-ci-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-ci-tests.json",
-            "--operation",
-            "guard.test.judge-ci-tests"
           ]
         },
         "inputs_fetch": {
@@ -961,36 +691,6 @@
             "crates/ci/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.ci",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/ci.json",
-            "--operation",
-            "guard.build.ci"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.ci",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/ci.json",
-            "--operation",
-            "guard.check.ci"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.ci",
           "tool": "cargo",
@@ -1014,50 +714,6 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/ci/Cargo.toml"
-          ]
-        },
-        "generate_native_macos": {
-          "operation": "ci.native.macos.generate",
-          "tool": "chrono-ci",
-          "argv": [
-            "generate",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/units-native-macos.json"
-          ]
-        },
-        "verify_native_macos": {
-          "operation": "ci.native.macos.verify",
-          "tool": "chrono-ci",
-          "argv": [
-            "verify",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/units-native-macos.json"
-          ]
-        },
-        "generate_native_linux": {
-          "operation": "ci.native.linux.generate",
-          "tool": "chrono-ci",
-          "argv": [
-            "generate",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/units-native-linux.json"
-          ]
-        },
-        "verify_native_linux": {
-          "operation": "ci.native.linux.verify",
-          "tool": "chrono-ci",
-          "argv": [
-            "verify",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/ci/units-native-linux.json"
           ]
         }
       },
@@ -1126,51 +782,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.ci-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/ci-tests.json",
-            "--operation",
-            "guard.build.ci-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.ci-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/ci-tests.json",
-            "--operation",
-            "guard.check.ci-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.ci-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/ci-tests.json",
-            "--operation",
-            "guard.test.ci-tests"
           ]
         },
         "inputs_fetch": {
@@ -1252,36 +863,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-registration/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-registration",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-registration.json",
-            "--operation",
-            "guard.build.judge-registration"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-registration",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-registration.json",
-            "--operation",
-            "guard.check.judge-registration"
           ]
         },
         "inputs_fetch": {
@@ -1377,51 +958,6 @@
             "crates/judge-registration-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-registration-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-registration-tests.json",
-            "--operation",
-            "guard.build.judge-registration-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-registration-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-registration-tests.json",
-            "--operation",
-            "guard.check.judge-registration-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-registration-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-registration-tests.json",
-            "--operation",
-            "guard.test.judge-registration-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-registration-tests",
           "tool": "cargo",
@@ -1501,36 +1037,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-filemap/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-filemap",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-filemap.json",
-            "--operation",
-            "guard.build.judge-filemap"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-filemap",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-filemap.json",
-            "--operation",
-            "guard.check.judge-filemap"
           ]
         },
         "inputs_fetch": {
@@ -1626,51 +1132,6 @@
             "crates/judge-filemap-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-filemap-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-filemap-tests.json",
-            "--operation",
-            "guard.build.judge-filemap-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-filemap-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-filemap-tests.json",
-            "--operation",
-            "guard.check.judge-filemap-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-filemap-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-filemap-tests.json",
-            "--operation",
-            "guard.test.judge-filemap-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-filemap-tests",
           "tool": "cargo",
@@ -1750,36 +1211,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-routes",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-routes.json",
-            "--operation",
-            "guard.build.judge-routes"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-routes",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-routes.json",
-            "--operation",
-            "guard.check.judge-routes"
           ]
         },
         "inputs_fetch": {
@@ -1875,51 +1306,6 @@
             "crates/judge-routes-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-routes-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-routes-tests.json",
-            "--operation",
-            "guard.build.judge-routes-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-routes-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-routes-tests.json",
-            "--operation",
-            "guard.check.judge-routes-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-routes-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-routes-tests.json",
-            "--operation",
-            "guard.test.judge-routes-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-routes-tests",
           "tool": "cargo",
@@ -1999,36 +1385,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-projects/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-projects",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects.json",
-            "--operation",
-            "guard.build.judge-projects"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-projects",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects.json",
-            "--operation",
-            "guard.check.judge-projects"
           ]
         },
         "inputs_fetch": {
@@ -2152,81 +1508,6 @@
             "crates/judge-projects-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-projects-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects-tests.json",
-            "--operation",
-            "guard.build.judge-projects-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-projects-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects-tests.json",
-            "--operation",
-            "guard.check.judge-projects-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-projects-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects-tests.json",
-            "--operation",
-            "guard.test.judge-projects-tests"
-          ]
-        },
-        "guarded_execute_core": {
-          "operation": "guard.test.projects.core",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects-tests.json",
-            "--operation",
-            "guard.test.projects.core"
-          ]
-        },
-        "guarded_execute_migration": {
-          "operation": "guard.test.projects.migration",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-projects-tests.json",
-            "--operation",
-            "guard.test.projects.migration"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-projects-tests",
           "tool": "cargo",
@@ -2309,36 +1590,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-cost/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-cost",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cost.json",
-            "--operation",
-            "guard.build.judge-cost"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-cost",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cost.json",
-            "--operation",
-            "guard.check.judge-cost"
           ]
         },
         "inputs_fetch": {
@@ -2434,51 +1685,6 @@
             "crates/judge-cost-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-cost-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cost-tests.json",
-            "--operation",
-            "guard.build.judge-cost-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-cost-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cost-tests.json",
-            "--operation",
-            "guard.check.judge-cost-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-cost-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cost-tests.json",
-            "--operation",
-            "guard.test.judge-cost-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-cost-tests",
           "tool": "cargo",
@@ -2558,36 +1764,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-mixed",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-mixed.json",
-            "--operation",
-            "guard.build.judge-mixed"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-mixed",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-mixed.json",
-            "--operation",
-            "guard.check.judge-mixed"
           ]
         },
         "inputs_fetch": {
@@ -2683,51 +1859,6 @@
             "crates/judge-mixed-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-mixed-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-mixed-tests.json",
-            "--operation",
-            "guard.build.judge-mixed-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-mixed-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-mixed-tests.json",
-            "--operation",
-            "guard.check.judge-mixed-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-mixed-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-mixed-tests.json",
-            "--operation",
-            "guard.test.judge-mixed-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-mixed-tests",
           "tool": "cargo",
@@ -2807,36 +1938,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-workflow/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-workflow",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow.json",
-            "--operation",
-            "guard.build.judge-workflow"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-workflow",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow.json",
-            "--operation",
-            "guard.check.judge-workflow"
           ]
         },
         "inputs_fetch": {
@@ -3026,141 +2127,6 @@
             "crates/judge-workflow-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-workflow-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.build.judge-workflow-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-workflow-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.check.judge-workflow-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-workflow-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.judge-workflow-tests"
-          ]
-        },
-        "guarded_streamed-originals": {
-          "operation": "guard.test.workflow-streamed-originals",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.workflow-streamed-originals"
-          ]
-        },
-        "guarded_native-provision": {
-          "operation": "guard.test.workflow-native-provision",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.workflow-native-provision"
-          ]
-        },
-        "guarded_ordinary-certificate": {
-          "operation": "guard.test.workflow-ordinary-certificate",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.workflow-ordinary-certificate"
-          ]
-        },
-        "guarded_execute_core": {
-          "operation": "guard.test.workflow.core",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.workflow.core"
-          ]
-        },
-        "guarded_execute_units": {
-          "operation": "guard.test.workflow.units",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.workflow.units"
-          ]
-        },
-        "guarded_execute_short": {
-          "operation": "guard.test.workflow.short",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-workflow-tests.json",
-            "--operation",
-            "guard.test.workflow.short"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-workflow-tests",
           "tool": "cargo",
@@ -3245,36 +2211,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/inputs/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.inputs",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/inputs.json",
-            "--operation",
-            "guard.build.inputs"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.inputs",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/inputs.json",
-            "--operation",
-            "guard.check.inputs"
           ]
         },
         "inputs_fetch": {
@@ -3459,51 +2395,6 @@
             "crates/inputs-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.inputs-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/inputs-tests.json",
-            "--operation",
-            "guard.build.inputs-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.inputs-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/inputs-tests.json",
-            "--operation",
-            "guard.check.inputs-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.inputs-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/inputs-tests.json",
-            "--operation",
-            "guard.test.inputs-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.inputs-tests",
           "tool": "cargo",
@@ -3595,36 +2486,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/distribution/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.distribution",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/distribution.json",
-            "--operation",
-            "guard.build.distribution"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.distribution",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/distribution.json",
-            "--operation",
-            "guard.check.distribution"
           ]
         },
         "inputs_fetch": {
@@ -3720,51 +2581,6 @@
             "crates/distribution-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.distribution-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/distribution-tests.json",
-            "--operation",
-            "guard.build.distribution-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.distribution-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/distribution-tests.json",
-            "--operation",
-            "guard.check.distribution-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.distribution-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/distribution-tests.json",
-            "--operation",
-            "guard.test.distribution-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.distribution-tests",
           "tool": "cargo",
@@ -3844,36 +2660,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/judge-cargo/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.judge-cargo",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cargo.json",
-            "--operation",
-            "guard.build.judge-cargo"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-cargo",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cargo.json",
-            "--operation",
-            "guard.check.judge-cargo"
           ]
         },
         "inputs_fetch": {
@@ -3969,51 +2755,6 @@
             "crates/judge-cargo-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.judge-cargo-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cargo-tests.json",
-            "--operation",
-            "guard.build.judge-cargo-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.judge-cargo-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cargo-tests.json",
-            "--operation",
-            "guard.check.judge-cargo-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.judge-cargo-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/judge-cargo-tests.json",
-            "--operation",
-            "guard.test.judge-cargo-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.judge-cargo-tests",
           "tool": "cargo",
@@ -4105,36 +2846,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/worktree/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.worktree",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree.json",
-            "--operation",
-            "guard.build.worktree"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.worktree",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree.json",
-            "--operation",
-            "guard.check.worktree"
           ]
         },
         "inputs_fetch": {
@@ -4269,81 +2980,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.worktree-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree-tests.json",
-            "--operation",
-            "guard.build.worktree-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.worktree-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree-tests.json",
-            "--operation",
-            "guard.check.worktree-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.worktree-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree-tests.json",
-            "--operation",
-            "guard.test.worktree-tests"
-          ]
-        },
-        "guarded_execute_core": {
-          "operation": "guard.test.worktree.core",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree-tests.json",
-            "--operation",
-            "guard.test.worktree.core"
-          ]
-        },
-        "guarded_execute_adoption": {
-          "operation": "guard.test.worktree.adoption",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/worktree-tests.json",
-            "--operation",
-            "guard.test.worktree.adoption"
           ]
         },
         "inputs_fetch": {
@@ -4489,36 +3125,6 @@
             "crates/diagnostics/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.diagnostics",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/diagnostics.json",
-            "--operation",
-            "guard.build.diagnostics"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.diagnostics",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/diagnostics.json",
-            "--operation",
-            "guard.check.diagnostics"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.diagnostics",
           "tool": "cargo",
@@ -4612,51 +3218,6 @@
             "crates/diagnostics-tests/Cargo.toml"
           ]
         },
-        "guarded_build": {
-          "operation": "guard.build.diagnostics-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/diagnostics-tests.json",
-            "--operation",
-            "guard.build.diagnostics-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.diagnostics-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/diagnostics-tests.json",
-            "--operation",
-            "guard.check.diagnostics-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.diagnostics-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/diagnostics-tests.json",
-            "--operation",
-            "guard.test.diagnostics-tests"
-          ]
-        },
         "inputs_fetch": {
           "operation": "inputs.fetch.diagnostics-tests",
           "tool": "cargo",
@@ -4736,36 +3297,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/cache/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.cache",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/cache.json",
-            "--operation",
-            "guard.build.cache"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.cache",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/cache.json",
-            "--operation",
-            "guard.check.cache"
           ]
         },
         "inputs_fetch": {
@@ -4859,51 +3390,6 @@
             "aarch64-apple-darwin",
             "--manifest-path",
             "crates/cache-tests/Cargo.toml"
-          ]
-        },
-        "guarded_build": {
-          "operation": "guard.build.cache-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/cache-tests.json",
-            "--operation",
-            "guard.build.cache-tests"
-          ]
-        },
-        "guarded_check": {
-          "operation": "guard.check.cache-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/cache-tests.json",
-            "--operation",
-            "guard.check.cache-tests"
-          ]
-        },
-        "guarded_execute": {
-          "operation": "guard.test.cache-tests",
-          "tool": "cargo-guard",
-          "argv": [
-            "run",
-            "--host-root",
-            ".",
-            "--config",
-            ".chrono-harness/config.json",
-            "--policy",
-            ".chrono-harness/cargo/cache-tests.json",
-            "--operation",
-            "guard.test.cache-tests"
           ]
         },
         "inputs_fetch": {
@@ -5507,26 +3993,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "aggregate"
-          ]
-        },
-        "native-macos": {
-          "operation": "host.bootstrap-native-macos",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-native-macos.json"
-          ]
-        },
-        "native-linux": {
-          "operation": "host.bootstrap-native-linux",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-native-linux.json"
           ]
         },
         "acquire-macos": {

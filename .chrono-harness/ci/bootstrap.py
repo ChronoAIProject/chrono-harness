@@ -33,74 +33,6 @@ def host_path(root, declared, prefix=".chrono-harness/"):
     return target
 
 
-def distribution_spec(root, config):
-    """Read the adopted installer contract; do not implement download/installation."""
-    if "distribution" not in config:
-        return None
-    declaration = config["distribution"]
-    if set(declaration) != {"manifest"}:
-        raise ValueError("invalid bootstrap distribution declaration")
-    raw = host_path(root, declaration["manifest"]).read_bytes()
-    release = json.loads(raw)
-    lock = json.loads(host_path(root, ".chrono-harness/distribution.json").read_bytes())
-    system = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
-    arch = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64"}.get(platform.machine())
-    key = str(system) + "-" + str(arch)
-    assets = release["platforms"][key]
-    if (lock["schema"] != "chrono-install/v1" or release["schema"] != "chrono-release/v1"
-            or lock["version"] != release["version"] or not lock["install"]
-            or lock["manifest"] != {"file": "release.json", "size": len(raw),
-                                    "sha256": hashlib.sha256(raw).hexdigest()}
-            or lock["installers"][key] != assets["chrono-distribution"]):
-        raise ValueError("bootstrap distribution manifest/installer binding differs")
-    installed, destinations = [], set()
-    for name, destination in sorted(lock["install"].items()):
-        host_path(root, destination, ".chrono-harness/bin/")
-        if destination in destinations:
-            raise ValueError("duplicate distribution destination")
-        destinations.add(destination)
-        asset = assets[name]
-        if asset["file"] != name + "-" + key:
-            raise ValueError("bootstrap distribution asset platform differs")
-        installed.append({"name": name, "path": destination,
-                          "sha256": asset["sha256"], "size": asset["size"]})
-    if any(item["destination"] in destinations for item in config["install"]):
-        raise ValueError("source install overlaps immutable enforcement executable")
-    return {"schema": "chrono-install-result/v1", "version": release["version"],
-            "source_commit": release["source_commit"], "source_tree": release["source_tree"],
-            "platform": key, "manifest": lock["manifest"], "installed": installed}
-
-
-def validate_distribution(root, config, raw, payloads=None):
-    expected = distribution_spec(root, config)
-    if expected is None or json.loads(raw) != expected:
-        raise ValueError("bootstrap requires original pinned distribution receipt")
-    for item in expected["installed"]:
-        if payloads is None:
-            target = host_path(root, item["path"], ".chrono-harness/bin/")
-            data = target.read_bytes()
-            if not target.stat().st_mode & 0o111:
-                raise ValueError("distribution executable lacks execute permission")
-        else:
-            data = payloads[item["path"]]
-        if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
-            raise ValueError("distribution executable differs: " + item["path"])
-    return expected
-
-
-def distribution_binding(raw):
-    return {"receipt_path": ".chrono-harness/state/distribution.json",
-            "receipt_sha256": hashlib.sha256(raw).hexdigest()}
-
-
-def installations(root, config):
-    selected = list(config["install"])
-    release = distribution_spec(root, config)
-    if release is not None:
-        selected += [{"destination": item["path"]} for item in release["installed"]]
-    return selected
-
-
 def report_destination(root, config):
     declared = config.get("report_path", ".chrono-harness/state/bootstrap.json")
     if not isinstance(declared, str) or any(c in declared for c in "\x00\r\n"):
@@ -156,7 +88,9 @@ def participate(root, config_path, config):
         if Path(marker) != root:
             raise ValueError("bootstrap participation root mismatch")
         return False
-    if set(adoption) != {"coordinator_root", "program", "git", "config"} or adoption["coordinator_root"] != "git-main-worktree":
+    if (set(adoption) not in ({"coordinator_root", "program", "git"},
+                              {"coordinator_root", "program", "git", "config"})
+            or adoption["coordinator_root"] != "git-main-worktree"):
         raise ValueError("unsupported bootstrap participation declaration")
     program = Path(adoption["program"])
     if program.is_absolute() or ".." in program.parts or program.parts[:2] != (".chrono-harness", "bin"):
@@ -170,7 +104,11 @@ def participate(root, config_path, config):
     if anchor == root and (root / ".git").is_dir() and not owner.exists():
         # Git main cannot enroll as a disposable linked attachment; it may seed tools.
         return False
-    result = subprocess.run([str(owner), "bootstrap", "--host-root", str(root), "--config", adoption["config"], "--bootstrap-config", config_path.as_posix()], pass_fds=PASS_FDS, capture_output=True)
+    # An omitted policy delegates selection to the existing lifecycle owner.
+    # Acquisition profiles keep their explicit, pre-activation policy.
+    policy = ["--config", adoption["config"]] if "config" in adoption else []
+    result = subprocess.run([str(owner), "bootstrap", "--host-root", str(root), *policy,
+                             "--bootstrap-config", config_path.as_posix()], pass_fds=PASS_FDS, capture_output=True)
     try:
         report = json.loads(result.stdout)
         process = report["managed_process"]
@@ -271,9 +209,6 @@ def registration_paths(config_path, config):
     paths = [config_path, config["projects"], ".chrono-harness/ci/bootstrap.py"]
     if "tool_bindings_registry" in config:
         paths.append(config["tool_bindings_registry"])
-    if "distribution" in config:
-        paths.extend([config["distribution"]["manifest"], ".chrono-harness/distribution.json",
-                      ".chrono-harness/install.py"])
     return paths
 
 
@@ -500,7 +435,6 @@ def main():
         raise ValueError("require_tool_bindings must be a boolean")
     binding_declarations(root, config)
     provision_environment(root, config)
-    distribution_spec(root, config)
     participate(root, config_path, config)
     source_before = observe_source(root)
     if config["schema"] != "chrono-bootstrap/v1":
@@ -556,13 +490,6 @@ def main():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
             result["installed"].append({"path": item["destination"], "sha256": file_digest(target)})
-        if "distribution" in config:
-            launcher = host_path(root, ".chrono-harness/install.py")
-            subprocess.run([sys.executable, "-B", str(launcher), str(root)],
-                           check=True, pass_fds=PASS_FDS)
-            original = host_path(root, ".chrono-harness/state/distribution.json").read_bytes()
-            validate_distribution(root, config, original)
-            result["distribution"] = distribution_binding(original)
         result["status"] = "passed"
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         result["error"] = str(error)

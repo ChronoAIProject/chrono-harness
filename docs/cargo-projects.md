@@ -152,13 +152,15 @@ the asserted files are absent. Relative home and input locations are explicit
 host choices, not automatic rewrites. Existing v2 policies keep their meaning.
 The product host has not yet activated the guarded operation.
 
-The proposed local host now registers the actual Cargo, compiler, formatter,
-linker/delegates, Rust/SDK/developer directory inventories, package bytes,
-configuration absences and Python/script inputs. Source actions remain selected;
-parallel `guarded_*` actions and acquisition/metadata declarations have explicit
-consumers. These declarations retain unresolved native provisioning, original
-endpoint snapshots and full adoption. They do not select historical beta.21
-enforcement executables. A current candidate is judged by its candidate tools.
+The local host retains the runner's real `guard.check.runner` consumer, actual
+Cargo/compiler/formatter/linker and Rust/SDK/full Developer assertions, plus the
+34 metadata/fetch operations. The unselected sibling guarded policies/actions and
+their exclusive package-file declarations are retired; original bytes remain in
+commit `87a77182c5da33627deb3b837e7515748eb6fd58`. The guard names
+`.chrono-harness/local-config.json` directly, including for CI's required local
+binding rejection. Scoped execution uses the stable source/platform selector and
+candidate tools; native full activation and positive native guard are unestablished.
+See [the finite host boundary](full-ci.md#main-host-adoption-inputs).
 
 The source-only native observer repair can produce the existing
 `chrono-input-directory/v3` guard manifests directly from the declared live

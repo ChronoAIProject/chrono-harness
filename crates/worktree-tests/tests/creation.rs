@@ -1074,7 +1074,7 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
             .unwrap()
             .push(file(path, value!([])));
         fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
-        let host_config = json(&fs::read(source().join(CONFIG)).unwrap()).unwrap();
+        let host_config = chrono_harness::load_selected_config(&source(), CONFIG).unwrap();
         let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
         config["artifacts"] = host_config["artifacts"].clone();
         for artifact in config["artifacts"].as_array_mut().unwrap() {

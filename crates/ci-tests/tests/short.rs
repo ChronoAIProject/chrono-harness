@@ -1517,9 +1517,9 @@ fn copy_artifacts(source: &Path, target: &Path) {
 
 #[test]
 fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity() {
-    let adopted: Value = serde_json::from_slice(
-        &fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/config.json"))
-            .unwrap(),
+    let adopted = chrono_harness::load_selected_config(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+        ".chrono-harness/config.json",
     )
     .unwrap();
     assert!(

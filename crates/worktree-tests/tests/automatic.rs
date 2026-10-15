@@ -1293,3 +1293,82 @@ fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
     assert!(!target.exists());
     assert_eq!(fs::read(receipt).unwrap(), bytes);
 }
+
+#[test]
+fn default_lifecycle_uses_the_selected_input_owners_policy_and_rejects_drift() {
+    let h = Host::new("payload");
+    super::check_inputs::bind(&h);
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    let selected = ".chrono-harness/selected-worktree.json";
+    let direct = ".chrono-harness/selected-host.json";
+    let policy = fs::read(h.root.join(POLICY)).unwrap();
+    fs::write(h.root.join(selected), &policy).unwrap();
+    let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    cfg["canonical_check"]["participation"] =
+        value!({"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]});
+    cfg["canonical_check"]["inputs"]["local"]["argv"] =
+        value!(["check-inputs", "--config", selected]);
+    fs::write(h.root.join(direct), serde_json::to_vec(&cfg).unwrap()).unwrap();
+    let selector = value!({"schema":"chrono-git-configs/v2",
+        "platforms":{platform():{"local":direct,"ci":direct}}});
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&selector).unwrap()).unwrap();
+    let mut fm = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    fm["files"]
+        .as_array_mut()
+        .unwrap()
+        .extend([file(selected, value!([])), file(direct, value!([]))]);
+    fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("selected-lifecycle");
+    let (code, created, error) = h.received(
+        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+            .current_dir(&h.root)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .args([
+                "start",
+                "--host-root",
+                h.root.to_str().unwrap(),
+                "--config",
+                selected,
+                "--kind",
+                "feature",
+                "--name",
+                "selected-lifecycle",
+                "--path",
+                target.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(code, 0, "{created} {error}");
+    // The unrelated default policy must never supply or weaken the selected Git.
+    let mut unselected = json(&policy).unwrap();
+    unselected["git"]["program"] = value!("/absent/unselected-git");
+    fs::write(target.join(POLICY), serde_json::to_vec(&unselected).unwrap()).unwrap();
+    commit(&target);
+    let invoke = |explicit: bool| {
+        let mut command =
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        command
+            .current_dir(&target)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .args(["use", "--operation", "use.consumer"]);
+        if explicit {
+            command.args(["--config", POLICY]);
+        }
+        h.received(command.output().unwrap())
+    };
+    let (code, used, error) = invoke(false);
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
+    assert_ne!(invoke(true).0, 0);
+    fs::write(target.join(selected), b"changed selected policy").unwrap();
+    let (code, refused, error) = invoke(false);
+    assert_ne!(code, 0, "{refused} {error}");
+    assert!(refused["managed_process"].is_null());
+    fs::write(target.join(selected), policy).unwrap();
+}
