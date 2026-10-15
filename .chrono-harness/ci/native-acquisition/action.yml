@@ -48,9 +48,24 @@ runs:
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: chrono-native-acquisition-${{ inputs.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+        # Exact install destinations shared by bootstrap-acquire-macos/linux.json.
         path: |
           .chrono-harness/state/native/${{ inputs.platform }}/
           .chrono-harness/state/inputs/
+          .chrono-harness/bin/chrono-harness
+          .chrono-harness/bin/chrono-judge-ci
+          .chrono-harness/bin/chrono-ci
+          .chrono-harness/bin/chrono-judge-registration
+          .chrono-harness/bin/chrono-judge-filemap
+          .chrono-harness/bin/chrono-judge-routes
+          .chrono-harness/bin/chrono-judge-projects
+          .chrono-harness/bin/chrono-judge-cost
+          .chrono-harness/bin/chrono-judge-mixed
+          .chrono-harness/bin/chrono-judge-workflow
+          .chrono-harness/bin/chrono-inputs
+          .chrono-harness/bin/chrono-distribution
+          .chrono-harness/bin/chrono-judge-cargo
+          .chrono-harness/bin/chrono-worktree
           !.chrono-harness/state/native/${{ inputs.platform }}/rustup/**
           !.chrono-harness/state/native/${{ inputs.platform }}/cargo/**
         if-no-files-found: error

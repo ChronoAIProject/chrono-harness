@@ -255,6 +255,17 @@ retains the actual declared file blobs at each genuine checkout. Reentry
 preserves originals and fails. No acquisition or test was executed for this
 source handoff.
 
+The existing native acquisition composite also transports the exact 14 installed
+executables declared by both acquisition profiles, alongside these state roots.
+Bootstrap remains their producer and records actual installed hashes; caller
+acceptance requires the original bytes for each claimed installation. The upload
+uses explicit install paths, excludes private Rustup/Cargo homes and build targets,
+and retains available failure evidence even when no installation occurred. Restore
+the artifact at `.chrono-harness/` to preserve both `bin/` and `state/`. Its
+seven-day retention, caller custody obligations, failure limitations and unknown
+storage/execution costs are owned by the [native CI transport](ci.md#candidate-native-initial-acquisition-entry).
+This source correction does not supply native observations or endpoint originals.
+
 ```sh
 chrono-inputs capture --host-root /path/to/host \
   --config .chrono-harness/config.json --commit FULL_COMMIT_OID \

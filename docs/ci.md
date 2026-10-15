@@ -224,19 +224,37 @@ The inline Bash forwarding has explicitly paired Python behavior tests in
 `host-bootstrap-tests`; they are defined but unexecuted in this source handoff.
 
 The existing pinned upload action runs with `always()`, including after an
-acquisition failure. It uploads both `.chrono-harness/state/native/PLATFORM/` and
-`.chrono-harness/state/inputs/`, excluding only that platform's private `rustup/`
-and `cargo/` homes. The common transport root is `.chrono-harness/state/`; restore
-the artifact there to preserve all original root-relative references. This
+acquisition failure. It uploads `.chrono-harness/state/native/PLATFORM/`,
+`.chrono-harness/state/inputs/` and the 14 explicit install destinations under
+`.chrono-harness/bin/` shared by both `bootstrap-acquire-PLATFORM.json` profiles.
+The bootstrap owns those executable bytes and their `installed[].path`/`sha256`
+records; the composite owns their transport to the caller's original-byte
+verification. It does not select the whole bin directory or build targets.
+The platform's private `rustup/` and `cargo/` homes remain excluded. The common
+transport root is now `.chrono-harness/`; restore the artifact there to preserve
+`bin/` and `state/` and all original root-relative references. This
 retains the outer job files, `acquisition-bootstrap.json` when published, each
 original `bootstrap-*/report.json` and operation stream, `acquisition.json` and
 its `.processes/`, plus the original inner provisioning/observation reports and
 process streams. A failed bootstrap may publish only its original
 `bootstrap-*/report.json`; the upload does not require a passing alias.
+Acquisition failure precedes this attempt's installation; an installation failure
+can leave a newly installed prefix. Selected files may also preexist, so their
+presence alone does not prove this attempt installed them. The upload retains
+available selected bytes without inventing missing files or successful installation. Its
+`if-no-files-found: error` applies to the complete upload, not each executable.
 Compact references and their original byte/digest closure are unchanged. The
 transport exposes its actual artifact ID and digest; the caller verifies these,
 each addressed original/stream digest, source identity and original job/process
-failure. Upload or step success is not native acceptance. No new archive tool is
+failure. For a passed bootstrap, require all 14 installed originals and compare
+their bytes with the original report and exact pushed candidate registrations.
+Source identity still requires that candidate's fixed Git source bytes; the
+artifact does not duplicate the repository. Failure evidence supports the
+recorded failure, not successful installation or independent byte verification
+of uninstalled tools. Private compiler/toolchain originals and complete native
+inputs are outside this upload. Upload or step success is not native acceptance.
+Actual upload/download layout and binary digest preservation on both native
+runners remain unverified. No new archive tool is
 used and private toolchain/cache contents are not evidence uploads.
 
 Artifacts have seven-day Actions retention. The caller consumes/downloads the
@@ -244,6 +262,19 @@ original closure for native review and acceptance before expiry, preserving
 still-required failure evidence under its registered custody policy. Runner and
 artifact disposal remain caller/GitHub responsibilities; this entry performs no
 lifecycle cleanup. Native build, storage, CI and lifecycle costs are **unknown**.
+Executable selection is limited to those 14 paths per platform/run/attempt
+for the same seven days. Their total bytes, upload/download time, artifact size
+and billed storage remain unknown until measured; the job/stream bounds do not
+provide an executable-size bound.
+
+**Executable transport impact:** the previous state-only artifact omitted all
+installed executable bytes despite retaining their digests. The action now adds
+only the registered 14 install paths and changes the artifact restore root from
+`.chrono-harness/state/` to `.chrono-harness/`. Producer, installer, failure/exit
+handling and seven-day retention are unchanged. Validation requires the existing
+two-end FILEMAP closure and real upload/download plus original-byte verification
+on both native runners; no such checks ran for this source correction. Default
+product policy and independent host adoption remain separate.
 
 **Policy/producer-consumer co-change warning:** previously neither acquisition
 action had a native workflow caller. The new host action, exact-branch trigger,

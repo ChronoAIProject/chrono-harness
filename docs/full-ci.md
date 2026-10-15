@@ -332,3 +332,15 @@ unknown until the caller executes and measures it. Keep initial originals throug
 native policy binding, endpoint/full acceptance and whole-Q3 review, then apply
 the existing caller-owned evidence retention and lifecycle. An initial observation
 cannot supply a historical original or a positive Cargo guard result.
+
+The [native acquisition transport](ci.md#candidate-native-initial-acquisition-entry)
+now includes the 14 registered installed executable originals, enabling the
+caller's existing installed-byte verification alongside source/report/stream
+verification. Its restore root is `.chrono-harness/`, with seven-day Actions
+retention; private toolchain homes and build targets remain excluded. This closes
+the source-declared omission of installed bytes, not native runtime acceptance.
+Exact pushed source, original exits/failures, both actual native artifact round
+trips and hashes, independent native policies, full input/adoption closure,
+R4/whole-Q3 review, formal delivery, all original 28 PR dispositions and full SPEC
+acceptance remain caller obligations. Native storage and execution costs are
+unknown until measured.
