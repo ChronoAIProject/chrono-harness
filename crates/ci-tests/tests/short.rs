@@ -2168,7 +2168,10 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
             Path::new("saved-preparation")
         );
         let saved = h.root.join(".chrono-harness/state/saved-preparation");
-        assert_eq!(fs::read(saved.join(error_name)).unwrap(), original.as_bytes());
+        assert_eq!(
+            fs::read(saved.join(error_name)).unwrap(),
+            original.as_bytes()
+        );
         let (_, input, request) = retained_receipt(&h.root, "judge-request-");
         assert_eq!(request["base"], h.base);
         assert_eq!(request["candidate"], h.candidate);
@@ -2204,7 +2207,12 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
         let progress = fs::read_dir(&saved)
             .unwrap()
             .map(Result::unwrap)
-            .find(|e| e.file_name().to_str().unwrap().starts_with("judge-transport-"))
+            .find(|e| {
+                e.file_name()
+                    .to_str()
+                    .unwrap()
+                    .starts_with("judge-transport-")
+            })
             .unwrap();
         let rows: Vec<Value> = fs::read_to_string(progress.path())
             .unwrap()
