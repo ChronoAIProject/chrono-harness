@@ -845,3 +845,32 @@ CI bound is increased. The release plan reserves `v0.1.0-beta.27` for the admitt
 Q2 increment plus this correction; it makes no publication, remote-acceptance or
 complete-SPEC claim. Added empty-selection Cargo cost and native total cost remain
 unmeasured until those actual consumer cases run.
+
+## Finite native fixture custody source boundary
+
+Candidate source extends the existing retained producer/Lease/process-fd owners
+with prospective temporary allocations, exact copied-body/original membership,
+relocation, persistent and nested diagnostic references, native pre-join capture
+and ordinary generated-output recovery without finish. Host policy selects CI
+short fixtures, independent Cargo-producing worktree fixtures, the existing full
+native context/relocation fixture and the failed checkout-hook fixture. Existing
+bounds, retained drain decoding and default temporary teardown remain in their owners.
+
+Policy and product change together; no checks were executed for this source
+batch. Rust expectations cover absence without registry mutation, partial/missing
+originals and sibling progress, Git source/index protection, native descriptor
+handoff and killed overlapping holders, interrupted raw streams, diagnostic
+exclusion and a real Cargo descendant from two working directories. Native request
+bytes/EOF and selected fixture diagnostics use the same capture and retained-reference
+owners. Existing socket partial-failure and pinned Cargo URL consumers retain their assertions on
+spaced/Unicode paths. Registered two-endpoint DELTA, native producer/consumer
+checks and independent review remain unexecuted obligations.
+
+Projects/workflow source now preserves old offline checkouts and external declared
+inputs without making the old path available. Complete prospective/native/copy
+adoption for those projects and their actual migration publisher still requires
+source outside this finite allowance (direct worktree dependency/manifests and
+lockfiles); it is unresolved. No Q3 input/full/native implementation, final-original
+report retirement, universal §10.1 acceptance, deployment, dev landing, PR closeout
+or auxiliary worktree cleanup is established by these edits. Build, native,
+maintenance, retained-byte and physical-release costs remain unknown.

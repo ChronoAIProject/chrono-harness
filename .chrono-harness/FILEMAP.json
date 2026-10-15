@@ -5885,6 +5885,70 @@
           "to": "test:judge-projects-migration"
         }
       ]
+    },
+    {
+      "path": "crates/worktree/src/automatic/producer/body.rs",
+      "owner": "worktree",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/fixture_body.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/worktree-tests/tests/temporary.rs",
+      "owner": "worktree-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:worktree-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-projects-tests/tests/support/temporary.rs",
+      "owner": "judge-projects-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "compile",
+          "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "compile",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "build-input",
+          "to": "project:judge-cargo-tests"
+        }
+      ]
     }
   ],
   "project_edges": [

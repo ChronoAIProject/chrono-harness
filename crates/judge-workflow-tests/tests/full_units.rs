@@ -206,8 +206,8 @@ fn copy_tree(from: &Path, to: &Path) {
         }
     }
 }
-fn clone_host(h: &Host) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
+fn clone_host(h: &Host) -> host::FixtureDirectory {
+    let dir = host::fixture_directory("workflow copied host λ ");
     assert!(
         Command::new("git")
             .args(["clone", "--quiet", "--no-hardlinks"])
@@ -474,8 +474,8 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
     manifest(collector.path(), &["one", "two"]);
     let old_one = h.root();
     let old_two = two.path().to_path_buf();
-    fs::remove_dir_all(&old_one).unwrap();
-    fs::remove_dir_all(&old_two).unwrap();
+    h.make_checkout_unavailable();
+    two.make_checkout_unavailable().unwrap();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     assert!(!old_one.exists() && !old_two.exists());
     let before = marker(tools.path());
@@ -1633,7 +1633,7 @@ fn collection_binds_canonical_runner_resolution_to_original_declaration() {
         passed(e, &r);
     }
     let collector = clone_host(&h);
-    fs::remove_dir_all(h.root()).unwrap();
+    h.make_checkout_unavailable();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     let before = marker(tools.path());
     manifest(collector.path(), &["one", "two"]);
@@ -2104,7 +2104,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
             .unwrap(),
     )
     .unwrap();
-    fs::remove_dir_all(&root).unwrap();
+    h.make_checkout_unavailable();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     for (_, path, _) in &identities {
         fs::remove_file(path).unwrap();

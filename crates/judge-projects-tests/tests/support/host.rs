@@ -1,4 +1,7 @@
 #![allow(dead_code)]
+#[path = "temporary.rs"]
+mod temporary;
+pub use temporary::{FixtureDirectory, fixture_directory};
 use super::support::*;
 use chrono_harness::sha256;
 use serde_json::{Value, json};
@@ -86,7 +89,7 @@ impl CommandEvidence {
     }
 }
 pub struct Host {
-    dir: tempfile::TempDir,
+    dir: FixtureDirectory,
     last_result: RefCell<Option<CommandEvidence>>,
     pub base: String,
     pub candidate: String,
@@ -96,10 +99,7 @@ pub struct Host {
 }
 impl Host {
     pub fn new(script: bool) -> Self {
-        let dir = tempfile::Builder::new()
-            .prefix("execution host space ")
-            .tempdir()
-            .unwrap();
+        let dir = fixture_directory("execution host space ");
         let root = fs::canonicalize(dir.path()).unwrap();
         git(&root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
@@ -143,7 +143,10 @@ impl Host {
         }
         let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
         let version = Command::new(&tool).arg("--version").output().unwrap();
-        let external = tempfile::NamedTempFile::new().unwrap();
+        let input_directory = dir.temporary_path().join("fixture-inputs");
+        fs::create_dir(&input_directory).unwrap();
+        let external = tempfile::Builder::new().disable_cleanup(true)
+            .tempfile_in(input_directory).unwrap();
         fs::write(external.path(), b"bounded input\n").unwrap();
         v.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] = json!([
             ".chrono-harness/bin/chrono-harness",
@@ -248,6 +251,9 @@ impl Host {
     }
     pub fn root(&self) -> std::path::PathBuf {
         fs::canonicalize(self.dir.path()).unwrap()
+    }
+    pub fn make_checkout_unavailable(&self) -> std::path::PathBuf {
+        self.dir.make_checkout_unavailable().unwrap()
     }
     pub fn save(&mut self) {
         write_values(&self.root(), &self.values);

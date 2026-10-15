@@ -169,6 +169,38 @@
         "original-state/cargo/producer/target/",
         "original-state/cargo/tests/target/"
       ]
+    },
+    {
+      "id": "worktree-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/worktree/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "source with spaces/independent/producer/target/",
+        "source with spaces/independent/tests/target/",
+        "cargo-linked/independent/producer/target/",
+        "cargo-linked/independent/tests/target/"
+      ],
+      "source_roots": [
+        "source with spaces/",
+        "cargo-linked/"
+      ]
+    },
+    {
+      "id": "ci-test-host",
+      "directory": ".chrono-harness/state/temporary-hosts/ci/",
+      "temporary": true,
+      "fixture_bodies": true,
+      "generated_outputs": [
+        "arbitrary non Cargo layout/.chrono-harness/state/cargo/producer/target/",
+        "arbitrary non Cargo layout/.chrono-harness/state/cargo/tests/target/",
+        "unavailable original checkout/.chrono-harness/state/cargo/producer/target/",
+        "unavailable original checkout/.chrono-harness/state/cargo/tests/target/"
+      ],
+      "source_roots": [
+        "arbitrary non Cargo layout/",
+        "unavailable original checkout/"
+      ]
     }
   ]
 }

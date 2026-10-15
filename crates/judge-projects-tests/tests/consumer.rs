@@ -1317,3 +1317,21 @@ fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_eff
         );
     }
 }
+
+#[test]
+fn offline_source_and_declared_external_input_survive_the_old_checkout_path() {
+    let h = Host::new(true);
+    let old_root = h.root();
+    let source_bytes = fs::read(old_root.join("p/product.py")).unwrap();
+    let head = git(&old_root, &["rev-parse", "HEAD"]);
+    let external = h.external.path().to_owned();
+    let retained = h.make_checkout_unavailable();
+    assert!(!old_root.exists());
+    assert_eq!(fs::read(retained.join("p/product.py")).unwrap(), source_bytes);
+    assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(&external).unwrap(), b"bounded input\n");
+    drop(h);
+    assert!(!old_root.exists());
+    assert_eq!(fs::read(external).unwrap(), b"bounded input\n");
+    assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
+}

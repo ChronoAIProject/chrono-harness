@@ -2,6 +2,11 @@ use std::io::Write;
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args[0].as_str() {
+        #[cfg(unix)]
+        "socket" => {
+            // Bind at the actual child cwd, independent of absolute path length.
+            let _socket = std::os::unix::net::UnixListener::bind("socket").unwrap();
+        }
         "echo" | "file" => println!("{}", args[1]),
         "github" => {
             std::fs::write(

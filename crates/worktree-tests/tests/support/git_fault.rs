@@ -103,6 +103,24 @@ fn main() {
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
+        "temporary-source-check" => {
+            if std::env::current_dir().unwrap() == Path::new(config["root"].as_str().unwrap())
+                && arg(1, "ls-tree")
+            {
+                let claim = fs::OpenOptions::new().write(true).create_new(true)
+                    .open(config["synchronization_claim"].as_str().unwrap());
+                match claim {
+                    Ok(_claim) => {
+                        use std::io::Read;
+                        let mut stream = std::net::TcpStream::connect(config["synchronize"].as_str().unwrap()).unwrap();
+                        stream.write_all(b"ready").unwrap();
+                        stream.read_exact(&mut [0]).unwrap();
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => (),
+                    Err(error) => panic!("source-check synchronization: {error}"),
+                }
+            }
+        }
         "remote" => match config["fault"].as_str().unwrap() {
             "remote-lease" if arg(1, "push") => {
                 update_remote(git, &home, "refs/heads/integration/owned");
