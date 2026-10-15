@@ -3243,15 +3243,13 @@
         },
         "provision_isolated": {
           "operation": "inputs.provision-isolated",
-          "tool": "chrono-inputs",
+          "tool": "chrono-worktree",
           "argv": [
-            "observe",
-            "--host-root",
-            ".",
-            "--manifest",
-            ".chrono-harness/inputs/isolated-production.json",
-            "--output",
-            ".chrono-harness/state/isolated-rust/production-2e939736-20261015.json"
+            "use",
+            "--operation",
+            "inputs.produce-admit-isolated",
+            "--path",
+            "."
           ]
         },
         "observe_macos": {
@@ -3278,6 +3276,19 @@
             ".chrono-harness/inputs/linux-observation.json",
             "--output",
             ".chrono-harness/state/inputs/observe-linux.json"
+          ]
+        },
+        "provision_isolated_body": {
+          "operation": "inputs.produce-admit-isolated",
+          "tool": "chrono-inputs",
+          "argv": [
+            "observe",
+            "--host-root",
+            ".",
+            "--manifest",
+            ".chrono-harness/inputs/isolated-production.json",
+            "--output",
+            ".chrono-harness/state/isolated-rust/production-2e939736-20261015.json"
           ]
         }
       },
@@ -3416,6 +3427,18 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/inputs-tests/Cargo.toml"
+          ]
+        },
+        "owner_local": {
+          "operation": "test.inputs-observations-owner",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml",
+            "--test",
+            "observations"
           ]
         }
       },
@@ -3914,6 +3937,18 @@
             "x86_64-unknown-linux-gnu",
             "--manifest-path",
             "crates/judge-cargo-tests/Cargo.toml"
+          ]
+        },
+        "owner_local": {
+          "operation": "test.cargo-configuration-owner",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-cargo-tests/Cargo.toml",
+            "--test",
+            "configuration"
           ]
         }
       },

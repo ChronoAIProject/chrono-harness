@@ -306,6 +306,94 @@ fn registered_operations_reuse_owner_argv_and_retain_failed_or_ambiguous_binding
 }
 
 #[test]
+fn registered_chain_preserves_distinct_bounds_and_stops_after_failure() {
+    for (first, expected_exit) in [("path", 0), ("fail", 17)] {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        fs::create_dir_all(root.join(".chrono-harness")).unwrap();
+        fs::write(
+            root.join(".chrono-harness/projects.json"),
+            serde_json::to_vec(&json!({
+                "projects":[],"scripts":[{"actions":{
+                    "produce":{"operation":"produce","tool":"probe","argv":[first, "produced"]},
+                    "consume":{"operation":"consume","tool":"probe","argv":["overflow"]}
+                }}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let m = json!({
+            "schema":"chrono-input-observation/v1",
+            "environment":{"inherit":[],"values":{}},
+            "operations":[],"files":[],"directories":[],"stop_on_failure":true,
+            "registered_operations":{"projects":".chrono-harness/projects.json",
+                "operations":["produce","consume"],
+                "tools":{"probe":env!("CARGO_BIN_EXE_chrono-inputs-test-observe")},
+                "timeout_seconds":2,"output_limit_bytes":32,
+                "operation_bounds":{"consume":{"timeout_seconds":3,"output_limit_bytes":8192}}}
+        });
+        let output = ".chrono-harness/state/chain.json";
+        let result = invoke(root, &m, output);
+        let report: Value = serde_json::from_slice(&fs::read(root.join(output)).unwrap()).unwrap();
+        assert_eq!(report["operations"]["produce"]["exit_code"], expected_exit);
+        if expected_exit == 0 {
+            assert!(result.is_ok(), "{result:?}");
+            assert_eq!(report["operations"]["consume"]["exit_code"], 0);
+            assert_eq!(
+                fs::read(root.join(format!("{output}.processes/1.stdout")))
+                    .unwrap()
+                    .len(),
+                4096
+            );
+        } else {
+            assert!(result.is_err());
+            assert!(report["operations"].get("consume").is_none());
+            assert!(
+                !root
+                    .join(format!("{output}.processes/1.launch.json"))
+                    .exists()
+            );
+            assert_eq!(
+                fs::read(root.join(format!("{output}.processes/0.stderr"))).unwrap(),
+                b"actual failure\n"
+            );
+        }
+    }
+}
+
+#[test]
+fn registered_chain_rejects_unknown_or_zero_bounds_before_effects() {
+    for bounds in [
+        json!({"unknown":{"timeout_seconds":2,"output_limit_bytes":32}}),
+        json!({"produce":{"timeout_seconds":0,"output_limit_bytes":32}}),
+    ] {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        fs::create_dir_all(root.join(".chrono-harness")).unwrap();
+        fs::write(
+            root.join(".chrono-harness/projects.json"),
+            serde_json::to_vec(&json!({
+                "projects":[],"scripts":[{"actions":{"produce":{
+                    "operation":"produce","tool":"probe","argv":["path","produced"]}}}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let m = json!({"schema":"chrono-input-observation/v1",
+            "environment":{"inherit":[],"values":{}},"operations":[],"files":[],"directories":[],
+            "registered_operations":{"projects":".chrono-harness/projects.json","operations":["produce"],
+                "tools":{"probe":env!("CARGO_BIN_EXE_chrono-inputs-test-observe")},
+                "timeout_seconds":2,"output_limit_bytes":32,"operation_bounds":bounds}});
+        assert!(invoke(root, &m, ".chrono-harness/state/invalid-chain.json").is_err());
+        assert!(
+            !root
+                .join(".chrono-harness/state/invalid-chain.json.processes")
+                .exists()
+        );
+    }
+}
+
+#[test]
 fn inventory_bounds_and_child_timeout_remain_failures_with_originals() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();

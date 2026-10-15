@@ -167,21 +167,56 @@ version implementation explains the package 0.96.0 / CLI 1.95.0 distinction.
 Acquisition is preparation of committed input; bootstrap does not download or
 learn expectations, and continues to use existing rustup provisioning.
 
-The pending `inputs.provision-isolated` action delegates through the existing
-input observer to `host.bootstrap-isolated`. Its bootstrap policy selects
-Rustup's official `default` profile in disjoint host-state Rustup/Cargo homes;
-the retained local inventory requires cargo, clippy, rust-docs, rust-std, rustc
-and rustfmt manifests, which the legacy minimal-plus-rustfmt selection cannot
-supply. Rustup produces all metadata, with self-update disabled. The observer
-retains the actual 120-second/1-MiB child outcome. The bootstrap participation
-policy and entrypoint still require committed bytes before installer effects.
-No canonical/local Cargo binding, retained digest, native expectation or full
-adoption is changed by this preparation. Entry-byte checks remain distinct from
-the original 92-file guard, which must still admit the genuine produced files
-before any private environment can be adopted. The state path is covered by
-the existing evidence-retain policy; the caller must retain it and one enclosing
-managed participation through every declared production/admission consumer.
-Production, storage and cleanup costs remain unmeasured until that work runs.
+The registered `inputs.provision-isolated` action invokes the existing worktree
+owner's `use` operation for `inputs.produce-admit-isolated`. Run its exact action
+from the committed candidate root:
+
+```sh
+.chrono-harness/bin/chrono-worktree use --operation inputs.produce-admit-isolated --path .
+```
+
+That one enclosing lease covers the input observer, `host.bootstrap-isolated`,
+the existing native provisioning whitelist's 34 Cargo fetch actions, and the
+actual immediate consumer `guard.check.runner`. The bootstrap selects Rustup's
+official `default` profile in disjoint host-state Rustup/Cargo homes. Rustup
+produces all metadata with self-update disabled. Each installer/fetch retains its
+existing 120-second/1-MiB child bound; the guard retains its existing
+600-second/4-MiB bound. The observer stops after any failed prerequisite and
+retains executed originals. This ordered chain does not run canonical or select
+additional tests. The wrapper retains the existing host protocol bounds.
+
+Before production, the caller must commit these producer, observer and guard
+bytes and rebuild/install the candidate through registered `host.bootstrap`.
+That source bootstrap profile explicitly selects its previously verified source
+build environment, independently of the pending private canonical selection;
+it does not learn expectations or produce the private directory. This profile's
+optional `environment` contains explicit string overrides, applied before
+Rustup selection. Reserved ownership variables are rejected. Isolated home
+selection still takes precedence in the default-profile producer.
+
+Config and the scoped canonical profile select private Cargo, compiler, rustfmt,
+sysroot, Cargo package inputs and Cargo-home configuration/credential absences.
+The 34 explicitly registered local Cargo guard policies select the same private
+sysroot. Their `manifest_root` binds the unchanged original
+`.chrono-harness/inputs/local/rust.json`: v2, 92 retained files and zero declared
+symlinks, including the original components and multirust-config digests. The
+actual guard must admit those bytes before invoking Cargo and recheck them after
+its consumer. Entry-byte checks and observer status cannot substitute for this
+admission. The retained global Rustup
+settings input belongs only to the explicit source-build bootstrap profile;
+direct canonical tools use the private homes. The producer observes its own
+Rustup-produced settings without inventing a new expected digest.
+No expected toolchain or package bytes are replaced.
+
+This local selection binds the current host's absolute execution environment;
+file inputs use existing host-relative locations to stay below the unchanged
+2-MiB configuration limit. Native hosts need their own actual selection and
+coordinator migration. Source preparation does not certify private production,
+admission, native or canonical success. The later short canonical entry retains
+its own complete worktree participation through all selected consumers. The
+private tree and original reports remain under existing evidence retention;
+finish, migration and evidence disposal remain caller-owned after consumers end.
+Production, storage and cleanup costs remain unknown until that work runs.
 
 The profiles use rustup selection directly, with no personal installation path.
 For older inline relocatable bindings, a repeated declared/configured original

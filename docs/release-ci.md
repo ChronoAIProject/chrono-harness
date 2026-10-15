@@ -58,4 +58,4 @@ v5 可在 `verification_consumers` 为验证单元登记 `need`（实际调用�
 
 缓存运输的 bootstrap 安装路径与发行验证的消费者路径各有用途。`chrono-cache` 发行资产只保留 `crates/cache/target/debug/chrono-cache` 的 staging；原始 cache-tests 在该处调用它。`.chrono-harness/bin/chrono-cache` 归 bootstrap，供外围 plan／recover／report 使用，不再由发行 staging 替换。源资产、摘要、生产者与前后观察仍按同一 v5 合同核验。
 
-发布 Python integration 组保留真实 distribution pack，并新增真实 cache CLI 的 plan→recover→stage→consumer→report 回归。该组显式增加 `build_cache` 依赖；本地 FILEMAP、shared_operations 与两个原生 job 的 needs／下载同步登记，没有新增独立单元。回归以同字节的真实 CLI 检测 inode 替换，验证 transport 摘要与 recovery/report；它不模拟原生后端、不同编译配置或完整外围工作流。失败保留逐进程原 stdout／stderr／argv／退出与配置到登记的 release-test-failures；原生 collector 仍要求真实全部单元成功。新增构建／下载／回归成本应分别实测；登记的其它成本仍是 unmeasured。
+发布 Python integration 组保留真实 distribution pack，并新增真实 cache CLI 的 plan→recover→stage→consumer→report 回归。该组显式增加 `build_cache` 依赖；本地 FILEMAP、shared_operations 与两个原生 job 的 needs／下载同步登记，没有新增独立单元。回归以同字节的真实 CLI 检测 inode 替换，验证 transport 摘要与 recovery/report；它不模拟原生后端、不同编译配置或完整外围工作流。失败保留四次 cache CLI 调用的原 stdout／stderr／argv／退出与配置到登记的 release-test-failures；此前的 Git-init fixture 设置不由该 recorder 记录。原生 collector 仍要求真实全部单元成功。新增构建／下载／回归成本应分别实测；登记的其它成本仍是 unmeasured。

@@ -55,6 +55,27 @@ class IsolatedProvision(unittest.TestCase):
         self.assertEqual(env["RUSTUP_HOME"], calls[0][1]["env"]["RUSTUP_HOME"])
         self.assertEqual(dict(os.environ), original, "selection changed the worker environment")
 
+    def test_source_bootstrap_selects_its_environment_before_private_production(self):
+        values = {"CARGO_HOME": "/source/cargo", "RUSTUP_HOME": "/source/rustup",
+                  "RUSTC": "/source/rustc", "RUSTFLAGS": "--sysroot=/source/sysroot"}
+        original = dict(os.environ)
+        env = bootstrap.provision_environment(self.root, {"environment": values})
+        for key, value in values.items():
+            self.assertEqual(env[key], value)
+        self.assertEqual(dict(os.environ), original)
+        private = bootstrap.provision_environment(self.root, dict(self.config, environment=values))
+        self.assertEqual(private["RUSTUP_HOME"],
+                         str(self.root / self.config["toolchain_provision"]["rustup_home"]))
+        self.assertEqual(private["RUSTC"], "")
+
+    def test_invalid_bootstrap_environment_fails_before_installer_effects(self):
+        for values in [None, [], {"": "x"}, {"bad=key": "x"}, {"RUSTC": None},
+                       {"CHRONO_PROCESS_FDS": "7"}, {"RUSTC": "bad\0value"}]:
+            with self.subTest(values=values), mock.patch.object(bootstrap.subprocess, "run") as run:
+                with self.assertRaisesRegex(ValueError, "environment selection"):
+                    bootstrap.toolchain_environment(dict(self.config, environment=values), self.root)
+                run.assert_not_called()
+
     def test_install_failure_stops_before_selection_and_preserves_exit(self):
         failure = subprocess.CalledProcessError(17, ["rustup", "toolchain", "install"])
         with mock.patch.object(bootstrap.subprocess, "run", side_effect=failure), \

@@ -21,6 +21,8 @@ struct Manifest {
     operations: Vec<Operation>,
     #[serde(default)]
     registered_operations: Option<Registered>,
+    #[serde(default)]
+    stop_on_failure: bool,
     files: Vec<File>,
     directories: Vec<Directory>,
 }
@@ -32,6 +34,14 @@ struct Registered {
     tools: BTreeMap<String, Program>,
     #[serde(default)]
     environment: BTreeMap<String, Output>,
+    timeout_seconds: u64,
+    output_limit_bytes: usize,
+    #[serde(default)]
+    operation_bounds: BTreeMap<String, Bounds>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Bounds {
     timeout_seconds: u64,
     output_limit_bytes: usize,
 }
@@ -194,6 +204,13 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         }
     }
     if let Some(registered) = m.registered_operations.take() {
+        if registered
+            .operation_bounds
+            .keys()
+            .any(|id| !registered.operations.contains(id))
+        {
+            return Err("observation bounds require a selected registered operation".into());
+        }
         let project_bytes =
             fs::read(no_symlink_parents(root, &registered.projects)?).map_err(|e| e.to_string())?;
         let projects: Value = serde_json::from_slice(&project_bytes).map_err(|e| e.to_string())?;
@@ -223,6 +240,7 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
             }
             let action = actions[0];
             let tool = action["tool"].as_str().ok_or("action tool required")?;
+            let bounds = registered.operation_bounds.get(&id);
             m.operations.push(Operation {
                 id,
                 program: registered
@@ -232,8 +250,9 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
                     .clone(),
                 environment: registered.environment.clone(),
                 argv: serde_json::from_value(action["argv"].clone()).map_err(|e| e.to_string())?,
-                timeout_seconds: registered.timeout_seconds,
-                output_limit_bytes: registered.output_limit_bytes,
+                timeout_seconds: bounds.map_or(registered.timeout_seconds, |b| b.timeout_seconds),
+                output_limit_bytes: bounds
+                    .map_or(registered.output_limit_bytes, |b| b.output_limit_bytes),
             });
         }
     }
@@ -332,6 +351,9 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
     let mut directories = BTreeMap::new();
     let mut errors = Vec::new();
     for (i, op) in m.operations.iter().enumerate() {
+        if m.stop_on_failure && !errors.is_empty() {
+            break;
+        }
         let result = (|| {
             let mut environment = environment.clone();
             for (key, source) in &op.environment {
@@ -388,6 +410,9 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         }
     }
     for f in m.files {
+        if m.stop_on_failure && !errors.is_empty() {
+            break;
+        }
         let result = (|| {
             let location = path(root, &f.location, &processes)?;
             let value = match chrono_harness::input_file::observe_file(&location)? {
@@ -406,6 +431,9 @@ pub fn observe(root: &Path, manifest: &str, output: &str) -> Result<Value, Strin
         }
     }
     for d in m.directories {
+        if m.stop_on_failure && !errors.is_empty() {
+            break;
+        }
         let result = (|| inventory(&path(root, &d.location, &processes)?, d.max_entries))();
         match result {
             Ok(value) => {

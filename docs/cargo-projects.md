@@ -299,6 +299,14 @@ The object contains:
 | `sdks` | Directory inventories with `{root, manifest, environment}`; each environment variable must select that exact canonical root |
 | `build_script_inputs` | Explicit present input-ID list for build-script external reads |
 
+A directory declaration may additionally bind `manifest_root` to the exact
+original manifest's `root` string. `root` then selects the current directory and
+`manifest_root` identifies the unchanged inventory being admitted there. The
+guard never probes that original location or changes a file/link expectation;
+without this field the existing exact root match remains required. Evidence
+includes the explicit original root. Admission and the post-consumer recheck
+operate on the selected directory, using the original retained manifest bytes.
+
 Each directory manifest lists every retained regular file and its SHA-256 under
 `chrono-input-directory/v1`; empty inventories, duplicate paths, symlinks and
 identity mismatches fail before Cargo. `chrono-input-directory/v2` retains those

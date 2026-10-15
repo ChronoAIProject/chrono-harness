@@ -135,6 +135,15 @@ and are not directly usable as guarded directory declarations. An observation is
 data for adoption, not an expected-input
 update, historical endpoint capture or governance verdict.
 
+`registered_operations.operation_bounds` optionally maps selected operation IDs
+to their own `{timeout_seconds, output_limit_bytes}`. Omitted IDs use the existing
+registered defaults; unknown IDs and invalid bounds fail before any child runs.
+The optional manifest `stop_on_failure: true` stops the ordered acquisition at
+its first failed operation or observation. It retains that failure and every
+executed original, without launching subsequent consumers. Omitting it preserves
+the existing independent observation behavior. This is ordered acquisition, not
+test selection or a scheduler.
+
 Actual failure, timeout, output overflow and inventory errors retain a failed
 report and raw available streams. A second invocation cannot overwrite an
 original output or process directory. Current observation results use

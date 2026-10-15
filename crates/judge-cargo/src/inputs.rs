@@ -42,6 +42,7 @@ pub(crate) struct BoundTool {
 pub(crate) struct DirectoryInventory {
     pub root: String,
     pub manifest: String,
+    pub manifest_root: Option<String>,
     pub environment: Option<String>,
 }
 #[derive(Deserialize)]
@@ -89,6 +90,8 @@ pub(crate) struct DirectoryEvidence {
     pub root: String,
     pub manifest: String,
     pub files: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_root: Option<String>,
 }
 
 #[derive(Clone, Serialize)]

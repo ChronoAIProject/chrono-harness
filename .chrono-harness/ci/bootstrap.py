@@ -345,6 +345,14 @@ def declared_bindings(root, config, env):
 def provision_environment(root, config):
     """Resolve the host's opt-in private selection before any installer effect."""
     env = dict(os.environ)
+    if "environment" in config:
+        values = config["environment"]
+        if (not isinstance(values, dict) or any(
+                not isinstance(k, str) or not k or "=" in k or "\0" in k
+                or k.startswith("CHRONO_") or not isinstance(v, str) or "\0" in v
+                for k, v in values.items())):
+            raise ValueError("invalid bootstrap environment selection")
+        env.update(values)
     declaration = config.get("toolchain_provision")
     if "toolchain_provision" in config:
         if (not isinstance(declaration, dict)

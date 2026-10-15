@@ -104,39 +104,23 @@
   "target_mode": "native",
   "configuration_files": [
     {
-      "path": "/.cargo/config",
-      "input": null
-    },
-    {
-      "path": "/.cargo/config.toml",
-      "input": null
-    },
-    {
-      "path": "/Users/.cargo/config",
-      "input": null
-    },
-    {
-      "path": "/Users/.cargo/config.toml",
-      "input": null
-    },
-    {
-      "path": "/Users/auricstudio/.cargo/config",
-      "input": null
-    },
-    {
-      "path": "/Users/auricstudio/.cargo/config.toml",
-      "input": null
-    },
-    {
       "path": ".cargo/config",
       "input": null
     },
     {
       "path": ".cargo/config.toml",
       "input": null
+    },
+    {
+      "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/config",
+      "input": null
+    },
+    {
+      "path": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/cargo/config.toml",
+      "input": null
     }
   ],
-  "configuration_ancestors": "inventory",
+  "configuration_ancestors": "absent",
   "cargo_input": "tool.cargo",
   "compiler": {
     "tool": "rustc",
@@ -144,7 +128,8 @@
   },
   "toolchain": {
     "sysroot": {
-      "root": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "root": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin",
+      "manifest_root": "/Users/auricstudio/.rustup/toolchains/1.95.0-aarch64-apple-darwin",
       "manifest": "toolchain.rust.inventory"
     },
     "backend": [

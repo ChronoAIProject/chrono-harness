@@ -278,7 +278,13 @@ fn bind_inner(
     declaration: &DirectoryInventory,
     manifest: &Path,
 ) -> Result<(Binding, DirectoryEvidence)> {
-    if declaration.root.is_empty() || declaration.manifest.is_empty() {
+    if declaration.root.is_empty()
+        || declaration.manifest.is_empty()
+        || declaration
+            .manifest_root
+            .as_ref()
+            .is_some_and(|s| s.is_empty())
+    {
         return Err(error("directory inventory root/manifest is empty"));
     }
     let source = if Path::new(&declaration.root).is_absolute() {
@@ -300,7 +306,11 @@ fn bind_inner(
     if !matches!(
         parsed.schema.as_str(),
         "chrono-input-directory/v1" | "chrono-input-directory/v2" | "chrono-input-directory/v3"
-    ) || parsed.root != declaration.root
+    ) || parsed.root
+        != declaration
+            .manifest_root
+            .as_deref()
+            .unwrap_or(&declaration.root)
         || (parsed.schema == "chrono-input-directory/v1" && has_links)
         || (parsed.schema != "chrono-input-directory/v1" && parsed.symlinks.is_none())
         || (parsed.schema != "chrono-input-directory/v3" && has_directories)
@@ -381,6 +391,7 @@ fn bind_inner(
             root: declaration.root.clone(),
             manifest: declaration.manifest.clone(),
             files: file_count,
+            manifest_root: declaration.manifest_root.clone(),
         },
     ))
 }

@@ -5109,9 +5109,18 @@
       "surface": "judge-policy",
       "cost": "unmeasured",
       "edges": [
-        {"kind": "runtime-input", "to": "project:inputs"},
-        {"kind": "runtime-input", "to": "project:inputs-tests"},
-        {"kind": "runtime-input", "to": "script:host-bootstrap"}
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:host-bootstrap"
+        }
       ]
     },
     {
@@ -6449,6 +6458,14 @@
         {
           "kind": "build-input",
           "to": "project:runner"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:inputs"
         }
       ]
     },
@@ -6461,6 +6478,10 @@
         {
           "kind": "build-input",
           "to": "project:runner-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6473,6 +6494,10 @@
         {
           "kind": "build-input",
           "to": "project:instructions"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6485,6 +6510,10 @@
         {
           "kind": "build-input",
           "to": "project:instructions-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6497,6 +6526,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6509,6 +6542,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6521,6 +6558,10 @@
         {
           "kind": "build-input",
           "to": "project:ci"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6533,6 +6574,10 @@
         {
           "kind": "build-input",
           "to": "project:ci-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6545,6 +6590,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-registration"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6557,6 +6606,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-registration-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6569,6 +6622,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-filemap"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6581,6 +6638,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-filemap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6593,6 +6654,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-routes"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6605,6 +6670,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-routes-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6617,6 +6686,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-projects"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6629,6 +6702,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-projects-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6641,6 +6718,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-cost"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6653,6 +6734,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-cost-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6665,6 +6750,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-mixed"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6677,6 +6766,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-mixed-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6689,6 +6782,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-workflow"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6701,6 +6798,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-workflow-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6713,6 +6814,10 @@
         {
           "kind": "build-input",
           "to": "project:inputs"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6725,6 +6830,10 @@
         {
           "kind": "build-input",
           "to": "project:inputs-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6737,6 +6846,10 @@
         {
           "kind": "build-input",
           "to": "project:distribution"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6749,6 +6862,10 @@
         {
           "kind": "build-input",
           "to": "project:distribution-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6760,6 +6877,10 @@
       "edges": [
         {
           "kind": "build-input",
+          "to": "project:judge-cargo"
+        },
+        {
+          "kind": "runtime-input",
           "to": "project:judge-cargo"
         }
       ]
@@ -6773,6 +6894,10 @@
         {
           "kind": "build-input",
           "to": "project:judge-cargo-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6785,6 +6910,10 @@
         {
           "kind": "build-input",
           "to": "project:worktree"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6797,6 +6926,10 @@
         {
           "kind": "build-input",
           "to": "project:worktree-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6809,6 +6942,10 @@
         {
           "kind": "build-input",
           "to": "project:diagnostics"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6821,6 +6958,10 @@
         {
           "kind": "build-input",
           "to": "project:diagnostics-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6833,6 +6974,10 @@
         {
           "kind": "build-input",
           "to": "project:cache"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6845,6 +6990,10 @@
         {
           "kind": "build-input",
           "to": "project:cache-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:judge-cargo"
         }
       ]
     },
@@ -6958,6 +7107,7 @@
     }
   ],
   "project_edges": [
+    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "script:host-bootstrap"},
     {"from": "project:runner", "kind": "compile", "to": "project:runner-tests"},
     {"from": "project:runner", "kind": "runtime-input", "to": "project:runner-tests"},
     {"from": "project:runner", "kind": "test-execution", "to": "test:runner-tests"},
@@ -9192,40 +9342,6 @@
     {"from": "input:configuration.fa2529f6d6a7c05c", "kind": "runtime-input", "to": "project:worktree-tests"},
     {"from": "input:configuration.fb439340240c6866", "kind": "runtime-input", "to": "project:cache"},
     {"from": "input:configuration.ff53794a06f9f819", "kind": "runtime-input", "to": "project:judge-filemap"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:cache"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:cache-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:ci"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:ci-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:diagnostics"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:diagnostics-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:distribution"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:distribution-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:inputs"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:inputs-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:instructions"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:instructions-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-cargo"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-cargo-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-ci"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-ci-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-cost"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-cost-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-filemap"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-filemap-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-mixed"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-mixed-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-projects"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-projects-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-registration"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-registration-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-routes"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-routes-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-workflow"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:judge-workflow-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:runner"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:runner-tests"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:worktree"},
-    {"from": "input:configuration.rustup-settings", "kind": "runtime-input", "to": "project:worktree-tests"},
     {"from": "input:package.bitflags.2.13.2.016cc34063c6f40c", "kind": "build-input", "to": "project:cache-tests"},
     {"from": "input:package.bitflags.2.13.2.016cc34063c6f40c", "kind": "build-input", "to": "project:ci"},
     {"from": "input:package.bitflags.2.13.2.016cc34063c6f40c", "kind": "build-input", "to": "project:distribution"},
@@ -21745,6 +21861,46 @@
       "projects-test-inventory"
     ],
     "claims": {
+      "inputs.produce-admit-isolated": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/", "crates/runner/target/"]},
+      "inputs.fetch.runner": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.runner-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.instructions": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.instructions-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-ci": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-ci-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.ci": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.ci-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-registration": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-registration-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-filemap": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-filemap-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-routes": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-routes-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-projects": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-projects-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-cost": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-cost-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-mixed": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-mixed-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-workflow": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-workflow-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.inputs": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.inputs-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.distribution": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.distribution-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-cargo": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.judge-cargo-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.worktree": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.worktree-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.diagnostics": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.diagnostics-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.cache": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "inputs.fetch.cache-tests": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/cargo/"]},
+      "guard.check.runner": {"resources": [], "outputs": ["crates/runner/target/"]},
+      "test.inputs-observations-owner": {"resources": [], "outputs": ["crates/inputs-tests/target/"]},
+      "test.cargo-configuration-owner": {"resources": [], "outputs": ["crates/judge-cargo-tests/target/"]},
+      "inputs.provision-isolated": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/", "crates/runner/target/"]},
+      "host.bootstrap-isolated": {"resources": [], "outputs": [".chrono-harness/state/isolated-rust/"]},
       "build.ci": {
         "resources": [],
         "outputs": [
