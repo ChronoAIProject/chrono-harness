@@ -307,9 +307,44 @@ fn registered_operations_reuse_owner_argv_and_retain_failed_or_ambiguous_binding
 
 #[test]
 fn registered_chain_preserves_distinct_bounds_and_stops_after_failure() {
+    struct ChainFixture {
+        directory: tempfile::TempDir,
+        case: &'static str,
+    }
+    impl Drop for ChainFixture {
+        fn drop(&mut self) {
+            if std::thread::panicking() {
+                // Expected failures clean up normally. Keep unexpected failures
+                // until diagnosis and acceptance consumers finish, then remove.
+                self.directory.disable_cleanup(true);
+                use std::io::Write;
+                let root = self.directory.path();
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "Registered chain case {:?}: original fixture retained at {}\n\
+                     Inputs: {} and {}\n\
+                     Report: {}\n\
+                     Process originals: {} (0=produce, 1=consume; available \
+                     source-*.json, *.launch.json, *.stdout, *.stderr)\n\
+                     Original report read: {:?}",
+                    self.case,
+                    root.display(),
+                    root.join(".chrono-harness/projects.json").display(),
+                    root.join(".chrono-harness/observe.json").display(),
+                    root.join(".chrono-harness/state/chain.json").display(),
+                    root.join(".chrono-harness/state/chain.json.processes")
+                        .display(),
+                    fs::read_to_string(root.join(".chrono-harness/state/chain.json"))
+                );
+            }
+        }
+    }
     for (first, expected_exit) in [("path", 0), ("fail", 17)] {
-        let d = tempfile::tempdir().unwrap();
-        let root = d.path();
+        let d = ChainFixture {
+            directory: tempfile::tempdir().unwrap(),
+            case: first,
+        };
+        let root = d.directory.path();
         fs::create_dir_all(root.join(".chrono-harness")).unwrap();
         fs::write(
             root.join(".chrono-harness/projects.json"),
@@ -334,8 +369,17 @@ fn registered_chain_preserves_distinct_bounds_and_stops_after_failure() {
         });
         let output = ".chrono-harness/state/chain.json";
         let result = invoke(root, &m, output);
-        let report: Value = serde_json::from_slice(&fs::read(root.join(output)).unwrap()).unwrap();
-        assert_eq!(report["operations"]["produce"]["exit_code"], expected_exit);
+        let report_bytes = fs::read(root.join(output)).unwrap_or_else(|error| {
+            panic!("chain case {first}: cannot read {output}: {error}; invocation: {result:?}")
+        });
+        let report: Value = serde_json::from_slice(&report_bytes).unwrap_or_else(|error| {
+            panic!("chain case {first}: cannot decode {output}: {error}; invocation: {result:?}")
+        });
+        assert_eq!(
+            report["operations"]["produce"]["exit_code"],
+            expected_exit,
+            "chain case {first}; invocation: {result:?}"
+        );
         if expected_exit == 0 {
             assert!(result.is_ok(), "{result:?}");
             assert_eq!(report["operations"]["consume"]["exit_code"], 0);
