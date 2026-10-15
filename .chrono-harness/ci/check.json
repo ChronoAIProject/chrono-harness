@@ -13,6 +13,7 @@
     "tools": {
       "cargo": "/private/tmp/chrono-sshx-pr-backlog-20261014/q3-candidate-validation-main/.chrono-harness/state/isolated-rust/rustup/toolchains/1.95.0-aarch64-apple-darwin/bin/cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
+      "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "python3": "/usr/bin/python3",
       "cargo-guard": ".chrono-harness/bin/chrono-judge-cargo",
       "chrono-inputs": ".chrono-harness/bin/chrono-inputs"
