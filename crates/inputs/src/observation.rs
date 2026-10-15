@@ -306,21 +306,27 @@ fn inventory(
                                             };
                                             json!({"observed":kind})
                                         }
-                                        Err(e) => json!({"unavailable":e.to_string(),"raw_os_error":e.raw_os_error()}),
+                                        Err(e) => {
+                                            json!({"unavailable":e.to_string(),"raw_os_error":e.raw_os_error()})
+                                        }
                                     };
                                     (Some(actual), None, kind)
                                 }
                                 Err(e) => (
                                     None,
-                                    Some(json!({"message":e.to_string(),"raw_os_error":e.raw_os_error()})),
+                                    Some(
+                                        json!({"message":e.to_string(),"raw_os_error":e.raw_os_error()}),
+                                    ),
                                     json!({"unavailable":"canonical resolution failed"}),
                                 ),
                             };
-                            *alias_failure = Some(json!({"location":root,"root":resolved,"error":error,
+                            *alias_failure = Some(
+                                json!({"location":root,"root":resolved,"error":error,
                                 "alias_failure":{"path":relative,"target":target_text,
                                 "literal_absolute":target.is_absolute(),"canonical_destination":destination,
                                 "within_root":actual.as_ref().ok().map(|p|p.starts_with(&resolved)),
-                                "resolution_error":resolution_error,"target_kind":target_kind}}));
+                                "resolution_error":resolution_error,"target_kind":target_kind}}),
+                            );
                             return Err(error);
                         }
                     };

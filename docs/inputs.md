@@ -219,8 +219,8 @@ has no manifest reference or partial file inventory. Successful observation
 and v3 manifest shapes, rejection predicates, entry bounds and guard acceptance
 are unchanged; no new schema, platform or acquisition policy is introduced.
 Existing report/source/process originals and no-clobber publication remain the
-evidence owners. This diagnostic addition has not been executed or validated;
-its extra failure-only metadata read and retained facts have unmeasured cost.
+evidence owners. The extra failure-only metadata read and retained facts have
+unmeasured cost.
 It cannot recover the unobserved target of the old native `usr/bin/altool`
 failure; fresh native acquisition is still required.
 
