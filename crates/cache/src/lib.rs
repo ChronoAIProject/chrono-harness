@@ -1,5 +1,6 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
 mod backend;
+mod content;
 mod probe;
 mod recovery;
 mod report;
@@ -123,6 +124,8 @@ pub struct Cache {
     pub compatibility_inputs: Vec<String>,
     pub source_inputs: Vec<String>,
     pub restore: Restore,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub verify_contents: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -299,6 +302,12 @@ pub fn validate(c: &Config) -> Result<(), String> {
         }
     }
     for (id, cache) in &c.caches {
+        if cache.verify_contents && !c.recover_unconfirmed_restores {
+            return Err(
+                "E_CACHE_CONTENT: content verification requires primary-checkout restore recovery"
+                    .into(),
+            );
+        }
         name(id)?;
         name(&cache.owner)?;
         name(&cache.producer)?;
@@ -699,6 +708,9 @@ fn prepare_with_inputs(
             "restore":cache.restore,"artifacts":artifacts,
             "artifact_registry":c.artifact_registry,"artifact_bindings":bindings,
             "inputs":values(&cache.compatibility_inputs)});
+        if cache.verify_contents {
+            identity["content_verification"] = json!(content::METHOD);
+        }
         if c.schema == SCHEMA {
             identity["consumers"] = json!(cache.consumers.iter().collect::<BTreeSet<_>>());
         }
@@ -717,6 +729,9 @@ fn prepare_with_inputs(
             "restore_keys":if cache.restore == Restore::Compatible {vec![prefix]} else {vec![]},
             "handling":"registered-build-required","status":"prepared-unrestored"}),
         );
+        if cache.verify_contents {
+            entries.get_mut(id).unwrap()["content_verification"] = json!(content::METHOD);
+        }
     }
     if c.schema == CONSUMER_SCHEMA {
         for source in &c.consumer_operations[consumer] {
@@ -784,6 +799,9 @@ fn prepare_with_inputs(
 }
 
 pub fn dispatch(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) == Some("seal") {
+        return content::dispatch(&args[1..]);
+    }
     if args.first().map(String::as_str) == Some("recover") {
         return recovery::dispatch(&args[1..]);
     }
@@ -873,6 +891,14 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         if c.recover_failed_restores {
             text.push_str("cache_recovery=discard-failed-host-restores\n");
         }
+        if plan["caches"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|cache| cache.get("content_verification").is_some())
+        {
+            text.push_str(&format!("cache_content_verification={}\n", content::METHOD));
+        }
         let selected: BTreeMap<_, _> = plan["caches"]
             .as_object()
             .ok_or("E_CACHE_OUTPUT: caches object")?
@@ -881,6 +907,9 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         // The provider uses the same lexical ordering of the exact selected set.
         for (index, cache) in selected.values().enumerate() {
             let prefix = format!("cache_{index}");
+            if let Some(method) = cache["content_verification"].as_str() {
+                text.push_str(&format!("{prefix}_verification={method}\n"));
+            }
             let paths = cache["artifacts"]
                 .as_object()
                 .ok_or("E_CACHE_OUTPUT: artifacts object")?

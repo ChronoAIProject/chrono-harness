@@ -190,9 +190,9 @@ and refused; a previous failure is not automatically retried.
 
 The host adopts this method in its existing jobs and classifies its step time as
 `cache-recovery`. No job, build recipe or business-test retry is added. The failure-only policy covers
-reported native restore failures and partial extraction, not corruption hidden
-behind a successful restore, backend archive replacement, or general compiler
-failure recovery. Archive integrity, linked-worktree leases and full native
+reported native restore failures and partial extraction. The optional producer
+content verification below also covers reported valid hits for selected caches.
+Backend archive replacement, linked-worktree leases and full native
 failure-scenario acceptance remain obligations.
 
 The host additionally adopts `recover_unconfirmed_restores: true`. This optional
@@ -211,9 +211,64 @@ Original outcomes, reasons and per-artifact results remain available to the
 transport reporter. Completed reentry preserves subsequent builds. An ordinary
 cold miss with all selected artifacts already absent adds no recovery warning;
 removed leftovers and explicit failures remain visible. The original build and
-selected tests still run, and their failures remain failures. This extension does
+selected tests still run, and their failures remain failures. This extension alone does
 not verify the contents of a restore that reports a valid matched key, preserve
 external ownership, or establish a native corruption experiment.
+
+## Opted-in producer content verification
+
+This host opts only `check.cache` and `check.cache-tests`, consumed by the existing
+`check.unit_cache` job, into `verify_contents: true`. This v2 option requires the
+existing primary-checkout failed/unconfirmed recovery policies; external artifacts
+remain unsupported. Other consumers retain their previous contract. The method
+`producer-manifest/v1` enters the compatibility identity, so earlier unsealed
+archives cannot enter this domain through a broad prefix.
+
+Those two compatibility domains additionally select their actual producer action
+from `projects.json` (`build.cache` or `test.cache-tests`, including tool and argv)
+and the Cargo tool record in the adopted direct Git policy. Existing inputs bind
+check environment, Cargo/compiler observations, manifests, locks, bootstrap and
+platform declarations. Unrelated project metadata remains outside these selected
+values. These declarations do not prove complete compiler/SDK input closure.
+
+The provider's existing save phase invokes `chrono-cache seal` after the original
+work has ended and before saving. It revalidates the plan/registration and current
+planner identity, requires the original producer step's successful **outcome**,
+and inventories the explicitly selected artifact directories. Each artifact gets
+`.chrono-cache-content-v1.json`, binding cache ID, producer operation, actual source
+key, artifact declaration and its contents. The inventory records regular-file
+SHA-256/length/execute bits, directories (including empty ones), and literal
+symlink targets without following them; special files and non-UTF-8 names fail.
+Only this method's own marker is excluded. The marker contains output identities,
+not test results, judge responses or a cached passing status. Original native
+steps, manifests and sealing observations remain in host execution evidence.
+Saving an opted-in entry requires its successful seal output in addition to the
+existing producer/save conditions. No build recipe, job or test retry is added.
+
+Before any original build consumes a claimed exact/compatible hit, `recover`
+compares its producer manifest and a fresh content inventory. Compatible restores
+bind the manifest to the **matched** source key, while the candidate retains its
+new source identity. Changed/missing contents, a missing/malformed manifest or an
+incompatible producer binding are recorded as unusable. Original manifest bytes,
+observed content identities/errors and native restore observations are retained
+before the existing recovery contract discards only selected registered outputs.
+The original build and check still run; replaying completed recovery preserves
+subsequently rebuilt outputs. Reporting retains the original key classification
+and exposes `unusable-content` separately from an accepted hit, copying referenced
+verification evidence into the existing upload directory.
+
+Hashing cost is additional: sealing and restore verification record wall-clock
+seconds per selected cache, with the measured window in each observation; the
+native step is classified `cache-verification`. Total transfer/storage/runner
+cost and native acceptance remain unmeasured. Local Rust regressions include an
+actual Cargo invocation read from the unchanged registered producer action on a
+small fixture: compatible source changes produce the candidate binary and retain
+incremental data, while changed producer settings partition the compatibility
+domain. This fixture is compiler evidence, not a native archive acceptance run.
+Content manifests are consistency evidence from trusted but fallible producers,
+not archive authentication or proof of complete build inputs. Cold/save, exact,
+compatible changed-source, incompatible-input and recovery scenarios require new
+native observations for this adopted domain before acceptance is claimed.
 
 ## Actual provider consumers
 

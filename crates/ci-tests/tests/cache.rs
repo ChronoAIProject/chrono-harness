@@ -486,3 +486,41 @@ fn one_registered_cache_has_at_most_one_saving_job() {
         assert_eq!(checks(&read_only["jobs"][id]), checks(original));
     }
 }
+
+#[test]
+fn content_sealing_follows_original_work_and_gates_native_saving() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    let rendered = chrono_ci::units::render(
+        &serde_json::from_value(value).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    let yaml: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    let position = |id: &str| steps.iter().position(|s| s["id"] == id).unwrap();
+    assert!(position("chrono_cache_work") < position("chrono_cache_seal"));
+    assert!(position("chrono_cache_seal") < position("cache_0_save"));
+    let seal = &steps[position("chrono_cache_seal")];
+    assert!(seal["run"].as_str().unwrap().contains(" seal --host-root"));
+    assert!(
+        seal["if"]
+            .as_str()
+            .unwrap()
+            .contains("cache_content_verification")
+    );
+    let save = &steps[position("cache_0_save")];
+    assert!(
+        save["if"]
+            .as_str()
+            .unwrap()
+            .contains("steps.chrono_cache_seal.outputs.cache_0_sealed == 'true'")
+    );
+    assert!(
+        save["if"]
+            .as_str()
+            .unwrap()
+            .contains("steps.chrono_cache_work.outcome == 'success'")
+    );
+}

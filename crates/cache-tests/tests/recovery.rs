@@ -577,3 +577,210 @@ fn partial_cleanup_failure_retains_each_result_and_refuses_a_second_deletion() {
         original["error"]
     );
 }
+
+fn verified_host() -> (Host, Value, Value) {
+    let (root, mut config, _) = recovery_host();
+    config["recover_unconfirmed_restores"] = json!(true);
+    config["caches"]["project"]["verify_contents"] = json!(true);
+    let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
+    fs::write(
+        root.path().join(".chrono-harness/cache.json"),
+        serde_json::to_vec(&config).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&prepared).unwrap(),
+    )
+    .unwrap();
+    (root, config, prepared)
+}
+
+fn seal(root: &Path, steps: &Value) -> std::process::Output {
+    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
+        .args([
+            "seal",
+            "--host-root",
+            root.to_str().unwrap(),
+            "--config",
+            ".chrono-harness/cache.json",
+            "--plan",
+            ".chrono-harness/state/restore/plan.json",
+            "--cache",
+            "project",
+            "--steps-env",
+            "CACHE_PRODUCER_STEPS",
+            "--work",
+            "work",
+        ])
+        .env(
+            "CACHE_PRODUCER_STEPS",
+            serde_json::to_string(steps).unwrap(),
+        )
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn verified_hit_requires_producer_seal_and_retains_mismatched_content_before_recovery() {
+    for mutation in [
+        "none",
+        "changed",
+        "missing",
+        "extra",
+        "mode",
+        "wrong-producer",
+        "wrong-key",
+        "malformed-manifest",
+        "missing-manifest",
+    ] {
+        let (root, _, prepared) = verified_host();
+        let sealed = seal(root.path(), &json!({"work":{"outcome":"success"}}));
+        assert!(
+            sealed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&sealed.stderr)
+        );
+        let marker = root
+            .path()
+            .join("out/project/.chrono-cache-content-v1.json");
+        match mutation {
+            "changed" => {
+                fs::write(root.path().join("out/project/partial"), b"altered content").unwrap()
+            }
+            "missing" => fs::remove_file(root.path().join("out/project/partial")).unwrap(),
+            "extra" => fs::write(root.path().join("out/project/extra"), b"unbound output").unwrap(),
+            "mode" => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(
+                        root.path().join("out/project/partial"),
+                        fs::Permissions::from_mode(0o755),
+                    )
+                    .unwrap();
+                }
+            }
+            "wrong-producer" => {
+                let mut value: Value = serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
+                value["producer"] = json!("other.operation");
+                fs::write(&marker, serde_json::to_vec(&value).unwrap()).unwrap();
+            }
+            "wrong-key" => {
+                let mut value: Value = serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
+                value["key"] = json!("incompatible-source-key");
+                fs::write(&marker, serde_json::to_vec(&value).unwrap()).unwrap();
+            }
+            "malformed-manifest" => fs::write(&marker, b"partial manifest").unwrap(),
+            "missing-manifest" => fs::remove_file(&marker).unwrap(),
+            _ => (),
+        }
+        let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}});
+        let recovered = recover(root.path(), &steps);
+        assert!(
+            recovered.status.success(),
+            "{mutation}: {}",
+            String::from_utf8_lossy(&recovered.stderr)
+        );
+        let report = result(root.path());
+        assert_eq!(
+            report["caches"]["project"]["restore"],
+            steps["cache_0_restore"]
+        );
+        assert_eq!(
+            report["caches"]["project"]["verification"]["status"],
+            if mutation == "none" {
+                "matched"
+            } else {
+                "unusable"
+            }
+        );
+        assert_eq!(root.path().join("out/project").exists(), mutation == "none");
+        if mutation != "none" {
+            let original = &report["caches"]["project"]["verification"]["original"];
+            assert!(
+                root.path()
+                    .join(original["path"].as_str().unwrap())
+                    .is_file()
+            );
+            // Completed recovery must preserve the output of the subsequent registered build.
+            fs::create_dir_all(root.path().join("out/project")).unwrap();
+            fs::write(root.path().join("out/project/rebuilt"), b"candidate").unwrap();
+            assert!(recover(root.path(), &steps).status.success());
+            assert!(root.path().join("out/project/rebuilt").is_file());
+            let mut final_steps = steps.clone();
+            final_steps["work"] = json!({"outcome":"failure"});
+            let delivered = transport(root.path(), &final_steps);
+            assert!(
+                delivered.status.success(),
+                "{}",
+                String::from_utf8_lossy(&delivered.stderr)
+            );
+            let delivered: Value = serde_json::from_slice(&delivered.stdout).unwrap();
+            let observed = &delivered["observation"];
+            assert_eq!(
+                observed["caches"]["project"]["restore"]["status"],
+                "unusable-content"
+            );
+            assert_eq!(
+                observed["caches"]["project"]["restore"]["key_status"],
+                "exact"
+            );
+            assert_eq!(observed["work"]["outcome"], "failure");
+            assert!(
+                root.path()
+                    .join(
+                        observed["caches"]["project"]["content_verification"]["upload"]["path"]
+                            .as_str()
+                            .unwrap()
+                    )
+                    .is_file()
+            );
+        }
+    }
+}
+
+#[test]
+fn producer_seal_refuses_failure_and_compatible_restore_checks_original_source_key() {
+    let (root, config, prepared) = verified_host();
+    let rejected = seal(
+        root.path(),
+        &json!({"work":{"outcome":"failure","conclusion":"success"}}),
+    );
+    assert!(!rejected.status.success());
+    assert!(
+        !root
+            .path()
+            .join("out/project/.chrono-cache-content-v1.json")
+            .exists()
+    );
+    assert!(
+        seal(root.path(), &json!({"work":{"outcome":"success"}}))
+            .status
+            .success()
+    );
+    fs::write(root.path().join("source"), b"candidate-source-two").unwrap();
+    let mut candidate = plan(root.path(), &config, "check.one").unwrap();
+    bind_installed_planner(&mut candidate);
+    assert_ne!(
+        prepared["caches"]["project"]["key"],
+        candidate["caches"]["project"]["key"]
+    );
+    assert_eq!(
+        prepared["caches"]["project"]["restore_keys"],
+        candidate["caches"]["project"]["restore_keys"]
+    );
+    fs::write(
+        root.path().join(".chrono-harness/state/restore/plan.json"),
+        serde_json::to_vec(&candidate).unwrap(),
+    )
+    .unwrap();
+    let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}});
+    assert!(recover(root.path(), &steps).status.success());
+    assert_eq!(
+        result(root.path())["caches"]["project"]["verification"]["status"],
+        "matched"
+    );
+    assert!(root.path().join("out/project/partial").is_file());
+}
