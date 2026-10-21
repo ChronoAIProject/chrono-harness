@@ -6,6 +6,8 @@ use std::{
     process::Command,
 };
 use tempfile::TempDir;
+#[path = "consumption.rs"]
+mod consumption;
 
 #[test]
 fn operation_bounds_are_explicit_complete_and_local_to_listed_operations() {
