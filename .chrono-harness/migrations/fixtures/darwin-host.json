@@ -25,6 +25,11 @@
         "host": "native-macos-26-run38549541595",
         "expected_version": "git version 2.39.3 (Apple Git-146)",
         "sha256": "4016687c36d60a2bbcab1de3850ebdafdd0a95f9421ff7f05aaf4ca6a002a227"
+      },
+      {
+        "host": "developer-macos-27-26A434",
+        "expected_version": "git version 2.50.1 (Apple Git-155)",
+        "sha256": "34129c71a01a74f7f3b2443521519b2e5447553fa187f5fcafaaf8c42cc192e2"
       }
     ]
   }

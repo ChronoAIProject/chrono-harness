@@ -1,7 +1,7 @@
 {
   "schema": "chrono-cache/v2",
   "namespace": "chrono-harness",
-  "artifact_registry": ".chrono-harness/config.json",
+  "artifact_registry": ".chrono-harness/git/pinned-macos.json",
   "require_primary_checkout": true,
   "inputs": {
     "rustc.file": {

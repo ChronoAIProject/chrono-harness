@@ -248,6 +248,14 @@
         {
           "kind": "runtime-input",
           "to": "script:host-bootstrap-tests"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "project:cache"
+        },
+        {
+          "kind": "runtime-input",
+          "to": "script:release-build"
         }
       ]
     },

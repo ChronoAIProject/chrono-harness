@@ -922,7 +922,7 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read =
         |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
-    let config = read(".chrono-harness/config.json");
+    let config = read(".chrono-harness/git/pinned-macos.json");
     let mut tool = config["tools"]
         .as_array()
         .unwrap()

@@ -1053,16 +1053,17 @@ fn registered_git_alternative_creates_from_latest_and_unregistered_bytes_refuse(
         let program = fixture_git();
         let version = Command::new(&program).arg("--version").output().unwrap();
         let hash = sha256(&fs::read(&program).unwrap());
+        let version_text = String::from_utf8_lossy(&version.stdout);
         h.policy(|p| {
             p["schema"] = value!("chrono-worktree-config/v3");
             p["check_inputs"] = value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}});
             p["git"]["expected_version"] = value!("not selected");
             p["git"]["sha256"] = value!(if case == "primary" {hash.clone()} else {"0".repeat(64)});
             if case == "primary" {
-                p["git"]["expected_version"] = value!(String::from_utf8_lossy(&version.stdout).trim());
+                p["git"]["expected_version"] = value!(version_text.trim());
             }
             p["git"]["identities"] = value!([{"sha256":if matches!(case, "alternative" | "wrong-version") {hash.clone()} else {"1".repeat(64)},
-                "expected_version":if case == "wrong-version" {"wrong version"} else {String::from_utf8_lossy(&version.stdout).trim()}}]);
+                "expected_version":if case == "wrong-version" {"wrong version"} else {version_text.trim()}}]);
         });
         let target = h.parent.join("target");
         let (code, report, error) = h.invoke("integration", "identity", &target);

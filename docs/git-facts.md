@@ -211,6 +211,10 @@ registered identity can select a separately bound policy. `macos-26` remains the
 native CI consumer. Its current executable identity and the candidate's native
 acceptance still require remote observation; cross-host Xcode equality is not
 assumed. Historical migration fixtures retain their original meanings.
+The Darwin migration tool fixture adds the separately named measured macOS-27
+identity; its original developer/native tuples and historical source snapshot
+are unchanged. Cache artifact registration and release staging explicitly consume
+the preserved direct policy's artifact metadata, independently of Git selection.
 
 Dedicated Rust tests cover successful selection, fixed/request bindings, drift,
 unknown bytes, malformed/ambiguous declarations and target binding disagreement.

@@ -1759,8 +1759,10 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     let version = Command::new(&program).arg("--version").output().unwrap();
     assert!(version.status.success());
     let config_path = ".chrono-harness/config.json";
-    let mut config: Value =
-        serde_json::from_slice(&fs::read(dir.path().join(config_path)).unwrap()).unwrap();
+    let mut config: Value = serde_json::from_slice(
+        &fs::read(dir.path().join(".chrono-harness/git/pinned-macos.json")).unwrap(),
+    )
+    .unwrap();
     let tool_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();
     let input_id = config["facts_git"]["input"].as_str().unwrap().to_owned();
     let tool = config["tools"]
