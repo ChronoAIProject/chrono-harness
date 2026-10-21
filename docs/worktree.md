@@ -5,8 +5,8 @@ project. It creates a new feature or integration worktree from a freshly fetched
 explicit remote target. It does not select projects from directory names, run a
 language restore, reset existing branches, open PRs or claim a governance verdict.
 
-The host registers `.chrono-harness/worktree.json` in FILEMAP. Its schema is
-`chrono-worktree-config/v1`; the adopted file supplies the complete shape:
+The host registers `.chrono-harness/worktree.json` in FILEMAP. The original
+`chrono-worktree-config/v1` shape is:
 
 ```json
 {
@@ -30,7 +30,7 @@ reuses their existing strict loader. A successful load or creation is not full
 reference admission, complete input certification, freshness certification or
 activation. Workflow's normal judge still evaluates delivery context and DELTA.
 
-`host_config` accepts the same stable registered `chrono-git-configs/v1` platform
+`host_config` accepts the same stable registered `chrono-git-configs/v1` or v2 platform
 entry as other full consumers, as well as a direct configuration. The shared
 registry snapshot reader selects the direct full-v3 target separately from each
 fixed source and fetched commit. Their effective configuration and workflow paths
@@ -58,6 +58,23 @@ The producer resolves the configured Git executable once for observation and
 binds its actual bytes for every Git operation. Optional expected digest and
 version values reject mismatches; a null value makes no expected-identity claim.
 Only the declared environment is inherited, and explicit values override it.
+
+The adopted `chrono-worktree-config/v3` retains v2's required `check_inputs`
+and adds a nonempty `git.identities` array. Each row declares `sha256` and
+`expected_version` for the same `git.program`. The primary digest/version stay
+required, all digests must be valid and unique across the primary and alternatives,
+and versions must be nonempty. V1/v2 reject `identities`, including null. Before
+any version probe the producer reads the resolved program's bytes and selects
+the primary or exact registered alternative; no match refuses admission. The
+selected version and digest are then checked by the existing process owner.
+The receipt retains the actual selected tool and original full policy digest.
+This changes neither committed source/fetched/coordinator equality nor v2
+automatic-cleanup ownership. Older binaries reject the versioned policy.
+
+This host preserves the original primary identity and separately registers the
+measured macOS 27 identity, aligned with the [Git facts selector](git-facts.md#exact-host-executable-selection).
+Native macOS-26 acceptance and actual coordinator cutover remain caller-owned.
+
 For untracked inventories, the producer explicitly disables Git global literal,
 glob, noglob and case-folding pathspec modes in that child environment. The
 exclusion arguments themselves are literal and case-sensitive; each process
@@ -1064,6 +1081,21 @@ registered bootstrap and short check commands. The current scoped local producer
 has `full_context: None`; this route needs no synthetic linked origin receipt.
 Main-only bootstrap may seed a missing owner binary. This is candidate validation,
 not acceptance of the surviving coordinator or of full/native obligations.
+
+The same staged main-clone path is the host admission adaptation when the
+surviving coordinator's committed Git pin cannot execute on a newly supported
+host. Use a fresh latest-dev integration branch in that independent main clone;
+register the exact additional identity at the existing Git/worktree owners, then
+commit the clean candidate before the registered bootstrap and short check.
+An owner binary seeded solely for a pre-repair failure probe in this disposable
+validation clone may be preserved outside its install destination after all its
+tasks join, allowing the same main-only bootstrap to seed the candidate owner.
+Verify that binary's identity and absence of consumers before moving it. This
+does not permit replacing an active or foreign coordinator, changing expected
+digests during validation, synthesizing linked receipts, or skipping policy
+equality. The caller must still observe native macOS-26 Git identity and exact
+candidate checks, then deploy matching committed policies and participation
+before creating the three real linked worktrees through ordinary `start`.
 
 For actual cutover, join/exclude incompatible producers, retain the v1 state,
 and install the compatible binary in the surviving main coordinator. Commit and

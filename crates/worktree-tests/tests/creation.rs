@@ -1047,6 +1047,93 @@ fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
 }
 
 #[test]
+fn registered_git_alternative_creates_from_latest_and_unregistered_bytes_refuse() {
+    for case in ["primary", "alternative", "unknown", "wrong-version"] {
+        let h = Host::new("payload");
+        let program = fixture_git();
+        let version = Command::new(&program).arg("--version").output().unwrap();
+        let hash = sha256(&fs::read(&program).unwrap());
+        h.policy(|p| {
+            p["schema"] = value!("chrono-worktree-config/v3");
+            p["check_inputs"] = value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}});
+            p["git"]["expected_version"] = value!("not selected");
+            p["git"]["sha256"] = value!(if case == "primary" {hash.clone()} else {"0".repeat(64)});
+            if case == "primary" {
+                p["git"]["expected_version"] = value!(String::from_utf8_lossy(&version.stdout).trim());
+            }
+            p["git"]["identities"] = value!([{"sha256":if matches!(case, "alternative" | "wrong-version") {hash.clone()} else {"1".repeat(64)},
+                "expected_version":if case == "wrong-version" {"wrong version"} else {String::from_utf8_lossy(&version.stdout).trim()}}]);
+        });
+        let target = h.parent.join("target");
+        let (code, report, error) = h.invoke("integration", "identity", &target);
+        if matches!(case, "primary" | "alternative") {
+            assert_eq!(code, 0, "{report} {error}");
+            assert_eq!(report["tool"]["sha256"], hash);
+            assert_eq!(
+                git(&target, &["rev-parse", "HEAD"]),
+                git(&h.root, &["rev-parse", "HEAD"])
+            );
+        } else {
+            assert_ne!(code, 0);
+            if case == "unknown" {
+                assert!(error.contains("before version probe"), "{error}");
+            } else {
+                assert!(
+                    report["error"]
+                        .as_str()
+                        .unwrap()
+                        .contains("Git version mismatch"),
+                    "{report} {error}"
+                );
+            }
+            assert!(!target.exists());
+        }
+    }
+}
+
+#[test]
+fn git_identity_contract_rejects_legacy_null_duplicates_and_missing_pins() {
+    for case in [
+        "v1",
+        "v2-null",
+        "duplicate",
+        "missing-pin",
+        "empty",
+        "invalid-hash",
+    ] {
+        let h = Host::new("payload");
+        h.policy(|p| {
+            p["schema"] = value!("chrono-worktree-config/v3");
+            p["check_inputs"] = value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}});
+            p["git"]["sha256"] = value!("0".repeat(64));
+            p["git"]["expected_version"] = value!("registered version");
+            p["git"]["identities"] = value!([{"sha256":"1".repeat(64),"expected_version":"registered alternative"}]);
+            match case {
+                "v1" => p["schema"] = value!("chrono-worktree-config/v1"),
+                "v2-null" => {p["schema"] = value!("chrono-worktree-config/v2"); p["git"]["identities"] = Value::Null;},
+                "duplicate" => p["git"]["identities"][0]["sha256"] = value!("0".repeat(64)),
+                "missing-pin" => p["git"]["sha256"] = Value::Null,
+                "empty" => p["git"]["identities"] = value!([]),
+                "invalid-hash" => p["git"]["identities"][0]["sha256"] = value!("invalid"),
+                _ => unreachable!(),
+            }
+        });
+        let target = h.parent.join("target");
+        let (code, _, error) = h.invoke("integration", "invalid", &target);
+        assert_ne!(code, 0, "{case}");
+        assert!(
+            error.contains(if matches!(case, "v1" | "v2-null") {
+                "Git identities require"
+            } else {
+                "worktree v3 requires"
+            }),
+            "{case}: {error}"
+        );
+        assert!(!target.exists(), "{case}: {error}");
+    }
+}
+
+#[test]
 fn adopted_policy_runs_the_actual_creation_consumer() {
     let h = Host::new("host files/no-language-contract.data");
     let adopted_bytes = fs::read(source().join(POLICY)).unwrap();
@@ -1060,7 +1147,9 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
             .unwrap()
             .push(file(path, value!([])));
         fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
-        let host_config = json(&fs::read(source().join(CONFIG)).unwrap()).unwrap();
+        let host_config =
+            json(&fs::read(source().join(".chrono-harness/git/pinned-macos.json")).unwrap())
+                .unwrap();
         let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
         config["artifacts"] = host_config["artifacts"].clone();
         for artifact in config["artifacts"].as_array_mut().unwrap() {

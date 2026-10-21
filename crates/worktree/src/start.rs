@@ -596,7 +596,7 @@ pub(super) fn create(
 pub(crate) fn with_report(
     root: &Path,
     config_path: &str,
-    config: Config,
+    mut config: Config,
     bytes: &[u8],
     operation: &str,
     success: &str,
@@ -642,7 +642,7 @@ pub(crate) fn with_report(
     {
         return Err("Git repository redirection environment is unsupported".into());
     }
-    if let Some(expected) = &config.git.sha256 {
+    if config.git.sha256.is_some() {
         if !config.git.program.contains('/') && !environment.contains_key("PATH") {
             return Err("Git resolution requires declared PATH".into());
         }
@@ -651,8 +651,19 @@ pub(crate) fn with_report(
             &config.git.program,
             Some(environment.get("PATH").map(String::as_str).unwrap_or("")),
         )?;
-        if chrono_harness::file_identity(&path)?.0 != *expected {
-            return Err("Git executable digest mismatch before version probe".into());
+        let observed = chrono_harness::file_identity(&path)?.0;
+        if config.git.sha256.as_deref() != Some(observed.as_str()) {
+            if let Some(identity) = config
+                .git
+                .identities
+                .as_ref()
+                .and_then(|rows| rows.iter().find(|row| row.sha256 == observed))
+            {
+                config.git.sha256 = Some(identity.sha256.clone());
+                config.git.expected_version = Some(identity.expected_version.clone());
+            } else {
+                return Err("Git executable digest mismatch before version probe".into());
+            }
         }
     }
     // Tool observation retains a failed version process instead of converting it into a success.

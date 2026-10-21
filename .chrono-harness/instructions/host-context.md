@@ -54,7 +54,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 无关登记项清理失败保留原回执／`cleanup_failures`，合法目标仍执行；目标身份、政策、所有权及协调状态写入失败继续阻断，显式 maintain 仍报失败。未封口 birth 只在实际排除和原附件／政策验证后恢复，保留原缺失／部分结果；新消费在已发布缓存尝试后开新代际，旧 intent/result 不覆盖。命令原 stdout／stderr／退出码保留，非空 stderr 不等于生命周期失败。
 
-兼容 binary 与两端已提交 policy/config/participation 必须配套；调用方负责加入／排除旧生产者、保留 v1 状态、有序部署与实际切换。只升级 binary 或 linked policy 应拒绝，旧版／未知所有权保留；migrate 不清理或宣称完成。[v2 切换及租约限制](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)仍需提交候选、支持平台和真实协调宿主验收。
+兼容 binary 与两端已提交 policy/config/participation 必须配套；调用方负责加入／排除旧生产者、保留 v1 状态、有序部署与实际切换。只升级 binary 或 linked policy 应拒绝，旧版／未知所有权保留；migrate 不清理或宣称完成。[v2 切换及租约限制](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)仍需提交候选、支持平台和真实协调宿主验收。宿主 Git 身份阻断时，唯一 bootstrap 适配是该节登记的独立干净 Git main clone／最新 dev integration 候选路径；main-only seed 不替代真实协调者部署与随后 canonical start。
 
 ## 按任务读取现有文档
 
@@ -68,7 +68,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 ## 当前未完成边界
 
-五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主绑定 `/usr/bin/git` 字节／版本，原生使用 macos-26；已有 scoped 原生匹配结果不等于完整启用，开发工具目录仍未显式绑定。
+五份 full 治理登记仍 proposed，`enforcement=not-implemented`、`input_closure=incomplete`；未采用 Cargo guarded policy。Cargo／编译器／SDK、配置及其它适用输入／执行物绑定仍有缺口。宿主 Git facts 采用 `chrono-git-configs/v2` 精确摘要选择，worktree 采用 v3 主身份与登记的补充身份；两者保留原 `/usr/bin/git` 字节／版本并另登记实测 macOS 27.0.1 身份，未知摘要仍在执行前拒绝。政策与产品同改：旧宿主含义保留，新增宿主可选对应直接政策；额外读取和完整验证成本未测。原生仍使用 macos-26，其当前字节与本候选原生验收待观察；已有 scoped 原生匹配结果不等于本次验收或完整启用，开发工具目录仍未显式绑定。
 
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 

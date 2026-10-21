@@ -30,6 +30,14 @@ pub struct Git {
     pub program: String,
     pub expected_version: Option<String>,
     pub sha256: Option<String>,
+    #[serde(default)]
+    pub identities: Option<Vec<GitIdentity>>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitIdentity {
+    pub expected_version: String,
+    pub sha256: String,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -183,18 +191,58 @@ fn configuration(root: &Path, config_path: &str) -> Result<(Config, Vec<u8>), St
     }
     let bytes = fs::read(no_symlink_parents(root, config_path)?).map_err(|e| e.to_string())?;
     let config: Config = decode(&bytes)?;
+    let declared = chrono_harness::json(&bytes)?;
+    if config.schema == "chrono-worktree-config/v3" {
+        let mut hashes = std::collections::BTreeSet::new();
+        let hash = config
+            .git
+            .sha256
+            .as_deref()
+            .filter(|s| chrono_harness::wire::is_digest(s))
+            .ok_or("worktree v3 requires a primary Git digest")?;
+        hashes.insert(hash);
+        if !config
+            .git
+            .expected_version
+            .as_ref()
+            .is_some_and(|s| !s.trim().is_empty())
+        {
+            return Err("worktree v3 requires a primary Git version".into());
+        }
+        let identities = config
+            .git
+            .identities
+            .as_ref()
+            .filter(|rows| !rows.is_empty())
+            .ok_or("worktree v3 requires nonempty Git identities")?;
+        for identity in identities {
+            if !chrono_harness::wire::is_digest(&identity.sha256)
+                || identity.expected_version.trim().is_empty()
+                || !hashes.insert(&identity.sha256)
+            {
+                return Err(
+                    "worktree v3 requires unique digest-bound Git identities and versions".into(),
+                );
+            }
+        }
+    } else if declared["git"].get("identities").is_some() {
+        return Err("Git identities require worktree config v3".into());
+    }
     if let Some(p) = &config.check_inputs {
         check_inputs::validate(p)?;
     }
     if (config.schema == "chrono-worktree-config/v1"
         && chrono_harness::json(&bytes)?.get("check_inputs").is_some())
-        || (config.schema == "chrono-worktree-config/v2" && config.check_inputs.is_none())
+        || (matches!(
+            config.schema.as_str(),
+            "chrono-worktree-config/v2" | "chrono-worktree-config/v3"
+        ) && config.check_inputs.is_none())
     {
         return Err("worktree v2 requires check_inputs; v1 does not accept it".into());
     }
     if !matches!(
         config.schema.as_str(),
-        "chrono-worktree-config/v1" | "chrono-worktree-config/v2"
+        "chrono-worktree-config/v1" | "chrono-worktree-config/v2" | "chrono-worktree-config/v3"
     ) || config.remote.is_empty()
         || config.remote.starts_with('-')
         || config.remote.contains(['\0', '\n', '\r'])

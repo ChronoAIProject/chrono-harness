@@ -88,7 +88,7 @@ fn expanded_observation(reader: &Reader) -> Value {
 #[test]
 fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let path = ".chrono-harness/config.json";
+    let path = ".chrono-harness/git/pinned-macos.json";
     let config: Value = serde_json::from_slice(&fs::read(product.join(path)).unwrap()).unwrap();
     let filemap: Value =
         serde_json::from_slice(&fs::read(product.join(".chrono-harness/FILEMAP.json")).unwrap())
@@ -179,12 +179,10 @@ fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
 #[test]
 fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
     let mut h = Host::new(json!({"mode":"passthrough"}));
-    let original = fs::read(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/config.json"),
-    )
-    .unwrap();
-    let path = ".chrono-harness/registry-source.json";
+    // The registered macOS declaration is fixture data on every test platform.
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let original = fs::read(product.join(".chrono-harness/git/pinned-macos.json")).unwrap();
+    let path = ".chrono-harness/registry-source.json";
     let config: Value = serde_json::from_slice(&original).unwrap();
     let mut originals = std::collections::BTreeMap::new();
     for registry in chrono_harness::facts::registry_paths(&config, path).unwrap() {
@@ -446,6 +444,96 @@ fn select(h: &Host, selector: &Value) {
 }
 fn selection() -> Value {
     json!({"schema":"chrono-git-configs/v1","platforms":{platform():CONFIG}})
+}
+
+fn identity_selection(h: &Host) -> Value {
+    json!({"schema":"chrono-git-configs/v2","platforms":{platform():{
+    "program":h.tool,"configurations":[
+        {"sha256":"0".repeat(64),"path":".chrono-harness/other-host.json"},
+        {"sha256":sha256(&fs::read(&h.tool).unwrap()),"path":CONFIG}
+    ]}}})
+}
+
+#[test]
+fn exact_host_identity_selects_registered_policy_and_preserves_guards() {
+    let mut h = Host::new(json!({"mode":"passthrough"}));
+    h.config["tools"][0]["program"] = json!(h.tool);
+    select(&h, &identity_selection(&h));
+    let candidate = commit(&h);
+    let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
+    reader.verify_config(&h.root, &candidate).unwrap();
+    let observed = reader.observation();
+    assert_eq!(observed["selection"]["config_path"], CONFIG);
+    assert_eq!(
+        observed["binding"]["sha256"],
+        h.config["environment"]["inputs"][0]["sha256"]
+    );
+    Reader::from_observations(
+        &h.root,
+        SELECTOR,
+        &candidate,
+        &json!({"environment":observed["environment"],"git_facts":observed}),
+    )
+    .unwrap();
+    let before = fs::read(h.root.join("trace")).unwrap();
+    fs::write(h.root.join(SELECTOR), b"{}").unwrap();
+    assert!(reader.git(&h.root, &["rev-parse", "HEAD"]).is_err());
+    assert_eq!(fs::read(h.root.join("trace")).unwrap(), before);
+}
+
+#[test]
+fn invalid_host_identity_selection_never_executes_git() {
+    for case in [
+        "unknown-bytes",
+        "duplicate",
+        "empty",
+        "relative",
+        "bad-hash",
+        "unknown-field",
+        "wrong-target-hash",
+        "wrong-target-program",
+    ] {
+        let mut h = Host::new(json!({"mode":"passthrough"}));
+        h.config["tools"][0]["program"] = json!(h.tool);
+        let mut selector = identity_selection(&h);
+        let host = &mut selector["platforms"][platform()];
+        match case {
+            "unknown-bytes" => host["configurations"].as_array_mut().unwrap().remove(1),
+            "duplicate" => {
+                let row = host["configurations"][1].clone();
+                host["configurations"].as_array_mut().unwrap().push(row);
+                Value::Null
+            }
+            "empty" => {
+                host["configurations"] = json!([]);
+                Value::Null
+            }
+            "relative" => {
+                host["program"] = json!("git-wrapper");
+                Value::Null
+            }
+            "bad-hash" => {
+                host["configurations"][0]["sha256"] = json!("bad");
+                Value::Null
+            }
+            "unknown-field" => {
+                host["fallback"] = json!(CONFIG);
+                Value::Null
+            }
+            "wrong-target-hash" => {
+                h.config["environment"]["inputs"][0]["sha256"] = json!("1".repeat(64));
+                Value::Null
+            }
+            "wrong-target-program" => {
+                h.config["tools"][0]["program"] = json!("git-wrapper");
+                Value::Null
+            }
+            _ => unreachable!(),
+        };
+        select(&h, &selector);
+        assert!(Reader::for_config(&h.root, SELECTOR).is_err(), "{case}");
+        assert!(!h.root.join("trace").exists(), "{case} launched Git");
+    }
 }
 fn commit(h: &Host) -> String {
     let git = chrono_harness::resolve_program(&h.root, "git", None).unwrap();

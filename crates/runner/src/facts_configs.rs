@@ -3,6 +3,13 @@ use crate::{json, no_symlink_parents, relative_path, sha256};
 use serde_json::{Value, json as value};
 use std::{fs, path::Path};
 
+pub(crate) fn is_selector(config: &Value) -> bool {
+    matches!(
+        config["schema"].as_str(),
+        Some("chrono-git-configs/v1" | "chrono-git-configs/v2")
+    )
+}
+
 pub(crate) struct Selection {
     pub path: String,
     pub bytes: Vec<u8>,
@@ -42,7 +49,13 @@ pub(crate) fn resolve(
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
     let config = json(&bytes)?;
-    if config["schema"] != "chrono-git-configs/v1" {
+    if !is_selector(&config) {
+        if config["schema"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("chrono-git-configs/"))
+        {
+            return Err("unsupported Git config selector schema".into());
+        }
         return Ok((path.into(), bytes, config, None));
     }
     let object = config
@@ -56,21 +69,41 @@ pub(crate) fn resolve(
         .as_object()
         .filter(|map| !map.is_empty())
         .ok_or("Git config selector requires nonempty platforms")?;
+    let version2 = config["schema"] == "chrono-git-configs/v2";
     for (platform, target) in platforms {
         if platform.is_empty() || platform.trim() != platform {
             return Err("Git config selector platform must be nonempty and literal".into());
         }
-        let target = target.as_str().ok_or("Git config selector path required")?;
-        host_path(target)?;
-        if target == path {
-            return Err("Git config selector cannot select itself".into());
+        let targets = if version2 {
+            identity_targets(target)?
+        } else {
+            vec![target.as_str().ok_or("Git config selector path required")?]
+        };
+        for target in targets {
+            host_path(target)?;
+            if target == path {
+                return Err("Git config selector cannot select itself".into());
+            }
         }
     }
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-    let selected = platforms
+    let host = platforms
         .get(&platform)
-        .and_then(Value::as_str)
         .ok_or_else(|| format!("Git config selector has no registered platform {platform}"))?;
+    let mut identity = None;
+    let selected = if version2 {
+        let program = host["program"]
+            .as_str()
+            .ok_or("Git selector program required")?;
+        let hash = sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
+        let row = host["configurations"].as_array().unwrap().iter()
+            .find(|row| row["sha256"] == hash)
+            .ok_or_else(|| format!("Git config selector has no registered executable identity for {platform}: {program} sha256={hash}"))?;
+        identity = Some((program, hash));
+        row["path"].as_str().unwrap()
+    } else {
+        host.as_str().ok_or("Git config selector path required")?
+    };
     let selected_bytes = read(selected)?;
     let selected_config = json(&selected_bytes)?;
     if !matches!(selected_config["schema_version"].as_u64(), Some(3 | 4))
@@ -79,6 +112,12 @@ pub(crate) fn resolve(
         return Err(
             "Git config selector requires a direct full-v3 policy or v4 policy, never another selector".into(),
         );
+    }
+    if let Some((program, hash)) = identity {
+        let (tool, input) = crate::facts_binding::declaration(&selected_config)?;
+        if tool["program"] != program || input["location"] != program || input["sha256"] != hash {
+            return Err("Git config selector identity differs from selected policy binding".into());
+        }
     }
     let selection = Selection {
         path: path.into(),
@@ -102,7 +141,7 @@ pub fn identity(
     path: &str,
 ) -> Result<Identity, String> {
     let entry = values.get(path).ok_or("missing configuration entry")?;
-    if entry["schema"] != "chrono-git-configs/v1" {
+    if !is_selector(entry) {
         return Ok(Identity {
             entry_path: path.into(),
             effective_path: path.into(),
@@ -134,6 +173,49 @@ pub fn identity(
         effective_path,
         selection,
     })
+}
+
+fn identity_targets(host: &Value) -> Result<Vec<&str>, String> {
+    let object = host
+        .as_object()
+        .ok_or("Git selector identity object required")?;
+    if object.len() != 2
+        || !object.contains_key("program")
+        || !object.contains_key("configurations")
+    {
+        return Err("Git selector identity requires only program and configurations".into());
+    }
+    let program = host["program"]
+        .as_str()
+        .filter(|p| !p.is_empty())
+        .ok_or("Git selector program required")?;
+    if !Path::new(program).is_absolute() || program.contains(['\0', '\n', '\r']) {
+        return Err("Git selector program must be an absolute literal path".into());
+    }
+    let rows = host["configurations"]
+        .as_array()
+        .filter(|rows| !rows.is_empty())
+        .ok_or("Git selector requires nonempty configurations")?;
+    let mut hashes = std::collections::BTreeSet::new();
+    let mut paths = vec![];
+    for row in rows {
+        let object = row
+            .as_object()
+            .ok_or("Git selector configuration object required")?;
+        let hash = row["sha256"]
+            .as_str()
+            .filter(|s| crate::wire::is_digest(s))
+            .ok_or("Git selector configuration digest required")?;
+        if object.len() != 2 || !object.contains_key("path") || !hashes.insert(hash) {
+            return Err("Git selector configuration requires unique digest and path only".into());
+        }
+        paths.push(
+            row["path"]
+                .as_str()
+                .ok_or("Git selector configuration path required")?,
+        );
+    }
+    Ok(paths)
 }
 
 fn host_path(path: &str) -> Result<(), String> {
