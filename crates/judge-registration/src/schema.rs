@@ -511,9 +511,10 @@ pub fn filemap(v: &Value) -> Result {
                 "test_costs",
                 "execution_plans",
             ],
-            &["execution_scheduling"],
+            &["execution_scheduling", "causal_consumption"],
         )?;
         choice(&v["status"], &["active", "proposed"])?;
+        crate::consumption::contract(v)?;
         crate::execution::plans(v)?;
         if let Some(policy) = v.get("execution_scheduling") {
             let policy: crate::execution::Scheduling =

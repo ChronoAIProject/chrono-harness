@@ -4,6 +4,49 @@
 
 The dependency direction is `judge-ci → judge-filemap → judge-mixed → judge-registration → runner`, with direct runner dependencies for facts/transport. The independent filemap test project has its own manifest, lock and target. There is no workspace or generic registry project.
 
+## Bounded internal causal consumption
+
+FILEMAP v2 may opt in with `causal_consumption.schema` equal to
+`chrono-internal-causal-consumption/v1`. Its nonempty `shared_startup` array
+contains unique `{id, units, startup, consumer, producer, caller, evidence}`
+references; `evidence` is `{test, operation}`. Paths name existing registered host
+documents, and operation/test identities resolve through projects and execution
+plans. Unknown versions/fields, duplicate chains and empty identities fail.
+This contract currently covers internal shared-startup unit consumption only.
+
+The host adopts `runner-startup`: the existing detector production operation →
+`host.bootstrap-shared-install-unit_runner` → installed runner/core tools →
+current runner unit check. Need and output-use text remain in the selected units
+consumer. Profiles, build operations and installation source/destination pairs
+remain in bootstrap registrations; caller argv and ownership remain in projects;
+build output claims and evidence plans remain in FILEMAP. No second inventory or
+discovery is introduced. The existing `host.bootstrap-real-consumer` retains the
+actual startup manifest and original current-check report and exercises the
+subsequent runner tests. Registration checks its declared operation, test owner,
+plan and output claim; existing projects execution and report collection must
+still establish actual success.
+
+The current scoped canonical path delegates to registration before unit
+selection. Contract changes, explicit source-path changes and reached operation
+owners from either fixed endpoint select the chain. Old-only references still
+select after removal or rebinding. A selected chain must resolve in the candidate;
+removing its opt-in is an uncertified retirement and fails. Missing need/use,
+inputs, callers, profiles, producer claims, installed tool roles, current check
+binding or required evidence fail with `E_CONSUMPTION`; retired chains use
+`E_CONSUMPTION_RETIRED`. Selected chains add their explicitly registered evidence
+test to the same global check obligations. Unit execution and collection keep
+their existing assignment and original-evidence rules. Unreached chains are
+reported as historical context, and consumers outside this opt-in keep their
+prior meaning.
+
+Product/policy visibility: registration gains this bounded consistency rule and
+the host opts in one existing chain. Additional fixed input reads, regression
+tests and execution of the already registered evidence test are the validation
+cost; complete build/CI/storage costs remain unknown. The contract cannot prove
+usefulness or fidelity to a real need: those remain accountable engineering
+judgments. External/all-consumer adoption, full-path causal enforcement, native
+acceptance of this candidate and complete SPEC activation remain pending.
+
 ## Versioned output
 
 `schema` is `chrono-filemap-impact/v2`. Consumers may deserialize `chrono_judge_filemap::Impact`; JSON consumers must check this schema. Endpoint commits, trees and registry digest are bound by the enclosing v1 request/report. Arrays and maps are emitted deterministically. Unknown cost values remain JSON null. This output is declared graph impact, including validated effective environment changes when supplied; it is not operation evidence or retirement approval. The additive `structure` field is `chrono-filemap-structure/v1` and is a deterministic diagnostic view of the same explicit inputs.

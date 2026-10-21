@@ -1082,7 +1082,20 @@ fn inventory(
         Some(snapshot(reader, root, base, op)?)
     };
     let new = snapshot(reader, root, &req.candidate, p.clone())?;
-    let (paths, mut selected, selection_explanation, affected) = ci_impact(old.as_ref(), &new);
+    let (paths, mut selected, mut selection_explanation, affected) = ci_impact(old.as_ref(), &new);
+    let consumption = chrono_judge_registration::consumption::check_scoped(
+        reader,
+        root,
+        req.base.as_deref(),
+        &req.candidate,
+        &p.filemap,
+        &p.projects,
+        p.registration_config.as_deref(),
+        &paths,
+        &affected,
+    )?;
+    selected.extend(consumption.required_tests.iter().cloned());
+    selection_explanation["causal_consumption"] = object!(consumption);
     if new.registry["schema_version"] == 2 {
         chrono_judge_projects::pair_declarations(&new.registry, &affected)?;
     }
