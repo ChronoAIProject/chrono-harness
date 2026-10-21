@@ -1,5 +1,9 @@
 //! Shared chrono-judge/v1 wire types and transport. No host admissibility policy.
-use crate::{CommandSpec, ProcessResult, decode, no_symlink_parents, run_process_observed, sha256};
+use crate::{
+    CommandSpec, ProcessResult, decode, no_symlink_parents, no_symlink_parents_detailed,
+    run_process_observed_detailed, sha256,
+};
+use chrono_diagnostics::error::{ErrorRecord, Failure, ReceivedError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fs, path::PathBuf};
@@ -331,12 +335,81 @@ pub(crate) fn validate_response_at(
 pub struct TransportFailure {
     pub message: String,
     pub process: Option<ProcessResult>,
+    error: Failure,
 }
 impl From<String> for TransportFailure {
     fn from(message: String) -> Self {
+        let error = Failure::new("E_JUDGE_TRANSPORT", message.clone());
         Self {
             message,
             process: None,
+            error,
+        }
+    }
+}
+impl From<crate::ProcessFailure> for TransportFailure {
+    fn from(source: crate::ProcessFailure) -> Self {
+        Self {
+            message: source.message.clone(),
+            process: None,
+            error: Failure::wrap("E_JUDGE_TRANSPORT", source.message.clone(), source),
+        }
+    }
+}
+impl std::fmt::Display for TransportFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for TransportFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+/// Versioned runner report extension; never a judge-v1 request/response field.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TransportDiagnostic {
+    pub schema: TransportDiagnosticSchema,
+    pub error: ErrorRecord,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TransportDiagnosticSchema {
+    #[serde(rename = "chrono-runner-transport-failure/v1")]
+    V1,
+}
+impl TransportFailure {
+    pub(crate) fn with_process(message: String, process: ProcessResult) -> Self {
+        let mut failure = Self::from(message);
+        if let Some(source) = &process.failure_cause {
+            failure.error = Failure::wrap(
+                "E_JUDGE_TRANSPORT",
+                failure.message.clone(),
+                crate::SharedProcessFailure(source.clone()),
+            );
+        } else if let Some(record) = process.failure_record.clone() {
+            failure.error = Failure::wrap(
+                "E_JUDGE_TRANSPORT",
+                failure.message.clone(),
+                ReceivedError::from(record),
+            );
+        }
+        failure.process = Some(process);
+        failure
+    }
+    fn context(mut self, req: &Request) -> Self {
+        self.error = self
+            .error
+            .at("request_id", req.request_id.clone())
+            .at("judge_id", req.judge_id.clone())
+            .at("operation", "judge.invoke")
+            .at("operation_started", self.process.is_some());
+        self
+    }
+    pub fn diagnostic(&self) -> TransportDiagnostic {
+        TransportDiagnostic {
+            schema: TransportDiagnosticSchema::V1,
+            error: self.error.record(),
         }
     }
 }
@@ -361,8 +434,11 @@ pub fn invoke_detailed(
     timeout: u64,
     limit: usize,
 ) -> Result<(Response, ProcessResult), TransportFailure> {
-    req.validate()?;
-    invoke_bytes(req, b, env, timeout, limit, &req.canonical()?)
+    (|| {
+        req.validate()?;
+        invoke_bytes(req, b, env, timeout, limit, &req.canonical()?)
+    })()
+    .map_err(|failure: TransportFailure| failure.context(req))
 }
 pub(crate) fn invoke_prepared(
     req: &PreparedRequest,
@@ -371,8 +447,11 @@ pub(crate) fn invoke_prepared(
     timeout: u64,
     limit: usize,
 ) -> Result<(Response, ProcessResult), TransportFailure> {
-    req.request.validate_header()?;
-    invoke_bytes(&req.request, b, env, timeout, limit, &req.stdin)
+    (|| {
+        req.request.validate_header()?;
+        invoke_bytes(&req.request, b, env, timeout, limit, &req.stdin)
+    })()
+    .map_err(|failure: TransportFailure| failure.context(&req.request))
 }
 fn invoke_bytes(
     req: &Request,
@@ -390,7 +469,7 @@ fn invoke_bytes(
         .as_deref()
         .filter(|v| is_digest(v))
         .ok_or("E_PROTOCOL: missing executable digest")?;
-    let path = no_symlink_parents(&req.candidate.root, &b.executable)?;
+    let path = no_symlink_parents_detailed(&req.candidate.root, &b.executable)?;
     let spec = CommandSpec {
         program: path.to_str().ok_or("non UTF-8 executable")?.into(),
         args: b
@@ -406,12 +485,9 @@ fn invoke_bytes(
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let p = run_process_observed(&req.candidate.root, &spec, stdin, hash)?;
+    let p = run_process_observed_detailed(&req.candidate.root, &spec, stdin, hash)?;
     if let Some(message) = p.failure.clone() {
-        return Err(TransportFailure {
-            message,
-            process: Some(p),
-        });
+        return Err(TransportFailure::with_process(message, p));
     }
     let result = decode::<Response>(&p.stdout_bytes).and_then(|response| {
         validate_response(req, &response, p.exit_code)?;
@@ -419,12 +495,12 @@ fn invoke_bytes(
     });
     match result {
         Ok(response) => Ok((response, p)),
-        Err(message) => Err(TransportFailure {
-            message: format!(
+        Err(message) => Err(TransportFailure::with_process(
+            format!(
                 "E_PROTOCOL: {message}; exit={}; stderr={}",
                 p.exit_code, p.stderr
             ),
-            process: Some(p),
-        }),
+            p,
+        )),
     }
 }
