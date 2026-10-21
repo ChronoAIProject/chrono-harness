@@ -771,7 +771,12 @@ fn migration_host_with_alias_collision(
     // Preserve the historical snapshot; install only the explicitly selected
     // platform fixture declarations in the new host. The copied host's Git digest/version can reject at Reader::for_config
     // before either historical-method or wrong-Python-version diagnostics.
-    let mut config: Value = serde_json::from_slice(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
+    // Rebind a declared direct policy as fixture data, preserving the fixed
+    // historical snapshot and leaving production selector admission to Rust.
+    let mut config: Value = serde_json::from_slice(
+        &fs::read(root.join(".chrono-harness/git/pinned-macos.json")).unwrap(),
+    )
+    .unwrap();
     adopt_fixture_bindings(&root, &mut config);
     fs::write(
         root.join(CONFIG),
