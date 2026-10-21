@@ -758,6 +758,54 @@ fn execution_self_diagnostic_rejects_mutated_prelaunch_error_records() {
     }
 }
 
+// Expectations come from the native operations and sealed request, rather
+// than parsing the compatibility transport_failure message.
+#[cfg(unix)]
+#[test]
+fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
+    use std::os::unix::fs::PermissionsExt;
+    for case in ["missing", "permission", "digest"] {
+        let (dir, request, mut binding) = fixture(value!({"marker":"must-not-run"}));
+        let path = dir.path().join("judge");
+        match case {
+            "missing" => fs::remove_file(&path).unwrap(),
+            "permission" => fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap(),
+            "digest" => binding.sha256 = Some("0".repeat(64)),
+            _ => unreachable!(),
+        }
+        let (status, rows) = chrono_harness::full::execute(
+            &request, std::slice::from_ref(&binding), &Default::default(),
+            FIXTURE_TIMEOUT_SECONDS, 8192,
+        ).unwrap();
+        assert_eq!(status, wire::Status::Error);
+        assert_eq!(rows[0]["state"], "error");
+        assert!(rows[0]["process"].is_null());
+        assert!(rows[0]["exit_code"].is_null());
+        let diagnostic = &rows[0]["transport_diagnostic"];
+        assert_eq!(diagnostic["schema"], "chrono-runner-transport-failure/v1", "{case}: {rows:#?}");
+        assert_eq!(diagnostic["error"]["schema"], "chrono-error/v1");
+        let error = &diagnostic["error"]["error"];
+        assert_eq!(error["context"]["request_id"], rows[0]["request_id"]);
+        assert_eq!(error["context"]["judge_id"], "fixture");
+        assert_eq!(error["context"]["operation"], "judge.invoke");
+        assert_eq!(error["context"]["operation_started"], false);
+        let cause = &error["source"];
+        assert_eq!(cause["code"], match case {
+            "missing" => "E_PROCESS_EXECUTABLE_READ",
+            "permission" => "E_PROCESS_SPAWN",
+            _ => "E_PROCESS_EXECUTABLE_DIGEST",
+        });
+        if case == "digest" {
+            assert!(cause["source"].is_null());
+        } else {
+            assert_eq!(cause["source"]["source"]["type"], "std::io::Error");
+            assert_eq!(cause["source"]["source"]["native_code"], if case == "missing" {libc::ENOENT} else {libc::EACCES});
+        }
+        chrono_harness::full::validate_execution(&request, &[binding], &status, &rows).unwrap();
+        assert!(!dir.path().join("must-not-run").exists());
+    }
+}
+
 #[test]
 fn dag_blocks_dependents_and_continues_independent_branch() {
     let (_dir, r, b) = fixture(value!({"kind":"blocked-dag"}));

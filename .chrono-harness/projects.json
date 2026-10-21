@@ -137,6 +137,19 @@
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
           ]
+        },
+        "diagnostics": {
+          "operation": "test.runner.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--test",
+            "protocol_v1",
+            "prelaunch_diagnostics_"
+          ]
         }
       },
       "language": "rust"

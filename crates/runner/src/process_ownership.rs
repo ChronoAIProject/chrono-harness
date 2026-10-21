@@ -537,7 +537,7 @@ impl Launch {
             });
         }
     }
-    pub(crate) fn spawn_error(&self, error: std::io::Error) -> String {
+    pub(crate) fn spawn_error(&self, error: &std::io::Error) -> String {
         use std::os::unix::fs::FileExt;
         let observations =
             ReceiveSnapshot::read(self.tree.memory()).describe_since(self.receive_before);
