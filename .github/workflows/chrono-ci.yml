@@ -272,9 +272,18 @@ jobs:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
         run: |
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.cache","check.cache-tests"]' --github-output "$GITHUB_OUTPUT"
+      - name: Apply selected native cache acceptance fixture
+        id: chrono_cache_acceptance
+        if: ${{ success() && vars.CHRONO_CACHE_ACCEPTANCE != '' }}
+        shell: bash
+        env:
+          CHRONO_CACHE_ACCEPTANCE: ${{ vars.CHRONO_CACHE_ACCEPTANCE }}
+          CHRONO_CACHE_ACCEPTANCE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          '.chrono-harness/bin/chrono-cache' acceptance-fixture --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --fixture 'native-unusable' --steps-env CHRONO_CACHE_ACCEPTANCE_STEPS --work 'chrono_cache_work'
       - name: Save registered cache check.cache
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') && (vars.CHRONO_CACHE_ACCEPTANCE == '' || steps.chrono_cache_acceptance.outcome == 'success') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -282,7 +291,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.cache-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') && (vars.CHRONO_CACHE_ACCEPTANCE == '' || steps.chrono_cache_acceptance.outcome == 'success') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

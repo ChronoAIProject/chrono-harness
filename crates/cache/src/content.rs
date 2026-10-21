@@ -4,7 +4,7 @@ use chrono_harness::{decode, file_identity, no_symlink_parents};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, path::Path, time::Instant};
 
-const MARKER: &str = ".chrono-cache-content-v1.json";
+pub(crate) const MARKER: &str = ".chrono-cache-content-v1.json";
 pub(crate) const METHOD: &str = "producer-manifest/v1";
 
 fn inventory(root: &Path) -> Result<Value, String> {

@@ -7287,5 +7287,15 @@
     "ref_environment": "GITHUB_REF"
   },
   "recover_failed_restores": true,
-  "recover_unconfirmed_restores": true
+  "recover_unconfirmed_restores": true,
+  "acceptance_fixtures": {
+    "native-unusable": {
+      "method": "remove-producer-manifest/v1",
+      "consumer": "check.unit_cache",
+      "caches": [
+        "check.cache",
+        "check.cache-tests"
+      ]
+    }
+  }
 }

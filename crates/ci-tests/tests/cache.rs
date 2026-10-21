@@ -524,3 +524,136 @@ fn content_sealing_follows_original_work_and_gates_native_saving() {
             .contains("steps.chrono_cache_work.outcome == 'success'")
     );
 }
+
+#[test]
+fn selected_native_acceptance_runs_between_seal_and_save_and_preserves_other_consumers() {
+    let mut value = source(".chrono-harness/ci/units.json");
+    // Compare the capability with the same host before opting in this one consumer.
+    value["persistent_cache"]["jobs"]["unit_cache"]
+        .as_object_mut()
+        .unwrap()
+        .remove("acceptance_fixture");
+    let old = chrono_ci::units::render(
+        &serde_json::from_value(value.clone()).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    value["persistent_cache"]["jobs"]["unit_cache"]["acceptance_fixture"] =
+        json!("native-unusable");
+    let new = chrono_ci::units::render(
+        &serde_json::from_value(value.clone()).unwrap(),
+        ".chrono-harness/ci/units.json",
+    )
+    .unwrap();
+    let old: Value = serde_yaml_ng::from_str(&old[".github/workflows/chrono-ci.yml"]).unwrap();
+    let new: Value = serde_yaml_ng::from_str(&new[".github/workflows/chrono-ci.yml"]).unwrap();
+    for (id, job) in old["jobs"].as_object().unwrap() {
+        if id != "unit_cache" {
+            assert_eq!(*job, new["jobs"][id], "{id}");
+        }
+    }
+    let steps = new["jobs"]["unit_cache"]["steps"].as_array().unwrap();
+    let position = |id: &str| steps.iter().position(|s| s["id"] == id).unwrap();
+    assert!(position("chrono_cache_seal") < position("chrono_cache_acceptance"));
+    for id in ["cache_0_save", "cache_1_save"] {
+        assert!(position("chrono_cache_acceptance") < position(id));
+        assert!(steps[position(id)]["if"].as_str().unwrap().contains("vars.CHRONO_CACHE_ACCEPTANCE == '' || steps.chrono_cache_acceptance.outcome == 'success'"));
+    }
+    let fixture = &steps[position("chrono_cache_acceptance")];
+    assert_eq!(
+        fixture["if"],
+        "${{ success() && vars.CHRONO_CACHE_ACCEPTANCE != '' }}"
+    );
+    assert_eq!(
+        fixture["env"]["CHRONO_CACHE_ACCEPTANCE"],
+        "${{ vars.CHRONO_CACHE_ACCEPTANCE }}"
+    );
+    assert_eq!(
+        fixture["env"]["CHRONO_CACHE_ACCEPTANCE_STEPS"],
+        "${{ toJSON(steps) }}"
+    );
+    assert!(fixture["continue-on-error"].is_null());
+    let checks = |job: &Value| {
+        job["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s["name"] == "Canonical harness check")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        checks(&old["jobs"]["unit_cache"]),
+        checks(&new["jobs"]["unit_cache"])
+    );
+    value["persistent_cache"]["jobs"]["unit_cache"]["save_caches"] = json!([]);
+    assert!(
+        chrono_ci::units::render(
+            &serde_json::from_value(value).unwrap(),
+            ".chrono-harness/ci/units.json"
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn native_acceptance_projection_requires_the_registered_saving_scope_before_writes() {
+    let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    value["persistent_cache"] = adoption("unit_example");
+    value["persistent_cache"]["jobs"]["unit_example"]["acceptance_fixture"] =
+        json!("native-unusable");
+    let valid = json!({"schema":"chrono-cache/v2","require_primary_checkout":true,"recover_failed_restores":true,
+        "artifacts":{"target":{"external":false}},"caches":{"core.target":{"consumers":["host.build"],"verify_contents":true,"artifacts":["target"]}},
+        "acceptance_fixtures":{"native-unusable":{"method":"remove-producer-manifest/v1","consumer":"host.build","caches":["core.target"]}}});
+    for mutation in [
+        None,
+        Some((
+            "/acceptance_fixtures/native-unusable/method",
+            json!("unknown"),
+        )),
+        Some((
+            "/acceptance_fixtures/native-unusable/consumer",
+            json!("other"),
+        )),
+        Some((
+            "/acceptance_fixtures/native-unusable/caches",
+            json!(["core.target", "core.target"]),
+        )),
+        Some((
+            "/acceptance_fixtures/native-unusable/caches",
+            json!(["unknown"]),
+        )),
+        Some(("/caches/core.target/verify_contents", json!(false))),
+        Some(("/artifacts/target/external", json!(true))),
+        Some(("/recover_failed_restores", json!(false))),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
+        let config = root.path().join(".chrono-harness/ci/units.json");
+        fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+        fs::write(
+            root.path().join(".chrono-harness/ci/check.json"),
+            serde_json::to_vec(&source(
+                "examples/ci-host-job-gating/.chrono-harness/ci/check.json",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let mut registration = valid.clone();
+        if let Some((pointer, value)) = &mutation {
+            *registration.pointer_mut(pointer).unwrap() = value.clone();
+        }
+        fs::write(
+            root.path().join(".chrono-harness/cache.json"),
+            serde_json::to_vec(&registration).unwrap(),
+        )
+        .unwrap();
+        let result = chrono_ci::generate(root.path(), ".chrono-harness/ci/units.json", false);
+        if mutation.is_none() {
+            assert!(result.is_ok(), "{result:?}");
+        } else {
+            assert!(result.is_err());
+            assert!(!root.path().join(".github/workflows/chrono-ci.yml").exists());
+        }
+    }
+}

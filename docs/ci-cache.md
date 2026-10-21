@@ -418,3 +418,110 @@ binaries stay outside evidence uploads. Transfer costs are measured separately,
 and a source-bound artifact is not proof of complete build input provenance.
 
 发行验证的 `chrono-cache` 资产在 Cargo test destination 被消费；bootstrap 安装的运输 executable 保持归 bootstrap。发行配方不再将资产 staging 到同一个 bin 路径。Python release integration 回归覆盖真实 CLI 的 plan／recover／staging／report 与 inode、摘要保留；这个本地证据不证明原生缓存后端或外围 workflow 成功。详见[发布所有者](release-ci.md)。
+
+## Bounded native unusable-content fixture
+
+**Product and host policy change:** the cache CLI now supports only
+`acceptance-fixture` with `remove-producer-manifest/v1`; the provider can opt one
+existing saving consumer into a named scope. Previously no registered operation
+could create an unusable archived payload. The host opts in only
+`persistent_cache.jobs.unit_cache.acceptance_fixture = native-unusable`, matching
+`cache.json.acceptance_fixtures.native-unusable` and its `check.cache` /
+`check.cache-tests` scopes. The operation removes only producer manifests after
+the original successful work and seal, before the existing native saves. It adds
+no job, build recipe or archive transport. The host classifies the selected step
+as `cache-verification`. Costs: ordinary consumers run no fixture process;
+selected execution revalidates plan inputs, reads manifest preimages and writes
+evidence for selected artifacts. Incremental byte cost is unmeasured. End-to-end native runtime, transfer and storage cost remain
+unknown. Rust behavior and provider tests plus DELTA-selected canonical validation
+are required; local tests do not establish native archive acceptance.
+
+Activation is the repository Actions variable `CHRONO_CACHE_ACCEPTANCE`. Leave it
+unset/empty for ordinary operation. Its value is strict JSON, for example:
+
+```json
+{
+  "schema": "chrono-cache-acceptance/v1",
+  "fixture": "native-unusable",
+  "consumer": "check.unit_cache",
+  "keys": {
+    "check.cache": "<exact native plan key for check.cache>",
+    "check.cache-tests": "<exact native plan key for check.cache-tests>"
+  },
+  "git_ref": "refs/pull/<PR number>/merge",
+  "run_id": "<R observed in attempt 1>",
+  "run_attempt": "2",
+  "source_commit": "<GITHUB_SHA observed in attempt 1>"
+}
+```
+
+`keys` is a nonempty subset of the declared two caches; use both for the bounded
+acceptance obligation. The operation validates exact current source/domain keys,
+consumer, fixture, native run/ref/attempt/source identity, and records actual `GITHUB_RUN_ID`,
+`GITHUB_SHA` and executable identity. It rejects missing native identity, unknown
+fields/scopes, changed preimages, unsuccessful original work/seal outcomes,
+exact-key restore hits and repeated/unfinished intents. It preflights all selected
+artifacts before removing any manifest. A selected fixture failure fails its step
+and prevents all native saves in this job. Other jobs do not subscribe to the
+variable. An unset variable skips the fixture step entirely.
+
+The fixture registration and activation do not enter cache compatibility or
+source identity. Product/source edits still affect keys through the existing
+registered source closure. The opted `producer-manifest/v1` compatibility domain,
+producer action argv, restore prefix, seal and original canonical check stay in
+force. Do not place temporary scenario sources or activation values in merged
+production policy, and do not calculate native compatibility with a different
+local toolchain/SDK environment.
+
+For an authorized caller, one finite sequence using the existing native workflow
+is:
+
+1. On the committed candidate, run the ordinary selected `unit_cache` job with
+   the variable empty (run R, attempt 1). Keep its native plan and both original
+   restore/save outcomes. Use the exact two keys from that native plan; keep
+   source, producer inputs and workflow ref fixed through the next attempts.
+2. Before attempt 2, ensure both requested keys can be saved: if attempt 1 saved
+   exact entries, retain their evidence, then revalidate each caller-owned entry's
+   ID, exact key/ref, ownership and lack of active consumers before deleting only
+   those entries under the caller's cache authority. No bulk deletion. If this
+   prerequisite cannot be established, stop this scenario without claiming it.
+   Alternatively an already observed native plan with no exact entry supplies
+   the same prerequisite. Backend listing alone does not prove archive health.
+3. Set the variable to the JSON above with R's exact ref/keys and attempt `2`,
+   then rerun R's existing workflow for attempt 2. The caller's activation commands
+   are `gh variable set CHRONO_CACHE_ACCEPTANCE < activation.json` followed by
+   `gh run rerun <R>`; the file contains the exact native run/source/ref/keys above. The selected current producers
+   remain `build.cache` / `test.cache-tests` via
+   `.chrono-harness/bin/chrono-harness check --unit cache`. Require successful
+   original work, seal, fixture and actual native saves. Retain the entire
+   `.chrono-harness/state/` artifact, step logs and original GitHub job/run/attempt
+   responses. `acceptance-intent.json` and `acceptance.json` sit beside the plan;
+   they reference original activation, steps, seal, manifest preimages, requested
+   keys, native identities and removal outcomes. Retain the originals referenced
+   by those records, not just the pointers. A successful fixture or save action
+   alone does not prove that the backend stored the deliberately unusable bytes.
+4. Clear the variable with `gh variable delete CHRONO_CACHE_ACCEPTANCE` before
+   `gh run rerun <R>` for attempt 3. Keep the same keys/ref
+   and use the ordinary native restore -> verify/recover -> original canonical
+   work -> seal -> report path. For **each** cache, require an original successful
+   native restore with the requested matched key, verification `unusable`,
+   recovery `discarded` with actual artifact removal, and successful current
+   rebuild/check. The transport report must preserve `unusable-content`, the
+   original exact key status and `W_CACHE_CONTENT_UNUSABLE`. Keep bad-content
+   verification originals, native steps, recovery/removal results, rebuilt seal,
+   original business streams/responses and collection result. These observations
+   establish unusable archived content only when the later native restore and
+   its retained verification actually demonstrate it. They do not establish
+   extraction failure or backend outage. Unavailable/missing originals remain
+   unresolved.
+5. The exact-hit save guard skips repair after recovery. After preserving the
+   acceptance evidence and all consumers finish, the caller may revalidate and
+   delete only the two owned deliberately bad entries, then use ordinary attempt
+   4 to rebuild/seal/save. A separate ordinary attempt 5 must verify healthy exact
+   hits if persistent repair is claimed. Keep the variable empty. The caller owns
+   this remote lifecycle and evidence retention/cleanup, following existing
+   finite artifact retention; the fixture does not mutate backend entries.
+
+This support leaves actual native execution, concurrency, other consumers,
+public adoption and complete SPEC/input closure pending. It is not a general
+fault-injection service and never manufactures native action observations.
