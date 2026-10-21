@@ -301,7 +301,9 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             )
             .unwrap()
         };
-        let mut config = read_host("config");
+        // This independent fixture edits a direct policy as data. Production
+        // entrypoints resolve the root selector through the Git-facts owner.
+        let mut config = read_host("git/pinned-macos");
         config["schema_version"] = json!(1);
         config.as_object_mut().unwrap().remove("facts_git");
         config["input_closure"]

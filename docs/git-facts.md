@@ -183,6 +183,46 @@ macOS checks and native Linux push/PR units and collection, preserving independe
 workflows and explicit SDK configuration; see [native adoption](native-ci-adoption.md#native-git-policy-adoption)
 for exact candidates, events and limits.
 
+## Exact host executable selection
+
+`chrono-git-configs/v2` extends the existing one-level selector for hosts that
+share an OS/architecture but ship different executable bytes. Each platform
+instead declares an absolute `program` and a nonempty `configurations` array of
+`{"sha256":"<registered digest>","path":".chrono-harness/<direct policy>.json"}`.
+Digests must be valid and unique within that platform. Every target remains a
+direct full-v3 or schema4 policy; nested selectors and fallback entries fail.
+
+Selection reads only the declared executable's bytes, without executing it.
+Exactly the registered digest selects a target. The selected policy's Git tool
+program, present input location and expected digest must agree literally with
+that selection before the usual bound reader executes its version probe. Unknown
+bytes fail with the observed path/digest; observations never become expected
+values during validation. Subsequent reader guards still bind the executable,
+selector, selected policy and fixed candidate. The existing selection observation
+and structural snapshot shapes are unchanged: their paths identify the selected
+direct policy, while retained selector bytes define its decision rule.
+
+This repository retains its previous exact `/usr/bin/git` policy under
+`.chrono-harness/git/pinned-macos.json` and separately registers the measured
+macOS 27.0.1 (26A434), arm64 executable in `git/macos-27.json`. Both report
+`git version 2.50.1 (Apple Git-155)`; their digests differ. This is a product and
+host-policy change: previously the latter host refused admission; now its exact
+registered identity can select a separately bound policy. `macos-26` remains the
+native CI consumer. Its current executable identity and the candidate's native
+acceptance still require remote observation; cross-host Xcode equality is not
+assumed. Historical migration fixtures retain their original meanings.
+The Darwin migration tool fixture adds the separately named measured macOS-27
+identity; its original developer/native tuples and historical source snapshot
+are unchanged. Cache artifact registration and release staging explicitly consume
+the preserved direct policy's artifact metadata, independently of Git selection.
+
+Dedicated Rust tests cover successful selection, fixed/request bindings, drift,
+unknown bytes, malformed/ambiguous declarations and target binding disagreement.
+The extra local cost is one declared executable read per selector resolution;
+total validation/storage costs remain unmeasured. Independent fixture consumers
+read the preserved pinned policy as data and bind their own tools; that does not
+admit its Git on the fixture platform or establish native acceptance.
+
 ## Guarding declared Git inputs
 
 Config v3 can opt into a versioned guard without changing old snapshots:

@@ -23,6 +23,18 @@ spec.loader.exec_module(fixture)
 CONFIG = ".chrono-harness/ci/bootstrap-shared.json"
 
 
+def fixture_host_config(root):
+    """Read the registered policy as fixture data, without selecting a live host.
+
+    Independent fixtures rebind their own tools before committing. The real
+    consumer retains the original selector and delegates admission to Rust.
+    """
+    value = json.loads((root / ".chrono-harness/config.json").read_bytes())
+    if value.get("schema") == "chrono-git-configs/v2":
+        value = json.loads((root / ".chrono-harness/git/pinned-macos.json").read_bytes())
+    return value
+
+
 def acquire_parent_source(source, root, git, run):
     """Acquire current endpoint trees, without traversing unrelated old blobs.
 
@@ -572,7 +584,7 @@ class RealAttempt:
         # Invoke the caller-built owner against the fresh fixture. Do not install
         # a running owner into the destination that core bootstrap will replace.
         self.lifecycle = str(program)
-        self.owner_output_limit = json.loads((root / ".chrono-harness/config.json").read_bytes())["protocol"]["stdout_limit_bytes"]
+        self.owner_output_limit = fixture_host_config(root)["protocol"]["stdout_limit_bytes"]
         self.result["fixture"] = str(root)
         self.result["custody"]["owner_executable"] = {"path": str(program), "sha256": bootstrap.file_digest(program)}
         self.result["custody"]["declared_outputs"] = self.outputs
@@ -782,7 +794,7 @@ class ManagedAttemptCustody(unittest.TestCase):
             policy["git"].update(program="/absent/parent/git", expected_version="parent Git", sha256="0" * 64)
             policy_path.write_text(json.dumps(policy))
             config_path = root / ".chrono-harness/config.json"
-            config = json.loads(config_path.read_bytes())
+            config = fixture_host_config(root)
             next(row for row in config["tools"] if row["id"] == "python3")["program"] = "/absent/parent/python3"
             config_path.write_text(json.dumps(config))
 
@@ -887,13 +899,14 @@ class ManagedAttemptCustody(unittest.TestCase):
         policy_path = root / ".chrono-harness/worktree.json"
         policy = json.loads(policy_path.read_bytes())
         policy["environment"] = {"inherit": ["PATH", "HOME", "SSH_AUTH_SOCK"], "values": {"GIT_TERMINAL_PROMPT": "0"}}
+        policy["schema"] = "chrono-worktree-config/v2"
         policy["git"] = {"program": git,
                          "expected_version": acquire("git-version", [git, "--version"], root).decode().strip(),
                          "sha256": hashlib.sha256(Path(git).read_bytes()).hexdigest()}
         policy_path.write_text(json.dumps(policy))
         shutil.copyfile(SOURCE / "fixtures/bootstrap-operation.py", root / fixture.OPERATION)
         config_path = root / ".chrono-harness/config.json"
-        config = json.loads(config_path.read_bytes())
+        config = fixture_host_config(root)
         config["protocol"]["timeout_seconds"] = 1 if mode == "timeout" else 20
         next(row for row in config["tools"] if row["id"] == "python3")["program"] = sys.executable
         config_path.write_text(json.dumps(config))
@@ -1094,7 +1107,7 @@ class RealSharedStartup(unittest.TestCase):
             for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK", "CHRONO_CHECK_SOURCE"):
                 environment.pop(key, None)
             environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
-            host = json.loads((source_root / ".chrono-harness/config.json").read_bytes())
+            host = fixture_host_config(source_root)
             tools = {row["id"]: row["program"] for row in host["tools"]}
 
             def run(name, argv, cwd):
@@ -1261,7 +1274,7 @@ class RealFixtureStartup(unittest.TestCase):
             attempt.publish()
             environment = dict(os.environ)
             environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
-            host = json.loads((root / ".chrono-harness/config.json").read_bytes())
+            host = fixture_host_config(root)
             tools = {row["id"]: row["program"] for row in host["tools"]}
             def run(name, argv, cwd):
                 attempt.run(name, argv, cwd, environment)

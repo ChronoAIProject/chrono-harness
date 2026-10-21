@@ -1283,12 +1283,11 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         fs::copy(host.join(&path), root.path().join(&path)).unwrap();
     }
     register_artifacts(root.path(), &config);
-    fs::rename(
-        root.path().join(".chrono-harness/artifacts.json"),
-        root.path()
-            .join(config["artifact_registry"].as_str().unwrap()),
-    )
-    .unwrap();
+    let registry = root
+        .path()
+        .join(config["artifact_registry"].as_str().unwrap());
+    fs::create_dir_all(registry.parent().unwrap()).unwrap();
+    fs::rename(root.path().join(".chrono-harness/artifacts.json"), registry).unwrap();
     (root, config)
 }
 
