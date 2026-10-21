@@ -236,6 +236,32 @@ fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meanin
         new.adoption = Some(value);
         assert!(consumption::contract(new.adoption.as_ref()).is_err());
     }
+    for defect in [
+        "unknown-field",
+        "duplicate-chain",
+        "empty-identity",
+        "bad-path",
+        "missing-evidence",
+    ] {
+        let mut adoption = host().adoption.unwrap();
+        match defect {
+            "unknown-field" => adoption["unrecognized"] = json!(true),
+            "duplicate-chain" => {
+                let row = adoption["shared_startup"][0].clone();
+                adoption["shared_startup"].as_array_mut().unwrap().push(row);
+            }
+            "empty-identity" => adoption["shared_startup"][0]["caller"] = json!(""),
+            "bad-path" => adoption["shared_startup"][0]["units"] = json!("../outside"),
+            "missing-evidence" => {
+                adoption["shared_startup"][0]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("evidence");
+            }
+            _ => unreachable!(),
+        }
+        assert!(consumption::contract(Some(&adoption)).is_err(), "{defect}");
+    }
     let mut new = host();
     new.documents.get_mut(UNITS).unwrap()["job_gating"]["startup"]["consumers"]["unit_ci"]["need"] =
         json!("");

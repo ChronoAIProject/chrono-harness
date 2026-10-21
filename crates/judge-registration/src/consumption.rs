@@ -295,6 +295,7 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
         || verify[..4] != produce[..4]
         || verify[4] != "verify"
         || !profiles.iter().any(|p| p == &verify[5])
+        || startup["profiles"][&verify[5]]["build"] != true
     {
         return Err("unit startup invocation/profile mismatch".into());
     }
@@ -440,7 +441,23 @@ pub fn check_scoped(
             relative_path(p)?;
             json(&reader.blob(root, oid, p)?)
         };
-        let check = read(profile)?;
+        let check = match read(profile) {
+            Ok(value) => value,
+            Err(error) => {
+                // Scoped inventory has already admitted an exact adoption_base
+                // when the historical check profile did not yet exist.
+                if Some(oid) == base && !reader.tree(root, oid)?.contains_key(profile) {
+                    Value::Null
+                } else {
+                    return Err(error);
+                }
+            }
+        };
+        if check["policy"].get("causal_consumption").is_some()
+            && check["schema"] != "chrono-ci-check/v3"
+        {
+            return Err("E_CONSUMPTION_SCHEMA: scoped v3 profile required".into());
+        }
         let mut s = Endpoint {
             adoption: check["policy"].get("causal_consumption").cloned(),
             filemap: read(filemap)?,
