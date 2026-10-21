@@ -842,7 +842,10 @@ fn acceptance_command(root: &Path, activation: Option<&Value>, steps: &Value) ->
         .env("GITHUB_RUN_ATTEMPT", "2")
         .env("GITHUB_REF", "refs/pull/1/merge")
         .env("GITHUB_SHA", "1234567890123456789012345678901234567890")
-        .env("CHRONO_CACHE_SOURCE_COMMIT", "abcdefabcdefabcdefabcdefabcdefabcdefabcd")
+        .env(
+            "CHRONO_CACHE_SOURCE_COMMIT",
+            "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        )
         .env_remove("CHRONO_CACHE_ACCEPTANCE");
     if let Some(activation) = activation {
         command.env(
@@ -854,29 +857,47 @@ fn acceptance_command(root: &Path, activation: Option<&Value>, steps: &Value) ->
 }
 
 fn acceptance(root: &Path, activation: Option<&Value>, steps: &Value) -> std::process::Output {
-    acceptance_command(root, activation, steps).output().unwrap()
+    acceptance_command(root, activation, steps)
+        .output()
+        .unwrap()
 }
 
 #[test]
 fn native_acceptance_binds_checkout_head_separately_from_event_merge_sha() {
     let (root, activation, _) = acceptance_host();
-    let marker = root.path().join("out/project/.chrono-cache-content-v1.json");
+    let marker = root
+        .path()
+        .join("out/project/.chrono-cache-content-v1.json");
     let preimage = fs::read(&marker).unwrap();
     let steps = json!({"work":{"outcome":"success"},"chrono_cache_seal":{"outcome":"success"}});
     let missing = acceptance_command(root.path(), Some(&activation), &steps)
-        .env_remove("CHRONO_CACHE_SOURCE_COMMIT").output().unwrap();
+        .env_remove("CHRONO_CACHE_SOURCE_COMMIT")
+        .output()
+        .unwrap();
     assert!(!missing.status.success());
     for source in ["", "invalid", "1234567890123456789012345678901234567890"] {
         let wrong = acceptance_command(root.path(), Some(&activation), &steps)
-            .env("CHRONO_CACHE_SOURCE_COMMIT", source).output().unwrap();
+            .env("CHRONO_CACHE_SOURCE_COMMIT", source)
+            .output()
+            .unwrap();
         assert!(!wrong.status.success());
         assert_eq!(fs::read(&marker).unwrap(), preimage);
     }
     let applied = acceptance(root.path(), Some(&activation), &steps);
-    assert!(applied.status.success(), "{}", String::from_utf8_lossy(&applied.stderr));
+    assert!(
+        applied.status.success(),
+        "{}",
+        String::from_utf8_lossy(&applied.stderr)
+    );
     let result: Value = serde_json::from_slice(&applied.stdout).unwrap();
-    assert_eq!(result["observation"]["native"]["GITHUB_SHA"], "1234567890123456789012345678901234567890");
-    assert_eq!(result["observation"]["native"]["CHRONO_CACHE_SOURCE_COMMIT"], activation["source_commit"]);
+    assert_eq!(
+        result["observation"]["native"]["GITHUB_SHA"],
+        "1234567890123456789012345678901234567890"
+    );
+    assert_eq!(
+        result["observation"]["native"]["CHRONO_CACHE_SOURCE_COMMIT"],
+        activation["source_commit"]
+    );
     assert!(!marker.exists());
 }
 

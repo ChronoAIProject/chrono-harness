@@ -436,8 +436,18 @@ evidence for selected artifacts. Incremental byte cost is unmeasured. End-to-end
 unknown. Rust behavior and provider tests plus DELTA-selected canonical validation
 are required; local tests do not establish native archive acceptance.
 
-Activation is the repository Actions variable `CHRONO_CACHE_ACCEPTANCE`. Leave it
-unset/empty for ordinary operation. Its value is strict JSON, for example:
+Activation uses the existing repository Actions variable facility with the exact
+name `CHRONO_CACHE_ACCEPTANCE_<run_id>_<run_attempt>`, for example
+`CHRONO_CACHE_ACCEPTANCE_1234_2`. The generated step selects only
+`vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)]`.
+An absent/empty value skips the fixture process and leaves ordinary save guards
+unchanged. A variable for R/2 is invisible to another run and to R/1 or R/3;
+only this opted job subscribes within R/2. The old unqualified variable would
+have activated unrelated concurrent cache jobs and is no longer read. The
+facility remains repository configuration, so the caller records any original
+value and restores it (or deletes the newly created exact variable) after the
+selected attempt; it must not overwrite an existing unrelated value. Its value
+is strict JSON, for example:
 
 ```json
 {
@@ -451,19 +461,25 @@ unset/empty for ordinary operation. Its value is strict JSON, for example:
   "git_ref": "refs/pull/<PR number>/merge",
   "run_id": "<R observed in attempt 1>",
   "run_attempt": "2",
-  "source_commit": "<GITHUB_SHA observed in attempt 1>"
+  "source_commit": "<checked-out PR head SHA observed in attempt 1>"
 }
 ```
 
 `keys` is a nonempty subset of the declared two caches; use both for the bounded
 acceptance obligation. The operation validates exact current source/domain keys,
-consumer, fixture, native run/ref/attempt/source identity, and records actual `GITHUB_RUN_ID`,
-`GITHUB_SHA` and executable identity. It rejects missing native identity, unknown
+consumer, fixture and native run/ref/attempt identity. `source_commit` binds
+`CHRONO_CACHE_SOURCE_COMMIT`, supplied by the same event source selection as
+checkout (`github.event.pull_request.head.sha || github.event.after || github.sha`
+on this host). PR `GITHUB_SHA` is the event merge SHA and is retained separately,
+without requiring it to equal the checked-out head. The actual successful
+canonical request/report and startup import must also bind that head, and the
+caller verifies this original evidence. The fixture records both SHA roles,
+`GITHUB_RUN_ID` and executable identity. It rejects missing native identity, unknown
 fields/scopes, changed preimages, unsuccessful original work/seal outcomes,
 exact-key restore hits and repeated/unfinished intents. It preflights all selected
 artifacts before removing any manifest. A selected fixture failure fails its step
 and prevents all native saves in this job. Other jobs do not subscribe to the
-variable. An unset variable skips the fixture step entirely.
+selected variable. An unset selected variable skips the fixture step entirely.
 
 The fixture registration and activation do not enter cache compatibility or
 source identity. Product/source edits still affect keys through the existing
@@ -477,7 +493,7 @@ For an authorized caller, one finite sequence using the existing native workflow
 is:
 
 1. On the committed candidate, run the ordinary selected `unit_cache` job with
-   the variable empty (run R, attempt 1). Keep its native plan and both original
+   the selected variable absent/empty (run R, attempt 1). Keep its native plan and both original
    restore/save outcomes. Use the exact two keys from that native plan; keep
    source, producer inputs and workflow ref fixed through the next attempts.
 2. Before attempt 2, ensure both requested keys can be saved: if attempt 1 saved
@@ -487,10 +503,15 @@ is:
    prerequisite cannot be established, stop this scenario without claiming it.
    Alternatively an already observed native plan with no exact entry supplies
    the same prerequisite. Backend listing alone does not prove archive health.
-3. Set the variable to the JSON above with R's exact ref/keys and attempt `2`,
-   then rerun R's existing workflow for attempt 2. The caller's activation commands
-   are `gh variable set CHRONO_CACHE_ACCEPTANCE < activation.json` followed by
-   `gh run rerun <R>`; the file contains the exact native run/source/ref/keys above. The selected current producers
+3. Select R's actual next attempt from the original run/jobs API, not an assumed
+   counter. For next attempt 2, preserve/check the exact variable's prior value,
+   then use `gh variable set CHRONO_CACHE_ACCEPTANCE_<R>_2 < activation.json`
+   and `gh run rerun <R> --job <observed unit_cache job database ID>`. Revalidate
+   run/ref/head, selected job identity and both exact keys immediately before
+   mutation. The file contains those native identities and attempt `2` above.
+   Use the existing job rerun route; a full workflow rerun is not required.
+   If GitHub reports another next attempt, use that actual value in both places.
+   No standalone workflow_dispatch exists in this host. The selected current producers
    remain `build.cache` / `test.cache-tests` via
    `.chrono-harness/bin/chrono-harness check --unit cache`. Require successful
    original work, seal, fixture and actual native saves. Retain the entire
@@ -500,8 +521,11 @@ is:
    keys, native identities and removal outcomes. Retain the originals referenced
    by those records, not just the pointers. A successful fixture or save action
    alone does not prove that the backend stored the deliberately unusable bytes.
-4. Clear the variable with `gh variable delete CHRONO_CACHE_ACCEPTANCE` before
-   `gh run rerun <R>` for attempt 3. Keep the same keys/ref
+4. Restore the exact selected variable's original value, or use
+   `gh variable delete CHRONO_CACHE_ACCEPTANCE_<R>_2` when this scenario created it.
+   Verify cleanup and absence of an activation for the next attempt, then rerun
+   only the observed current `unit_cache` job of R for ordinary attempt 3.
+   Keep the same checked-out head, keys/ref
    and use the ordinary native restore -> verify/recover -> original canonical
    work -> seal -> report path. For **each** cache, require an original successful
    native restore with the requested matched key, verification `unusable`,
@@ -518,10 +542,63 @@ is:
    acceptance evidence and all consumers finish, the caller may revalidate and
    delete only the two owned deliberately bad entries, then use ordinary attempt
    4 to rebuild/seal/save. A separate ordinary attempt 5 must verify healthy exact
-   hits if persistent repair is claimed. Keep the variable empty. The caller owns
+   hits if persistent repair is claimed. Keep each attempt's selected variable absent. The caller owns
    this remote lifecycle and evidence retention/cleanup, following existing
    finite artifact retention; the fixture does not mutate backend entries.
 
 This support leaves actual native execution, concurrency, other consumers,
 public adoption and complete SPEC/input closure pending. It is not a general
 fault-injection service and never manufactures native action observations.
+
+
+## Native source pair and producer-input variation
+
+The actual implementation seed is `98615238ba130b5a7306cd162204791f4ba305e9`;
+its successor is the committed combined candidate carrying the bounded fixture,
+runner diagnostics and internal consumption contract. These states have unchanged
+selected compatibility declarations and selected file/JSON build values for
+`check.cache` and `check.cache-tests`; both registered source closures change.
+A fixed-byte source audit belongs to the candidate handoff. This is conditional
+source eligibility, not a native domain observation: native compiler/Cargo,
+platform, linker/SDK, home configuration and all other selected observations must
+also match. The seed already uses `producer-manifest/v1`; older unsealed caches
+cannot seed this experiment.
+
+Use the existing PR-to-dev path for a clean native seed checkout, retain its two
+successful producers, complete seals, exact saved keys, backend observations and
+original artifact/run/attempt records, then advance that same PR to the combined
+successor. The PR merge ref is the cache scope; keeping the same PR permits the
+existing same-domain prefix to select seed archives. Before claiming compatible
+reuse, compare both actual native plans: compatibility prefixes equal, source
+suffixes different for BOTH caches, matched restore keys equal the retained seed
+keys, original producer manifests verify, and the unchanged canonical cache unit
+actually builds/tests the successor. Do not widen a prefix or execute any cached
+old judge to adjudicate the successor. If native inputs drift or an exact
+successor entry wins, retain observations and report the unmet prerequisite.
+
+The predeclared output distinction is existing implementation behavior: the seed
+has no `acceptance-fixture` dispatch or native-acceptance Rust cases; the successor
+binary dispatches it (without activation, it rejects the missing option rather
+than treating it as an unknown action) and the current test output includes
+`native_acceptance_binds_checkout_head_separately_from_event_merge_sha` and the
+other fixture cases. Check actual newly built cache executable identity and
+successful current tests after restoration; no old binary is executed in the
+successor. Tests and diagnostics show current output, not measured compiler
+incremental speedup. Native logs must separately show retained incremental data,
+actual registered Cargo acceptance/rebuild and candidate output identities.
+
+For the incompatible-input scenario, the caller prepares a temporary owner
+patch adding `CARGO_PROFILE_DEV_OPT_LEVEL=1` and
+`CARGO_PROFILE_TEST_OPT_LEVEL=1` as string values at
+`.chrono-harness/ci/check.json#/policy/environment`. This is the existing actual
+Cargo execution environment and both caches' selected compatibility input;
+no provider environment field or alternate build recipe is needed. Preserve all
+existing values, especially `CARGO_INCREMENTAL=1`, and Rust `1.95.0` in the bootstrap
+owners. Bootstrap and check the committed scenario through the registered entry;
+policy-only edits do not require an independent YAML edit. Do not change `build.cache`, `test.cache-tests`,
+`check --unit cache` or restore prefixes. Both cache domains must differ because
+they select `/policy/environment`, and the actual original Cargo processes must
+receive the changed profile settings. The caller owns scenario commits after
+observing the earlier native results; no temporary scenario policy belongs in the
+final production tree. Revert only the scenario's exact owner changes when returning to ordinary inputs. Native execution, storage and total
+cost are unknown until measured.

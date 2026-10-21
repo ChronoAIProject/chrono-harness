@@ -62,7 +62,7 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 | --- | --- |
 | 改登记、执行计划或测试 | [影响闭包](../../docs/filemap-impact.md)、[执行／分组／语言](../../docs/execution.md)、[单元库存](../../docs/ci-units.md)：本宿主 cap=2，不越依赖、共享 claim 或登记时限；跨调用隔离归调用方。分组、真实未过滤库存与原断言／线程／发布操作的保留合同在单元文档；语言声明不证明其余跨语言逻辑已迁移。 |
 | 改输入、Cargo 或 full 采用 | [输入与 parity](../../docs/inputs.md)、[Cargo guarded](../../docs/cargo-projects.md)、[Git facts](../../docs/git-facts.md)、[full CI](../../docs/full-ci.md)：快照不补依赖／改预期摘要／启用治理；candidate decoder 消费历史数据，不执行旧判官。full unscoped 需原 origin receipt／历史证据，缺失失败。解码测试由 `.chrono-harness/migrations/test-hosts.json` 显式选平台，未知平台不回退、不以实测版本生成预期；Linux fixture 不表示主宿主 full 采用。 |
-| 改 CI 缓存 | [缓存所有者](../../docs/ci-cache.md)：原生消费者、唯一保存者、恢复／重入、bootstrap 报告槽位、原始 outcome 与后端查询合同。缓存不替代构建／检查；有效命中内容校验、外部所有权、linked transport 租约未完成，只支持 primary checkout。缓存测试只在失败时保留原 fixture／探测配置／报告。 |
+| 改 CI 缓存 | [缓存所有者](../../docs/ci-cache.md)：原生消费者、唯一保存者、恢复／重入、bootstrap 报告槽位、原始 outcome 与后端查询合同。缓存不替代构建／检查；仅 check.unit_cache 的两项编译缓存采用 producer-manifest/v1 命中内容校验及恢复，当前候选原生验收待执行；外部所有权、linked transport 租约及其它消费者仍未完成，只支持 primary checkout。缓存测试只在失败时保留原 fixture／探测配置／报告。 |
 | 改发布或消费关系 | [发布所有者](../../docs/release-ci.md)：v5 显式 needs／rust_toolchain／verification_consumers、原未过滤操作与 producer/run/attempt、失败证据；declared 不证明必要性，本地／原生／公开采用分别验收。 |
 | 读成本或排查失败 | [汇总观察](../../docs/ci-units.md#github-projection-and-transport)、[诊断边界](../../docs/diagnostics.md)：读原件；当前 attempt API 视图可含沿用结果，新 job ID 不证明重跑。canonical-check 含构建／测试／汇总，读数不是完整历史、重跑成本、计费或全流程总量，告警不证明冗余／节省。 |
 
@@ -72,4 +72,4 @@ cargo run --locked --manifest-path crates/instructions/Cargo.toml --bin chrono-i
 
 普通 full check 在登记要求和所选义务通过后只表示 DELTA 满足现役合同；`declared-complete` 是负责的工程声明，registration 仍报告 `completeness_proven:false`。已知缺输入、必需依赖未解决、缺绑定／快照及漂移必须失败，不另要求普遍隐藏输入证明或 VM。同命令已采用，同判仍需完整相同有效输入与确定性求值；独立 parity 要求 `completeness_proven:true` 和完整观察，当前未建立，也不另加普通 full 门。
 
-缓存已有一个登记消费者的原生 cold miss/save 与 exact-hit 路径验收；changed-source、损坏／不可用、并发、其它消费者及完整成本／生命周期合同仍未完成。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。
+缓存已有一个登记消费者的历史原生 cold miss/save 与 exact-hit 路径验收，不证明新增 producer-manifest/v1 域已验收；当前两项缓存的 cold/exact、changed-source、不兼容输入、不可用归档验收仍待执行，并发、其它消费者及完整成本／生命周期合同仍未完成。现役 scoped 路径仅采用 runner-startup 的版本化内部消费关系检查；full judge 的类型化 prelaunch／报告诊断已有有界实现。两者当前原生验收、外部／全消费者采用仍未完成，具体边界归所有者文档及覆盖表。完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收仍未完成；阶段成功不是交付。成本仍有 unmeasured 项，来源／许可资料是可选资料，不是执行政策。Git 生命周期按当前任务授权；不改全局配置、参考仓库或其它工作树，不把过程转录写入产品源。

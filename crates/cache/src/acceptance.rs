@@ -112,6 +112,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         "GITHUB_RUN_ATTEMPT",
         "GITHUB_REF",
         "GITHUB_SHA",
+        "CHRONO_CACHE_SOURCE_COMMIT",
     ]
     .into_iter()
     .map(|name| {
@@ -131,14 +132,17 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         || activation.git_ref != native["GITHUB_REF"]
         || activation.run_id != native["GITHUB_RUN_ID"]
         || activation.run_attempt != native["GITHUB_RUN_ATTEMPT"]
-        || activation.source_commit != native["GITHUB_SHA"]
+        || activation.source_commit != native["CHRONO_CACHE_SOURCE_COMMIT"]
         || !native["GITHUB_RUN_ID"].bytes().all(|b| b.is_ascii_digit())
         || !native["GITHUB_RUN_ATTEMPT"]
             .bytes()
             .all(|b| b.is_ascii_digit())
         || native["GITHUB_RUN_ATTEMPT"] == "0"
-        || native["GITHUB_SHA"].len() != 40
-        || !native["GITHUB_SHA"].bytes().all(|b| b.is_ascii_hexdigit())
+        || ["GITHUB_SHA", "CHRONO_CACHE_SOURCE_COMMIT"]
+            .iter()
+            .any(|name| {
+                native[*name].len() != 40 || !native[*name].bytes().all(|b| b.is_ascii_hexdigit())
+            })
         || activation
             .keys
             .iter()

@@ -252,6 +252,8 @@ pub(crate) fn project(
     // Registry validation guarantees the same selected set as the planner.
     let selected: BTreeSet<_> = consumer.caches.iter().collect();
     let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
+    let acceptance_variable =
+        "vars[format('CHRONO_CACHE_ACCEPTANCE_{0}_{1}', github.run_id, github.run_attempt)]";
     for (index, id) in selected.into_iter().enumerate() {
         let key = format!("cache_{index}");
         let step = &key;
@@ -265,9 +267,11 @@ pub(crate) fn project(
             work_id
         };
         let fixture_guard = if consumer.acceptance_fixture.is_some() {
-            " && (vars.CHRONO_CACHE_ACCEPTANCE == '' || steps.chrono_cache_acceptance.outcome == 'success')"
+            format!(
+                " && ({acceptance_variable} == '' || steps.chrono_cache_acceptance.outcome == 'success')"
+            )
         } else {
-            ""
+            String::new()
         };
         suffix.push_str(&format!("      - name: Save registered cache {id}\n        id: {step}_save\n        if: ${{{{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.{producer_step}.outcome == 'success' && steps.{step}_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.{key}_key && (steps.chrono_cache_plan.outputs.{key}_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.{key}_sealed == 'true'){fixture_guard} }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: ${{{{ steps.chrono_cache_plan.outputs.{key}_key }}}}\n          path: ${{{{ steps.chrono_cache_plan.outputs.{key}_paths }}}}\n", c.save_action));
     }
@@ -303,7 +307,7 @@ pub(crate) fn project(
         shell(work_id)
     );
     if let Some(fixture) = &consumer.acceptance_fixture {
-        seal.push_str(&format!("      - name: Apply selected native cache acceptance fixture\n        id: chrono_cache_acceptance\n        if: ${{{{ success() && vars.CHRONO_CACHE_ACCEPTANCE != '' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_ACCEPTANCE: ${{{{ vars.CHRONO_CACHE_ACCEPTANCE }}}}\n          CHRONO_CACHE_ACCEPTANCE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} acceptance-fixture --host-root . --config {} --plan {} --fixture {} --steps-env CHRONO_CACHE_ACCEPTANCE_STEPS --work {}\n", shell(&c.program), shell(&c.config), shell(&plan_path), shell(fixture), shell(work_id)));
+        seal.push_str(&format!("      - name: Apply selected native cache acceptance fixture\n        id: chrono_cache_acceptance\n        if: ${{{{ success() && {acceptance_variable} != '' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_ACCEPTANCE: ${{{{ {acceptance_variable} }}}}\n          CHRONO_CACHE_SOURCE_COMMIT: ${{{{ github.event.pull_request.head.sha || github.event.after || github.sha }}}}\n          CHRONO_CACHE_ACCEPTANCE_STEPS: ${{{{ toJSON(steps) }}}}\n        run: |\n          {} acceptance-fixture --host-root . --config {} --plan {} --fixture {} --steps-env CHRONO_CACHE_ACCEPTANCE_STEPS --work {}\n", shell(&c.program), shell(&c.config), shell(&plan_path), shell(fixture), shell(work_id)));
     }
     suffix.insert_str(0, &seal);
     suffix.push_str(&format!("      - name: Record original cache transport observations\n        if: ${{{{ always() && steps.chrono_cache_plan.outcome == 'success' }}}}\n        shell: bash\n        env:\n          CHRONO_CACHE_STEPS: ${{{{ toJSON(steps) }}}}\n          GH_TOKEN: ${{{{ github.token }}}}\n        run: |\n          {} report --host-root . --plan {} --report-directory {} --steps-env CHRONO_CACHE_STEPS --work {}{bootstrap_arg}{saves_arg}\n", shell(&c.program), shell(&plan_path), shell(&evidence_directory), shell(work_id)));

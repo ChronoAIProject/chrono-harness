@@ -177,3 +177,16 @@ typed errors throughout the existing products, a common emergency publication
 entry, registered formatting/sink choices, persisted record references,
 subprocess context transfer and non-Rust adapters remain required. Failed
 diagnostic publication must not be reported as successful evidence retention.
+
+
+For native candidate acceptance, the existing macos-26 `unit_runner` path must
+execute the canonical runner unit after current shared-startup install/verify.
+Retain actual full invocation regression outputs, original process/stream/error
+records, current binary/source binding and the original unit/collection artifact
+production identities. Linux process/descriptor/pre-exec coverage still requires
+the registered Linux native verification path; local Darwin results do not
+establish Linux errno or ownership behavior. A successful native business check
+without these retained originals is insufficient for the corresponding evidence
+claim. The [shared-startup handoff](filemap-impact.md#bounded-internal-causal-consumption)
+owns the existing source/artifact/run/attempt predicates; no new workflow or
+alternate diagnostic test recipe is introduced.

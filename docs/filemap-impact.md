@@ -47,6 +47,22 @@ usefulness or fidelity to a real need: those remain accountable engineering
 judgments. External/all-consumer adoption, full-path causal enforcement, native
 acceptance of this candidate and complete SPEC activation remain pending.
 
+Native handoff uses the existing PR-to-dev macos-26 parent workflow. Require the
+detector's current shared artifact, original clean producer reports and manifest,
+then the real `unit_runner` install/verify and
+`.chrono-harness/bin/chrono-harness check --unit runner`, followed by the existing
+collection. Retain startup binding, exact artifact ID and actual producing
+run/attempt, `startup-install.json`, imported bootstrap provenance, manifest and
+file identities, sealed canonical request/report, original stdout/stderr and
+uploaded unit artifact binding. Match the checked-out PR head across them;
+event merge SHA is a separate role. On job reruns, carried detector results must
+resolve to their original producer/artifact attempt, not the current attempt by
+assumption. Collection must consume the actual selected unit originals and
+passing business response. A local real-consumer fixture or a generated workflow
+cannot establish any of these remote observations. Artifact retention follows
+the existing finite provider retention; the caller joins consumers and harvests
+necessary evidence before protected lifecycle cleanup.
+
 ## Versioned output
 
 `schema` is `chrono-filemap-impact/v2`. Consumers may deserialize `chrono_judge_filemap::Impact`; JSON consumers must check this schema. Endpoint commits, trees and registry digest are bound by the enclosing v1 request/report. Arrays and maps are emitted deterministically. Unknown cost values remain JSON null. This output is declared graph impact, including validated effective environment changes when supplied; it is not operation evidence or retirement approval. The additive `structure` field is `chrono-filemap-structure/v1` and is a deterministic diagnostic view of the same explicit inputs.

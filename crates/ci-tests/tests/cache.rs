@@ -573,9 +573,13 @@ fn selected_native_acceptance_runs_between_seal_and_save_and_preserves_other_con
         "${{ github.event.pull_request.head.sha || github.event.after || github.sha }}"
     );
     // A variable for R/2 is absent to ordinary concurrent R2/2 and R/3 jobs.
-    let variable_name = |run: &str, attempt: &str| format!("CHRONO_CACHE_ACCEPTANCE_{run}_{attempt}");
+    let variable_name =
+        |run: &str, attempt: &str| format!("CHRONO_CACHE_ACCEPTANCE_{run}_{attempt}");
     let variables = std::collections::BTreeMap::from([(variable_name("1234", "2"), "selected")]);
-    assert_eq!(variables.get(&variable_name("1234", "2")), Some(&"selected"));
+    assert_eq!(
+        variables.get(&variable_name("1234", "2")),
+        Some(&"selected")
+    );
     for (run, attempt) in [("5678", "2"), ("1234", "3"), ("1234", "1")] {
         assert_eq!(variables.get(&variable_name(run, attempt)), None);
     }
